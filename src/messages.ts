@@ -2170,9 +2170,24 @@ export function authConfirmationSent(email: string): string {
  */
 export const VIEW_ONLY = "View only";
 
-/** What that label means, in the one sentence the bar has room for. */
+/**
+ * What that label means, in the one sentence the bar has room for.
+ *
+ * **It said *"Somebody shared this article with you"* until 2026-09-04**, and
+ * that sentence assumed a person had sent this reader a link. Since
+ * `GET /api/public/library` and the shelf at `/read/public`, a visitor may well
+ * have arrived from a list nobody pointed them at — so the old opening was
+ * false for exactly the readers the shelf was built to bring, and it told them
+ * they had a relationship with somebody they do not have.
+ *
+ * *Shared publicly* rather than *listed on the public shelf*: naming a page the
+ * visitor has not seen is an invitation with no context, and the second
+ * sentence — untouched, because it was always the part doing the work — already
+ * tells them what they have got. GPT Sol found this, and the neighbouring
+ * worktree that owns the visitor's copy agreed the wording.
+ */
 export const SHARED_WITH_YOU =
-  "Somebody shared this article with you. The whole piece is here to read, at every zoom level.";
+  "This article was shared publicly. The whole piece is here to read, at every zoom level.";
 
 /**
  * The ask, and it is to join rather than to unlock this page.
@@ -2763,17 +2778,20 @@ export const SHARED_LINK_CARRIES =
  * plainly is going further than the precedent, deliberately, and it is recorded
  * as a decision rather than left to look like a default.
  *
- * **Deliberately unchanged when the listing landed** (2026-09-04). Being listed
- * and then delisted is the fact this sentence already covers: unsharing makes
- * the next request — for the article or for the list it appeared in — refuse,
- * and cannot reach a page a browser already has. Naming the list here would add
- * a second, weaker way of saying the same thing on the card that can least
- * afford two.
+ * **It now names the list, after an argument it lost** (2026-09-04). The first
+ * version of this stage left the sentence alone, reasoning that delisting was
+ * already covered by "the next request is refused". GPT Sol showed that it is
+ * not, on two counts. A request for the *list* is not refused — it answers 200
+ * with the article simply absent (src/store/public-library.ts), so the words
+ * did not describe what happens. And the omission was the wrong way round for
+ * the owner: publishing had just been widened to *found by a stranger*, and
+ * this is the sentence that says how far turning it off reaches, so the
+ * reassuring half was the half missing.
  * docs/research/260828a-public-access-how-others-do-it.md.
  */
 export const SHARING_CANNOT_UNRING =
-  "Turning this off refuses the next request. It cannot take back a page somebody's browser already " +
-  "has, or anything they copied out of it.";
+  "Turning this off takes it off the public list and refuses the next request for it. It cannot " +
+  "take back a page somebody's browser already has, or anything they copied out of it.";
 
 /** The confirmation, which no other product asks for. */
 export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
@@ -3497,10 +3515,12 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
  * 2026-09-04, when the buying moved to `/pricing`; both then said *"the pricing
  * page"*, and for `pay-lapsed` that was **false** — GPT Sol, reviewing stage 1
  * of docs/plans/260904b-pricing-page-and-public-showcase.md. `hasLapsed`
- * (src/store/pg-billing.ts) includes `unpaid` and `incomplete`, which
- * `canCheckout` refuses, and `/pricing` draws no plan button at all to an
- * account that may not check out — so an `unpaid` or `incomplete` account, sent
- * there by that sentence, arrived at a page with prices and nothing to press.
+ * (src/store/pg-billing.ts) includes `unpaid` and `incomplete`, for which
+ * `summary.purchase` answers `{ kind: "none" }` (src/billing/summary.ts), so
+ * `/pricing` draws such an account no plan button at all — and an `unpaid` or
+ * `incomplete` account, sent there by that sentence, arrived at a page with
+ * prices and nothing to press. (The field was `canCheckout` until 2026-09-04;
+ * the fact it decides is the same one.)
  *
  * `QuotaNotice` (src/web/QuotaNotice.tsx) draws the link, and it picks the
  * destination from the same code that picked the sentence, so the prose and the

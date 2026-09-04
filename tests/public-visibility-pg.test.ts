@@ -844,10 +844,16 @@ when("sharing one article", { timeout: 60_000 }, () => {
        * question is whether the columns the projection publishes are the
        * columns this field reports, and only a row answers that.
        *
-       * The owner's sharing dialog lists these five
+       * The owner's sharing dialog lists them
        * (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md),
-       * and the two `false`s are the half that matters — an inventory that said
+       * and the `false`s are the half that matters — an inventory that said
        * *arc* here would name a rung of Outline this article does not have.
+       *
+       * **Not a count.** This said *"these five"* while `PublicArtefacts` held
+       * seven, because timeline and sketch arrived on 2026-09-04 and a number
+       * written into prose does not move with the type. The object below does
+       * have to move with it, and does — it is a whole-value assertion, so a
+       * new artefact fails here rather than passing with the field ignored.
        */
       available: {
         arc: false,
