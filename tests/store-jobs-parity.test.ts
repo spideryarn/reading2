@@ -1533,6 +1533,67 @@ for (const adapter of ADAPTERS) {
     });
 
     /**
+     * **A pause and a Stop that land together may not disagree about what
+     * happened** — the outcome and the record it carries are one answer.
+     *
+     * ⟨GPT Sol, reviewing the built stage 3, finding 3, CONFIRMED⟩ It ran the
+     * two concurrently against the filesystem adapter and got
+     * `{"pauseKind":"requeued","pauseStatus":"cancelled","current":"cancelled"}`
+     * — a `requeued` outcome carrying a job that had already ended. The
+     * discriminated union `pauseForDeadline` returns is then false at runtime,
+     * and src/jobs.ts answers the reader `done: false` about a terminal job.
+     *
+     * The cause is that the adapter mutates the record every caller shares,
+     * yields while persisting it, and clones it **after** the yield — so the
+     * value it hands back is whatever the *next* transition left behind rather
+     * than the one it made. Postgres cannot produce it: the transition is one
+     * locked transaction and `returning` reads the row it wrote.
+     *
+     * The assertion is deliberately about **agreement rather than about which
+     * of the two won**. Either order is legitimate: a pause that commits first
+     * leaves a `queued` job for the Stop to cancel, and a Stop that lands first
+     * makes the pause answer `cancelled`. What is never legitimate is an
+     * outcome whose own `job` contradicts it.
+     */
+    it("never answers `requeued` with a job that is not queued", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+
+      /* Started in the same turn, so the pause is mid-transition when the Stop
+         arrives. Sequential calls cannot reach this state and the existing Stop
+         case above is sequential, which is why it stayed green. */
+      const [paused] = await Promise.all([
+        store.pauseForDeadline(job.id, attempt, 2),
+        store.requestCancel(job.id, OWNER),
+      ]);
+
+      if (paused.kind === "requeued") {
+        expect(
+          paused.job.status,
+          "a `requeued` outcome came back carrying a job that is not queued",
+        ).toBe("queued");
+        expect(
+          paused.job.cancelling ?? false,
+          "a `requeued` outcome came back carrying a job that is being stopped",
+        ).toBe(false);
+        expect(paused.job.finishedAt, "a `requeued` job has not finished").toBeUndefined();
+      } else {
+        /* The other legitimate order, and the only other one: the Stop was on
+           the row before the pause classified it. */
+        expect(paused.kind, "a pause racing a Stop answered something else").toBe("cancelled");
+      }
+
+      /* However it resolved, the reader who pressed Stop gets their stop —
+         either from `requestCancel` itself or from the claimant that was told
+         `cancelled`. Read afterwards so this says what the store settled on
+         rather than what either call believed. */
+      const current = (await store.get(job.id, OWNER))?.status;
+      expect(["cancelled", "running", "queued"]).toContain(current);
+    });
+
+    /**
      * **An unwind that crossed the lease is not a pause, it is a lost claim.**
      *
      * The claimant aborts at `LEASE_MS - DEADLINE_MARGIN_MS` and has that margin

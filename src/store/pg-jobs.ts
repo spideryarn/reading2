@@ -1123,33 +1123,61 @@ const rawPgJobStore: JobStore = {
                 attemptId: null,
                 leaseExpiresAt: null,
                 requeues: sql`${jobs.requeues} + 1`,
-                /**
-                 * **The draft goes with the claim here too, and that is a
-                 * decision rather than an oversight.**
+                /* **`draft_revision_id` is deliberately *not* in this set** —
+                 * this note documents a field that is absent, so it is a plain
+                 * comment rather than the doc of whatever happens to follow it.
+                 * The requeue keeps the draft, exactly as `pauseForDeadline`
+                 * does, and it is the one field separating this statement from
+                 * the settlement below.
                  *
-                 * Keeping the pointer would let the next claim *reopen* this
-                 * draft — `openOrBeginJobDraft` finds a draft only via this
-                 * job's `draft_revision_id` — and carrying a half-written draft
-                 * across attempts is decision 8 of
-                 * docs/plans/260831b-finish-the-database-move.md, which Greg
-                 * deferred. It is not free: the draft was being written by a
-                 * process that vanished mid-step, so what is in it is whatever
-                 * that process had got to.
+                 * It used to be cleared here, on the argument that a draft
+                 * written by a process that vanished mid-step holds "whatever
+                 * that process had got to", and that dropping it "costs nothing
+                 * the reader can feel" because the checkpoints are keyed on the
+                 * article rather than on the revision. **The second half of that
+                 * was wrong, and the first is no longer true.** ⟨GPT Sol,
+                 * reviewing the built stage 3 of
+                 * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md,
+                 * finding 1⟩
                  *
-                 * Dropping it costs nothing the reader can feel. The next claim
-                 * opens a fresh draft, every step's `stepIsDone` reads the
-                 * *artefacts* rather than the step record and finds none, so the
-                 * steps re-run — exactly as they do after a Retry today. The
-                 * expensive half is the model calls, and those are held by the
-                 * checkpoints, which are keyed on the article this row still
-                 * names.
+                 * **What it actually cost.** On a *first* ingest there is no
+                 * published revision to copy blocks from, so a fresh draft makes
+                 * `blocks` re-run as a genuine first ingest and mint every block
+                 * id afresh (src/ids.ts). Those ids are inside the `hierarchy`
+                 * structure request, so its fingerprint moves and the
+                 * checkpoint the previous window paid for — ~508 s and about $2
+                 * on a 142-page paper — becomes unreachable for ever. Keyed on
+                 * the article is not the same as reachable from it. So a job
+                 * that paused cleanly and was then deployed over spent its
+                 * second window buying the tree again, and had one left for a
+                 * step measured at 658–778 s against a 740 s deadline: the exact
+                 * Retry click that plan exists to remove.
                  *
-                 * And a terminal job may not keep a pointer at all —
-                 * `sweepAbandonedDrafts` spares a revision any job row names — so
-                 * clearing it here keeps this transition's field set the same as
-                 * the settlement's, which is the pair most likely to drift.
+                 * **Why the half-written worry has gone.** It predates the
+                 * transactional stage runner. Artefacts, the postcondition, the
+                 * step completion, the publication and the job transition now
+                 * commit **together or not at all** (src/store/pg-session.ts),
+                 * and the model call is outside that transaction — so a claimant
+                 * killed mid-step leaves either a wholly finished step or no
+                 * trace of one. The step it was inside stays honestly `running`,
+                 * which `beginStepRun` explicitly allows *a different attempt*
+                 * to reopen (src/store/pg-revisions.ts § `setWhere`), and a
+                 * swept claimant that keeps going is refused by
+                 * `requireLiveJobOwnsDraft` because this statement has already
+                 * cleared its token. Decision 8 of
+                 * docs/plans/260831b-finish-the-database-move.md was deferred
+                 * against a store that could leave a draft half-written; this
+                 * one cannot.
+                 *
+                 * **The settlement below still clears it, and must.**
+                 * `sweepAbandonedDrafts` spares a revision that *any* job row
+                 * names, so a *terminal* job holding a pointer is a draft
+                 * nothing will ever publish and nothing will ever reclaim. The
+                 * two field sets are no longer identical, which is the pair most
+                 * likely to drift — so the difference is stated here and in the
+                 * comment on the settlement's own `draftRevisionId`, and
+                 * tests/claim-session-postgres.test.ts asserts both directions.
                  */
-                draftRevisionId: null,
                 /* Cleared, so the record always describes *this* state. A job
                    that failed a step, was requeued and is now waiting its turn
                    must not sit in the queue wearing the last attempt's sentence.
@@ -1181,7 +1209,14 @@ const rawPgJobStore: JobStore = {
              will ever reclaim. The path is ordinary rather than exotic: a step
              releases, the next advance never comes, the lease lapses, and this
              statement is what ends the job. GPT Sol, 2026-08-30,
-             docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1. */
+             docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1.
+
+             **And this is the one field the requeue above deliberately does
+             not write.** The two statements were kept identical on purpose
+             until 2026-09-04; they are not any more, because a row going back
+             into the queue is not terminal and its draft is what the next
+             window resumes on. Read the long note above before making them
+             agree again. */
           draftRevisionId: null,
           /* Nulled on the cancelled branch rather than left alone, so the field
              always describes *this* ending — the same rule `finishIn` follows.

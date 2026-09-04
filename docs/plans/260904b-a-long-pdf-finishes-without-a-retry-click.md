@@ -99,6 +99,30 @@ reservation to a measured, hierarchy-specific number as well as re-rating the no
 counter-evidence to the postmortem's fear, worth recording: given 128,000 the call thought 47,289
 rather than expanding to fill it.
 
+**Thinking does not expand into the larger budget, and the postmortem's warning is an `effort: "high"`
+phenomenon.** Measured 2026-09-04, eight real structure calls — two articles × two budgets × two
+repeats, production's own `SYSTEM` and `PRODUCTION_EFFORT`, varying only `max_tokens`:
+
+| article | budget | thinking (rep 1 / rep 2) | cost |
+|---|---|---|---|
+| claudes-constitution (120 blk) | 42,075 (old) | 9,983 / 5,644 | $0.148 / $0.108 |
+| claudes-constitution | 80,425 (new) | 6,336 / 5,714 | $0.119 / $0.111 |
+| replication-crisis (274 body blk) | 42,075 (old) | 20,803 / 31,083 | $0.340 / $0.439 |
+| replication-crisis | 80,425 (new) | 18,279 / 18,714 | $0.320 / $0.310 |
+
+Every call reached `end_turn`; none truncated at either budget. Thinking was **lower** at the larger
+budget on both articles, and the difference is well inside the run-to-run noise already visible within
+one budget — replication-crisis swung 20,803 → 31,083 between two *identical* calls, a 49% spread.
+
+**This reconciles the contradiction that made the risk look real.**
+[260826a](../postmortems/260826a-toc-max-tokens.md) measured expansion at `effort: "high"`; this stage
+has run at `EFFORT = "medium"` since that postmortem moved it, and the live Kuhn call (47,289 of
+128,000) is the same medium regime. At medium, thinking is governed by `effort`, not by the size of the
+ceiling. So the extra cost of `STRUCTURE_HEADROOM` and the 81-section floor across every article is
+**effectively zero** — which is what lets stage 4 ship as built, and it resolves GPT Sol's finding 5 in
+the code review, which flagged the risk conditionally. **Re-check it if `EFFORT` ever goes back to
+"high"**, because that is the regime where expansion was actually observed.
+
 **The step is marginal against the deadline, and that is the real ceiling.** Structure 508 s, then 34
 label batches at concurrency 4 — **658 s / 708 s / 778 s** at the measured 15/20/27 s per batch,
 against a 740 s deadline, *before* `extract` has taken any of the same window. This is not
@@ -246,10 +270,19 @@ this stage were taken:
   and one where the answer builds a tree the invariants reject, which is what pins the write after
   `assertTreeSound` rather than merely after `buildTree`.
 - **A poisoned row.** `{ fingerprint, answer: "not JSON" }` passed the entry gate, skipped the call
-  and failed for ever. `usableStructure` now parses before it accepts. **Partially**: an answer that
-  parses and then fails `buildTree` still throws on every attempt, and the lever for that stays
-  `PROMPT_VERSION` — the full fix is a retry loop around the whole call-and-build stretch, which is
-  more machinery than the risk earns. Written down at the gate.
+  and failed for ever. `usableStructure` now parses before it accepts.
+
+**And then the whole of it, on the second review** ⟨GPT Sol, code review, finding 6⟩. The parse-only
+gate left the same trap one step along: an answer that parses and then fails `buildTree`,
+`appendSupplement` or `assertTreeSound` was accepted, skipped the call, and threw on **every** attempt
+without ever overwriting itself — a permanently wedged article whose only lever was a `PROMPT_VERSION`
+bump, i.e. a deploy, for one reader's PDF. The full fix turned out to be much less machinery than the
+"retry loop around the whole call-and-build stretch" it was written off as: the parse-build-append-
+assert stretch is now one local function, `treeFrom`, called **twice on two different questions** —
+once on the stored answer, where a throw demotes the row to a miss and the call below replaces it,
+and once on a fresh one, where a throw is the run failing. Both poisons are red first in
+`tests/hierarchy-structure-checkpoint.test.ts`: one that fails `buildTree`, one that fails the
+invariants, each asserted to buy exactly one call and to leave the good answer in the row.
 
 **Two things the plan did not say.** `HierarchyRun` gained `structureResumed`, and the run's
 `inputTokens`/`outputTokens` now come from a hoisted `structureUsage` that is zero on a resumed
@@ -421,6 +454,81 @@ its "unreachable" zero-row branch, three more copies of "one claim covers one st
 on when a deadline overrun now reaches that sentence, and `src/types.ts` § `requeues` on nothing
 rendering it yet.
 
+#### The second code review, and the three things it changed
+
+GPT Sol reviewed the whole change again on 2026-09-04 and returned **DO-NOT-SHIP**, on the ground
+that *"the clean deadline-pause path is sound, but the end-to-end guarantee still fails when a later
+claim lapses or is deployed over"*. Three of its findings belong to this stage.
+
+**1 — a lapsed claim still destroyed the identity the checkpoint is keyed on.** `pauseForDeadline`
+kept `draft_revision_id`; **`settleExpired`'s requeue branch still nulled it**, so stages 2 and 3 did
+not compose. The failing sequence is ordinary: hierarchy overruns and pauses cleanly (window 1); the
+next claim is deployed over inside hierarchy; `settleExpired` spends window 2 *and clears the draft*;
+window 3 opens an empty draft, `blocks` runs as a first ingest and re-mints every block id, the
+structure fingerprint moves, and the ~508 s / ~$2 call bought in window 2 is unreachable. The budget
+is then gone for a step measured at 658–778 s, and the reader gets the Retry click this whole job
+exists to remove.
+
+**Sol's argument that the old rationale was stale was checked against the code before it was acted
+on, and it holds.** That rationale — a claimant that vanished mid-step leaves "whatever that process
+had got to" — predates the transactional stage runner. [`pg-session.ts`](../../src/store/pg-session.ts)
+now commits artefacts, the postcondition, the step completion, the publication and the job transition
+**together or not at all**, with the model call outside that transaction, so a killed claim leaves a
+wholly finished step or no trace of one. The step it was inside stays honestly `running`, and
+`beginStepRun`'s `setWhere` explicitly allows *a different attempt* to reopen a row in that state
+([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); a swept claimant that keeps going is refused
+by `requireLiveJobOwnsDraft`, because the sweep cleared its token. So the requeue now keeps the
+pointer. **The terminal branch still clears it and must** — `sweepAbandonedDrafts` spares a revision
+any job row names, so a terminal row holding one is a draft nothing will ever publish or reclaim. The
+two field sets were deliberately identical and are not any more, and both statements now say so.
+
+The test is end-to-end over four windows in
+[`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts): a between-steps
+release, a clean mid-step pause that pays for the structure answer, a claim that is deployed over and
+swept by `settleExpired`, and the finish. Two things make it evidence rather than decoration — the
+fixture `blocks` **mints fresh ids on every run**, as the real one does with no published blocks to
+copy from, and the checkpoint is keyed on *those ids*, as the real one is keyed on a request that
+contains them. Watched red on exactly the finding: `expected null to be '901d2e92-…'`.
+
+**2 — the hand-back threshold started a step known not to fit.** `STEP_BUDGET_MS.hierarchy` was
+320.4 s, measured on ordinary articles. On the 142-page paper the structure call **alone** is 508 s
+and the whole step is 658–778 s, while the recorded `extract` requests took 305–347 s — so the walk
+reached hierarchy with 393–435 s left, admitted it, bought most of a call it could not finish, and
+spent one of only two requeues.
+
+It is now **700 s**, which is `extract`'s number arrived at by `extract`'s reasoning: no threshold
+can promise this step fits, because 778 s is more than the 740 s deadline, so the most a threshold
+can do is stop it being *started on a remnant*. What that means in practice is that `hierarchy`
+almost always begins a claim rather than continuing one — the walk runs its first runnable step
+ungated, so a claim that opens on it gets the whole window, and a claim that reaches it after
+`fetch → extract → blocks` hands back instead. **The cost is one extra request for an ordinary
+article**, which is the cheap direction the budget table's own header names; a size-sensitive
+threshold is the obvious later refinement and is not built, because the flat number is what removes
+the retry click. `tests/jobs-lease-budget.test.ts` pins the *relationship* — greater than what the
+worst measured PDF extract leaves behind, less than the claimant's own deadline — so re-tuning either
+side stays free.
+
+**3 — the filesystem adapter could return an internally contradictory outcome** (CONFIRMED; Sol ran
+`pauseForDeadline` and `requestCancel` concurrently and got `{"pauseKind":"requeued",
+"pauseStatus":"cancelled","current":"cancelled"}`). Every mutating method in
+[`jobs-fs.ts`](../../src/store/jobs-fs.ts) worked on the record every caller shares and ended
+`await persist(job); return structuredClone(job)` — so the clone was on the far side of a yield and
+described whatever the *next* transition had left behind. The discriminated union was false at
+runtime and `src/jobs.ts` answered `done: false` about a terminal job.
+
+The fix is one shared helper, `committed(job)`, which snapshots at the transition's linearisation
+point and **persists the snapshot as well as returning it**; every transition and `settleExpired`'s
+per-job settlement go through it. Not a lock, and it does not need one: each method decides and
+mutates in a single synchronous stretch, so the decision was already atomic on a single-threaded
+runtime and only reading the answer back was not. Writing the live object instead was harmless only
+as long as every queued write happened to end up writing the same final value, which is an accident
+rather than a rule. Postgres gets the same property from `select … for update` plus `returning`, and
+the new parity case asserts **agreement rather than which side won** — either order is legitimate,
+and an outcome contradicting its own payload never is. Watched red on the filesystem adapter and
+green on Postgres, which is exactly the shape Sol reported.
+
+Findings 4 and 5 are stage 1's and stage 4's and were taken elsewhere.
+
 ### Stage 4 — the estimator counts nodes the prompt can actually produce — **DONE 2026-09-04**
 
 **Two changes, and the second is the one stage 1 says we would have got wrong.**
@@ -546,23 +654,43 @@ commits, each with its test seen red first.
 
 **The fused page-number affix** — `defusedFolios` in [`src/pdf-score.ts`](../../src/pdf-score.ts).
 When the haystack is built, a line-initial token that is wholly a numbered heading (digits, dots, a
-final dot) also enters it with 1–4 leading digits stripped. **Eight of the eight false positives now
-pass and both true positives still fail**, checked through the real `scorePage` against the real
-`pass0` output:
+final dot) also enters it with **this page's printed folio** taken off the front. **Eight of the eight
+false positives pass and both true positives still fail**, checked through the real `check` against
+the real `pass0` output:
 
-| verified through `scorePage` | page | text layer holds | now |
+| verified through `check` | page | text layer holds | now |
 |---|---|---|---|
 | `9.5.10` `9.2.12` `9.4.4` `9.6.7` `9.10.4` | 37, 25, 30, 41, 56 | `649.5.10.` … `839.10.4.` | clean |
 | `16.3` `17.7` `4` | 98, 109, 128 | `12516.3.` `13617.7.` `1554.` | clean |
 | `12` `13` | 50, 71 | only inside `9.8.12.`, `2012a`, `13.5`, `13.2` | still invented |
 
-Three clauses keep it narrow and each is load-bearing: line-initial (without it the neighbouring
-`1843–79 → 43–79` regression breaks), the whole token must be a numbered heading (`2012a)` and
-`1843–79` are never candidates), and at most four digits come off leaving at least one — which is why
-`9.8.12.`, line-initial on the page where `12` was a *true* positive, yields nothing. Measured cost:
-260 extra haystack entries across Kuhn's 142 pages. The residual hole is written down on the
-function — a line beginning `2012.` would admit `12`, and the printed folio would settle it but
-deriving it needs the running-header offset.
+**The first version of this was a hole and was rewritten** ⟨GPT Sol, code review, finding 4,
+CONFIRMED and reproduced⟩. It stripped **1–4** leading digits from any line-initial numbered heading,
+which admits far more than the `2012. → 12` cost written down at the time: Sol scored a page printing
+`12.3. Genuine heading` against a transcription saying `2.3. Genuine heading` and the check passed it.
+Corrupting a section number is the class `protect` exists to catch, and suppressing that retry
+publishes a silently wrong article — **much worse than the ~8 wasted retries the rule saves**.
+
+**Option (a) of the two offered, and the evidence is what chose it: the folio is knowable.** A new
+`folioOffset` elects one offset for the whole document — every page votes for every offset its
+line-initial digit runs could imply, and a winner needs support on **half the pages and twice the
+runner-up**. On the real file, offset 27 (the paper starts at journal page 28) is line-initial on
+**141 of 142 pages against a runner-up's 10**, so it is elected by a distance no coincidence reaches.
+`defusedFolios` then strips **that one number on that one page**, and only when what is left is itself
+a numbered heading — so folio 77 against `77.3.` leaves `.3.`, which is nothing, and a document that
+elects no offset gets no defusing at all. **Measured narrowing on Kuhn: 260 extra haystack entries
+became 11**, with all eight true fixes intact.
+
+The eleven cases, run through the real `check` against the real text layer: eight clean, `12` and `13`
+still invented, and Sol's `12.3. → 2.3.` now invented. The unit tests build the document rather than
+one page, because the folio is only strippable when the document agrees what it is.
+
+**Sol's stronger suggestion is still the right eventual answer and is not done:** `pass0`
+([`src/pdf.ts`](../../src/pdf.ts)) knows the text-layer item boundary between the folio and the
+heading and throws it away by concatenating with no separator. Keeping it would mean none of this had
+to be inferred — no offset election, no folio arithmetic, and the *recall* side of the same defect
+(the baseline holds `649.5.10.` too) would go with it. It is a change to what every page's text looks
+like, so it needs its own measurement pass against the fixture corpus; noted on `folioOffset`.
 
 **The letter-spaced `ARTICLE INFO` box was left alone**, and the "if it is cheap" test is what
 decided it: it carries no digits, so it never touches the protected path at all — it costs *recall*,
@@ -626,6 +754,63 @@ finish.
 chunk passes"* and `ATTEMPTS`' *"then it fails… The failure is still visible and still hard"*. A
 chunk that fails twice is published with a quality note.
 
+### Stage 5b — a child's range the wrong way round is a repair, not a refusal — **DONE 2026-09-04**
+
+Found by a real end-to-end ingest that got past everything above and then died at `hierarchy`, having
+spent ~500 s and **$1.26**, with nothing checkpointed (the write is correctly after the build) and a
+Retry button for the reader:
+
+> The node at root > child 4 > child 3 has a range that runs backwards — its start block comes 4
+> block(s) after its end block in the article.
+
+**The refusal was circular.** `spanOf` in `planChildRanges` lumped `lo > hi` in with "this id is not
+in the article"; one such child left the *whole* sibling set unplanned; `visit` then fell back to the
+raw proposal and the guard for a node nobody planned fired on a node that would have planned
+perfectly well. It declined to plan *because* of the fault, then threw *because* it had not planned.
+Measured refusal rate on the production recipe over 23 stored eval calls: **~9%**, on a corpus topping
+out at 499 blocks against this document's 2,025 — a floor, not an estimate. On this document, 1 in 2.
+
+**Ends are never used**, which is what makes ordering safe rather than a guess: every end is derived
+from the next start ([`src/hierarchy.ts`](../../src/hierarchy.ts) § `planChildRanges`), so the whole
+effect of a transposition is which of the two numbers is read as the start. Reading the smaller one
+is the section the answer plainly meant.
+
+Run against the real saved answer (`m4-kuhn-structure-raw.json`, 2,025 blocks), with the fix in the
+code rather than applied to the proposal outside it:
+
+| | outcome | boundaries | blocks moved | largest | `checkTree` | kinds |
+|---|---|---|---|---|---|---|
+| **A** as the model wrote it | BUILT | 30 | 40 | 5 | 0 | gap 26, short 3, overlap 1 |
+| **B** `root > child 4 > child 3` reversed by 4 — **the live failure** | **BUILT** (was REFUSED) | 30 | 73 | 34 | 0 | gap 25, short 3, **reversed 1**, overlap 1 |
+| **C** same, pairs ordered outside the code | BUILT | 30 | 71 | 30 | 0 | gap 25, short 3, overlap 2 |
+| **D** untouched answer, ordering on — **the control** | BUILT | 30 | 40 | 5 | 0 | identical to A |
+
+D is the one that matters as much as B: **ordering changes nothing on an answer that was already
+sound** (0 pairs ordered). B against C is the difference between mending it in the checker and mending
+it in the plan — 73 blocks against 71, and the fault named `reversed` rather than buried in
+`overlap` — because `recordBoundaryFaults` goes on measuring against what the model **literally
+wrote**, never against the tidied value.
+
+**Four things it was important not to get wrong.** A new `PartitionRepair["kind"]`, `"reversed"`, so
+the mend is counted and reported like the others rather than applied in silence — and it is the only
+kind recorded at size 0, because a transposition is a fault whether or not it moved anything. **The
+invented-id branch still nulls the group**: that refusal is correct and its message names the id.
+**The guard in `visit` stays**, because a backwards range at the root has no parent to plan it, and
+neither does one in a set an invented id left unplanned — both still refuse, both are tested.
+And `reversed` *replaces* `gap`/`overlap` on the child's own start entry rather than adding a second
+entry beside it: two entries would double-count one movement in `repairedBlockCount` and break the
+invariant the fuzz asserts, that two faults in one node never share a coordinate.
+
+**The property test never found this because its generator could not produce it** — it excluded
+backwards ranges by construction, on the grounds that they were refusals with messages of their own.
+It now transposes one child in eight, and a control asserts the fuzz still produces them
+(`withReversed > 100` of 3,000). A property test only holds over the inputs its generator can make.
+
+**Done when:** the live shape builds, is counted as `reversed`, and `checkTree` reports nothing ✓; the
+root case still refuses ✓; `tests/hierarchy-repairs.test.ts` (32) and the structure eval (55) green ✓.
+`docs/project/hierarchy.md` § The one thing it loses, and what still throws, and the two comments in
+`evals/hierarchy-structure/floor.ts` that said a backwards range still throws, are corrected.
+
 ### Stage 6 — sectioning, only if stage 1 says one pass cannot safely fit
 
 Its first step is nearly free: put the mechanical skeleton from
@@ -643,6 +828,74 @@ Recovery is to retry the original job with its full steps and source provenance,
 so the PDF chunk checkpoints are found and the transcription is not re-bought.
 
 Then a fresh upload end to end in a browser, on production, watched.
+
+### Stage 8 — the tree leans on the author's own table of contents
+
+> Can we make a minimal update to the prompt […] to include a light suggestion to lean towards/make
+> use of/be informed by/extend the author's existing Table of Contents approach if they've provided a
+> good one. But this is tricky to get right, because their one may not [be] good or suitable for
+> Spideryarn's purposes, so maybe provide guidance on when and when not to.
+>
+> — Greg, 2026-09-04
+
+**Stage 1's measurements are the argument for it.** Kuhn has **254 authored heading blocks** (25 h1,
+208 h2, 21 h3, numbered three deep), and the model produced 83 nodes and **dropped 59 headings** —
+because the prompt tells it that headings are HARD boundaries *and* to go 3 levels deep with 5–9
+children, and on this document those are **jointly unsatisfiable**. It resolved the conflict by
+flattening the author's third level. The 241-block section above is the same fact seen from the other
+end.
+
+So this is not only a nicety: the author's structure is being discarded on exactly the documents
+where it is best.
+
+**After stage 7, not before.** It changes generation, so it invalidates every cached structure answer
+(`PROMPT_VERSION`) and — more sharply — `estimateHierarchyTokens` was re-derived *today* against a
+corpus produced under the **current** prompt. A prompt that made the model honour 254 headings instead
+of 83 would change the node count the estimator was just fitted to. Shipping the two together would
+mean neither could be judged.
+
+**Fable answered, and the framing above is wrong in the way that matters.** ⟨2026-09-04⟩
+
+**`droppedHeadings: 59` is mostly an off-by-one, not the author being overruled.** Of the model's 82
+non-root nodes, 24 start *on* a heading block and **53 start on the block immediately after one**.
+Every unbacked `sourceHeading` claim reproduced is at offset −1: the model named the heading correctly
+and put the boundary on the first paragraph after it, so the heading fell into the previous section's
+tail, `planChildRanges` believed the start, and the claim was then dropped as out of range. **75 of 82
+nodes claim a `sourceHeading`** — the model is already leaning on the author, and is cutting one block
+late. On the evidence this is Kuhn-specific: noema's three trees show 0 of 83 starts one-after-a-heading.
+
+So **the light prompt suggestion would change nothing**, because the model is not ignoring the author.
+Two real levers, in order:
+
+1. **A heading-snap repair in `planChildRanges`, as code.** A kept child whose start is the block after
+   a heading run moves back to that run's first heading, recorded as a new kind of `PartitionRepair` so
+   it is counted like the others. On Kuhn this alone takes backed claims from 24 to ~75 **with no prompt
+   change**, and it guards the prompt change, which a model can ignore.
+2. **Re-scoping the depth and fan-out bullets** — the genuine capacity conflict. Kuhn's numbering wants
+   four levels (26 → 120 `x.y` → 97 `x.y.z`) against a prompt that caps the tree near 91 nodes, so even
+   with the off-by-one fixed ~180 of 253 headings could not start a node. Fable's replacement text keeps
+   the fan-out and depth numbers as guidance for what the model *proposes* while letting the author's own
+   hierarchy exceed them, adds one line excluding journal/site furniture from being a boundary, and tells
+   the model to trust the author's numbering over the tag level.
+
+**And the scaffolding route is wrong on this document.** Kuhn's tag levels lie about its numbering —
+`9.4` and `9.6` are tagged `h1`, 76 third-level headings are `h2` — so `buildHeadingTree` gives 22
+top-level parts, 241 internal nodes, one 92-block section and a missing section 24. Feeding that in
+would hand the model a **worse** outline than it produces unaided. Notably, `evals/hierarchy-structure`
+already has `headings-listed` and `headings-seeded` arms built and **neither has ever been run** — so
+the scaffolding question can be answered for the cost of one panel rather than a build.
+
+**Measure it with `headingsCut`, not `droppedHeadings`** ⟨Fable⟩: the snap repair drives
+`droppedHeadings` to near zero on its own, so it would report success for the wrong reason. `headingsCut`
+(the share of authored headings that start a node — Kuhn is 21/253 today) is two-sided: it must rise on
+Kuhn and other numbered documents and must **not** rise on the ones that over-segment or carry furniture.
+Add `maxSectionBlocks` and a count of sections over `MAX_BATCH` (Kuhn: 239 and 5), and keep headingless
+controls where the change should be a no-op.
+
+**Done when:** the change is evaluated in the harness rather than eyeballed, on documents that span
+the cases — a deeply-numbered paper, a sparsely-headed web article, one whose headings are stock
+labels; `droppedHeadings` and max section span both improve on the first without regressing the
+others; the estimator is re-checked against trees generated under the new prompt.
 
 ## Deliberately not doing
 

@@ -223,6 +223,14 @@ const aborts = processSingleton<Map<string, AbortController>>(
  *     fetch ≤110s + extract ~10s + blocks ~5s + hierarchy 320.4s + assets ≤185s = 630.4s
  *     630.4s  <  740s self-abort  <  800s platform kill
  *
+ * **That sum is elapsed time, and since 2026-09-04 it is no longer the number of
+ * requests.** `STEP_BUDGET_MS.hierarchy` is now 700s, so a walk that has spent
+ * ~125s on `fetch → extract → blocks` hands the claim back rather than starting
+ * the one step it cannot restart cheaply, and the ordinary article takes two.
+ * The arithmetic below still has to hold — a job that cannot fit one invocation
+ * is a job nothing can recover — but "fits one claim" and "takes one request"
+ * are now different claims about it. See `STEP_BUDGET_MS` § `hierarchy`.
+ *
  * **Re-measured 2026-09-04, and the old line said 520s.** It quoted `fetch ~10s`
  * and `extract ~5s`, both of which this same file falsified in the same change
  * that raised `MAX_PAGES` ⟨GPT Sol⟩: `fetch` is bounded by src/fetch.ts's three
@@ -296,9 +304,12 @@ class DeadlineReached extends Error {
  * mid-ingest cost the reader their job and left them a Retry button. It now puts
  * the job back to `queued` on the same row, which is what the filesystem store's
  * `sweepStopped` has always done at restart, and which keeps the slug, the
- * article and the article's checkpoints. The contract is src/store/jobs.ts §
- * `settleExpired`; enforcing the number is the store's, deciding it is ours, the
- * same division `LEASE_MS` and `jobConcurrency` already have.
+ * article, the article's checkpoints **and the draft** — the last of those since
+ * 2026-09-04, because without it the next window re-mints every block id and the
+ * checkpoints, though still there, name an identity that has moved. The contract
+ * is src/store/jobs.ts § `settleExpired`; enforcing the number is the store's,
+ * deciding it is ours, the same division `LEASE_MS` and `jobConcurrency` already
+ * have.
  *
  * **A lapsed lease and a step that overran are not the same event, and this
  * budget covers both.** A lapse is *nobody came back* — the claimant was frozen,
@@ -508,10 +519,52 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   extract: 700_000,
   /* GUESS, generous. Deterministic, no model call. */
   blocks: 5_000,
-  /* MEASURED 2026-08-30, the worst in data/_ai-calls.jsonl: one call, so its
-     sum and its wall clock agree and no grouping argument applies. This is the
-     number the whole budget turns on, and `LEASE_MS` is sized around it. */
-  hierarchy: 320_400,
+  /* **A CEILING, and the reasoning is `extract`'s above, for the same reason.**
+     ⟨measured 2026-09-04 on Kuhn, *A Landscape of Consciousness*, 142 pages⟩
+
+     **MEASURED 2026-08-30**, on ordinary articles: the worst `hierarchy` in
+     data/_ai-calls.jsonl is **320.4 s** in a single call, so its sum and its
+     wall clock agree and no grouping argument applies. That number stood here
+     until 2026-09-04 and is still the one `LEASE_MS` is sized around — it is
+     what an ordinary web page costs, and `tests/jobs-lease-budget.test.ts` goes
+     on asserting the whole HTML ingest against it.
+
+     **MEASURED 2026-09-04**, on the 142-page paper this plan is about: the
+     structure call **alone** is 508 s and the whole step is **658–778 s**. The
+     same two production ingests recorded `extract` at 305–347 s, so the walk
+     reached this step with 393–435 s of its deadline left — comfortably over
+     320.4 s, so it started a step that could not reach even its first
+     checkpoint, bought most of a ~$2 structure call, and spent one of the two
+     windows `REQUEUE_BUDGET` allows. ⟨GPT Sol, reviewing the built stage 3⟩
+
+     **No threshold can promise this step fits**, because 778 s is more than the
+     740 s deadline; what a threshold can do is stop it being *started* on a
+     remnant. So this is `extract`'s answer to `extract`'s question — as much of
+     the window as can be reserved without the step becoming unstartable — and
+     the same 700 s, which is not a coincidence: both are "essentially the whole
+     window, minus enough for a step to have preceded it".
+
+     What it means in practice is that `hierarchy` almost always begins a claim
+     rather than continuing one: the walk runs its **first** runnable step
+     ungated (`advanceJobWith`'s loop, below), so a claim that opens on
+     `hierarchy` gets the entire 740 s, and a claim that reaches it after
+     `fetch → extract → blocks` hands back instead. Once inside, an overrun is a
+     cooperative pause that keeps the draft (`pauseForDeadline`,
+     src/store/jobs.ts) and the structure answer is checkpointed
+     (src/hierarchy.ts), so the next window resumes rather than re-buying it.
+
+     **The cost is one extra request for an ordinary article**, which used to
+     finish all five steps in one claim and now hands back before `hierarchy`
+     with ~615 s left. That is the cheap direction this table's header names —
+     the steps already done are skipped from the draft — and the expensive
+     direction is what shipped. A size-sensitive threshold would keep the single
+     request for short articles and is the obvious later refinement; it is not
+     built, because the simple number is what removes the retry click.
+
+     `tests/jobs-lease-budget.test.ts` pins the relationship rather than the
+     number: greater than what the worst measured PDF `extract` leaves behind,
+     and less than the claimant's own deadline. */
+  hierarchy: 700_000,
   /* Its own wall-clock cap rather than a measurement — `ASSETS_BUDGET_MS` in
      src/collect-assets.ts, which the step enforces on itself. Measured cost on
      the corpus's worst article (10 images) is 7.1s; the cap is there for a

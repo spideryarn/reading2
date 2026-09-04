@@ -1214,6 +1214,25 @@ equivalent: on the store we actually ship, a deploy landing mid-ingest cost the 
 same row is the whole point, because the row keeps the slug, the slug keeps the article, and the
 article keeps its checkpoints.
 
+**And since 2026-09-04 the requeued row keeps its draft too.** It did not until then, and that made
+this half of the budget quietly undo the other half: a job that had paused cleanly and was then
+deployed over came back with `draft_revision_id` null, so `blocks` re-ran as a first ingest, re-minted
+every block id, and could not reach the structure checkpoint the previous window had paid for — the
+ids are inside the request that checkpoint is keyed on. Reaching an article's checkpoints is not the
+same as being able to use them. The old argument for clearing it — a claimant that vanished mid-write
+leaves a half-written draft — predates the transactional stage runner: artefacts, step completion and
+the job transition now commit together or not at all
+([`pg-session.ts`](../../src/store/pg-session.ts)), the model call is outside that transaction, and
+`beginStepRun` already lets a different attempt reopen the step row an abort left `running`. So a
+killed claim leaves a finished step or no trace of one, never half of one. ⟨GPT Sol, reviewing the
+built stage 3 of
+[260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md), finding 1⟩
+
+**The *terminal* branch still clears the pointer, and must.** `sweepAbandonedDrafts` spares a revision
+that any job row names, so a job that has ended holding one is a draft nothing will ever publish and
+nothing will ever reclaim. The two field sets used to be identical on purpose; they are not any more,
+and the difference is stated on both statements in [`pg-jobs.ts`](../../src/store/pg-jobs.ts).
+
 The budget is [`REQUEUE_BUDGET`](../../src/jobs.ts) — **two requeues, so three lease windows in
 all** — and the number is the caller's while enforcing it is the store's, the same division
 `LEASE_MS` and the concurrency cap already have. Without one a job that overruns every lease requeues
@@ -1249,13 +1268,16 @@ between-steps hand-back. The job goes back to `queued` on its own row, the brows
 
 **It keeps `draft_revision_id`, and that is the whole design rather than a nicety.** The obvious
 implementation was to route the overrun through `settleExpired`'s requeue, which already carries the
-budget — but that statement **nulls the pointer**, and on a first ingest there is no published
+budget — but that statement **nulled the pointer**, and on a first ingest there is no published
 revision for the next draft to copy from. So `blocks` re-runs as a genuine first ingest and mints
 **every block id afresh** ([`src/ids.ts`](../../src/ids.ts); GPT Sol reproduced `same: false` over
 identical HTML). Everything keyed on those ids goes with them — the hierarchy structure checkpoint
-above all — so every window would re-buy the most expensive call in the pipeline. A lapsed claimant's
-draft is worth throwing away because it vanished mid-write; this one's is not, because it stopped on
-purpose with every finished step's run row committed.
+above all — so every window would re-buy the most expensive call in the pipeline.
+
+The pause was therefore built as its own statement. **The lapsed half was then fixed to match**, on
+the second review — see the paragraph above: a pause that keeps the draft and a lapse that throws it
+away compose into a job that loses it anyway, which is the ordinary sequence of one overrun followed
+by one deploy.
 
 **Four answers, not a row count** ⟨GPT Sol⟩. Zero rows moved means four different things —
 `requeued`, `cancelled`, `budget-spent`, `stale` — and only one of them may end the job. **Cancellation
@@ -1397,10 +1419,14 @@ ids over rather than minting new ones.
    (1) and (2) hold, and unwise before then: automatically re-running steps against artefacts we
    cannot vouch for is how you get a tree built for the previous version of an article.
    **Built on 2026-09-03, twice over** — `REQUEUE_BUDGET` above. The reason it became safe is
-   (1) and (2): the requeue drops the job's draft pointer, so every step re-asks `stepIsDone` about
-   *artefacts* rather than trusting its own record, and the expensive half is held by the checkpoints
-   instead. Carrying the draft across attempts is still not done — that is decision 8 of
-   [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md).
+   (1) and (2): every step re-asks `stepIsDone` about *artefacts* rather than trusting its own
+   record, and the expensive half is held by the checkpoints. **The requeue used to drop the job's
+   draft pointer as well, and stopped on 2026-09-04**: it carries the draft across attempts now, so
+   the finished steps are found rather than re-run and the block ids do not move under the
+   checkpoints. That is decision 8 of
+   [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md), decided in
+   the affirmative for a requeue and still open for anything else — what made it safe is that a step
+   and its artefacts now commit atomically, so there is no half-written draft to carry.
 
 The sweep-then-retry shape is deliberately the same one
 [`sweepOrphaned`](../../src/routes.ts) uses for comments, and for the same reason: a status of

@@ -84,7 +84,7 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 /**
@@ -134,6 +134,7 @@ import { mintAttempt } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import type { ArtifactKind, ArtifactStore } from "../src/store/artifacts.js";
+import type { CheckpointStore } from "../src/store/checkpoints.js";
 import type { Arc, Block, Job, JobStep, StepName, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
@@ -185,6 +186,7 @@ const SLUGS = {
   pause: "claim-session-pg-deadline-pause",
   pauseStop: "claim-session-pg-deadline-pause-stop",
   pauseSpent: "claim-session-pg-deadline-pause-spent",
+  pauseLapse: "claim-session-pg-pause-then-lapse",
 } as const;
 
 /* ------------------------------------------------------- the scratch roots -- */
@@ -1496,5 +1498,227 @@ when("a claim under Postgres", () => {
     expect(row?.failureKind).toBe("retry");
     expect(row?.error).toBe(INTERRUPTED.message);
     expect(row?.draftRevisionId, "a terminal job kept its draft pointer").toBeNull();
+  }, 180_000);
+
+  /* ----------------------------------------------------------------- 10 -- */
+
+  /**
+   * **A clean pause, then a lapsed claim, then the finish — and the draft, the
+   * block ids and the structure checkpoint survive all three.**
+   *
+   * ⟨GPT Sol, reviewing the built stage 3, finding 1⟩ `pauseForDeadline` keeps
+   * `draft_revision_id`; `settleExpired`'s **requeue** branch still nulled it,
+   * and stages 2 and 3 therefore did not compose. The sequence that breaks is
+   * ordinary rather than exotic:
+   *
+   * 1. `hierarchy` overruns and pauses cleanly — window one of three spent;
+   * 2. the next claim is deployed over while it is inside `hierarchy`;
+   * 3. `settleExpired` requeues it and **throws the draft away**;
+   * 4. the third window opens an empty draft, so `blocks` runs as a first
+   *    ingest and mints every id afresh (src/ids.ts) — the ids are in the
+   *    structure request, so its fingerprint moves and the checkpoint bought in
+   *    window two is unreachable;
+   * 5. the tree is bought again — ~508 s and ~$2 on the paper this plan is
+   *    about — the budget is gone, and the reader gets the Retry button this
+   *    whole job exists to remove.
+   *
+   * ## Why the old rationale for clearing it no longer holds
+   *
+   * The comment on that branch argued that a draft written by a process which
+   * vanished mid-step holds "whatever that process had got to". That predates
+   * the transactional stage runner. Artefacts, the postcondition, the step
+   * completion, the publication and the job transition now commit **together or
+   * not at all** (src/store/pg-session.ts), and the model call is outside that
+   * transaction, so a killed claimant leaves either a finished step or no trace
+   * of it — never half of one. The step it was inside stays honestly `running`,
+   * and `beginStepRun` explicitly allows *a different attempt* to reopen a row
+   * in that state (src/store/pg-revisions.ts). A stale claimant that keeps going
+   * is refused by `requireLiveJobOwnsDraft`, because `settleExpired` cleared its
+   * token. There is nothing half-written left for the pointer to point at.
+   *
+   * The **terminal** branch still clears it and must: `sweepAbandonedDrafts`
+   * spares a revision any job row names, so a job that has ended holding a
+   * pointer is a draft nothing will ever publish or reclaim.
+   *
+   * ## What makes the assertions load-bearing rather than decorative
+   *
+   * `blocks` here **mints fresh ids on every run**, which is what the real one
+   * does when there are no published blocks to copy from — so a lost draft is
+   * visible in the article's own ids, not merely in a counter. And the
+   * structure checkpoint is keyed on **those ids**, exactly as the real one is
+   * keyed on a request that contains them, so "the checkpoint was still there"
+   * and "the identity survived" are one fact rather than two hopeful ones.
+   */
+  it("keeps the draft when a lapsed claim is requeued, so the checkpoint written before it survives", async () => {
+    const slug = SLUGS.pauseLapse;
+    const job = await queueJob(slug, INGEST);
+
+    /** How many times `blocks` has run, and the ids the last run minted. */
+    let blockRuns = 0;
+    let minted: Block[] = [];
+    /** How many times `hierarchy` failed to find its answer and had to buy one. */
+    let structureCalls = 0;
+
+    const extractHtml = "<html><body><p>the article, as fetched</p></body></html>";
+    const extract = returningStep("extract", {
+      extractedHtml: extractHtml,
+      meta: { slug, title: "A fixture article" },
+    });
+
+    /* **Fresh ids every run**, as `blocks` mints them on a first ingest. A draft
+       that survives is a `blocks` that never runs again; a draft that is thrown
+       away is a different article wearing the same slug. */
+    const blocksStep = {
+      name: "blocks",
+      label: STEPS.blocks.label,
+      outputs: () => [],
+      produces: STEPS.blocks.produces,
+      async run(): Promise<StepProduct> {
+        blockRuns += 1;
+        minted = [
+          block(mintId(), `The opening paragraph, generation ${blockRuns}.`),
+          block(mintId(), `The closing paragraph, generation ${blockRuns}.`),
+        ];
+        return {
+          parts: {
+            blocks: { blocks: minted },
+            stampedHtml: `<html><body>${minted.map((b) => b.html).join("")}</body></html>`,
+          } as never,
+          detail: "blocks ran",
+        };
+      },
+    } as unknown as PipelineStep;
+
+    /**
+     * `hierarchy`, with stage 2's checkpoint in miniature: read the blocks the
+     * draft holds, key the answer on their **ids**, and pay only on a miss.
+     *
+     * `hang` is the deadline overrun — the checkpoint is written first, because
+     * that is the whole shape of the real step: the expensive answer lands, and
+     * then the wall clock runs out before the step can finish.
+     */
+    const hierarchyStep = (hang: boolean) =>
+      ({
+        name: "hierarchy",
+        label: STEPS.hierarchy.label,
+        outputs: () => [],
+        produces: STEPS.hierarchy.produces,
+        async run(
+          ctx: { signal: AbortSignal },
+          store: ArtifactStore,
+          checkpoints: CheckpointStore,
+        ): Promise<StepProduct> {
+          const file = await store.read(slug, "blocks", "blocks");
+          const read = file?.blocks as Block[] | undefined;
+          if (!read?.length) throw new Error("hierarchy could not read the blocks in its draft");
+          /* The key **is** the block identity — lower-case, hyphenated and
+             within `CHECKPOINT_KEY_RE` by construction, because a block id is. */
+          const key = read.map((b) => b.id).join("-");
+          const found = await checkpoints.read<{ tree: string }>(slug, "hierarchy-structure", [key]);
+          if (!found.has(key)) {
+            structureCalls += 1;
+            await checkpoints.write(slug, "hierarchy-structure", key, {
+              tree: "as the model gave it",
+            });
+          }
+          if (hang) {
+            await new Promise<never>((_resolve, reject) => {
+              if (ctx.signal.aborted) reject(ctx.signal.reason as Error);
+              else
+                ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason as Error), {
+                  once: true,
+                });
+            });
+          }
+          return {
+            parts: {
+              tree: treeFor(slug, read),
+              labels: labelsFor(slug, read),
+              blocks: { blocks: read },
+            } as never,
+            stamp: { inputHash: hashBlocks(read) },
+            detail: "hierarchy ran",
+          };
+        },
+      }) as unknown as PipelineStep;
+
+    /* --- Window 1: `extract` and `blocks` land; `hierarchy` is handed back. --
+       30 s of deadline: more than `blocks` needs and far less than
+       `STEP_BUDGET_MS.hierarchy`, so the walk puts the claim down between the
+       two rather than starting a step it cannot finish. No requeue is spent —
+       a between-steps release is free. */
+    const { result: first } = await advanceInFreshScratch(job.id, {
+      session: claimSession,
+      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
+      leaseMs: DEADLINE_MARGIN_MS + 30_000,
+    });
+    expect(first?.done, "window one ended the job").toBe(false);
+    expect(blockRuns, "window one did not get as far as minting the blocks").toBe(1);
+    const firstIds = minted.map((b) => b.id);
+    const draft = (await jobRow(job.id))?.draftRevisionId;
+    expect(draft, "window one opened no draft").toBeTruthy();
+    expect((await jobRow(job.id))?.requeues ?? 0, "a between-steps release spent a window").toBe(0);
+
+    /* --- Window 2: the clean pause, with the tree already paid for. --------- */
+    const { result: paused } = await advanceInFreshScratch(job.id, {
+      session: claimSession,
+      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(true) } as never,
+      leaseMs: DEADLINE_MARGIN_MS + 6_000,
+    });
+    expect(paused?.done, "the overrun ended the job instead of putting it down").toBe(false);
+    expect(structureCalls, "the structure answer was not bought in window two").toBe(1);
+    expect((await jobRow(job.id))?.requeues).toBe(1);
+    expect((await jobRow(job.id))?.draftRevisionId, "the pause dropped the draft").toBe(draft);
+
+    /* --- Window 3: the claim is deployed over, and the lease lapses. -------
+       Claimed and then expired on the **database's** clock rather than run with
+       a lease short enough to expire between assertions — the same helper shape
+       tests/store-jobs-parity.test.ts uses, and for the same reason. */
+    const lost = mintAttempt();
+    const claimed = await pgJobStore.claim(job.id, DEV_OWNER_ID, lost, 60_000, 4);
+    expect(claimed.kind, "the requeued job could not be claimed again").toBe("claimed");
+    await db()
+      .update(jobsTable)
+      .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+      .where(eq(jobsTable.id, job.id));
+    /* Owner-scoped, because the unscoped sweep is the whole table and this suite
+       shares a database with everything else that is running. */
+    expect(await pgJobStore.settleExpired(undefined, DEV_OWNER_ID, REQUEUE_BUDGET)).toContainEqual({
+      id: job.id,
+      status: "queued",
+    });
+
+    const swept = await jobRow(job.id);
+    expect(swept?.status).toBe("queued");
+    expect(swept?.requeues, "the lapse and the pause did not share one counter").toBe(2);
+    /* **The finding, in one line.** */
+    expect(
+      swept?.draftRevisionId,
+      "the lapsed claim's requeue threw the draft away — the next window re-mints every " +
+        "block id and the structure checkpoint is unreachable",
+    ).toBe(draft);
+
+    /* --- Window 4: the finish, on the draft the first three left. ---------- */
+    const { result: finished, root } = await advanceInFreshScratch(job.id, {
+      session: claimSession,
+      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
+    });
+    expect(finished?.job.error).toBeUndefined();
+    expect(finished?.done).toBe(true);
+    expect(finished?.job.status).toBe("done");
+
+    expect(blockRuns, "the resumed claim re-minted the article's ids").toBe(1);
+    expect(
+      structureCalls,
+      "the checkpoint written in window two was not found in window four — the identity it " +
+        "is keyed on moved",
+    ).toBe(1);
+    expect(
+      await currentRevisionOf(slug),
+      "the published revision is not the draft the three windows shared",
+    ).toBe(draft);
+    const article = await runAsOwner(DEV_OWNER_ID, () => pgArticleReader.loadArticle(slug));
+    expect(article.blocks.map((b) => b.id)).toEqual(firstIds);
+    await assertScratchUntouched(root, "the claim that finished a paused-then-lapsed job");
   }, 180_000);
 });

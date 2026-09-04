@@ -227,6 +227,42 @@ function persist(job: Job, ticket = tickets.get(job.id)): Promise<void> {
 }
 
 /**
+ * **Persist this transition and answer with the record as it was when the
+ * transition was made** — the filesystem adapter's linearisation point.
+ *
+ * Every mutating method here works on the *shared* object in `index`, and every
+ * one of them used to end `await persist(job); return structuredClone(job)`. The
+ * clone is on the far side of a yield, so what came back was not the transition
+ * that was made but whatever the next one had left behind. GPT Sol ran
+ * `pauseForDeadline` and `requestCancel` in one turn and got
+ * `{kind: "requeued"}` carrying a **cancelled** job: the discriminated union
+ * false at runtime, and src/jobs.ts telling the reader `done: false` about a job
+ * that was over. ⟨reviewing the built stage 3 of
+ * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md, finding 3⟩
+ *
+ * So the snapshot is taken **before** the yield, and it is the snapshot that is
+ * written as well as returned. Writing the live object instead would put a
+ * later transition's state under an earlier transition's write — harmless only
+ * as long as every queued write happens to end up writing the same final value,
+ * which is an accident rather than a rule. Snapshots are written in the order
+ * the transitions were made (`persist` chains them per job), so the file ends
+ * up holding the last transition's record either way, and each intermediate
+ * write is now honest about which transition it belongs to.
+ *
+ * **Not a lock**, and it does not need to be. Every method here decides and
+ * mutates in one synchronous stretch, so the *decision* is already atomic on a
+ * single-threaded runtime; the only thing that was not atomic was reading the
+ * answer back. Postgres gets this from `select … for update` plus `returning`.
+ *
+ * `structuredClone` is the same call `get` makes on the way out, and for the
+ * same reason.
+ */
+function committed(job: Job, ticket = tickets.get(job.id)): Promise<Job> {
+  const snapshot = structuredClone(job);
+  return persist(snapshot, ticket).then(() => snapshot);
+}
+
+/**
  * Return anything left `running` or half-run by a process that has gone.
  *
  * **Single-process reasoning, and it is sound here:** this process has just
@@ -544,8 +580,7 @@ export const fsJobStore: JobStore = {
     const queued: Job = { ...job, status: "queued" };
     index.set(queued.id, queued);
     tickets.set(queued.id, ticket);
-    await persist(queued);
-    return { kind: "created", job: structuredClone(queued) };
+    return { kind: "created", job: await committed(queued, ticket) };
   },
 
   async claim(
@@ -578,8 +613,7 @@ export const fsJobStore: JobStore = {
     // going" should not restart every time a tab picks it back up.
     job.startedAt ??= new Date().toISOString();
     attempts.set(id, { attempt, expires: Date.now() + leaseMs });
-    await persist(job);
-    return { kind: "claimed", job: structuredClone(job) };
+    return { kind: "claimed", job: await committed(job) };
   },
 
   async releaseStep(
@@ -603,8 +637,7 @@ export const fsJobStore: JobStore = {
       job.status = "queued";
     }
     attempts.delete(id);
-    await persist(job);
-    return structuredClone(job);
+    return await committed(job);
   },
 
   async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
@@ -634,8 +667,7 @@ export const fsJobStore: JobStore = {
      * over a handful of small records once a step.
      */
     job.steps = structuredClone(steps);
-    await persist(job);
-    return structuredClone(job);
+    return await committed(job);
   },
 
   /**
@@ -690,8 +722,7 @@ export const fsJobStore: JobStore = {
     delete job.error;
     delete job.failureKind;
     attempts.delete(id);
-    await persist(job);
-    return { kind: "requeued", job: structuredClone(job) };
+    return { kind: "requeued", job: await committed(job) };
   },
 
   async finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
@@ -711,8 +742,7 @@ export const fsJobStore: JobStore = {
     else delete job.failureKind;
     if (ending.title !== undefined) job.title = ending.title;
     attempts.delete(id);
-    await persist(job);
-    return structuredClone(job);
+    return await committed(job);
   },
 
   /**
@@ -776,13 +806,15 @@ export const fsJobStore: JobStore = {
            allowed to part company across a restart. */
         job.requeues = spent;
         sweepStopped(job);
-        await persist(job);
-        settled.push({ id, status: job.status as ExpirySettlement["status"] });
+        /* The status off the **snapshot** rather than off the shared record:
+           this loop awaits once per job, so a transition on another turn can
+           reach the same object in between and the settlement would then report
+           that one's ending instead of this one's. See `committed` above. */
+        settled.push({ id, status: (await committed(job)).status as ExpirySettlement["status"] });
         continue;
       }
       settleAbandoned(job);
-      await persist(job);
-      settled.push({ id, status: job.status as ExpirySettlement["status"] });
+      settled.push({ id, status: (await committed(job)).status as ExpirySettlement["status"] });
     }
     return settled;
   },
@@ -814,8 +846,7 @@ export const fsJobStore: JobStore = {
     } else {
       job.cancelling = true;
     }
-    await persist(job);
-    return structuredClone(job);
+    return await committed(job);
   },
 
   async forget(id: string, owner: OwnerId): Promise<boolean> {
