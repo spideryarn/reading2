@@ -45,6 +45,12 @@ so say so in the prompt, and say how: `npx vitest run tests/<one>.test.ts` and
 Until 2026-09-02 it could not, and fifteen reviews in a row were reasoning rather than
 reproduction — every attempt to run a test is in their activity logs, dying on `EROFS`.
 
+**But only a test that needs nothing outside the tree.** The profile has *no network at all*, not
+even loopback, so anything touching Postgres or a local service skips or fails however it is
+invoked, and `data/` is not writable either. Those are **the orchestrator's to run**, handing over
+the raw output — not the reviewer's. Promising "you can run a test file" without that caveat is how
+a review comes back with five Postgres assertions quietly skipped.
+
 **Weight the second review higher than the first — higher, not instead.** A plan-stage review reads
 prose, so it can only catch what the prose says. It cannot find a `PATCH` handler that writes one
 field and then rejects the request — that bug does not exist until somebody writes it. Reviewing the
@@ -397,12 +403,52 @@ then with a real `codex exec`:
 | `npm run typecheck` (the tsx CLI) | `EPERM` | `EPERM` | `EPERM` |
 | `npm test`, the whole suite | no | no | no |
 
-The last two rows are the honest limits. The tsx CLI listens on a unix socket and the sandbox
-denies that in every mode (a `unix_sockets` allow rule in the profile's `[network]` table did not
-change it), so run scripts as `node --import tsx <script>`. The full suite writes to `data/` and the
-Postgres half needs loopback network, which no profile short of `danger-full-access` grants. Neither
-matters for a review: one red test file is the reproduction, a green suite is the implementer's
-job.
+The last two rows are the honest limits **of this profile**, and it is worth knowing why, because
+the reason is not the one this doc gave until 2026-09-04. Both are gated by a single switch: the
+profile's **network** policy, which `review` does not grant at all. Not the internet, not loopback —
+`curl http://127.0.0.1:…` exits 7. So run scripts as `node --import tsx <script>`, which opens no
+socket. Neither limit matters for a review: one red test file is the reproduction, a green suite is
+the implementer's job, and **the Postgres half is the orchestrator's to run and hand over.**
+
+> This paragraph used to say the tsx CLI's unix socket "is denied in every mode" and that a
+> `unix_sockets` rule did not change it. That was wrong, and it mattered: it read as a property of
+> the sandbox, so nobody looked again. It is a property of *this profile*. See
+> [What network would buy](#what-network-would-buy-and-why-the-profile-does-not-grant-it).
+
+### What network would buy, and why the profile does not grant it
+
+Measured 2026-09-04 on 0.152.1, mostly with `codex sandbox`, which runs a command under a profile
+**with no model in it and at no cost** — the cheap way to settle any question on this page. Point
+`CODEX_HOME` at a directory holding a throwaway `config.toml` and you can test a profile without
+touching the repo's.
+
+| Profile | `curl` external | `curl` loopback | `npm run typecheck` | a real Postgres test |
+|---|---|---|---|---|
+| `review` (what is checked in) | ✗ exit 7 | ✗ exit 7 | ✗ `EPERM` | ✗ |
+| `[permissions.X.network] enabled = true` | 200 | 200 | **passes, 1266 files** | **16/16 passed** |
+| the same `+ features.network_proxy` and a loopback allowlist | ✗ blocked | 200 | ✗ `EPERM` | ✗ 5 of 16 failed |
+| the same again with `network.mode = "full"` | ✗ blocked | 200 | ✗ `EPERM` | ✗ 5 of 16 failed |
+
+Row 2 is the temptation: turn network on and the reviewer can typecheck the repo and reproduce a
+Postgres finding against a real database, which is where most of this codebase's bugs live.
+
+Rows 3 and 4 are why we don't take the middle road. Codex *does* have a host allowlist —
+`features.network_proxy = true` plus a `[permissions.<name>.network.domains]` table of
+`"host" = "allow"` — and it works as an allowlist. But **turning the proxy on is what re-denies the
+unix socket**, so typecheck dies again; and a client that does not speak SOCKS never arrives, since
+the proxy is reached through `ALL_PROXY=socks5h://…` — the Postgres driver gets
+`connect ECONNREFUSED 127.0.0.1:1`. `network.mode = "full"` does not change either. So the choice is
+binary: no network, or unrestricted outbound.
+
+**We take no network.** With `"/" = "read"`, a network-capable reviewer is a process that can read
+`.env.local` — including a production `DATABASE_URL` — and make outbound requests, moments after
+reading a corpus of untrusted article prose. Nothing about that requires the model to be
+adversarial. Deny rules exist and work (`"/path" = "none"`, globs included), but they do not save
+it: denying `.env*` stops the suite reading `DATABASE_URL` and so removes the capability you turned
+network on for, and denying `~/.codex` stops codex executing its own binary.
+
+The cost we accept is real — the reviewer reasons about Postgres rather than reproducing it. Pay it
+by running that suite yourself and handing over the raw output.
 
 It is a relaxation of what the reviewer can *run*, not of what it can *change*: the sandbox still
 refuses a write to anything git tracks, so nothing in [Commit before you let it write](#commit-before-you-let-it-write)
@@ -598,9 +644,11 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
 - **Don't pipe Codex's raw stdout back in as a prompt.** It's a prompt-injection vector as soon as
   Codex echoes file or user content. Use `-o` and parse deliberately.
 - **`listen EPERM` on a tsx IPC pipe.** Any sandboxed run that shells out to `npx tsx` or an
-  `npm run` script built on it fails with `listen EPERM … /tmp/tsx-…/*.pipe` — in every mode,
-  `workspace-write` included, measured 2026-09-02. That's a sandbox artefact, not a code failure:
-  the tsx CLI listens on a unix socket and the sandbox denies it. Invoke the script as
+  `npm run` script built on it fails with `listen EPERM … /tmp/tsx-…/*.pipe` — in every mode we
+  actually use, `workspace-write` included, measured 2026-09-02. That's a sandbox artefact, not a
+  code failure: the tsx CLI listens on a unix socket and the sandbox denies it **whenever the
+  profile denies network**, which is every profile here (2026-09-04 —
+  [why](#what-network-would-buy-and-why-the-profile-does-not-grant-it)). Invoke the script as
   `node --import tsx …`, which opens no socket, or re-run the validation in your own shell.
 - **Stale-looking answers.** A run occasionally returns something that reads as an answer to a
   *previous* prompt. The wrapper writes a fresh temp `-o` file per run and never resumes a session,
