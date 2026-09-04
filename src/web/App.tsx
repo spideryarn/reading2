@@ -106,7 +106,7 @@ import { SourceScanNotice } from "./SourceScanNotice.js";
 import { RefereeHowButton, RefereeHowCard, useHowCard } from "./RefereeCard.js";
 import { useSourceScan } from "./useSourceScan.js";
 import { SearchPanel } from "./SearchPanel.js";
-import { useSearch } from "./useSearch.js";
+import { useSearch, type SavedSearch } from "./useSearch.js";
 import { assignSlots } from "./hit-colours.js";
 import {
   blockHues,
@@ -161,8 +161,10 @@ import {
   termParam,
   findParam,
   matchParam,
+  type Matcher,
   resolveMatcher,
   orderParam,
+  type HitOrder,
   confParam,
   currentAt,
   runParam,
@@ -214,7 +216,12 @@ import type {
   PublicIdeas,
   PublicTimeline,
 } from "../public-types.js";
-import { artefactsIn, artefactsOf, visitorComments } from "./public-artefacts.js";
+import {
+  artefactsIn,
+  artefactsOf,
+  visitorComments,
+  visitorSearches,
+} from "./public-artefacts.js";
 import { NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
 import { markedModes, visitorGap } from "./visitor.js";
 import {
@@ -653,6 +660,12 @@ type ArticleAccess =
        */
       comments: Comment[];
       /**
+       * **The owner's saved searches, read-only**, lifted out here for the
+       * reason `comments` above is.
+       * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+       */
+      searches: SavedSearch[];
+      /**
        * **The glossary, the summaries, the ideas and the tweet thread**, as
        * they arrived — inside the same payload as the prose.
        *
@@ -835,6 +848,10 @@ async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAc
            the `status` a `PublicComment` deliberately does not carry, and says
            why. src/web/public-artefacts.ts. */
         comments: visitorComments(found.article),
+        /* Derived here too, once, and for the same reason — `visitorSearches`
+           supplies the `status` a `PublicSearchRun` deliberately does not
+           carry. src/web/public-artefacts.ts. */
+        searches: visitorSearches(found.article),
         sessionUnconfirmed: found.sessionUnconfirmed,
       };
 }
@@ -1017,6 +1034,7 @@ function ArticlePage({
           artefacts={access.artefacts}
           available={access.available}
           comments={access.comments}
+          searches={access.searches}
           signedIn={signedIn}
           sessionUnconfirmed={access.sessionUnconfirmed}
           view={view}
@@ -1268,6 +1286,7 @@ function VisitorArticle({
   artefacts,
   available,
   comments,
+  searches,
   signedIn,
   sessionUnconfirmed,
   view,
@@ -1279,6 +1298,8 @@ function VisitorArticle({
   available: PublicArtefacts;
   /** The owner's comments, read-only. reader-capability.ts § comments. */
   comments: Comment[];
+  /** The owner's saved searches, read-only. reader-capability.ts § searches. */
+  searches: SavedSearch[];
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
   /**
@@ -1315,7 +1336,15 @@ function VisitorArticle({
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "visitor", artefacts, available, comments, signedIn, sessionUnconfirmed }}
+      capability={{
+        kind: "visitor",
+        artefacts,
+        available,
+        comments,
+        searches,
+        signedIn,
+        sessionUnconfirmed,
+      }}
     />
   );
 }
@@ -1868,6 +1897,13 @@ function Reader({
   const comments =
     capability.kind === "owner" ? capability.comments.comments : capability.comments;
   const commentError = owner?.comments.error ?? null;
+  /* **A visitor's saved searches, and there is no owner arm to meet.** Unlike
+     the comments above, the owner's searches are fetched inside `SearchBand`
+     itself rather than held here — so this is not a seam between two sources,
+     it is the one source there is, and `NO_SEARCHES` stands in where the
+     question does not arise. A module constant rather than a fresh `[]`,
+     because the band memoises on it by identity. reader-capability.ts § searches. */
+  const searches = capability.kind === "visitor" ? capability.searches : NO_SEARCHES;
   /**
    * The floating chat, and the passage it is about.
    *
@@ -3227,9 +3263,30 @@ function Reader({
           onOpenKey={setOpenTimelineKey}
         />
       )}
+      {/* **The owner/visitor pair, since 2026-09-04.** It was `owner &&` alone
+          until then, because search is the one mode where the reader's own
+          question is the artefact. Greg drew the line at *making* one: a
+          visitor gets the list, the ticks and the marks, and no way to ask.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+
+          Not gated on there being any, unlike the artefact modes above: an
+          article nobody has searched is an article nobody has searched, which
+          is a sentence the panel draws rather than a missing artefact
+          `visitorGap` should be standing in front of.
+          src/public-types.ts § PublicArticle.searches. */}
       {owner && mode === "search" && (
         <SearchBand
           slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setFound}
+          openHit={openHit}
+          onOpenHit={setOpenHit}
+        />
+      )}
+      {!owner && mode === "search" && (
+        <VisitorSearchBand
+          searches={searches}
           blocks={article.blocks}
           onJump={jumpTo}
           onFound={setFound}
@@ -3697,6 +3754,15 @@ export function TimelineBand({
  * flight.
  */
 const NO_EVENTS: TimelineEvent[] = [];
+
+/**
+ * The same module constant for the same reason, and it is never rendered: only
+ * `VisitorSearchBand` reads `searches`, and it is mounted only for a visitor.
+ * It exists so that the line resolving the capability has an honest value for
+ * *the question does not arise* rather than an `as` or a `null` every reader
+ * downstream would have to test.
+ */
+const NO_SEARCHES: SavedSearch[] = [];
 
 /**
  * **The same panel, for somebody who does not own the article.**
@@ -4797,12 +4863,144 @@ function SearchBand({
 }) {
   useRenderCount("SearchBand");
   const { runs, loaded, loadFailed, ask, retry, remove, recolour, error } = useSearch(slug);
+  const { panel, setActive } = useSearchMode({
+    runs,
+    blocks,
+    words: true,
+    onJump,
+    onFound,
+    openHit,
+    onOpenHit,
+  });
+
+  return (
+    <SearchPanel
+      {...panel}
+      access={{
+        kind: "owner",
+        loaded,
+        loadFailed,
+        error,
+        onAsk: (criterion) => {
+          /* `ask` mints the id, so `?runs=` can name the search before the
+             model has said anything — the same trick `?note=` and `?thread=`
+             use.
+
+             And it switches itself on, which is the one exception to
+             default-false: a search the reader just paid for and cannot see is
+             not a result. */
+          setActive([...panel.active, ask(criterion)]);
+          onOpenHit(null);
+        },
+        onRetry: retry,
+        /* Straight through. Unlike every other write on this panel it does not
+           touch `?runs=` or the open row: a colour changes what a mark looks
+           like, never which marks are drawn or which one the reader is on. */
+        onRecolour: recolour,
+        onDelete: (id) => {
+          remove(id);
+          setActive(panel.active.filter((x) => x !== id));
+          onOpenHit(null);
+        },
+      }}
+    />
+  );
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * No `useSearch`, and therefore no fetch, no `ask`, no retry and no delete: the
+ * saved runs came in the page's own payload. Greg, 2026-09-04 — *"Only owner
+ * can create new searches. Everyone else can see the ones they have already
+ * created."*
+ *
+ * A second band rather than a second panel, for the reason
+ * `VisitorTimelineBand` and `VisitorGlossaryBand` give: a hook cannot be called
+ * conditionally, so the owner/visitor seam has to be a component boundary
+ * (src/web/reader-capability.ts). And `words: false`, which pins the matcher —
+ * a pasted `?match=words` would otherwise put this reader in front of a box
+ * that is not rendered.
+ */
+function VisitorSearchBand({
+  searches,
+  blocks,
+  onJump,
+  onFound,
+  openHit,
+  onOpenHit,
+}: {
+  searches: SavedSearch[];
+  blocks: Article["blocks"];
+  onJump(id: BlockId): void;
+  onFound(next: Found[]): void;
+  openHit: string | null;
+  onOpenHit(next: string | null): void;
+}) {
+  useRenderCount("VisitorSearchBand");
+  const { panel } = useSearchMode({
+    runs: searches,
+    blocks,
+    words: false,
+    onJump,
+    onFound,
+    openHit,
+    onOpenHit,
+  });
+  return <SearchPanel {...panel} access={{ kind: "visitor" }} />;
+}
+
+/**
+ * **Everything the search band does that is not a fetch** — the six URL
+ * parameters, the colour slots, the two matchers meeting, and the three effects
+ * that keep the panel and the prose showing one set of passages.
+ *
+ * Extracted on 2026-09-04 so that the owner's band and the visitor's are one
+ * behaviour rather than two, which is the same split `useTimelineMode` and
+ * `useQuotesMode` already have.
+ *
+ * **It returns two things rather than one**, unlike its siblings, and the
+ * second is the reason: `onAsk` and `onDelete` are the owner's alone, and both
+ * of them have to write `?runs=` — a search the reader just paid for switches
+ * itself on, and a deleted one switches itself off. `setActive` is that write,
+ * handed back so those two verbs can stay on the arm they belong to instead of
+ * being passed *in* here as optionals.
+ */
+function useSearchMode({
+  runs,
+  blocks,
+  words,
+  onJump,
+  onFound,
+  openHit,
+  onOpenHit,
+}: {
+  runs: SavedSearch[];
+  blocks: Article["blocks"];
+  /**
+   * **Is the literal matcher on offer to this reader?**
+   *
+   * True for an owner, false for a visitor, and it decides the value of
+   * `matcher` rather than only hiding a control — `?match=words` is ordinary
+   * query state, and a pasted link walks straight past a chip that was merely
+   * not drawn. The same pin `DiagramPanel` puts on `?diagram=`, for the same
+   * reason. See `PublicArticle.searches` for why v1 leaves it out.
+   */
+  words: boolean;
+  onJump(id: BlockId): void;
+  onFound(next: Found[]): void;
+  openHit: string | null;
+  onOpenHit(next: string | null): void;
+}) {
   const [match, setMatcher] = useQueryState("match", matchParam);
   const [find, setFind] = useQueryState("find", findParam);
   /* `?match=` has no default of its own, so that a URL carrying `?find=` and
      nothing else still opens on the words matcher it was written for. The rule
-     lives in params.ts § resolveMatcher; here it is one line. */
-  const matcher = resolveMatcher(match, find);
+     lives in params.ts § resolveMatcher; here it is one line.
+
+     **And `words` overrides it**, in this component, whatever the URL says —
+     see the prop. */
+  const matcher: Matcher = words ? resolveMatcher(match, find) : "meaning";
   /* `?run=` is read and never written — the one-search URLs that existed before
      2026-08-26 seed the set, and from then on it is `?runs=`. params.ts §
      resolveRuns has the why. */
@@ -4928,10 +5126,13 @@ function SearchBand({
     [onFound, onOpenHit],
   );
 
-  return (
-    <SearchPanel
-      matcher={matcher}
-      onMatcher={(next) => {
+  return {
+    /* Spread straight into `SearchPanel` by both bands, so the two cannot drift
+       into passing different things — the shape `useTimelineMode` already has. */
+    panel: {
+      runs,
+      matcher,
+      onMatcher: (next: Matcher) => {
         void setMatcher(next);
         /* The selection goes with the matcher, because the row it names belongs
            to the list that is about to be replaced. The ticks do **not**: they
@@ -4943,25 +5144,22 @@ function SearchBand({
            not have, and a set of ticks is a preference that survives a look
            elsewhere. */
         onOpenHit(null);
-      }}
-      find={find}
-      onFind={(next) => {
+      },
+      find,
+      onFind: (next: string | null) => {
         void setFind(next);
         onOpenHit(null);
-      }}
-      runs={runs}
-      loaded={loaded}
-      loadFailed={loadFailed}
-      active={active}
-      slots={slots}
-      onToggle={(id, on) => {
+      },
+      active,
+      slots,
+      onToggle: (id: string, on: boolean) => {
         void setRunIds(on ? [...active, id] : active.filter((x) => x !== id));
         /* Whatever row was open may have belonged to the search just switched
            off, and a highlighted row pointing at a mark that is no longer drawn
            is the panel and the prose disagreeing. Cheap to clear, and the
            reader loses only a highlight. */
         onOpenHit(null);
-      }}
+      },
       /* Pressing the row rather than its box: the set becomes this one search.
          Greg, 2026-08-27 — *"if I click on a row, select that and deselect all
          the others (since usually we care about just one at a time). If I want
@@ -4969,43 +5167,23 @@ function SearchBand({
          the row that is already alone leaves it alone; the box is what unticks.
          The open row goes for the same reason it goes on a toggle — it may have
          belonged to a search that is no longer drawing anything. */
-      onSolo={(id) => {
+      onSolo: (id: string) => {
         void setRunIds([id]);
         onOpenHit(null);
-      }}
-      onToggleAll={(on) => {
+      },
+      onToggleAll: (on: boolean) => {
         void setRunIds(on ? runs.map((r) => r.id) : []);
         onOpenHit(null);
-      }}
-      onAsk={(criterion) => {
-        /* `ask` mints the id, so `?runs=` can name the search before the model
-           has said anything — the same trick `?note=` and `?thread=` use.
-
-           And it switches itself on, which is the one exception to
-           default-false: a search the reader just paid for and cannot see is
-           not a result. */
-        void setRunIds([...active, ask(criterion)]);
-        onOpenHit(null);
-      }}
-      onRetry={retry}
-      /* Straight through. Unlike every other write on this panel it does not
-         touch `?runs=` or the open row: a colour changes what a mark looks
-         like, never which marks are drawn or which one the reader is on. */
-      onRecolour={recolour}
-      onDelete={(id) => {
-        remove(id);
-        void setRunIds(active.filter((x) => x !== id));
-        onOpenHit(null);
-      }}
-      found={results}
-      all={ordered}
-      order={order}
-      onOrder={(next) => void setOrder(next)}
-      gate={gate}
-      gateMoved={chosenConf !== null}
-      onGate={(next) => void setConf(next)}
-      openKey={openHit}
-      onOpen={(key, blockId) => {
+      },
+      found: results,
+      all: ordered,
+      order,
+      onOrder: (next: HitOrder) => void setOrder(next),
+      gate,
+      gateMoved: chosenConf !== null,
+      onGate: (next: number | null) => void setConf(next),
+      openKey: openHit,
+      onOpen: (key: string, blockId: BlockId) => {
         onOpenHit(key);
         // Always jump, even when the block is already on screen — unlike
         // stepping between comments, which deliberately does not. A search
@@ -5013,10 +5191,11 @@ function SearchBand({
         // nothing moved" is the complaint that makes a results list feel
         // broken; two comments in one paragraph are the opposite case.
         onJump(blockId);
-      }}
-      error={error}
-    />
-  );
+      },
+    },
+    /* `?runs=`, for the owner's two verbs that write it. See the docblock. */
+    setActive: (ids: string[]) => void setRunIds(ids),
+  };
 }
 
 /**

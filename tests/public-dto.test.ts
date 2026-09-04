@@ -61,6 +61,7 @@ const NO_ARTEFACTS = {
      no "nobody built one" state for them to be in. src/public-types.ts
      § PublicArticle.comments. */
   comments: [],
+  searches: [],
   sketch: null,
 } as const;
 
@@ -373,6 +374,10 @@ describe("the public article payload", () => {
            provenance-url to all reader[s]."* It is `publicSourceUrl`'s answer,
            never `articles.final_url` itself. */
         "meta.url",
+        /* The same "an empty array is still a present key" as `comments`
+           above, and for the same reason: `PublicArticle.searches` is required.
+           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+        "searches",
         "tree",
         "tree.generator",
         "tree.nodes",
@@ -950,6 +955,7 @@ describe("the artefacts a shared link carries", () => {
     tweets: THREAD,
     timeline: TIMELINE,
     comments: [],
+    searches: [],
     sketch: null,
   });
 
@@ -1182,6 +1188,120 @@ describe("the artefacts a shared link carries", () => {
     expect("citations" in (built.comments[0] ?? {})).toBe(false);
   });
 
+  /**
+   * **A saved search's question and its passages, and none of the run.**
+   *
+   * The twin of the comments case above, and the fixture does the same thing:
+   * it sets **every** field a `SearchRun` can carry, so a projection that
+   * spread its argument would leak here rather than pass for want of anything
+   * to find.
+   *
+   * **`sourceHash` is the one to look for and not find.** It is selected by the
+   * public read — the query needs it — and turns into `stale` before the DTO
+   * sees it, which is the only place in this feature where a selected column is
+   * deliberately not a promise about the wire. If it ever appears in this list,
+   * the derivation has been replaced by a passthrough.
+   */
+  it("carries a saved search's question and passages, and not the run around them", () => {
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      searches: [
+        {
+          id: "spya-run23z",
+          criterion: "anywhere the argument turns on a number",
+          createdAt: "2026-09-02T09:00:00.000Z",
+          stale: false,
+          colour: 3,
+          hits: [
+            {
+              blockId: "spya-k3m9qt",
+              quote: "does not survive its own first example",
+              confidence: 88,
+              reasoning: "The example is the measurement being disputed.",
+              start: 17,
+            },
+          ],
+          /* Everything below must not cross. Set, so that a spread would show. */
+          status: "done",
+          model: "some-model",
+          error: "a previous attempt failed",
+          sourceHash: "0123456789abcdef",
+        },
+      ],
+    });
+
+    expect(keyPaths(built.searches)).toEqual(
+      [
+        "[].colour",
+        "[].createdAt",
+        "[].criterion",
+        "[].hits",
+        "[].hits[].blockId",
+        "[].hits[].confidence",
+        "[].hits[].quote",
+        "[].hits[].reasoning",
+        "[].hits[].start",
+        "[].id",
+        "[].stale",
+      ].sort(),
+    );
+    /* And not vacuously: the reader's own words really are there, and so is the
+       passage they found. */
+    expect(built.searches[0]?.criterion).toContain("turns on a number");
+    expect(built.searches[0]?.hits[0]?.quote).toContain("first example");
+    expect(built.searches[0]?.hits[0]?.confidence).toBe(88);
+    /* The hash itself, named rather than left to the key set — this is the
+       assertion somebody deleting the derivation would have to notice. */
+    expect(JSON.stringify(built.searches)).not.toContain("0123456789abcdef");
+  });
+
+  /**
+   * **`stale` crosses as the server worked it out**, either way.
+   *
+   * Both arms, because a derivation hardwired to `true` — which is what a
+   * mistake in the fingerprint comparison produces, and it is the likely
+   * mistake — passes any test that only ever asks about a stale run. The
+   * server-side half of this is `tests/public-visibility-pg.test.ts`, against a
+   * real article whose real blocks are hashed; this only pins that the DTO
+   * carries the answer rather than inventing one.
+   */
+  it("passes staleness through in both directions", () => {
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      searches: [
+        { id: "spya-run22z", criterion: "fresh", createdAt: "2026-09-02T09:00:00.000Z",
+          status: "done", hits: [], stale: false },
+        { id: "spya-run33z", criterion: "old", createdAt: "2026-09-02T09:00:00.000Z",
+          status: "done", hits: [], stale: true },
+      ],
+    });
+
+    expect(built.searches.map((r) => r.stale)).toEqual([false, true]);
+  });
+
+  /**
+   * **An unpinned colour leaves the key off**, rather than crossing as `null`.
+   *
+   * `SearchRun.colour` absent means *whichever slot the hash gives it*
+   * (src/web/hit-colours.ts), and `assignSlots` distinguishes that from a
+   * chosen slot — so a `null` arriving in its place would be a third value at a
+   * seam that has two. `opt()` is what keeps them apart; this is what says so.
+   */
+  it("leaves an unpinned colour off rather than sending a null", () => {
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      searches: [
+        { id: "spya-run44z", criterion: "unpinned", createdAt: "2026-09-02T09:00:00.000Z",
+          status: "done", hits: [], stale: false },
+      ],
+    });
+
+    expect("colour" in (built.searches[0] ?? {})).toBe(false);
+  });
+
   it("carries the events and none of the pipeline around them", () => {
     expect(pathsUnder("timeline")).toEqual(
       [
@@ -1269,6 +1389,7 @@ describe("the artefacts a shared link carries", () => {
       tweets: null,
       timeline: null,
       comments: [],
+      searches: [],
       sketch: null,
     });
     expect("glossary" in empty).toBe(true);

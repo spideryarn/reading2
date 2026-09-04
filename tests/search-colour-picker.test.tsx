@@ -47,22 +47,29 @@ async function mount(runs: SavedSearch[] = RUNS): Promise<void> {
   await act(async () => {
     root.render(
       <SearchPanel
+        /* The owner's arm: the picker under test is one of the four verbs that
+           moved onto `SearchAccess` on 2026-09-04, and a visitor has no such
+           control at all — which is what `visitorRuns` below asserts. */
+        access={{
+          kind: "owner",
+          loaded: true,
+          loadFailed: false,
+          error: null,
+          onAsk: () => {},
+          onRetry: () => {},
+          onRecolour: (id, colour) => recoloured.push([id, colour]),
+          onDelete: () => {},
+        }}
         matcher="meaning"
         onMatcher={() => {}}
         find={null}
         onFind={() => {}}
         runs={runs}
-        loaded
-        loadFailed={false}
         active={[]}
         slots={assignSlots(runs)}
         onToggle={() => {}}
         onSolo={() => {}}
         onToggleAll={() => {}}
-        onAsk={() => {}}
-        onRetry={() => {}}
-        onRecolour={(id, colour) => recoloured.push([id, colour])}
-        onDelete={() => {}}
         found={[]}
         all={[]}
         order="document"
@@ -72,7 +79,6 @@ async function mount(runs: SavedSearch[] = RUNS): Promise<void> {
         onGate={() => {}}
         openKey={null}
         onOpen={() => {}}
-        error={null}
       />,
     );
   });

@@ -56,11 +56,11 @@ import {
   SHARING_RIGHTS_CONFIRM,
   SHARING_UNKNOWN,
   SHARED_HEADING,
+  SHARED_NOTE,
   SHARING_INVENTORY_UNKNOWN,
   SHARED_IF_BUILT_HEADING,
   SHARED_IF_BUILT_NOTE,
   NOT_SHARED_HEADING,
-  NOT_SHARED_NOTE,
   SHARING_WRITE_UNCERTAIN,
   SHARING_COPY_TIP,
   SHARING_OPEN_TIP,
@@ -497,7 +497,9 @@ export function AccessSharing({
 
               And it is not merely moved into the `shared` branch, which was the
               first fix: there it sat immediately above `Inventory`, which says
-              the same thing itemised, with `NOT_SHARED_NOTE` as its summary.
+              the same thing itemised — and had a hand-written summary of its
+              own until 2026-09-04, which is exactly the sentence that went
+              stale (src/messages.ts, at `NOT_SHARED_HEADING`).
               The list is the better answer — it is derived from the modes rather
               than written, so it cannot fall behind — and one fact belongs on
               this card once. The sentence survives for the visitor, who has no
@@ -719,11 +721,16 @@ function Inventory({ inventory }: { inventory: SharedInventory | undefined }) {
           grouped them wrongly, on the one list where which column a thing is in
           is the entire point. */}
       <div className="tw:mb-3 tw:flex tw:flex-col tw:gap-3.5">
-        <InventoryList heading={SHARED_HEADING} items={shared} tone="out" />
+        <InventoryList heading={SHARED_HEADING} note={SHARED_NOTE} items={shared} tone="out" />
         {ifBuilt.length > 0 && (
           <InventoryList heading={SHARED_IF_BUILT_HEADING} note={SHARED_IF_BUILT_NOTE} items={ifBuilt} tone="out" />
         )}
-        <InventoryList heading={NOT_SHARED_HEADING} note={NOT_SHARED_NOTE} items={withheld} tone="kept" />
+        {/* **No note under this one since 2026-09-04**, like the first column
+            and for the same reason. The sentence that was here summarised the
+            whole card by hand and went stale the day comments began crossing —
+            src/messages.ts, where `NOT_SHARED_HEADING` is declared, has the
+            argument. */}
+        <InventoryList heading={NOT_SHARED_HEADING} items={withheld} tone="kept" />
       </div>
     </TooltipGroup>
   );
