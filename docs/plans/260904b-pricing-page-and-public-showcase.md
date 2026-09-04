@@ -293,35 +293,31 @@ product.
   and a currency switcher (hosted Checkout picks the currency from the customer's location — which
   is why each Stripe price carries all three, [billing.md](../project/billing.md)).
 
-## Where this stands, 2026-09-04 evening
+## Where this stands, 2026-09-04 late
 
-**Important work left.** Three of six stages are on `dev` and the tree is green; what remains
-includes a promise the code has already broken.
+**Most of it is on `dev`, and what is left is one stage plus a decision only Greg can make.**
 
 | Stage | State |
 |---|---|
 | 1 — buying from `/pricing` | **on `dev`** (`275a6230`, `fd081a15`) |
 | 2 — the pricing page rebuilt | **on `dev`** (`07412b79`) |
 | 3a — the listing's data and API | **on `dev`** (`80573d0c`, `1ef8ba6b`) |
-| 3b — `/read/public` itself | **built**, uncommitted — see the log |
-| 4 — showcase links, takedown route, byline | not started |
-| 4b — the upgrade path | **built**, uncommitted — see the log |
+| 3b — `/read/public` itself | **on `dev`** (`bb454bb4`) |
+| 3c — the sharing copy that 3a owed | **on `dev`** (`56eecb43`, `ef0ac457`) |
+| 4b — a Reader can reach Researcher | **on `dev`** (`47345d3a`); GPT Sol's six findings in flight |
+| 4 — byline and a takedown route | in flight |
+| 4c — showcase links from the marketing pages | not started |
 | 5 — a public article counts half | not started; needs a migration |
 
-**The one thing that is worse than not-yet-built.** Stage 3a shipped the listing's API while
-`src/messages.ts` was fenced by a neighbouring session, so `SHARING_ON` still tells an owner *"Anyone
-with the link can read this"* when the code now makes public articles enumerable. Nothing is exposed
-that Greg did not agree to expose — he is the only account holder — but **the app is saying something
-untrue**, and `PrivacyPage` now promises *"The sharing card lists exactly what will go out before you
-turn it on"* on top of it. This is the next thing to do, and it is small: the constants are agreed to
-be ours, and the wording is drafted in §1 above.
+**What is Greg's and cannot be done for him:** flipping the showcase articles public, in the
+production UI rather than by SQL, so the `article_visibility_changes` row records that he confirmed
+the rights. The criterion has grown two clauses since it was written: a showcase article should have
+a **Sketch** drawn, because a visitor's Diagram now shows the Sketch and most articles have never had
+one, and it will carry **his saved searches in his own words**, which is the first shared artefact
+that is the reader's voice rather than the model's.
 
-**What each remaining stage costs, honestly.** 3b is the cheapest — the route parses, both sides
-answer 404 deliberately, and it needs a page reusing the shelf's card with the owner verbs off.
-Stage 5 is the expensive one and the only one touching money: a migration adding `article_id` to
-`ingest_events`, a weighted `SUM` replacing a `COUNT`, and a warning at the unshare moment that is a
-gate rather than a nicety, because the free tier's window is lifetime and there is no next month to
-rescue anybody who unshares themselves over the wall.
+**The one number that gates a deploy** is still the count of non-Greg public rows in production
+(§1). Nothing has changed about it; it has simply not been read yet.
 
 ## Stages
 
@@ -696,6 +692,42 @@ ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the
 - No rate limit beyond what the namespace has. Cluster C and S4 of that plan are still open.
 
 ## Log
+
+- **2026-09-05, stage 4b's review findings fixed** — GPT Sol read the `purchase` union and found two
+  money-path defects and three gaps. All six are closed, and none of them was wrong:
+  - **P1: a schema-valid row offered Checkout for a tier the customer already owned.**
+    `status = 'active'`, a known price, a readable period, `stripe_subscription_id` null.
+    `entitlementFromRow` said *paying Reader*; the sale gate reads the id and said *sell them
+    anything*, so `/profile` answered `checkout` over `["reader", "researcher"]` and pressing
+    *Get Reader* would have started a second, concurrently billed subscription. **The separation was
+    the fault**, so the summary and `startCheckout` now ask one function, `subscriptionState`
+    (`src/billing/tiers.ts`), which fails closed to the Portal on anything it cannot make sense of.
+    A `CHECK` went in beside it — `billing_accounts_subscription_fields_need_subscription`, one
+    ordinary additive migration — so the row cannot be written at all. Both halves, because a
+    constraint can be dropped and a migration can lag the code that matches it.
+  - **P1: all three claims in the switching sentence were false out of a trial.** `trialing` is an
+    entitled status and the Portal is `trial_update_behavior: "end_trial"`, so the press ends the
+    trial: no difference to invoice, the period restarts, and — because the period *start* moves —
+    `nextQuotaAdjustment` writes no delta and the whole new allowance arrives. Greg's call was
+    **separate copy rather than refusing the switch**, and it is argued at `switchingPlan`
+    (`src/billing-plan.ts`): the capability was never what was wrong, and refusing it would leave a
+    trialling reader at the Portal's own switch menu with no warning at all. The `switch` arm now
+    carries `from: "paid" | "trial"`, so the compiler asks for the words rather than the page
+    guessing.
+  - **P1 coverage: every client test stayed green when `startCheckout` posted the wrong tier.**
+    Mutated to send `{"tierId":"researcher"}` for every press, all 24 tests across the three client
+    files passed — a *Get Reader* button opening a $50 Checkout with nothing red. The tests now
+    record `RequestInit.body`, press each direct-purchase button, and assert the exact tier id;
+    pressing the switch button closes the acknowledged filter gap in the same pass.
+  - **P2: no Stripe key still produced buttons.** `readBillingSummary` emits `purchase: none` before
+    the ranking is reached. `manageable` is untouched, and the reason is written at the branch.
+  - **P2: the non-empty tuple was a compile-time claim about a wire value.** `isPurchase` checks the
+    discriminant, the non-empty list, and that a `switch` says which kind it is; `useBilling` throws
+    on a body it cannot draw, which lands on the billing read's existing error path. Before it, the
+    legacy `canCheckout`/`offers` body produced *TypeError: Cannot read properties of undefined
+    (reading 'kind')* inside a render.
+  - **P3: the ranking is quota upgrades only**, and now says so at `tiersToOffer` — including what it
+    deliberately does not do, which is find a cheaper deal at the same allowance.
 
 - **2026-09-04, stage 4b built** — the gate is tier-aware, and a paying Reader is offered
   Researcher on both pages. Seven things worth knowing:

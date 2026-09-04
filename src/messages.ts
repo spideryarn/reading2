@@ -2585,6 +2585,42 @@ export function publicShelfShared(when: string): string {
   return `Shared ${when}`;
 }
 
+/* ── If something here is yours ────────────────────────────────────────────── */
+
+/**
+ * **The link a person follows when a piece published here is theirs**, drawn on
+ * the two surfaces a stranger meets a republished article on: the foot of
+ * `/read/public`, and the visitor's own details page for one article
+ * (src/web/PublicLibraryPage.tsx, src/web/PublicPages.tsx). It goes to
+ * `TAKEDOWN_HREF` — a section on `/privacy` rather than a page of its own,
+ * argued in src/web/router.ts and again beside the section itself.
+ *
+ * **Written to somebody who does not have an account**, which is what makes it
+ * different from every other sentence in this file. "Yours" here means *you
+ * wrote it or you hold the rights to it* — not the owner's sense of "your
+ * articles", which is a reader's shelf. On the shelf page there is nothing else
+ * for the word to attach to; on the article page the sentence beside it settles
+ * it.
+ *
+ * **One sentence doing both jobs**, deliberately: it is the link text *and* the
+ * whole of the offer, so there is no lead-in prose to keep in step with it and
+ * no second wording to drift. Quiet rather than loud — a report link with a
+ * warning colour on every card would read as a warning about each article, and
+ * the piece it is next to is almost always shared perfectly legitimately.
+ */
+export const TAKEDOWN_LINK = "If something here is yours, ask us to take it down";
+
+/**
+ * The heading of the section at the other end of it, on `/privacy`.
+ *
+ * Here rather than inline in the page because two things need to agree on it —
+ * the page draws it, and tests/takedown-privacy-section.test.tsx checks that
+ * the anchor the link points at is the section that carries it. The rest of that
+ * page's prose is JSX, and stays JSX: it is a policy read top to bottom, not a
+ * set of strings other surfaces reuse (src/web/PrivacyPage.tsx § Prose in JSX).
+ */
+export const TAKEDOWN_HEADING = "If something here is yours";
+
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
 /** The switch, off. */

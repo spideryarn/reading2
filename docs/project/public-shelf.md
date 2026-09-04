@@ -64,6 +64,24 @@ of a page mounted for people with no account. The file's own header has the full
 
 Every sentence is in [`src/messages.ts`](../../src/messages.ts) § the shelf of public articles.
 
+## What a card says, and the one line under the list
+
+A card is the title, the piece's **byline**, where it was published, how long it is and when it was
+shared — the byline first, which is the order the owner's own shelf card and the article's masthead
+both use. It is *the article's* author, off the publisher's page, and never the reader who shared it;
+[`src/public-library-types.ts`](../../src/public-library-types.ts) § `byline` says at length why that
+distinction is worth writing down, and the listing's projection still names no column about an owner.
+Greg, asked on 2026-09-04 whether a public article should show whose it is, said yes — the article
+page already did, through `PublicMeta.byline`, and this shelf did not.
+
+Under the list, outside all three state arms so an empty shelf and a failed read keep it, is one
+quiet line: **if something here is yours, ask us to take it down**. The shelf is where a stranger
+*finds* a republished article, so it is one of the two places that link has to be — the other is the
+visitor's own details page for one article. It is not on a card: a card is an offer to read, and a
+report link on every one of them would read as a warning about each article.
+[privacy.md § If something here is yours](privacy.md#if-something-here-is-yours) is the section it
+points at, and why it is a section rather than a route.
+
 ## The address, and the three enforcers of it
 
 `public` is reserved as an article slug, because `/read/public` is otherwise an address two things
@@ -96,4 +114,4 @@ being about the reading *view* instead, and had it called rationalising.
 - **No cursor.** The row cap is a ceiling rather than a page size, so there is nothing to paginate
   through. The ordering is total on `(public_at, slug)` precisely so that a cursor is possible the
   day it starts biting.
-- **Showcase links from other pages**, which are stage 4 of the plan, along with a takedown route.
+- **Showcase links from other pages**, which are stage 4c of the plan.

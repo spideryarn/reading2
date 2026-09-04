@@ -445,7 +445,7 @@ describe("every article lookup names an owner", () => {
  *    its own?
  * 3. Does the listing's **generated SQL** carry `visibility = 'public'` in its
  *    `where`? Read off the statement, not off a constant beside it.
- * 4. Are the selected columns exactly the seven a card needs?
+ * 4. Are the selected columns exactly the eight a card needs?
  * 5. Is every text column bounded, so 200 rows is a bound on bytes too?
  * 6. Is the answer bounded and totally ordered?
  *
@@ -883,7 +883,7 @@ describe("the one query that lists articles for nobody in particular", () => {
   });
 
   /**
-   * **Exactly seven columns, spelled out.**
+   * **Exactly eight columns, spelled out.**
    *
    * The danger `publicCurrentRevisionQuery` names is a public query that one day
    * does `select({ article: articles })` and picks up `owner_id`,
@@ -923,7 +923,7 @@ describe("the one query that lists articles for nobody in particular", () => {
     return items;
   };
 
-  it("selects exactly the seven columns a card needs, and nothing else", () => {
+  it("selects exactly the eight columns a card needs, and nothing else", () => {
     expect(selectItems()).toEqual([
       '"spideryarn"."articles"."slug"',
       '"spideryarn"."articles"."public_at"',
@@ -932,6 +932,12 @@ describe("the one query that lists articles for nobody in particular", () => {
          matched loosely because its body is multi-line SQL, tightly on the alias
          because that is the name the row comes back under. */
       expect.stringMatching(/^case[\s\S]*end as "heading_title"$/),
+      /* **The eighth, added 2026-09-04**, and it is a fact about the document
+         rather than about its owner: `article_revisions.byline` is what stage 2
+         read off the publisher's page. There is still no column here naming the
+         reader who shared it, and the reason that matters is in
+         src/public-library-types.ts § `byline`. */
+      `left("spideryarn"."article_revisions"."byline", ${PUBLIC_CARD_CHARS.byline}) as "byline"`,
       `left("spideryarn"."article_revisions"."root_gist", ${PUBLIC_CARD_CHARS.gist}) as "root_gist"`,
       `left("spideryarn"."article_revisions"."site_name", ${PUBLIC_CARD_CHARS.siteName}) as "site_name"`,
       '"spideryarn"."article_revisions"."word_count"',
@@ -1515,6 +1521,7 @@ interface ListedSpec {
   title?: string | null;
   gist?: string;
   siteName?: string;
+  byline?: string;
   headings?: readonly Heading[];
 }
 
@@ -1546,6 +1553,7 @@ const LISTED: readonly (ListedSpec & { article: string; revision: string; shortI
       title: "T".repeat(OVERSIZED),
       gist: "G".repeat(OVERSIZED),
       siteName: "S".repeat(OVERSIZED),
+      byline: "B".repeat(OVERSIZED),
     },
     /* **The `<h1>` fallback, with two ways to get it wrong beside it.** No title
        at all, an `<h2>` *before* the `<h1>` so a predicate that lost its
@@ -1626,6 +1634,7 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
         sectionCount: 0,
         rootGist: row.gist ?? `What ${row.key} is about.`,
         siteName: row.siteName ?? "example.test",
+        byline: row.byline ?? "A. Writer",
         /* The bar the article read sets, put under this row's control: a
            revision with no tree is not a readable article, and neither is one
            with no blocks. */
@@ -1764,6 +1773,9 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
     const card = (await shelfNow()).find((e) => e.slug === listSlug("theirs-public"));
     expect(card).toBeDefined();
     expect(Object.keys(card ?? {}).sort()).toEqual([
+      /* `byline` is the *article's* author, off the publisher's page. The owner
+         of this row is `LIST_OWNER_B` and the line below is what says so. */
+      "byline",
       "gist",
       "publicAt",
       "siteName",
@@ -1806,12 +1818,13 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
    * **Red first:** removing the `left()` from `title` on 2026-09-04 failed this
    * at 5000 against 300.
    */
-  it("and cuts an enormous title, gist and site name down to the card's size", async () => {
+  it("and cuts an enormous title, gist, site name and byline down to the card's size", async () => {
     const card = (await shelfNow()).find((e) => e.slug === listSlug("oversized"));
     expect(card).toBeDefined();
     expect(card?.title).toHaveLength(PUBLIC_CARD_CHARS.title);
     expect(card?.gist).toHaveLength(PUBLIC_CARD_CHARS.gist);
     expect(card?.siteName).toHaveLength(PUBLIC_CARD_CHARS.siteName);
+    expect(card?.byline).toHaveLength(PUBLIC_CARD_CHARS.byline);
   });
 
   /**
@@ -1859,7 +1872,13 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
 
   /** Ask the route, exactly as `handleApi` does, with nobody signed in. */
   async function shelfNow(): Promise<
-    { slug: string; title: string; gist: string | null; siteName: string | null }[]
+    {
+      slug: string;
+      title: string;
+      byline: string | null;
+      gist: string | null;
+      siteName: string | null;
+    }[]
   > {
     const { servePublicApi } = await import("../src/public/routes.js");
     let status = 0;
@@ -1887,7 +1906,13 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
 
     expect(status).toBe(200);
     const body = JSON.parse(text) as {
-      entries: { slug: string; title: string; gist: string | null; siteName: string | null }[];
+      entries: {
+        slug: string;
+        title: string;
+        byline: string | null;
+        gist: string | null;
+        siteName: string | null;
+      }[];
       truncated: boolean;
     };
     /* The cap is 200 and this fixture is eight rows, so a `true` here means the
