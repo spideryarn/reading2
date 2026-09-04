@@ -283,6 +283,21 @@ async function vercelApi<T>(pathAndQuery: string): Promise<T> {
 /* ------------------------------------------------------------------ */
 
 /**
+ * The `.git` every worktree shares, as an absolute path.
+ *
+ * `git rev-parse --git-common-dir` answers relatively (`.git`) in the primary
+ * checkout and absolutely in a worktree, so it is resolved against `ROOT` either
+ * way rather than trusted to be one or the other.
+ */
+function gitCommonDir(): string {
+  const out = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }).trim();
+  return path.resolve(ROOT, out);
+}
+
+/**
  * **Two deploys at once is not hypothetical here.** Several agents work this
  * tree, and two overlapping runs would each capture a different sha, both find
  * the same pending migrations, and both try to apply them — drizzle takes no
@@ -293,7 +308,14 @@ async function vercelApi<T>(pathAndQuery: string): Promise<T> {
  * too, not only the migration.
  */
 function takeLock(): () => void {
-  const file = path.join(ROOT, ".git", "spideryarn-deploy.lock");
+  /* **The shared git directory, not `ROOT/.git`** — which in a worktree is a
+     *file* pointing at the real one, so the old path died with `ENOTDIR` and no
+     deploy could be run from a worktree at all. `--git-common-dir` resolves to
+     the primary checkout's `.git` from every worktree, which is not merely a
+     workaround: the lock exists to stop two deploys overlapping *anywhere*, and
+     one lock per worktree would have let a worktree and the primary deploy at
+     the same time — the exact race the comment above describes. */
+  const file = path.join(gitCommonDir(), "spideryarn-deploy.lock");
 
   /* **The claim is atomic** — see scripts/lockfile.ts. This used to be
      `if (!existsSync(file)) return claim()` followed by an `openSync(file, "w")`

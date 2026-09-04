@@ -42,9 +42,10 @@ import { getDb } from "../db/client.js";
 import { allTiers } from "../store/pg-tiers.js";
 import { billingAccounts } from "../db/schema.js";
 import { log } from "../log.js";
+import { nextQuotaAdjustment } from "./quota-adjustment.js";
 import { chooseSubscription } from "./subscription.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
-import { isEntitledStatus } from "./tiers.js";
+import { choiceRules, quotaRules } from "./tiers.js";
 
 const logger = log("store");
 
@@ -74,6 +75,76 @@ export type SyncResult =
   | { readonly kind: "unmapped"; readonly customerId: string };
 
 /**
+ * **A seam: what Stripe says this customer's subscriptions are.**
+ *
+ * Injected only by tests, and the default is the real thing, so forgetting to
+ * inject cannot make a production build inert — the same reasoning as `sync` on
+ * `serveStripeWebhook` (./webhook.ts) and `verify` on `handleApi`.
+ *
+ * It exists because the quota arithmetic below is about a **transition** — what
+ * the row said before, against what Stripe says now — and a transition cannot be
+ * exercised by writing a row and reading it back. Testing the pure function
+ * alone and trusting the wiring is the exact mistake `tests/billing-tiers.test.ts`
+ * exists to stop us making again.
+ */
+export type ListSubscriptions = (customerId: string) => Promise<Stripe.Subscription[]>;
+
+/**
+ * What a caller may tell this function. The test seam, and nothing else.
+ *
+ * **It briefly carried a `changedAt`**, taken from the delivering event's
+ * `created` so that a mid-period plan change could be prorated against the
+ * moment it happened rather than the moment we heard. That was removed on
+ * 2026-09-04: the event that provokes a sync is not necessarily the event that
+ * caused the change the sync then fetches, so the timestamp scaled the wrong
+ * transition. ./quota-adjustment.ts § *Why `f` is taken at the sync*.
+ */
+export interface SyncOptions {
+  /** The test seam described above. Never set in production. */
+  readonly listSubscriptions?: ListSubscriptions;
+}
+
+/**
+ * Every subscription this customer has, as Stripe returns them.
+ *
+ * **All of them, not the one the event named.** A late `deleted` for a
+ * subscription that has already been replaced would otherwise wipe the
+ * replacement. `status: "all"` because a cancelled one is still worth storing —
+ * `/profile` saying "your subscription ended" is a different thing from an
+ * account that looks as though it never subscribed.
+ *
+ * **Paginated, and it was not.** Stripe's page maximum is 100, so a single
+ * `limit: 100` says "the first hundred", not "all" — and an older *active*
+ * subscription can sit behind a hundred cancelled ones. The cap below is a guard
+ * against an unbounded loop rather than a page size; reaching it is a fact worth
+ * logging, not a normal outcome. GPT Sol, 2026-09-02.
+ */
+async function listFromStripe(): Promise<ListSubscriptions> {
+  const stripe = await stripeClient();
+  return async (customerId) => {
+    const subscriptions: Stripe.Subscription[] = [];
+    const MAX_SUBSCRIPTIONS = 1000;
+    for await (const subscription of stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+      expand: ["data.items.data.price"],
+    })) {
+      assertLivemode(subscription.livemode, `subscription ${subscription.id}`);
+      subscriptions.push(subscription);
+      if (subscriptions.length >= MAX_SUBSCRIPTIONS) {
+        logger.error(
+          { customerId, count: subscriptions.length },
+          "stopped reading this customer's subscriptions at the cap — something is very wrong",
+        );
+        break;
+      }
+    }
+    return subscriptions;
+  };
+}
+
+/**
  * Bring one customer's row into line with Stripe.
  *
  * @param customerId a `cus_…`, taken from the event only as a lookup key.
@@ -86,8 +157,15 @@ export type SyncResult =
  * finds false. "No-op" here means the same resulting *entitlement*, never zero
  * work: it always asks Stripe.
  */
-export async function syncSubscriptionFromStripe(customerId: string): Promise<SyncResult> {
-  const stripe = await stripeClient();
+export async function syncSubscriptionFromStripe(
+  customerId: string,
+  options: SyncOptions = {},
+): Promise<SyncResult> {
+  /* Built out here rather than inside the transaction, exactly where the client
+     was before this seam existed: constructing it can throw
+     `StripeConfigError`, and that throw belongs outside a transaction it would
+     do nothing but roll back. */
+  const listSubscriptions = options.listSubscriptions ?? (await listFromStripe());
   /* Read once, before the transaction opens. An empty list is a deployment
      whose setup script has not run, which must not turn a webhook into a 500. */
   const tiers = await allTiers();
@@ -100,7 +178,19 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
          race. `billing_accounts.stripe_customer_id` is unique, so this is at
          most one row. */
       const [row] = await tx
-        .select({ ownerId: billingAccounts.ownerId })
+        .select({
+          ownerId: billingAccounts.ownerId,
+          /* Read under the lock, because the quota arithmetic below is about the
+             **transition** — what this row says now, against what Stripe says —
+             and the write that replaces them happens in the same transaction.
+             Read them outside it and a concurrent sync could apply the same
+             plan change twice. */
+          stripeSubscriptionId: billingAccounts.stripeSubscriptionId,
+          priceId: billingAccounts.priceId,
+          currentPeriodStart: billingAccounts.currentPeriodStart,
+          quotaLimitDelta: billingAccounts.quotaLimitDelta,
+          quotaPeriodStart: billingAccounts.quotaPeriodStart,
+        })
         .from(billingAccounts)
         .where(eq(billingAccounts.stripeCustomerId, customerId))
         .for("update")
@@ -108,51 +198,57 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
 
       if (!row) return { kind: "unmapped", customerId } satisfies SyncResult;
 
-      /* **All of them, not the one the event named.** A late `deleted` for a
-         subscription that has already been replaced would otherwise wipe the
-         replacement. `status: "all"` because a cancelled one is still worth
-         storing — `/profile` saying "your subscription ended" is a different
-         thing from an account that looks as though it never subscribed.
+      /* Inside the lock, deliberately — see the header. `listFromStripe` is
+         what this was before the seam, comment for comment. */
+      const subscriptions = await listSubscriptions(customerId);
 
-         **Paginated, and it was not.** Stripe's page maximum is 100, so a
-         single `limit: 100` says "the first hundred", not "all" — and an older
-         *active* subscription can sit behind a hundred cancelled ones. The cap
-         below is a guard against an unbounded loop rather than a page size;
-         reaching it is a fact worth logging, not a normal outcome. GPT Sol,
-         2026-09-02. */
-      const subscriptions: Stripe.Subscription[] = [];
-      const MAX_SUBSCRIPTIONS = 1000;
-      for await (const subscription of stripe.subscriptions.list({
-        customer: customerId,
-        status: "all",
-        limit: 100,
-        expand: ["data.items.data.price"],
-      })) {
-        assertLivemode(subscription.livemode, `subscription ${subscription.id}`);
-        subscriptions.push(subscription);
-        if (subscriptions.length >= MAX_SUBSCRIPTIONS) {
-          logger.error(
-            { customerId, count: subscriptions.length },
-            "stopped reading this customer's subscriptions at the cap — something is very wrong",
-          );
-          break;
-        }
-      }
-
-      const chosen = chooseSubscription(subscriptions, isEntitledStatus, (priceId) =>
-        tiers.some((t) => t.stripePriceId === priceId),
-      );
+      /* One instant for the whole write, read here rather than inside, so both
+         decisions that govern entitlement stay pure functions of their inputs —
+         and so the subscription chosen and the allowance prorated cannot be
+         answered against two different moments. What the tier table answers is
+         `choiceRules` and `quotaRules` in ./tiers.ts. */
+      const now = new Date();
+      const chosen = chooseSubscription(subscriptions, choiceRules(tiers, now));
       for (const note of chosen.notes) {
         logger.warn({ customerId, ownerId: row.ownerId, note }, "reading a Stripe subscription");
       }
       if (chosen.anomaly) {
         logger.error(
           { customerId, ownerId: row.ownerId },
-          "this customer has more than one live subscription and may be paying twice",
+          /* **Non-terminal, not live.** The count behind this is subscriptions
+             Stripe may still collect on — an `active` beside an `unpaid` is two
+             collectable invoices — so saying "live" would send whoever reads
+             this looking at the wrong list. The note beside it names them. */
+          "this customer has more than one non-terminal subscription and may be paying twice",
         );
       }
 
       const state = chosen.state;
+      /* **The allowance prorates, because the price does.** A mid-period plan
+         change moves the limit by what is left of the period, so that upgrading
+         with an hour to go buys an hour's worth rather than a month's —
+         ./quota-adjustment.ts has the arithmetic, the ordering rule and the
+         reasoning. It is decided here and *stored*, so that admission reads an
+         integer under its own lock rather than doing time arithmetic there. */
+      const quota = nextQuotaAdjustment({
+        stored: {
+          subscriptionId: row.stripeSubscriptionId,
+          priceId: row.priceId,
+          currentPeriodStart: row.currentPeriodStart,
+          adjustment: { delta: row.quotaLimitDelta, periodStart: row.quotaPeriodStart },
+        },
+        incoming: state
+          ? {
+              subscriptionId: state.subscriptionId,
+              priceId: state.priceId,
+              periodStart: state.currentPeriodStart,
+              periodEnd: state.currentPeriodEnd,
+            }
+          : null,
+        now,
+        rules: quotaRules(tiers),
+      });
+
       await tx
         .update(billingAccounts)
         .set({
@@ -165,6 +261,20 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
           currentPeriodStart: state?.currentPeriodStart ?? null,
           currentPeriodEnd: state?.currentPeriodEnd ?? null,
           cancelAtPeriodEnd: state?.cancelAtPeriodEnd ?? false,
+          /* **Null on every sync that finds no ending**, which is what makes an
+             un-cancelled subscription stop claiming a date it once had. A
+             reader who cancels and then changes their mind in the Portal is
+             exactly the case a partial update would leave saying "ends on the
+             3rd" for ever. */
+          cancelAt: state?.cancelAt ?? null,
+          /* **In the same statement as `price_id` and the period**, which is
+             what makes a redelivered webhook safe: the delta is measured from
+             the stored price, so a second delivery that found the old price
+             still there would pay the difference out twice. No branch of
+             `nextQuotaAdjustment` skips this write — every field on every sync,
+             as above. */
+          quotaLimitDelta: quota.delta,
+          quotaPeriodStart: quota.periodStart,
           livemode: state?.livemode ?? null,
           lastSyncedAt: new Date(),
           updatedAt: new Date(),

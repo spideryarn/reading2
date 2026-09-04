@@ -89,7 +89,8 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
-import { runPdfExtract } from "./pdf-read.js";
+import { MAX_PAGES, runPdfExtract } from "./pdf-read.js";
+import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
@@ -101,6 +102,7 @@ import {
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
   PAGE_HAS_NO_ARTICLE,
+  pdfTooManyPages,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
@@ -1341,6 +1343,117 @@ function requireUrl(ctx: StepContext): string {
 }
 
 /**
+ * **The page cap, enforced in stage 1** — one policy, called from the two places
+ * the queue's acquisition step has PDF bytes for the first time.
+ *
+ * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. The stage
+ * CLIs do not come through here: `npm run fetch` hands a fetched PDF straight to
+ * `writeRaw`, and `npm run pdf` keeps the original before `runPdfExtract` counts
+ * anything. Both are deliberate — a CLI is somebody at a keyboard spending their
+ * own attention, and neither can reach a reader's job — but "no PDF reaches
+ * storage uncounted" is a statement about the queue and not about the repo.
+ *
+ * Greg asked for the refusal to arrive in seconds rather than after a job card
+ * has been running (docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md
+ * § Stage 4). It used to happen in stage 2, inside `pass0`.
+ *
+ * **Why two call sites rather than one shared seam after acquisition.** By the
+ * time `acquireUpload` returns it has stored the canonical bytes and settled the
+ * upload `verified` — and `verified` is terminal (src/source.ts § `NEXT`), so a
+ * refusal on the far side of that line cannot mark the record `rejected` and the
+ * reason is lost. That is the race `acquireUpload`'s own `refuse` comment
+ * describes. And a fetched `.pdf` address never goes through `acquireUpload` at
+ * all, so the upload half alone enforces nothing for half the origins. What is
+ * duplicated is one call; the policy is here.
+ *
+ * **Not `pass0`.** That walks every page calling `getTextContent` — stage 2's
+ * work, and 3.7–6.9 s of it on a real 144-page paper. `countPdfPages` reads the
+ * page tree and walks away in tens of milliseconds, and shares its comparison
+ * with `pass0`'s own guard so the two limits cannot drift
+ * (src/pdf.ts § `refuseTooManyPages`).
+ *
+ * **A file pdf.js says it cannot read is not refused here — and only that.** The
+ * cap is a cost gate, not a validity one: a malformed or password-protected PDF
+ * fails in `pass0`, in the step whose sentence is about extracting, and forcing
+ * it into the step whose sentence is about fetching would tell the reader
+ * something untrue about where their document went. `pdfIsUnreadable`
+ * (src/pdf.ts) is the whole of that judgement, and its comment carries the one
+ * file shape it deliberately does not cover.
+ *
+ * **Everything else rethrows**, and the first draft of this did not. ⟨Sol,
+ * 2026-09-04⟩ A bare `catch {}` around the counter also swallows a failed
+ * dynamic import, a worker that would not start, a pdf.js regression and a
+ * programmer error — and every one of those would leave the cap silently not
+ * gating while the document went to storage. A gate that quietly stops gating
+ * is docs/reusable/silent-success.md in its purest form, and the narrow catch is
+ * the difference between "this file is not readable" and "the counter is
+ * broken".
+ *
+ * `mark` is how the upload half records the refusal on its own row before the
+ * throw unwinds the step. The fetched half has no record to mark.
+ *
+ * **The whole context rather than the slug**, since 2026-09-04, and the reason
+ * is `ctx.signal`: this opens a stranger's file in our own process, and the
+ * claimant's self-abort at 740 s is the only bound on how long that may take.
+ * The first version took a slug and passed no signal, so the deadline could not
+ * reach pdf.js at all ⟨GPT Sol⟩ — see `countPdfPages`.
+ */
+async function refuseAnOverlongPdf(
+  ctx: StepContext,
+  bytes: Uint8Array,
+  mark?: () => Promise<boolean>,
+): Promise<void> {
+  const slug = ctx.slug;
+  let pages: number;
+  try {
+    pages = await countPdfPages(bytes, ctx.signal);
+  } catch (err) {
+    if (!pdfIsUnreadable(err)) throw err;
+    /* `warn`, not `debug`: production runs at `info`, so a debug line here would
+       be exactly the reassuring comment that reports nothing. The class name and
+       nothing else — no message, because that is a stranger's file talking
+       (docs/project/logging.md). */
+    plog.warn(
+      { slug, step: "fetch", why: (err as Error).name },
+      `page count: ${slug} would not open`,
+    );
+    return;
+  }
+  try {
+    refuseTooManyPages(pages, MAX_PAGES);
+    return;
+  } catch (err) {
+    if (!(err instanceof TooManyPages)) throw err;
+    /* **Awaited before the throw**, for the reason `acquireUpload`'s `refuse`
+       gives at length: a fire-and-forget mark races the unwind, and the state
+       machine never reaches the terminal state that stops a pointless re-run.
+
+       **And its answer is read.** `rejectUpload` returns `false` rather than
+       throwing when the row will not move, and the one way that happens here is
+       a record already `verified` — a first count that failed transiently,
+       followed by one that did not. The job still fails with the right sentence;
+       what is left behind is a `verified` upload for a document we refuse to
+       read, and it is worth being able to find that rather than inferring it.
+       ⟨Sol, 2026-09-04⟩ */
+    if (mark && !(await mark())) {
+      plog.warn(
+        { slug, step: "fetch", pages: err.pages },
+        `page count: ${slug} is over the cap but its upload record would not move`,
+      );
+    }
+    /* `{ authored }`: `pages` is `doc.numPages` off pdf.js's page tree and the
+       limit is our own constant. Two numbers, and the rest is fixed prose. The
+       reader's sentence is `pdfTooManyPages`; this one is for the log, and says
+       where to go if you are here to tune the cap. */
+    throw stageFailure(pdfTooManyPages(err.pages, err.limit), {
+      authored:
+        `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
+        `not a technical one — see docs/plans/260826c-pdf-ingestion.md.`,
+    });
+  }
+}
+
+/**
  * **Stage 1 for a file the reader gave us** — the verification the plan calls
  * `verify-source`, living inside the acquisition step rather than beside it.
  *
@@ -1427,6 +1540,13 @@ async function acquireUpload(
   if (!looksLikePdf(got)) await refuse("not-a-pdf");
   const sha256 = createHash("sha256").update(got).digest("hex");
   if (sha256 !== record.claimedSha256) await refuse("checksum-mismatch");
+
+  /* **After the hash, before the promotion**, and the position is the whole of
+     it: three lines further down the record is `verified` and nothing can move
+     it again. Not through `refuse` above, because that throws the *static*
+     sentence for the reason and the reader wants the page count — the record
+     takes the reason, the job takes the number. See `refuseAnOverlongPdf`. */
+  await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages"));
 
   /* Promoted to a name that is a statement about its contents, and create-only.
      `already-there` is the dedup hit — two readers with the same paper — and it
@@ -1602,6 +1722,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const host = new URL(url).hostname;
       ctx.report(host);
       const doc = await fetchDocument(url, { signal: ctx.signal });
+      /* **Before `writeRaw`**, so a document we will not read does not end up
+         in the content-addressed bucket under its own hash. The branch is on
+         what stage 1 decided the bytes *are*, never on the address — a `.pdf`
+         URL that served a Cloudflare challenge is HTML (docs/project/fetching.md).
+         No upload record here, so nothing to mark. */
+      if (doc.kind === "pdf") await refuseAnOverlongPdf(ctx, doc.bytes);
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that

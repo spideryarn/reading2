@@ -88,6 +88,11 @@ function row(fields: Partial<AccountSnapshot>): AccountSnapshot {
     stripeSubscriptionId: null,
     stripeCustomerId: null,
     cancelAtPeriodEnd: false,
+    cancelAt: null,
+    /* No mid-period plan change, which is the ordinary state: the limit comes
+       from the tier. src/billing/quota-adjustment.ts. */
+    quotaLimitDelta: null,
+    quotaPeriodStart: null,
     ...fields,
   };
 }

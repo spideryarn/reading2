@@ -90,6 +90,10 @@ function Frame({ width, label }: { width: number; label: string }) {
       <div className="reader" style={{ width, ["--mode-w" as string]: "0px" }}>
         <TableView
           article={ARTICLE}
+          /* A preview page, not the reader: no view state to carry. */
+          /* A preview page, not the reader: the address is the design page itself
+             and there is no view state to carry. */
+          linkBase="/design"
           geometry={geometry}
           columns={[]}
           layout={{ widths: [width - 12], tableW: width, overflowing: false }}

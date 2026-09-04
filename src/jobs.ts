@@ -167,14 +167,20 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * step. `tests/jobs-lease-budget.test.ts` pins the invariant rather than the
  * numbers, so the next person to raise one cannot forget the other.
  *
- * **Why 420s.** Measured per-article step totals from `data/_ai-calls.jsonl`:
- * `hierarchy` 324.0s over three calls, `summarise` 240.3s over ten. Both exceed the
- * 220s deadline these constants used to give, so a long step could not complete
- * through the job path **on any machine** — it only ever succeeded via the CLI,
- * which takes no lease. The deadline is bounded above too: the route loop must
- * reserve a whole deadline before starting a step, so too large a value refuses
- * the last short step of an article that would have fitted. Half the invocation
- * budget is the ceiling, and 400s is that.
+ * **Why the deadline is minutes and not seconds.** Measured per-article step
+ * wall times from `data/_ai-calls.jsonl`: `hierarchy` **320.4s in a single
+ * call**, which is the longest step this project has ever measured and the
+ * number everything here is sized around. It exceeds the 220s deadline these
+ * constants used to give, so a long step could not complete through the job path
+ * **on any machine** — it only ever succeeded via the CLI, which takes no lease.
+ * (This paragraph was headed *"Why 420s"* and argued for a number two revisions
+ * out of date; the reasoning was still right, so what is corrected is the claim
+ * it was attached to. `hierarchy` also read "324.0s over three calls", which was
+ * three unrelated runs collapsed by a null slug —
+ * tests/jobs-lease-budget.test.ts § the longest step.)
+ *
+ * The deadline is bounded above too, and the ceiling is the invariant above: it
+ * must fire before the platform's kill, with enough margin to unwind.
  *
  * That ordering is the whole point and it is why there is no heartbeat. A lease
  * that can be renewed means an expired lease says *probably dead*; a lease
@@ -196,11 +202,28 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * cost it carries meanwhile is a dead claimant unreclaimable for ~12.5 minutes
  * instead of ~7. Do not leave that lying around after its cause has gone.
  *
- * The arithmetic it has to satisfy, measured rather than assumed —
- * `tests/jobs-lease-budget.test.ts` pins it:
+ * The arithmetic it has to satisfy, measured rather than assumed and **for an
+ * ordinary web page** — `tests/jobs-lease-budget.test.ts` pins it:
  *
- *     fetch ~10s + extract ~5s + blocks ~5s + hierarchy 320.4s + assets ≤180s ≈ 520s
- *     520s  <  740s self-abort  <  800s platform kill
+ *     fetch ≤110s + extract ~10s + blocks ~5s + hierarchy 320.4s + assets ≤185s = 630.4s
+ *     630.4s  <  740s self-abort  <  800s platform kill
+ *
+ * **Re-measured 2026-09-04, and the old line said 520s.** It quoted `fetch ~10s`
+ * and `extract ~5s`, both of which this same file falsified in the same change
+ * that raised `MAX_PAGES` ⟨GPT Sol⟩: `fetch` is bounded by src/fetch.ts's three
+ * 30s attempts rather than by a single request, and `extract`'s 10s is the *HTML*
+ * branch. `assets` is its own cap, which moved from 180s to 185s to include the
+ * unwinding.
+ *
+ * **And a PDF does not fit, has never claimed to, and that is not a hole.** The
+ * PDF branch of `extract` is a fan-out of model calls whose ceiling is
+ * `STEP_BUDGET_MS.extract` — 700s, most of one whole window on its own. Measured
+ * in a browser on 2026-09-04: a 144-page paper spent nearly all of the first
+ * window in `extract` and had `hierarchy` cut off by the deadline, so it took
+ * **two claims**. What makes that cheap rather than ruinous is the per-chunk
+ * checkpoints and a retry that lands on the same article
+ * (src/pdf-read.ts § `CHUNK_CONCURRENCY`, `slugForRetry`) — and what the sum
+ * above is really pinning is that the *ordinary* article still fits one.
  *
  * 420s was right for the one-step-per-request shape this replaces, where every
  * step got a fresh deadline. Under a claim that walks the whole job it is a
@@ -210,6 +233,38 @@ const aborts = processSingleton<Map<string, AbortController>>(
  */
 export const LEASE_MS = 760_000;
 export const DEADLINE_MARGIN_MS = 20_000;
+
+/**
+ * **The claimant's own deadline, as the reason it aborts with** — so that
+ * "nobody came back" and "the reader pressed Stop" can be told apart by anyone
+ * holding the signal.
+ *
+ * They could not be, until 2026-09-04. Stop and the deadline abort the *same*
+ * `AbortController` — deliberately, because a step listening for one is
+ * listening for both — and `runStep`'s catch decided with a bare
+ * `controller.signal.aborted`. So a job killed by its own 740 s deadline took
+ * the branch written for a reader who chose to stop, and the card said **"You
+ * stopped this before it finished."** to somebody who had pressed nothing.
+ * Found in a browser run on a 144-page PDF, at 742.8 s; raising `MAX_PAGES` to
+ * 250 is what turns that from rare into routine.
+ *
+ * **A class rather than the message string**, which was the other way to tell
+ * them apart and was available: the deadline already aborted with
+ * `new Error(INTERRUPTED.message)`, so `reason.message === INTERRUPTED.message`
+ * would work today and would silently stop working the day somebody reworded a
+ * sentence — docs/project/copy.md says copy stays freely rewritable, and pinning
+ * one here would make that false without saying so. The type carries the fact
+ * the code needs and the message goes on carrying the one the reader needs.
+ *
+ * It keeps `INTERRUPTED`'s wording and `Error`'s `name`, so nothing downstream
+ * that reads either sees a change: this is a *narrowing* of what was already
+ * thrown, not a new thing to handle.
+ */
+class DeadlineReached extends Error {
+  constructor() {
+    super(INTERRUPTED.message);
+  }
+}
 
 /**
  * **How many times a job may be given back to the queue after its claimant
@@ -223,13 +278,23 @@ export const DEADLINE_MARGIN_MS = 20_000;
  * is the half that was right. GPT Sol, reviewing the built stage 3, finding 2.
  *
  * `settleExpired` used to end every lapsed claim outright, so a deploy landing
- * mid-ingest — or a long PDF that ran past its lease — cost the reader their job
- * and left them a Retry button. It now puts the job back to `queued` on the same
- * row, which is what the filesystem store's `sweepStopped` has always done at
- * restart, and which keeps the slug, the article and the article's checkpoints.
- * The contract is src/store/jobs.ts § `settleExpired`; enforcing the number is
- * the store's, deciding it is ours, the same division `LEASE_MS` and
- * `jobConcurrency` already have.
+ * mid-ingest cost the reader their job and left them a Retry button. It now puts
+ * the job back to `queued` on the same row, which is what the filesystem store's
+ * `sweepStopped` has always done at restart, and which keeps the slug, the
+ * article and the article's checkpoints. The contract is src/store/jobs.ts §
+ * `settleExpired`; enforcing the number is the store's, deciding it is ours, the
+ * same division `LEASE_MS` and `jobConcurrency` already have.
+ *
+ * **A lapsed lease and a step that overran are not the same event, and this
+ * paragraph used to name the second as an example of the first.** A lapse is
+ * *nobody came back* — the claimant was frozen, killed or deployed over, and
+ * stopped saying anything. A claimant that reaches its own deadline is still
+ * here: it aborts its step, and `walkClaim` ends the job as a **retryable
+ * error** rather than handing it back, so the reader presses Retry and this
+ * budget is not involved at all. Watched on 2026-09-04, on the 144-page paper
+ * this work is about: `ms: 740033`, ended, no requeue. An automatic second
+ * window for the cooperative case is listed as *recommended, not built* in
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md.
  *
  * **Why there is a number at all:** without one, a job that overruns every lease
  * requeues for ever, buying model calls nobody is waiting for. That is the
@@ -351,11 +416,69 @@ export function jobConcurrency(): number {
  * prevent. So round up.
  */
 export const STEP_BUDGET_MS: Record<StepName, number> = {
-  /* GUESS, generous. Network only, no model call. Never measured. */
-  fetch: 10_000,
-  /* GUESS, generous. Readability over HTML; a long PDF is slower and this
-     number does not cover it. */
-  extract: 5_000,
+  /* **MEASURED** 2026-09-04, and the measurement is the smaller half of the
+     number.
+
+     `fetchDocument` took 107–893 ms over five real addresses off this box
+     (paulgraham, gwern, a 1.3 MB Wikipedia article, slatestarcodex, a 5.6 MB
+     arXiv PDF). What bounds the step is not that: it is `DEFAULTS` in
+     src/fetch.ts, **three attempts of 30 s each** with a backoff capped at 10 s
+     between them, so a hanging retryable origin costs about **110 s**. An
+     earlier draft of this comment said 30 s, having read `timeoutMs` and not the
+     retry loop it sits inside ⟨Sol, 2026-09-04⟩ — which is the same mistake in
+     miniature that the whole table's header is about.
+
+     On top of that sits the page count added on 2026-09-04
+     (`refuseAnOverlongPdf`, src/pipeline.ts): 1.5–1.8 s on the first PDF a
+     process sees, because that is when pdf.js loads, and 17–33 ms after —
+     measured on four files from 8 to 144 pages and 0.1 MB to 11 MB, with no
+     trend against either. The storage put is the one part still unmeasured, and
+     it is the reason for the rounding rather than a gap.
+
+     It read *"GUESS, generous. Network only, no model call. Never measured"*
+     until then, and 10 s was under a single one of its own three timeouts. */
+  fetch: 150_000,
+  /* **A CEILING, and the two branches of this step are two different steps.**
+     ⟨measured 2026-09-04⟩
+
+     *HTML* is Readability: 0.95 s, 1.2 s, 2.8 s and **5.2 s** over the four real
+     pages above, the worst being Wikipedia's 1.3 MB *Consciousness*. So the 5 s
+     that stood here was already under the worst ordinary web page, never mind
+     the note beside it admitting it did not cover a PDF.
+
+     *PDF* is `runPdfExtract`, and **no number can bound it**, which is why this
+     is a ceiling and not a measurement. 250 pages plans ~84 chunks; at
+     `CHUNK_CONCURRENCY` 16 that is 270 s at the 45 s mean call and 588 s if
+     every wave hits the 98 s tail — and on top of *that* sit two retry layers
+     this file cannot see, `ATTEMPTS` for a chunk that fails its check and
+     `TRANSPORT_ATTEMPTS` with backoff for one that never answered
+     (src/pdf-read.ts). A first draft of this row said 600 s and read as though
+     588 + 12 were a budget; it was arithmetic pretending to be a bound ⟨Sol,
+     2026-09-04⟩.
+
+     So the question is not "how long does a PDF extract take" but "is there
+     enough of this claim left to be worth starting one at all", and the answer
+     is as much of the window as can be reserved without the step becoming
+     unstartable. The deadline is `LEASE_MS - DEADLINE_MARGIN_MS` = 740 s; a
+     budget at or over that never fits and the job would sit `queued` for ever.
+     **700 s** leaves the 40 s a preceding `fetch` needs to have run and still
+     admit — and when it does not, the claim is handed back and the next one
+     runs `extract` first, which this table never gates: the walk checks the
+     budget *between* steps, so the first step of any claim always starts
+     (`advanceJobWith`'s loop, below). That is what makes a number this large
+     safe rather than a way to wedge a job — and it is also the limit of what it
+     buys. A claim that *begins* at `extract` gets whatever is left of its
+     deadline, however little; this row protects the ordinary
+     `fetch → extract` walk and nothing else.
+
+     Being over-large costs an HTML article one extra request, which is the cheap
+     direction this table's header says to round in. Being under-large is what
+     shipped: a PDF extract admitted with 100 s left, self-aborting at 100 s.
+     That is survivable now rather than ruinous, because the per-chunk
+     checkpoints are keyed on the article and a retry keeps it (`slugForRetry`),
+     so the paid chunks are banked — but a wasted lease window is still a wasted
+     lease window, and `REQUEUE_BUDGET` above allows two of them. */
+  extract: 700_000,
   /* GUESS, generous. Deterministic, no model call. */
   blocks: 5_000,
   /* MEASURED 2026-08-30, the worst in data/_ai-calls.jsonl: one call, so its
@@ -803,9 +926,21 @@ async function runStep(
        in a body, and rule 3 in src/log.ts is that `redact` cannot reach
        anything inside `msg`. The full error goes in the object, where it can. */
     const stopped = controller.signal.aborted;
+    /* **Whose abort was it.** The deadline and Stop share one controller, so
+       the *reason* is the only thing that separates them — see
+       `DeadlineReached`, which is also where the argument for a type rather
+       than a message match lives. */
+    const ranOutOfTime = controller.signal.reason instanceof DeadlineReached;
     if (stopped) {
       jlog.debug(
-        { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
+        {
+          step: step.name,
+          ms: since(stepStarted),
+          /* Which of the two aborts this was, because the log line reads the
+             same for both and they are not the same event. */
+          why: ranOutOfTime ? "deadline" : "stop",
+          ...spendFields(spend),
+        },
         `step cancelled: ${step.name} — ${job.slug}`,
       );
     } else {
@@ -846,8 +981,21 @@ async function runStep(
      * a step of a job that `recordFailureKind` was about to make retryable. The
      * reader is not owed a failure's account of a thing they chose. GPT Sol,
      * stage 2 review.
+     *
+     * **And "a cancel" is two things, which cost a reader a false accusation
+     * for a day.** An abort here is either the reader's Stop or this claimant's
+     * own deadline, and until 2026-09-04 both got `STEP_STOPPED` — *"You stopped
+     * this before it finished"* — because the branch asked whether the signal
+     * had fired and not who fired it. The card said that about a 144-page PDF
+     * whose hierarchy step ran out of time at 742.8 s, in a browser run no test
+     * had covered. `INTERRUPTED` is what the *job* has always ended with in that
+     * case (`interruptedEnding`, below), so this is the shelf card agreeing with
+     * the band rather than a new sentence: *"whatever was running it did not come
+     * back"* — which is what a claimant handing back at its own deadline is,
+     * from the reader's side.
      */
-    const reader = stopped ? STEP_STOPPED : readerFailureOf(err, step.label);
+    const stopping = ranOutOfTime ? INTERRUPTED : STEP_STOPPED;
+    const reader = stopped ? stopping : readerFailureOf(err, step.label);
     step.status = "error";
     /* **The reader's sentence on both fields, and it has to be both.** The band
        renders `job.error` and the shelf card renders `step.error`
@@ -1875,17 +2023,37 @@ async function walkClaim(
    * heartbeat — after which an expired lease means *probably dead* rather than
    * *definitely over its own deadline*, and `settleExpired` stops being safe.
    * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md § 3. What bounds a *step* is
-   * `STEP_BUDGET_MS`, checked before the step starts rather than while it runs.
+   * `STEP_BUDGET_MS` — checked between steps, deciding whether the **next** one
+   * is worth starting, and never while one runs.
+   *
+   * **Not before every step**, which this line claimed until 2026-09-04 ⟨Sol⟩:
+   * the walk below runs its first runnable step unconditionally, so a claim
+   * that begins at `extract` — a mode job, a forced re-run, a resumed ingest —
+   * starts it whatever is left. `tests/claim-session-postgres.test.ts` runs one
+   * on a two-second deadline and depends on that. So the table is a *hand-back*
+   * rule rather than an admission guarantee, and a step still has to survive
+   * being started with less than its budget; what makes that survivable for the
+   * expensive one is the per-chunk checkpoints, not this.
    */
   const controller = new AbortController();
   aborts.set(job.id, controller);
-  let overran = false;
   /** When this claimant stops, on the clock `Date.now()` reads. */
   const deadlineAt = claimedMs + (parts.leaseMs ?? LEASE_MS) - DEADLINE_MARGIN_MS;
   const deadline = setTimeout(() => {
-    overran = true;
-    controller.abort(new Error(INTERRUPTED.message));
+    controller.abort(new DeadlineReached());
   }, deadlineAt - Date.now());
+  /**
+   * **Was that our deadline, or was it the reader?** — read off the abort
+   * itself, so there is one answer and everybody reads the same one.
+   *
+   * This was a `let overran = false` set beside the `abort` above, and the
+   * second copy is what went wrong: `runStep` cannot see a local of this
+   * function, so its `catch` asked the only question it *could* ask —
+   * `controller.signal.aborted` — and answered the reader's-Stop branch for a
+   * job nobody had touched (see `DeadlineReached`). A boolean that only one of
+   * two readers can reach is a fact with two versions.
+   */
+  const overran = (): boolean => controller.signal.reason instanceof DeadlineReached;
   /**
    * Put the timer and the abort entry down.
    *
@@ -2004,7 +2172,7 @@ async function walkClaim(
          mislabelling; the deadline had a branch on the failure path and none on
          the success path. */
       if (controller.signal.aborted) {
-        const ending = overran
+        const ending = overran()
           ? interruptedEnding(job)
           : (markCancelled(job, "Cancelled"), endingFrom(job, "cancelled"));
         return { kind: "end", jobId: job.id, attempt, ending };
@@ -2076,7 +2244,7 @@ async function walkClaim(
            step was interrupted by its own claimant — so it ends as an error
            the reader may retry, with `INTERRUPTED`'s wording rather than
            whatever the abort happened to say. */
-        const ending = overran
+        const ending = overran()
           ? interruptedEnding(job)
           : endingFrom(job, ran.outcome === "cancelled" ? "cancelled" : "error");
         const after = await endJob(job, attempt, ending, jlog, startedMs, session);
@@ -2092,7 +2260,7 @@ async function walkClaim(
       const settlement = ran.settlement as JobSettlement;
 
       if (settlement.kind === "ended") {
-        if (overran) {
+        if (overran()) {
           jlog.warn(
             { step: step.name },
             `step ${step.name} ran past its deadline and ignored the signal — ${job.slug}`,

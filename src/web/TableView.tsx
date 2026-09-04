@@ -14,7 +14,15 @@
  *    navLabels belong: navigation chrome, never shown in place of prose that
  *    could be displayed (granularity-zoom.md#node-shape).
  */
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Article, BlockId, Comment, NodeId, TreeNode } from "../types.js";
 import { useRenderCount } from "./perf.js";
 import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
@@ -194,9 +202,62 @@ interface Props {
   sections: Section[];
   /** Same key as the `?at=` tracker: re-measure when the columns change. */
   layoutKey: string;
+  /**
+   * This page's address with `at` dropped — `"/read/x?cols=0,2"`. What the 551
+   * block permalinks in the gutter and the gist cells are built from.
+   *
+   * **It is a prop rather than a read of `location` because this component is
+   * `memo`ised.** `blockHref` used to read the address bar during render,
+   * which was sound only while every URL change re-rendered this tree; a memo
+   * retires that. Being a *string* is what makes it work: a render caused only
+   * by `?at=` produces an equal one, so the memo still holds, and any other
+   * parameter produces a different one and correctly does not.
+   *
+   * **Pathname included, not just the query.** The first version carried only
+   * the query, and `blockHref` still read `location.pathname` — so a write
+   * that changed only the path left every permalink on the old spelling. GPT
+   * Sol reproduced it, 2026-09-04.
+   *
+   * Self-maintaining, which an audit of the 35 parameters in params.ts would
+   * not have been — the thirty-sixth is covered too. BlockRef.tsx § `blockHref`.
+   */
+  linkBase: string;
 }
 
-export function TableView({
+/**
+ * **Memoised** — one of two in `src/web`; `Spine` is the other.
+ *
+ * `useReadingPosition` writes `?at=` to the address as sections pass the
+ * reading line — a deliberate feature (docs/project/url-state.md) — and that
+ * re-renders `Reader` **87–88 times during one scroll** of a 551-block article,
+ * measured 2026-09-04. None of this table's 29 props depends on `at`, so every
+ * one of those renders reconciled 551 rows, ~2,200 cells, `thead`, `colgroup`,
+ * `ColumnPanels` and `Lightbox` to produce the same tree.
+ *
+ * The default shallow comparison is deliberate, and a custom `areEqual` here
+ * would be a bug rather than an optimisation: the tempting one compares
+ * `article.blocks` or a block id, and that freezes the prose — a new comment, a
+ * pressed glossary term and a search would all stop updating it, silently. The
+ * props are made stable instead, which is checkable; App § "TableView's four
+ * callbacks" is the other half of this change.
+ *
+ * **What this retires:** `blockHref` read `location.search` during render on the
+ * grounds that any URL change re-rendered this whole tree. It no longer does.
+ * That is what `linkBase` is for — see `Props.linkBase`, and do not reintroduce
+ * a render-time read of `location`, or of any other global, in this subtree
+ * without giving it the same treatment.
+ *
+ * Verify with `?perf=1`: `useRenderCount("TableView")` counts *body*
+ * executions, so a skipped render is not counted, and `measure-cpu.ts --scroll`
+ * prints the tally. **Zero renders is not on its own evidence of correctness** —
+ * a memo that never updates reads zero too. Pair it with the browser check that
+ * a comment, a glossary press and a search still change the prose.
+ *
+ * See docs/plans/260904a-more-scroll-cpu-wins.md.
+ */
+export const TableView = memo(TableViewInner);
+
+function TableViewInner({
   article,
   geometry,
   columns,
@@ -225,6 +286,7 @@ export function TableView({
   hitHues,
   sections,
   layoutKey,
+  linkBase,
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
@@ -922,7 +984,12 @@ export function TableView({
                             )}
                           </div>
                           <p className="gist-text">{node.gist}</p>
-                          <BlockRange className="range" range={node.range} onJump={onJump} />
+                          <BlockRange
+                            className="range"
+                            range={node.range}
+                            onJump={onJump}
+                            linkBase={linkBase}
+                          />
                         </>
                       ) : (
                         // A leaf: navigation chrome only, and only in outline mode.
@@ -1016,6 +1083,7 @@ export function TableView({
                     is. */}
                 <BlockGutter
                   id={block.id}
+                  linkBase={linkBase}
                   comments={cmtsByBlock.get(block.id)}
                   chatCount={chatCounts.get(block.id) ?? 0}
                   onOpenComment={onOpenComment}

@@ -395,6 +395,170 @@ export class TooManyPages extends Error {
   }
 }
 
+/**
+ * **The comparison, in one place.** Two callers now ask it — `pass0` below, and
+ * stage 1, which refuses an over-long document before it is stored at all
+ * (src/pipeline.ts § `refuseAnOverlongPdf`).
+ *
+ * It is one line and it is a function anyway, because the alternative is two
+ * hand-written `>` against two hand-written limits, and the second one to be
+ * edited is the one that goes on being wrong: a cap raised in the acquisition
+ * step and not here would accept a document stage 2 then refuses, which is
+ * exactly the shape of the report this came out of
+ * (docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md).
+ */
+export function refuseTooManyPages(pages: number, limit: number | undefined): void {
+  if (limit !== undefined && pages > limit) throw new TooManyPages(pages, limit);
+}
+
+/**
+ * **Why pdf.js could not open this file — or `null` for "that was not the
+ * file's fault".**
+ *
+ * Two callers, and they want the same judgement at different widths. Stage 1's
+ * page cap only asks *is this the file rather than the counter*: a file it
+ * cannot read goes on to stage 2, because a cost gate is not a validity gate,
+ * while a broken counter fails loudly. Stage 2 then has to **say which**, since
+ * a locked file and a damaged one are two different things to be told and only
+ * one of them mentions a password (src/pdf-read.ts § `runPdfExtract`,
+ * src/messages.ts § `PDF_LOCKED`).
+ *
+ * So the reason is the primitive and `pdfIsUnreadable` is the question asked of
+ * it. One list of exception names, and the two gates cannot drift into
+ * disagreeing about what a readable PDF is.
+ *
+ * **By name, and the honest reason is the seam rather than the export list.**
+ * The classes are exported from the build (`pdfjs-dist/legacy/build/pdf.mjs`) —
+ * an earlier version of this comment said they were not, and was wrong ⟨Sol,
+ * 2026-09-04⟩. But `loadPdfjs` is a dynamic import chosen at runtime, so an
+ * `instanceof` would mean awaiting the module again purely to get two
+ * constructors, in a predicate whose whole job is to classify the failure of
+ * having loaded it. The names are stable public API and the comparison is exact.
+ *
+ * **What this deliberately does not cover, and it is a real edge.** pdf.js
+ * funnels worker-side `FormatError`s into `UnknownErrorException` — an
+ * unsupported encryption algorithm is the reachable example, reproduced by Sol
+ * on 2026-09-04 — so a PDF with exotic encryption is not classified here, fails
+ * stage 1 outright, and its reader gets the generic sentence for a step that
+ * talks about fetching. Swallowing `UnknownErrorException` too is not the fix:
+ * the same class carries genuine parser and worker faults, which is exactly what
+ * must not pass a gate silently. One rare file gets a worse sentence; the
+ * alternative is the cap quietly not applying. If that trade ever stops being
+ * right, the answer is a "could not safely count" outcome the caller can act on,
+ * not a wider catch.
+ *
+ * **That paragraph used to call this a trade against *"stage 2's sentence"*, and
+ * on the day it was written there was no such sentence** — every unopenable PDF,
+ * exotic or ordinary, reached the reader as the generic retryable copy with a
+ * Retry button that could not work. The two sentences below it named exist since
+ * 2026-09-04, which is what turned a trade that did not exist into one that
+ * does, and narrows it to the rare file rather than all of them.
+ */
+export function pdfUnreadableReason(err: unknown): "locked" | "damaged" | null {
+  if (!(err instanceof Error)) return null;
+  /* Measured 2026-09-04: a truncated file, a zip and an empty buffer all arrive
+     as `InvalidPDFException`; an encrypted one is `PasswordException`. */
+  if (err.name === "PasswordException") return "locked";
+  if (err.name === "InvalidPDFException") return "damaged";
+  return null;
+}
+
+/** The same judgement, for the caller that only needs the file/not-the-file half. */
+export function pdfIsUnreadable(err: unknown): boolean {
+  return pdfUnreadableReason(err) !== null;
+}
+
+/**
+ * **How many pages, and nothing else** — open, read the page tree, walk away.
+ *
+ * `pass0` answers this too and takes **3.7–6.9 s** on a real 144-page paper
+ * (arXiv 2303.18223) to do it, because it walks every page calling
+ * `getTextContent`. That is stage 2's work and stage 1 must not pay for it: the
+ * acquisition step wants one number, on a path a reader is watching, so the
+ * refusal lands in seconds rather than after a job card has been running.
+ *
+ * Measured 2026-09-04 on four files, 8 to 144 pages and 0.1 MB to 11 MB:
+ * **17–33 ms** warm, with no trend against either page count or file size, and
+ * **1.5–1.8 s on the first PDF a process sees**, which is pdf.js loading and is
+ * paid once whoever pays it.
+ *
+ * `doc.numPages` is available the moment the document opens, from the page
+ * tree, without touching a page — the same fact the guard in `pass0` relies on.
+ *
+ * **It throws whatever pdf.js throws** for a file it cannot open, and the
+ * caller in stage 1 deliberately swallows two of those: a file we cannot parse
+ * is not a file that is too long, and refusing it here would put every
+ * malformed-PDF failure into the step that talks about fetching. See
+ * `pdfUnreadableReason`.
+ *
+ * ## The signal, and it is the only bound there is
+ *
+ * This is where a stranger's file is opened in our own process, on the claimant
+ * that is holding a job — so the step's deadline has to be able to end it. The
+ * first version took no signal at all and its caller passed none, which meant
+ * the 740 s self-abort **could not reach pdf.js**: a pathological file held the
+ * acquisition step until the platform killed the function ⟨GPT Sol, 2026-09-04⟩.
+ * docs/project/security.md § the untrusted file is about exactly this surface.
+ *
+ * `destroy()` is what an abort does, because it is the only thing that ends a
+ * loading task — and the rejection it causes is deliberately **replaced** by the
+ * signal's own reason, so that a caller classifying the failure sees *the step
+ * gave up* rather than pdf.js's "Worker was destroyed", which is not a statement
+ * about the file.
+ *
+ * **What it can and cannot interrupt, honestly.** pdf.js hands work back at its
+ * own `await` points, so the abort lands between them; a single synchronous
+ * parse step inside the library runs to its end whatever this does. That makes
+ * this a bound on the *operation* rather than a guarantee about any instant, and
+ * it is the same bound every cooperative deadline in this codebase has.
+ */
+export async function countPdfPages(
+  source: string | Uint8Array,
+  signal?: AbortSignal,
+): Promise<number> {
+  /* Before the file is read at all, let alone parsed. A claimant that has
+     already given up must not open a stranger's document. */
+  signal?.throwIfAborted();
+  /* Copied for the reason `pass0` copies — pdf.js transfers the buffer to its
+     worker and leaves the caller holding a detached one, and here the caller is
+     about to hash those same bytes and put them in a bucket. */
+  const data =
+    typeof source === "string" ? new Uint8Array(await readFile(source)) : new Uint8Array(source);
+  const pdfjs = await loadPdfjs();
+  /* Again: loading pdf.js is 1.5–1.8 s on the first PDF a process sees, and the
+     deadline may have passed inside it. */
+  signal?.throwIfAborted();
+  const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
+  /* `void`, because nothing is waiting on the release here — the `finally` below
+     awaits a `destroy` on every path, and this one only has to *start* it. */
+  const giveUp = () => {
+    void loadingTask.destroy();
+  };
+  signal?.addEventListener("abort", giveUp, { once: true });
+  try {
+    const doc = await loadingTask.promise;
+    return doc.numPages;
+  } catch (err) {
+    /* An abort is why this failed, so it is what the caller is told. pdf.js's
+       own destruction error would otherwise be classified as a fact about the
+       document, which it is not. */
+    signal?.throwIfAborted();
+    throw err;
+  } finally {
+    signal?.removeEventListener("abort", giveUp);
+    /* **`destroy`, not `cleanup`** — only this stops the worker, and this
+       function opens a document precisely in order to abandon it. See the
+       `finally` in `pass0` for the day that distinction cost. Idempotent in
+       pdf.js, so calling it after `giveUp` did costs nothing. */
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* Being abandoned anyway; a failure to release a worker must not replace
+         the answer, or the error, we came here for. */
+    }
+  }
+}
+
 export async function pass0(
   source: string | Uint8Array,
   opts: { maxPages?: number } = {},
@@ -439,15 +603,24 @@ export async function pass0(
    *
    * The limit is passed in rather than imported: this module has no opinion
    * about cost, and `MAX_PAGES` belongs to the stage that pays.
+   *
+   * **Since 2026-09-04 this is a backstop rather than the first gate.** Stage 1
+   * counts the pages before it stores the document, so an over-long PDF is
+   * refused in seconds. This still has to be here: an article ingested before
+   * that landed, a re-extraction after the cap moves, and every command-line
+   * caller reach this guard and not the other one. The comparison is shared —
+   * `refuseTooManyPages` above — so the two cannot drift apart.
    */
-  if (opts.maxPages !== undefined && doc.numPages > opts.maxPages) {
+  try {
+    refuseTooManyPages(doc.numPages, opts.maxPages);
+  } catch (err) {
     try {
       await loadingTask.destroy();
     } catch {
       /* Being abandoned anyway. A failure to release a worker we are throwing
          away must not replace the error that says why we are throwing it. */
     }
-    throw new TooManyPages(doc.numPages, opts.maxPages);
+    throw err;
   }
 
   const pages: PageText[] = [];

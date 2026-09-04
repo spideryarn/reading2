@@ -258,10 +258,24 @@ function foldCase(hay: string): { folded: string; map: number[] } {
   return { folded, map };
 }
 
-/** Every place `needle` appears in `hay`, case-insensitively. */
-function literalSpans(hay: string, needle: string): { start: number; end: number }[] {
+/** What `foldCase` returns: the folded text, and where each unit came from. */
+interface Folded {
+  folded: string;
+  map: number[];
+}
+
+/**
+ * Every place `needle` appears in `hay`, case-insensitively.
+ *
+ * Takes the fold rather than making it, because the fold depends only on `hay`
+ * and `hay` does not change while somebody types. `folds` below holds it.
+ */
+function literalSpans(
+  hay: string,
+  needle: string,
+  { folded, map }: Folded,
+): { start: number; end: number }[] {
   const spans: { start: number; end: number }[] = [];
-  const { folded, map } = foldCase(hay);
   /* The needle is folded the same way, and its *folded* length is what steps
      the search forward — the two can differ, and stepping by the original's
      length is how you would get overlapping matches back. */
@@ -299,11 +313,17 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
   const needle = find?.trim() ?? "";
   if (needle.length < MIN_FIND_CHARS) return [];
   const found: Found[] = [];
-  const texts = blocks.map((b) => renderedText(b.html));
-  const scale = ruler(texts);
+  /* `page`, rather than the two lines this used to be — which were `page`'s
+     first and third fields spelled out a second time. Typing another character
+     re-ran them over the whole article; now the second keypress parses nothing.
+     The `index` map `page` also builds is unused here, and costs one pass over
+     an array this function is about to walk anyway. */
+  const { texts, scale } = page(blocks);
+  const folded = foldedTexts(blocks);
   blocks.forEach((block, index) => {
     const text = texts[index] ?? "";
-    for (const span of literalSpans(text, needle)) {
+    const fold = folded[index] ?? { folded: "", map: [0] };
+    for (const span of literalSpans(text, needle, fold)) {
       found.push({
         key: `${block.id}:${span.start}`,
         blockId: block.id,
@@ -370,10 +390,10 @@ export interface ActiveRun {
  * The blocks, rendered and measured once — everything `resolveOne` needs that
  * does not vary per passage.
  *
- * Built once per call and shared, for the reason the note above `resolveHits`
- * gives: rendering every block's text is the one genuinely expensive thing in
- * this file, and a ruler rebuilt per source would measure each result's *place*
- * against a scale reconstructed from the same numbers.
+ * Built once per array of blocks and shared, for the reason the note above
+ * `resolveHits` gives: rendering every block's text is the one genuinely
+ * expensive thing in this file, and a ruler rebuilt per source would measure
+ * each result's *place* against a scale reconstructed from the same numbers.
  */
 interface Page {
   index: Map<BlockId, number>;
@@ -381,9 +401,69 @@ interface Page {
   scale: Ruler;
 }
 
+/**
+ * The same article, asked again, is not parsed again.
+ *
+ * `renderedText` is `document.createElement("div")`, an `innerHTML =` and a
+ * `textContent` read — a full HTML parse, per block. `page` does it for every
+ * block, and **six** exported resolvers call `page`. Two of them call it inside
+ * a loop: one `resolveClaim` per shown claim (ClaimsPanel.tsx) and one
+ * `resolveCriterion` per ticked criterion (CriteriaPanel.tsx). So referee mode
+ * was O(claims × blocks) parses, and ticking one criterion paid for all of them
+ * again; a literal search paid a whole pass per keypress.
+ *
+ * **Keyed on the array's identity, not on its contents**, which is the right key
+ * here for a reason worth stating: `article.blocks` is replaced wholesale when
+ * the article changes, and nothing on the client mutates a blocks array in
+ * place — so a surviving identity is a guarantee that the html behind it
+ * survived too. A content hash would be a parse to avoid a parse.
+ *
+ * A `WeakMap` rather than a `Map` so a closed article is collectable: the entry
+ * dies with the array, there is nothing to invalidate and no size to bound. It
+ * is also why this is not a `useMemo` in some component — five different
+ * components ask this question, and they should share one answer rather than
+ * hold five.
+ *
+ * The `Page` handed back is **shared, and must not be mutated.** Everything
+ * that takes one only reads it.
+ */
+const pages = new WeakMap<Block[], Page>();
+
+/**
+ * And the case-folded form of the same text, for the one caller that needs it.
+ *
+ * `foldCase` walks the article by code point and allocates a `number[]` as long
+ * as it, per block. Inside `literalSpans` that ran **once per block per
+ * keypress**, which is the other half of the cost `page` above addresses — the
+ * parse was the loud half, this is the one that survives it.
+ *
+ * **Its own `WeakMap` rather than a field on `Page`, and lazily**, because
+ * `resolveHits` and the four other resolvers never fold anything. Most readers
+ * never type in the find box at all, and they should not be holding an offset
+ * map the length of the article in case they do. Keyed on the same `blocks`
+ * array, so the two caches live and die together.
+ */
+const folds = new WeakMap<Block[], Folded[]>();
+
+function foldedTexts(blocks: Block[]): Folded[] {
+  const had = folds.get(blocks);
+  if (had) return had;
+  const built = page(blocks).texts.map(foldCase);
+  folds.set(blocks, built);
+  return built;
+}
+
 function page(blocks: Block[]): Page {
+  const had = pages.get(blocks);
+  if (had) return had;
   const texts = blocks.map((b) => renderedText(b.html));
-  return { index: new Map(blocks.map((b, i) => [b.id, i])), texts, scale: ruler(texts) };
+  const built: Page = {
+    index: new Map(blocks.map((b, i) => [b.id, i])),
+    texts,
+    scale: ruler(texts),
+  };
+  pages.set(blocks, built);
+  return built;
 }
 
 /**

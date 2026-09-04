@@ -21,6 +21,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ASSETS_BUDGET_MS } from "../src/collect-assets.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS } from "../src/jobs.js";
+import { DEFAULT_INGEST_STEPS } from "../src/pipeline.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -60,8 +61,18 @@ describe("the job lease and the platform's kill", () => {
   });
 
   /**
-   * **The whole default ingest, not one step — and this is the assertion that
-   * will bind.**
+   * **The whole default ingest of an ordinary web page, not one step — and this
+   * is the assertion that will bind.**
+   *
+   * **"Of an ordinary web page" was implicit and is now written down**, along
+   * with the check that makes the promise below true rather than aspirational
+   * ⟨Sol, 2026-09-04⟩. `DEFAULT_INGEST_STEPS` is imported and asserted against
+   * the keys of `worstStepMs`, because this comment claimed a new default step
+   * would break the test and nothing made that so: the list was hand-typed, and
+   * a sixth step would have left every assertion here green. The PDF branch of
+   * `extract` is a fan-out of model calls that does **not** fit one invocation,
+   * has never claimed to, and is what the per-chunk checkpoints and the
+   * hand-back exist for.
    *
    * Today every step gets its own fresh deadline, because each `/advance` takes
    * its own claim. Under the claim-once coordinator the whole job runs inside
@@ -90,11 +101,26 @@ describe("the job lease and the platform's kill", () => {
        and took 7.1s. A reader who cannot tell which of these is observed will
        reason about the guesses as though they were facts. */
     const worstStepMs = {
-      /* GUESS, generous. Network only, no model call. Never measured. */
-      fetch: 10_000,
-      /* GUESS, generous. Readability on HTML; a long PDF is slower and is not
-         covered by this number — see the PDF note below. */
-      extract: 5_000,
+      /* MEASURED 2026-09-04: 107-893 ms over five real addresses, plus up to
+         1.8 s for the page count stage 1 now does. Written as 110 s because
+         that is what `src/fetch.ts` actually allows a hanging retryable origin
+         — three attempts of `DEFAULTS.timeoutMs` = 30 s, with `retryDelayMs`
+         capped at 10 s between them. An earlier draft said 30 s, having read the
+         timeout and not the loop around it. */
+      fetch: 110_000,
+      /* MEASURED 2026-09-04, **the HTML branch only**: 0.95-5.2 s over four real
+         pages, the worst being Wikipedia's 1.3 MB *Consciousness*. Rounded up.
+
+         **Not `STEP_BUDGET_MS.extract`, and the difference is the point of this
+         comment.** That number is 700 s and answers a different question — how
+         much of a claim must remain before the walk moves on to this step — and
+         it is a ceiling sized for the PDF branch. (Not a guarantee that a PDF is
+         never begun in a short window: the walk runs its *first* step ungated,
+         so a claim that begins at `extract` starts it regardless ⟨Sol,
+         2026-09-04⟩.) This one is elapsed time for the HTML branch. Importing
+         the other table here would assert something false about the case this
+         test is about. */
+      extract: 10_000,
       /* GUESS, generous. Deterministic, no model call. */
       blocks: 5_000,
       /* MEASURED 2026-08-30, worst in data/_ai-calls.jsonl: one call, so sum
@@ -106,8 +132,30 @@ describe("the job lease and the platform's kill", () => {
          hanging publisher, where 10 images cost ~151s. */
       assets: ASSETS_BUDGET_MS,
     };
+    /* **The guard the comment above promised and did not have.** A step added
+       to the default ingest and not costed here is a budget that goes on
+       agreeing with itself — the same shape as every other pair of hand-typed
+       lists this repo has been bitten by. Sorted on both sides so the order of
+       either is nobody's business. */
+    expect(
+      Object.keys(worstStepMs).sort(),
+      "a step joined or left DEFAULT_INGEST_STEPS — cost it here, or this budget is about a " +
+        "pipeline that no longer exists",
+    ).toEqual([...DEFAULT_INGEST_STEPS].sort());
+
     const wholeJobMs = Object.values(worstStepMs).reduce((a, b) => a + b, 0);
     expect(wholeJobMs).toBeLessThan(maxDurationSeconds() * 1000);
+    /* **And against the claimant's own deadline, which is the tighter of the
+       two and the one this test's prose is actually about.** It compared only
+       with `maxDuration` until 2026-09-04, so a future total of 750 s would have
+       passed while disproving the sentence above it ⟨Sol⟩ — the claimant aborts
+       itself at `LEASE_MS - DEADLINE_MARGIN_MS`, 60 s before the platform does.
+       Today's HTML total is 630.4 s and clears both. */
+    expect(
+      wholeJobMs,
+      "the default HTML ingest no longer fits ONE claim — it would now be split across requests, " +
+        "which works but is not what the sentence above claims",
+    ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
   });
 
   /**
