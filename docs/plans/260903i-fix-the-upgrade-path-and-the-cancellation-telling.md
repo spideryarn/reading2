@@ -239,7 +239,7 @@ reads a stored integer and nothing else changes there.
 
 Fable's implementation notes, which are the actual cost of this stage:
 
-- **Two columns**, `quota_limit_override` and `quota_period_start`, not one.
+- **Two columns**, `quota_limit_delta` and `quota_period_start`, not one. (Written as `quota_limit_override` here; it was built under that name and renamed on 2026-09-04 when the second review showed it had to store a **delta** — see below.)
 - **The ordering rule is the part to write deliberately**, because Stripe does not guarantee webhook
   order. Compare the incoming `current_period_start` to the stored one: **greater** → the period
   rolled, clear the override; **equal** → same period, apply the delta; **less** → a stale event,
@@ -759,7 +759,8 @@ was red **in the other direction** — refused at 32 where it should have admitt
 code drops a downgraded reader to the Reader limit immediately rather than to the 33 they paid for.
 The exploit and its mirror image are the same bug.
 
-**Where it lives.** `nextQuotaOverride` in [`src/billing/quota-override.ts`](../../src/billing/quota-override.ts)
+**Where it lives.** `nextQuotaAdjustment` in [`src/billing/quota-adjustment.ts`](../../src/billing/quota-adjustment.ts)
+(named `nextQuotaOverride` in `quota-override.ts` on the day, and renamed with the column below)
 is pure and takes the transition; `syncSubscriptionFromStripe` calls it inside the lock it already
 holds and writes both columns in the same statement as `price_id`. `entitlementFromRow` reads a
 stored integer and compares one date. Admission does no arithmetic.
@@ -958,127 +959,91 @@ and stop the defensive clamp matching the sentence describing it. It now counts 
 can still be holding one. Pinned in `tests/billing-tiers.test.ts` from both sides, and the pin was
 watched failing against the old reduce.
 
-#### The change-time fix, built — and how it was arrived at
+#### After Sol's second review: the change time comes out, and two rules go in
 
-**Read this before proposing anything here, because two prior proposals were refuted to get to it**
-and the next person will otherwise propose one of them again. The blocker Sol found was real; the
-replacement offered for it was worse; the answer was neither.
+**Three shapes have now been proposed and refuted for this stage, and the point of writing all three
+down is that the next person will otherwise propose one of them again.** They are, in order:
+`used_so_far + limit × f` (not idempotent — 429 ingests against a tier of 150 when simulated);
+scaling by a **change time** taken from the delivering event (below); and storing an **absolute**
+limit rather than a delta (below). What is left is the plainest version of the arithmetic, and it is
+the one to keep.
 
-`f` is now evaluated at the moment the plan changed, taken from the delivering event's `created` and
-clamped into `[last_synced_at, now]`. `observedChangeTime` in
-[`src/billing/quota-override.ts`](../../src/billing/quota-override.ts) is the whole of it, and three
-properties are what make it safe rather than clever:
+**1. `changedAt` and `observedChangeTime` are gone.** Built on 2026-09-03, removed on 2026-09-04
+after Sol reproduced the defect it introduced. The webhook serves four event types identically and
+then fetches *current* state, so **the event that provokes a sync is not necessarily the event that
+caused the change the sync finds**. A `checkout.session.completed` retry from day 17 arriving after a
+day-20 upgrade discovers it and scales it by day 17: **76 granted where the day-20 answer is 63**, an
+immediate downgrade then leaving **32** rather than 20, and the genuine plan-change event that
+follows seeing the same price and preserving the wrong number. Sol also refuted the bound the whole
+argument rested on — automatic retries run three days, but a **manual** retry runs 15 days from the
+Dashboard and 30 from the CLI, so "created at most three days ago" was simply false. And its own
+lower bound leaked: `last_synced_at` is written *after* the Stripe fetch, so a change landing in
+between is stamped later than it happened.
 
-- **the event supplies *when*, never *state*** — everything decided is still what
-  `stripe.subscriptions.list` said under the lock, so `sync.ts`'s ask-Stripe-what-is-true rule is
-  untouched;
-- **the lower bound is `last_synced_at` because that is when we last saw the old price**, so the
-  change cannot predate it, and a stale event cannot drag the fraction back towards the period start
-  and buy a nearly-full upgrade for a few pence;
-- **Stripe's own retry ceiling bounds the rest** — an event arriving now was created at most three
-  days ago.
+Two independent reviews have now found a blocking defect in successive attempts to learn *when* a
+plan changed from an event. The conclusion taken is that **an event cannot tell us**, so the delay is
+accepted rather than corrected. `f` is taken at the sync, and the residual is stated plainly rather
+than papered over:
 
-Two caveats live beside it in the code: Stripe warns against using `created` **to determine event
-order**, which is not what this does, and the timestamp is second-granular, which against a fraction
-of a month is noise.
+- a delayed **downgrade over-grants** — generous to somebody who is paying us less, and accepted;
+- a delayed **upgrade under-grants** — a real harm to a customer who has just paid more. Rare, since
+  ordinary delivery is seconds, and repaired by a manual resync. Not dismissed;
+- the **exploit this stage closes runs through the upgrade direction**, so lag can only make it
+  safer.
 
-**`changedAt` is required, not optional.** The two callers with no event — admission's resync and
-checkout's confirmation — pass `"unknown"` out loud at the call site with a comment saying why.
-Making it optional would let the next reader see a sensible default and quietly restore the bug the
-default *is*.
+**2. A different subscription is not a plan change.** `billing_accounts` stores
+`stripe_subscription_id` and the arithmetic never received it, so a change of *winner* between two
+subscriptions whose periods start in the same Stripe second read as a mid-period downgrade and was
+prorated as one — **85 where the new subscription's own tier is the answer**. Both ids now cross into
+`nextQuotaAdjustment`; a different id clears, and never prorates. Sol, reproduced.
 
-**The red, witnessed by putting the reviewed version back** (one line: `fractionRemaining(incoming,
-now)`):
+**3. The column stores a delta, not a limit** — `quota_limit_delta`, renamed while it is still
+unshipped. An absolute limit **silently opted an account out of every future tier change**: raising
+Reader from 20 to 50 by the documented one-`UPDATE` left an account carrying an override of 33 sitting
+at 33, for ever. The repairs that suggest themselves do not work — `max(tierLimit, override)` reopens
+the exploit, because an upgrade to Researcher with an hour left becomes `max(33, 150)`. Storing what
+the change was *worth* does: the read is `tierLimit + delta`, floored and clamped, so the tier table
+stays in charge of the base.
 
-```
-× prorates a late webhook against the change, not against the delivery
-× prorates at the moment the plan changed, not the moment we were told
-    AssertionError: expected { limit: 124, …(1) } to deeply equal { limit: 33, …(1) }
-× cannot be dragged back before the last time we looked
-    AssertionError: expected { limit: 46, …(1) } to deeply equal { limit: 98, …(1) }
-```
+| | stored | today | after a raise |
+|---|---|---|---|
+| upgrade to Researcher, 3d1h left | `−117` | 150 − 117 = **33** | Researcher → 200 gives **83** |
+| downgrade to Reader, 27d left | `+13` | 20 + 13 = **33** | Reader → 50 gives **63** |
 
-The first of those three is the **wiring** pin, over a real database: a downgrade made five days ago
-and heard about now gives 41 rather than 63. Every date in it is fixed at fixture time, so it does
-not depend on the clock at all. `tests/billing-webhook-route.test.ts` pins the other end of the same
-seam — that the event's own `created` reaches `sync` — and reddens when the webhook passes
-`"unknown"` instead.
+`billing_accounts_quota_override_not_negative` went with it: a delta is legitimately negative, and the
+bound it would actually need — that `ingests_per_period + delta` lands inside `[0, the largest tier]`
+— is a function of another table, which a row constraint cannot see. **The clamp moved to the read**,
+in `limitForPeriod`, where the tier is in hand; it is pinned from both ends there and the paired-null
+CHECK is now watched refusing in the database.
 
-**Why the two rejected shapes are recorded rather than summarised.** Sol's *stateless* form,
-`used_so_far + limit(tier) × fraction remaining`, was offered as immune to collapsed history and
-idempotent. It is neither, and simulating it rather than reasoning about it is the only thing that
-showed why: it granted **429 ingests against a tier of 150** inside one period, because `used_so_far`
-moves and each recomputation adds another `limit × fraction` on top of a ceiling that already
-contained one — and every `customer.subscription.updated`, including a Portal card change, is a
-recomputation. *Used only grows and the fraction only shrinks* is not an invariant: opposite
-directions say nothing about the **sum**. It was also not the fairness-for-correctness trade it
-looked like — for a reader who had spent 12 of their 20 before upgrading on day 15 it gives **87**
-against the delta's 85, because it tracks what somebody spent rather than what they bought.
-
-**Two `sync`-wide pins and a lock pin, added because M12's class is real.** They live in
-`tests/billing-quota-override.test.ts` under *what one sync writes*, because that is the only file
-that drives sync end to end. One asserts every field of the write against a row that disagrees with
-Stripe in all of them; one asserts they all clear when the customer has no subscription we can meter.
-Mutation-checked: hardcoding `livemode` reddens two of them, never writing `cancel_at` from Stripe
-reddens one.
-
-**M17, and the pin it broke.** Removing `.for("update")` from sync's locked read left the whole suite
-**green**, which is a finding rather than a failure: the lock pin as first written asserted only that
-the sync *waits*, and an unlocked sync waits too — the holder's row lock blocks sync's final `UPDATE`
-whether or not its `SELECT` was locked. It was measuring something true that was not the thing it was
-named for, which is this document's recurring shape at test scale.
-
-The rewritten case changes the row *while the sync is in flight*: the holder records the upgrade
-itself, with an override of 99, and commits. Under the lock the `SELECT` blocks and — at
-`read committed` — re-reads the newest committed version, so the sync sees the price already moved,
-finds nothing to prorate, and leaves the 99 alone. Without it:
+**The reds, each witnessed before its fix:**
 
 ```
-× reads and moves the price inside one critical section
-AssertionError: expected { limit: 33, …(1) } to deeply equal { limit: 99, …(1) }
+× does not let an older event scale a change it did not cause
+    expected { kind: 'eligible' } to match object { kind: 'refused', limit: 63, used: 63 }
+× does not prorate when a different subscription starts the same second
+    AssertionError: expected { limit: 85, …(1) } to deeply equal { limit: null, periodStart: null }
+× follows a tier raise for an account carrying an override
+    AssertionError: expected { kind: 'refused', used: 82, …(2) } to match object { kind: 'eligible' }
 ```
 
-**And the claim that pin was written to defend was too strong, which the mutation is also what
-showed.** An earlier paragraph here said the override made sync a read-modify-write, so *"two
-concurrent syncs that both read the old price would both apply the delta"*. They would not: two syncs
-fetching the same Stripe state compute the same answer from the same stored state and write the same
-number, so a lost lock does not double-apply. What it loses is an **intermediate transition** — a
-sync that read before somebody else's change committed overwrites their result with a delta measured
-from state that is already gone, which is what the 33-over-99 above is. The lock is still
-load-bearing, for that reason rather than the one first given.
+**Mutation-checked, four more.** Dropping the subscription-id comparison reddens the two cases named
+for it and nothing else; reading the tier from a constant instead of the argument reddens four,
+including the named up-down-up sequence; dropping the CHECK in the database reddens the rejection
+test; and the earlier M-series stands.
 
-**A comment is not a guard.** Two of the new cases were written with a period of exactly three days
-and came out at **32 rather than 33**, because the arithmetic lands on 33.0 and the milliseconds
-between building the fixture and running the sync decide the floor. The first test in the file
-carried a comment warning about precisely this, a few lines above, and the comment did not stop it
-happening — to the person who had written it, the same day. `threeDaysLeft()` is now the only way
-this file builds that period, and that is the difference: a guard removes the case, a comment asks
-somebody to remember it.
+**The migration was regenerated rather than stacked.** Nothing was committed and the only database
+holding the old columns was this laptop's, so `20260903185701_opposite_mach_iv` was removed from the
+chain, its columns and constraints dropped locally along with its `__drizzle_migrations` row, and
+`20260904062555_supreme_paper_doll` generated in its place — two nullable columns and one CHECK,
+checked by diffing the snapshot against its predecessor, `db:chain` clean. Worth knowing for next
+time: **`drizzle-kit generate` cannot rename a column non-interactively**, because the rename-versus-
+drop-and-add question is a TTY prompt, and `db:generate` reports the refusal as "wrote no migration".
 
-**The evidence was wrong twice before the code was.** A `perl` revert of one mutation silently
-rewrote a *second* matching line in the same `.set` block — the near-identical
-`state?.x ?? null` fields make that easy — and only diffing the revert caught it. That is the second
-time in this job that a checking step, rather than the code under it, was the thing that was wrong:
-the first was M12's whole class, where the suite agreed with a bug because nothing drove sync end to
-end. **Diff every revert**, and treat a mutation run that ends green as a claim needing its own
-evidence.
-
-**`npm test` and `npm run check`, run once the machine recovered.** Typecheck and build clean;
-`test` and `cycles` red, and neither for our reasons. The `test` gate's six failures were
-`store-shelf-reads` and `load-article-serialisation` (shared local Supabase, the set Stages 1 and 3
-recorded) and `billing-portal-check` — **which passes 27/27 in isolation**, because Stage 2's agent
-was editing it while the gate ran. `billing-tiers` failed in one full-suite run and passes alone, for
-the same reason: `billing_tiers` is a shared table and a peer suite leaves rows in it. `cycles` is
-biome's 159 findings in `evals/` and `biome.jsonc`; all twelve files this stage touched check clean.
-
-**One flake worth somebody's time, found twice here and not ours.**
-`tests/billing-settlement.test.ts` fails on
-`ingest_events_settled_after_reserved` whenever the container's clock is a few milliseconds ahead of
-the host's: `reserved_at` comes from Postgres `now()` and the settlement timestamp from JS
-`new Date()`, so a reservation settled milliseconds after it was made can violate a constraint that
-says a settlement cannot precede its reservation. Measured on 2026-09-03 with the container 60ms
-ahead, and again on 2026-09-04 with the two clocks 2ms apart. The fix is for the settlement to take
-its timestamp from the same clock as the default — `now()` — rather than from the application.
+**The tests Sol asked for that are not here, and why.** Two of the six existed only to serve
+`changedAt` — an older event discovering a newer transition, and a realistic `last_synced_at` in the
+delayed case — and went with the mechanism; the first survives in spirit as the red above. The
+`"unknown"` seam assertions went the same way: there is no longer a second argument to assert.
 
 ### What merging `origin/dev` will cost, measured 2026-09-04
 
@@ -1247,9 +1212,27 @@ day 20, and a pending **day-17 `checkout.session.completed` retry** arriving fir
 against a truth of **63**; an immediate downgrade then leaves 32 rather than 20, and the genuine
 plan-change event that follows sees the same price and preserves the wrong number.
 
-Sol also refuted the bound the design rested on: automatic retries run three days, but **manual
-retries run 15 days from the Dashboard and 30 from the CLI**, so *"an event arriving now was created
-at most three days ago"* — written into `src/billing/quota-override.ts` as load-bearing — is false.
+Sol also refuted the bound the design rested on. *"An event arriving now was created at most three
+days ago"* — written as load-bearing into the module now called
+[`src/billing/quota-adjustment.ts`](../../src/billing/quota-adjustment.ts) — is false, because **the
+three-day figure covers automatic retries only, and a human can replay an event by hand afterwards**.
+Verified 2026-09-04 against [Receive Stripe events](https://docs.stripe.com/webhooks): *"Stripe
+attempts to deliver events to your destination for up to three days with an exponential back off in
+live mode"*, and manual retries are a separate documented mechanism, available from the Dashboard and
+the CLI. **Sol's specific windows — 15 days from the Dashboard, 30 from the CLI — I could not
+confirm**, and they are recorded here as Sol's assertion rather than as fact. The refutation does not
+need them: one manual replay is enough to break an *at most* claim.
+
+The same page settles it independently, and this is the sentence that should have stopped the design
+being written at all:
+
+> Stripe doesn't guarantee the delivery of events in the order that they're generated … Don't use
+> `created` to determine event order or whether you've already processed an event. Track event IDs to
+> identify duplicate deliveries instead.
+
+The code's own docblock quoted that warning and then argued past it — *"ordering is not what this
+does"* — which was true and beside the point. What the design actually needed was for `created` to be
+**causally tied to the transition later fetched from Stripe**, and nothing offers that.
 
 **The decision, and it reverses one I made yesterday.** The mechanism comes out; the delay-induced
 error is **accepted rather than fixed**. Two independent reviews have now found a blocking defect in

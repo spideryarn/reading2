@@ -70,7 +70,14 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { FREE, entitlementForTier, isEntitledStatus, tierForPrice } from "../billing/tiers.js";
+import { limitForPeriod } from "../billing/quota-adjustment.js";
+import {
+  FREE,
+  entitlementForTier,
+  isEntitledStatus,
+  quotaRules,
+  tierForPrice,
+} from "../billing/tiers.js";
 import type { Entitlement, TierRow } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingAccounts, ingestEvents } from "../db/schema.js";
@@ -156,6 +163,14 @@ export interface BillingRow {
   readonly currentPeriodEnd: Date | null;
   readonly stripeSubscriptionId: string | null;
   readonly stripeCustomerId: string | null;
+  /**
+   * What a mid-period plan change left this account allowed, and which period
+   * that number belongs to. Null in the ordinary case, which means *ask the
+   * tier* — src/billing/quota-adjustment.ts, and `billing_accounts` in
+   * ../db/schema.ts.
+   */
+  readonly quotaLimitDelta: number | null;
+  readonly quotaPeriodStart: Date | null;
 }
 
 /**
@@ -195,7 +210,19 @@ export function entitlementFromRow(
       customerId: row.stripeCustomerId,
     };
   }
-  return entitlementForTier(tier, { start, end });
+  /* **The one place a stored override is read.** A plan change mid-period leaves
+     a number here that is neither tier's, because Stripe prorated the price and
+     the allowance follows it — src/billing/quota-adjustment.ts. It applies only to
+     the period it was computed for, so this is a comparison and not arithmetic:
+     admission reads an integer. */
+  const { maxAllowance } = quotaRules(tiers);
+  const limit = limitForPeriod(
+    tier.ingestsPerPeriod,
+    start,
+    { delta: row.quotaLimitDelta, periodStart: row.quotaPeriodStart },
+    maxAllowance,
+  );
+  return { ...entitlementForTier(tier, { start, end }), limit };
 }
 
 /**
@@ -281,6 +308,8 @@ const BILLING_COLUMNS = {
   currentPeriodEnd: billingAccounts.currentPeriodEnd,
   stripeSubscriptionId: billingAccounts.stripeSubscriptionId,
   stripeCustomerId: billingAccounts.stripeCustomerId,
+  quotaLimitDelta: billingAccounts.quotaLimitDelta,
+  quotaPeriodStart: billingAccounts.quotaPeriodStart,
 } as const;
 
 /**

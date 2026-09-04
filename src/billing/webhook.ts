@@ -282,6 +282,13 @@ export async function serveStripeWebhook(
   }
 
   try {
+    /* **The event is a doorbell, not a fact.** Only the customer id is taken
+       from it; everything else is fetched. `event.created` was briefly passed
+       here so the quota arithmetic could prorate against the moment of the
+       change, and it was wrong: this handler serves four event types and then
+       fetches *current* state, so the event that rings is not necessarily the
+       one that caused what the sync finds. ./quota-adjustment.ts § *Why `f` is
+       taken at the sync*. */
     const result = await sync(customer);
     if (result.kind === "unmapped") {
       /* `error`, not `warn`: the mapping is written before a Checkout Session

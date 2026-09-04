@@ -3903,6 +3903,47 @@ export const billingAccounts = spideryarn.table(
      */
     cancelAt: timestamp("cancel_at", { withTimezone: true }),
     /**
+     * **How far a mid-period plan change moved this account's allowance**, in
+     * ingests, away from what its tier sells.
+     *
+     * Null is the ordinary state and means *ask the tier and nothing else*.
+     * Negative for an upgrade — a Reader who upgraded with three days left is
+     * 117 short of a whole Researcher month — and positive for a downgrade.
+     * `entitlementFromRow` (../store/pg-billing.ts) adds it to
+     * `billing_tiers.ingests_per_period`, so admission still reads stored
+     * integers and does no arithmetic about time under the row lock.
+     *
+     * **A delta and not a limit, which is the whole of the difference between a
+     * tier table that still governs and one that has been opted out of.**
+     * Raising a quota is one `UPDATE` and no deploy (docs/project/billing.md);
+     * an account carrying an absolute 33 would have sat at 33 through every
+     * future raise, for ever. What the change was *worth* does not go stale when
+     * the tier moves. GPT Sol, 2026-09-04.
+     *
+     * It exists because **Stripe prorates the price and we handed over the
+     * allowance whole**. Upgrading with an hour left of the period costs a few
+     * pence and used to buy the full 150 ingests — Researcher volume at the
+     * Reader price, monthly, from a script. Written only by
+     * `syncSubscriptionFromStripe` (../billing/sync.ts), in the same locked
+     * write as `price_id`, `stripe_subscription_id` and the period, all of which
+     * the arithmetic reads. There is deliberately **no range CHECK**: the bound
+     * a delta needs is a function of `billing_tiers`, which a row constraint
+     * cannot see, so the clamp lives at the read in ../billing/quota-adjustment.ts
+     * where the tier is known.
+     */
+    quotaLimitDelta: integer("quota_limit_delta"),
+    /**
+     * Which period the delta above belongs to.
+     *
+     * **Two columns rather than one**, because without this a period *roll* and
+     * a mid-period *switch* are the same event seen from the row: both arrive as
+     * a sync carrying a period, and only the stored start says which. It is also
+     * what makes a stale delta inert — the read side applies one only when this
+     * equals `current_period_start`, so a sync that forgot to clear one still
+     * cannot meter anybody on last month's number.
+     */
+    quotaPeriodStart: timestamp("quota_period_start", { withTimezone: true }),
+    /**
      * Which side of Stripe's test/live divide this row came from.
      *
      * Stored rather than inferred so that a row written by a misconfigured
@@ -3930,6 +3971,23 @@ export const billingAccounts = spideryarn.table(
     check(
       "billing_accounts_subscription_needs_customer",
       sql`${t.stripeSubscriptionId} is null or ${t.stripeCustomerId} is not null`,
+    ),
+    /* A delta without a period cannot be applied and a period without a delta
+       says nothing, so one of the two alone is a bug rather than a state.
+       `num_nonnulls` rather than a pair of disjunctions because it says the rule
+       instead of encoding it — the same idiom as `ingest_events_settled_once`
+       below.
+
+       **There is no companion range check, and that is deliberate.** The
+       previous column held an absolute limit and carried a `>= 0`; a delta is
+       legitimately negative, and the bound it would actually need — that
+       `ingests_per_period + delta` lands inside `[0, the largest tier]` — is a
+       function of another table, which a row constraint cannot see. The clamp
+       therefore lives at the read, in ../billing/quota-adjustment.ts, where the
+       tier is in hand. */
+    check(
+      "billing_accounts_quota_delta_is_dated",
+      sql`num_nonnulls(${t.quotaLimitDelta}, ${t.quotaPeriodStart}) <> 1`,
     ),
   ],
 );

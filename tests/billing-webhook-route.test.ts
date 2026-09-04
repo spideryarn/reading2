@@ -173,6 +173,24 @@ describe("what Stripe is told, which decides whether it retries", () => {
     expect(reply.status).toBe(200);
   });
 
+  /**
+   * **Only the customer id crosses from the event into the sync**, and this pins
+   * it rather than leaving it to a reader of the handler.
+   *
+   * `event.created` was briefly passed as well, so a mid-period plan change
+   * could be prorated against the moment it was made. It was wrong: this handler
+   * serves four event types and then fetches *current* state, so an older event
+   * can discover a newer transition and scale it by the wrong instant. GPT Sol
+   * reproduced it at 76 where the answer was 63.
+   * src/billing/quota-adjustment.ts § *Why `f` is taken at the sync*.
+   */
+  it("passes the sync the customer and nothing else from the event", async () => {
+    const sync = vi.fn(async () => synced);
+    const created = Math.floor((Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000);
+    await serve(eventBody({ created }), sync);
+    expect(sync.mock.calls).toEqual([["cus_1"]]);
+  });
+
   it("200 without syncing for an event type we deliberately ignore", async () => {
     const sync = vi.fn(async () => synced);
     const payload = eventBody({ type: "invoice.payment_failed" });
