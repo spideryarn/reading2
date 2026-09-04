@@ -458,19 +458,32 @@ column already there.
 Built 2026-09-03, and it is the half that had been missing: the refusal copy had been pointing at
 *"the Upgrade button on your profile page"* since the wall went up, and there was no such button.
 
+**Where a reader buys, since 2026-09-04: `/pricing`.** Greg: *"Right now, the only way to pay is
+from the /profile page, which is a bit buried and confusing."* Both pages now draw the same
+[`PlanCards`](../../src/web/PlanCards.tsx) — presentational, knowing nothing about billing — over one
+owner of the billing state each, so the flow **moved** rather than being copied and `useBilling.ts`
+is still the only implementation of it. `/pricing` is the address to send somebody: it is in the top
+bar, in the footer, and it is where a quota refusal's link goes.
+
 **`/profile` has a Plan section**, directly under Account — [`BillingSection.tsx`](../../src/web/BillingSection.tsx)
 over [`useBilling.ts`](../../src/web/useBilling.ts). It says which plan, how much of it is used, and
 what may be bought, and it has the two buttons that leave for Stripe. There is nothing else to it,
-because there is nothing else to build: Checkout and the Portal are hosted.
+because there is nothing else to build: Checkout and the Portal are hosted. Its cards are built from
+the **rows** (`cardFor`), not from the website's copy, so raising a quota there is still one `UPDATE`
+and this page still follows without a deploy.
 
-**`/pricing` says which plan you are on too**, in one line under the price table — `describePlan`'s
+**`/pricing` says which plan you are on too**, in one line under the plans — `describePlan`'s
 headline, plus its `detail` in the three states where the headline alone does not say what you are
-on (`lapsed`, a **cancelling** `paid`, and `unknown`), and a link back to `/profile` rather than a
-second Upgrade button. It is the only other place a reader is told their own plan, and it asks the
-route **only when signed in**, by a `readerId` prop from `App.tsx` — an id rather than a boolean, so
-that a direct A→B sign-in cannot leave A's tier and usage under B's session, which is the shelf's
-`<Library key={user.id}>` bug and was this page's too before review caught it.
-[website-text.md § The pricing page](website-text.md#the-pricing-page) has the reasoning.
+on (`lapsed`, a **cancelling** `paid`, and `unknown`), and a *Change plan* link back to `/profile`.
+That link stays where it is now that buying has moved: buying is the buttons above it, while an
+invoice, a card and a cancellation are the hosted Portal, which only `/profile` can open (it needs a
+Stripe customer, and `/pricing` does not know whether there is one). It is the only other place a
+reader is told their own plan, and it asks the route **only when signed in**, by a `readerId` prop
+from `App.tsx` — an id rather than a boolean, so that a direct A→B sign-in cannot leave A's tier and
+usage under B's session, which is the shelf's `<Library key={user.id}>` bug and was this page's too
+before review caught it. There is exactly **one** `useBilling()` on that page, feeding both the
+buttons and the line. [website-text.md § The pricing page](website-text.md#the-pricing-page) has the
+reasoning, including how a stranger's press survives the sign-in in between.
 
 Note that the cancellation warning above means the `cancelling` detail this page renders is
 **currently always absent in production**: `cancelling` is computed from `cancel_at_period_end`,
@@ -497,10 +510,22 @@ on the wire for the page to print. `tests/billing-plan.test.ts` is the second ha
 words chosen do not reconstruct the ratio from the numbers that *are* there, and that they make the
 same three promises `pay-lapsed` makes.
 
-**The refusal carries a way out of itself.** `QuotaNotice`
-([`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx)) draws an ingest failure and puts a link
-to `/profile` beside it when — and only when — the message's code is one of the three in
-`QUOTA_CODES`. It is one component in four places (the shelf's add box, a job card's refused
+**The refusal carries a way out of itself, and the way out is not the same for all three.**
+`QuotaNotice` ([`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx)) draws an ingest failure
+and puts a link beside it when — and only when — the message's code is one of the three in
+`QUOTA_CODES`. Where that link goes is decided by the code:
+
+| code | goes to | because |
+|---|---|---|
+| `pay-free` | `/pricing` | never subscribed, so `canCheckout` is true and the prices are the answer to *what would carrying on cost* |
+| `pay-limit` | `/profile` | a working subscription at its ceiling. There is **nothing to buy** — `canCheckout` is false while any non-terminal subscription exists, so `/pricing` draws this reader no button, and the Portal cannot do Reader → Researcher either. The reset date and the subscription are what help |
+| `pay-lapsed` | `/profile` | the client cannot tell a terminal lapse (may check out again) from `unpaid`/`incomplete` (may not) — `hasLapsed` covers both. `/profile` draws the cards when checkout is allowed **and** the Portal when there is a customer, so it is the destination that is never a dead end |
+
+(All three pointed at `/pricing` for a few hours on 2026-09-04, until a GPT Sol review of that day's
+work found that two of them landed on a page with prices and nothing to press —
+[the review](../plans/260904b-stage1-code-review-sol.md). The sentences in `ingestQuotaReached` name
+the same page their own link goes to, and `tests/quota-notice.test.tsx` holds both halves together.)
+It is one component in four places (the shelf's add box, a job card's refused
 **Retry**, the `/add/` page a pasted URL navigates to, and the upload picker), because four
 renderings of one refusal would be four chances for three of them to stop offering the link.
 `pay-off`, `pay-down` and `pay-none` are `pay-` codes too and get no link: nobody buys their way out
@@ -1162,8 +1187,10 @@ path shut.
 | [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`. |
 | [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |
 | [`src/billing/summary.ts`](../../src/billing/summary.ts) | `GET /api/billing/usage`: the row, the tiers and the ledger, turned into a `ReaderPlan`. |
-| [`src/web/BillingSection.tsx`](../../src/web/BillingSection.tsx) · [`useBilling.ts`](../../src/web/useBilling.ts) | The Plan section on `/profile`, and the two redirects. |
-| [`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx) | An ingest failure with a link to `/profile` beside it, when the failure is the quota. |
+| [`src/web/BillingSection.tsx`](../../src/web/BillingSection.tsx) · [`useBilling.ts`](../../src/web/useBilling.ts) | The Plan section on `/profile`, and the two redirects. `useBilling` is the one implementation of checkout, shared with `/pricing`. |
+| [`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx) | An ingest failure with a way out beside it, when the failure is the quota — `/pricing` or `/profile`, chosen by the refusal's own code. |
+| [`src/web/PlanCards.tsx`](../../src/web/PlanCards.tsx) | The three plans, drawn once for `/`, `/features`, `/pricing` and `/profile`. Presentational: it takes plans and an optional action per plan, and knows nothing about billing. |
+| [`src/web/buy-intent.ts`](../../src/web/buy-intent.ts) | Which plan a stranger pressed before signing in — an expiring, read-and-delete `sessionStorage` marker, never the URL. |
 | [`src/store/pg-session.ts`](../../src/store/pg-session.ts) | Three of the seven sites a job ends at, and the only one that charges. |
 | [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) | The other four — `settleExpired`, `requestCancel`, `finish` and `releaseStep` — plus the job INSERT that writes `ingest_event_id`. |
 | [`src/db/schema.ts`](../../src/db/schema.ts) | `billing_tiers`, `billing_tier_prices`, `billing_accounts`, `ingest_events`, `jobs.ingest_event_id`. |

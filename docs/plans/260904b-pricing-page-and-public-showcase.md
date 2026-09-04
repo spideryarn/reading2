@@ -285,6 +285,97 @@ product.
 - Showcase links driven by the listing, so an unshared article leaves no dead link.
 - **Pre-deploy gate:** the count of non-Greg public rows in production (§1).
 
+### Stage 5 — a public article counts half
+
+Added mid-run. Greg, 2026-09-04:
+
+> please also change how we price Public-readable articles - they are half-price, i.e. they only
+> count as a half-article against the user's article-quota (e.g. free users can make 6 Public
+> articles, $10 users can make twice as many if Public, etc etc). … The intention is to incentivise
+> people to make articles Public, because then more people benefit from them.
+
+**This is a change to money logic on a ledger that has already taken real payments**, so it does not
+get folded into another stage. It also sits naturally after stage 3, because the incentive and the
+listing are the same argument: sharing is worth something to us, so it is worth something to the
+reader.
+
+**The crux is that the two events are far apart in time.** A slot is spent when an article is
+*added*; sharing happens later, or never. So "half price" needs a mechanism, and the three
+candidates differ mostly in how they fail:
+
+- **Recompute live** — usage is `private + public/2`, derived from current visibility every time it
+  is asked. Nothing to game; unsharing simply puts the usage back. The cost is that a reader can
+  become *over* quota by unsharing, and then be refused their next add.
+- **A credit** — sharing refunds half a slot, once. Easy to say; share-then-unshare is free slots
+  for ever unless it is clawed back, which is the ledger growing a second kind of row.
+- **Half at add-time only** — cheapest, and misses the article you decide to share three weeks
+  later, which is most of them.
+
+**Halves do not go in the ledger.** Whichever mechanism wins, the arithmetic stays integer by
+counting in half-units — a private article costs 2, a public one costs 1, and a 20-article tier has
+a budget of 40. Same rule, no floats anywhere near money, and no `0.5 + 0.5 !== 1`.
+
+**The ethical question is real and is not the engineering's to settle.** Sharing already asks the
+owner to tick a box confirming they have the right to. Attaching a quota reward to that tick-box pays
+people to say yes, and stage 3 is simultaneously widening what sharing *means* from "reachable by
+link" to "listed publicly". Both dials move the same way at once. Fable was asked for a straight
+answer on whether that is a genuine problem; whatever it says goes in the log here, and if it is a
+problem the answer is a product decision for Greg, not a mitigation an agent picks.
+
+**Done looks like:** one authoritative place computes the cost of an article, every surface that
+states a number agrees with it, and a test proves that sharing and unsharing move the count in both
+directions. The trawl (see the log) is what says which surfaces those are.
+
+#### What the mechanics turned out to be — and the two things that decide the design
+
+The ledger was read before any of this was designed, and it does not support the obvious
+implementation. Three findings, each checked in the code:
+
+**1. There is no way to get from a charged ledger row to the article it produced.** `ingest_events`
+has six columns and none identifies an article ([`schema.ts:4102`](../../src/db/schema.ts)). Its
+`slug` is documented as *diagnostic only*, and it is worse than mutable — it is the pre-allocation
+stem for a URL add and **null** for an upload, so for every article minted since 2026-08-31 it does
+not even equal `articles.slug`. The only other path, `ingest_events → jobs.ingest_event_id →
+jobs.slug → articles.slug`, fails at both hops: **jobs are hard-deleted** by the reader
+(`DELETE /api/jobs/:id`) and by a retention sweep that runs after *every* job ending, and the second
+hop is a name the schema explicitly refuses to treat as identity. So "is this article public right
+now?" is not a question today's usage query can ask.
+
+**The fix is one column**: `article_id uuid references articles(id) on delete set null` on
+`ingest_events`, written by `settleReservation` at charge time. `ref.articleId` is already in scope
+on the line above the settlement, already cross-checked against the locked article row, and costs one
+extra bound parameter — no new read. **`ai_calls` is the exact precedent**, carrying `article_id` +
+`article_slug` + a `job_id` held as *text rather than a foreign key* with the reasoning already
+written down: *"a billing row must not be deletable by housekeeping."* Only the charging site needs
+it; the other six settlement sites all release, and a released row needs no article.
+
+**2. Existing rows cannot be backfilled, so the discount starts from the day it ships.** For a
+charged row whose job has been swept there is nothing left to join on, and where the job survives the
+match is on a slug — the identity claim the schema disclaims. So the query uses a `left join` with
+`coalesce(visibility, 'private')`: **an unresolvable row is charged full price**, which fails in the
+direction that cannot be gamed. The user-visible consequence is real and should be said out loud
+rather than discovered: *an article you shared last week does not become cheaper; the discount
+applies to what you add from now on.* Grandfathered articles are unaffected either way — they have no
+ledger row at all, so they already cost nothing.
+
+**3. `used` stops being monotonic, and on the free tier that reaches back across all time.** The free
+allowance has no period clause — `usageSql`'s free arm is literally `sql\`true\`` — so unsharing does
+not merely raise this month's usage, it raises the lifetime figure. This is the sharp edge of live
+recomputation and it is why Fable's warning-at-unshare is a gate rather than a nicety: on a lifetime
+allowance there is no next month to rescue anybody. The unshare confirmation must say what it will
+cost before it happens.
+
+And one arithmetic consequence to accept knowingly: cardinality is **N charged rows : 1 article**. A
+re-added URL adopts the shelf's article and charges again, so sharing that article later halves
+*both* rows. That is defensible — they did pay for two ingests — but it means "public costs half" is
+a statement about ingests, not about articles, and the copy should not promise otherwise.
+
+**The shape, then:** every ingest costs **2** half-units, a currently-public one costs **1**, a
+tier's budget is `limit * 2`, and the wall compares half-units to half-units. `usageOf`'s
+`Number.isInteger` assertion — which exists to stop a silent "used nothing" — keeps working
+untouched, which is the argument for half-units rather than fractions, and not a stylistic
+preference.
+
 ## What this deliberately does not do
 
 - No annual billing, no currency switcher, no comparison table.
@@ -296,6 +387,56 @@ product.
 - No rate limit beyond what the namespace has. Cluster C and S4 of that plan are still open.
 
 ## Log
+
+- **2026-09-04, stage 1 built.** `PlanCards` is the presentational component (`src/web/Plans.tsx`
+  renamed to `src/web/PlanCards.tsx`, since the numbers moved into it as data); `/`, `/features` and
+  `/pricing` render `WebsitePlans`, the copy plus its footnote, and `/profile` renders `PlanCards`
+  directly with cards built from `summary.offers` — the two sources are deliberate, so `/profile`
+  keeps the property that raising a quota is one `UPDATE` and no deploy. One `useBilling()` on
+  `/pricing`, in the signed-in half. The sign-in panel is plain utilities rather than `site-panel`,
+  because `/pricing` is not a `.site` page until stage 2. Three things worth knowing for the stages
+  after this one:
+  - **The naive buy-intent does not merely double-post, it loops.** Reading the marker where it is
+    needed, rather than on mount, times the double-mount test out: `useBilling` returns a fresh
+    object on every render, the effect watching it re-runs when a failed press clears `busy`, and a
+    marker still in storage posts again. Consuming on mount is what makes it one request.
+  - **`<StrictMode>` will eat the marker if the consuming effect assigns unconditionally.** The
+    second pass reads `null` over the first pass's answer, on the same instance. Guarded, and the
+    guard is the reason the test drives `<StrictMode>` rather than asserting about it.
+  - **Stage 2 has an anchor collision to resolve.** `SiteNav`'s *Sign in* link is `#sign-in` on the
+    landing page and `/#sign-in` everywhere else; `/pricing` now has its own `#sign-in` panel, so
+    when the page joins the nav that link should stay on the page it is on rather than jumping to
+    the landing page.
+- **2026-09-04, the refusal copy moved with the link.** `ingestQuotaReached`'s free and lapsed
+  sentences named *"the Upgrade button on your profile page"*, and `QuotaNotice` now draws a link
+  beside them; prose and button have to name the same page. `/profile` still has the same
+  buttons — it is simply no longer where we send everybody.
+- **2026-09-04, stage 1 code-reviewed by GPT Sol and fixed before committing**
+  ([the review](260904b-stage1-code-review-sol.md)). Six findings, three of them P1, two of them
+  reproduced by the reviewer:
+  - **The refusal link is now chosen per code, not uniformly.** `pay-free` → `/pricing`;
+    `pay-limit` and `pay-lapsed` → `/profile`, because `canCheckout` is false for a working
+    subscription at its ceiling *and* for the `unpaid`/`incomplete` half of `hasLapsed`, so
+    `/pricing` drew those readers no button at all. The `pay-lapsed` sentence, which promised
+    *"resubscribing from the pricing page"*, was false for that half and now names `/profile`.
+    `quotaRefusalCode` returns a `QuotaCode` union so `QuotaNotice`'s `switch` cannot miss a
+    fourth refusal. Table in [billing.md](../project/billing.md).
+  - **A failed billing read no longer removes the buying path silently.** `/pricing` draws
+    `/profile`'s own *"Couldn't read your plan — Try again"* where the plan line would be: with no
+    summary there are no buttons either, so the page was prices and nothing to press.
+  - **The drift guard compares whole rows keyed by tier id.** Sol swapped the `reader` and
+    `researcher` ids — a real wrong-tier purchase, since the id is all a checkout carries — and
+    every predicate stayed green, because they were independent substring searches over the file's
+    source. It imports `WEBSITE_PLANS` now; the same swap was re-run and goes red on the name.
+  - **The buy-intent TTL is re-checked immediately before the POST.** Sol held
+    `/api/billing/usage` pending for eleven minutes and watched an expired marker open Stripe.
+    `takeBuyIntent` returns the creation time with the tier, and the test drives the same
+    reproduction.
+  - **The sign-in panel promises the tab rather than the account**, since an emailed confirmation
+    link usually opens a new one and both markers are `sessionStorage`.
+  - **Two residual limits are written down rather than fixed** (buy-intent.ts): a remount between
+    consumption and the summary landing loses a valid press, and two tabs are once-safe *each*.
+    Exact-once needs an idempotency key on the checkout route, and the worst case is a refund.
 
 - **2026-09-04, plan reviewed by GPT Sol and rewritten.** Three P1s: the consent change above; the
   auth-continuation mechanism, which did not work and used the URL as consent; and the slug
