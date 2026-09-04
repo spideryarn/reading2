@@ -453,6 +453,7 @@ describe("the sharing card, on the page that owns it", () => {
         ideas: false,
         quotes: false,
         timeline: false,
+        sketch: false,
       },
     };
 

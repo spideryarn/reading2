@@ -318,7 +318,7 @@ describe("renaming from the masthead", () => {
  *
  * Only two things here are the metadata page's own — that the pencil is on it
  * at all, and that it is **withheld on the fixture**, which is the same refusal
- * Delete makes a few sections further down: an unknown address has no shelf row,
+ * Archive makes a few sections further down: an unknown address has no shelf row,
  * so the PATCH behind the button would 404 and pressing it is how you would
  * find out. Everything else about the rename is the block above, because it is
  * literally the same hook and the same editor.

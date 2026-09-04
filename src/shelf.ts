@@ -60,7 +60,7 @@ const EMPTY: ShelfState = { opens: 0 };
  * Read-modify-write serialised per process, exactly as src/comments.ts does it
  * and for exactly the same reason.
  *
- * Pressing Delete on two cards in quick succession is the *normal* way to use
+ * Pressing Archive on two cards in quick succession is the *normal* way to use
  * this, and each one is a whole-file write. Without the chain the second read
  * starts before the first write lands, and one of the two archives silently
  * does not happen — with no error anywhere, because both writes succeeded.
@@ -194,7 +194,7 @@ export async function patchShelf(
 
     if (change.archived === true) {
       // Archiving something already archived keeps the original date. Undo is
-      // one click away and a second Delete should not quietly reset the clock.
+      // one click away and a second Archive should not quietly reset the clock.
       if (!next.archivedAt) next = { ...next, archivedAt: now.toISOString() };
     } else if (change.archived === false) {
       const { archivedAt: _dropped, ...rest } = next;

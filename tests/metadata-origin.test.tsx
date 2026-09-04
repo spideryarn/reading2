@@ -218,7 +218,7 @@ describe("the owner's metadata page", () => {
    *
    * The file link is not, and must not be: `hasShelfRow` is false until the
    * request lands, and offering a control that PATCHes a row we have not
-   * confirmed exists is the rule the Delete button on this page is built around.
+   * confirmed exists is the rule the Archive button on this page is built around.
    * Two different answers to "do we know this yet", and both are right.
    */
   it("still says where the article came from when the metadata request fails", async () => {

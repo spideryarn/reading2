@@ -14,14 +14,12 @@ export function IconButton({
   onClick,
   children,
   disabled,
-  destructive,
   ref,
 }: {
   label: string;
   onClick: () => void;
   children: ReactNode;
   disabled?: boolean;
-  destructive?: boolean;
   /**
    * For callers that have to put focus back on this button.
    *
@@ -48,11 +46,13 @@ export function IconButton({
          is what lets controls in a row agree without anybody re-doing the
          arithmetic when an icon changes. `rounded-md` rather than `rounded`,
          because 4px was the only 4px radius on the page. */
-      className={`tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:disabled:opacity-50 ${
-        destructive
-          ? "tw:hover:bg-destructive/10 tw:hover:text-destructive"
-          : "tw:hover:bg-highlight/10 tw:hover:text-foreground"
-      }`}
+      /* **There is no `destructive` variant any more.** There was one, and its
+         only caller was the shelf's "Delete" — which archives. When that button
+         became "Archive" on 2026-09-04 the red went with the word, because red
+         is this app's colour for *this cannot be undone* and every button that
+         reaches this component is reversible. Dead options are how a convention
+         stops meaning anything, so it was removed rather than left. */
+      className="tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:disabled:opacity-50"
     >
       {children}
     </button>

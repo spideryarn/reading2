@@ -753,9 +753,25 @@ function TableViewInner({
                paragraph at a time. Leaves are 1:1 with blocks (src/hierarchy.ts). */
             <th
               data-nav-depth={geometry.leafDepth}
-              className={`pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
+              className={`text pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
             >
-              Text<span className="depth-tag">verbatim</span>
+              {/* **Two spans, and neither is decoration.** The prose below is
+                  centred in its cell (styles.css § text), so a heading left at
+                  the cell's edge names a column whose text starts 180px to its
+                  right — the masthead had the same defect and was fixed the same
+                  way. `.th-measure` is the box that does the moving: it carries
+                  the article's font *purely so that `65ch` means there what it
+                  means in the prose*, and `.th-name` puts the head's own type
+                  back. They have to be two elements because one element cannot
+                  both resolve a `ch` in the reading face and be set in the
+                  chrome's. The other headers are untouched — they sit over
+                  columns that are not centred and are right as they are.
+                  styles.css § the header over the article's column. */}
+              <span className="th-measure">
+                <span className="th-name">
+                  Text<span className="depth-tag">verbatim</span>
+                </span>
+              </span>
             </th>
           )}
         </tr>
@@ -842,9 +858,10 @@ function TableViewInner({
              else.
 
              **The `target` is ours, never the article's.** DOMPurify drops an
-             author's `target` (measured 2026-09-04), and the browser pass at
-             ingress writes `_blank` onto every link that leaves the app —
-             src/web/sanitize.ts, and SPIDERYARN-READING2-10. This test is still
+             author's `target` (measured 2026-09-04), and the pass that runs
+             straight after it at ingress writes `_blank` onto every link that
+             leaves the app — src/web/external-links.ts, and
+             SPIDERYARN-READING2-10. This test is still
              written against the attribute rather than against the href, because
              the attribute is the thing that decides what the browser will do.
              The keywords are ASCII case-insensitive, so `_SELF` is `_self`. */

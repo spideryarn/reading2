@@ -418,7 +418,17 @@ body {
      wordmark's right edge, which does not overlap and still reads as broken:
      it is the ordinary gutter this bar has everywhere else, kept rather than
      eaten. */
-  padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
+  /* **Named, because the title has to be placed against them.** This bar is
+     asymmetric — the wordmark reserves the left, the Feedback button the right
+     — and § the title over the column has to undo that asymmetry to land the
+     title on the prose's own left edge. Two declarations reading one number
+     each, rather than the arithmetic being written out twice.
+     `.controls` below still carries the same two expressions of its own: it
+     needs the same numbers here and *different* ones on a phone (§ a narrow
+     window gives it a 0.75rem right gutter and this bar 1rem), so one shared
+     pair would be a claim that is false at the width it matters most. */
+  --masthead-pad-l: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
+  padding-left: var(--masthead-pad-l);
   /* And the same again on the other side, for the Feedback button. Simpler
      than its mirror, deliberately: both bars are *positioned* at
      `left: --spine-w + --mode-w`, so the wordmark only reaches into them by
@@ -426,7 +436,8 @@ body {
      `--safe-right`, which the button sits inside too. So the button reaches
      exactly `--feedback-w` in, and there is nothing to subtract.
      FeedbackButton.tsx § The bars have to reserve the space. */
-  padding-right: calc(var(--feedback-w) + 1.5rem);
+  --masthead-pad-r: calc(var(--feedback-w) + 1.5rem);
+  padding-right: var(--masthead-pad-r);
 }
 
 .masthead-inner { max-width: 62rem; }
@@ -723,15 +734,76 @@ thead th {
   height: var(--head-h);
   background: var(--panel);
   border-bottom: 1px solid var(--rule-strong);
-  padding: 0.5rem 1rem;
+  /* **Three names for what used to be three literals**, because § the header
+     over the article's column has to state this bar's type and gutter a second
+     time — one element cannot both carry the head's 0.68rem and resolve `65ch`
+     in the article's face, so the prose column's heading is two boxes and the
+     inner one puts these back. Named rather than copied: a heading that
+     silently stopped matching its neighbours is exactly the drift a literal
+     invites. */
+  --head-pad-x: 1rem;
+  --head-type-size: 0.68rem;
+  --head-type-weight: 600;
+  padding: 0.5rem var(--head-pad-x);
   text-align: left;
   font-family: var(--font-ui);
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: var(--head-type-size);
+  font-weight: var(--head-type-weight);
   line-height: 1.4;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
+}
+
+/* ------------------------------- § the header over the article's column ----
+   **`Text verbatim` follows the prose, for the reason the masthead does.**
+   § text centres the article in its cell, and in Hierarchy that leaves the one
+   heading in the row naming a column whose first word starts 180px to its
+   right, while `Parts` and `Sections` sit squarely over theirs. Greg looked at
+   it and called it a misalignment rather than whitespace, 2026-09-04. The
+   honest reading is that this heading was never aligned to the *text* — it was
+   aligned to the cell, and that only looked right while the text began at the
+   cell's edge.
+
+   **Only this heading.** The gist columns are not centred and are correct where
+   they are, so `th.text` is a class TableView puts on one cell.
+
+   **The offset is the same quantity as everywhere else in this change**, with
+   the percentage base written for where it lands: this is a block child, so
+   `100%` is the header cell's *content* box, and the head's own gutter has to
+   be added back before the body cell's is taken off. The two cells are the same
+   column — one `<col>`, `table-layout: fixed` — which is what makes the widths
+   comparable at all; only the padding differs, and that difference is the
+   `--head-pad-x` / `--text-pad-*` swap below.
+
+   **It could not be padding on the `<th>`, which is where this started.**
+   Percentage padding on a table cell does not resolve against the cell:
+   measured in Chrome, the heading landed 239px past the prose. So the geometry
+   is a margin on a block inside the cell, where `100%` is defined. */
+th.text .th-measure {
+  display: block;
+  /* The article's font, and *only* so that `--reading-measure` below counts the
+     same 65 zeroes the prose does — size and weight both, because Geist is
+     variable. Nothing is set at this size: `.th-name` below is the whole of the
+     visible heading. § the gutter carries the same two lines for the same
+     reason. */
+  font-size: var(--reading-size);
+  font-weight: var(--reading-weight);
+  margin-left: max(
+    0px,
+    calc(
+      (
+          100% + var(--head-pad-x) * 2 - var(--text-pad-l) - var(--text-pad-r) -
+            var(--reading-measure)
+        ) / 2 + var(--text-pad-l) - var(--head-pad-x)
+    )
+  );
+}
+/* And the head's own type back, so the heading looks exactly as it did. Both
+   values come from `thead th` above rather than being written again. */
+th.text .th-name {
+  font-size: var(--head-type-size);
+  font-weight: var(--head-type-weight);
 }
 
 .depth-tag {
@@ -1112,6 +1184,36 @@ tr.row-active .block-ref { opacity: 0.95; }
    prose, depending only on which tag the author reached for. */
 .prose {
   max-width: clamp(45ch, 90vw, var(--reading-measure));
+  /* **And the measure sits in the middle of whatever cell it is given** —
+     Greg, 2026-09-04: *"Always centre the Text view within its column when
+     visible, no matter which mode is active."* § plain, centred already
+     centred the whole TABLE when the article was the only thing on the page;
+     this is the other half, and it is the half that covers a mode. In a band
+     mode the prose cell is the window minus the rail minus the band — 1190px
+     at 1600 — while this box is 65ch, so the article used to sit against the
+     left of its cell with 400px of empty page beyond it.
+
+     `auto`, not arithmetic, so it is **self-limiting**: the moment the cell is
+     narrower than the measure there is nothing to divide and the rule does
+     nothing at all. That is the whole of why Plain (whose cell is already
+     capped at `PROSE_ALONE_MAX_REM`) and a phone are untouched by it.
+
+     Every `.prose` variant with a narrower measure of its own — a callout at
+     58ch, a caption, an opaque block — centres on the same axis rather than
+     keeping its old left edge, which is what stops the column reading as two
+     columns that nearly line up. The footnotes are the single exception, and
+     they opt out as a block rather than half-moving: § footnotes.
+
+     **Two things still drawn against the cell's own edges, deliberately.** The
+     gutter had to follow the text and does (§ the gutter). The search bar
+     (§ has-hit) and `row-active` did not: both say *this row matched* or *this
+     is the row you are on*, which is a fact about the row rather than a mark on
+     a phrase, so a rule down the cell's edge is the right shape for them and
+     stays legible while you scroll past at speed. The alone rule below warns
+     that moving prose inside its cell leaves four things behind; two of the
+     four needed to come and two did not, and that is the reading of it rather
+     than an exemption. GPT Sol pressed on this, 2026-09-04. */
+  margin-inline: auto;
   font-family: var(--font-reading);
   font-size: var(--reading-size);
   line-height: var(--reading-line-height);
@@ -2450,7 +2552,13 @@ td.text.has-hit[data-hues="8"] {
      half underneath it — the failure would be a few pixels of the delete button
      going unclickable, which reads as a dead button rather than as a layout
      bug. */
-  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  /* Plus `--kb-inset`: how much of the layout viewport the soft keyboard is
+     covering, measured from `window.visualViewport` and set on the element by
+     CommentDialog.tsx. `0px` everywhere there is no keyboard and on every
+     browser that has no `visualViewport`, so this reads as the line above it
+     did until 2026-09-04. useVisualViewport.ts says why the meta tag alone
+     cannot do it. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem + var(--kb-inset, 0px));
   width: min(24rem, calc(100vw - 2.5rem));
   /* **`dvh`, not `vh`, and the difference only exists on a phone.** `100vh` is
      the *large* viewport: the height the page would have with the browser's own
@@ -2459,16 +2567,19 @@ td.text.has-hit[data-hues="8"] {
      bar. `dvh` tracks the viewport as it currently is. Same change on
      `.chat-dialog`, which has the same shape.
 
-     **It does not fix the on-screen keyboard, which is what this was first
-     changed for.** With the default viewport policy the keyboard resizes only
-     the *visual* viewport, and every viewport unit — `dvh` included — stays
-     tied to the layout viewport; making the keyboard shrink these needs
-     `interactive-widget=resizes-content` on the viewport meta in index.html.
-     That is an app-wide change to how every page reacts to a keyboard and it is
-     not being made blind, so it is deferred to a real-device pass. Corrected by
-     GPT Sol, 2026-08-27, after the first version of this note claimed the
-     keyboard case was solved. */
-  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h)));
+     **The keyboard is a second problem and `dvh` does not solve it on iOS.**
+     With the default viewport policy the keyboard resizes only the *visual*
+     viewport, and every viewport unit — `dvh` included — stays tied to the
+     layout viewport, so this `max-height` went on believing it had a whole
+     screen. `interactive-widget=resizes-content` (index.html) asks the browser
+     to shrink the layout viewport instead; Chromium does, and **WebKit does not
+     reliably** — so `--kb-inset` above and here is the part that works on both,
+     and it is subtracted rather than trusted to `dvh`. Both together are still
+     unverified on a real phone. */
+  max-height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
   display: flex;
   flex-direction: column;
   /* **Not `auto`, and this is half of why the ✕ used to move.** The whole box
@@ -2502,7 +2613,15 @@ td.text.has-hit[data-hues="8"] {
    Only while it arrives — a permanently constant height would put a two-line
    explanation in a 34rem box. The relax-to-fit happens when the answer settles,
    by which point the reader is not aiming at a button. */
-.cmt-dialog.busy { height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h))); }
+/* The same arithmetic as `max-height` above, `--kb-inset` included — a fixed
+   height that forgot the keyboard would put the box back under it for exactly
+   as long as an answer takes to arrive. */
+.cmt-dialog.busy {
+  height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
+}
 
 /* The one part that scrolls. `min-height: 0` is load-bearing and silent: a flex
    item's default `min-height: auto` refuses to shrink below its content, so
@@ -5505,7 +5624,25 @@ td.text.note .prose {
   padding-inline-start: 2.4rem;
   font-size: 0.95rem;
   color: var(--ink-soft);
+  /* **And the notes are the one place that opts out of § text's centring**, so
+     the apparatus stays together. Two elements are drawn against this cell's
+     left edge — `.notes-head` and `.note-num` below — and both are absolutely
+     positioned, so they can only move by an offset computed in *their* font;
+     they set 0.8rem/600 for the look of a label, which makes `65ch` mean
+     something 90px different there than it does in the prose. Left where they
+     are, a centred note would strand its own number 200px out in a wide band
+     mode: worse than a supplementary block that keeps the left edge it has
+     always had. GPT Sol found it, 2026-09-04.
+
+     The clean fix is a length resolved once and inherited — `@property` with
+     `syntax: "<length>"` — and **this build cannot have one**: see the note
+     beside `--bar-bottom` in § tokens for the day a registered property was
+     silently replaced by its `initial-value` in the served stylesheet. */
+  margin-inline: 0;
 }
+/* The gutter comes back with it, or the reader's icons would be centred beside
+   a note that is not. § the gutter. */
+td.text.note .blk-gutter { left: 0.35rem; }
 /* A note's body is an `<li>` (src/notes.ts § What "canonical" means here), and
    stage 3 hands each one to its own row — so the browser draws a list marker for
    a list that is not there. Harmless until this change, and now a bullet sitting
@@ -9077,9 +9214,15 @@ line.diag-now {
   /* `--safe-right`: these are `position: fixed` against the physical screen,
      so in landscape the gutter alone leaves them inside the notch. */
   right: calc(1.25rem + var(--safe-right));
-  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  /* `--kb-inset` for the reason `.cmt-dialog` gives — and this panel has a
+     composer in it, so the keyboard is its ordinary state rather than an edge
+     case. ChatDialog.tsx sets it; `0px` when there is nothing to avoid. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem + var(--kb-inset, 0px));
   width: min(26rem, calc(100vw - 2.5rem));
-  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h)));
+  max-height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -9105,9 +9248,14 @@ line.diag-now {
   /* `--safe-right`: these are `position: fixed` against the physical screen,
      so in landscape the gutter alone leaves them inside the notch. */
   right: calc(1.25rem + var(--safe-right));
-  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  /* And `--kb-inset`, the same as its two neighbours: this box exists to be
+     typed into. AnnotateDialog.tsx sets it. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem + var(--kb-inset, 0px));
   width: min(26rem, calc(100vw - 2.5rem));
-  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h)));
+  max-height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -9566,7 +9714,56 @@ mark.chat[data-chat-end]::before {
    different widths and a ragged column of icons reads as a mistake. */
 .blk-gutter {
   position: absolute;
-  left: 0.35rem;
+  /* **It travels with the measure, because the measure moved.** `.prose` is
+     centred in this cell (§ text), so in a mode — where the cell is the window
+     minus the rail and the band and the text is 65ch of it — a gutter left at
+     `0.35rem` would be a column of icons 200px out in the margin, marking
+     paragraphs it is no longer beside.
+
+     `0.35rem` is still the offset; what is added is half the room the centring
+     divides. **`100%` here is the CELL's padding box** — this box is absolutely
+     positioned and `td.text` is its containing block — which is why the two
+     pads are subtracted, and why this is written out rather than shared with
+     the `auto` above: `margin-inline: auto` on `.prose` divides the same
+     quantity against the *content* box, so one custom property could not serve
+     both without meaning two different numbers at its two use sites.
+
+     `max(0px, …)` for the same reason `auto` is self-limiting: below about
+     900px the measure is wider than the cell, there is nothing to divide, and
+     the gutter stays exactly where it has always been.
+
+     **It follows the PARAGRAPH's measure, not this row's box**, and that is a
+     choice rather than an oversight. A callout is 58ch, a caption and an opaque
+     block are narrower again (§ text), so tracking each row would give a ragged
+     column of icons — the thing `align-items: center` below already exists to
+     avoid. One straight column, aligned to the ordinary paragraphs that are
+     nearly all of an article, and a callout's icons a few pixels further from
+     its first word. The other branch of `.prose`'s `clamp` costs the same
+     order: between roughly 680px and 810px of window `90vw` binds instead of
+     the measure, and the gutter is then up to ~6px shy of the text. GPT Sol
+     asked for both to be stated rather than implied, 2026-09-04. */
+  left: calc(
+    0.35rem +
+      max(
+        0px,
+        (100% - var(--text-pad-l) - var(--text-pad-r) - var(--reading-measure)) / 2
+      )
+  );
+  /* **These two are here to make `ch` mean what it means in the article, and
+     for nothing else.** `--reading-measure` is `65ch` (styles/tokens.css), and
+     `ch` is the zero glyph of the font the length is *used* on — **including
+     its weight**, because Geist is a variable face and the axis changes the
+     digit's advance. So the line above would otherwise measure 65 zeroes at the
+     cell's 1rem/400 rather than the prose's 1.0625rem/450: 6% short on size,
+     and a further ~3px on weight. GPT Sol found the weight half, 2026-09-04,
+     from a 2.8px residual in the measurements.
+
+     Nothing in this column is changed by them: every glyph is a fixed-px icon,
+     `.blk-n` sets its own size, and `line-height` is 0 below. If a child is ever
+     added that sizes itself in `em`, these are the lines that will have moved
+     it. */
+  font-size: var(--reading-size);
+  font-weight: var(--reading-weight);
   top: calc(var(--block-pad) + 0.2rem);
   width: 1.4rem;
   display: flex;
@@ -11967,6 +12164,72 @@ table.only-prose thead { display: none; }
   margin-inline: auto;
 }
 
+/* ------------------------------------------- § the title over the column --
+   **And the same again in a mode, where the prose moved and the table did
+   not.** § text centres `.prose` inside its cell at every width; in a band mode
+   that cell is the whole table, so the article slides ~200px right and the
+   masthead — left-aligned at `62rem` — stays against the wordmark. A centred
+   column under a left-aligned title reads as a bug rather than as a choice, so
+   the title follows it.
+
+   **The condition is "the prose is the table's only column", asked of the
+   table itself.** That is exactly when this bar and the reading cell are the
+   same box — both start at `--spine-w + --mode-w` and both run to the right
+   edge — which is the fact the arithmetic below depends on. In Hierarchy the
+   gist columns are in front of the prose, the two boxes are not the same, and
+   `:has` does not match: the title stays where the gists start, which is where
+   the reader's eye enters that view anyway. `.text-alone` is excluded because
+   the rule above already has that case and does it with the cap instead.
+
+   **Not `margin-inline: auto`**, which is what the alone rule can afford. Auto
+   margins centre inside this bar's *content* box, and the box is 24px in on
+   the left in a mode against 144px on the right for the Feedback button — so
+   auto would have put the title 60px left of the prose. So the left margin is
+   stated: the prose's own inset (`--text-pad-l` plus half the room the centring
+   divides) measured from the bar's edge, less the padding this margin is
+   already inside. `100%` is the content box, so the bar's full width is
+   `100% + --masthead-pad-l + --masthead-pad-r`.
+
+   `max(0px, …)` is the same self-limiting as everywhere else in this change,
+   and it is what holds below roughly 1050px: the bar's reservations are wider
+   than the margin the centring leaves, the term goes negative, and the title
+   stays exactly where it has always been while the prose slides towards it.
+   The same caveat the alone rule states at length, for the same reason and at
+   about the same width. Below 844px the question does not arise — a mode band
+   with no room hides this bar outright (§ a band with no room). That is also
+   what keeps § a narrow window honest: it overrides this bar's padding directly
+   with a 1rem gutter and leaves `--masthead-pad-*` describing the desktop, and
+   the two only ever disagree at a width where this rule is already clamped to
+   zero or the bar is not drawn. GPT Sol asked for the divergence to be named
+   rather than left to be found, 2026-09-04. */
+.reader:has(table.only-prose):not(.text-alone) .masthead-inner {
+  /* `65ch` measured in the article's face rather than the chrome's — the same
+     line, and the same reason, as `font-size` on `.blk-gutter` (§ the gutter).
+     Inert: every child of this box sets its own size (h1 1.45rem, `.facts` and
+     `.source-note` 0.82rem, `.root-gist` 0.95rem, the back link `text-xs`).
+
+     **Size and not weight, and that is what the last 2.8px is.** The gutter
+     matches `--reading-weight` too, because nothing in it is text; here the
+     byline, the source note and the whole-article gist all inherit their weight
+     from this box, so matching the prose's 450 would embolden four pieces of
+     small print nobody asked to change. Measured: the title lands 2.8px right
+     of the first line of the article. The sibling rule above ships 4px of the
+     same kind of slippage and says so; this is that, from the variable font's
+     weight axis rather than from a bar's padding. GPT Sol, 2026-09-04. */
+  font-size: var(--reading-size);
+  max-width: var(--reading-measure);
+  margin-left: max(
+    0px,
+    calc(
+      (
+          100% + var(--masthead-pad-l) + var(--masthead-pad-r) - var(--text-pad-l) -
+            var(--text-pad-r) - var(--reading-measure)
+        ) / 2 + var(--text-pad-l) - var(--masthead-pad-l)
+    )
+  );
+  margin-right: auto;
+}
+
 /* ------------------------------------------------------------- lightbox --
    One figure, as big as the window will allow — Lightbox.tsx, opened by the ⤢
    the reading column puts on every picture, table and code block
@@ -13281,19 +13544,60 @@ table.only-prose thead { display: none; }
   backdrop-filter: blur(2px);
 }
 
+/* **The panel does not scroll; the part between the header and the buttons
+   does.** `.cmt-dialog`'s shape, for `.cmt-dialog`'s reason: when the whole box
+   scrolls, the things a reader is aiming at — the ✕ at the top, Send at the
+   foot — are content, and content scrolls away. On a desktop that is a small
+   annoyance. On a phone with the keyboard up it is the bug Greg reported: Send
+   was below the fold of a box that had no fold of its own to scroll. */
 .fb-panel {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   width: min(94vw, 34rem);
-  max-height: 90dvh;
-  overflow-y: auto;
+  /* **90% of the `<dialog>`, not 90% of the screen**, and that is the whole
+     iOS fix in one line. The dialog is `inset: 0` — the layout viewport — and
+     FeedbackDialog.tsx overwrites its `top` and `height` from
+     `window.visualViewport` whenever there is one, so on a phone with the
+     keyboard up this resolves against the strip the reader can actually see.
+     It was `90dvh`, which is the same number on a desktop and a lie on iOS,
+     where the keyboard leaves `dvh` alone (useVisualViewport.ts).
+
+     **Measured in Chrome on 2026-09-04**, because "does a percentage resolve
+     against an `inset: 0` parent" is the assumption the whole change rests on:
+     900px in a 1000px window, and 306px once the dialog was given the
+     340px-tall strip a keyboard leaves — 90% of each, with the buttons inside
+     the strip both times. **It depends on `box-sizing: border-box`** (the
+     global reset at the top of this file): under `content-box` the padding and
+     border are added *after* the cap, and the same measurement came back 34px
+     over budget. */
+  max-height: 90%;
+  overflow: hidden;
   padding: 1rem 1.15rem 1.15rem;
   border: 1px solid var(--rule-strong);
   border-radius: 10px;
   background: var(--surface-raised);
   box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
   font-family: var(--font-ui);
+}
+
+/* The two that stay put, and the one that moves. `min-height: 0` is
+   load-bearing and silent — a flex item's default `min-height: auto` refuses to
+   shrink below its content, so without it `.fb-scroll` grows past the panel's
+   `max-height` and nothing scrolls at all, which is the stylesheet looking
+   right and doing nothing (`.cmt-body` says the same). The 2px of padding is
+   room for a focus ring that would otherwise be clipped by the new overflow. */
+.fb-head,
+.fb-actions { flex: 0 0 auto; }
+.fb-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-inline: 2px;
+  margin-inline: -2px;
 }
 
 .fb-head {
@@ -13540,7 +13844,23 @@ table.only-prose thead { display: none; }
 }
 .fb-copy:hover { color: var(--highlight); border-color: var(--rule-strong); }
 
-.fb-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+/* **The hairline says the buttons are a foot, not the end of the content.**
+   Once the middle scrolls under them — a phone with the keyboard up, where
+   `.fb-scroll` shows about a third of what it holds — a row of buttons hard
+   against a sentence that has been cut mid-block reads as the bottom of the
+   dialog rather than as a footer with more above it. Seen at a 390×340 viewport,
+   which is what a 390×740 phone has left once the keyboard is up. */
+.fb-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.6rem;
+  /* `--rule-strong`, not `--rule`. `--rule` is `--border` (oklch 0.27) and the
+     panel is `--surface-raised` (0.26), so the line is there and nobody can see
+     it — measured in a browser at 390×340, where the divider is the whole point.
+     `.fb-shot-drop` below hit the same thing from the other direction. */
+  border-top: 1px solid var(--rule-strong);
+}
 .fb-cancel,
 .fb-send {
   display: inline-flex;

@@ -864,6 +864,25 @@ describe("the one query that lists articles for nobody in particular", () => {
   });
 
   /**
+   * **An archived article is off this shelf too.**
+   *
+   * Visibility decides whether the *link* works; archiving decides whether the
+   * article is *listed*. Without this clause an owner who archives something
+   * they had shared loses sight of it on their own shelf while strangers go on
+   * finding it here — and the payload carries no `archived_at`, so nothing on
+   * either end would ever show that it had. GPT Sol, 2026-09-04.
+   *
+   * In the `where` for the same reason the readability bar is: `limit` should
+   * count rows a visitor is actually going to be shown.
+   *
+   * **Red first:** deleting `isNull(articles.archivedAt)` from the `where` on
+   * 2026-09-04 failed this.
+   */
+  it("and leaves out an article its owner has archived", () => {
+    expect(whereClause).toMatch(/"spideryarn"\."articles"\."archived_at" is null/);
+  });
+
+  /**
    * **Exactly seven columns, spelled out.**
    *
    * The danger `publicCurrentRevisionQuery` names is a public query that one day

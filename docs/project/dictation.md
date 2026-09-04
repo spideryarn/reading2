@@ -255,6 +255,16 @@ guesses, or on Safari and Firefox sends nothing that was said at all. GPT Sol fo
 Feedback dialog, 2026-09-02; [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the worked
 example.
 
+**And disable the button too, not only the guard.** A correct guard behind a lit button is a press
+that does nothing and says nothing — the worse half of the pair, because the reader has no way to
+tell it from a broken app. GPT Sol found four boxes in that state on 2026-09-04, when Enter started
+promising Send in the chat composer: chat, the comment follow-up, the annotate box and the quiz
+answer all guarded `readOnly` alone or lit a button the guard would refuse. Every box that *sends* now does both —
+chat, the comment follow-up, annotate, quiz and Feedback — and
+`tests/the-enter-key-really-sends.test.tsx` presses two of them while armed. The profile boxes are
+the exception on purpose: ⌘+Enter there saves prose to a field the arriving transcript will overwrite
+a second later, and the next blur saves it again, so there is nothing to lose.
+
 **And if the box lives in a component that stays mounted when it disappears** — a dialog whose
 parent renders it open *or* shut, as `FeedbackButton` does — closing it unmounts nothing, so
 `useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One
