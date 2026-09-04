@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B (2 of 26 done) → C → D → E → F (hinge) → G → H → I
+  → B (12 of 26 done) → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -32,7 +32,7 @@ more*.
 | **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
 | **T-D** | **`npm test` is three projects now** — see below. The first stage of the six that is visible to anybody else. |
 | **T-E** | Four verdicts at the private lane's teardown, `POLLUTED` and `TEARDOWN FAILED` among them; the pool names itself; the shared lane reports its neighbours on failure. Two Sol rounds — the design one refused half the spec, the built one refused the commit. |
-| **B** | **2 of 26.** `chat-anchor-route` and `owner-jobs`, each green first run and each with one mutation the filesystem version could not have caught. |
+| **B** | **12 of 26.** Two in the pilot, then ten more in two parallel halves. All green, each with one mutation watched red and a written note of what that mutation does *not* cover. |
 | **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
 
 **This paragraph used to say "nothing yet changes the default `npm test`", and T-D is where that
@@ -1885,6 +1885,79 @@ carrying into the remaining 24, because they are about how a mutation is chosen:
 Neither is worth re-doing on these two. Both are worth writing into the brief for the rest, because
 "one mutation watched going red" is a rule this plan wrote and it does not say *which* mutation,
 which turns out to be most of its value.
+
+#### Ten more, in two parallel halves — 12 of 26, 2026-09-04
+
+Two agents, disjoint file sets, both editing `TEST_LANES` at different alphabetical positions. Five
+route suites (`the-query-string-does-not-decide-the-route`, `chat-spoken-route`,
+`chat-live-ticket-route`, `chat-live-turn`, `quiz-mark-route`) and five queue and article-identity
+suites (`second-job-queues`, `upload-records`, `list-reconciles-expired`,
+`one-article-for-one-address`, `article-cache-call-site`).
+
+All ten green together — `10 passed, 79 tests` in one private database, no `POLLUTED`. **The pilot's
+30–40 minutes a file held for nine of ten.** `quiz-mark-route` took roughly twice that, and for a
+reason worth naming: its fixture is an *artefact it rewrites per test*, not an article it reads, so
+three seeded articles and a real second publication had to stand in for what a directory copy used to
+do.
+
+##### The most valuable result is a mutation that did not bite
+
+Deleting `row.workKey === ticket.workKey` from `tryEnqueue`'s re-read classifier — a
+predicate the Postgres path owns and the filesystem never had, exactly the kind this plan asks for —
+left `second-job-queues` **green**. That re-read only runs when the insert conflicts, and the suite's
+two accepted-job cases insert cleanly. So the file exercises one branch of that classifier and none
+of `sourceTaken`, `nameTaken` or id-collision.
+
+**Nothing in the file, the plan or the review would have revealed that.** It is the argument for the
+rule the plan already has — one mutation watched going red, per file — restated as: the rule's value
+is not the red, it is that a mutation which *stays green* names a hole nobody knew was there. Both
+agents were asked to say what each mutation does **not** cover, and every one of the ten has an
+answer written down.
+
+##### Two more traps, and both are Postgres being stricter than a directory was
+
+3. **A global `fetch` stub that catches model calls also catches the seeder.** `scratchArticleInPg`
+   → `storeRawSource` puts bytes in the Supabase bucket **over HTTP**, so seeding inside a test whose
+   `fetch` is stubbed fails with the stub's own *"no model in tests"* and reads as a route bug. Swap
+   the real `fetch` back for the length of the seed and restore it in a `finally`.
+4. **Postgres validates ids the filesystem store never looked at.** `jobs_id_format` refuses a
+   hand-written mnemonic like `spya-2ndrun` (the body must start with a letter), and `jobs.attempt_id`
+   is a `uuid`, so a string token like `"attempt-2nd"` fails the insert. Any converted queue suite
+   that writes its own ids needs `mintId()` and `mintAttempt()`. **This is the migration finding
+   underneath the trap**: a filesystem store validated nothing, so a decade of hand-written fixture
+   ids were never wrong until now.
+
+And one that is not a trap but a shortcut: **`claimSession` is the answer for any suite driving
+`advanceJobWith`**, is already exported, and already says so in its docstring. `article-cache-call-site`
+converted in 20 minutes using it. That downgrades the fear about `jobs-walk` and `step-failure-seam`
+— their difficulty is the `data/_jobs/` byte assertions, not the walk.
+
+##### The category question, escalated rather than decided, and the answer is to re-run the witness
+
+The two halves disagreed. The pilot moved both its files to `shared-mechanism-collateral`; the queue
+agent moved only one, leaving four as `database-integration` because after conversion they seed no
+article and run no step, so **they reach no condemned module at all** — and
+`shared-mechanism-collateral` requires a non-empty `mechanisms`, which there is nothing to fill.
+
+Read against the definitions at the top of the registry, neither is right. Those categories say **what
+work the file still needs**: `database-integration` is *"move it, or finish moving it"*, which a
+converted file does not need, and `shared-mechanism-collateral` is *"none, to this file"*, which is
+the correct action but claims a mechanism that is gone.
+
+**The resolution is that the map should shrink, and cannot yet.** Membership is one-directional —
+`tests/store-migration-registry.test.ts` demands an entry for every file
+[`tests/store-migration-witness.json`](../../tests/store-migration-witness.json) saw touching the
+filesystem store, and nothing demands a listed file still touch it. So a converted file may leave the
+map **only once the witness is re-run**, and the witness is dated 2026-09-03. So:
+
+> **Re-run the witness at the end of stage B**, and let every file the conversion took out of its
+> reach drop out of `STORE_MIGRATION` entirely.
+
+At that point the category question dissolves rather than being answered, which is the better
+outcome, and the map becomes a measurement of the *current* tree again instead of a September the 3rd
+one. Until then the four entries stay `database-integration` with reasons that say the conversion is
+done — the honest verdict rather than an un-updated one, in the queue agent's words, and it is
+recorded here so that the next reader knows it was a decision.
 
 **Call it 30–40 minutes a file for the twenty-four that are left, plus a day for the three that are
 not this shape.** The editing is nearly all pattern: pin `postgres` in `vi.hoisted`, a `pgReady`

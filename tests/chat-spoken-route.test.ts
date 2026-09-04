@@ -20,28 +20,85 @@
  *
  * And the 409, which is not a guard in the ordinary sense: it is the whole
  * idempotency of the endpoint. docs/plans/260831l-live-conversation-in-chat.md § 1.
+ *
+ * ## It ran on the filesystem store until 2026-09-04, and the read-back is why
+ *
+ * The three assertions below that go and look in the store — *on disk, not
+ * merely in the response* — are the whole reason this file is more than a test
+ * of `withSpokenTurn`. They were reading a `chat.json` this suite had just
+ * written under a throwaway `data/<slug>/`, which is the store that is not
+ * deployed (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B). Worse, the filesystem `loadThreads` they called reads the data root
+ * unconditionally and never consults the store at all, so pinning the flag and
+ * leaving that read alone would have handed every one of them an empty list
+ * rather than an error — a green suite asserting nothing.
+ *
+ * It now pins `postgres` before any import, seeds through `scratchArticleInPg`,
+ * and reads back through `chatStore.load` inside `asTestOwner`. What that buys:
+ * a spoken exchange is two rows in `chat_messages` written beside a thread
+ * upsert, so *the response was right and the store was not* is a state that can
+ * exist here — on files the thread is written whole, in one object, and cannot
+ * be half-written.
  */
-import { cp, readFile, rm } from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handleApi } from "../src/routes.js";
-import { loadThreads } from "../src/chat.js";
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement. Copied
+ * from tests/candidates-route.test.ts, which explains the shape.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
 import { LIVE_MODEL } from "../src/live.js";
 import type { ChatThread } from "../src/types.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
+loadEnvLocal();
+
+/** A throwaway slug, so the conversations written below belong to nobody. */
 const SLUG = "test-chat-spoken-route";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
-const reseed = async () => {
-  await rm(DIR, { recursive: true, force: true });
-  await cp(EXAMPLE, DIR, { recursive: true });
-};
-beforeAll(reseed);
-afterEach(reseed);
-afterAll(() => rm(DIR, { recursive: true, force: true }));
+
+const { reachable } = await pgReady({
+  suite: "tests/chat-spoken-route.test.ts",
+  tables: ["spideryarn.chat_threads", "spideryarn.chat_messages", "spideryarn.revision_blocks"],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { chatStore, STORE } = await import("../src/store/index.js");
+
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on the database being up, deliberately: a control that vanishes
+       when Postgres is missing vanishes exactly when it matters. A flag that
+       failed to take looks precisely like this suite working — the filesystem
+       store answers every append happily, and the two-row write the read-backs
+       below are about does not exist there. */
+    expect(STORE).toBe("postgres");
+  });
+});
+
+/**
+ * Every read-back runs as the reader the request ran as.
+ *
+ * Outside a request `currentOwnerId()` falls back to the environment's owner
+ * and the read fails as a 404 about the fixture, arriving inside the assertion
+ * — see `asTestOwner`.
+ */
+const threads = () => asTestOwner(() => chatStore.load(SLUG));
 
 interface Answer {
   status: number;
@@ -87,20 +144,48 @@ async function post(threadId: string, body: unknown, path = "spoken"): Promise<A
 }
 
 /**
- * A block id the fixture article really has.
+ * The article, and a block id it really has.
  *
- * Read from the artefact rather than written out, because the point of the
+ * Read off the seeded clone rather than written out, because the point of the
  * check it exercises is that the id is *in the article* — a constant copied
  * here would go stale the day the fixture changed, and the test would then be
- * asserting the refusal path while claiming to assert the acceptance one.
+ * asserting the refusal path while claiming to assert the acceptance one. See
+ * `ScratchArticle.blocks`: the ids belong to whichever corpus article was
+ * cloned, so there is nothing here to write down.
  */
+let article: ScratchArticle | undefined;
 let REAL_BLOCK = "";
+
 beforeAll(async () => {
-  const blocks = JSON.parse(
-    await readFile(path.join(DIR, "blocks.json"), "utf8"),
-  ) as { blocks: { id: string }[] };
-  REAL_BLOCK = blocks.blocks[0]?.id ?? "";
+  if (!reachable) return;
+  /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
+     Postgres reader filters every article by owner. An article seeded as
+     anybody else is invisible and every route below answers 404, which looks
+     exactly like a broken route — `ScratchOptions.ownerId`. */
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+  REAL_BLOCK = article.blocks[0]?.id ?? "";
   if (!REAL_BLOCK) throw new Error("the fixture has no blocks to point at");
+}, 60_000);
+
+/**
+ * Conversations, and nothing a previous case wrote beside them.
+ *
+ * Where the filesystem version re-copied `example/` into `data/<slug>/` after
+ * every case, which threw the chat file away along with it. Deleting the
+ * threads and keeping the article is the same reset — nothing here writes to
+ * the article — and it is what the two `toHaveLength(0)` refusals below need to
+ * mean anything.
+ */
+beforeEach(async () => {
+  if (!article) return;
+  await asTestOwner(async () => {
+    for (const thread of await chatStore.load(SLUG)) await chatStore.remove(SLUG, thread.id);
+  });
+});
+
+afterAll(async () => {
+  await article?.remove();
+  await closeDb();
 });
 
 /** The minimum a valid exchange needs. */
@@ -113,7 +198,7 @@ const exchange = (over: Record<string, unknown> = {}) => ({
 
 const threadOf = (answer: Answer): ChatThread => answer.body.thread as ChatThread;
 
-describe("appending one exchange", () => {
+when("appending one exchange", () => {
   it("writes both rows, done, and titles the conversation", async () => {
     const out = await post("spya-vaaaaa", exchange());
     expect(out.status).toBe(200);
@@ -125,7 +210,7 @@ describe("appending one exchange", () => {
     /* On disk, not merely in the response. The response is built from the
        store's return value, so a route that answered without writing would
        look identical from here. */
-    const stored = (await loadThreads(SLUG)).find((t) => t.id === thread.id);
+    const stored = (await threads()).find((t) => t.id === thread.id);
     expect(stored?.messages).toHaveLength(2);
     expect(stored?.messages[1]?.text).toBe("Because it does not compute.");
   });
@@ -165,7 +250,7 @@ describe("appending one exchange", () => {
   });
 });
 
-describe("what the route refuses to take the browser's word for", () => {
+when("what the route refuses to take the browser's word for", () => {
   it("NEVER stores a tool run as running", async () => {
     /* The live panel's own idea of a run says `running` while it is going, and
        that object is what the browser has to hand when the exchange ends. A
@@ -195,7 +280,7 @@ describe("what the route refuses to take the browser's word for", () => {
       exchange({ passages: [{ blockIds: ["../../etc/passwd"], why: "x" }] }),
     );
     expect(out.status).toBe(400);
-    expect(await loadThreads(SLUG)).toHaveLength(0);
+    expect(await threads()).toHaveLength(0);
   });
 
   it("refuses a WELL-FORMED id that this article does not have", async () => {
@@ -210,7 +295,7 @@ describe("what the route refuses to take the browser's word for", () => {
       exchange({ passages: [{ blockIds: ["spya-zzzzzz"], why: "nowhere" }] }),
     );
     expect(out.status).toBe(400);
-    expect(await loadThreads(SLUG)).toHaveLength(0);
+    expect(await threads()).toHaveLength(0);
   });
 
   it("refuses a receipt for a tool a live session is never given", async () => {
@@ -271,7 +356,7 @@ describe("what the route refuses to take the browser's word for", () => {
   });
 });
 
-describe("the expected tail, which is also the idempotency", () => {
+when("the expected tail, which is also the idempotency", () => {
   it("appends a second exchange behind the first", async () => {
     const first = threadOf(await post("spya-vaaaba", exchange()));
     const tail = first.messages.at(-1)!.id;
@@ -295,7 +380,7 @@ describe("the expected tail, which is also the idempotency", () => {
     const again = await post("spya-vaaabb", body);
     expect(again.status).toBe(409);
 
-    const stored = (await loadThreads(SLUG)).find((t) => t.id === threadOf(first).id);
+    const stored = (await threads()).find((t) => t.id === threadOf(first).id);
     expect(stored?.messages, "the replay wrote the turn a second time").toHaveLength(2);
   });
 
