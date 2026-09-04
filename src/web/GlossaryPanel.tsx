@@ -77,9 +77,10 @@ import {
   LoaderCircle,
   RotateCcw,
   Search,
+  TextSearch,
   TriangleAlert,
 } from "lucide-react";
-import type { BlockId, Glossary, GlossaryEntry, Job } from "../types.js";
+import type { BlockId, Glossary, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
@@ -101,7 +102,8 @@ import {
 } from "./threshold.js";
 import type { UseGlossary } from "./useGlossary.js";
 import type { StepFailure } from "./useStepJob.js";
-import { builtButEmpty } from "../messages.js";
+import { builtButEmpty, codeOfMessage } from "../messages.js";
+import { MAX_ASKED_TERM } from "../asked-term.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
@@ -189,6 +191,20 @@ interface Props {
   onGate(gate: number | null): void;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
+  /**
+   * **Hand the reader to Chat**, for a term the article does not contain.
+   *
+   * The glossary defines terms *from the piece* and will not be talked out of
+   * it, so a word the piece never uses has no answer here — and chat is the one
+   * surface in this app that may answer from outside the article. Absent for a
+   * visitor, who has no chat.
+   *
+   * A mode switch and nothing more: the composer is not pre-filled, because a
+   * draft would have to be carried across a component boundary that only chat
+   * mode's own dialog has a prop for (src/web/chat-handoff.ts). Worth doing
+   * later; not worth blocking the box on.
+   */
+  onAskChat?: (() => void) | undefined;
 }
 
 export function GlossaryPanel({
@@ -200,6 +216,7 @@ export function GlossaryPanel({
   gate: chosenGate,
   onGate,
   onJump,
+  onAskChat,
 }: Props) {
   useRenderCount("GlossaryPanel");
   const owner = access.kind === "owner" ? access.owner : null;
@@ -252,6 +269,17 @@ export function GlossaryPanel({
           />
         )}
       </div>
+
+      {/* **Above the list and above the sort**, because it is the way in rather
+          than a way of arranging what is already there — and because a reader
+          who typed a word wants to see what came back without scrolling past
+          twenty-four terms to find it.
+
+          Owner only, and not marked-not-hidden: it spends money on a model call
+          and the endpoint is owner-only, so for a visitor it is not a control
+          they have lost but one that has never applied to them. The band's own
+          sentence already says what a shared link does not carry. */}
+      {owner && <AskATerm owner={owner} onJump={onJump} onAskChat={onAskChat} />}
 
       {/* Sorting is only a question once there is a list, and each option is
           only offered once the model actually returned what it needs — an older
@@ -1420,6 +1448,159 @@ function Term({
 }
 
 /**
+ * **A box that finds a term in the article and explains it.**
+ *
+ * Asked for, in these words:
+ *
+ * > I would like to be able to type into a search box in the glossary for a
+ * > particular term and for it to look for that term and add it to the
+ * > glossary. And maybe it should be a tiny bit robust in the spelling or
+ * > something if I type it wrong.
+ * >
+ * > — a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`
+ *
+ * Two things it deliberately does not do, and the hint under the box says the
+ * first one out loud rather than letting the reader find out:
+ *
+ * - **It adds nothing to the list.** The glossary is one JSON document that a
+ *   *Find more terms* run rewrites and that a shared link publishes whole, so a
+ *   reader-added entry would be merged away by the first and handed to
+ *   strangers by the second — src/types.ts § `AskedTermAnswer`. Saying "not
+ *   added to the list" in the hint is what stops the answer's disappearance
+ *   from reading as a bug.
+ * - **It does not correct spelling.** The tolerance is `term-match.ts`'s
+ *   folding of case, plurals and possessives, and no more. When it finds
+ *   nothing there is **no "did you mean…"**: it says which of three things it
+ *   established and offers chat, which may answer from outside the piece.
+ *
+ * **The refusal is the server's own sentence, verbatim**, and it carries a
+ * `[gl-ask-…]` code. Three of them, because there are three facts —
+ * docs/postmortems/260904c-the-glossary-said-the-term-was-not-there.md is what
+ * a single sentence over several causes costs, and it was written about this
+ * exact code path the day before.
+ */
+function AskATerm({
+  owner,
+  onJump,
+  onAskChat,
+}: {
+  owner: UseGlossary;
+  onJump(id: BlockId): void;
+  onAskChat?: (() => void) | undefined;
+}) {
+  const [term, setTerm] = useState("");
+  const { ask, asking, asked, askFailed, clearAsked } = owner;
+
+  return (
+    <div className="gloss-ask">
+      <form
+        className="gloss-ask-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void ask(term);
+        }}
+      >
+        {/* `type="search"`, so a phone offers the right keyboard and the browser
+            draws its own clear affordance.
+
+            `maxLength` is the server's number, and it is **not quite the
+            server's rule**: this counts raw UTF-16 code units as typed, where
+            `parseAskedTerm` counts them after NFC and whitespace collapsing. So
+            forty decomposed `é`s plus a letter is eighty-one here and forty-one
+            there — the box refuses a term the route would take. That is the
+            harmless direction and it is the one an `input` can express; the
+            check that matters runs on both sides. ⟨Sol⟩ */}
+        <input
+          className="gloss-ask-input"
+          type="search"
+          value={term}
+          maxLength={MAX_ASKED_TERM}
+          placeholder="Look up a term…"
+          aria-label="Look up a term in this article"
+          onChange={(e) => {
+            setTerm(e.target.value);
+            /* The previous answer goes the moment the box changes. It belongs to
+               a word that is no longer in it, and an answer sitting under a
+               different term is the panel telling the reader something untrue.
+               **Unconditionally, and that is the fix rather than the tidy-up:**
+               `if (asked || askFailed)` was the first version, and during a
+               request both are null — so the one moment there is something to
+               disown was the one moment this did nothing, and the reply landed
+               under whatever the reader had typed since. `clearAsked` bumps a
+               generation for exactly this. GPT Sol's review. */
+            clearAsked();
+          }}
+        />
+        <button
+          type="submit"
+          className="gloss-btn"
+          /* Disabled on the same rule the server refuses on, so the button is
+             never a request that could only fail. Whitespace alone is an empty
+             box. */
+          disabled={asking || term.trim().length === 0}
+          title="Finds these words in the article and explains the passage they are in. One model call."
+        >
+          {asking ? <LoaderCircle size={12} className="cmt-spinner" /> : <TextSearch size={12} />}
+          {asking ? "Looking…" : "Look up"}
+        </button>
+      </form>
+
+      {/* **The deferral, said before it is noticed.** A reader who typed a term
+          and got an answer would otherwise reasonably expect a new row, and its
+          absence would read as a failure rather than as the design. */}
+      <p className="gloss-ask-hint">
+        Finds the words in this article and explains the passage. Not added to the list.
+      </p>
+
+      {asking && (
+        <p className="gloss-look-wait">
+          The whole piece goes to the model, and it may search the web as well, so this can take up
+          to a minute.
+        </p>
+      )}
+
+      {askFailed && (
+        <div className="gloss-ask-failed">
+          <p className="gloss-error">{askFailed}</p>
+          {/* **The handoff, and it is a real one.** The glossary explains what
+              the piece says and this word is not in the piece, so there is no
+              answer here at any price. Chat is the surface that may go outside
+              the article, and offering it is the difference between a dead end
+              and a door.
+
+              **Only when the article was actually searched**, which is what the
+              `gl-ask-` code means. A malformed term — control characters pasted
+              in, the one refusal the box's own guards do not catch — is not a
+              question chat can answer either, and *"a term cannot contain
+              control characters. Ask in chat"* would be the panel offering a
+              door out of a typo. Read off the code rather than off the sentence,
+              docs/project/copy.md § The bracketed code. */}
+          {onAskChat && codeOfMessage(askFailed)?.startsWith("gl-ask-") && (
+            <button type="button" className="gloss-btn" onClick={onAskChat}>
+              Ask in chat
+            </button>
+          )}
+        </div>
+      )}
+
+      {asked && (
+        <div className="gloss-ask-answer">
+          {/* **The piece's own words, not the reader's.** Where they differ — a
+              capital, a plural — the article wins, because that is the passage
+              the model was asked about. Showing the reader's string here would
+              be the panel quoting something it did not use. */}
+          <p className="gloss-ask-found">
+            <strong>{asked.quote}</strong>
+            <BlockRef id={asked.blockId} onJump={onJump} />
+          </p>
+          <LookupAnswer lookup={asked.lookup} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * The web's answer for one term, or the button that asks for it.
  *
  * Greg, 2026-08-26: *"provide web citations (e.g. clickable links with
@@ -1557,6 +1738,21 @@ function Looked({
     );
   }
 
+  return <LookupAnswer lookup={lookup} />;
+}
+
+/**
+ * **One checked answer, drawn.** The provenance line, the prose, and the hosts
+ * it cited.
+ *
+ * Its own component since 2026-09-04, when the *Look up a term* box arrived
+ * with the identical thing to draw: the box is `explain` with a phrase instead
+ * of an entry, so it comes back as a `GlossaryLookup` and gets the same
+ * treatment. A near-copy would have been two places to keep the "asked, not
+ * checked" distinction honest, and that distinction is the one thing here that
+ * a rewrite has already had to fix once.
+ */
+function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
   const sources = lookup.citations.filter((c) => isWebUrl(c.url));
 
   return (

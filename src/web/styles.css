@@ -5729,6 +5729,59 @@ td.text.note-open {
    recipe docs/project/icons.md describes — 0.7s rather than 1s, and it pulses
    under prefers-reduced-motion instead of freezing, which this one did. */
 
+/* **Look up a term** — the box above the list, its answer and its refusals.
+   docs/project/glossary.md § Looking a term up.
+
+   Ruled off below rather than boxed, and sharing `.srch-box`'s padding and
+   `.srch-input`'s field so the two search-shaped things in this app look like
+   one idea. It does not reuse those class names: the search band owns them and
+   a shared class across two modes is how one mode's tweak silently redraws
+   another. */
+.gloss-ask {
+  padding: 0.5rem 0.7rem 0.55rem;
+  border-bottom: 1px solid var(--rule);
+}
+.gloss-ask-row { display: flex; align-items: center; gap: 0.35rem; }
+.gloss-ask-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.gloss-ask-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-ask-input::placeholder { color: var(--ink-faint); }
+/* The browser's own clear affordance is kept here, unlike the search band's —
+   there is no Escape handler on this box, so removing it would leave a reader
+   with a full field and no one-press way to empty it. */
+.gloss-ask-hint {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.35;
+}
+/* The refusal and the way out of it, on their own lines: the sentence is three
+   or four lines in an 18rem band, and a button beside it would be unreadable. */
+.gloss-ask-failed { margin-top: 0.35rem; }
+.gloss-ask-failed .gloss-error { margin: 0 0 0.4rem; }
+.gloss-ask-answer { margin-top: 0.45rem; }
+/* The article's own words, and where they are. `strong` rather than a quote
+   mark, because the passage is the model's subject and not a citation. */
+.gloss-ask-found {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+.gloss-ask-found strong { font-weight: 600; }
+
 .gloss-provenance {
   margin: 0.45rem 0 0;
   color: var(--ink-faint);

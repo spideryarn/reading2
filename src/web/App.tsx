@@ -3035,6 +3035,7 @@ function Reader({
           read={glossaryRead}
           onJump={jumpTo}
           onSelected={setTerm}
+          onMode={setMode}
         />
       )}
       {/* **The visitor's three bands, and they are the slice.** Each is the same
@@ -4347,6 +4348,7 @@ function GlossaryBand({
   read,
   onJump,
   onSelected,
+  onMode,
 }: {
   slug: string;
   /**
@@ -4360,16 +4362,31 @@ function GlossaryBand({
   read: GlossaryRead;
   onJump(id: BlockId): void;
   onSelected(selection: TermSelection | null): void;
+  /**
+   * Switch mode, for the one thing the glossary cannot answer.
+   *
+   * The *Look up a term* box explains what the piece says and nothing else, so
+   * a word the piece never uses has no answer in this band at any price. Chat
+   * is the surface that may go outside the article, and the panel offers it
+   * rather than leaving the reader at a dead end. Same prop and same reason as
+   * `ConversationBand`'s, one band along. See `AskATerm` in GlossaryPanel.tsx.
+   */
+  onMode(next: Mode): void;
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
   const band = useGlossaryMode(glossary.glossary?.entries ?? NO_TERMS, onSelected);
+
+  /* Memoised so the panel's `onAskChat` keeps its identity between renders,
+     which is the same reason every other callback crossing this boundary is. */
+  const askChat = useCallback(() => onMode("chat"), [onMode]);
 
   return (
     <GlossaryPanel
       access={{ kind: "owner", owner: glossary, glossary: glossary.glossary }}
       {...band}
       onJump={onJump}
+      onAskChat={askChat}
     />
   );
 }

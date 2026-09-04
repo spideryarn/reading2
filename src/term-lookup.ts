@@ -33,10 +33,18 @@ import { explain as explainDefault } from "./explain.js";
 import { isStale, safeUrl } from "./glossary.js";
 import { log } from "./log.js";
 import type { GlossaryLookupStore } from "./store/contracts.js";
-import { formsOf, termAppears, termPattern } from "./term-match.js";
-import { GLOSSARY_OUT_OF_DATE, GLOSSARY_TERM_NOT_QUOTED } from "./messages.js";
+import { formsOf, termPattern } from "./term-match.js";
+import { ASKED_TERM_REFUSED, parseAskedTerm } from "./asked-term.js";
+import {
+  ASKED_TERM_ABSENT,
+  ASKED_TERM_NO_PROSE,
+  ASKED_TERM_PART_WORD,
+  GLOSSARY_OUT_OF_DATE,
+  GLOSSARY_TERM_NOT_QUOTED,
+} from "./messages.js";
 import type {
   Article,
+  AskedTermAnswer,
   Block,
   BlockId,
   GlossaryEntry,
@@ -66,8 +74,35 @@ function patternsFor(entry: { name: string; aliases: string[] }): { form: string
     });
 }
 
-function quoteMatching(forms: { form: string; pattern: RegExp }[], text: string): string | undefined {
-  for (const { form, pattern } of forms) if (termAppears(text, pattern)) return form;
+/**
+ * The first form that appears in `text`, **and the characters it actually
+ * matched**.
+ *
+ * Two facts, because two callers want different ones and both are truthful
+ * about something different. `form` is the glossary's own wording — *"Martin
+ * Luther King Jr."*, or its alias *"MLK"* — and is what `lookUpTerm` quotes,
+ * because a glossary entry has a canonical name and that name is what the
+ * reader pressed. `matched` is the run of characters in this block, which is
+ * what {@link makeAskAboutTerm} quotes, because a phrase a reader typed into a
+ * box has no canonical form and the piece's own wording is the only honest one:
+ * type *attention head* at a piece that says *attention heads* and the passage
+ * is about the plural.
+ *
+ * They differ exactly where the matcher folds — case, a plural, a possessive —
+ * which is the whole of the tolerance this feature has.
+ */
+function quoteMatching(
+  forms: { form: string; pattern: RegExp }[],
+  text: string,
+): { form: string; matched: string } | undefined {
+  for (const { form, pattern } of forms) {
+    /* Reset before use for the reason `termSpans` states: these patterns carry
+       `g` and are reused across every block of the article, so a surviving
+       `lastIndex` would start the search in the middle of the next one. */
+    pattern.lastIndex = 0;
+    const hit = pattern.exec(text);
+    if (hit) return { form, matched: hit[0] };
+  }
   return undefined;
 }
 
@@ -99,13 +134,13 @@ function quoteMatching(forms: { form: string; pattern: RegExp }[], text: string)
 function anchorIn(
   entry: { name: string; aliases: string[] },
   blocks: readonly Block[],
-): { blockId: BlockId; quote: string } | undefined {
+): { blockId: BlockId; quote: string; matched: string } | undefined {
   const forms = patternsFor(entry);
   if (forms.length === 0) return undefined;
   for (const block of blocks) {
     if (!block.text) continue;
-    const quote = quoteMatching(forms, block.text);
-    if (quote) return { blockId: block.id, quote };
+    const hit = quoteMatching(forms, block.text);
+    if (hit) return { blockId: block.id, quote: hit.form, matched: hit.matched };
   }
   return undefined;
 }
@@ -301,5 +336,195 @@ export function makeLookUpTerm(
     );
 
     return { entry: updated };
+  };
+}
+
+/* ------------------------------------------ a term the reader typed in a box -- */
+
+/**
+ * Everything the *Look up a term* box needs — **which is strictly less than a
+ * lookup needs**, and the subtraction is the feature.
+ *
+ * No `lookups` store, because nothing is saved. No `loadGlossary`, because the
+ * question is about the article and not about the list: a term the glossary has
+ * never heard of is exactly the case this box exists for.
+ */
+export interface AskAboutTermDeps {
+  /** Where the article's blocks and meta come from. Owner-filtered — see below. */
+  readonly reader: { loadArticle(slug: string): Promise<Article> };
+
+  /** The 403 the filesystem needs and Postgres does not. `LookUpTermDeps` has the reason. */
+  readonly assertWritable?: (slug: string) => Promise<void>;
+
+  /** Overridable so a test can drive the successful path without a model. */
+  readonly explain?: typeof explainDefault;
+
+  /** Overridable for the same reason. */
+  readonly now?: () => string;
+}
+
+/**
+ * **Is the term in there at all, ignoring word boundaries?**
+ *
+ * Asked only after the real matcher has said no, and only to tell two refusals
+ * apart: *the piece never says this* wants chat, and *the piece says it inside a
+ * longer word* wants the reader to retype it. Neither sentence would be true of
+ * the other case, which is the whole reason this scan exists —
+ * docs/postmortems/260904c-the-glossary-said-the-term-was-not-there.md.
+ *
+ * **The same escaping and the same whitespace rule as `termPattern`, minus the
+ * lookarounds and the suffix**, so the only difference between the two answers
+ * is the boundary. Building it any other way would let the two scans disagree
+ * about something else and put a wrong sentence on the screen.
+ *
+ * It **does not** claim a typo. A substring hit is not evidence of one: a piece
+ * that says *axiomatic* contains *axiom*, and nobody misspelled anything.
+ */
+function appearsInsideAWord(term: string, blocks: readonly Block[]): boolean {
+  const body = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const loose = new RegExp(body, "iu");
+  return blocks.some((b) => (b.text ? loose.test(b.text) : false));
+}
+
+/**
+ * Find a term the reader typed in the article, and explain the passage it is
+ * in. **Nothing is stored.**
+ *
+ * A reader asked for this, and asked for a little more than it does:
+ *
+ * > I would like to be able to type into a search box in the glossary for a
+ * > particular term and for it to look for that term and add it to the
+ * > glossary. And maybe it should be a tiny bit robust in the spelling or
+ * > something if I type it wrong.
+ * >
+ * > — a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`
+ *
+ * **The robustness is `term-match.ts`'s and nothing is added to it.** Case,
+ * plurals and possessives fold; a misspelling does not. That is a real limit
+ * and it is stated to the reader in the refusal rather than papered over with a
+ * guess — see `ASKED_TERM_ABSENT` in src/messages.ts for why there is no
+ * *"did you mean…"* here.
+ *
+ * **"Add it to the glossary" is deliberately not built.** {@link AskedTermAnswer}
+ * has the three reasons, one of which is that a reader-added entry would be
+ * published with an already-shared article.
+ *
+ * ## What it will not take from the client
+ *
+ * A term, and nothing else. Not a block id, not an offset, not a definition,
+ * not aliases, not a provenance label, not an owner — every one of those is
+ * either found here from the article or does not exist.
+ *
+ * **Which is not the same as "the caller cannot influence the passage", and a
+ * first draft of this paragraph said so.** A long enough term picks out one
+ * paragraph, so a caller does choose *which* of their own article's blocks is
+ * explained. What the narrow input buys is that the text sent to the model is
+ * always this article's own, and this article is always theirs: there is no
+ * spelling of the request that makes it a way to ask a paid model about text of
+ * the caller's own composition. ⟨Sol⟩
+ *
+ * ## Ownership
+ *
+ * `reader.loadArticle` is the check, and it is the same one `lookUpTerm` above
+ * relies on: under Postgres every read joins through `ownedSlug`
+ * (src/store/pg.ts), so a stranger's slug is a 404 before a byte of prose is
+ * read — and it is read **first**, before the term is even parsed, so a
+ * non-owner cannot tell a bad term from somebody else's article. `assertWritable`
+ * is the filesystem store's extra 403 over the committed `example/` article.
+ */
+export function makeAskAboutTerm(
+  deps: AskAboutTermDeps,
+): (slug: string, asked: unknown, signal?: AbortSignal) => Promise<AskedTermAnswer> {
+  const explain = deps.explain ?? explainDefault;
+  const now = deps.now ?? (() => new Date().toISOString());
+
+  return async function askAboutTerm(slug, asked, signal) {
+    /* Ownership before anything else, `lookUpTerm`'s order and for its reason:
+       "there is no such article" and "that one is not yours" have to be settled
+       before the caller learns anything at all — including whether their term
+       was well-formed. */
+    await deps.assertWritable?.(slug);
+    const article = await deps.reader.loadArticle(slug);
+
+    const parsed = parseAskedTerm(asked);
+    if (!parsed.ok) {
+      /* **400, and no bracketed code.** Every one of these is something the box
+         itself refuses before the request goes (src/web/GlossaryPanel.tsx), so a
+         reader reaching one has a broken client rather than a report to file —
+         which is the case docs/project/copy.md's *a refusal that is an answer
+         gets no code* is actually about. The three sentences are still written
+         for a person, because a person is who would see one. */
+      throw Object.assign(new Error(ASKED_TERM_REFUSED[parsed.fault]), { status: 400 });
+    }
+
+    /* **No prose is not an answer about the term**, and this branch exists so
+       that it cannot be reported as one. An article whose blocks are all
+       figures or embeds would otherwise be told "the piece does not use those
+       words" on the strength of a scan that read nothing — the reported bug's
+       exact shape, a confident sentence over an empty check. */
+    if (!article.blocks.some((b) => b.text)) {
+      throw Object.assign(new Error(ASKED_TERM_NO_PROSE.message), { status: 409 });
+    }
+
+    /* One entry with no aliases: a phrase a reader typed has no canonical name
+       and no other names, so the entry shape is the adapter and `anchorIn` is
+       the same walk, in the same order, under the same rule that decides where
+       the prose underlines this term. */
+    const anchor = anchorIn({ name: parsed.term, aliases: [] }, article.blocks);
+    if (!anchor) {
+      /* **Two refusals, not one**, and the scan above is what tells them apart.
+         Both refuse again unchanged; only one of them leaves the reader
+         something to type differently. src/messages.ts § `ASKED_TERM_ABSENT`. */
+      const message = appearsInsideAWord(parsed.term, article.blocks)
+        ? ASKED_TERM_PART_WORD.message
+        : ASKED_TERM_ABSENT.message;
+      throw Object.assign(new Error(message), { status: 409 });
+    }
+
+    const result = await explain({
+      meta: article.meta,
+      blocks: article.blocks,
+      blockId: anchor.blockId,
+      /* **The article's words, not the reader's.** `anchor.matched` is the run
+         of characters actually in that block, so "the reader has selected this
+         passage" stays literally true through the plural and the capital the
+         matcher folded — and, as a side effect worth stating, the reader's own
+         string never reaches the model at all. */
+      quote: anchor.matched,
+      ...(signal ? { signal } : {}),
+    });
+
+    const lookup: GlossaryLookup = {
+      answer: result.answer,
+      /* `safeUrl` for `lookUpTerm`'s reason with one word changed: this is where
+         a model-supplied URL stops being a value in flight and becomes one the
+         panel will put in an `href`. It is not stored, and that changes nothing
+         — the `href` is the hazard, not the column. */
+      citations: result.citations.flatMap((c) => {
+        const url = safeUrl(c.url);
+        return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];
+      }),
+      searches: result.searches,
+      model: result.model,
+      at: now(),
+    };
+
+    /* **No term and no prose in the line**, which here means the answer, the
+       quote and the words the reader typed — a search box is a reader's private
+       question in a way a stored glossary entry is not. `chars` is what makes
+       the eighty-character bound observable without carrying the string.
+       docs/project/logging.md. */
+    log("store").info(
+      {
+        slug,
+        chars: parsed.term.length,
+        searches: lookup.searches,
+        citations: lookup.citations.length,
+        model: lookup.model,
+      },
+      "explained a term a reader asked about",
+    );
+
+    return { term: parsed.term, blockId: anchor.blockId, quote: anchor.matched, lookup };
   };
 }

@@ -1818,7 +1818,7 @@ Four things came out of that, and each was measured rather than reasoned to:
   because it is written down.
 
   So the wordless branch is now rare and real: it fires when a drawn scene has no
-  title we can use at all — none given, one over four words, one carrying control
+  title we can use at all — none given, one over the 40-character cap, one carrying control
   characters — and then there genuinely is a scene nobody can name.
 - **`1K`, not `2K`, and it is not a compromise.** Cheaper ($0.068 against
   $0.101), 40% faster, and *more* legible at 288 px — 10.5 px of cap height
@@ -1831,7 +1831,18 @@ Four things came out of that, and each was measured rather than reasoned to:
   covered in glyph-shapes that are not words — unchanged on both Gemini models
   and on the OpenAI one. It carries no misspelling because it carries no word,
   and a reader could still fairly call it lettering. The fix is in the brief
-  prompt, not in a rule about text.
+  prompt, not in a rule about text, and on an article *about* transcripts and
+  tampered logs the brief model writes scrolls anyway: a run on 2026-09-04 came
+  back with banner-glyphs on a plate whose eight captions were all correct.
+
+**What eleven real plates looked like, 2026-09-04.** Nine of nine captioned
+plates spelled every supplied string correctly, and every caption was readable at
+288 px. The caption's size is not constant — it falls as the plate gets more
+crowded, and one plate that drew twelve roundels for eight vignettes came back at
+the edge of legible where a nine-roundel plate was comfortable. So *how many
+vignettes* remains the lever on how readable the thumbnail is, which is the same
+thing § *Ornament may not crowd the scenes* already says for a different
+reason.
 
 **A caption in the picture is not a row in the legend, and the gap is on
 purpose.** A dropped vignette's caption is on the page with nothing beneath the
@@ -1939,9 +1950,21 @@ since 2026-09-03, because it used to be derived from the path by a binary test
 that would have recorded every plate as a chat call.
 
 **The brief call is the bill and the pictures are not**, which is the opposite of
-every intuition about this feature: measured across three articles at **$0.23–$0.38
-an article, 80–88% of it the brief**, against Sketch's $0.20. Worst case 417 s
-inside a 760 s lease. The numbers, per article and per plate, are in
+every intuition about this feature. Measured across three articles on 2026-09-04,
+under the lettering prompt and `google/gemini-3.1-flash-image` at 1K:
+
+| | brief | plates | wall clock |
+|---|---|---|---|
+| noema | $0.4182 | $0.2042 (3) | 349 s + 36 s |
+| constitution | $0.2814 | $0.2041 (3) | 241 s + 35 s |
+| openai-huggingface | $0.2096–$0.3224 | ~$0.2040 (3) | 183–293 s + 37 s |
+
+So **$0.41–$0.62 an article, two thirds of it the brief**, against Sketch's
+$0.20, and comfortably inside the 760 s lease. Two things moved on 2026-09-04 and
+they moved in opposite directions: a plate went from about $0.013 to **$0.068**,
+because it is priced on the wire now rather than arriving as a BYOK figure; and
+the brief got longer, because it writes a title for every vignette. The earlier
+numbers — $0.23–$0.38 an article, 80–88% of it the brief — are in
 [`evals/results/illustrated-v2b/README.md`](../../evals/results/illustrated-v2b/README.md),
 and the before-and-after of the prompt that produced them is
 [§ Tuning the prompt](../plans/260903c-illustrated-diagram-sub-mode.md#tuning-the-prompt-illustrated2).

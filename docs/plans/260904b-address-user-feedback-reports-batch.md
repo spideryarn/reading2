@@ -1,6 +1,11 @@
 # Twelve reports from one afternoon's reading
 
-**Status: in progress**, started 17:05 London on 2026-09-04 (Greg held it back until then so usage
+**Status: done.** All twelve reports resolved in Sentry with a note each under
+[`docs/user-feedback/`](../user-feedback/). Two halves were deferred on purpose and their reasons are
+in *Stages* below: the Illustrated steering box, and persistent glossary additions. The loose ends
+worth picking up next are in *Left undone*.
+
+**Status was: in progress**, started 17:05 London on 2026-09-04 (Greg held it back until then so usage
 limits would have reset). Fable's product memo was written at 14:45 and kept rather than re-spent;
 GPT Sol's review of the plan arrived at 17:30 and reorganised it — see *Stages*, below, which is the
 part to read if you are picking this up.
@@ -390,6 +395,15 @@ plate answerable rather than decorative.
 - **Dictation has never been measured on human speech.** The 90–92% hard-term recall behind -11 and
   -15 comes from a synthetic corpus. A person, an iPad and a room is a different measurement and it
   is the open thread both reports leave behind.
+- **`tests/client-imports.test.ts` is red on `dev`, and it is a real finding.**
+  `src/web/useStepJob.ts` imports `StepBefore` from `../pipeline.js` — committed 2026-09-03 in
+  `a9fd3197`, nothing to do with this batch. It is a *type-only* import and so erases at build time,
+  but the test flags the erased form **deliberately**, and says so in its own comment. So the fix is
+  to move `StepBefore` to a shared module, not to relax the rule. Left alone here because the
+  judgment belongs to whoever owns that code, not to a passing batch.
+- **Unexplained 404s in the browser console** on the dev box, seen repeatedly during the -13
+  verification with no URL captured. None of the checks were affected and it is most likely a missing
+  favicon or asset locally, but nobody has actually looked. Cheap to chase; worth one Sonnet.
 - **The Illustrated steering box** (-12's other half) — deferred with its reason in *Stages*, above.
 - **Persistent glossary additions** (-Y's other half) — deferred, and it needs a table.
 

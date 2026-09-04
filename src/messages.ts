@@ -302,6 +302,15 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      `GLOSSARY_TERM_NOT_QUOTED` for why they carry codes at all. */
   "gl-not-quoted": "blocked",
   "gl-stale": "blocked",
+  /* **The three ways the *Look up a term* box comes back empty.** All
+     `blocked`: each refuses again unchanged, and each names a different way
+     through — chat, a different spelling, or nothing at all. Three codes rather
+     than one because they are three facts, which is the lesson of
+     docs/postmortems/260904c-the-glossary-said-the-term-was-not-there.md
+     applied on the same code path a day later. See `ASKED_TERM_ABSENT`. */
+  "gl-ask-absent": "blocked",
+  "gl-ask-part-word": "blocked",
+  "gl-ask-no-prose": "blocked",
   /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
      that is why there are four rather than one. The kind is what decides
      whether a Retry appears, and a single sentence would have had to either
@@ -1329,6 +1338,101 @@ export const GLOSSARY_OUT_OF_DATE: ReaderFacingFailure = {
     "This list of terms was written for an earlier version of the article, so it cannot say " +
     "where — or whether — the piece uses this one. Checking it will not help until the terms are " +
     "found again: the banner at the top of the panel has the button. [gl-stale]",
+};
+
+/**
+ * **The three ways the glossary's *Look up a term* box comes back empty**, and
+ * they are three because they want three different things from the reader.
+ *
+ * The box is the answer to *"I would like to be able to type into a search box
+ * in the glossary for a particular term and for it to look for that term"*
+ * (a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`). It scans the article with
+ * `term-match.ts`'s rule — case, plurals and possessives folded, and nothing
+ * else — and explains the passage it finds.
+ *
+ * Written **immediately after** the postmortem whose named class is *collapsed
+ * diagnosis* (260904c), on the same code path, so the split is deliberate
+ * rather than lucky:
+ *
+ * 1. {@link ASKED_TERM_ABSENT} — the words are nowhere in the piece, not even
+ *    inside a longer one. **Chat is the way through**, because chat may answer
+ *    from outside the article and the glossary may not.
+ * 2. {@link ASKED_TERM_PART_WORD} — the characters *are* in the piece, but never
+ *    with a boundary on both sides. The reader has a move the first case does
+ *    not give them: type the word as the piece writes it.
+ * 3. {@link ASKED_TERM_NO_PROSE} — there was no prose to search. This one is
+ *    **not a claim about the term at all**, and that is why it exists: without
+ *    it, an article the extractor left with no text would answer every question
+ *    with *"the piece does not use those words"*, which is the reported bug's
+ *    exact shape — a confident sentence over an empty scan.
+ *
+ * **None of them names the term back at the reader.** It is in the box they
+ * typed it into, a line above; repeating it is what turned a refusal into a
+ * denial last time.
+ *
+ * **No "did you mean…".** Considered and rejected on 2026-09-04: the shared
+ * matcher gives no typo tolerance at all, and the word a reader wants is as
+ * often a lowercase idea as a proper noun, so there is no candidate list worth
+ * ranking yet. Guessing badly here would be worse than the honest handoff.
+ */
+export const ASKED_TERM_ABSENT: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Those words are not in this article — not in that form, a plural or a possessive, and not " +
+    "inside a longer word either. The glossary only ever explains what the piece itself says, so " +
+    "there is nothing here to explain and asking again will not help. Chat can answer from " +
+    "outside the article. [gl-ask-absent]",
+};
+
+/**
+ * **The characters are there and they never stand on their own** — see
+ * {@link ASKED_TERM_ABSENT} for why this is its own sentence.
+ *
+ * The commonest way to reach it is a stem: *"axiom"* against a piece that says
+ * *axiomatic*. (Not *"axi"* against *axis* — a draft of this comment said so and
+ * it is false, because `termPattern`'s optional plural makes *axis* a match.
+ * ⟨Sol⟩)
+ *
+ * **It claims exactly what the second scan establishes, and one draft claimed
+ * more.** That draft said *"every time inside a longer word"*, and the
+ * counterexample is a term with punctuation at its edge: `-bar` against an
+ * article that says `foo-bar` fails the bounded scan — the character before the
+ * hyphen is a letter — and passes the loose one, yet `-bar` is right there,
+ * starting with its own separator. What is true in *every* case this branch
+ * fires on is the thing the lookarounds actually tested: a letter or a digit is
+ * run up against the characters, on one side or the other. So that is what the
+ * sentence says. Claiming a word, or a typo, is the reported bug's own fault in
+ * a friendlier tone. ⟨Sol⟩
+ */
+export const ASKED_TERM_PART_WORD: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Those characters do turn up in the article, but never standing on their own — every time, a " +
+    "letter or a digit runs straight into them, so there is no phrase here to explain and asking " +
+    "for the same ones again will not help. Try the words as the piece writes them, or ask chat, " +
+    "which can answer from outside the article. [gl-ask-part-word]",
+};
+
+/**
+ * **Nothing was searched**, so nothing may be concluded about the term.
+ *
+ * **Reachable by construction, and never yet seen.** `assertSomethingWasProduced`
+ * (src/blocks.ts) requires *a* block and not a block with words in it, and
+ * figures, images and embeds carry no `text` — so an article of nothing but
+ * pictures is storable and the reading view will open a glossary band over it.
+ * It has not happened: 0 of 52 revisions in the local corpus on 2026-09-04
+ * (`bool_or(text <> '')` over `spideryarn.revision_blocks`).
+ *
+ * Kept anyway, and the number is the argument rather than against it: the
+ * alternative to this sentence is `ASKED_TERM_ABSENT` — a confident claim about
+ * the reader's words over a scan that read nothing, which is the reported bug's
+ * exact shape.
+ */
+export const ASKED_TERM_NO_PROSE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no prose in this article to search, so asking again will not help — and this says " +
+    "nothing about the words you typed. [gl-ask-no-prose]",
 };
 
 /* ---------------------------------------------------------- placing passages -- */
