@@ -611,6 +611,11 @@ the Portal behind them would take the switch.
   ever reached `nextQuotaAdjustment`. The upgrade was impossible until minutes before that plan
   ended, so the delta arithmetic is proven by unit tests and by nothing else. Worth knowing before
   we invite people down it.
+- **`PlanCards` no longer rescues a jumbled list.** As of `e8d75ac6` it draws the plans in the order
+  it is handed them and promotes nothing — `tw:order-first` was removed because below `lg` the grid
+  collapses to one column and the raised card jumped the queue, so a phone read *$10 / No charge /
+  $50*. Both callers pass cheapest-first today. **If `canCheckout` starts filtering offers per tier,
+  whatever survives must stay in ascending price order**, because nothing downstream will fix it.
 - **Done:** a signed-in Reader at `/pricing` is offered Researcher and reaches something that takes
   the money; the three stale arguments are gone; `stripe:check` still passes.
 
