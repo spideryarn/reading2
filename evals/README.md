@@ -325,8 +325,10 @@ so a run that dies after six paid calls keeps six results, plus every produced t
 Every arm is labelled with the **kind of claim its result can support** — `isolated` (one variable
 differs from the incumbent) or `bakeoff` (several move together: it can pick a deployable recipe
 and can never explain the win) — and the label travels into the results file. `incumbent` (what
-ships: `anthropic/claude-sonnet-5`, effort high, one call), `incumbent-repeat` (the noise floor),
-`smart-low` (isolated: effort), `headings-listed` (isolated: the author's headings as an explicit
+ships: `anthropic/claude-sonnet-5`, one call, at whatever `src/hierarchy.ts` § `EFFORT` currently
+says — this line named a value and was wrong about it for five days), `incumbent-repeat` (the noise
+floor), `smart-medium` (isolated: effort, and it was `smart-low` until production moved to `low` on
+2026-09-04 — the arm points the other way now), `headings-listed` (isolated: the author's headings as an explicit
 list — production already shows them as blocks and calls them hard boundaries, so this isolates
 salience), `headings-seeded` (isolated: the whole deterministic heading tree as a proposal),
 `cheap-high` (bakeoff: gpt-5.6-luna does not exist on the Messages wire — src/models.ts — so

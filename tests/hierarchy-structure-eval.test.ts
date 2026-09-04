@@ -15,6 +15,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ARMS, armByName, CANDIDATES, FIELD_EFFORT, ZDR } from "../evals/hierarchy-structure/arms.js";
+import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { CORPUS, defaultCorpus } from "../evals/hierarchy-structure/corpus.js";
 import { buildHeadingTree, PREAMBLE_TITLE } from "../src/heading-tree.js";
 import {
@@ -496,12 +497,18 @@ describe("the challenger field", () => {
   });
 
   it("puts a Sonnet arm at the field's own effort, or the field compares to nothing", () => {
-    /* Every challenger differs from `incumbent` in model AND effort at once.
-       `smart-low` is the only arm that differs from them in model alone, so
-       without it in the run there is no like-for-like reading at all. */
-    const low = armByName("smart-low");
-    if (low.kind !== "one-call") throw new Error("smart-low changed kind");
-    expect(low.call.effort).toBe(FIELD_EFFORT);
+    /* Every challenger runs at `FIELD_EFFORT`, so a Sonnet arm at that same
+       effort is the only like-for-like reading the field has: without one, a
+       challenger's gap is model AND effort at once and cannot be attributed.
+       That job belonged to `smart-low` until 2026-09-04, and belongs to the
+       **incumbent** now that production runs `low` — which is strictly better,
+       because the like-for-like control is then the thing that actually ships.
+       If production's effort ever moves off `FIELD_EFFORT` again, this goes red
+       and the field needs its Sonnet arm back. */
+    const incumbent = armByName("incumbent");
+    if (incumbent.kind !== "one-call") throw new Error("the incumbent changed kind");
+    expect(incumbent.call.effort).toBe(FIELD_EFFORT);
+    expect(incumbent.call.model).toBe(CAPABLE_MODEL_OPENROUTER);
   });
 });
 

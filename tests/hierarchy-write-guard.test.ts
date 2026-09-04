@@ -276,9 +276,15 @@ describe("generateHierarchy refuses to hand back an invalid tree", () => {
    * have been green while the interesting case was invisible. GPT Sol, finding 7.
    *
    * No tiling fault reaches this path any more, so the fixture mends a boundary
-   * and then fails on something else: the root's own range stops one block
-   * short of the article, which is a fault `planChildRanges` has no say in and
-   * `buildTree` still refuses.
+   * at depth one and then fails deeper down on a range that runs backwards —
+   * a fault in what the model *said* rather than in how its sections line up,
+   * and one `planChildRanges` deliberately has no say in.
+   *
+   * **A root stopping short of the article used to be the second half**, and it
+   * stopped throwing on 2026-09-04: the root is clamped to the article's ends
+   * like every other node's range is derived (src/hierarchy.ts § "The root's
+   * range is derived like everybody else's"). A backwards range replaces it
+   * because it is the fault that is still fatal and is nearest in spirit.
    */
   it("says what it had already mended when it refuses for another reason", async () => {
     const section = (title: string, from: number, to: number) => ({
@@ -290,20 +296,26 @@ describe("generateHierarchy refuses to hand back an invalid tree", () => {
     modelTree = {
       root: {
         title: "The example",
-        gist: "Two parts, and a root that stops short of the article.",
-        // One block short at the end — every block still gets a leaf inside the
-        // tree, but the last one gets none at all, so nothing can resolve it.
-        range: [blocks[0]!.id, blocks[last - 1]!.id],
+        gist: "Two parts, and a backwards range inside the second one.",
+        range: [blocks[0]!.id, blocks[last]!.id],
         children: [
           section("First", 0, 0),
-          // Skips block 1 — the slip that gets mended before the root is checked.
-          section("Second", 2, last - 1),
+          // Skips block 1 — the slip that gets mended before anything descends.
+          {
+            ...section("Second", 2, last),
+            children: [
+              section("Opening", 2, 2),
+              // Backwards, and therefore unplannable: `planChildRanges` leaves
+              // this sibling set alone so the precise message survives.
+              section("Backwards", last, 3),
+            ],
+          },
         ],
       },
     };
     const result = await run();
     expect(result.threw).not.toBeNull();
-    expect(result.threw!.message).toMatch(/does not cover the whole article/);
+    expect(result.threw!.message).toMatch(/runs backwards/);
     expect(result.threw!.message).toMatch(/mended 1 boundary/);
     expect(result.threw!.message).toMatch(/moving 1 block/);
     expect(produced(result)).toEqual([]);

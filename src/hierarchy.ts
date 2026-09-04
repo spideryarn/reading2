@@ -61,7 +61,8 @@ const PROMPT_VERSION = "toc/3";
 /**
  * How hard the model thinks before it starts writing.
  *
- * **`"medium"`, and this setting has now been wrong in both directions twice.**
+ * **`"low"` since 2026-09-04, and this setting has now been wrong in both
+ * directions twice before that.**
  *
  * The history, because it is the argument. It was `"high"` originally, by
  * default rather than by decision. The max_tokens postmortem forced it down to
@@ -82,24 +83,49 @@ const PROMPT_VERSION = "toc/3";
  * a better answer estimate: both make the room bigger and the thinking takes
  * the room. Greg's call, the same day.
  *
- * **What this costs, said plainly, because a quality setting is being lowered.**
- * The reasoning this stage needs — finding topic shifts, balancing the levels —
- * is exactly the part worth thinking about, and nobody has measured `high`
- * against `medium` *for this stage*. That comparison exists for arc, thread and
- * glossary and was never run for the tree. So this is a decision taken on a
- * failure mode rather than on a quality measurement, and the measurement is
- * still owed.
+ * **The measurement that was owed has now been taken, and it says `"low"`.**
+ * 2026-09-04. The three paragraphs above said this setting had never been
+ * measured for quality, only chosen off a failure mode. That is no longer true,
+ * and the evidence points one way in three independent runs:
  *
- * **If you run that comparison, read `repairedBlocks` and `largestRepair`
- * alongside the score.** Since `0062f74` a tree that does not tile is snapped
- * shut and repaired rather than thrown away, so an arm can score `ok` having
- * been repaired into shape — and a boundary one paragraph out and a section
- * handed forty of its neighbour's blocks would otherwise look identical.
- * `evals/hierarchy-structure/run.ts` records both.
+ * - **Blind judging, eight of eight.** Two evals, two judge families (GPT Sol
+ *   and Fable), two draw sets — `low` preferred over `medium` every time, with
+ *   the free heading tree placing second. evals/results/hierarchy-effort-2026-09-03.md
+ *   and evals/results/hierarchy-cheap-models-2026-09-03.md.
+ * - **The same reliability, not worse.** Pooled across three articles both
+ *   efforts produced a tree 6 times in 7, and the one article that beat them
+ *   beat *both*. The earlier "low failed 1 in 8 where medium failed 0 in 10"
+ *   reading came from one document.
+ * - **Cheaper and faster, on the long articles that matter.** 2026-09-04, on
+ *   the 360-block constitution: $0.264 against $0.293 and 150s against 172s,
+ *   for the same seven depth-1 parts. On the 184-block gwern essay: $0.135
+ *   against $0.234 — 42% less — and **eight parts against six**.
  *
- * See docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
+ * **The failure modes are not commensurable, and that is the argument.**
+ * `medium`'s named fault is *welding*: it fuses two of the author's own
+ * sections under one title. That is valid, silent, shipped, and paid by every
+ * reader of that article — nothing in the pipeline can detect it, and the
+ * six-versus-eight parts above is it happening again. `low`'s fault is a tiling
+ * violation, which `buildTree` throws on, the job card reports, and a Retry
+ * recovers. A loud failure that costs one retry is a better trade than a quiet
+ * one that costs every reader a worse map.
+ *
+ * **What is still not measured**: `high` against either, for this stage. It has
+ * never been run and is unlikely to be worth the money now, given that the
+ * argument for lowering was a failure mode and the argument for lowering
+ * further is a quality result.
+ *
+ * **If you run any of these comparisons, read `repairedBlocks` and
+ * `largestRepair` alongside the score.** Since `0062f74` a tree that does not
+ * tile is snapped shut and repaired rather than thrown away, so an arm can
+ * score `ok` having been repaired into shape — and a boundary one paragraph out
+ * and a section handed forty of its neighbour's blocks would otherwise look
+ * identical. `evals/hierarchy-structure/run.ts` records both.
+ *
+ * See docs/plans/260904c-hierarchy-structure-in-waves.md § Product decisions,
+ * docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
  */
-const EFFORT = "medium" as const;
+const EFFORT = "low" as const;
 
 /**
  * **What production actually thinks at, for anything that needs to say so.**
@@ -112,6 +138,10 @@ const EFFORT = "medium" as const;
  * `effort` — was quietly answering high-vs-low instead of the medium-vs-low
  * question production has. GPT Sol found it by reading both files at once,
  * which is the only way a restated constant is ever found.
+ *
+ * *(That arm is `smart-medium` since 2026-09-04: production moved to `low`, so
+ * the arm isolating effort had to move the other way or become a second copy of
+ * the incumbent. The name in the paragraph above is the one it had at the time.)*
  *
  * `structureRequest` below already hands this out to callers who have blocks;
  * `evals/cost` reads it that way and stayed correct throughout. This export is
@@ -1159,7 +1189,56 @@ export function buildTree(
     return id;
   };
 
-  const rootId = visit(root, null, 0, "root");
+  /**
+   * **The root's range is derived like everybody else's, and it was not.**
+   *
+   * Every other node's range is *computed*: `planChildRanges` believes a child's
+   * start and works out its end from the next start, so the first child begins
+   * where its parent begins and the last one ends where its parent ends. A
+   * section that stopped short was stretched and counted. The root has no
+   * parent, so its range came straight out of the answer — and then met the
+   * hard equality guard below. It was the one node in the tree where the
+   * ordinary fault was fatal, and the repair machinery's own documentation read
+   * as though it covered the whole tree.
+   *
+   * **It is not a corner case.** `openai-huggingface` ends on an empty
+   * paragraph, a stranded footnote this prompt renders as
+   * `NOT-GISTABLE: (withheld)`, and a blog footer whose entire text is
+   * "No posts". Ending the article before those three is what a careful reader
+   * would do, and three independent arms — Sonnet at `medium`, Sonnet at `low`,
+   * and glm-5.3-flash — each did exactly that and each lost the article to the
+   * same sentence. evals/results/hierarchy-cheap-models-2026-09-03.md,
+   * recommendation 3.
+   *
+   * **Widen, never shrink.** The other way to make the two claims agree is to
+   * believe the model and drop the blocks it left out, and that is much worse:
+   * every block gets exactly one leaf, so an uncovered block has no row
+   * anywhere and no resolver in the reading view can find it.
+   *
+   * **Counted, at the boundary that moved** — a repair nobody is told about is
+   * the same shape as the bug it repaired (docs/reusable/silent-success.md). At
+   * the closing end the coordinate is `blocks.length`, which is the same
+   * boundary the last child's own stretch names, so `repairedBlockCount` folds
+   * the two into one rather than charging the article twice for one slip.
+   *
+   * Only when both endpoints resolve and run forwards. An invented id and a
+   * backwards range are faults in what the model *said*, and `visit` still
+   * refuses them with messages of their own — clamping first would turn the
+   * first of those into a silent acceptance.
+   */
+  const rootLo = index.get(root.range?.[0] as string);
+  const rootHi = index.get(root.range?.[1] as string);
+  const last = blocks.length - 1;
+  let rootRange: readonly [string, string] | undefined;
+  if (rootLo !== undefined && rootHi !== undefined && rootLo <= rootHi && blocks.length > 0) {
+    if (rootLo > 0) repairs.push({ where: "root", kind: "gap", at: 0, size: rootLo });
+    if (rootHi < last) {
+      repairs.push({ where: "root", kind: "short", at: blocks.length, size: last - rootHi });
+    }
+    if (rootLo > 0 || rootHi < last) rootRange = [blocks[0]!.id, blocks[last]!.id] as const;
+  }
+
+  const rootId = visit(root, null, 0, "root", rootRange);
 
   /* The root has to span the whole article, and nothing else checks it.
      `assertChildrenPartition` verifies that a node's children tile *it*, which
