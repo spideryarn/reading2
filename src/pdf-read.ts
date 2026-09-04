@@ -148,6 +148,46 @@ const CHUNK_WORDS = 3200;
 /** A page with fewer than this many words in the text layer tells us nothing about density. */
 const ASSUMED_WORDS = 500;
 
+/**
+ * **The third bound on a chunk, and the one for what `CHUNK_WORDS` cannot see.**
+ *
+ * An image-heavy page holds almost no words, so the word bound never closes a
+ * chunk of them and `MAX_CHUNK_PAGES` is all that is left. On Kuhn's 142-page
+ * paper the figure pages 8–13 did exactly that: one chunk of **4.54 MB** against
+ * a 200 KB median, 22× the document's own typical chunk, and it was the 354 s
+ * call in a run whose per-call mean was 52 s and p95 96 s. That outlier is the
+ * whole reason this exists.
+ *
+ * **This is a planning bound and not the request limit.** `MAX_ENCODED_BYTES`
+ * below is the hard ceiling a provider will accept, two orders of magnitude
+ * above this, and it refuses a chunk that is already built. This one shapes the
+ * plan so that nothing normal ever gets near it.
+ *
+ * **Three megabytes, measured rather than picked.** Run over four real
+ * documents, cutting the plans either side of the change and weighing them:
+ *
+ *     document           │ chunks before → after │ largest chunk before → after
+ *     ───────────────────┼───────────────────────┼─────────────────────────────
+ *     kuhn (142pp)       │      69   →   69      │  4.54 MB → 2.58 MB
+ *     easy (8pp)         │       2   →    2      │  0.12 MB → 0.12 MB
+ *     harder (14pp)      │       5   →    6      │  7.98 MB → 7.03 MB
+ *     much-harder (17pp) │       3   →    3      │  2.54 MB → 2.54 MB
+ *
+ * The number sits in the gap the corpus leaves: `harder` and `much-harder`
+ * routinely make 2.5 MB chunks and are not pathological, so a bound below that
+ * would reshape documents that already work — at 1 MB, `much-harder` goes from
+ * 3 chunks to **14** and `harder` from 5 to 11, which is chunk count, and chunk
+ * count is a copy of `SYSTEM` bought each time. 3 MB is the smallest value that
+ * costs Kuhn no extra chunks at all while removing its outlier, and 4 MB
+ * behaves identically on all four — so this is the tighter of two choices the
+ * evidence cannot separate.
+ *
+ * **What it cannot do**, said plainly: split one page. `harder` has a single
+ * page that encodes to 7.0 MB on its own, and it is still sent on its own, over
+ * this bound. Same limitation as `CHUNK_WORDS` against a 10,000-word page.
+ */
+const MAX_CHUNK_BYTES = 3 * 1024 * 1024;
+
 const MAX_TOKENS = 16_000;
 
 /** How many times a chunk that fails its check is asked again. See the loop in `runPdfExtract`. */
@@ -250,7 +290,15 @@ const ATTEMPTS = 2;
  */
 export const CHUNK_CONCURRENCY = 16;
 
-/** Anthropic's own limit is on the whole encoded request; OpenRouter's providers are no kinder. */
+/**
+ * Anthropic's own limit is on the whole encoded request; OpenRouter's providers
+ * are no kinder.
+ *
+ * **The hard ceiling, and not the planning bound** — `MAX_CHUNK_BYTES` is that,
+ * ten times smaller, and it is what stops an ordinary document ever coming near
+ * this one. This stays as the refusal for a chunk that is already built, which
+ * a single enormous page can still be.
+ */
 const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
 
 // ────────────────────────────────────────────────────────────── the ask
@@ -378,20 +426,77 @@ export interface Chunk {
  *
  * A scan has no word counts at all, which is why `ASSUMED_WORDS` exists: with
  * no information, assume a full page rather than an empty one.
+ *
+ * **And words are not the only thing a page holds**, which is what
+ * `pageBytes` is for — see `MAX_CHUNK_BYTES`. Without it a run of image-heavy
+ * pages is bounded by nothing but `MAX_CHUNK_PAGES`, because the thing making
+ * them big is the thing `CHUNK_WORDS` cannot see.
  */
-export function planChunks(pass: Pass0, maxChunkPages = MAX_CHUNK_PAGES): Chunk[] {
+export function planChunks(
+  pass: Pass0,
+  opts: {
+    maxChunkPages?: number;
+    /**
+     * Each page's encoded size, cut on its own — `PdfCuts.measurePages`.
+     *
+     * Optional because the byte bound needs pdf-lib and half of this
+     * function's callers (the CLI's chunk listing, the eval fixtures, most of
+     * the tests) only want the shape of the plan. Omit it and the plan is
+     * exactly what it was before the bound existed, which the test next to the
+     * bound's own asserts.
+     */
+    pageBytes?: ReadonlyMap<number, number>;
+  } = {},
+): Chunk[] {
+  const maxChunkPages = opts.maxChunkPages ?? MAX_CHUNK_PAGES;
+  const sizes = opts.pageBytes;
+  /**
+   * **What a page costs *on top of* what every cut costs anyway.**
+   *
+   * A one-page cut is not the page: pdf-lib copies the fonts, the catalogue and
+   * the rest of the shared furniture into it, and on Kuhn that floor is 126 KB
+   * of a 156 KB median page. Summing raw per-page sizes would therefore say a
+   * three-page chunk is 468 KB when it is really 205 KB — a bound in those
+   * units would mean nothing you could compare to a real request.
+   *
+   * So: the lightest page stands in for the shared part, and every page is
+   * charged its excess over it. Checked against the real cut sizes on four
+   * documents — the estimate lands between 0.81× and 1.33× of the bytes that
+   * actually go on the wire, which is close enough for a bound that exists to
+   * stop a 22× outlier.
+   */
+  const shared = sizes?.size ? Math.min(...sizes.values()) : 0;
+  const marginal = (page: number) => (sizes ? Math.max(0, (sizes.get(page) ?? shared) - shared) : 0);
+
   const chunks: Chunk[] = [];
   let current: number[] = [];
   let words = 0;
+  let bytes = 0;
   for (const page of pass.pages) {
     const weight = Math.max(page.words, ASSUMED_WORDS);
-    if (current.length && (current.length >= maxChunkPages || words + weight > CHUNK_WORDS)) {
+    const cost = marginal(page.page);
+    const full =
+      current.length >= maxChunkPages ||
+      words + weight > CHUNK_WORDS ||
+      (sizes !== undefined && bytes + cost > MAX_CHUNK_BYTES);
+    /* `current.length &&` on every one of these: a bound may close a chunk, and
+       must never be able to drop a page. One page over any of the three limits
+       is still that page, on its own. */
+    if (current.length && full) {
       chunks.push(chunkFrom(current, chunks));
       current = [];
       words = 0;
     }
+    /* The context page `chunkFrom` is about to attach travels with the chunk, so
+       it is charged to it — the bound is on what the request carries, not on
+       what the chunk is named after. */
+    if (current.length === 0) {
+      const previous = page.page - 1;
+      bytes = shared + (chunks.length && previous >= 1 ? marginal(previous) : 0);
+    }
     current.push(page.page);
     words += weight;
+    bytes += cost;
   }
   if (current.length) chunks.push(chunkFrom(current, chunks));
   return chunks;
@@ -1600,7 +1705,10 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   /* One parse of the source for the whole stage. Every cut below comes out of
      it — see `openPdfCuts` for what it used to cost to do otherwise. */
   const cuts = await openPdfCuts(opts.bytes);
-  const chunks = planChunks(pass);
+  /* Measured here and nowhere else: this is the only caller of `planChunks`
+     that is about to *send* the chunks, so it is the only one that pays for
+     knowing how big they are. ~9 ms a page, once. See `MAX_CHUNK_BYTES`. */
+  const chunks = planChunks(pass, { pageBytes: await cuts.measurePages() });
   /**
    * **Every key, and then one read for all of them.**
    *
