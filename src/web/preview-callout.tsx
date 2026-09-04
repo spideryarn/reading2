@@ -24,7 +24,6 @@ import { buildGeometry } from "./tree.js";
 import { buildSections } from "./position.js";
 import type { Article, Block, BlockId, Tree, TreeNode } from "../types.js";
 import FIXTURE from "./preview-callout-fixture.json";
-import "./styles.css";
 import "./tailwind.css";
 
 const BLOCKS = FIXTURE as Block[];

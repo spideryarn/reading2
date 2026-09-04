@@ -15,6 +15,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ARMS, armByName, CANDIDATES, FIELD_EFFORT, ZDR } from "../evals/hierarchy-structure/arms.js";
+import type { ArmResult } from "../evals/hierarchy-structure/run.js";
+import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { CORPUS, defaultCorpus } from "../evals/hierarchy-structure/corpus.js";
 import { buildHeadingTree, PREAMBLE_TITLE } from "../src/heading-tree.js";
 import {
@@ -365,12 +367,38 @@ describe("parseStructureResponse", () => {
        went; then two independent slips until 2026-08-31, when the count bound
        went with it. Nothing about the *tiling* refuses an answer now
        (src/hierarchy.ts § `planChildRanges`) — the partition is derived rather than
-       checked. What is left is a fault in what the model said, and a range
-       running backwards is the plainest of them. */
+       checked. What is left is a fault in what the model said.
+
+       **Walked back a third time on 2026-09-04**, and by the same argument: a
+       child whose range runs *backwards* is now derived from too, because the
+       derivation never believed an end in the first place
+       (tests/hierarchy-repairs.test.ts § "a child whose range runs backwards").
+       So the fixture moves to the plainest fault that is left — a block id the
+       article does not contain, which is the model naming something that does
+       not exist rather than misstating a boundary. */
     const blocks = Array.from({ length: 6 }, () => block());
-    expect(() =>
-      parseStructureResponse(answer(blocks, [[0, 2], [5, 3]]), blocks, "backwards"),
-    ).toThrow(/backwards/);
+    const invented = JSON.stringify({
+      root: {
+        title: "The whole thing",
+        gist: "One sentence about the argument.",
+        range: [blocks[0]!.id, blocks.at(-1)!.id],
+        children: [
+          {
+            title: "Part 1",
+            gist: "Part 1 makes its own distinct claim here.",
+            range: [blocks[0]!.id, blocks[2]!.id],
+          },
+          {
+            title: "Part 2",
+            gist: "Part 2 makes its own distinct claim here.",
+            range: ["spya-zzzzzz", blocks[5]!.id],
+          },
+        ],
+      },
+    });
+    expect(() => parseStructureResponse(invented, blocks, "invented")).toThrow(
+      /not in blocks\.json/,
+    );
   });
 });
 
@@ -496,12 +524,18 @@ describe("the challenger field", () => {
   });
 
   it("puts a Sonnet arm at the field's own effort, or the field compares to nothing", () => {
-    /* Every challenger differs from `incumbent` in model AND effort at once.
-       `smart-low` is the only arm that differs from them in model alone, so
-       without it in the run there is no like-for-like reading at all. */
-    const low = armByName("smart-low");
-    if (low.kind !== "one-call") throw new Error("smart-low changed kind");
-    expect(low.call.effort).toBe(FIELD_EFFORT);
+    /* Every challenger runs at `FIELD_EFFORT`, so a Sonnet arm at that same
+       effort is the only like-for-like reading the field has: without one, a
+       challenger's gap is model AND effort at once and cannot be attributed.
+       That job belonged to `smart-low` until 2026-09-04, and belongs to the
+       **incumbent** now that production runs `low` — which is strictly better,
+       because the like-for-like control is then the thing that actually ships.
+       If production's effort ever moves off `FIELD_EFFORT` again, this goes red
+       and the field needs its Sonnet arm back. */
+    const incumbent = armByName("incumbent");
+    if (incumbent.kind !== "one-call") throw new Error("the incumbent changed kind");
+    expect(incumbent.call.effort).toBe(FIELD_EFFORT);
+    expect(incumbent.call.model).toBe(CAPABLE_MODEL_OPENROUTER);
   });
 });
 
@@ -997,5 +1031,124 @@ describe("throwAnatomy", () => {
     expect(throwAnatomy(reworded)).toEqual({ kind: "unparsed", size: null, depth: null });
     // A different failure entirely - also unparsed, not silently binned.
     expect(throwAnatomy("the model refused the structure request").kind).toBe("unparsed");
+  });
+});
+
+/**
+ * `elapsedMs` (ArmResult) and the per-call `wave`/`startedOffsetMs`/`endedOffsetMs`
+ * (CallStats), added 2026-09-04 so a reader stops having to reconstruct latency
+ * as "first call + max(the parallel calls)" — the approximation GPT Sol called
+ * "defensible... but not generally valid" (evals/README.md § hierarchy-structure).
+ *
+ * No model calls here — `run.ts` is not invoked, `runModelArm` is not invoked.
+ * These are fixture round-trips through plain `JSON.stringify`/`JSON.parse`,
+ * which is exactly what `run.ts`'s `checkpoint()` does to `RunFile` (no custom
+ * replacer or reviver) — so a round-trip through it is a round-trip through
+ * what ships.
+ */
+describe("elapsedMs and per-call wave/offsets", () => {
+  const callStats = (over: Partial<CallStats>): CallStats => ({
+    ms: 1000,
+    inputTokens: 27_000,
+    outputTokens: 18_000,
+    reasoningTokens: 13_000,
+    generationId: "gen-abc",
+    costUsd: 0.24,
+    providerCostUsd: 0.24,
+    upstream: "Anthropic",
+    ...over,
+  });
+
+  const armResult = (over: Partial<ArmResult>): ArmResult => ({
+    arm: "waves",
+    comparison: "bakeoff",
+    slug: "fowler-phrenology",
+    run: 1,
+    callOrder: 1,
+    outcome: "ok",
+    blocksSha256: { measured: "abc123", manifest: "abc123", matchesManifest: true },
+    ...over,
+  });
+
+  it("elapsedMs round-trips through JSON.stringify/parse on an ok row", () => {
+    const result = armResult({ elapsedMs: 7234 });
+    const roundTripped = JSON.parse(JSON.stringify(result)) as ArmResult;
+    expect(roundTripped.elapsedMs).toBe(7234);
+  });
+
+  it("elapsedMs round-trips on a threw row too — a failed arm still consumed wall clock", () => {
+    const result = armResult({
+      outcome: "threw",
+      error: "a later wave answered about a different range than the part it was given",
+      elapsedMs: 4102,
+    });
+    const roundTripped = JSON.parse(JSON.stringify(result)) as ArmResult;
+    expect(roundTripped.outcome).toBe("threw");
+    expect(roundTripped.elapsedMs).toBe(4102);
+  });
+
+  it("wave, startedOffsetMs and endedOffsetMs round-trip on every call in the array", () => {
+    const result = armResult({
+      elapsedMs: 7010,
+      calls: [
+        callStats({ wave: 1, startedOffsetMs: 0, endedOffsetMs: 2000 }),
+        callStats({ wave: 2, startedOffsetMs: 2000, endedOffsetMs: 7000 }),
+        callStats({ wave: 2, startedOffsetMs: 2010, endedOffsetMs: 7010 }),
+      ],
+    });
+    const roundTripped = JSON.parse(JSON.stringify(result)) as ArmResult;
+    expect(roundTripped.calls).toHaveLength(3);
+    expect(roundTripped.calls?.map((c) => c.wave)).toEqual([1, 2, 2]);
+    expect(roundTripped.calls?.map((c) => c.startedOffsetMs)).toEqual([0, 2000, 2010]);
+    expect(roundTripped.calls?.map((c) => c.endedOffsetMs)).toEqual([2000, 7000, 7010]);
+  });
+
+  it("wave and the offsets are optional — a run.json from before 2026-09-04 has neither", () => {
+    // No `wave`/`startedOffsetMs`/`endedOffsetMs` at all, and no `elapsedMs`:
+    // exactly the shape of every committed results file under evals/results/
+    // dated before this field existed. It must still be a valid CallStats/
+    // ArmResult, or every old run.json would fail to type-check against these
+    // interfaces the moment anything read it typed.
+    const result = armResult({ calls: [callStats({})] });
+    expect(result.elapsedMs).toBeUndefined();
+    expect(result.calls?.[0]?.wave).toBeUndefined();
+  });
+
+  /**
+   * **The assertion that matters.** Three calls run in a wave-2 barrier,
+   * overlapping in wall-clock time (their offset windows all fall inside
+   * [2000, 7010]) alongside one earlier wave-1 call. `elapsedMs` is the true
+   * wall clock for the whole cell — the latest `endedOffsetMs` plus a little
+   * assembly time after the last call returns — never the sum of `ms`.
+   *
+   * If a later change "simplified" `elapsedMs` back into `calls.reduce((n, c)
+   * => n + c.ms, 0)` — exactly the regression this eval was built to catch,
+   * per the task brief — the two figures would be EQUAL, not `sum >
+   * elapsedMs`, and this assertion goes red. It cannot go red by accident: the
+   * only way `sum(ms) <= elapsedMs` is for every call to have run serially
+   * with zero overlap AND zero assembly time either side, which parallel wave
+   * calls by construction do not.
+   */
+  it("summed calls[].ms is strictly greater than elapsedMs for calls issued in parallel", () => {
+    const calls: CallStats[] = [
+      callStats({ ms: 2000, wave: 1, startedOffsetMs: 0, endedOffsetMs: 2000 }),
+      callStats({ ms: 5000, wave: 2, startedOffsetMs: 2000, endedOffsetMs: 7000 }),
+      callStats({ ms: 5000, wave: 2, startedOffsetMs: 2010, endedOffsetMs: 7010 }),
+      callStats({ ms: 5000, wave: 2, startedOffsetMs: 2005, endedOffsetMs: 7005 }),
+    ];
+    const summedMs = calls.reduce((n, c) => n + c.ms, 0);
+    // The true wall clock: the last call to finish, plus 50ms of assembly
+    // after it — never a sum, and always less than one would get by adding
+    // the wave-2 calls' durations instead of overlapping them.
+    const elapsedMs = Math.max(...calls.map((c) => c.endedOffsetMs ?? 0)) + 50;
+
+    expect(summedMs).toBe(17_000);
+    expect(elapsedMs).toBe(7060);
+    expect(summedMs).toBeGreaterThan(elapsedMs);
+
+    const result = armResult({ elapsedMs, calls });
+    const roundTripped = JSON.parse(JSON.stringify(result)) as ArmResult;
+    const roundTrippedSum = roundTripped.calls!.reduce((n, c) => n + c.ms, 0);
+    expect(roundTrippedSum).toBeGreaterThan(roundTripped.elapsedMs!);
   });
 });

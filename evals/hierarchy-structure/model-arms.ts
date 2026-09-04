@@ -76,6 +76,32 @@ export interface CallStats {
    * latency figure, which for a model with one ZDR provider is the whole story.
    */
   upstream: string | null;
+  /**
+   * **Which round of calls this one belongs to** — 1 for the first
+   * whole-article call, 2 for the next cascade depth, and so on. This is "how
+   * many barriers deep", **not tree depth**: a `waves` arm's wave-2 call can
+   * propose several levels of children in one answer, and `one-call` /
+   * `revise` arms have no cascade at all (1 throughout, and 2 for `revise`'s
+   * revision pass). Read together with `startedOffsetMs`/`endedOffsetMs` it
+   * shows the barrier structure a reader would otherwise have to reconstruct —
+   * which calls were concurrent, how long the gap before the next wave was.
+   *
+   * Optional because a run.json written before 2026-09-04 has no notion of
+   * waves at all — see evals/README.md § hierarchy-structure.
+   */
+  wave?: number;
+  /**
+   * This call's start, in milliseconds since **the arm itself started** — not
+   * process start, not wall-clock epoch — so concurrent calls (same
+   * `startedOffsetMs`, roughly) and serialised ones (the next wave's
+   * `startedOffsetMs` well after the previous wave's `endedOffsetMs`) are
+   * visible without a reader doing the arithmetic. Computed from the same
+   * `Date.now()` readings `ms` already uses, so all three are on one clock.
+   * Optional for the same reason as `wave`.
+   */
+  startedOffsetMs?: number;
+  /** This call's end, on the same clock and for the same reason as `startedOffsetMs`. */
+  endedOffsetMs?: number;
 }
 
 /**
@@ -245,6 +271,10 @@ export type MessagesSend = (req: {
   system: string;
   user: string;
   maxTokens: number;
+  /** `Date.now()` at the moment the arm itself started — see `CallStats.startedOffsetMs`. */
+  armStartedAt: number;
+  /** Which round of calls this one belongs to — see `CallStats.wave`. */
+  wave: number;
 }) => Promise<{ raw: string; stats: CallStats }>;
 
 /** The one chat/completions request this eval makes. */
@@ -267,7 +297,7 @@ function apiKey(): string {
  * (`MESSAGES_PROVIDER`, src/messages-stream.ts), with only model and effort
  * varying per arm. Non-streaming, because nobody watches an eval.
  */
-export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens }) => {
+export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens, armStartedAt, wave }) => {
   const client = new Anthropic({
     baseURL: "https://openrouter.ai/api",
     apiKey: apiKey(),
@@ -323,8 +353,9 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       upstream: (message as unknown as { provider?: string | null }).provider ?? null,
     });
 
+    const finishedAt = Date.now();
     const stats: CallStats = {
-      ms: Date.now() - startedAt,
+      ms: finishedAt - startedAt,
       inputTokens: u.input_tokens ?? null,
       outputTokens: u.output_tokens ?? null,
       reasoningTokens: u.output_tokens_details?.thinking_tokens ?? null,
@@ -335,6 +366,9 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       costUsd: streamCostUsd,
       providerCostUsd: null, // verify-costs.ts fills this from the provider's record
       upstream: (message as unknown as { provider?: string | null }).provider ?? null,
+      wave,
+      startedOffsetMs: startedAt - armStartedAt,
+      endedOffsetMs: finishedAt - armStartedAt,
     };
 
     /* Arm outcomes, not bench faults — the same distinction the chat wire
@@ -435,9 +469,12 @@ function statsFor(
     provider?: string;
   },
   startedAt: number,
+  armStartedAt: number,
+  wave: number,
 ): CallStats {
+  const finishedAt = Date.now();
   return {
-    ms: Date.now() - startedAt,
+    ms: finishedAt - startedAt,
     inputTokens: json.usage?.prompt_tokens ?? null,
     outputTokens: json.usage?.completion_tokens ?? null,
     reasoningTokens: json.usage?.completion_tokens_details?.reasoning_tokens ?? null,
@@ -445,10 +482,13 @@ function statsFor(
     costUsd: typeof json.usage?.cost === "number" ? json.usage.cost : null,
     providerCostUsd: null, // verify-costs.ts fills this from the provider's record
     upstream: json.provider ?? null,
+    wave,
+    startedOffsetMs: startedAt - armStartedAt,
+    endedOffsetMs: finishedAt - armStartedAt,
   };
 }
 
-export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
+export const sendChat: ChatSend = async ({ call, system, user, maxTokens, armStartedAt, wave }) => {
   const key = apiKey();
   const startedAt = Date.now();
   return withDeclaredExternalCall("hierarchy-structure-chat", { model: call.model }, async ({ observe }) => {
@@ -545,7 +585,7 @@ export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
         `chat wire returned no message content (${json.usage?.completion_tokens ?? "?"} completion ` +
           `tokens, ${json.usage?.completion_tokens_details?.reasoning_tokens ?? "?"} of them reasoning) ` +
           `— the upstream produced only reasoning and no answer`,
-        [statsFor(json, startedAt)],
+        [statsFor(json, startedAt, armStartedAt, wave)],
       );
     }
     /* `length` is not an error anywhere in the app, which src/models.ts flags
@@ -554,10 +594,10 @@ export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
       throw new ArmFailure(
         `truncated (finish_reason: length) at max ${maxTokens} — the answer cannot be scored`,
         /* This one DID bill, in full, and the money belongs on the arm. */
-        [statsFor(json, startedAt)],
+        [statsFor(json, startedAt, armStartedAt, wave)],
       );
     }
-    const stats = statsFor(json, startedAt);
+    const stats = statsFor(json, startedAt, armStartedAt, wave);
     assertCallAccounted(stats, `chat wire, ${call.model}`);
     return { raw: choice.message.content, stats };
   });
@@ -736,6 +776,10 @@ async function runWaves(
   const send = senderFor(arm.call.model);
   const calls: CallStats[] = [];
   const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
+  /* "The arm's own start" for every call's offset below — captured once, here,
+     rather than at the top of runModelArm's dispatch, because this function
+     IS the arm for a `waves` spec. See CallStats.startedOffsetMs. */
+  const armStartedAt = Date.now();
   try {
   // Wave 1: the whole article, chapters only.
   const base = structureRequest(body);
@@ -744,6 +788,8 @@ async function runWaves(
     system: base.system + WAVE_L1_ADDENDUM,
     user: base.user,
     maxTokens: base.maxTokens,
+    armStartedAt,
+    wave: 1,
   });
   calls.push(l1.stats);
   const root = parseWave(l1.raw, "the wave-1 response");
@@ -760,7 +806,7 @@ async function runWaves(
    * the context the team lead specified — the parent's title and gist and the
    * sibling titles.
    */
-  const subdivide = async (parents: ModelNode[]): Promise<ModelNode[]> => {
+  const subdivide = async (parents: ModelNode[], wave: number): Promise<ModelNode[]> => {
     const next: ModelNode[] = [];
     await Promise.all(
       parents.flatMap((parent) =>
@@ -779,6 +825,8 @@ async function runWaves(
             system: req.system + WAVE_SUB_ADDENDUM,
             user: context + req.user,
             maxTokens: req.maxTokens,
+            armStartedAt,
+            wave,
           });
           calls.push(answer.stats);
           const sub = parseWave(answer.raw, "a later-wave response");
@@ -801,7 +849,7 @@ async function runWaves(
   // Waves 2..levels: subdivide the previous wave's long survivors.
   let frontier: ModelNode[] = [root];
   for (let level = 2; level <= arm.levels && frontier.length > 0; level++) {
-    frontier = await subdivide(frontier);
+    frontier = await subdivide(frontier, level);
   }
 
   return { tree: assembleTree(root, blocks, slug, built), calls, built };
@@ -818,6 +866,8 @@ async function runRevise(
   slug: string,
 ): Promise<ModelArmRun> {
   const calls: CallStats[] = [];
+  /* "The arm's own start" — see the identical comment in runWaves. */
+  const armStartedAt = Date.now();
   try {
     const { body } = splitBlocks(blocks);
     const base = structureRequest(body);
@@ -826,6 +876,8 @@ async function runRevise(
       system: base.system,
       user: base.user,
       maxTokens: base.maxTokens,
+      armStartedAt,
+      wave: 1,
     });
     calls.push(proposal.stats);
     /* The draft is passed on as the model wrote it (fence stripped). It is NOT
@@ -836,6 +888,8 @@ async function runRevise(
       system: base.system + REVISE_ADDENDUM,
       user: `${base.user}\n\nDRAFT:\n${stripFence(proposal.raw)}`,
       maxTokens: base.maxTokens,
+      armStartedAt,
+      wave: 2,
     });
     calls.push(revised.stats);
     const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
@@ -864,11 +918,15 @@ export async function runModelArm(
             ? `\n\n${renderHeadingList(blocks)}`
             : "";
       const send = arm.call.model.startsWith("anthropic/") ? sendMessages : sendChat;
+      /* No cascade at all — one call is the whole arm, so it is wave 1 by
+         definition (CallStats.wave's doc comment). */
       const { raw, stats } = await send({
         call: arm.call,
         system,
         user: `${user}${seed}`,
         maxTokens,
+        armStartedAt: Date.now(),
+        wave: 1,
       });
       const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
       try {

@@ -156,11 +156,24 @@ why: `tailwind.css` pulls `styles.css` in inside `@layer app`, and importing the
 leaves the second copy unlayered, where it silently outranks every Tailwind utility.
 
 This paragraph told you to import **both** until 2026-09-04, one line after quoting the comment that
-says both does not work — and `preview-profile.tsx` and `preview-composer.tsx` still do. It is not
-theoretical: `preview-sharing.tsx` was written from that advice, and with the pair its chips came out
-in a different face at a different size, and a row wrapped where production does not. The screenshots
-were wrong about the one thing a screenshot is for. **So copy `preview-sharing.tsx`**, not the other
-two, until somebody fixes them.
+says both does not work — and **eight of the ten preview pages did it**, while a ninth
+(`preview-live.tsx`) imported neither and was the older bug above, live. It is not theoretical:
+`preview-sharing.tsx` was written from that advice, and with the pair its chips came out in a
+different face at a different size, and a row wrapped where production does not. The screenshots were
+wrong about the one thing a screenshot is for.
+
+All nine are fixed, and **[`tests/preview-pages.test.ts`](../../tests/preview-pages.test.ts) is what
+keeps them that way** — it fails on a `preview-*.tsx` that imports no stylesheet and on one that
+imports `styles.css` directly. So this is now a rule with a test behind it rather than a paragraph
+somebody has to have read, which is the difference that mattered: the advice was written down and
+wrong, and being written down is what made it spread.
+
+**A preview page is not the page it previews**, and that is worth knowing before you measure
+anything on one. The real page may sit inside a container whose class carries rules the preview has
+no ancestor for — the sharing card lives under `.metadata-page`, and until 2026-09-04 that class
+carried a button `font` rule the preview therefore did not get, so the preview showed a typeface
+production never had. If a measurement matters, check the class chain the component really renders
+inside, not just that a stylesheet loaded.
 
 ### A hidden tab does not animate, and half this app is animated
 

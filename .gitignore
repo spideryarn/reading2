@@ -49,3 +49,15 @@ scratch-bakeoff
 # tracked (settings, hooks), so this names only the subdirectory.
 # docs/project/worktrees.md
 .claude/worktrees/
+
+# Where `gjd-remote upload` puts a file: <checkout>/uploads/ on the box. It is
+# somebody handing a screenshot or a log to the agent working over there, and it
+# lands in the one checkout that a dozen agents share. Ignored rather than merely
+# untracked for the same reason as .claude/worktrees/ above: the commit recipe in
+# AGENTS.md leans on the working-tree status being readable, and a folder of
+# other people's screenshots in it is noise every one of them has to read past.
+# Nothing here is source, and nothing here is backed up.
+# Anchored, so it means the one at the top of the checkout and never some
+# future src/…/uploads/ that is real code.
+# docs/project/hetzner-remote-server-box.md
+/uploads/

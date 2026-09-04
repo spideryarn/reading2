@@ -306,6 +306,14 @@ height. Buttons only; `input`, `select` and `textarea` keep their UA fonts until
 wrong one. The console check above gains a second line: count the buttons whose computed
 `font-family` is not the page's.
 
+**Three findings from one block is enough, so there is a checklist now.**
+[`tests/preflight-substitute.test.ts`](../../tests/preflight-substitute.test.ts) reads Tailwind's
+real `preflight.css` out of `node_modules`, pulls out every property it sets on a `<button>`, and
+requires each one to be mirrored in our `@layer base` block or listed with a reason for skipping it.
+It cannot know our block is *correct* — nothing can. It can know that nobody has decided about a
+property preflight thinks a button needs, which is the state all three findings were in, and it
+fails on the next Tailwind upgrade that adds one.
+
 ### The other half of the same hole: images
 
 Found 2026-08-27, when Greg said the screenshots on the landing page *"look warped somehow"*. They

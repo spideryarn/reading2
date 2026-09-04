@@ -1,0 +1,1129 @@
+{
+  "version": "toc/3",
+  "generator": "claude-sonnet-5",
+  "slug": "fowler-phrenology",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0016",
+        "n0085"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-rn6cbv"
+      ],
+      "title": "Utility of Phrenology",
+      "gist": "This record presents Fowler's lecture arguing that phrenology has wide practical value across personal, family, professional, and civic life, framed by its publication details."
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0005",
+        "n0008",
+        "n0011",
+        "n0014"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-uq5se0"
+      ],
+      "title": "Cataloguing Information",
+      "gist": "The record identifies the work, its contributor, publication data, persistent link, and licensing terms."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-es7p7w"
+      ],
+      "title": "Title",
+      "gist": "The work is identified as a lecture on the utility of phrenology by L.N. Fowler."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-es7p7w",
+        "spya-es7p7w"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0006",
+        "n0007"
+      ],
+      "range": [
+        "spya-h9frp6",
+        "spya-m3a6ew"
+      ],
+      "title": "Contributors",
+      "gist": "The lecture's author is identified as L.N. Fowler, 1811-1896.",
+      "sourceHeading": "Contributors"
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0005",
+      "children": [],
+      "range": [
+        "spya-h9frp6",
+        "spya-h9frp6"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0005",
+      "children": [],
+      "range": [
+        "spya-m3a6ew",
+        "spya-m3a6ew"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0009",
+        "n0010"
+      ],
+      "range": [
+        "spya-wt8rt7",
+        "spya-dfqq59"
+      ],
+      "title": "Publication/Creation",
+      "gist": "The lecture was published in London by W. Tweedie sometime between 1873 and 1879.",
+      "sourceHeading": "Publication/Creation"
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-wt8rt7",
+        "spya-wt8rt7"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-dfqq59",
+        "spya-dfqq59"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0012",
+        "n0013"
+      ],
+      "range": [
+        "spya-zk03kp",
+        "spya-cwcbw8"
+      ],
+      "title": "Persistent URL",
+      "gist": "A permanent link locates the digitised work at Wellcome Collection.",
+      "sourceHeading": "Persistent URL"
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-zk03kp",
+        "spya-zk03kp"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-cwcbw8",
+        "spya-cwcbw8"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0015"
+      ],
+      "range": [
+        "spya-uq5se0",
+        "spya-uq5se0"
+      ],
+      "title": "License and attribution",
+      "gist": "The record specifies the license and attribution terms governing reuse.",
+      "sourceHeading": "License and attribution"
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-uq5se0",
+        "spya-uq5se0"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0017",
+        "n0021",
+        "n0028",
+        "n0041",
+        "n0053",
+        "n0061",
+        "n0070"
+      ],
+      "range": [
+        "spya-ntpaad",
+        "spya-wjrymt"
+      ],
+      "title": "UTILITY OF PHRENOLOGY.",
+      "gist": "Fowler argues that phrenology, grounded in physiology, offers practical guidance for self-understanding, family life, professions, law, and personal happiness.",
+      "sourceHeading": "UTILITY OF PHRENOLOGY."
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0018",
+        "n0019",
+        "n0020"
+      ],
+      "range": [
+        "spya-ntpaad",
+        "spya-x7n46w"
+      ],
+      "title": "A Lecture,",
+      "gist": "The lecture is announced as delivered by L.N. Fowler of New York.",
+      "sourceHeading": "A Lecture,"
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-ntpaad",
+        "spya-ntpaad"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-bd6vhe",
+        "spya-bd6vhe"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-x7n46w",
+        "spya-x7n46w"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0022",
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027"
+      ],
+      "range": [
+        "spya-gefve6",
+        "spya-mnsz9f"
+      ],
+      "title": "Physiology and the Case for Phrenology",
+      "gist": "Fowler contends that understanding the laws of physiology and phrenology is essential to health and education, and lists the many practical advantages phrenology offers."
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-gefve6",
+        "spya-gefve6"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-sgu686",
+        "spya-sgu686"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-a3vnb6",
+        "spya-a3vnb6"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-pjtqgn",
+        "spya-pjtqgn"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-eks7rr",
+        "spya-eks7rr"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-mnsz9f",
+        "spya-mnsz9f"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0029",
+        "n0030",
+        "n0031",
+        "n0032",
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036",
+        "n0037",
+        "n0038",
+        "n0039",
+        "n0040"
+      ],
+      "range": [
+        "spya-v36sfm",
+        "spya-qfc8sn"
+      ],
+      "title": "Self-Knowledge and Human Diversity",
+      "gist": "Phrenology reveals self-knowledge, explains the true causes of differences among people, and shows each person their natural capabilities and proper sphere in life."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-v36sfm",
+        "spya-v36sfm"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-ceaznc",
+        "spya-ceaznc"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-f0nqp5",
+        "spya-f0nqp5"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-g43qyv",
+        "spya-g43qyv"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-mk80vj",
+        "spya-mk80vj"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-vkneu2",
+        "spya-vkneu2"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-g73szb",
+        "spya-g73szb"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-ggxrg6",
+        "spya-ggxrg6"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-wqh3m3",
+        "spya-wqh3m3"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-jnn7tj",
+        "spya-jnn7tj"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-nrfeqx",
+        "spya-nrfeqx"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-qfc8sn",
+        "spya-qfc8sn"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051",
+        "n0052"
+      ],
+      "range": [
+        "spya-ercubu",
+        "spya-gy8d5s"
+      ],
+      "title": "Phrenology in Family Life",
+      "gist": "Fowler shows how phrenology guides adopting children, hiring servants, raising children wisely, and even aids artists and physicians in reading character and health."
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-ercubu",
+        "spya-ercubu"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-h5sx7z",
+        "spya-h5sx7z"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-xwa8zn",
+        "spya-xwa8zn"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-gu7qy9",
+        "spya-gu7qy9"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-wrwmn0",
+        "spya-wrwmn0"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-evqumc",
+        "spya-evqumc"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-d26tr5",
+        "spya-d26tr5"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-wmqbs9",
+        "spya-wmqbs9"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-y7fuv5",
+        "spya-y7fuv5"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-prrjgx",
+        "spya-prrjgx"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-gy8d5s",
+        "spya-gy8d5s"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058",
+        "n0059",
+        "n0060"
+      ],
+      "range": [
+        "spya-hsrhdm",
+        "spya-xytw0n"
+      ],
+      "title": "Scientific and Religious Testimonials",
+      "gist": "Prominent scientists, physicians, and clergymen testify that their study and experience confirm phrenology's truth and practical value."
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-hsrhdm",
+        "spya-hsrhdm"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-gvaz7g",
+        "spya-gvaz7g"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-pepu00",
+        "spya-pepu00"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-ctuev9",
+        "spya-ctuev9"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-ft50z5",
+        "spya-ft50z5"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-p20xmy",
+        "spya-p20xmy"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-xytw0n",
+        "spya-xytw0n"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069"
+      ],
+      "range": [
+        "spya-jjfbqh",
+        "spya-y546et"
+      ],
+      "title": "Phrenology in Public and Social Life",
+      "gist": "Phrenology aids legislators, judges, jurors, and educators in adapting justice and instruction to people's true mental character."
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-jjfbqh",
+        "spya-jjfbqh"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-w96ma7",
+        "spya-w96ma7"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-n2fmf0",
+        "spya-n2fmf0"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-znx7mw",
+        "spya-znx7mw"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-erz73v",
+        "spya-erz73v"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-wc3s5z",
+        "spya-wc3s5z"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-kv6zv7",
+        "spya-kv6zv7"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-y546et",
+        "spya-y546et"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0071",
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084"
+      ],
+      "range": [
+        "spya-drpthy",
+        "spya-wjrymt"
+      ],
+      "title": "Business, Character, and Conclusion",
+      "gist": "Fowler traces business success and failure to natural mental organization and closes by urging the harmonious development of all one's faculties as the path to perfection."
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-drpthy",
+        "spya-drpthy"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-t8f80r",
+        "spya-t8f80r"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-ne78jx",
+        "spya-ne78jx"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-b5sg0c",
+        "spya-b5sg0c"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-r7gs4x",
+        "spya-r7gs4x"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-ryb8q9",
+        "spya-ryb8q9"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-xvrxss",
+        "spya-xvrxss"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-dht7a3",
+        "spya-dht7a3"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-dxzfn8",
+        "spya-dxzfn8"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-ghg5yq",
+        "spya-ghg5yq"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-ynfe46",
+        "spya-ynfe46"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-hq7xcd",
+        "spya-hq7xcd"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-t44h4r",
+        "spya-t44h4r"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-wjrymt",
+        "spya-wjrymt"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0086",
+        "n0088"
+      ],
+      "range": [
+        "spya-gd9a45",
+        "spya-rn6cbv"
+      ],
+      "title": "Publisher Imprint",
+      "gist": "The volume closes with its publisher's imprint and accompanying archival materials."
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 2,
+      "parent": "n0085",
+      "children": [
+        "n0087"
+      ],
+      "range": [
+        "spya-gd9a45",
+        "spya-gd9a45"
+      ],
+      "title": "Publisher Details",
+      "gist": "The lecture was printed by W. Tweedie at 337 Strand, London."
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0086",
+      "children": [],
+      "range": [
+        "spya-gd9a45",
+        "spya-gd9a45"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 2,
+      "parent": "n0085",
+      "children": [
+        "n0089",
+        "n0090"
+      ],
+      "range": [
+        "spya-e7t74k",
+        "spya-rn6cbv"
+      ],
+      "title": "Printed Materials",
+      "gist": "The closing pages include an illustrative figure and the item's archival reference code."
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-e7t74k",
+        "spya-e7t74k"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-rn6cbv",
+        "spya-rn6cbv"
+      ],
+      "title": ""
+    }
+  }
+}

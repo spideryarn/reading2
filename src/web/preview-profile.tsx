@@ -28,7 +28,6 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MODE_IDEAL, MODE_MIN } from "./layout.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
-import "./styles.css";
 import "./tailwind.css";
 
 const SLUG = "preview-article";

@@ -1,0 +1,1488 @@
+{
+  "version": "toc/3",
+  "generator": "claude-sonnet-5",
+  "slug": "fowler-phrenology",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0012",
+        "n0016",
+        "n0037",
+        "n0043",
+        "n0052",
+        "n0072",
+        "n0080",
+        "n0113"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-rn6cbv"
+      ],
+      "title": "Utility of Phrenology",
+      "gist": "Phrenology, building on physiology's insight into mind and body, offers practical guidance for family life, the professions, law, and personal success.",
+      "sourceHeading": "Utility of phrenology : a lecture / by L.N. Fowler."
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-ntpaad"
+      ],
+      "title": "Bibliographic Front Matter",
+      "gist": "The record's cataloguing details identify the lecture's author, publisher, and access information."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-es7p7w",
+        "spya-es7p7w"
+      ],
+      "title": ""
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-h9frp6",
+        "spya-h9frp6"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-m3a6ew",
+        "spya-m3a6ew"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-wt8rt7",
+        "spya-wt8rt7"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-dfqq59",
+        "spya-dfqq59"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-zk03kp",
+        "spya-zk03kp"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-cwcbw8",
+        "spya-cwcbw8"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-uq5se0",
+        "spya-uq5se0"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-ntpaad",
+        "spya-ntpaad"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0013",
+        "n0014",
+        "n0015"
+      ],
+      "range": [
+        "spya-bd6vhe",
+        "spya-gefve6"
+      ],
+      "title": "UTILITY OF PHRENOLOGY.",
+      "gist": "The lecture opens by naming its author and posing the practical question of what use phrenology serves."
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-bd6vhe",
+        "spya-bd6vhe"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-x7n46w",
+        "spya-x7n46w"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-gefve6",
+        "spya-gefve6"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0017",
+        "n0024"
+      ],
+      "range": [
+        "spya-sgu686",
+        "spya-g73szb"
+      ],
+      "title": "Physiology, Phrenology, and Self-Knowledge",
+      "gist": "Phrenology extends physiology's lessons about bodily law into self-knowledge, explaining the mind's faculties and the differences among people."
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0018",
+        "n0021"
+      ],
+      "range": [
+        "spya-sgu686",
+        "spya-eks7rr"
+      ],
+      "title": "Physiology and Bodily Law",
+      "gist": "Because the body is a delicate machine governed by fixed laws, people must know physiology to live healthily, and better teaching of it would strengthen children's constitutions."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [
+        "n0019",
+        "n0020"
+      ],
+      "range": [
+        "spya-sgu686",
+        "spya-a3vnb6"
+      ],
+      "title": "Life as a Governed Machine",
+      "gist": "Physiology gives the knowledge of life's laws needed to obey them, just as a machine must be understood to be properly managed."
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 4,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-sgu686",
+        "spya-sgu686"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 4,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-a3vnb6",
+        "spya-a3vnb6"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [
+        "n0022",
+        "n0023"
+      ],
+      "range": [
+        "spya-pjtqgn",
+        "spya-eks7rr"
+      ],
+      "title": "Neglect and Educational Reform",
+      "gist": "Ignorance of bodily laws stunts children's growth and vitality, so education must be reformed to teach physiology and build stronger constitutions."
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 4,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-pjtqgn",
+        "spya-pjtqgn"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 4,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-eks7rr",
+        "spya-eks7rr"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0025",
+        "n0027",
+        "n0030",
+        "n0034"
+      ],
+      "range": [
+        "spya-mnsz9f",
+        "spya-g73szb"
+      ],
+      "title": "Phrenology and Self-Knowledge",
+      "gist": "Phrenology reveals the mind's separate faculties, giving self-knowledge and insight into others, and explains why people's characters and abilities differ."
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [
+        "n0026"
+      ],
+      "range": [
+        "spya-mnsz9f",
+        "spya-mnsz9f"
+      ],
+      "title": "Advantages of Phrenology",
+      "gist": "Phrenology offers many practical benefits, from self-knowledge and self-government to guidance in vocation, family life, and moral improvement."
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 4,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-mnsz9f",
+        "spya-mnsz9f"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [
+        "n0028",
+        "n0029"
+      ],
+      "range": [
+        "spya-v36sfm",
+        "spya-ceaznc"
+      ],
+      "title": "Mind as Distinct Faculties",
+      "gist": "Phrenology shows that the mind, like the body, consists of distinct powers manifested through the brain, and understanding our own tendencies lets us guard against excess and improve ourselves."
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 4,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-v36sfm",
+        "spya-v36sfm"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 4,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-ceaznc",
+        "spya-ceaznc"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [
+        "n0031",
+        "n0032",
+        "n0033"
+      ],
+      "range": [
+        "spya-f0nqp5",
+        "spya-mk80vj"
+      ],
+      "title": "Understanding Others' Character",
+      "gist": "Knowing phrenology also helps us understand others, as illustrated by a badly balanced convict, giving those who grasp mental and bodily laws a real advantage in life."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 4,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-f0nqp5",
+        "spya-f0nqp5"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 4,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-g43qyv",
+        "spya-g43qyv"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 4,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-mk80vj",
+        "spya-mk80vj"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [
+        "n0035",
+        "n0036"
+      ],
+      "range": [
+        "spya-vkneu2",
+        "spya-g73szb"
+      ],
+      "title": "Explaining Human Diversity",
+      "gist": "Though all people share the same faculties and bodily structures, differences in their quality and activity produce the great diversity of character among men, which Physiology and Phrenology together explain."
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 4,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-vkneu2",
+        "spya-vkneu2"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 4,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-g73szb",
+        "spya-g73szb"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0038",
+        "n0039",
+        "n0040",
+        "n0041",
+        "n0042"
+      ],
+      "range": [
+        "spya-ggxrg6",
+        "spya-qfc8sn"
+      ],
+      "title": "Capabilities and One's Sphere in Life",
+      "gist": "Phrenology reveals a person's true capacities and the natural sphere of life to which they are best suited."
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-ggxrg6",
+        "spya-ggxrg6"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-wqh3m3",
+        "spya-wqh3m3"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-jnn7tj",
+        "spya-jnn7tj"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-nrfeqx",
+        "spya-nrfeqx"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-qfc8sn",
+        "spya-qfc8sn"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051"
+      ],
+      "range": [
+        "spya-ercubu",
+        "spya-wmqbs9"
+      ],
+      "title": "Domestic and Family Applications",
+      "gist": "Phrenology guides families in adopting children, choosing servants, and raising and educating children wisely."
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-ercubu",
+        "spya-ercubu"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-h5sx7z",
+        "spya-h5sx7z"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-xwa8zn",
+        "spya-xwa8zn"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-gu7qy9",
+        "spya-gu7qy9"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-wrwmn0",
+        "spya-wrwmn0"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-evqumc",
+        "spya-evqumc"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-d26tr5",
+        "spya-d26tr5"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-wmqbs9",
+        "spya-wmqbs9"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0053",
+        "n0056",
+        "n0067"
+      ],
+      "range": [
+        "spya-y7fuv5",
+        "spya-xytw0n"
+      ],
+      "title": "Phrenology in the Professions",
+      "gist": "Artists, physicians, and clergymen can all improve their work by applying phrenological insight into human character and mind."
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0054"
+      ],
+      "range": [
+        "spya-y7fuv5",
+        "spya-y7fuv5"
+      ],
+      "title": "Phrenology and Artists",
+      "gist": "An artist who understands the mind's organization can paint character so faithfully that no label is needed to identify the subject."
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [
+        "n0055"
+      ],
+      "range": [
+        "spya-y7fuv5",
+        "spya-y7fuv5"
+      ],
+      "title": "Painting True Character",
+      "gist": "Knowledge of phrenology lets an artist capture a subject's real disposition and expression rather than a merely smooth, generic likeness."
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 4,
+      "parent": "n0054",
+      "children": [],
+      "range": [
+        "spya-y7fuv5",
+        "spya-y7fuv5"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0057",
+        "n0060",
+        "n0062"
+      ],
+      "range": [
+        "spya-prrjgx",
+        "spya-ft50z5"
+      ],
+      "title": "Phrenology and Physicians",
+      "gist": "Physicians who grasp the mind's influence over the body can treat illness more effectively, a truth confirmed by both case histories and expert testimony."
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [
+        "n0058",
+        "n0059"
+      ],
+      "range": [
+        "spya-prrjgx",
+        "spya-gy8d5s"
+      ],
+      "title": "Mental Illness and the Body",
+      "gist": "Cases of disappointment and grief show how mental states alone can prostrate or restore the body without any physical cause."
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 4,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-prrjgx",
+        "spya-prrjgx"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 4,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-gy8d5s",
+        "spya-gy8d5s"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [
+        "n0061"
+      ],
+      "range": [
+        "spya-hsrhdm",
+        "spya-hsrhdm"
+      ],
+      "title": "Teaching Mental Philosophy",
+      "gist": "Lecturing to medical students convinced the author that understanding the mind is essential before the body can be properly treated."
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 4,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-hsrhdm",
+        "spya-hsrhdm"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [
+        "n0063",
+        "n0064",
+        "n0065",
+        "n0066"
+      ],
+      "range": [
+        "spya-gvaz7g",
+        "spya-ft50z5"
+      ],
+      "title": "Physicians' Testimonials",
+      "gist": "Leading doctors, including Vimont, Gregory, Elliotson, and Ellis, affirmed phrenology's scientific validity and clinical usefulness."
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 4,
+      "parent": "n0062",
+      "children": [],
+      "range": [
+        "spya-gvaz7g",
+        "spya-gvaz7g"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 4,
+      "parent": "n0062",
+      "children": [],
+      "range": [
+        "spya-pepu00",
+        "spya-pepu00"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 4,
+      "parent": "n0062",
+      "children": [],
+      "range": [
+        "spya-ctuev9",
+        "spya-ctuev9"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 4,
+      "parent": "n0062",
+      "children": [],
+      "range": [
+        "spya-ft50z5",
+        "spya-ft50z5"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0068",
+        "n0070"
+      ],
+      "range": [
+        "spya-p20xmy",
+        "spya-xytw0n"
+      ],
+      "title": "Phrenology and Clergymen",
+      "gist": "Ministers who understand phrenology can better tailor their preaching to their hearers' minds, a view endorsed by prominent clergy."
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0067",
+      "children": [
+        "n0069"
+      ],
+      "range": [
+        "spya-p20xmy",
+        "spya-p20xmy"
+      ],
+      "title": "Preaching to the Mind",
+      "gist": "Beecher argues that phrenology, unlike old metaphysics, gives practical knowledge of human nature that has guided his entire ministry."
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 4,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-p20xmy",
+        "spya-p20xmy"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0067",
+      "children": [
+        "n0071"
+      ],
+      "range": [
+        "spya-xytw0n",
+        "spya-xytw0n"
+      ],
+      "title": "Clerical Testimonials",
+      "gist": "Archbishop Whately and Rev. Chalmers praised phrenology's logical rigor and its contribution to human understanding."
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 4,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-xytw0n",
+        "spya-xytw0n"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078",
+        "n0079"
+      ],
+      "range": [
+        "spya-jjfbqh",
+        "spya-kv6zv7"
+      ],
+      "title": "Law, Justice, and Legislation",
+      "gist": "Judges, legislators, and jurors can render fairer judgments and better laws by understanding the phrenological roots of crime and conduct."
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-jjfbqh",
+        "spya-jjfbqh"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-w96ma7",
+        "spya-w96ma7"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-n2fmf0",
+        "spya-n2fmf0"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-znx7mw",
+        "spya-znx7mw"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-erz73v",
+        "spya-erz73v"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-wc3s5z",
+        "spya-wc3s5z"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-kv6zv7",
+        "spya-kv6zv7"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0081",
+        "n0086",
+        "n0091",
+        "n0101",
+        "n0108"
+      ],
+      "range": [
+        "spya-y546et",
+        "spya-wjrymt"
+      ],
+      "title": "Character, Marriage, and Business Success",
+      "gist": "Balanced or imbalanced faculties determine happiness, marital compatibility, moral conduct, and success or failure in business."
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 2,
+      "parent": "n0080",
+      "children": [
+        "n0082",
+        "n0084"
+      ],
+      "range": [
+        "spya-y546et",
+        "spya-drpthy"
+      ],
+      "title": "Harmony of Faculties",
+      "gist": "Genuine happiness and a successful marriage both depend on balancing the mind's faculties rather than indulging one at the expense of another."
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [
+        "n0083"
+      ],
+      "range": [
+        "spya-y546et",
+        "spya-y546et"
+      ],
+      "title": "Balanced Faculties and Happiness",
+      "gist": "True enjoyment comes from the harmonious exercise of all mental faculties, not from gratifying one while neglecting the others."
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 4,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-y546et",
+        "spya-y546et"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [
+        "n0085"
+      ],
+      "range": [
+        "spya-drpthy",
+        "spya-drpthy"
+      ],
+      "title": "Choosing a Marriage Partner",
+      "gist": "Phrenology helps identify compatible partners, as shown by a cautionary tale of a marriage ruined by mismatched character."
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 4,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-drpthy",
+        "spya-drpthy"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 2,
+      "parent": "n0080",
+      "children": [
+        "n0087",
+        "n0089"
+      ],
+      "range": [
+        "spya-t8f80r",
+        "spya-ne78jx"
+      ],
+      "title": "Character and Depravity",
+      "gist": "Even great men have flaws, and outward virtue often masks inconsistent or self-serving conduct."
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0086",
+      "children": [
+        "n0088"
+      ],
+      "range": [
+        "spya-t8f80r",
+        "spya-t8f80r"
+      ],
+      "title": "Strength and Weakness",
+      "gist": "A great man's very strength often carries the seed of his downfall, as with Napoleon."
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 4,
+      "parent": "n0087",
+      "children": [],
+      "range": [
+        "spya-t8f80r",
+        "spya-t8f80r"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0086",
+      "children": [
+        "n0090"
+      ],
+      "range": [
+        "spya-ne78jx",
+        "spya-ne78jx"
+      ],
+      "title": "Feigned Virtue",
+      "gist": "Many people display virtue only when it is convenient, revealing a deeper social depravity."
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 4,
+      "parent": "n0089",
+      "children": [],
+      "range": [
+        "spya-ne78jx",
+        "spya-ne78jx"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 2,
+      "parent": "n0080",
+      "children": [
+        "n0092",
+        "n0095",
+        "n0099"
+      ],
+      "range": [
+        "spya-b5sg0c",
+        "spya-dxzfn8"
+      ],
+      "title": "Causes of Business Failure",
+      "gist": "Business failure often stems from a mismatch between a person's mental organization and the work they attempt."
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0091",
+      "children": [
+        "n0093",
+        "n0094"
+      ],
+      "range": [
+        "spya-b5sg0c",
+        "spya-r7gs4x"
+      ],
+      "title": "Imperfect Organization",
+      "gist": "A person with feeble or unsuited faculties cannot succeed at demanding work no matter how hard they try."
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 4,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-b5sg0c",
+        "spya-b5sg0c"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 4,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-r7gs4x",
+        "spya-r7gs4x"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0091",
+      "children": [
+        "n0096",
+        "n0097",
+        "n0098"
+      ],
+      "range": [
+        "spya-ryb8q9",
+        "spya-dht7a3"
+      ],
+      "title": "Wrong Choice of Business",
+      "gist": "People often fail because they lack natural talent for the work they attempt, sometimes forced into it by others."
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 4,
+      "parent": "n0095",
+      "children": [],
+      "range": [
+        "spya-ryb8q9",
+        "spya-ryb8q9"
+      ],
+      "title": ""
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 4,
+      "parent": "n0095",
+      "children": [],
+      "range": [
+        "spya-xvrxss",
+        "spya-xvrxss"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 4,
+      "parent": "n0095",
+      "children": [],
+      "range": [
+        "spya-dht7a3",
+        "spya-dht7a3"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0091",
+      "children": [
+        "n0100"
+      ],
+      "range": [
+        "spya-dxzfn8",
+        "spya-dxzfn8"
+      ],
+      "title": "A Mother's Ambition",
+      "gist": "A mother's insistence on a clerical career for her mechanically gifted son shows the danger of ignoring natural aptitude."
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 4,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-dxzfn8",
+        "spya-dxzfn8"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 2,
+      "parent": "n0080",
+      "children": [
+        "n0102",
+        "n0104",
+        "n0106"
+      ],
+      "range": [
+        "spya-ghg5yq",
+        "spya-hq7xcd"
+      ],
+      "title": "Elements of Business Success",
+      "gist": "Success in business depends on wise planning, careful management of resources, and recognizing the right moment."
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [
+        "n0103"
+      ],
+      "range": [
+        "spya-ghg5yq",
+        "spya-ghg5yq"
+      ],
+      "title": "Planning versus Labour",
+      "gist": "Some succeed through mental planning that directs the labour of others, while blind toil without purpose fails."
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 4,
+      "parent": "n0102",
+      "children": [],
+      "range": [
+        "spya-ghg5yq",
+        "spya-ghg5yq"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [
+        "n0105"
+      ],
+      "range": [
+        "spya-ynfe46",
+        "spya-ynfe46"
+      ],
+      "title": "Saving and Overwork",
+      "gist": "Prudent investment brings success, while overspending or overworking the body leads to breakdown and failure."
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 4,
+      "parent": "n0104",
+      "children": [],
+      "range": [
+        "spya-ynfe46",
+        "spya-ynfe46"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [
+        "n0107"
+      ],
+      "range": [
+        "spya-hq7xcd",
+        "spya-hq7xcd"
+      ],
+      "title": "Timing and Circumstance",
+      "gist": "Success also requires recognizing the right moment, since even readiness must wait for its proper time."
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 4,
+      "parent": "n0106",
+      "children": [],
+      "range": [
+        "spya-hq7xcd",
+        "spya-hq7xcd"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 2,
+      "parent": "n0080",
+      "children": [
+        "n0109",
+        "n0111"
+      ],
+      "range": [
+        "spya-t44h4r",
+        "spya-wjrymt"
+      ],
+      "title": "Purpose and Perfection",
+      "gist": "Man's design gives every faculty a purpose, and true perfection lies in developing and rightly directing the whole mind."
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [
+        "n0110"
+      ],
+      "range": [
+        "spya-t44h4r",
+        "spya-t44h4r"
+      ],
+      "title": "Man's Design and Purpose",
+      "gist": "Man was made for a specific purpose, with every power meant for active, worthy use."
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 4,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-t44h4r",
+        "spya-t44h4r"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [
+        "n0112"
+      ],
+      "range": [
+        "spya-wjrymt",
+        "spya-wjrymt"
+      ],
+      "title": "Perfection and the Mind",
+      "gist": "Because it is \"the mind that makes the man,\" full development and right use of our faculties prepare us for eternal existence."
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 4,
+      "parent": "n0111",
+      "children": [],
+      "range": [
+        "spya-wjrymt",
+        "spya-wjrymt"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0114",
+        "n0115",
+        "n0116"
+      ],
+      "range": [
+        "spya-gd9a45",
+        "spya-rn6cbv"
+      ],
+      "title": "Publisher's Imprint",
+      "gist": "The pamphlet closes with its publisher's imprint and shelfmark."
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 2,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-gd9a45",
+        "spya-gd9a45"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 2,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-e7t74k",
+        "spya-e7t74k"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 2,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-rn6cbv",
+        "spya-rn6cbv"
+      ],
+      "title": ""
+    }
+  }
+}

@@ -769,6 +769,26 @@ Also: asserting a column constant or a projection object passes while the real q
 `.select()`. Assert the generated SQL — Drizzle's `QueryBuilder` from `drizzle-orm/pg-core` builds it
 with no database and no connection.
 
+### A source-scanning guard reads the comments too
+
+A test that greps the tree for a bad pattern will match the **prose explaining why that pattern was
+removed**, and this repo writes a lot of that prose. Both halves of
+[`tests/linky-is-scoped.test.ts`](../../tests/linky-is-scoped.test.ts) did on the day it was written
+(2026-09-04): the three files it had just cleaned each carry a comment quoting the offending markup
+and naming the containers that style it, so re-introducing the bug left the guard green. Strip block
+comments before scanning, and match a class as an *attribute* rather than as a word.
+
+The same file offers the other half of the lesson. A guard whose sweep can come back empty — no
+files matched the naming convention, no rules found in the stylesheet — passes vacuously for ever
+after somebody renames something. **Assert the sweep found anything at all**, then assert what it
+found.
+
+And a related shape, from [`tests/preflight-substitute.test.ts`](../../tests/preflight-substitute.test.ts)
+the same day: a checklist that records a property as *deliberately skipped in favour of something
+else* has to name that something and check it is still there. Declining CSS's `font` shorthand for
+two longhands, and then losing the longhands, left the checklist green over exactly the bug it was
+built for — because the thing it compared against never mentions longhands.
+
 ## A suite that cannot run, and how to make it say so
 
 A Postgres suite that finds the database behind the code should say so out loud. Getting that to
