@@ -145,6 +145,44 @@ keeps billing at the price they were sold; moving them is a separate, deliberate
 > `tier_id` on `billing_accounts`, leaving entitlement to read that instead — the price id stays as
 > a record of what they bought. A price-history table is the heavier alternative. **Not built.**
 
+### Moving subscribers to a new price
+
+**`stripe:setup` refuses to move a tier row off a price that anyone is still billing on**, and in
+**live mode it refuses unconditionally** — even with nobody on it, because a scan cannot prove that
+nobody subscribed *while the scan was running*. So the script will not do this for you and this is
+the procedure it points at. Without one written down, the refusal is a wall rather than a guard.
+
+It is deliberately manual, and there is an unavoidable window in the middle where a subscriber's
+price is not the one the row names, so they read as free. Do the three steps in one sitting.
+
+1. **Stop new subscribers arriving on the old price.** Expire any outstanding Checkout Sessions for
+   it (`checkout.sessions.expire`). A Session that has not completed is invisible to every scan here
+   — see the limit recorded beside `whyNotWriteMenu` in
+   [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) — so this is the only way to close that
+   race rather than hope past it.
+
+2. **Create the new price and move the lookup key**, then migrate every unfinished subscription onto
+   it. `transfer_lookup_key: true` on the create; `subscriptions.update` per subscriber, with the
+   proration behaviour you intend. "Unfinished" is `isTerminalStatus` in
+   [`src/billing/tiers.ts`](../../src/billing/tiers.ts) — everything except `canceled` and
+   `incomplete_expired`, which deliberately includes `incomplete`, `paused` and `unpaid`, because all
+   three can start billing again.
+
+3. **Point the row at the new price**, immediately:
+
+   ```sql
+   update spideryarn.billing_tiers set stripe_price_id = 'price_new' where id = 'reader';
+   ```
+
+Then run `npm run stripe:check`. It compares the row against Stripe, and its subscriber sweep fails
+if anybody is left on a price the Portal's plan menu does not list — which is exactly the state this
+procedure exists to avoid.
+
+**The simpler thing to do is usually not to reprice at all.** Retiring the tier is *not* the
+alternative: `offerableTiers` drops a retired tier, which drops its price from the Portal menu, and
+strands the same people by a different route. Selling a new tier alongside the old one leaves
+everybody where they are.
+
 ### What holds these rows to account
 
 The invariants used to be TypeScript — a union of tier names, constants, and tests over them. Rows
