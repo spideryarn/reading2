@@ -657,7 +657,12 @@ describe("the one query that lists articles for nobody in particular", () => {
       const uses = await usesOf(file);
       expect(uses.length, `${file} names the articles table nowhere`).toBeGreaterThan(0);
       const stray = uses
-        .filter((u) => u.fn === undefined || !fns.includes(u.fn))
+        /* `null`, not `undefined` — `articleTableUses` reports "outside any
+           function" as `fn: null` (tests/helpers/article-queries.ts), so the
+           `undefined` test never fired and the null fell through to
+           `fns.includes(null)`, which is what `npm run typecheck` was failing
+           on. The behaviour was right by accident; the type said so. */
+        .filter((u) => u.fn === null || !fns.includes(u.fn))
         .map((u) => `line ${u.line} in ${u.fn ?? "no function"} (${u.how}) ${u.text}`);
       expect(
         stray,

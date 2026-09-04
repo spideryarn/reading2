@@ -1,8 +1,9 @@
 # The tree goes as deep as each part of the article needs
 
-**Status: planned, reviewed twice, not yet built. Stages 1 and 2 (the measurements and the spikes)
-are done; nothing in `src/` has changed.** Started
-2026-09-04. Worktree `deepen-fat-sections`. **Supersedes
+**Status: planned, reviewed twice, not yet built.** Stages 1 and 2 — the measurements and the
+spikes — are done and their evidence is in `evals/results/hierarchy-waves-2026-09-04/`; **nothing in
+`src/` has changed**, and stage 3 is the first thing that touches it. Started 2026-09-04. Worktree
+`deepen-fat-sections`. **Supersedes
 [260904c-hierarchy-structure-in-waves.md](260904c-hierarchy-structure-in-waves.md)**, whose pure core
 this uses and whose framing — latency and the length ceiling — the measurements below have moved on
 from.
@@ -429,12 +430,12 @@ subdivision prompt must ask for gists.
 ## The machinery already exists
 
 [`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) — 1,275 lines, pure, 38 tests, reviewed
-twice, and until now **called by nothing**. It was built for 260904c to cascade from the root down.
-Deepening is the same machinery seeded one layer lower:
+twice, and until now **called by nothing**. It was built for 260904c and this plan is what finally
+calls it, seeded from wave 1 rather than from the root:
 
-| what deepening needs | what the cascade core already has |
+| what the cascade needs | what the core already has |
 |---|---|
-| "is this section fat?" | `shouldExpand` against `CASCADE_RECIPE.terminalBlocks` |
+| "does this node still need splitting?" | `shouldExpand` against `CASCADE_RECIPE.terminalBlocks`, plus its heading clause |
 | how many children to ask for | `predictedChildren` |
 | several fat sections in one call | `planExpansionBatches` — packs parents until the child count, the evidence estimate or the hard request bound says stop |
 | a section too big for one call | `OversizedTarget`, returned rather than sent |
@@ -443,12 +444,20 @@ Deepening is the same machinery seeded one layer lower:
 | a buildable result | `finaliseCascade` → `ModelNode`, exactly what `buildTree` takes |
 | a depth stop | `CASCADE_RECIPE.maxDepth` and `CapReached` |
 
-The one thing it does not have is the **words** half of the fatness test: `shouldExpand` counts
-structural blocks only. That is a small, additive change to `CascadeRecipe` and its predicate.
+**What it does not have, and stage 3 adds** — three things, in the order they matter:
 
-So what is missing is the impure half — render a request, make the call, attach the answer,
-checkpoint it. Much smaller than 260904c's stage 2, and it makes 1,275 lines of tested code
-load-bearing instead of dead.
+1. **The heading snap.** `planChildRanges` calls `snapStartsToHeadings`
+   ([`src/hierarchy.ts:1205`](../../src/hierarchy.ts)); `normaliseExpansion` does not. Until they
+   share one rule, a scoped call reads a slice the finished tree will not give its parent — the
+   blocker in [§ What the second review changed](#blocker-derived-ranges).
+2. **A refusal instead of a clamp** for a start naming a block outside its parent.
+3. **The words half of the governor.** `shouldExpand` counts structural blocks only; the word bound
+   and the forced-open ceiling are additive changes to `CascadeRecipe` and its predicate. Note the
+   heading clause is already there and already overrides the size rule — the code settled the
+   precedence before this plan restated it.
+
+Past those, what is missing is the impure half: render a request, make the call, attach the answer,
+checkpoint it. It makes 1,275 lines of tested code load-bearing instead of dead.
 
 ### Where it goes in `generateHierarchy`
 
@@ -524,7 +533,7 @@ its own output is not itself fat on the next pass.
 ⟨GPT Sol, on the rewritten plan, 2026-09-04. Verdict: *"the scoped-wave architecture is directionally
 right, but the rewrite does not completely close either original blocker."*⟩ Both were checked here.
 
-### Still blocking 1 — waves 2 and beyond do not see the ranges the final tree will use either
+### Still blocking 1 — waves 2 and beyond do not see the ranges the final tree will use either <a id="blocker-derived-ranges"></a>
 
 `proposalFromTree` fixes the seed layer, and that half is right. But `planChildRanges` calls
 `snapStartsToHeadings` before deriving its ranges ([`src/hierarchy.ts:1205`](../../src/hierarchy.ts))
@@ -799,7 +808,7 @@ run B.
 So the expansion prompt has to say which rule wins when they collide, rather than leaving the model
 to pick. That decision is with Fable too, and it lands in stage 3's prompt.
 
-### Stage 3 — the pure half: conversion, precedence, and the shared derivation rule
+### Stage 3 — the pure half: conversion, precedence, and the shared derivation rule <a id="stage-3"></a>
 
 No network, no flag, nothing wired into `generateHierarchy`.
 
@@ -864,7 +873,7 @@ renders identically to today, a deepened one shows sub-sections in the frontier 
 or duplicated cells, `?at=` stays section-granular, and `?cols=` shows a ragged table of contents that
 reads like one.
 
-### Stage 8 — turn it on, or stop
+### Stage 8 — turn it on, or stop <a id="stage-8"></a>
 
 **The plan as first written could finish with every gate green and the feature still switched off**,
 because it lands behind a flag and no later stage enables it. ⟨GPT Sol, first review, finding 9.⟩ So
@@ -880,24 +889,69 @@ and `prompt-caching.md` with stage 5, `granularity-zoom.md` with stage 7, `url-s
 
 ## Alternatives considered
 
-- **The full breadth-first cascade** ([260904c](260904c-hierarchy-structure-in-waves.md)). Replaces
-  the global call instead of following it, so it also attacks latency and removes the length ceiling
-  rather than raising it — but it gives up the one thing 260826h § D says is strictly better, a
-  single call that sees every boundary at once. Paused, and this plan is the cheaper half of it.
-- **Just sharpen the prompt.** Free, and it is stage 1's second experiment. It cannot be the whole
-  answer, because three of the five fat sections are the author's own headings and the depth cap is
-  what stops the model going under them.
-- **Raise the cap to four levels for everyone.** One line in the prompt, no new calls. Rejected
-  because it makes every ordinary article pay a rung it does not need — the median section is 2–7
-  blocks, and a fourth level there is one paragraph per node, which is the leaf layer with extra
-  steps.
-- **Leave it.** Named because it is a real option and stage 1 might choose it: a 26-paragraph section
-  under a good gist is a door, and the reader was always going to read the prose.
+Each of these was live at some point in this plan's life, and the first two were **measured** rather
+than argued away.
+
+- **Just sharpen the prompt: a conditional fourth level, one whole-document call, no new machinery.**
+  The simplest possible version, and the one GPT Sol named as the experiment the plan was missing.
+  Measured in [stage 1](#the-free-experiment-a-conditional-fourth-level-in-the-one-whole-document-call):
+  it works on a 141-block article, works on a 1,326-block book and **halves rather than solves** the
+  problem there, and fails **four times out of four** on a 2,569-block book. **Not dead** — it is the
+  fallback if [stage 8](#stage-8) says no, because it is free and it helps
+  everything under book scale.
+- **Raise the depth cap to four for everyone, unconditionally.** One line, no new calls. Rejected
+  because the median article section is 2–7 blocks, so a fourth level there is one paragraph per
+  node — the leaf layer with extra steps.
+- **A second pass that deepens only the sections a word-and-block heuristic calls fat.** This plan's
+  own first draft. Superseded on two counts: one extra level is not enough on a book, and the
+  heuristic is a worse instrument than asking the call that just read the prose. The heuristic
+  survives as a *bound*, which is [§ The four bounds](#the-four-bounds-and-which-of-them-can-overrule-the-verdict).
+- **Whole-article prompt caching on every scoped call**, so each one can see the book. Rejected on
+  arithmetic: a cache read costs what sending 10% of the article costs and a section is under 1% of
+  it, so this is 4× the slice-only bill. The break-even is a 257-block slice.
+- **Leave it.** Still a real option, and [stage 8](#stage-8) exists to be able to
+  choose it. On an article the case is thin — three of thirteen, one of them badly. It is books that
+  make the case, and books are rare.
 
 ## Where the advice came from
 
-- **Fable 5**, 2026-09-04 — the frontier reframe, which is the load-bearing idea here; the
-  words-trigger/blocks-gate conjunction; recursion with a depth cap; and the `buildChains` trap,
-  found by reading and confirmed against the source.
-- **A repo-wide survey**, 2026-09-04 — the depth-consumer map above.
-- **GPT Sol** — pending, on this plan.
+All 2026-09-04.
+
+- **Greg** — the adaptive shape itself, quoted at the top: waves, fanning out one level at a time,
+  and the per-child self-assessment. The plan before that was a single follow-up pass.
+- **Fable 5**, twice — the frontier reframe, which is the load-bearing reader-side idea; the
+  words-trigger/blocks-gate conjunction; the `buildChains` trap, found by reading and confirmed
+  against the source; the forced-open ceiling; and the ruling that the author's headings beat the
+  fan-out target, with the observation that *"Quarter-Deck, Sunset, Dusk"* is a list of its
+  children's names and therefore the tell that the grouping had nothing to say. Its claim that the
+  46% residual was measured with words alone was **wrong**, and the correction is in
+  [§ Where I checked Fable and it was wrong](#where-i-checked-fable-and-it-was-wrong).
+- **GPT Sol**, twice, on the plan — first review: the unsafe splice point, the leaf-parent frontier,
+  the conditional-prompt experiment that was missing, `shouldExpand`'s heading clause selecting a
+  hundred targets rather than five, the checkpoint ordering, and the missing enable stage. Second
+  review: both blockers still open, the concurrency arithmetic wrong twice, the two overstated
+  claims corrected in this plan's own text, and the stage split this plan now follows.
+- **A repo-wide survey** — the depth-consumer map above.
+
+## For whoever picks this up
+
+- **Nothing in `src/` has changed.** The two spike scripts are new and throwaway
+  (`scripts/spike-book-structure.ts`, `scripts/spike-expand-section.ts`); delete them when stages 3–5
+  have made them redundant.
+- **Start at [stage 3](#stage-3)**,
+  which is pure and needs no network. Its first test is one that fails on today's
+  `normaliseExpansion` because of the missing heading snap; write that red before anything else.
+- **The evidence is in the repo** at `evals/results/hierarchy-waves-2026-09-04/`, with a README
+  saying what each file is and which commands regenerate it. Every number in this plan is derived
+  from those files. Two of the plan's earlier claims did not survive being recomputed, so recompute
+  rather than quoting.
+- **The books are Gutenberg texts and their HTML is gitignored**, at `output/2701-h.html` and
+  `output/1228-h.html` in the primary checkout — the only copy. `blocks.json` is deterministic and
+  free to rebuild: `npx tsx src/blocks.ts <html> <out.blocks.json>`. Note that command **rewrites its
+  input HTML in place** (it stamps ids), so copy the fixture somewhere first.
+- **Every book run costs about a dollar** and takes 100–500 seconds. The scoped expansions are a few
+  cents.
+- **`docs/project/hierarchy.md` § Longer pieces is stale**: it says generating the structure section
+  by section is "still not built", which is true, and it quotes a prompt that no longer matches
+  `SYSTEM` (it says gists are a later stage; they are not). Fix it in whichever stage touches the
+  prompt.
