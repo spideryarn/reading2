@@ -840,6 +840,43 @@ the cases — a deeply-numbered paper, a sparsely-headed web article, one whose 
 labels; `droppedHeadings` and max section span both improve on the first without regressing the
 others; the estimator is re-checked against trees generated under the new prompt.
 
+## It worked — 2026-09-04, 16:19–16:39 UTC
+
+A real upload of the real document, through the real picker, on the merged code, watched end to end.
+**No human intervention, no Retry, and not one error-level line in the whole run.**
+
+```
+16:19:23  fetch                                       1.3 s
+16:19:25  extract      142 pages, 69 chunks           6 min 34 s   (12 quality notes)
+16:25:59  blocks       2,046 blocks                  36 s
+16:26:35  ── hand-back: not enough window left for hierarchy ──
+16:26:51  hierarchy    20 AI calls, $2.89            12 min 07 s
+16:38:58  ── hand-back ──
+16:39:04  assets → revision published → job done
+```
+
+**19 min 41 s, three lease windows, two automatic hand-backs, ~$3.50.**
+
+Three things in that are the stages working rather than a lucky draw:
+
+- **Both hand-backs happened before a step started, never partway through one.** That is stage 3's
+  raised `STEP_BUDGET_MS.hierarchy`: the claimant declined to begin a twelve-minute step in the tail of
+  a window and put the job down instead. The browser re-drove it in about sixteen seconds, unattended.
+- **`hierarchy` took 727 s — longer than a whole 740 s deadline leaves once anything else has run.** It
+  fits only because it got a window to itself. Under the old 320.4 s budget this document could not
+  have completed at any point, whatever the token estimate said.
+- **12 quality notes**, against 20 and 32 on two earlier runs of the same file — stage 5's folio fix
+  showing up in the reader-visible outcome rather than only in a unit test. Run-to-run variance is
+  high, so this is a direction, not a measurement.
+
+The postmortem is
+[260904c](../postmortems/260904c-a-document-refused-for-an-answer-it-never-had-to-give.md), and it
+covers both bugs: the estimator, and the folio fix that briefly widened the hole it was narrowing.
+
+**Not yet on production.** `main` is written only by `npm run deploy`, and the two dead Kuhn jobs there
+are `blocked`, so they show no Retry and cannot be revived — recovery is a fresh upload, which re-buys
+the transcription at about $0.66.
+
 ## Deliberately not doing
 
 - **Lowering `effort` or shrinking `THINKING_HEADROOM`** to buy headroom.
