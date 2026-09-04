@@ -17,7 +17,7 @@ step along. This plan is about the step it moved to.
 
 **Done enough to stop here.** The thing this plan exists for is achieved: Kuhn's paper uploads and
 becomes a readable article, unattended, in 19 min 41 s — watched end to end at
-[§ It worked](#it-worked--2026-09-04-16192-1639-utc). Everything below is on `dev` and none of it is
+[§ It worked](#it-worked-2026-09-04-16191639-utc). Everything below is on `dev` and none of it is
 on production.
 
 | stage | state |
