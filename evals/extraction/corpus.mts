@@ -168,6 +168,22 @@ export const EXTRA_FIXTURES: { name: string; file: string; url: string; slot: st
     url: "https://ar.wikipedia.org/wiki/%D8%B0%D9%83%D8%A7%D8%A1_%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A" },
   { name: "eurlex-regulation", file: "eurlex_regulation.html", slot: "—",
     url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52022XC0504(01)" },
+  /* **Five more added the same day**, held back at first for a licence check —
+     copyrighted third-party prose — and promoted once Greg decided it:
+     "It's fine to include copyrighted material in the eval, as long as we
+     attribute it to them. We're not publishing or stealing it." (2026-09-04).
+     See fixtures/README.md, "The five added 2026-09-04, on Greg's copyright
+     decision" for the attribution established for each. */
+  { name: "blogger-bldgblog", file: "blogger_bldgblog.html", slot: "—",
+    url: "https://bldgblog.blogspot.com/" },
+  { name: "hn-dropbox", file: "hn_dropbox.html", slot: "—",
+    url: "https://news.ycombinator.com/item?id=8863" },
+  { name: "quanta-year-physics", file: "quanta_year_physics.html", slot: "—",
+    url: "https://www.quantamagazine.org/the-year-in-physics-20241217/" },
+  { name: "npr-ozy-style-feature", file: "npr_ozy_style_feature.html", slot: "—",
+    url: "https://www.npr.org/sections/goatsandsoda/" },
+  { name: "archwiki-install", file: "archwiki_install.html", slot: "—",
+    url: "https://wiki.archlinux.org/title/Installation_guide" },
 ];
 
 /** Every committed fixture, for an eval whose denominator is not `CORPUS`'s. */

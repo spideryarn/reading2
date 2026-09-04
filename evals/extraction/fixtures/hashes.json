@@ -178,5 +178,35 @@
     "bytes": 238390,
     "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52022XC0504(01)",
     "capturedAt": "2026-09-04"
+  },
+  "blogger-bldgblog": {
+    "sha256": "9038791d3081421e9e32571de3c1016fda9b81e7deb3c4180628e73b1cea5966",
+    "bytes": 486316,
+    "url": "https://bldgblog.blogspot.com/",
+    "capturedAt": "2026-09-04"
+  },
+  "hn-dropbox": {
+    "sha256": "c3d4f69083d78c14f0f8b0100dffc1e7013e62ed03fe18c4f28dcee858b068af",
+    "bytes": 101192,
+    "url": "https://news.ycombinator.com/item?id=8863",
+    "capturedAt": "2026-09-04"
+  },
+  "quanta-year-physics": {
+    "sha256": "df4b28583b32961c468051b74a7dc958078e6d56c45539dc4f2f9c48b81370dc",
+    "bytes": 241077,
+    "url": "https://www.quantamagazine.org/the-year-in-physics-20241217/",
+    "capturedAt": "2026-09-04"
+  },
+  "npr-ozy-style-feature": {
+    "sha256": "cd05ed37aac58bb2adedca6d98b36972897ba7baaff70d1d6c86f5274fad1616",
+    "bytes": 311742,
+    "url": "https://www.npr.org/sections/goatsandsoda/",
+    "capturedAt": "2026-09-04"
+  },
+  "archwiki-install": {
+    "sha256": "772599011fe46419b3af3ccd270d5da8ffb9cd2fdb86a1a0db180396bf33684f",
+    "bytes": 99729,
+    "url": "https://wiki.archlinux.org/title/Installation_guide",
+    "capturedAt": "2026-09-04"
   }
 }
