@@ -227,10 +227,20 @@ export function buildNoteIndex(blocks: readonly NoteBlock[]): NoteIndex {
     else byNote.set(id, { id, blocks: [block], citedBy: [], markers: 0, label: "", ordinal: 0 });
   }
 
-  /* Which passages cite each note, and what the author numbered it. Read out of
-     the body's own html rather than out of the DOM, so it is the same answer
-     before the article is rendered and during a re-annotation — and so the
-     count is of the article, not of what happens to be mounted. */
+  countCitations(blocks, byNote);
+  return { byNote, noteOf, first, titled: introduces(before) };
+}
+
+/**
+ * Which passages cite each note, and what the author numbered it.
+ *
+ * Read out of the body's own html rather than out of the DOM, so it is the same
+ * answer before the article is rendered and during a re-annotation — and so the
+ * count is of the article, not of what happens to be mounted.
+ *
+ * Fills `markers`, `citedBy`, `label` and `ordinal` in place.
+ */
+function countCitations(blocks: readonly NoteBlock[], byNote: Map<string, Note>): void {
   let numbered = 0;
   for (const block of blocks) {
     let cited: Set<string> | null = null;
@@ -262,8 +272,6 @@ export function buildNoteIndex(blocks: readonly NoteBlock[]): NoteIndex {
     note.ordinal = ++numbered;
     note.label = String(note.ordinal);
   }
-
-  return { byNote, noteOf, first, titled: introduces(before) };
 }
 
 /**

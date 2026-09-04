@@ -5490,7 +5490,12 @@ td.text.has-hit[data-hues="8"] {
    container at the end of the document (src/notes.ts), so the run really is
    contiguous and one rule across the top is honest about where it starts. */
 td.text.note {
-  background: var(--muted);
+  /* `background-color`, not the `background` shorthand: `td.text.has-hit[data-hues]`
+     paints the search bar down the left of a matched paragraph as a
+     `background-image`, and the shorthand resets that to `none`. A hit inside a
+     footnote is still a hit — the spine already says so (§ the spine's parts) —
+     and this rule is later in the file, so it would have won. */
+  background-color: var(--muted);
 }
 td.text.note .prose {
   /* The room the number sits in, taken from the note rather than from the
@@ -5500,6 +5505,14 @@ td.text.note .prose {
   padding-inline-start: 2.4rem;
   font-size: 0.95rem;
   color: var(--ink-soft);
+}
+/* A note's body is an `<li>` (src/notes.ts § What "canonical" means here), and
+   stage 3 hands each one to its own row — so the browser draws a list marker for
+   a list that is not there. Harmless until this change, and now a bullet sitting
+   beside the number that replaced it. Scoped to the notes, because an ordinary
+   list in the article is a list and keeps its bullets. */
+td.text.note .prose > li {
+  list-style: none;
 }
 td.text.note-open {
   border-top: 1px solid var(--rule);
@@ -10643,6 +10656,16 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 }
 .ill-row:hover { background: var(--surface-raised); }
 .ill-row:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+/* **The caption that is lettered on the plate itself**, so the row and the
+   picture can be matched by eye. Small, tracked and quiet: it is a wayfinding
+   label, and the two lines under it — what is drawn, and the article's own
+   words — are what the row is actually for. Absent on a wordless plate. */
+.ill-caption {
+  display: block; margin-bottom: 0.15rem;
+  font-size: 0.68rem; line-height: 1.2; letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.ill-row:hover .ill-caption { color: var(--highlight); }
 .ill-depicts { display: block; font-size: 0.82rem; line-height: 1.35; color: var(--ink); }
 /* **Wraps, and is never clamped.** The quote is how a reader reads the picture
    back against the piece, so cutting it to an ellipsis would take away the

@@ -216,6 +216,42 @@ a rule the reader has already learned.
 keeps today's behaviour; only a plain external link gets reveal-then-open. The glossary term is what
 this app is *for*; the link is what every other app has.
 
+#### What stage 3 found and built
+
+**-14 was a rendering bug, and the review's guess about it was wrong in a useful direction.** The
+plan said "the number and the back-link exist in the data model but were not drawn". Read out of
+`xanadu-spya-ueuvaf`'s own public payload: nine notes, all three fields on every one, nine markers
+labelled `1`…`9`, and nine of the author's own `↩︎` back-links carrying `data-spya-note-back`. So
+the data was complete and *the back-link was in fact drawn* — as a faint glyph with three pixels of
+padding at the end of 126 words, which the reader was looking straight at. The number was never
+drawn at all: a note's body is an `<li>`, stage 3 gives every block its own row, and an orphan
+`<li>` numbers nothing. Nothing needed re-extracting; the whole fix is in the reading view.
+[links.md § What the reader meets at the note](../project/links.md#what-the-reader-meets-at-the-note).
+
+**One design call worth recording**: the number beside a note is **the author's own marker text**,
+not a count and not a CSS counter. Counting drifts the moment one note of a piece goes unrecognised,
+and then the marker says `6` and the note says `5` with nobody able to say which is lying. Wikipedia
+keeps its `[5]`. The ordinal is the fallback for a note nothing cites.
+
+**Verified in a real browser, with real touch.** Chrome at 834×1194, `hasTouch`, driving CDP
+`Input.dispatchTouchEvent` rather than synthetic events — which is the whole point, given
+[260903g](../postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md). Every case the
+review asked to see pinned came back right: first tap reveals and navigates nothing; a tap on a
+*different* link reveals that one; the second tap opens exactly one tab at the right URL with
+`window.opener === null`; a 140px drag opens nothing; a glossary term inside a link goes to
+`?mode=glossary&term=…` and opens no tab; a footnote marker still previews and then jumps, landing
+with its own back-link on screen and highlighted. On a 1440×900 mouse viewport, plain, middle and
+⌘-clicks and Enter each opened one tab and left the reading view where it was, and an in-article
+fragment still jumped in place.
+
+**Deferred, deliberately** — margin or side notes; a floating "return" button that follows the
+reader down the notes; making browser Back restore the scroll position. Each is a bigger product
+move than the report asked for, and the three things shipped are what the report actually named.
+
+**One incidental correction**: `TableView.tsx` had claimed since August that the sanitiser keeps an
+article's own `target`. It does not — DOMPurify drops it — and that turns out to be what makes the
+new rule safe, since no publisher can opt a link into or out of it.
+
 ### What the review changed about the answers themselves
 
 - **-15**: the answer is *"current evidence does not justify a swap"*, **not** *"a swap cannot
