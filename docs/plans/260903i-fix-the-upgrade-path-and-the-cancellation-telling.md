@@ -1334,3 +1334,55 @@ on demand — so that half rests on the unit tests plus the shape verification a
 `everyPage` was extracted while doing this, so the subscription scan and the invoice sweep share one
 definition of "exhaustive or throw". That rule had already been wrong twice in opposite directions,
 and a second copy is a second place for it to be softened.
+
+## Stage 5 — the live account, 2026-09-04
+
+Deployed as `436d6b56` (`dpl_8L1mAj8bMc4267cUGNoREyoGF6ad`, built 09:11:37Z). `/api/health` reported
+**67 migrations expected, 67 applied, digests identical**, `missing: []`, `ahead: 0`, so the accrual
+migration landed with the code rather than before or after it.
+
+The deploy's test gate was forced. Four files were red and all four were attributed before forcing,
+none of them ours: `stop-details` (a new `"read the label checkpoints"` info log added by `ca9ad5ee`
+hours earlier, against a hard-coded line count), `load-article-serialisation` (`Storage get failed
+(500)` — `5aceccfe` isolates the test *database* per run but the local Storage bucket is still
+shared), `client-imports` and `paid-cli-ledger` (both upstream). `5aceccfe` landing mid-flight is
+why `store-shelf-pg` and `store-shelf-reads` stopped failing between two runs of the same tree.
+
+**`STRIPE_WEBHOOK_SECRET` is not among the keys `/api/health` reports**, so its absence from that
+list says nothing. It was confirmed set by POSTing an unsigned body to the live endpoint: **400**
+`Webhook refused` is the signature path talking, where a missing secret would have been **503**.
+Worth adding to `ENV_CHECKS` in `src/vercel-health.ts` — a missing webhook secret turns the endpoint
+into one that refuses every delivery, and nothing currently reports it.
+
+### What was written to Stripe, and what read it back
+
+`stripe:setup --prod --apply` moved the four Portal fields and refreshed both products'
+name/description/tax code. **No price moved** — the dry run and the apply both printed *"price is
+already 10.00 USD / 9.00 EUR / 8.00 GBP"*. The script's own read-back passed, but the verdict that
+counts is `stripe:check --prod`, a separate code path, which went from **5 blocking problems to
+none** and now prints *"every money-sensitive field matches what stripe:setup enforces"*.
+
+The webhook event was added by hand, because **no script writes `enabled_events`** — `stripe:check`
+detects the gap and `stripe:setup` has no webhook step at all. The trap is that `enabled_events` is
+**replaced, not appended**: writing the one new event would have silently unsubscribed the other
+four and stopped every subscription reaching the database. The live list was read first (exactly the
+four, no extras), the union written, and a *fresh retrieve* — not the update's return value — used to
+confirm both that nothing was dropped and that `invoice.created` is still absent.
+
+### Fault 2, proved on the live subscription
+
+The row was stale exactly as predicted: Stripe held `cancel_at 2026-10-03T11:37:09Z` while our row
+held `cancelAt: null`, written `2026-09-03T11:46:08` by the old code at the moment of cancellation.
+Nothing would have refreshed it before the subscription ended, so the reader would never have been
+told.
+
+Resynced by writing inert `metadata` to the subscription, which makes Stripe emit a fresh
+`customer.subscription.updated`. Chosen over writing our own row directly **because it tests the
+deployed handler rather than bypassing it**: the row is now `cancelAt 2026-10-03T11:37:09.000Z`,
+`updatedAt 2026-09-04T09:31:00`, which is the production code receiving a real event and reading
+`cancel_at`. Before-and-after guards confirmed `status`, `cancel_at`, `cancel_at_period_end`,
+`schedule` and the price id were all untouched.
+
+**Fault 3 is deployed but unobserved.** The account has one subscription, so "metered on the wrong
+one" cannot be seen live; it rests on the unit tests. `stripe:check` says as much in its own
+`subscribers` line — necessary, not sufficient.
