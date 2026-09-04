@@ -32,7 +32,10 @@ more*.
 | **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
 | **T-D** | **`npm test` is three projects now** — see below. The first stage of the six that is visible to anybody else. |
 | **T-E** | Four verdicts at the private lane's teardown, `POLLUTED` and `TEARDOWN FAILED` among them; the pool names itself; the shared lane reports its neighbours on failure. Two Sol rounds — the design one refused half the spec, the built one refused the commit. |
-| **B** | **25 of 26.** Two in a pilot, ten in two halves, then thirteen in three. Only `routes.test.ts` is left, and it is B2. Every file carries its mutation, the run's own numbers, and what the mutation does *not* cover — retained in the file after a review found the first ten had reported the evidence without keeping it. |
+| **B** | **26 of 26.** Two in a pilot, ten in two halves, then thirteen in three, then `routes.test.ts` as B2. Every file carries its mutation, the run's own numbers, and what the mutation does *not* cover — retained in the file after a review found the first ten had reported the evidence without keeping it. |
+| **B2** | `routes.test.ts`, one `describe` at a time. 127 tests, ~150 minutes against an estimate of 240. |
+| **B3** | The stage-end review's seven findings. The evidence guard rebuilt after Sol **reproduced** that it could not see nine of ten markers deleted; `STORE_CONVERSIONS` replaces `convertedInB`; two kept greens closed and three evidence notes corrected against re-run mutations. `routes.test.ts` 129 tests. |
+| **witness** | Re-run twice on 2026-09-04. **91 files touch the store, against 88 before stage B** — see below; that is the measurement that moved stage D onto the critical path and cut stage C by an order of magnitude. |
 | **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
 
 **This paragraph used to say "nothing yet changes the default `npm test`", and T-D is where that
@@ -48,6 +51,12 @@ of 634 files.
 **What that bought:** the same 626 files run, set-compared before and after with an empty difference
 both ways, against a baseline that was *nondeterministically* red — two runs of an unchanged tree
 failing 6 and 31 files, in disjoint sets.
+
+**The headline number, and it is not the one this plan expected.** After 26 conversions the
+filesystem store's reach went **up**, 88 → 91, because 22 of the 26 still reach it through
+`scratchArticleInPg`. **Stage B moved the assertions and left the fixtures.** Nothing is deletable
+until stage D replaces the fixture loader, and B was never on that path — see § *The witness was
+re-run*.
 
 **The `pdf` spike is done** and moved stage E — see § `pdf`. **All of D′ is off the list: D′1 is
 landed, D′2 was scheduled twice, D′3 is cancelled.**
