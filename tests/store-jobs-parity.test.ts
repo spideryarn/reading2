@@ -1418,6 +1418,158 @@ for (const adapter of ADAPTERS) {
       expect((await store.get(job.id, OWNER))?.status).toBe("cancelled");
     });
 
+    /* --------------------------------- and a claimant can put a job down -- */
+
+    /**
+     * **A claimant that runs out of its own deadline *inside* a step hands the
+     * job back rather than ending it** — the cooperative half of the pause, and
+     * the difference between a reader pressing Retry and a reader watching the
+     * next window start by itself.
+     *
+     * `settleExpired` above is the *lapsed* half: nobody came back. This one is
+     * the claimant that is still here, has unwound cleanly, and is putting the
+     * job down. Both write `queued` on the same row and both spend the same
+     * counter — see `pauseForDeadline` in src/store/jobs.ts.
+     *
+     * **Watched red before it was believed**, against the stores as they were:
+     * `store.pauseForDeadline is not a function`.
+     */
+    it("puts a claimant that ran out of its own time back in the queue, on its own row", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+      /* A step actually in flight, so the *steps* half of the transition is
+         exercised rather than assumed — a pause that left a `running` step
+         behind would draw a spinner on a card that is waiting its turn. */
+      await store.noteProgress(job.id, attempt, [
+        { ...job.steps[0]!, status: "running", startedAt: new Date().toISOString() },
+      ]);
+
+      const paused = await store.pauseForDeadline(job.id, attempt, 2);
+      expect(paused.kind).toBe("requeued");
+      if (paused.kind !== "requeued") throw new Error("unreachable");
+      expect(paused.job.status).toBe("queued");
+      expect(paused.job.slug, "the pause moved the job to a different article").toBe(job.slug);
+      /* **Which window it is on, on the record the reader is shown.** A card
+         that cannot say which attempt this is looks stalled. */
+      expect(paused.job.requeues).toBe(1);
+
+      const back = await store.get(job.id, OWNER);
+      expect(back?.status).toBe("queued");
+      /* Nothing failed, so the record must not say anything did. */
+      expect(back?.error).toBeUndefined();
+      expect(back?.failureKind).toBeUndefined();
+      expect(back?.finishedAt).toBeUndefined();
+      expect(back?.steps[0]?.status, "a paused job left a step spinning").toBe("pending");
+      expect(back?.steps[0]?.error).toBeUndefined();
+
+      /* And it is claimable again, which is the whole of what "back in the
+         queue" has to mean. */
+      expectClaimed(await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP));
+    });
+
+    /**
+     * **One counter, two ways of spending it.**
+     *
+     * `jobs.requeues` is shared between the lapsed-lease recovery and this one,
+     * so three windows is three *in total* — a lapse followed by one cooperative
+     * pause leaves only the third. Said here as a case rather than only in a
+     * comment, because the two paths are in different files and a second counter
+     * is exactly the shape somebody would add without noticing.
+     */
+    it("spends the same budget a lapsed lease spends, not a second one of its own", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+
+      /* Window one: the claimant is deployed over and says nothing. */
+      expectClaimed(await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP));
+      await adapter.expire(job.id);
+      expect(await store.settleExpired(undefined, undefined, 2)).toEqual([
+        { id: job.id, status: "queued" },
+      ]);
+
+      /* Window two: the claimant is alive and runs out of its own deadline. */
+      const second = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, second, LEASE, CAP));
+      expect((await store.pauseForDeadline(job.id, second, 2)).kind).toBe("requeued");
+
+      /* Window three is the last one, and nothing is left after it. */
+      const third = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, third, LEASE, CAP));
+      const spent = await store.pauseForDeadline(job.id, third, 2);
+      expect(spent.kind, "a third pause bought a fourth window").toBe("budget-spent");
+      /* **And the row did not move**, which is what lets the claimant end the
+         job properly through its own session — the draft failed, the pointer
+         cleared, the ending recorded — rather than this statement doing half of
+         it. */
+      expect((await store.get(job.id, OWNER))?.status).toBe("running");
+    });
+
+    /**
+     * **Cancellation wins.**
+     *
+     * A reader pressed Stop while the step was running, and the claimant then
+     * reached its own deadline. Resuming what they stopped is the app not
+     * listening — and falling through to the interrupted ending would be worse
+     * still, because `finishIn` clears `cancelling` and keeps whatever ending it
+     * was handed, so a job the reader chose to stop would end `error` with a
+     * Retry button on it. ⟨GPT Sol, finding 3 on the plan⟩
+     */
+    it("tells a claimant that the reader stopped the job, rather than giving it another window", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+      expect((await store.requestCancel(job.id, OWNER))?.cancelling).toBe(true);
+
+      const paused = await store.pauseForDeadline(job.id, attempt, 3);
+      expect(paused.kind, "a stopped job was handed another window").toBe("cancelled");
+      /* Still running, still ours, still carrying the flag — so the claimant's
+         own settlement is what ends it, as a cancellation. */
+      const still = await store.get(job.id, OWNER);
+      expect(still?.status).toBe("running");
+      expect(still?.cancelling).toBe(true);
+    });
+
+    /**
+     * **An unwind that crossed the lease is not a pause, it is a lost claim.**
+     *
+     * The claimant aborts at `LEASE_MS - DEADLINE_MARGIN_MS` and has that margin
+     * to unwind in; a step that takes longer than the margin to come apart
+     * arrives here with nothing left to write with. Zero rows moved would look
+     * exactly like a spent budget, which is why the outcome is discriminated
+     * rather than counted.
+     */
+    it("refuses a claimant whose lease ran out while it was unwinding", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+      await adapter.expire(job.id);
+
+      expect((await store.pauseForDeadline(job.id, attempt, 3)).kind).toBe("stale");
+      /* And nothing moved: a refusal that still wrote half of something would be
+         the same failure wearing a different word. */
+      expect((await store.get(job.id, OWNER))?.status).toBe("running");
+    });
+
+    /**
+     * **And a claimant whose job somebody else now holds gets the same answer**
+     * — a second job, with its lease still live, so what refuses it is the token
+     * rather than an expiry it could have been refused for anyway.
+     */
+    it("refuses a pause from a claimant whose job somebody else now holds", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+      await adapter.reattach(job.id, mintAttempt());
+
+      expect((await store.pauseForDeadline(job.id, attempt, 3)).kind).toBe("stale");
+      expect((await store.get(job.id, OWNER))?.status).toBe("running");
+    });
+
     /**
      * **The sweep, scoped to one person, because `listJobs` calls it.**
      *
@@ -2296,6 +2448,98 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
    * ('queued','running')` and `settleExpired` on `status = 'running'`, so
    * whichever commits second re-reads the row and finds nothing to do.
    */
+  /**
+   * **Stop, arriving in the window between the pause's read and its write.**
+   *
+   * ⟨GPT Sol, reviewing the built stage 3, finding 2⟩ The sequential Stop case
+   * in the parity block above is real but blunt: it completes `requestCancel`
+   * *before* calling `pauseForDeadline`, so removing `.for("update")` — or
+   * splitting the read and the write into two transactions — leaves it green.
+   * This is the case that goes red for that.
+   *
+   * **The barrier is a second connection holding the row lock**, so the
+   * interleaving is arranged rather than raced for. The lock is taken, the pause
+   * is started and blocks, Stop is written onto the locked row, and the lock is
+   * released. Whichever statement of the pause was waiting then re-reads the
+   * committed row — `read committed` re-checks a locked tuple — and must see
+   * the Stop.
+   *
+   * Under the weakening the pause's `SELECT` does not block, so it classifies a
+   * row that says nothing about Stop; its `UPDATE` blocks instead, and by the
+   * time it lands `cancelling` is set. `liveAttempt` still matches, so it writes
+   * `queued` over a row carrying the flag — **the wedge**: `claim` answers
+   * `stopping` to that row for ever, and the reader's Stop button is already
+   * disabled. That is the state `jobs_cancelling_is_running` exists to make
+   * unreachable through the API and which two statements can still reach
+   * between them.
+   */
+  it("cannot be raced into leaving a job queued with Stop still on it", async () => {
+    const id = await queued();
+    const attempt = mintAttempt();
+    expectClaimed(await pgJobStore.claim(id, OWNER, attempt, LEASE, CAP));
+
+    /* **The holder runs on `getDb()`**, not on a `Pool` of this file's own.
+       `DATABASE_URL` is not where the tests are: vitest gives each run its own
+       private lane, and a second pool built from the environment locks a row in
+       whichever database that names — which was the first version of this, and
+       it failed loudly at the barrier check below rather than passing for the
+       wrong reason. */
+    let pausing!: ReturnType<typeof pgJobStore.pauseForDeadline>;
+    await getDb().transaction(async (tx) => {
+      await tx.execute(sql`select id from ${jobs} where ${jobs.id} = ${id} for update`);
+
+      /* Started, not awaited: it is about to block on the lock above. */
+      pausing = pgJobStore.pauseForDeadline(id, attempt, 2);
+
+      /* **Wait until it really is blocked**, rather than sleeping and hoping.
+         A backend of this database waiting on a `Lock` is this run's: vitest
+         gives the file its own private database, and the file holds the shared
+         run lock besides. Failing loudly when the barrier never engages is the
+         point — a barrier that quietly did not is a test that passes for the
+         wrong reason (docs/reusable/silent-success.md), and this check has
+         earned its keep twice already.
+
+         **Two things about the probe, and each reported the opposite of the
+         truth before it was right.**
+
+         `pg_stat_activity`, not `pg_locks`: a row-lock waiter waits on the
+         holder's `transactionid`, and a `transactionid` lock carries no
+         `relation`, so the obvious `not granted and relation =
+         'spideryarn.jobs'::regclass` matches nothing at all.
+
+         And on **`getDb()`, not `tx`**: Postgres takes the activity snapshot
+         once per transaction and caches it until that transaction ends, so a
+         probe run on the *holding* transaction re-reads the picture as it was
+         before the pause had even connected — for ever, however long it polls.
+         It said the pause had sailed straight through the lock while the pause
+         was blocked on it the whole time. */
+      let waiting = false;
+      for (let i = 0; i < 200 && !waiting; i++) {
+        const probe = await getDb().execute(
+          sql`select count(*)::int as n from pg_stat_activity
+                where datname = current_database() and wait_event_type = 'Lock'`,
+        );
+        waiting = Number((probe.rows[0] as { n: number } | undefined)?.n ?? 0) > 0;
+        if (!waiting) await new Promise((r) => setTimeout(r, 25));
+      }
+      expect(waiting, "the pause never blocked on the row lock — the barrier did nothing").toBe(
+        true,
+      );
+
+      /* The reader presses Stop, onto the row this transaction holds. It commits
+         when this callback returns, which is what lets the pause through. */
+      await tx.update(jobs).set({ cancelling: true }).where(eq(jobs.id, id));
+    });
+    const paused = await pausing;
+
+    expect(paused.kind, "a Stop that landed mid-transition was not seen").toBe("cancelled");
+    const after = await pgJobStore.get(id, OWNER);
+    /* The row did not move, so the claimant still holds it and ends it as a
+       cancellation through its own session. */
+    expect(after?.status).toBe("running");
+    expect(after?.cancelling).toBe(true);
+  });
+
   it("gives one answer when Stop, the sweep and a release arrive together", async () => {
     const id = await queued();
     const attempt = mintAttempt();

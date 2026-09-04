@@ -231,6 +231,26 @@ later than the plan asked for, because a complete answer that builds a tree the 
 reject would replay just as permanently as one that does not parse. Seen red both ways: the two
 "stores nothing" tests fail when the write is moved above `parseJson`.
 
+**What the code review changed** ⟨GPT Sol, 2026-09-04, second round⟩. Three of its four findings on
+this stage were taken:
+
+- **The canonical request no longer restates what the gateway injects.**
+  `messagesWireBody(task, body)` is now exported from `src/messages-stream.ts`, `streamMessage` sends
+  its output and `canonicalStructureRequest` fingerprints it. Restating `provider` and `model` here
+  covered today's two fields and would have missed tomorrow's third **silently**, because a mutation
+  test can only enumerate the fields an object already has.
+- **The tests did not reproduce the window the feature exists for.** Every run in them succeeded, so
+  a write placed *after* `generateLabels` would have passed all of them while losing the tree to
+  exactly the failure the plan is about. There is now a test where the label pass throws after the
+  structure answer lands and a second run resumes without a call — seen red under that mutation —
+  and one where the answer builds a tree the invariants reject, which is what pins the write after
+  `assertTreeSound` rather than merely after `buildTree`.
+- **A poisoned row.** `{ fingerprint, answer: "not JSON" }` passed the entry gate, skipped the call
+  and failed for ever. `usableStructure` now parses before it accepts. **Partially**: an answer that
+  parses and then fails `buildTree` still throws on every attempt, and the lever for that stays
+  `PROMPT_VERSION` — the full fix is a retry loop around the whole call-and-build stretch, which is
+  more machinery than the risk earns. Written down at the gate.
+
 **Two things the plan did not say.** `HierarchyRun` gained `structureResumed`, and the run's
 `inputTokens`/`outputTokens` now come from a hoisted `structureUsage` that is zero on a resumed
 run — a resumed attempt really did pay nothing for the tree, and without the flag beside them those
@@ -346,6 +366,61 @@ the store without going through it"*); this is the same rule on the way in. Watc
   sibling path has a completed step behind it, so progress is guaranteed and the existing `release`
   shape would be the right fix if it ever bites.
 
+#### The code review, and the two things it changed
+
+GPT Sol reviewed the built stage and returned **SHIP-WITH-CHANGES**. Its own summary of what checked
+out is worth keeping: Stop, expiry, a duplicate pause and a claim cannot cause a lost Stop or a
+double-spend under the row lock; the lock order cannot deadlock revision work, because a revision
+transaction takes article-then-job and the pause takes only the job; aborted products are never
+written, because the model call is outside the transaction; and **`queued` with a draft is not a new
+invariant** — `releaseStepIn` has always left that pointer, `requestCancel` clears it when it
+cancels a queued job, and retry, forget and trimming all operate on terminal rows.
+
+Two findings were real.
+
+**A relinquishing claimant could unregister its successor's `AbortController`** ⟨P1⟩. `standDown`'s
+`aborts.delete(job.id)` was unconditional, on the reasoning that *"the claim is what stops two of us
+being inside one job"* — true of two claimants *running* and not of one that has handed the claim
+back and is still unwinding. The row is `queued` the moment the transition commits, so another
+advance in the same process can claim it and install its own controller in the turn this one spends
+returning. Deleting it removes half of Stop: the flag still lands on the row, but `cancelJob` finds
+nothing to pull, so the new claimant's model call runs on to the next step boundary. Now
+`if (aborts.get(job.id) === controller)`. **Not covered by a regression, deliberately**: no `await`
+stands between the pause's commit and that line, so a test could only race for it.
+`transitionAfter`'s `release` has had the same shape since 2026-08-30, so this is older than the
+pause.
+
+**The Stop test was sequential, and a barrier case found something worse than the review predicted**
+⟨P2⟩. Sol pointed out that the parity Stop case completes `requestCancel` before calling
+`pauseForDeadline`, so removing the row lock would leave every new test green. The barrier case
+written for it — a second transaction holds the row, the pause blocks on it, Stop is written onto
+the locked row, the lock is released — is red without the lock, and not in the way either of us
+expected: the pause's `UPDATE` then tries to write `queued` onto a row carrying `cancelling`, which
+`jobs_cancelling_is_running` **refuses**, so the reader gets a `db-failed` 500 on a job they simply
+stopped. The schema is the only thing between that and the permanent *"Stopping…"* wedge.
+
+Two things about writing that barrier are worth carrying elsewhere, because each reported the
+opposite of the truth for a while:
+
+- **A row-lock waiter waits on the holder's `transactionid`**, and a `transactionid` lock carries no
+  `relation` — so the obvious `pg_locks where not granted and relation = 'spideryarn.jobs'::regclass`
+  matches nothing at all.
+- **Postgres caches the `pg_stat_activity` snapshot for the life of a transaction.** Polling it from
+  the transaction that holds the lock re-reads the picture from before the waiter existed, for ever,
+  however long it polls. It said the pause had sailed through the lock while the pause was blocked
+  on it the whole time.
+
+The other three findings were taken as written: the cancellation case now asserts the persisted
+sentences on both surfaces rather than only the status (deleting the two corrective lines in
+`walkClaim` left it green); the draft-identity case captures `draft_revision_id` from *inside* the
+step that is about to be aborted, so it proves the same draft rather than *a* draft; and the stale
+comments Sol listed are corrected — `src/store/pg-jobs.ts`'s "every transition is one statement" and
+its "unreachable" zero-row branch, three more copies of "one claim covers one step"
+(`src/jobs.ts`, `src/store/jobs.ts` § `claim`, `src/store/pg-session.ts`),
+`src/store/pg-session.ts`'s "nothing real can run through it yet", `src/messages.ts` § `INTERRUPTED`
+on when a deadline overrun now reaches that sentence, and `src/types.ts` § `requeues` on nothing
+rendering it yet.
+
 ### Stage 4 — the estimator counts nodes the prompt can actually produce — **DONE 2026-09-04**
 
 **Two changes, and the second is the one stage 1 says we would have got wrong.**
@@ -400,12 +475,36 @@ prose (~180,000 words).
 for a term built from "heading-block count, splits for runs longer than ~9 blocks, and the ancestors
 those require". Taken as a **sum** — which is the faithful reading of the prompt, since a heading
 opens a node *and* a long run inside it still gets split — Kuhn comes to 344 sections and **68,575
-tokens**, which with any reservation above 47,289 is a refusal of the very document the live call
-answered in 10,996. So the two rules are treated as **competing lower bounds and the larger is
-taken**, and the comment on `sectionsForced` says so out loud rather than leaving it as arithmetic.
-The sum is the literal reading; the max is what the corpus says the model does; where they disagree
-the corpus wins, and if a real answer is ever seen above the estimate the sum is what to move back
-towards.
+tokens**. That fits one response beside the measured 47,289 of thinking (115,864 of 128,000); what it
+does not fit is a reservation with real margin on top. So the two rules are treated as **competing
+lower bounds and the larger is taken**, and `sectionsAsked` says so out loud rather than leaving it
+as arithmetic.
+
+**A first draft of this section said the sum exceeded the ceiling "under any reservation above
+47,289", and that was arithmetically false** — it exceeds it under *this* reservation, 64,000. GPT
+Sol caught it reviewing the code and the corrected sentence is now in the function's own comment.
+The honest statement of the trade: the sum and a reservation with margin cannot both be had on this
+document, and the choice made was to keep the margin.
+
+**Sol's counterexample, kept because it is the strongest argument against the choice.** A 2,420-block
+handbook with a heading every eleven blocks — each heading opening a section, each ten-block run
+after it over the ~9 threshold — is 440 sections and about 87,300 tokens under the faithful reading,
+against the estimate's 53,700. The sum would **refuse** that document (`blocked`, no Retry button);
+the max admits it with a budget above every per-node cost ever measured but below a stacked worst
+case. It is admitted, deliberately, because the corpus says the faithful reading is not what the
+model does at scale — 254 authored headings produced 83 nodes and 59 *dropped* headings on the one
+long document anybody has measured. The case is pinned in `tests/token-budget.test.ts` with what
+would falsify it: a real structure answer larger than the estimate. Then the sum is what to move back
+to, and the reservation or the per-node constant has to move with it. The earlier "adversarial" test
+used a heading every **eight** blocks, so it had no run over the threshold and never exercised the
+overlap at all — also Sol's catch.
+
+**And the floor is empirical, not derived.** `MINIMUM_SECTIONS = 81` is the width of the section
+level in the shape the prompt describes, but a 10-block article cannot be partitioned into 81
+non-empty sections and *"aim for 5-9 children"* is not an instruction to fill every branch. Sol was
+right that the first version of the comment overclaimed by calling them sections the article
+"forces"; it now says what it is — the smallest answer this stage is willing to size for, chosen at
+the shape the prompt asks for because that is where the corpus keeps landing.
 
 **The second finding: the corpus is concave and no linear term fits both ends.** Real node density
 falls with length — one node per 1.4 blocks on `fowler-phrenology`, one per 24 on Kuhn — so a divisor
@@ -425,6 +524,14 @@ article's `max_tokens` goes from ~48,000 to 80,425. Unspent allowance is not bil
 room it is given — at `effort: "high"`. The counter-evidence is the Kuhn call itself: at `medium`,
 given 128,000, it thought 47,289 rather than filling. **Worth watching on the bill**, and
 `truncatedMessage` splits the two halves if it ever stops being true.
+
+**Sol's one dissent that was not taken:** he would keep `THINKING_HEADROOM`'s 40,000 for short
+documents and add a long-input tier, on the ground that one long call not filling 128,000 says
+nothing about how ordinary short calls react when their allowance nearly doubles. Not built: the
+boundary between the tiers would be a number nobody has measured either, and the direction of the
+error matters — a *smaller* reservation on a short article is the tighter one, and truncation is the
+expensive failure. Recorded here as an open risk rather than settled, with the bill as the place it
+would show.
 
 Two smaller corrections the plan had right and are worth recording as done: the fixture test
 serialised its "actual" with `JSON.stringify(…, null, 1)`, inflating what it compared against by up

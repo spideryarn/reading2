@@ -1230,6 +1230,49 @@ filesystem adapter keeps it in memory, so a restart resets the cap there — wea
 because a restart there is `sweepStopped`, which requeues with no budget at all, and because that
 store is not what ships.
 
+### A claimant that runs out of time puts the job down, and keeps its draft
+
+A lapsed lease is *nobody came back*. This is the other half, and it was missing until 2026-09-04: a
+claimant that is **still here**, has reached its own 740s deadline part-way through a step, and has
+unwound cleanly. It used to end the job terminal `error` with a Retry button the reader had to press
+— on a process that could perfectly well have handed the job back.
+
+That is routine rather than rare on a long PDF. A 142-page paper's `hierarchy` step needs **658–778s
+on its own** against a 740s deadline, before `extract` has taken any of the same window;
+`llm-survey` died exactly this way on 2026-09-04 (extract 353s, then `hierarchy` cut off at 380s
+having already paid for its structure call).
+
+So `walkClaim` now asks the store for a **capped cooperative pause** — `pauseForDeadline`,
+[`src/store/jobs.ts`](../../src/store/jobs.ts) — which is the mid-step twin of `transitionAfter`'s
+between-steps hand-back. The job goes back to `queued` on its own row, the browser re-drives the
+`{done: false, busy: false}` answer immediately with no client change, and the next claim carries on.
+
+**It keeps `draft_revision_id`, and that is the whole design rather than a nicety.** The obvious
+implementation was to route the overrun through `settleExpired`'s requeue, which already carries the
+budget — but that statement **nulls the pointer**, and on a first ingest there is no published
+revision for the next draft to copy from. So `blocks` re-runs as a genuine first ingest and mints
+**every block id afresh** ([`src/ids.ts`](../../src/ids.ts); GPT Sol reproduced `same: false` over
+identical HTML). Everything keyed on those ids goes with them — the hierarchy structure checkpoint
+above all — so every window would re-buy the most expensive call in the pipeline. A lapsed claimant's
+draft is worth throwing away because it vanished mid-write; this one's is not, because it stopped on
+purpose with every finished step's run row committed.
+
+**Four answers, not a row count** ⟨GPT Sol⟩. Zero rows moved means four different things —
+`requeued`, `cancelled`, `budget-spent`, `stale` — and only one of them may end the job. **Cancellation
+wins**: had the pause simply excluded `cancelling` rows and fallen through, `finishIn` would have
+cleared the flag and kept the interrupted ending, so a job the reader deliberately stopped would end
+`error` saying *whatever was running it did not come back*. That is [the app not
+listening](copy.md), on the one action a reader is most certain about. `stale` — the lease lapsed
+inside the 20s unwind margin, or the attempt moved — is a lost claim, because a claimant there cannot
+record an ending either.
+
+**The counter is the one above.** `jobs.requeues` is shared with the lapsed-lease path, so three
+windows is three *in total*, not three cooperative overruns: a lapse followed by one pause leaves
+only the third. And the cap is what the pause needs and the between-steps release does not — every
+hand-back before this one was preceded by a *completed* step, so progress was structurally
+guaranteed, where a step that can never fit in one window would otherwise pause, re-claim and spend
+another window for ever.
+
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
 the driver over 300 iterations, not read off the source. An idle shelf is unchanged, because the gate
@@ -1578,8 +1621,11 @@ and until 2026-09-04 it did not: an overrun took the branch written for Stop and
 stopped this before it finished"* to somebody who had pressed nothing (seen on a 144-page PDF, at
 742.8 s). The abort now carries a typed reason, `DeadlineReached` in [`src/jobs.ts`](../../src/jobs.ts),
 and an overrun reads `INTERRUPTED` on the step as it always did on the job. **A deadline overrun is
-also not a lapsed lease** and does not go through the requeue budget above: the claimant is still
-here, it unwinds, and `walkClaim` ends the job as a retryable error for the reader to pick up.
+still not a lapsed lease** — the claimant is here and unwinds — but since 2026-09-04 it *does* spend
+the same budget: it hands the job back rather than ending it, and only ends it once the windows are
+gone. See [§ A claimant that runs out of time puts the job
+down](#a-claimant-that-runs-out-of-time-puts-the-job-down-and-keeps-its-draft). When Stop and the
+deadline land together the reader's Stop is the one that decides.
 
 **The claimant's timer is armed at the claim, not after the session opens.** Everything above rests
 on the claimant aborting itself *inside* its own lease, and for a while it did not: the timer was

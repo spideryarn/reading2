@@ -2,12 +2,20 @@
  * Ingest jobs in Postgres — the record both invocations can see, and the fence
  * that stops the wrong one writing.
  *
- * ## Every transition is one conditional statement
+ * ## Every transition is one conditional statement, bar one
  *
- * There is no read-then-write anywhere in this file, including where the
- * filesystem adapter has to read first. The precondition lives in the `WHERE`,
- * so the database decides rather than the order two requests happened to
- * arrive in, and a loser learns it lost instead of overwriting a winner.
+ * The precondition lives in the `WHERE`, so the database decides rather than
+ * the order two requests happened to arrive in, and a loser learns it lost
+ * instead of overwriting a winner — where the filesystem adapter has to read
+ * first, this file does not.
+ *
+ * **`pauseForDeadline` is the exception and it is deliberate.** Its caller does
+ * not want to know *whether* it moved the row, it wants to know **why not** —
+ * Stop, a spent budget, or a lost claim, which want three different things and
+ * which one row count cannot tell apart. So it locks the row, decides, and
+ * writes, in one transaction; the fence is still in the `WHERE` of the write.
+ * A conditional statement plus a classifying read afterwards would be the worse
+ * shape: the read would answer about a row that had moved in between.
  *
  * ## The fence is four conditions and this project has dropped one three times
  *
@@ -76,6 +84,7 @@ import {
   type ExpirySettlement,
   type JobEnding,
   type JobStore,
+  type PauseOutcome,
   StaleAttemptError,
   type StepOutcome,
 } from "./jobs.js";
@@ -161,6 +170,10 @@ function toJob(row: Row): Job {
     // `cancelling` is `false` in the column and *absent* on the type when not
     // set, because the card reads `job.cancelling === true`.
     ...(row.cancelling && { cancelling: true }),
+    /* Absent at zero, for the same reason: it is nearly every job, and a field
+       that is always there is a field the client has to test the value of.
+       `Job.requeues` (src/types.ts) says what it is for. */
+    ...(row.requeues > 0 && { requeues: row.requeues }),
   };
 }
 
@@ -873,6 +886,130 @@ const rawPgJobStore: JobStore = {
   },
 
   /**
+   * **Read the row under a lock, decide, and write — all in one transaction**,
+   * which is what makes the four answers of `PauseOutcome` distinguishable at
+   * all.
+   *
+   * The obvious shape is one fenced `UPDATE` and a fall-back on zero rows, and
+   * it is wrong for the reason `PauseOutcome` gives: zero rows is four events,
+   * and one of them is a reader's Stop that must not become an `error`. A
+   * classifying `SELECT` *after* a refused `UPDATE` would answer about a row
+   * that had moved in between. So the lock comes first and nothing can change
+   * underneath the decision.
+   *
+   * **`for update` and then `liveAttempt` again on the write.** The re-fence is
+   * not belt-and-braces: it is the one predicate this repo has now dropped from
+   * a copy three times (src/store/job-fence.ts), and a transition written
+   * without it is exactly what the module exists to make impossible. Under the
+   * row lock it can only ever agree with the read.
+   *
+   * **The lease is asked with `leaseIsOver` itself**, imported rather than
+   * written again — so the set this refuses on is exactly the set `liveAttempt`
+   * refuses on and exactly the set `settleExpired` may settle, with no instant
+   * in between. It is also the arm that answers for a NULL lease, which
+   * `jobs_running_is_fenced` makes unreachable and which a hand-written `>`
+   * would have quietly answered `unknown` to. `clock_timestamp()` rather than
+   * `now()` is that module's rule and it matters here: the expression is
+   * evaluated on the locked tuple, so a statement that waited for the lock sees
+   * the time it actually got it.
+   *
+   * **No reservation is released and no draft is disposed of**, because the job
+   * is not over: it is `queued`, on its own row, holding its slug, its article,
+   * its checkpoints and its draft. That is the whole of the transition.
+   */
+  async pauseForDeadline(
+    id: string,
+    attempt: string,
+    requeueBudget: number,
+  ): Promise<PauseOutcome> {
+    const db = getDb();
+    return await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          attemptId: jobs.attemptId,
+          status: jobs.status,
+          cancelling: jobs.cancelling,
+          requeues: jobs.requeues,
+          lapsed: leaseIsOver.mapWith(Boolean),
+        })
+        .from(jobs)
+        .where(eq(jobs.id, id))
+        /* **The lock, and the whole transition rests on it.** Without it this
+           `SELECT` reads a snapshot under `read committed` and blocks nobody, so
+           a Stop can land between the classification below and the `UPDATE` —
+           which then tries to write `queued` onto a row carrying `cancelling`.
+           Watched: `jobs_cancelling_is_running` refuses that, so the reader gets
+           a `db-failed` 500 on a job they simply stopped, and the schema is the
+           only thing standing between this and the wedge that constraint exists
+           to make unreachable. The only case that can see it is the barrier one
+           in tests/store-jobs-parity.test.ts; every sequential case stays green
+           without the lock. No `.limit(1)`: `where id = …` is the primary key,
+           so it bought nothing. */
+        .for("update");
+
+      /* The whole of `liveAttempt`, asked as four questions so the *reason* is
+         available rather than only the refusal. A claimant here can write
+         nothing at all, an ending included, so the caller reports a lost claim
+         — see `PauseOutcome`. */
+      if (!row || row.attemptId !== attempt || row.status !== "running" || row.lapsed) {
+        return { kind: "stale" };
+      }
+      /* **Before the budget, always.** A reader's Stop is not a window that ran
+         out, and a job that has spent its budget *and* been stopped is still a
+         job that was stopped. */
+      if (row.cancelling) return { kind: "cancelled" };
+      /* The same comparison `settleExpired` makes — `requeues < budget` — so the
+         two paths cannot disagree about what the number counts. At the default
+         budget of zero this is the first thing that refuses, which keeps a
+         caller that has not asked for a pause exactly where it was. */
+      if (row.requeues >= requeueBudget) return { kind: "budget-spent" };
+
+      const moved = await tx
+        .update(jobs)
+        .set({
+          status: "queued",
+          /* The *cancelled* shape of `settledSteps`, which is the same shape
+             `settleExpired`'s requeue writes and the same shape `sweepStopped`
+             has always written: the running step back to `pending` with its
+             `startedAt` dropped and no sentence on it.
+
+             **Derived from the row rather than taken from the caller**, and
+             that is deliberate. The claimant's in-memory steps carry the
+             *failure* narrative `runStep` records on the way out — `error`, and
+             `INTERRUPTED`'s sentence — and writing those onto a job that is
+             going back into the line would put a red step on a card that is
+             waiting its turn. The row already holds every finished step, because
+             `noteProgress` wrote them. */
+          steps: settledSteps(sql`true`),
+          attemptId: null,
+          leaseExpiresAt: null,
+          requeues: sql`${jobs.requeues} + 1`,
+          /* Cleared, so the record always describes *this* state — the same rule
+             the requeue in `settleExpired` follows, and for the same reason: a
+             `failureKind` under a `queued` status is `jobWorthRetrying` reading
+             a state that is not an ending. */
+          error: null,
+          failureKind: null,
+          /* **`draftRevisionId` is deliberately not in this list**, and it is the
+             one field that separates this statement from `settleExpired`'s
+             requeue. See `PauseOutcome` in src/store/jobs.ts. */
+        })
+        .where(liveAttempt(id, attempt))
+        .returning();
+
+      /* **Nearly unreachable, and the residue is real** ⟨GPT Sol⟩: nothing else
+         can move the row while this transaction holds it, but `liveAttempt`
+         re-reads `clock_timestamp()`, so a lease that expires in the microseconds
+         between the read and the write is refused here and is refused
+         correctly. A refusal rather than a throw, because the honest answer for
+         a fence that refused is that this claimant may not write — which is
+         exactly what `stale` says. */
+      if (!moved[0]) return { kind: "stale" };
+      return { kind: "requeued", job: toJob(moved[0]) };
+    }, READ_COMMITTED);
+  },
+
+  /**
    * **One statement decides which kind of ending each of these is** — the same
    * shape `requestCancel` has, and for the same reason.
    *
@@ -1353,11 +1490,13 @@ export async function releaseStepIn(
   const moved = await exec
     .update(jobs)
     .set({
-      /* **Back to `queued`, and the token cleared.** One claim covers one
-         step. Holding it across requests would mean the next advance — a
-         different request with a different token — is told `busy` until the
+      /* **Back to `queued`, and the token cleared.** A claim must never outlive
+         its claimant — holding it across requests would mean the next advance,
+         a different request with a different token, is told `busy` until the
          lease expires, which is the endpoint deadlocking itself on the happy
-         path. GPT Sol, 2026-08-27. */
+         path. GPT Sol, 2026-08-27. (This said *"one claim covers one step"*,
+         which stopped being true on 2026-08-30: a claim walks a whole job, and
+         this is the hand-back it takes *between* two of them.) */
       /* **Back to `queued`, and the token cleared** — unless Stop arrived while
          this step was running, in which case the release is where the cancel
          lands. Releasing to `queued` with `cancelling` still set is a state

@@ -53,6 +53,7 @@ import {
   DEADLINE_MARGIN_MS,
   enqueue,
   getJob,
+  REQUEUE_BUDGET,
 } from "../src/jobs.js";
 import { STEPS } from "../src/pipeline.js";
 import { jobWorthRetrying, stageFailure } from "../src/job-failure.js";
@@ -76,7 +77,12 @@ const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
  */
 const SLUGS = [
   "test-seam-cancelled",
-  "test-seam-overran",
+  /* Two overrun cases, two articles. They must not share one: the first leaves
+     its job `queued` — that is what a pause *is* — and a second job on the same
+     slug would then wait behind it rather than running. `test-seam-overran` was
+     one slug until 2026-09-04, when the second case arrived. */
+  "test-seam-overran-pa",
+  "test-seam-overran-ov",
   "test-seam-undeclared",
   "test-seam-declared-blocked",
   "test-seam-declared-retry",
@@ -439,21 +445,23 @@ describe("a run the reader stopped", () => {
  * something went wrong is the app not listening"* — and this is that same
  * disrespect reversed. **Raising `MAX_PAGES` to 250 is what makes it common**,
  * because a deadline overrun on a long PDF goes from rare to routine.
+ *
+ * **Since 2026-09-04 the first two overruns do not produce a sentence at all**,
+ * which is the other half of the same respect: the claimant is alive and hands
+ * the job back rather than ending it (`pauseForDeadline`, src/store/jobs.ts).
+ * So there are two cases here now — what a paused job says, which is nothing,
+ * and what the ending says once the windows are gone, which is what this case
+ * always asserted.
  */
 describe("a run its own deadline stopped", () => {
-  it("does not tell the reader they stopped something they did not", async () => {
-    const slug = "test-seam-overran";
-    const queued: Job = {
-      id: `spya-seamo${Math.random().toString(36).slice(2, 3)}`,
-      ownerId: currentOwnerId(),
-      slug,
-      steps: [{ name: "fetch", label: STEPS.fetch.label, status: "pending" }],
-      status: "queued",
-      createdAt: new Date().toISOString(),
-    };
-    await fsJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
-
-    const advanced = await advanceJobWith(queued.id, {
+  /**
+   * One overrunning job, driven until it either pauses or ends.
+   *
+   * `leaseMs` is `DEADLINE_MARGIN_MS + 100`, so the claimant gives up a tenth of
+   * a second in — the deadline is `leaseMs - DEADLINE_MARGIN_MS` after the claim.
+   */
+  async function overrun(id: string) {
+    return await advanceJobWith(id, {
       session: async () => fsStoreSession({ artifacts: fsArtifacts, jobs: fsJobStore }),
       steps: {
         ...STEPS,
@@ -472,10 +480,69 @@ describe("a run its own deadline stopped", () => {
             }),
         },
       } as unknown as AdvanceParts["steps"],
-      /* The deadline is `leaseMs - DEADLINE_MARGIN_MS` after the claim, so this
-         is "give up a tenth of a second in". */
       leaseMs: DEADLINE_MARGIN_MS + 100,
     });
+  }
+
+  async function anOverrunningJob(seed: string): Promise<Job> {
+    const queued: Job = {
+      id: `spya-seam${seed}${Math.random().toString(36).slice(2, 3)}`,
+      ownerId: currentOwnerId(),
+      slug: `test-seam-overran-${seed}`,
+      steps: [{ name: "fetch", label: STEPS.fetch.label, status: "pending" }],
+      status: "queued",
+      createdAt: new Date().toISOString(),
+    };
+    await fsJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
+    return queued;
+  }
+
+  /**
+   * **A job that is merely waiting its turn says nothing at all**, and that is
+   * the sentence rule applied to a state that is not an ending.
+   *
+   * **Watched red on 2026-09-04**, against the pause as first written: the
+   * filesystem store's `noteProgress` aliased the coordinator's own steps array
+   * rather than copying it, so `runStep`'s failure narrative — `error`,
+   * `[jb-gone]`, a `finishedAt` — was already on the record by the time the
+   * pause read it, and `sweepStopped` only resets a step that says `running`.
+   * A card waiting its turn drew a red step with an interruption on it.
+   */
+  it("says nothing about a job it has merely put down", async () => {
+    const job = await anOverrunningJob("pa");
+    const advanced = await overrun(job.id);
+
+    expect(advanced?.done, "the job ended instead of being put down").toBe(false);
+    expect(advanced?.job.status).toBe("queued");
+    expect(advanced?.job.requeues).toBe(1);
+
+    const step = advanced?.job.steps[0];
+    expect(step?.status, "a job waiting its turn is showing a failed step").toBe("pending");
+    expect(step?.error, "a job waiting its turn is carrying an ending's sentence").toBeUndefined();
+    expect(advanced?.job.error).toBeUndefined();
+    /* `jobWorthRetrying` reads `failureKind`, and a kind under a status that is
+       not an ending is a Retry rule answering about a state it was not written
+       for. */
+    expect(advanced?.job.failureKind).toBeUndefined();
+
+    /* And the same is true of what was actually persisted, not only of the
+       answer this call happened to hand back. */
+    const stored = await getJob(job.id);
+    expect(stored?.steps[0]?.status).toBe("pending");
+    expect(stored?.steps[0]?.error).toBeUndefined();
+  });
+
+  it("does not tell the reader they stopped something they did not", async () => {
+    const job = await anOverrunningJob("ov");
+
+    /* Through the windows the pause buys, so this is the *ending* — which is
+       what this case has always been about. `REQUEUE_BUDGET` of them are
+       hand-backs and the next one ends it. */
+    for (let window = 0; window < REQUEUE_BUDGET; window++) {
+      expect((await overrun(job.id))?.done, `window ${window + 1} ended the job early`).toBe(false);
+    }
+    const advanced = await overrun(job.id);
+    expect(advanced?.done, "the job went round again past its budget").toBe(true);
 
     const step = advanced?.job.steps[0];
     expect(step?.status, "the step did not fail, so this proves nothing").toBe("error");

@@ -115,9 +115,16 @@ import {
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
-import { DEADLINE_MARGIN_MS, advanceJobWith, claimSession, retryJob } from "../src/jobs.js";
+import {
+  DEADLINE_MARGIN_MS,
+  REQUEUE_BUDGET,
+  advanceJobWith,
+  claimSession,
+  retryJob,
+} from "../src/jobs.js";
 import type { AdvanceParts } from "../src/jobs.js";
 import type { LabelsFile } from "../src/labels.js";
+import { INTERRUPTED, STEP_STOPPED } from "../src/messages.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
@@ -175,6 +182,9 @@ const SLUGS = {
   retry: "claim-session-pg-retry",
   openFailure: "claim-session-pg-open-failure",
   requeue: "claim-session-pg-requeue",
+  pause: "claim-session-pg-deadline-pause",
+  pauseStop: "claim-session-pg-deadline-pause-stop",
+  pauseSpent: "claim-session-pg-deadline-pause-spent",
 } as const;
 
 /* ------------------------------------------------------- the scratch roots -- */
@@ -357,6 +367,38 @@ function returningStep(
       };
     },
   } as PipelineStep;
+}
+
+/**
+ * A step that **never finishes on its own** and comes apart when the signal
+ * fires — which is what a model call does, and is the only way to reach
+ * `runStep`'s cancelled outcome.
+ *
+ * A step that merely *ignores* the signal is a different path: it runs to
+ * completion, lands in `transitionAfter`, and is ended there. This one is the
+ * mid-step overrun the pause is for — `hierarchy` cut off at 380 s on a real
+ * 144-page paper, having already paid for its structure call.
+ *
+ * `before` runs first, so a case can arrange a race — a Stop pressed while the
+ * step is in flight — from inside the step rather than from a timer.
+ */
+function hangingStep(name: StepName, before?: () => Promise<void>): PipelineStep {
+  return {
+    name,
+    label: STEPS[name].label,
+    outputs: () => [],
+    produces: STEPS[name].produces,
+    async run(ctx: { signal: AbortSignal }): Promise<StepProduct> {
+      await before?.();
+      await new Promise<never>((_resolve, reject) => {
+        if (ctx.signal.aborted) reject(ctx.signal.reason as Error);
+        else ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason as Error), {
+          once: true,
+        });
+      });
+      throw new Error(`${name} came back from a promise that only ever rejects`);
+    },
+  } as unknown as PipelineStep;
 }
 
 /**
@@ -1187,5 +1229,272 @@ when("a claim under Postgres", () => {
     expect((await stepHashesOf(r3!)).ideas).toBe(expected);
     expect((await stepHashesOf(r3!)).ideas).not.toBe(stale);
     await assertScratchUntouched(root, "the job queued behind a re-extraction");
+  }, 180_000);
+
+  /* ------------------------------------------------------------------ 7 -- */
+
+  /**
+   * **A claimant that runs out of time *inside* a step puts the job down and
+   * keeps its draft — and the next claim resumes on that same draft.**
+   *
+   * The acceptance case for stage 3 of
+   * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md. Until it,
+   * a mid-step overrun ended the job `error` with a Retry button the reader had
+   * to press, on a claimant that was alive and could have handed back — measured
+   * on a 142-page PDF whose `hierarchy` step needs 658–778 s against a 740 s
+   * deadline, and watched happening to `llm-survey` at 380 s.
+   *
+   * ## Why the draft is the assertion, and not a detail
+   *
+   * ⟨GPT Sol, finding 2, reproduced⟩ An earlier draft of the plan routed this
+   * through `settleExpired`'s requeue, which carries the same budget — but that
+   * statement **nulls `draft_revision_id`**, and on a first ingest there is no
+   * published revision to copy from, so `blocks` would re-run as a genuine first
+   * ingest and mint every block id afresh (src/ids.ts). The structure
+   * checkpoint of stage 2 is keyed on those ids, so a lost draft makes it
+   * permanently unreachable and every window re-buys the most expensive call in
+   * the pipeline.
+   *
+   * So this asserts the thing directly: the draft pointer survives, and the step
+   * that finished before the overrun is still recorded in it — which is what
+   * makes the next claim skip rather than re-run.
+   *
+   * ## The arrangement
+   *
+   * `extract` finishes at once and `blocks` never finishes at all. The lease
+   * leaves an 8 s deadline: enough for the walk to admit `blocks`, whose
+   * `STEP_BUDGET_MS` is 5 s, and not enough for it to survive.
+   */
+  it("hands the job back mid-step when it runs out of time, and resumes on the same draft", async () => {
+    const slug = SLUGS.pause;
+    const { steps, blocks } = articleSteps(slug, "pza", "the paused article");
+    const job = await queueJob(slug, INGEST);
+
+    /* **Which draft the claim was writing into, read while it still is.**
+       ⟨GPT Sol⟩ Reading the pointer only *after* the pause proves the row has
+       one, not that it has the *same* one: an implementation that replaced the
+       draft with a populated clone would satisfy every assertion below,
+       publication included. So the id is captured from inside the step that is
+       about to be aborted, which is the last moment the original is provably
+       the one in use. */
+    let inFlightDraft: string | null = null;
+    const { result: paused, root } = await advanceInFreshScratch(job.id, {
+      session: claimSession,
+      steps: {
+        ...STEPS,
+        ...steps,
+        blocks: hangingStep("blocks", async () => {
+          inFlightDraft = (await jobRow(job.id))?.draftRevisionId ?? null;
+        }),
+      } as never,
+      /* 8s of deadline after `DEADLINE_MARGIN_MS`: `extract` runs and commits,
+         `blocks` is admitted with more than its 5s budget left, and the timer
+         fires while it is in flight. */
+      leaseMs: DEADLINE_MARGIN_MS + 8_000,
+    });
+
+    /* **`done: false`, which is what makes this work with no client change.**
+       The browser re-drives a `{done: false, busy: false}` answer immediately
+       (src/web/jobEngine.ts) — the same shape the deliberate between-steps
+       hand-back has always returned. */
+    expect(paused?.done, "the job ended instead of being put down").toBe(false);
+    expect(paused?.busy).toBe(false);
+    expect(paused?.ran).toBe("blocks");
+    expect(paused?.job.status).toBe("queued");
+    /* Which window it is on, so the card can say so rather than looking stalled. */
+    expect(paused?.job.requeues).toBe(1);
+    /* Nothing failed, so nothing on the record may say one did — a `failureKind`
+       under a `queued` status is a Retry rule reading a state that is not an
+       ending. */
+    expect(paused?.job.error).toBeUndefined();
+    expect(paused?.job.failureKind).toBeUndefined();
+
+    const row = await jobRow(job.id);
+    expect(row?.status).toBe("queued");
+    expect(row?.attemptId, "the claim was not let go").toBeNull();
+    expect(row?.requeues).toBe(1);
+    expect(row?.steps.find((s) => s.name === "blocks")?.status, "a paused job left a step spinning").toBe(
+      "pending",
+    );
+
+    /* **The whole point of the stage.** */
+    const held = row?.draftRevisionId;
+    expect(held, "the pause threw the draft away — stage 2's checkpoint is now unreachable").toBeTruthy();
+    expect(inFlightDraft, "the step never saw a draft, so the identity below proves nothing").toBeTruthy();
+    expect(held, "the pause kept *a* draft, but not the one the claim was writing into").toBe(
+      inFlightDraft,
+    );
+    expect((await revisionRow(held!))?.status).toBe("draft");
+    /* **`extract` is `done` in that draft, and `blocks` is honestly still
+       `running`.** The second is the marker discipline rather than an oversight:
+       `beginStep` brackets a run and only the success path clears it, so a step
+       that was aborted mid-way must not read as finished — and `beginStepRun`
+       already lets a later attempt reopen a row in this state. Between them they
+       are the whole assertion: the finished work survived the pause and the
+       unfinished work did not pretend to. */
+    expect(
+      await stepRunsOf(held!),
+      "the step that finished before the overrun was not kept",
+    ).toEqual({ extract: "done", blocks: "running" });
+    expect(await currentRevisionOf(slug)).toBeNull();
+    await assertScratchUntouched(root, "the paused claim");
+
+    /* **And the next claim finishes it**, on the draft this one left. `extract`
+       is skipped because its artefacts are in that draft — which is exactly what
+       a requeue that nulled the pointer would have destroyed.
+
+       **Counted rather than read off the step's status**, and the difference
+       matters: `runStep` leaves an already-`done` step saying `done` rather than
+       relabelling it `skipped`, so a step that ran a second time and a step that
+       skipped are the same word on the record. The only honest question is
+       whether the fixture's body was entered. */
+    let extractRuns = 0;
+    const countedExtract = {
+      ...(steps.extract as PipelineStep),
+      async run(...args: Parameters<PipelineStep["run"]>) {
+        extractRuns += 1;
+        return await (steps.extract as PipelineStep).run(...args);
+      },
+    } as PipelineStep;
+    const { result: finished, root: second } = await advanceInFreshScratch(job.id, {
+      session: claimSession,
+      steps: { ...STEPS, ...steps, extract: countedExtract } as never,
+    });
+    expect(finished?.job.error).toBeUndefined();
+    expect(finished?.done).toBe(true);
+    expect(finished?.job.status).toBe("done");
+    /* **`extract` never ran again, which is the resumption itself.**
+       `stepIsDone` reads the artefacts through the session, so it can only
+       answer yes because they are in the draft this claim adopted. A pause that
+       nulled the pointer would have opened an empty draft, run it again, and
+       minted new block ids on the way. */
+    expect(
+      extractRuns,
+      "the resumed claim re-ran a step the paused one had already paid for",
+    ).toBe(0);
+    expect(finished?.ran).toBe("hierarchy");
+
+    /* The published revision **is** the draft the paused claim was writing into,
+       so nothing was started again. */
+    expect(await currentRevisionOf(slug)).toBe(held);
+    const article = await runAsOwner(DEV_OWNER_ID, () => pgArticleReader.loadArticle(slug));
+    expect(article.blocks.map((b) => b.id)).toEqual(blocks.map((b) => b.id));
+    await assertScratchUntouched(second, "the claim that resumed a paused job");
+  }, 180_000);
+
+  /* ------------------------------------------------------------------ 8 -- */
+
+  /**
+   * **Stop racing the overrun: the reader's stop wins.**
+   *
+   * ⟨GPT Sol, finding 3⟩ If the pause simply excluded `cancelling` rows and fell
+   * through to today's `interruptedEnding`, `finishIn` would clear `cancelling`
+   * and keep the ending it was handed — so a job the reader deliberately stopped
+   * would end `error`, with a Retry button, saying *"whatever was running it did
+   * not come back"*. That is the exact "the app not listening" failure
+   * src/messages.ts is written against.
+   *
+   * The Stop is pressed **from inside the step**, through the store rather than
+   * through `cancelJob`, so the flag lands on the row while the claim is live
+   * and the abort that follows is the claimant's own deadline. That is the race:
+   * both are true at once, and only one of them is the reader's.
+   */
+  it("ends a job stopped while it was overrunning as cancelled, not as an error", async () => {
+    const slug = SLUGS.pauseStop;
+    const { steps } = articleSteps(slug, "pzb", "the stopped article");
+    const job = await queueJob(slug, INGEST);
+
+    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+      session: claimSession,
+      steps: {
+        ...STEPS,
+        ...steps,
+        extract: hangingStep("extract", async () => {
+          await runAsOwner(DEV_OWNER_ID, async () => {
+            const asked = await pgJobStore.requestCancel(job.id, DEV_OWNER_ID);
+            expect(asked?.cancelling, "the Stop never reached the row").toBe(true);
+          });
+        }),
+      } as never,
+      leaseMs: DEADLINE_MARGIN_MS + 1_500,
+    });
+
+    expect(advanced?.done).toBe(true);
+    expect(advanced?.job.status, "a job the reader stopped ended as something else").toBe(
+      "cancelled",
+    );
+
+    const row = await jobRow(job.id);
+    expect(row?.status).toBe("cancelled");
+    /* A stop is not a window, so the budget is untouched. */
+    expect(row?.requeues).toBe(0);
+    expect(row?.failureKind, "a stopped job was given a Retry rule").toBeNull();
+    /**
+     * **The account, on both surfaces** ⟨GPT Sol, finding 3 on the built stage⟩.
+     * Asserting the status alone leaves the corrective lines in `walkClaim`
+     * deletable with this case still green — `runStep` has already marked the
+     * job cancelled by the time they run, so the status is not evidence for
+     * them. What they fix is what the reader is *told*: the card renders
+     * `step.error` and the band renders `job.error`, and `runStep` wrote
+     * `INTERRUPTED` on the step because it asked which abort fired and got the
+     * honest answer for a claimant that had no idea a Stop was also in flight.
+     * Neither field may go on saying nobody came back about a thing the reader
+     * chose. tests/step-failure-seam.test.ts is where that seam lives.
+     */
+    const stopped = row?.steps.find((s) => s.name === "extract");
+    expect(stopped?.error, "the card blamed the deadline for the reader's own Stop").toBe(
+      STEP_STOPPED.message,
+    );
+    expect(stopped?.error).not.toContain(INTERRUPTED.message);
+    expect(row?.error, "the band blamed the deadline for the reader's own Stop").not.toContain(
+      INTERRUPTED.message,
+    );
+    expect(row?.cancelling).toBe(false);
+    /* Terminal, so it may not go on holding a pointer — `sweepAbandonedDrafts`
+       spares a revision any job row names. */
+    expect(row?.draftRevisionId).toBeNull();
+    expect(await currentRevisionOf(slug)).toBeNull();
+    await assertScratchUntouched(root, "the claim the reader stopped");
+  }, 120_000);
+
+  /* ------------------------------------------------------------------ 9 -- */
+
+  /**
+   * **And it stops.** A step that can never fit in one window would pause,
+   * re-claim, spend another window, for ever — buying model calls nobody is
+   * waiting for, which is the failure this whole area is about wearing a
+   * different hat.
+   *
+   * `REQUEUE_BUDGET` is the cap and it is **shared** with the lapsed-lease path,
+   * so this is three windows in total rather than three cooperative overruns.
+   * The third ends the job the way it always did: `INTERRUPTED` and `retry`, so
+   * the reader gets the button and the sentence, and a new job with a fresh
+   * budget is exactly what pressing it makes.
+   */
+  it("stops handing back a job that never fits, rather than looping for ever", async () => {
+    const slug = SLUGS.pauseSpent;
+    const { steps } = articleSteps(slug, "pzc", "the article that never fits");
+    const job = await queueJob(slug, INGEST);
+
+    const parts = {
+      session: claimSession,
+      steps: { ...STEPS, ...steps, extract: hangingStep("extract") } as never,
+      leaseMs: DEADLINE_MARGIN_MS + 1_500,
+    };
+
+    for (let window = 1; window <= REQUEUE_BUDGET; window++) {
+      const { result } = await advanceInFreshScratch(job.id, parts);
+      expect(result?.done, `window ${window} ended the job instead of pausing`).toBe(false);
+      expect((await jobRow(job.id))?.requeues).toBe(window);
+    }
+
+    const { result: over } = await advanceInFreshScratch(job.id, parts);
+    expect(over?.done, "the job went round again past its budget").toBe(true);
+    const row = await jobRow(job.id);
+    expect(row?.status).toBe("error");
+    expect(row?.requeues, "the ending spent another window").toBe(REQUEUE_BUDGET);
+    expect(row?.failureKind).toBe("retry");
+    expect(row?.error).toBe(INTERRUPTED.message);
+    expect(row?.draftRevisionId, "a terminal job kept its draft pointer").toBeNull();
   }, 180_000);
 });

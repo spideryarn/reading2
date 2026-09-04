@@ -55,6 +55,7 @@ import {
   type ExpirySettlement,
   type JobEnding,
   type JobStore,
+  type PauseOutcome,
   StaleAttemptError,
   type StepOutcome,
 } from "./jobs.js";
@@ -114,14 +115,22 @@ interface QueueState {
    */
   tickets: Map<string, EnqueueTicket>;
   /**
-   * How many times `settleExpired` has given each job back to the queue rather
-   * than ending it — the budget's counter. See jobs.ts § `settleExpired`.
+   * How many extra lease windows each job has been given rather than being
+   * ended — the budget's counter, spent by `settleExpired` when a claim lapses
+   * and by `pauseForDeadline` when a live claimant runs out of its own deadline.
+   * See jobs.ts § `settleExpired` and § `pauseForDeadline`.
    *
    * **In memory, unlike the Postgres column it stands in for**, and that is the
    * same single-process argument the rest of this file rests on: a restart
    * empties this map, and a restart is `sweepStopped`, which requeues everything
    * running with no budget at all. A count that outlived the process would be a
    * budget against an interruption this store does not have.
+   *
+   * **`Job.requeues` is written from this and is not it.** The field is the one
+   * the reader's card may read, so it goes on the record and therefore onto the
+   * disk; the budget is this map, so a restart still hands the job a fresh one.
+   * The two agree within a process and part company across a restart, which is
+   * the same weaker parity this whole counter already had.
    */
   requeues: Map<string, number>;
   /** Jobs the reader has dismissed. A late write must not bring one back. */
@@ -600,9 +609,89 @@ export const fsJobStore: JobStore = {
 
   async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
     const job = fenced(id, attempt);
-    job.steps = steps;
+    /**
+     * **A copy, because the caller goes on mutating this array.**
+     *
+     * `get` clones on the way out with the reasoning that *"a caller that
+     * mutated what it was handed would be writing to the store without going
+     * through it — which is the thing having a store is for"*. This is the same
+     * rule on the way in, and it was missing: `walkClaim` calls this once a step
+     * with the very array it then mutates, so the index held a live reference to
+     * the coordinator's working copy and every later change to it landed in the
+     * store without a transition.
+     *
+     * It stayed invisible while every other transition passed its own explicit
+     * `steps`. What made it visible is `pauseForDeadline`, which deliberately
+     * derives the paused shape from **the record the store holds** — as the
+     * Postgres `settledSteps` does — and found `runStep`'s failure narrative
+     * already written onto it: a step reading `error` with `INTERRUPTED`'s
+     * sentence on a job that is going back into the queue. `sweepStopped` only
+     * resets a step that says `running`, so it left it there.
+     * tests/step-failure-seam.test.ts § a run its own deadline stopped.
+     *
+     * A shallow copy of the array is not enough — the elements are the objects
+     * being mutated — so this is `structuredClone`, the same call `get` makes,
+     * over a handful of small records once a step.
+     */
+    job.steps = structuredClone(steps);
     await persist(job);
     return structuredClone(job);
+  },
+
+  /**
+   * The Postgres `pauseForDeadline`, on one process's `attempts` map.
+   *
+   * The four questions are asked in the same order and answered with the same
+   * words, and the order is what matters most: **a reader's Stop is decided
+   * before the budget**, so a job that has spent its windows *and* been stopped
+   * is still a job that was stopped.
+   *
+   * `sweepStopped` rather than the fields written out again, exactly as
+   * `settleExpired` calls it: a restart, a lapsed lease and a claimant that ran
+   * out of its own deadline are three ways to reach one interruption, and they
+   * must not drift into three answers. Its `cancelling` branch is unreachable
+   * from here — the check above has already left.
+   *
+   * **No draft to keep**, which is the one thing this cannot demonstrate: the
+   * filesystem session holds no transaction and no draft revision
+   * (src/store/session.ts). What it can hold both stores to is the *queue*
+   * shape, which is what tests/store-jobs-parity.test.ts asserts;
+   * tests/claim-session-postgres.test.ts is where the draft survives a pause.
+   */
+  async pauseForDeadline(
+    id: string,
+    attempt: string,
+    requeueBudget: number,
+  ): Promise<PauseOutcome> {
+    await ready();
+    const job = index.get(id);
+    const held = attempts.get(id);
+    /* The same four conditions `fenced` throws on, answered rather than thrown:
+       the caller has three other outcomes to tell apart and a bare refusal
+       cannot say which this is. */
+    if (
+      !job ||
+      job.status !== "running" ||
+      held?.attempt !== attempt ||
+      held.expires <= Date.now()
+    ) {
+      return { kind: "stale" };
+    }
+    if (job.cancelling) return { kind: "cancelled" };
+    const spent = requeues.get(id) ?? 0;
+    if (spent >= requeueBudget) return { kind: "budget-spent" };
+
+    requeues.set(id, spent + 1);
+    job.requeues = spent + 1;
+    sweepStopped(job);
+    /* Cleared, so the record always describes *this* state: a job that failed a
+       step, was given another window and is now waiting its turn must not sit in
+       the queue wearing the last attempt's sentence. */
+    delete job.error;
+    delete job.failureKind;
+    attempts.delete(id);
+    await persist(job);
+    return { kind: "requeued", job: structuredClone(job) };
   },
 
   async finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
@@ -680,7 +769,12 @@ export const fsJobStore: JobStore = {
          everything running with no budget at all. So a count that outlived the
          process would be a budget against an event this store does not have. */
       if (!job.cancelling && (requeues.get(id) ?? 0) < requeueBudget) {
-        requeues.set(id, (requeues.get(id) ?? 0) + 1);
+        const spent = (requeues.get(id) ?? 0) + 1;
+        requeues.set(id, spent);
+        /* On the record as well as in the map: the map is the *budget* and this
+           is what goes to the reader. See `QueueState.requeues` for why the two are
+           allowed to part company across a restart. */
+        job.requeues = spent;
         sweepStopped(job);
         await persist(job);
         settled.push({ id, status: job.status as ExpirySettlement["status"] });
