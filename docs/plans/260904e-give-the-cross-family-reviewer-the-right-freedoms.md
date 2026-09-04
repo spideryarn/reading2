@@ -303,6 +303,18 @@ qualified.
 Sol's own verdict on the template: *"The template is not too long… Its problem is precision at the
 candidate and evidence seams, not size."* That answers the suspicion I had ranked first.
 
+### The rule obeying itself, same day
+
+F2 was an established P1 whose final fix landed after the round-two snapshot, which is precisely
+the case the new rule says gets a narrowly scoped check. So it got one —
+[260904e-f2-check-sol.md](260904e-f2-check-sol.md) — walking Sol's own six-step sequence through the
+committed wording. **Fix verified**, including the thing I was most worried about: that the
+paragraph explaining the rule might quietly explain it into a smaller rule. It doesn't.
+
+Worth noting what this cost: one 25-minute run, scoped to a single passage in a single file, with
+discovery explicitly closed. That is what the termination rule is *for* — not fewer reviews, but
+narrower ones once the question is settled.
+
 ## An anomaly, written down because it hides
 
 Sol's answer file was **written twice**: a complete 18,458-byte answer at 22:11, replaced by a
@@ -337,4 +349,6 @@ did not hold up. That is the doc's own rule working in both directions.
 - [x] Stage 1 — corrections and the network decision — 2026-09-04
 - [x] Stage 2 — the review prompt contract — 2026-09-04
 - [x] Stage 3 — the delegation roster — 2026-09-04
+- [x] Stage 1–2 code review, refused, all ten findings taken — 2026-09-04
+- [x] F2's fix verified under the new rule; gates green; merged and pushed to `dev` — 2026-09-04
 - [x] Stage 4 — **dropped** with a reason, above
