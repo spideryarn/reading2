@@ -931,12 +931,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "of stage B and stops seeing this file reach a condemned module.",
   },
   "tests/routes.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
-      "The HTTP surface itself, and the broadest reach in the inventory: twenty-three sites across " +
-      "the article reader, comments, searches, shelf, reader profile and library search. It copies " +
-      "`example/` under a throwaway slug and asserts through `loadComments`, `loadShelf` and " +
-      "`loadRuns`, so both the fixture and every read-back move together.",
+      "**Converted in stage B2 on 2026-09-04** — the HTTP surface itself, and the broadest reach " +
+      "in the inventory. The pre-conversion count recorded here was *twenty-three sites*; the " +
+      "derived number is **16 `cp`/`rm`/`writeFile` calls and 28 calls into the filesystem-only " +
+      "readers and writers** (`loadComments`, `loadShelf`, `loadRuns`, `createComment`, " +
+      "`patchComment`, `beginAnswer`, `beginRun`, `deleteRun`), plus `SPIDERYARN_READER_FILE`. " +
+      "Five `scratchArticleInPg` articles replace the `example/` copies and every read-back now " +
+      "goes through `commentStore`, `shelfStore`, `searchStore` or `readerStore`. Three things " +
+      "changed meaning rather than moving: the reader profile is a row keyed on the owner, so the " +
+      "isolation is a seeded owner under `asTestOwner` and a database postcondition in `afterAll`; " +
+      "the three admin cases that asserted **501 because filesystem** now assert 200 and a list, " +
+      "which stage F does not touch; and an orphaned `pending` comment is one whose lease has run " +
+      "out, which brought a case with it. Ten mutations, seven red and three green — the greens " +
+      "are the library's owner predicate, the search store's `remove` id predicate, and the two " +
+      "slug guards that are belt and braces over each other. **Still `database-integration` " +
+      "rather than collateral**, and that is the honest verdict rather than an un-updated one: " +
+      "the entry should simply leave this map when `tests/store-migration-witness.json` is re-run " +
+      "at the end of stage B.",
   },
   "tests/second-job-queues.test.ts": {
     convertedInB: "2026-09-04",

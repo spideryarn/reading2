@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B (25 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
+  → B ✅ → B2 ✅ → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -2196,6 +2196,60 @@ verdict** rather than letting a retained log stand in for a run it did not do. T
 the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
 but it means the follow-ups were verified here, in this tree, and not there.
 
+### B2 is done — `routes.test.ts`, and stage B's 26 of 26
+
+2026-09-04, ~150 minutes against an estimate of 240. **127 tests, green, in the private lane**, which
+now runs 126 files and 1966 tests. Converted one `describe` at a time, as the stage said, and **not**
+split into siblings.
+
+**Thirteen mutation runs across the 17 blocks, ten of them recorded: seven red, three green.** Every
+one is written beside the assertion it bears on with its `**Blind to.**`. Five blocks were judged to
+need none, and each says so in its own header — the two stream-refusal blocks and the two PATCH-body
+tables validate above any store, and the tweets route's every plausible break also answers *"nothing
+here"*, which is not a mutation, it is an ambiguity.
+
+##### Three findings, and the first should stop somebody deleting a check
+
+- **The slug guard is triply redundant and no single mutation can move it.** `require-slug`,
+  `routes.ts` § `slugPart` and `api.ts` each refuse independently; the block proves *some* guard
+  refuses and cannot say which. Only turning off all three moved it — and then a traversal is a
+  **404, not an escape**, because it is the filesystem store that made the class reachable at all.
+  Worth having before somebody deletes a "redundant" check on the strength of a green suite.
+- **`PATCH /api/reader` answers from its own input, not from the row.** `writeProfile` returns its
+  argument, so a write that did nothing still replies with what it was told. Only the `GET`-backed
+  assertions can see a broken write, which is a general shape worth looking for: **a route that
+  echoes cannot witness its own persistence.**
+- **Nothing in the file could tell *this run* from *these runs*** for saved searches — `remove` and
+  `recolour` could each lose their id predicate silently. One assertion closed `recolour`; `remove`
+  has no two-run case at all, and that green is kept and recorded rather than papered over.
+
+##### What changed meaning, and the one case that had to be added
+
+The reader-profile block's `SPIDERYARN_READER_FILE` isolation has no Postgres equivalent, so it is a
+seeded owner under `asTestOwner` with the row **asserted gone** in `afterAll` — the decision this plan
+recorded before B2 began. The three admin cases now assert 200-and-a-list, 200-and-a-page, and
+`[401, 403, 200]`; *"says nothing about users in three refusals"* keeps its name and gains force,
+because the third arm is what proves an empty `users` really would be indistinguishable from a
+refusal.
+
+And **an orphaned `pending` comment turns out to be one whose lease has expired**, which needed a new
+case — *leaves a live attempt alone*. It is the only case the sweep mutation can reach: **all three
+inherited cases would have watched that mutation go green.** Nothing was dropped; two cases gained
+assertions.
+
+##### A trap this plan states, which is false
+
+Trap 5 above says `scratchArticleInPg`'s `mutate` rewrites the article URL to
+`spideryarn-test.invalid`. **It does not.** The string is defined locally in two test files
+(`jobs.test.ts` and `retry-is-only-for-a-failed-job.test.ts`), each with its own `urlFor`. The trap
+was written into B2's brief by generalising one agent's local fix into a claim about the shared
+helper, without opening the helper. Harmless in B2, where nothing pumps — but it is the fourth thing
+today asserted from a report rather than from the code, and the correction belongs next to the claim.
+
+**Promoting it to the helper is the right fix and is not done**, because it changes a fixture every
+suite in the lane uses and stage B is closing. It is a candidate for stage C or D: one place, distinct
+per slug, so `freeSlug` cannot adopt one fixture for another.
+
 #### The guard is built, and marking the 25 found four files whose evidence was not evidence
 
 `convertedInB` on the `STORE_MIGRATION` entry, and
@@ -2251,8 +2305,8 @@ filesystem site. Three of its numbers have since been checked against the files,
 | --- | --- | --- |
 | `jobs.test.ts` tests | ~35 | **71** |
 | `jobs-walk.test.ts` tests | 9 | **10** |
-| `routes.test.ts` filesystem sites | ~40 | **3 functions** — `cp`, `rm`, `writeFile` — over a handful of fixture slugs |
-| `routes.test.ts` "501 because filesystem" tests | ~9 | **4 assertions** |
+| `routes.test.ts` filesystem sites | ~40 | **46** — and the inventory was right; see below |
+| `routes.test.ts` "501 because filesystem" tests | ~9 | **4 assertions** across 3 tests |
 
 **It is not that the inventory was careless — it is that a site count is the wrong instrument.** The
 queue round's own verdict was that *"the byte assertions were the easy part — they are rows"*, and
@@ -2260,15 +2314,25 @@ that the real cost was `claimSession` needing a draft and the Postgres store sha
 neither of which any count of `readFile` calls can see. So `step-failure-seam` was called an outlier
 and took forty minutes, while `jobs-walk` was called ordinary and took ninety.
 
-**`routes.test.ts`'s 240 minutes is therefore uncertain downwards**, and B2's brief says so and asks
-for the real number rather than inheriting this one. Its fixture pattern — copy the committed fixture
-under a `test-…` slug, drive `handleApi`, clean up — is exactly the pattern `scratchArticleInPg`
-replaced in the other twenty-five, and one of its seventeen blocks announces in its own header that it
-touches no store at all.
+**And the row about `routes.test.ts`'s sites is a correction of a correction.** This section first
+said the inventory had over-counted by more than tenfold — *"3 functions, `cp`, `rm`, `writeFile`,
+over a handful of fixture slugs"* — from a grep for `readFile|writeFile|mkdir|rm\(|existsSync|dataRoot`.
+B2 counted properly: **16 call sites of those functions, 28 calls into filesystem-only readers and
+writers** (`loadComments` ×13, `loadRuns` ×7, `loadShelf` ×5, `createComment` ×2, `deleteRun` ×2,
+`patchComment`, `beginAnswer`, `beginRun`) and 2 `SPIDERYARN_READER_FILE` sites. **46, so the
+inventory's ~40 was right and the correction was wrong.**
+
+The grep missed the 28 because **it looked for filesystem verbs, and the filesystem-only readers do
+not have filesystem verbs in their names** — which is the trap this document spends a table and two
+paragraphs on, made by the person who wrote the table. It is the same failure in a third costume: a
+search that did not cover the answer, reported as an absence.
+
+**The 240 minutes was still too high — B2 took ~150** — but not for the reason given here. The
+estimate was wrong because a site count is the wrong instrument, not because the sites were few.
 
 Recorded because § *Counts are perishable here* is this document's rule and this document keeps
-breaking it: **five of the six counts that went stale went stale by being copied**, and these four
-went wrong by being derived from the wrong thing, which is the harder failure to notice.
+breaking it: **five of the six counts that went stale went stale by being copied**, and these went
+wrong by being derived from the wrong thing, which is the harder failure to notice.
 
 #### The evidence guard: cite it, do not copy it
 
