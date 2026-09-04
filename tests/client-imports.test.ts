@@ -372,6 +372,21 @@ const SHARED = new Set([
      file names the prefix) and
      docs/plans/260831af-carrying-markup-facts-past-readability.md. */
   "reserved.js",
+  /* The order the steps run in, and `StepBefore<S>` read off it. On the list
+     because it qualifies — it imports `types.js`, already here, and nothing
+     else — and because it exists *because of this test* rather than in spite of
+     it, which is the third module to be written for that reason after
+     `referee-mirror-types.js` and `injection-scan-types.js`.
+
+     The client needs it because `useStepJob.ts` checks a caller's `precededBy`
+     against the real order at compile time, and the alternative is the browser
+     carrying a second copy of the sequence. It carried one once
+     (src/web/feedback-diagnostics.ts § `WORD` argues against a third), and a
+     copy is how `precededBy: ["assets"]` on `hierarchy` comes to name a step
+     that runs afterwards — which GPT Sol reproduced on 2026-09-03 and which the
+     server does not honour and never has. One ordering, not two.
+     See src/step-order.ts. */
+  "step-order.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

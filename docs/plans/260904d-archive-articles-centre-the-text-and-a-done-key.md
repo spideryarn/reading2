@@ -176,10 +176,12 @@ including for anything deferred.
 
 Still open, and cheap:
 
-- **`tests/client-imports.test.ts` is red on `dev`** — `src/web/useStepJob.ts` imports `StepBefore`
-  from `../pipeline.js` (commit `a9fd3197`). Type-only, so it erases, but the test flags the erased
-  form **deliberately** and says so. The fix is moving the type to a shared module.
+- ~~**`tests/client-imports.test.ts` is red on `dev`**~~ — **done 2026-09-04**, and the fix was the
+  one named here: § A third pass below.
 - **Unexplained 404s in the dev browser console**, no URL captured, nobody has looked.
+- **`tests/client-imports.test.ts` checks import edges, not side effects** — GPT Sol, 2026-09-04.
+  A top-level `console.log` or timer in an allowlisted module passes a test whose header claims
+  purity is checked rather than trusted. Nothing on the list does it today. § A third pass.
 - **Dictation has never been measured on human speech** — the 90–92% hard-term recall behind -11 and
   -15 is a synthetic corpus.
 - Seven decisions from the last batch are waiting on Greg in
@@ -229,3 +231,112 @@ hour; one of them killed the wrapper, started a "fresh" server that walked to 53
 working and with having measured the wrong process. It caught itself and said so.
 [browser-testing.md](../project/browser-testing.md) now carries it, with the remedy: prove *which
 code* is being served with a `curl` before trusting anything the browser says.
+
+## A third pass, 2026-09-04 23:00 — the queue was empty and the trunk was not green
+
+The loop's next run found **one unresolved report, and it was this batch's own -1A**, left open
+deliberately because the keyboard fix could not be verified without a phone. Leaving it open was the
+wrong call: `feedback-reports.md` says an issue nobody closes is one the loop rediscovers every three
+hours and re-derives the same answer for, which is exactly what happened. It is resolved now, and the
+device check is written into the note instead —
+[the note](../user-feedback/260904_1723-mobile-keyboard-done-send-button.md), which was also rewritten,
+because it still described `interactive-widget=resizes-content` as the fix and still carried the
+sentence about a standalone app resizing "on its own" that had already been retracted on the Sentry
+issue. **A retraction that lives only in a Sentry comment is a retraction nobody will read.**
+
+`awaiting-approval.md` was empty, and is still empty.
+
+### The carried-over red test, cleared
+
+`tests/client-imports.test.ts` had been red on `dev` since `a9fd3197` because
+`src/web/useStepJob.ts` took `import type { StepBefore }` from `src/pipeline.ts` — a server module.
+Nothing shipped wrong: the import really was erased, which is why it survived. What was wrong is
+that the rule had a standing exception, and a rule with an exception cannot be read off its own test.
+
+`STEP_ORDER`, `StepsMissingFromOrder` and `StepBefore` moved to **`src/step-order.ts`**, which imports
+`types.js` and nothing else. `pipeline.ts` re-exports all three, so the couple of dozen callers that
+say `from "./pipeline.js"` did not change. This is the third module written for this test rather than
+in spite of it, after `referee-mirror-types.ts` and `injection-scan-types.ts`, and the test's own
+header names the remedy: *move the shared thing into a module that imports nothing.*
+
+**The check was proved able to fail** before it was believed: a `node:crypto` import added to
+`step-order.ts` turns the new allowlist entry red, and removing it turns it green again.
+
+**It paid a debt nobody was tracking.** `src/web/tsconfig.json` carried `"../*.d.ts"` in its
+`include` for one reason, stated in its own comment: the old import dragged the pipeline's whole type
+closure into the client project, through `src/fetch.ts` and `src/pdf.ts`, and without the glob those
+resolved as `any` and the project failed TS7016 on packages the browser never loads. The comment
+recorded the price at the time — 267 files to 346, and 2.5s → 3.2s across `npm run typecheck`. With
+the import moved there is no closure left to drag in, so the glob is gone and the comment now says
+why it is absent, which is the thing the next reader of `tests/tsconfig.json` will wonder about.
+
+### Decisions and assumptions, this pass
+
+1. **-1A resolved rather than left open.** Assumption: if the phone check fails, a new report is the
+   right way for that to come back, and the loop working as designed. The alternative — an issue
+   parked open for a check only Greg can do — costs a run every three hours and hides nothing usefully.
+2. **`STEP_ORDER` moved rather than duplicated**, and moved rather than `StepBefore` being rewritten
+   to take a hand-written order. A second copy of the sequence is the failure
+   `src/web/feedback-diagnostics.ts` § `WORD` already argues against, and the order is a fact with
+   ends on both sides of the wire.
+3. **`step-order.js` on the allowlist holds a runtime value**, not only types, unlike
+   `public-types.js` beside it. Judged to qualify on the rule as written — it imports nothing but an
+   already-listed module — and the array is nine short strings, so nothing meaningful reaches the
+   bundle even if a future caller imports it as a value.
+4. **Appended here rather than given a plan doc of its own.** Two items, both continuations of this
+   doc's own *Carried over* list.
+
+### GPT Sol on the move, and what it caught
+
+No runtime finding — Sol checked the one that mattered, that `import { STEP_ORDER }` followed by
+`export { STEP_ORDER }` is the same live binding as the old `export const` for every consumer,
+including `import * as`, enumeration and interop, and confirmed the cycle gate clean across 1,370
+files. Four Lows, all real, all fixed bar the last:
+
+1. **The compatibility re-exports defeated the very protection they looked like.** `pipeline.ts`
+   re-exported `StepBefore` and `StepsMissingFromOrder` as well as `STEP_ORDER`, and nothing in the
+   tree imports either from there any more — so knip listed both as unused exports. The `@public`
+   tag that keeps `StepsMissingFromOrder` alive protects the **declaration**, not a façade in front
+   of it. Both re-exports dropped; knip is quiet on all three names.
+2. **Four comments stopped being true in transit**, which is what a move does and why it is worth a
+   reviewer: `isStepName` described as "below" when it stayed behind; a warning that a value import
+   would pull the pipeline into the bundle, when it would now pull nine short strings; and two files
+   still naming `pipeline.ts` as where `StepBefore` is defined.
+3. **The new tsconfig comment overclaimed, twice.** There *is* still a closure —
+   `step-order.ts → types.ts → messages/assets/ids` — merely a small one that was already in the
+   project. And **TS7016 is not what will catch the next breach**: a future client import of a fully
+   typed server module would typecheck in silence. `tests/client-imports.test.ts` is the diagnostic;
+   the `include` was only ever a plaster over one breach of it. The comment says that now.
+4. **Not fixed, and worth carrying: the purity guard does not check purity.**
+   `tests/client-imports.test.ts` checks import edges and `node:` builtins, so a top-level
+   `console.log`, a timer, a global mutation or a side-effectful bare-package import in an
+   allowlisted module passes it. No module on the list does any of that today, so nothing is broken —
+   but the test's own header says purity is "checked rather than trusted", and that is stronger than
+   what it implements. Left alone deliberately: tightening it is a change to a rule that eight
+   modules are already on the right side of, and it belongs in its own piece of work rather than
+   riding along with a move.
+
+### The trunk had a second red, and it was also this batch's
+
+`npm run check` came back with three failing files out of 661. Two —
+`tests/admin-store.test.ts` and `tests/step-failure-seam.test.ts` — were 20- and 30-second
+**timeouts**, and both pass alone: fifteen other sessions were on the shared Postgres at the time.
+That is the known signature on this box, and the rule that goes with it is *re-run each alone before
+believing a red batch*.
+
+The third was real. `tests/store-migration-registry.test.ts` had
+`tests/feedback-dictation-vocabulary.test.tsx` down as a file the import graph can reach a condemned
+module through, with no registry entry and no witness record. **That file is `b96eadc0`'s — the
+previous batch's answer to the microphone misspelling "Spideryarn"** — and it landed after
+`store-migration-witness.json` was recorded, which is precisely the case the registry's hole check
+exists to catch and the third time it has caught one.
+
+Proved not to be this pass's doing before it was fixed: with the old `../pipeline.js` import put back
+in `useStepJob.ts`, the failure is identical. Classified the way the two arrivals before it were —
+`store-agnostic-fake` / `static-only`, because the file replaces `src/store/index.js` wholesale with
+an object literal and constructs no store at all, and because re-running witness 2 is what would
+upgrade the evidence. Green.
+
+**Two red tests on the trunk, both left there by this batch, and neither noticed until a later run of
+the loop went looking.** The gate that would have caught them is `npm run check`, which takes half an
+hour here and was not run at the end of that batch.

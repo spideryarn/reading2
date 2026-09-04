@@ -470,6 +470,30 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "has no owner column and therefore no second reader, so this claim only exists in Postgres; " +
       "the seeder is the whole of its filesystem contact.",
   },
+  /**
+   * **A third arrival, and the hole check caught it a day after the second** —
+   * which is the check earning its fourteen seconds for the third time, and the
+   * reason it re-derives the import graph live rather than reading a stored
+   * answer.
+   *
+   * Landed 2026-09-04 with `b96eadc0`, answering a feedback report about the
+   * microphone in the Feedback dialog spelling "Spideryarn" wrong
+   * (docs/user-feedback/260904_1241-dictation-misspells-spideryarn.md). Well
+   * after the witness ran, so `static-only` is the state of the evidence rather
+   * than a preference: re-running witness 2 is what upgrades it.
+   */
+  "tests/feedback-dictation-vocabulary.test.tsx": {
+    category: "store-agnostic-fake",
+    evidence: "static-only",
+    reason:
+      "Asks whether the Feedback dialog's microphone carries the app's own vocabulary — that the " +
+      "dialog hands `useDictation` a context at all, and that the upload puts it in the body. It " +
+      "replaces `src/store/index.js` wholesale with a two-method object literal, mocks " +
+      "`useDictation`, `apiFetch` and `fetch`, and opens no microphone and calls no model; it " +
+      "constructs no store of any kind and reads no path. It reaches a condemned module only " +
+      "because `src/transcribe.ts` and the dialog's own imports pull the app in behind them. " +
+      "Nothing here changes when the filesystem store goes.",
+  },
   "tests/glossary-ideas-baseline.test.ts": {
     category: "store-agnostic-fake",
     reason:

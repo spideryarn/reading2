@@ -69,8 +69,10 @@ It starts at `ArtifactKind` and `ArtifactMap` in
 one of them a total record, so the new kind or step stays red until it has one: `SHAPE` and
 `STAMP_SOURCE` (`artifacts.ts`), `DECODERS`
 ([`artifacts-fs.ts`](../../src/store/artifacts-fs.ts)), `STEP_BUDGET_MS`
-([`src/jobs.ts`](../../src/jobs.ts)), `STEPS` and — via `StepsMissingFromOrder` — `STEP_ORDER`
-([`src/pipeline.ts`](../../src/pipeline.ts)); `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
+([`src/jobs.ts`](../../src/jobs.ts)), `STEPS` ([`src/pipeline.ts`](../../src/pipeline.ts)) and — via
+`StepsMissingFromOrder` — `STEP_ORDER`, which moved to
+[`src/step-order.ts`](../../src/step-order.ts) on 2026-09-04 so the browser could read the order
+without naming a server module, and which `pipeline.ts` re-exports; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
 `STAGE_EFFORT` and `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts));
 `REVISION_CARRY_POLICY` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); and `ArticleReader`
 ([`contracts.ts`](../../src/store/contracts.ts)) with both adapters,

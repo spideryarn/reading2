@@ -3,6 +3,10 @@
 **[SPIDERYARN-READING2-1A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1A)** · reported
 2026-09-04 17:23 UTC · resolved 2026-09-04 · *shipped, but not the way it was asked for*
 
+> **This note was rewritten on 2026-09-04 after its first fix turned out not to work on the phone the
+> report came from.** The issue was reopened and is resolved again; § The first fix was wrong says
+> what changed and what is still unchecked.
+
 ## What the reader said
 
 > The keyboard on mobile devices should have a Done/Send button where appropriate, including this
@@ -24,12 +28,12 @@ The literal request was "including this Feedback dialog box", and for its textar
 a key that lies — and `AnnotateDialog.tsx` already records rebinding Enter in a multi-line box as "a
 trap" the app fell into once and reversed.
 
-So the fix for this dialog is **the button's position, not the key's label**: the viewport meta now
-carries `interactive-widget=resizes-content`, and `.fb-panel` follows `.cmt-dialog`'s shape — header
-and actions pinned, one scrolling region between them. Send stays on screen with the keyboard up.
+So the fix for this dialog is **the button's position, not the key's label**: `.fb-panel` follows
+`.cmt-dialog`'s shape — header and actions pinned, one scrolling region between them — and the panel
+places itself inside the part of the screen the reader can actually see. § The first fix was wrong is
+how that ended up being measured.
 
-That reversed a deliberate deferral recorded on `.cmt-dialog`; the note there now says why it landed,
-and that **it is still unverified on a real phone.**
+That reversed a deliberate deferral recorded on `.cmt-dialog`; the note there now says why it landed.
 
 ## Every text box, decided
 
@@ -78,10 +82,42 @@ what shows. `.cmt-sources` has the same invisible divider, pre-existing.
 2. **On a phone the chat composer's Enter always sends and there is no Shift+Enter**, so a reader
    cannot type a newline in it. Found while surveying; not part of this report.
 
+## The first fix was wrong
+
+The first attempt put `interactive-widget=resizes-content` on the viewport meta, which asks the
+browser to shrink the **layout** viewport so `dvh` and `position: fixed` come out right for free.
+Chromium does that. **WebKit does not** — the implementation bug is open
+([259770](https://bugs.webkit.org/show_bug.cgi?id=259770)) — and what iOS does instead is pan a
+smaller *visual* viewport over a layout viewport that stays full height. So the fix would have done
+nothing on the device the report came from, and this note claimed otherwise: it said an installed
+standalone app "resizes on its own", which was never checked and is not true. GPT Sol found it after
+the issue had already been resolved, and the issue was reopened for it.
+
+The 390×340 browser check that seemed to prove the fix could not have: it was the layout viewport a
+phone *becomes* when the meta is honoured, so it tested Chromium's behaviour and called it iOS's.
+
+What ships now is [`src/web/useVisualViewport.ts`](../../src/web/useVisualViewport.ts), which reads
+`window.visualViewport` — the one thing both engines agree on — on **both** `resize` and `scroll`,
+because `resize` is the keyboard arriving and `scroll` is iOS panning, and listening to only the
+first leaves the dialog the right height in the wrong place. Four dialogs use it: Feedback takes a
+`top` and a `height`, and the three panels pinned to the bottom corner (`.cmt-dialog`,
+`.chat-dialog`, `.annotate-dialog`) take a `--kb-inset` that lifts and shortens them together.
+
+`null` means do not interfere, and that is the whole fallback — no `visualViewport` and the
+stylesheet stands exactly as it did.
+
 ## Honest limit
 
-The keyboard could not actually be raised. What was tested is the layout viewport a 390×740 phone
-*becomes* when the key is honoured — 390×340, coarse pointer — where Send sits at y=273, on screen in
-all three toggle states. That is the strongest evidence available without a device. If iOS Safari
-ignores `interactive-widget`, an installed standalone app resizes on its own, which is the case this
-report came from.
+**Nobody has raised a real keyboard on a real phone.** No automation available here can: the
+on-screen keyboard is not something a headless browser has.
+
+[`tests/visual-viewport-dialogs.test.tsx`](../../tests/visual-viewport-dialogs.test.tsx) holds the
+part a test can hold — eight cases, and the no-`visualViewport` fallback is asserted *first*, because
+a suite that only ever ran with the fake installed would not notice the day the hook started writing
+`NaNpx` into every dialog in the app. Listeners are counted rather than recorded, so a leak shows up
+as a number that never returns to zero.
+
+That is evidence the numbers reach the elements, keep up with the events and are let go of
+afterwards. It is not evidence that iOS sends the numbers. The difference is exactly what went wrong
+the first time, so it is written down rather than assumed: **open the Feedback box on a phone with
+the keyboard up and check Send is reachable.** If it is not, this report deserves a new one.
