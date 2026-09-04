@@ -2780,6 +2780,16 @@ function Reader({
         /* The gate, and only the gate — the body is `chatAboutBlock` above,
            which explains why it is `undefined` rather than a no-op here. */
         onChatAbout={owner ? chatAboutBlock : undefined}
+        /* **The same body, deliberately, and only until stage 3.** Pressing "?"
+           opens the same pre-filled draft and spends nothing, which is why the
+           button's own copy promises a question rather than an answer. What
+           replaces this is a launcher that sends once — the seam is a
+           `ChatTarget` variant, not a handler hoisted up here, because a token
+           arriving in this component re-renders the whole article:
+           docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md
+           § Stage 3. Gated on `owner` for the reason above; the two doors are
+           one capability. */
+        onHelp={owner ? chatAboutBlock : undefined}
         terms={termSelections}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}

@@ -392,6 +392,168 @@ the chat button, and the UI must not imply it already sends.
 **Done:** component tests for present/absent by callback, each confirmed red first; pointer-events
 opt-in verified; tab order and `aria-label` checked.
 
+#### Built, and measured — 2026-09-04 <a id="stage-2-built"></a>
+
+`CircleHelp` at `size={12}` in `grid-area: 2 / 2`, rendered only where `onHelp` is, and wired in App
+to **`chatAboutBlock` itself** — the same body as the chat button, so a press opens the pre-filled
+draft and spends nothing. Stage 3 replaces that one line.
+
+**The copy is "Ask for help with this paragraph"**, in both `title` and `aria-label`, and it is the
+whole promise stage 2 can make: the press opens a composer that still says *"Nothing is asked until
+you send"*. "Explain this" becomes true in stage 3 and would be a lie today — GPT Sol's condition on
+this stage being coherent on its own.
+
+**Nine tests, each watched red before it was made green** — six in
+`tests/block-gutter.test.tsx` (drawn only where the callback is; calls `onHelp` and *not*
+`onChatAbout`; the press does not reach the row's handler; the exact copy; the same 12px glyph; last
+in the tab order) and three in `tests/gutter-target-size.test.ts` (row 2 / column 2 with all four
+cells distinct; hidden at rest and revealed by hover *and* focus with `pointer-events` handed back;
+present and pressable inside `@media (hover: none)`). The propagation one was then **mutation-checked**:
+deleting `stopPropagation` turns it red on its own.
+
+**The geometry did not move, which is the point of stage 1 having reserved the cell.** The overhang
+pass re-run over 18 combinations — 1280 desktop, 820 × 1180 and 390 × 844 both with touch emulation,
+× roots 12 / 16 / 20, × owner and visitor — with every control scrolled into view, the pointer put on
+it, and `elementFromPoint` asked what is there: **33/33 owner controls and 10/10 visitor controls, all
+24 × 24, none outside its own row, each the topmost thing at its own centre.** Worst clearance 4.45 /
+5.95 / 7.44px at the three roots for an owner, 2.22 / 2.97 / 3.72 for a visitor — *identical to stage
+1*, and every row height identical too (one-line paragraph 63.09, ordinary heading 69.05, visitor
+39.09 / 39.86). A fourth drawn cell cost nothing because the row was already floored for it.
+
+One trap worth recording, because it looks exactly like a layout bug: **`elementFromPoint` takes
+viewport coordinates and returns `null` below the fold**, which the first run reported as 14 "buried"
+controls at 390 × 844. Scroll each control into view before hit-testing it.
+
+#### The touch opacities, looked at rather than reasoned about <a id="stage-2-touch"></a>
+
+Stage 1 predicted the risk landed here — under `(hover: none)` the "?" is a third permanently visible
+glyph on every row — and proposed levelling the pad to 0.35 before considering taking the whole set
+down. **Levelled**, and the 4x crops are why: at 0.45 the chat button and the "?" stack in the right
+column against a 0.35 permalink alone in the left, and the pad reads lopsided — the eye lands on its
+right half before it lands on the prose. The 0.45/0.35 split was accretion, two rules written months
+apart, not a hierarchy. At one number the pad reads as a single small mark.
+
+Measured off the crops, peak glyph luminance against a page at 10: **67 → 54** levelled, and 45 if the
+whole set went to 0.28 — which is not needed and is where an affordance on a real iPad in daylight
+starts to be one you cannot find. `.block-chat.has` is untouched and stays at **opacity 1**, confirmed
+in the browser rather than argued: it is *state*, and its (0,2,0) beats the touch rule's (0,1,0).
+
+Shots are 4x and taken with the mouse never moved, both deliberately: at 1x a 12px glyph at a third of
+strength is a few grey pixels, and an emulated pointer still fires `tr:hover`, which takes the thing
+being judged to full strength.
+
+#### What Sol's stage 2 review changed <a id="stage-2-review"></a>
+
+[260904b-gutter-help-button-stage2-review-sol.md](260904b-gutter-help-button-stage2-review-sol.md).
+Verdict: *"I would not commit stage 2 unchanged."* It confirmed the cascade, agreed that the identical
+`title` and `aria-label` are right here, and established that **"cost zero pixels" is true by
+construction rather than by luck** — a padded row already has two `--blk-slot` tracks and a floor
+derived from the same variable, so the fourth child occupies a reserved cell at any root and in every
+heading shape. Its own verification was partial: the sandbox blocked both Chrome and `tsx`, so its
+typecheck line is not a TypeScript result.
+
+| | finding | what happened |
+|---|---|---|
+| 1 | **the touch contrast fails WCAG 1.4.11** — 0.35 is not a 3:1 control | right, and by a wide margin: 0.35 measures **1.65:1**. Now `opacity: 0.653` = 3.00:1 — § below has the decision, the two shortfalls kept, and the bound that ruled out 4.5:1 |
+| 2 | **commit-blocking: the floor is keyed to the wrong invariant.** `gutter-pad` came from `onChatAbout \|\| comments` while the component's API independently permits `onHelp`; "the two can only ever agree" is true of App and false at the type boundary | the condition is now `onChatAbout \|\| onHelp \|\| cmtsByBlock.has(…)`, and `tests/gutter-pad-floor.test.tsx` is the invariant written down — watched red on exactly the `onHelp`-only case |
+| 3 | all nine tests stay green if **App** stops passing `onHelp`, and the harness cannot see that either | `tests/public-network-trace.test.tsx` — the one file that renders the real `App` at the real address for both readers — now asserts the "?" beside every paragraph for an owner and none for a visitor. Watched red by deleting App's `onHelp` line |
+| 4 | the comment claimed the composer opens with the paragraph "already quoted" | corrected: `chatAboutBlock` passes `opening`, which is *shown above* an empty composer, and the anchor carries only `blockId`. Load-bearing in stage 3 |
+
+Sol also judges stage 2 **not independently shippable** and it is right: on touch the bubble and the
+"?" look like different actions and open the same empty composer, with no tooltip to tell them apart.
+Ship it with stage 3.
+
+#### The touch contrast, measured — and the decision is Greg's <a id="stage-2-contrast"></a>
+
+Computed from the tokens rather than eyeballed. `--page` is `oklch(0.145 0 0)` and `--ink-faint` is
+`oklch(0.63 0 0)`; both are achromatic, so linear-light sRGB is `L³` and that *is* the WCAG relative
+luminance. `opacity` composites in **gamma-encoded** sRGB, which the pixels confirm: 0.45 predicted
+67.2 and Chrome drew 67; 0.35 predicted 54.4 and Chrome drew 54.
+
+| | opacity | composited sRGB | contrast vs page |
+|---|---|---|---|
+| today | 0.35 | 54.5 | **1.65:1** |
+| the old chat button | 0.45 | 67.2 | 2.01:1 |
+| **3:1** | **0.653** | 92.9 | 3.00:1 (0.65 lands at 2.985) |
+| 4.5:1 | 0.868 | 120.3 | 4.51:1 |
+| full strength | 1.0 | 137.0 | 5.66:1 |
+
+For scale: the prose itself is **18.15:1**, so even a compliant "?" is about a sixth of the words'
+contrast — 3:1 is not "as loud as the text".
+
+**And the pixels say the opacity is only half the story.** Measured on the rendered glyph alone (one
+`.blk-help` on an uncommented row, so nothing orange shares the crop):
+
+| candidate | 1x | 2x | 3x |
+|---|---|---|---|
+| 0.35, stroke 2 (today) | 1.46:1 | 1.64:1 | 1.64:1 |
+| 0.653, stroke 2 | **2.34:1** | 3.01:1 | 3.01:1 |
+| flat `oklch(0.478 0 0)`, stroke 1.5 | 1.85:1 | 3.01:1 | 3.01:1 |
+| **flat `oklch(0.478 0 0)`, stroke 2.5** | **3.01:1** | 3.01:1 | 3.01:1 |
+| opacity 1, stroke 2 | 4.06:1 | 5.66:1 | 5.66:1 |
+
+A 12px lucide glyph draws a 1px stroke that never covers a whole device pixel at 1x, so the nominal
+3:1 renders 2.34:1 there. **Only a heavier stroke holds the ratio at every density.** Buying quiet
+back by *thinning* the stroke does the opposite, which is why the obvious third option is the wrong
+one.
+
+**The decision: `opacity: 0.653`, stroke left at 2, on all three affordances.** Fable took the call
+with fresh measurements and it overturned the flat-grey recommendation this section carried first;
+two of its numbers dominate, and both are things the first pass had not measured.
+
+- **The stroke was the whole of the 1x fix, and the flat colour contributed nothing to it.** The
+  first sweep omitted `0.653 + stroke 2.5`, which measures 3.01:1 at 1x, 2x and 3x — identical to the
+  flat variant. The 1x gain was the stroke all along.
+- **"No alpha, so the ratio cannot drift" cuts the other way.** The prose cell is *already* tinted on
+  ordinary rows: `td.text.opaque` (media, captions) paints `--muted` and `tr.row-active td.text`
+  paints `--panel`. Over `--muted`, alpha 0.653 holds **2.77:1** while a flat `oklch(0.478 0 0)` falls
+  to **2.46:1** — alpha partly rides a lighter ground up, and a flat colour cannot. Neither is
+  compliant there; alpha is closer, and it does not add a second grey token.
+
+**The bound that actually made the decision.** The gutter's grammar is that the reader's own mark
+carries the weight. The bookmark is 4.48:1 against the page, and its *lead* over the affordances is:
+
+| affordance grey | vs page | bookmark's lead |
+|---|---|---|
+| 0.35 (what stage 2 shipped for a day) | 1.65:1 | 2.72:1 |
+| **0.653** | **3.00:1** | **1.49:1**, plus the hue the greys do not have |
+| 0.868 (4.5:1) | 4.50:1 | 1.00:1 — hue alone |
+| 1.0 | 5.66:1 | inverted (0.79:1) |
+
+**0.868 is the inversion point.** At 4.5:1 the reader's mark stops leading on luminance, and anything
+above it makes the buttons outshine the marks — which inverts the rule the whole column runs on. So
+this is not "3:1 is the least we can get away with": **3:1 is the compliant setting the grammar
+survives, and 4.5:1 is not.** A future reader must not round up to be safe.
+
+**Two shortfalls, known and left in.** Recorded here rather than discovered later, in the same spirit
+as the 22 × 15 target that stood for a month.
+
+| | measured | the one-line remedy, and why it was not taken |
+|---|---|---|
+| a 1x screen | **2.34:1** (2.25 on a tinted row) | `.blk-gutter svg { stroke-width: 2.5 }` gives 3.01 at every density. It buys the ratio only on 1x `(hover: none)` hardware — old Android tablets; a 1x touch *laptop* has a trackpad and never matches the query — and costs about a quarter more ink on every iPad, on every row |
+| a tinted row | **2.75:1** measured at 2x/3x against `--muted` | nothing cheap: the ratio is quoted against `--page`, and these cells are lighter |
+
+**The crops show the gutter at rest, and that is not the state a reader is usually in.** A tap sets
+`tr:hover` on iOS — sticky hover — and `row-active` with it, so the row a reader has touched shows
+its gutter at full strength; Fable verified it in the browser. Every crop in this section was taken
+with the mouse never moved, which is right for judging the resting column and shows nothing of what
+follows a first tap.
+
+**Held in reserve, not rejected: delete the `(hover: none)` block entirely** and let touch inherit the
+desktop grammar — an empty gutter, tap a paragraph to reveal its affordances, tap the control. Fable
+verified this already works. It is not v1 because help would cost two taps and Greg asked for one,
+but it is the fallback if 0.653 is too loud on his own iPad. Two real-device checks first: that
+Safari's sticky hover actually reaches `hoveredRow`, and that the `onJump` scroll nudge on every
+paragraph tap is tolerable.
+
+**One harness artefact worth knowing**, because it put two misleading crops in front of Greg:
+`page.addStyleTag` is **unlayered**, so it beats this layered stylesheet whatever the specificity —
+`gh-s2-contrast-wcag3` and `-alt` therefore drew `.block-chat.has` grey at 0.653 instead of blue at 1.
+The shipping cascade does not: measured through it, `.has` is `oklch(0.72 0.12 235)` at opacity 1 and
+the bookmark `rgb(219 138 69)` at 0.75, both untouched. Any further injected variant must say
+`.block-chat:not(.has)`, and `tests/gutter-target-size.test.ts` now fails if anything inside the touch
+query sets a `color` at all.
+
 ### Stage 3 — one click sends, exactly once
 
 - **A launch seam that does not hoist streaming state above `TableView`.** Sol's blocker 2: the

@@ -9450,7 +9450,7 @@ mark.chat[data-chat-end]::before {
    arrangement that fits, and it costs 1.6rem of horizontal padding instead.
 
        permalink   chat
-       bookmark    (the "?" — stage 2, empty for now)
+       bookmark    "?"
 
    docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
 
@@ -9542,13 +9542,14 @@ mark.chat[data-chat-end]::before {
    with the bookmark, which is the same "fixed, not packed" rule as the columns:
    a comment must not change the height of the row it is on.
 
-   **Say what is true today: on a stage-1 owner row with no comment, the reserved
-   second row holds nothing.** Both current controls sit in row 1, and the 24px
-   below them is preparation — the bookmark's cell, and the "?" cell that stage 2
-   fills. That is deliberate and Sol accepted it as an intermediate branch commit
-   while noting what it costs: short owner rows get visibly taller before a
-   control uses the space. Do not soften it into "what the row can draw", which a
-   reader can falsify in one click of the inspector.
+   **Since 2026-09-04 the reserved row is occupied on every owner row**, which
+   it was not when this floor landed: the "?" is the fourth cell, rendered on
+   every block and revealed by hover exactly as the permalink above it is. That
+   retires the caveat GPT Sol wrote against stage 1 — short owner rows getting
+   taller before a control used the space — and it is worth knowing it was ever
+   true, because the floor is still keyed off the reader's **capability** rather
+   than off what happens to be drawn on the row. That is the part that has to
+   stay: it is what stops a comment changing the height of the row it lands on.
 
    This *is* a change to the article's rhythm, unlike the `.has-marks` floor it
    replaces, and that is the visible cost of Greg's call for 24px targets
@@ -9657,10 +9658,13 @@ td.text.kind-heading:not(.gutter-pad) .blk-gutter {
 
    Written as `grid-area` on the slot classes rather than as `:nth-child`, which
    would be a second copy of BlockGutter.tsx's render order that nothing keeps in
-   step with the first. */
+   step with the first — and the two genuinely differ: the "?" is rendered last,
+   so that tab order runs address, mark, chat, help, and it is *drawn* diagonally
+   under the chat button. */
 .blk-permalink { grid-area: 1 / 1; }
 .block-chat { grid-area: 1 / 2; }
 .blk-cmt { grid-area: 2 / 1; }
+.blk-help { grid-area: 2 / 2; }
 
 /* **State is visible; an affordance waits to be asked for.** The permalink and
    an unused chat button are hidden until the pointer is on the row; a comment
@@ -9673,14 +9677,17 @@ td.text.kind-heading:not(.gutter-pad) .blk-gutter {
    with a mouse would look fine. `pointer-events` has to travel with the
    opacity, or an invisible target grows in the gutter and eats the clicks. */
 .blk-permalink,
-.block-chat {
+.block-chat,
+.blk-help {
   opacity: 0;
   pointer-events: none;
 }
 tr:hover .blk-permalink,
 tr:hover .block-chat,
+tr:hover .blk-help,
 .blk-permalink:focus-visible,
 .block-chat:focus-visible,
+.blk-help:focus-visible,
 .block-chat.has {
   opacity: 1;
   pointer-events: auto;
@@ -9709,16 +9716,67 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    harness said everything was fine, because `(hover: none)` never matches
    there. So the permalink is decided here rather than by omission.
 
-   Faint rather than full: on a phone this is one glyph beside every paragraph
-   in the article, and at full strength eighty of them are a column of
-   decoration. */
+   **One number for all three**, since the "?" arrived. The chat button was 0.45
+   and the permalink 0.35, which was accretion rather than a hierarchy — two
+   rules written months apart — and with two glyphs stacked in the right column
+   and one in the left it read lopsided: the eye landed on the right half of the
+   pad before it landed on the prose. One number makes the pad read as a single
+   small mark, which is what it is.
+
+   **And the number is 0.653, which is exactly 3:1 against the page.** These are
+   icon-only controls that are permanently visible here, so WCAG 2.2's 1.4.11
+   applies to them, and the 0.35 this file carried for a day was **1.65:1** —
+   short by a wide margin. The arithmetic, from the tokens rather than from a
+   screenshot: `--page` is `oklch(0.145 0 0)` and `--ink-faint` is
+   `oklch(0.63 0 0)`; both are achromatic, so linear-light sRGB is `L³` and that
+   *is* the relative luminance, and `opacity` composites in gamma-encoded sRGB —
+   which the pixels confirm to the digit (0.35 predicted 54.4 and Chrome drew
+   54; 0.653 predicted 92.9 and drew 93).
+
+   **Why not 4.5:1, and this is the part not to "round up to be safe".** The
+   gutter's grammar is that the reader's own mark carries the weight and the
+   affordances do not. The bookmark's luminance lead over them is 2.72:1 at
+   0.35, **1.49:1 at 0.653 — plus its hue, which the affordances have none of**,
+   1.00:1 at the 0.868 that buys 4.5:1, and *inverted* above that. So 0.868 is
+   the point where the reader's mark stops leading and the buttons begin to
+   outshine it. 0.653 is not the least we can get away with: it is the compliant
+   setting the grammar survives, and the next step up is the one that breaks it.
+
+   **Two shortfalls left in deliberately, recorded rather than discovered.**
+   Both are known and neither was worth its cost, in the same spirit as the
+   22 × 15 target that stood for a month before Greg asked:
+
+   1. **1x: 2.34:1.** A 12px lucide glyph draws a 1px stroke that never covers a
+      whole device pixel on a 1x screen, so the rendered peak falls short of the
+      nominal ratio. The one-line remedy is `.blk-gutter svg { stroke-width: 2.5 }`
+      in this block, measured at 3.01:1 at 1x, 2x and 3x. Not taken: it buys the
+      ratio only on 1x `(hover: none)` hardware — old Android tablets, since a 1x
+      touch laptop has a trackpad and does not match this query — and costs about
+      a quarter more ink on every iPad, every row.
+   2. **A tinted row: 2.77:1.** `td.text.opaque` (media and captions) paints
+      `--muted` and `tr.row-active td.text` paints `--panel`, and the ratio is
+      quoted against `--page`. Alpha partly rides a lighter background up, which
+      is the argument that killed the alternative of writing this as a flat grey:
+      a flat `oklch(0.478 0 0)` is the same 3:1 over the page and drops to
+      **2.46:1** over `--muted`, where 0.653 holds 2.77.
+
+   **`.block-chat.has` is untouched by this and must stay so**: it is *state*,
+   not an affordance, and its `opacity: 1` and `--chat-mark` win here on
+   specificity (0,2,0 against 0,1,0) rather than by being written below. A block
+   that already has a conversation goes on saying so at full strength, in blue.
+   Nothing in this block may set `color`, or that quietly stops being true —
+   `tests/gutter-target-size.test.ts` says so.
+
+   docs/plans/260904b-… § The touch contrast has the tables, the crops and the
+   option held in reserve: deleting this block altogether so touch inherits the
+   desktop grammar. */
 @media (hover: none) {
   .blk-permalink,
-  .block-chat {
-    opacity: 0.45;
+  .block-chat,
+  .blk-help {
+    opacity: 0.653;
     pointer-events: auto;
   }
-  .blk-permalink { opacity: 0.35; }
 }
 
 /* The reader's mark. `--highlight` is exactly what `mark.cmt` paints the
@@ -9762,6 +9820,18 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   font-family: var(--font-mono);
   font-size: 0.58rem;
 }
+
+/* ------------------------------------------------------ one press for help --
+   The "?" — Greg's *"hey, I don't understand. Tell me more"* in a single press.
+   Everything about its box, its reveal and its touch rule is § the gutter's
+   above, shared with the other three; what is here is the one thing it does not
+   share, which is what it turns when you point at it.
+
+   `--highlight` rather than `--chat-mark`: the reader is the one asking, and
+   this is their own gutter. The chat button's colour is reserved for the fact
+   that a conversation *exists*, which is the one thing in this column that is
+   about what the machine has produced rather than what the reader has done. */
+.blk-help:hover { color: var(--highlight); }
 
 /* ---------------------------------------------------------- § ideas mode ----
    The sixth mode, and the smallest stylesheet section of any of them — which is

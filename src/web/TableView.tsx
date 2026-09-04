@@ -156,6 +156,13 @@ interface Props {
    */
   onChatAbout?: ((blockId: BlockId) => void) | undefined;
   /**
+   * The reader pressed "?" beside a paragraph — the same capability as
+   * `onChatAbout`, passed the same way and absent for a visitor for the same
+   * reason. BlockGutter.tsx has the argument for why it is its own callback
+   * rather than a flag on that one.
+   */
+  onHelp?: ((blockId: BlockId) => void) | undefined;
+  /**
    * Every glossary term this article has, so every one can be underlined.
    *
    * **A list since 2026-08-26, and it used to be the one the reader had
@@ -279,6 +286,7 @@ function TableViewInner({
   openChat,
   onOpenChat,
   onChatAbout,
+  onHelp,
   terms,
   openTerm,
   hitMarks,
@@ -1025,25 +1033,29 @@ function TableViewInner({
 
                    **The condition is the reader's capability, not what is on
                    the row.** `onChatAbout` is what BlockGutter renders the chat
-                   button from, and in stage 2 the "?" beneath it, so a reader
-                   who has it is a reader whose gutter is the whole pad — floored
+                   button from, and `onHelp` the "?" beneath it, so a reader who
+                   has them is a reader whose gutter is the whole pad — floored
                    on every row, so their comment-free paragraphs do not jump
                    when they add a note to one. A visitor has neither, so their
                    gutter stays one slot tall and the article keeps its old
                    rhythm.
 
-                   **In stage 1 the reserved row is genuinely empty on most
-                   rows**, and the honest version is worth writing down rather
-                   than dressing up as "what the row can draw": with only three
-                   controls, an uncommented owner row puts both of them in row 1
-                   and the 24px below is preparation for the "?" that stage 2
-                   adds. GPT Sol accepted that as an intermediate branch commit
-                   and named its cost — short owner rows get taller before
-                   anything uses the space. The `cmtsByBlock` half is
-                   belt-and-braces rather than reachable today: App hands a
-                   visitor `NO_COMMENTS`, but a bookmark without a floor is the
-                   overhang this whole rule exists to prevent, so the two facts
-                   are read from the same place BlockGutter reads them.
+                   **Every one of the three is asked about, and the first draft
+                   of stage 2 asked about one.** It read `onChatAbout ||
+                   comments` on the reasoning that App gates both callbacks on
+                   `owner`, so the chat button and the "?" can only ever agree.
+                   That is true of today's single caller and **false at this
+                   component's boundary**, which is where a condition has to
+                   hold: an `onHelp`-only caller drew a permalink in row 1 and a
+                   "?" in row 2 with no two-row floor — the exact overhang class
+                   stage 1 existed to remove, reintroduced through the props.
+                   GPT Sol's stage 2 review; `tests/gutter-pad-floor.test.tsx`
+                   is the invariant written down, watched red first. So the rule
+                   is **anything that can be drawn in the pad's second row
+                   floors the row**, read from the same three facts BlockGutter
+                   renders from. Since 2026-09-04 that row is also *occupied* on
+                   every owner row rather than reserved and empty, which retires
+                   the caveat GPT Sol wrote against stage 1.
 
                    It was `has-marks`, meaning "this block has a comment", until
                    2026-09-04; the name went with the meaning. */
@@ -1051,7 +1063,9 @@ function TableViewInner({
                   block.context ? ` ctx-${block.context.type}` : ""
                 } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }${onChatAbout || cmtsByBlock.has(block.id) ? " gutter-pad" : ""}`}
+                }${
+                  onChatAbout || onHelp || cmtsByBlock.has(block.id) ? " gutter-pad" : ""
+                }`}
                 /* The bar down the left of a matched paragraph — Greg's call,
                    2026-08-25, so a match is findable while scrolling past at
                    speed. Its intensity is scaled *harder* than the wash by the
@@ -1114,6 +1128,7 @@ function TableViewInner({
                   chatCount={chatCounts.get(block.id) ?? 0}
                   onOpenComment={onOpenComment}
                   onChatAbout={onChatAbout}
+                  onHelp={onHelp}
                   onJump={onJump}
                   announce={announce}
                 />

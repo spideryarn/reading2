@@ -22,7 +22,7 @@
  * **A 2 × 2 pad rather than a column**, since 2026-09-04:
  *
  *     permalink   every block, on hover     |  chat   on hover; always with chats
- *     comment mark  only when commented     |  (empty — the "?" goes here)
+ *     comment mark  only when commented     |  "?"    on hover
  *
  * It was a single column of three ~15px slots until Greg asked for targets a
  * finger can hit: *"they're quite hard to click on on an iPad."* WCAG 2.5.8 asks
@@ -32,8 +32,15 @@
  * styles.css § the gutter, and the call is Greg's, in
  * docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
  *
- * **The fourth cell is empty on purpose.** The "?" that fills it is stage 2 of
- * that plan; the geometry lands and is measured before anything is added to it.
+ * **The "?" fills the fourth cell, and today it spends nothing.** It opens the
+ * same pre-filled draft the chat button does — *"Nothing is asked until you
+ * send"* — so what it says has to promise a question rather than an answer;
+ * stage 3 of that plan is what makes one press send one. It is the second
+ * door into the same conversation on purpose: the chat button is free text
+ * about this paragraph, and this one is *"I don't understand this"*, which
+ * Greg asked for as one press. Fable argued for one door rather than two and
+ * lost on Greg's call — the argument is in the plan § Rejected, because
+ * anybody looking at four icons will have it again.
  *
  * **A visitor's gutter is the permalink and nothing else** — one element in the
  * top-left cell, not four with three of them blank, because none of these is a
@@ -43,7 +50,8 @@
  * costs a model call, which is not theirs to spend, so `onChatAbout` is
  * optional and the button exists only where the callback does. The bookmark
  * never draws for them either, for a different reason — the marks in it are the
- * reader's own, and a visitor has none. The callback *is* the capability, the
+ * reader's own, and a visitor has none. The "?" is gated on the same callback
+ * pattern as the chat button and for the same reason. The callback *is* the capability, the
  * way `onRenamed` is on Masthead.tsx — one fact rather than a boolean beside a
  * handler that can disagree with it. It used to render for everybody and the
  * press was swallowed in App, which is a button that can only fail. GPT Sol's
@@ -51,8 +59,8 @@
  * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C1.
  *
  * **Every position is fixed, and as of 2026-09-04 that is finally true without
- * a caveat.** The permalink, and the chat button wherever there is one, are
- * rendered on every block whether or not they are visible, so *hovering* has
+ * a caveat.** The permalink, and the chat button and "?" wherever there are
+ * any, are rendered on every block whether or not they are visible, so *hovering* has
  * never moved anything. But under the flex column this replaced, adding or
  * deleting a comment moved the chat button between the second slot and the
  * third — an honest caveat GPT Sol made this file admit on 2026-08-31, and one
@@ -67,7 +75,7 @@
  * docs/postmortems/block-chat-was-never-in-the-gutter.md.
  */
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
-import { Bookmark, Check, Link2, MessageSquare, TriangleAlert } from "lucide-react";
+import { Bookmark, Check, CircleHelp, Link2, MessageSquare, TriangleAlert } from "lucide-react";
 import type { BlockId, Comment } from "../types.js";
 import { blockHref, blockPermalink, shortBlockId } from "./BlockRef.js";
 
@@ -117,6 +125,20 @@ interface Props {
    */
   onChatAbout?: ((id: BlockId) => void) | undefined;
   /**
+   * The reader pressed "?" on this paragraph — *"I don't get this"* in one
+   * press, and **its absence is what says the reader may not.**
+   *
+   * Optional and `| undefined` for exactly the reasons `onChatAbout` above
+   * gives, and it is the same capability: a reader who cannot buy a model call
+   * gets neither door. A separate callback rather than a second argument to
+   * that one, because the two intents diverge in stage 3 of
+   * docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md —
+   * this one sends, and the chat button will still be waiting for the reader's
+   * own words. Today they do the same thing, which is why the copy on the
+   * button below is careful not to claim otherwise.
+   */
+  onHelp?: ((id: BlockId) => void) | undefined;
+  /**
    * Go to this block without a page load, writing `?at=` as it goes — App's
    * own jump, the one every gist cell and arrow key uses.
    *
@@ -154,6 +176,7 @@ export function BlockGutter({
   chatCount,
   onOpenComment,
   onChatAbout,
+  onHelp,
   onJump,
   announce,
 }: Props) {
@@ -392,6 +415,40 @@ export function BlockGutter({
               counting only the whole-block ones would make the number disagree
               with the marks sitting beside it. */}
           {!!chatCount && <span className="block-chat-n">{chatCount}</span>}
+        </button>
+      )}
+
+      {/* Bottom-right, under the chat button and beside the reader's own mark
+          — Greg asked for it *"underneath the comment one"* and the pad is what
+          that became once four 24px targets would not stack.
+
+          **What it says is what it does, and today that is less than it will
+          be.** It opens the composer with the paragraph's *opening* shown above
+          it — `chatAboutBlock` passes `opening`, and the composer itself is
+          empty; the anchor carries only the `blockId`, no quote — and it sends
+          nothing. So "Ask for help with this paragraph" is the whole promise; "Explain this" would be a button reporting an answer nobody
+          has bought yet, which is the shape of failure
+          docs/reusable/silent-success.md is about. GPT Sol made this the
+          condition on stage 2 being coherent on its own, and the sentence
+          changes when the behaviour does.
+
+          Same `CircleHelp` at `size={12}` as the other three glyphs: stage 1
+          grew the hit box to 24px and deliberately left the ink alone, because
+          the amount of grey per row is what decides whether the gutter reads as
+          quiet. No count beside it — a conversation is a conversation, and the
+          chat button next door already carries that number. */}
+      {onHelp && (
+        <button
+          type="button"
+          className="blk-help"
+          onClick={(e) => {
+            e.stopPropagation();
+            onHelp(id);
+          }}
+          title="Ask for help with this paragraph"
+          aria-label="Ask for help with this paragraph"
+        >
+          <CircleHelp size={12} aria-hidden="true" />
         </button>
       )}
     </div>

@@ -144,6 +144,127 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
   });
 });
 
+/** Every rule whose selector *list* contains this exact selector. */
+function rulesWith(selector: string): Array<{ sel: string; body: string }> {
+  const out: Array<{ sel: string; body: string }> = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const sel = (m[1] ?? "").replace(/\s+/g, " ").trim();
+    const parts = sel.split(",").map((p) => p.trim());
+    if (parts.includes(selector)) out.push({ sel, body: (m[2] ?? "").replace(/\s+/g, " ").trim() });
+  }
+  return out;
+}
+
+/**
+ * The body of the gutter's `@media (hover: none) { … }`, by counting braces.
+ *
+ * Two things here are the point rather than plumbing. **Braces are counted**
+ * because a lazy regex stops at the first nested rule's `}` and would leave the
+ * touch assertions below passing on a fragment. And **the block is found by
+ * what is in it**, not by being the first one: this stylesheet has two, the
+ * other one three thousand lines earlier, and reading that one would have been
+ * a check that could never fail for the reason it says.
+ */
+function touchBlock(): string {
+  for (const m of css.matchAll(/@media \(hover: none\)/g)) {
+    const open = css.indexOf("{", m.index);
+    let depth = 0;
+    for (let i = open; i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) {
+        const body = css.slice(open + 1, i);
+        if (body.includes(".blk-permalink")) return body;
+        break;
+      }
+    }
+  }
+  throw new Error("no `@media (hover: none)` block covering the gutter");
+}
+
+/**
+ * **The fourth cell, and the three ways it could be drawn and still be
+ * unusable** — stage 2 of docs/plans/260904b-…: a "?" in the wrong cell, a "?"
+ * that never appears on a device with no hover, and a "?" inside a container
+ * that is `pointer-events: none`. The last is not hypothetical — it is exactly
+ * what `.blk-cmt` would have shipped as, and the only reason it did not is a
+ * declaration somebody remembered to write.
+ */
+describe('the "?" is the fourth cell of the pad', () => {
+  it("names row 2 / column 2, which stage 1 left empty on purpose", () => {
+    expect(rule(".blk-help")).toContain("grid-area: 2 / 2");
+    /* And the pad is still a map rather than a queue: four slots, four cells,
+       no two the same. Auto-placement is what used to shunt the chat button
+       along when a comment arrived. */
+    const cells = [".blk-permalink", ".block-chat", ".blk-cmt", ".blk-help"].map((sel) =>
+      /grid-area:\s*([^;]+);/.exec(rule(sel))?.[1]?.trim(),
+    );
+    expect(cells).toEqual(["1 / 1", "1 / 2", "2 / 1", "2 / 2"]);
+  });
+
+  it("is an affordance: hidden at rest, revealed on hover and on focus", () => {
+    /* The gutter's grammar, and the reason this is asserted rather than left to
+       the eye: at rest the gutter shows *state*, on hover it shows
+       *affordances*. A "?" painted on every paragraph of an unmarked article is
+       eighty question marks. */
+    const hidden = rulesWith(".blk-help").filter((r) => r.body.includes("opacity: 0;"));
+    expect(hidden.length, "`.blk-help` is not hidden at rest").toBe(1);
+    expect(hidden[0]?.body).toContain("pointer-events: none");
+    expect(hidden[0]?.sel).toContain(".blk-permalink");
+
+    const shown = rulesWith("tr:hover .blk-help");
+    expect(shown.length, "nothing reveals `.blk-help` on hover").toBe(1);
+    expect(shown[0]?.body).toContain("opacity: 1");
+    /* Without this the reveal is a target that is visible and not clickable:
+       the container is `pointer-events: none` and every child opts back in. */
+    expect(shown[0]?.body).toContain("pointer-events: auto");
+    /* A keyboard reader never produces `tr:hover`, so focus has to be in the
+       same list, or the button is invisible for exactly the reader who cannot
+       find it by waving a mouse at the page. */
+    expect(shown[0]?.sel).toContain(".blk-help:focus-visible");
+  });
+
+  it("leaves the reader's marks alone on a touch device", () => {
+    /* **The touch block may raise the affordances and must not touch state.**
+       Two things live in this gutter that are facts rather than buttons — a
+       block that already has a conversation, and the bookmark — and the
+       grammar the whole column runs on is that those carry the weight while
+       the affordances stay under them. `.block-chat.has` wins on specificity
+       (0,2,0 against the touch rule's 0,1,0), which is *not* the same as being
+       safe: a `color` declared in this block would land on `.block-chat.has`
+       too, because nothing more specific sets its colour inside the query, and
+       the blue mark would go grey on every touch device while every desktop
+       check stayed green. That is this stylesheet's oldest failure mode.
+
+       This is why the affordances are raised with `opacity` alone. It is also
+       the reason the flat-grey alternative was refused: written as a colour it
+       would have had to be scoped away from `.has` by hand. */
+    const touch = touchBlock();
+    expect(touch, "the touch block sets a colour — see `.block-chat.has`").not.toMatch(
+      /(^|[;{\s])color\s*:/,
+    );
+    // And the mark's own colour is still declared, outside the query where it
+    // applies to every device.
+    expect(rule(".block-chat.has")).toContain("color: var(--chat-mark)");
+    expect(rule(".blk-cmt")).toContain("color: var(--highlight)");
+  });
+
+  it("exists at all on a device with no hover, and can be pressed there", () => {
+    /* This stylesheet has shipped a hover-only affordance twice — `.block-chat`
+       and `.block-id` — and a desktop harness said fine both times, because
+       `(hover: none)` never matches on one. Greg reads on an iPad. */
+    const touch = touchBlock();
+    const found = /([^{}]*\.blk-help[^{}]*)\{([^{}]*)\}/.exec(touch);
+    expect(found, "`.blk-help` is not in the `(hover: none)` block").not.toBeNull();
+    const body = (found?.[2] ?? "").replace(/\s+/g, " ");
+    expect(body).toContain("pointer-events: auto");
+    /* Faint but present, and never invisible: a 0 here is the hover-only bug
+       with a different spelling. */
+    const opacity = Number(/opacity:\s*([\d.]+)/.exec(body)?.[1]);
+    expect(opacity).toBeGreaterThan(0);
+    expect(opacity).toBeLessThan(1);
+  });
+});
+
 describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
   it("matches both halves of the declaration", () => {
     const { rem, px } = slotDeclaration();
