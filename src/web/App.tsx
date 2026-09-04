@@ -31,6 +31,7 @@ import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
+import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
@@ -408,15 +409,16 @@ export function App() {
        Bare, like `PrivacyPage` above: `NotFoundPage` draws its own way home.
        docs/plans/260903j-not-found-page.md. */
     if (route.kind === "not-found") return <NotFoundPage signedIn={false} />;
-    /* **The public shelf, which has no page yet.** `/read/public` is a reserved
-       address (src/web/router.ts § `public-library`) and stage 3b of
-       docs/plans/260904b-pricing-page-and-public-showcase.md builds what goes on
-       it. Until then it is an address with nothing at it, and the 404 page is
-       the honest answer — the same one the edge gives, so the status and the
-       page agree. **Not `LandingPage`**, which is what the fall-through below
-       would give it: a plausible page at an address that means nothing is the
-       exact silence docs/plans/260903j-not-found-page.md exists to break. */
-    if (route.kind === "public-library") return <NotFoundPage signedIn={false} />;
+    /* **The seventh, and the only one that is somebody else's articles.**
+       `/read/public` lists every article anybody has shared — reachable signed
+       out for the same reason `/features` and `/pricing` are, and rather more
+       so: it is the page Greg asked for *"to showcase what Spideryarn is capable
+       of"*, so a stranger is exactly who it is for. Bare, like the two above it
+       and for the same reason: signed out there is no shelf for a corner logo to
+       link at, and the page carries `SiteNav` of its own. The edge answers 200
+       for this address now, so the status and the page agree.
+       PublicLibraryPage.tsx. */
+    if (route.kind === "public-library") return <PublicLibraryPage signedIn={false} />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -546,14 +548,18 @@ function SignedIn({
         <NotFoundPage signedIn />
       </>
     );
-  /* The public shelf, signed in. Same reasoning as the signed-out arm above —
-     the page is stage 3b — and dressed the same way every other standalone page
-     is here, because signed in there is a shelf for the logo to link at. */
+  /* **The public shelf, signed in, and it is the same page a stranger gets.**
+     That is the rule the whole public namespace follows and it is worth saying
+     here rather than only in the component: identical bytes either way, and the
+     only thing `signedIn` decides is whether the top bar offers a *Sign in*
+     link that would go nowhere (SiteBits.tsx § `signedIn`). Dressed with the
+     corner logo like every other standalone page here, because signed in there
+     is a shelf for it to link at. */
   if (route.kind === "public-library")
     return (
       <>
         <HomeLogo />
-        <NotFoundPage signedIn />
+        <PublicLibraryPage signedIn />
       </>
     );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page

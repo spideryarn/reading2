@@ -17,6 +17,13 @@ all.
 Owner: this doc. Everything that survived review is doc work — the one code stage was dropped, on
 the reviewer's own advice about its own feature.
 
+**Status, 2026-09-04: done enough to stop here.** All three surviving stages are on `dev`, reviewed
+and revised; the gates are green. What remains is in [§ Raised, not done](#raised-not-done), and
+none of it blocks anything. The one item with a half-life is #3, the postmortem line asking whether
+a review caught the class — it is the only proposal here that would ever settle the cadence question
+with evidence rather than opinion, and every week it is not in the template is a week of
+postmortems that cannot answer it.
+
 ## Where this came from
 
 - **GPT Sol on itself**, dispatched read-only: [260904e-review-sol-freedoms.md](260904e-review-sol-freedoms.md)

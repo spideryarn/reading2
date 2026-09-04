@@ -37,7 +37,7 @@
  * |---|---|---|
  * | Public and readable | 200 | Enhanced |
  * | Private, absent, or an unreadable revision | 404 | Unmodified default |
- * | `/read/public`, the reserved shelf address | 404 until stage 3b | Unmodified default |
+ * | `/read/public`, the reserved shelf address | 200 | Unmodified default |
  * | Malformed slug | 400 | Unmodified default |
  * | Method other than GET or HEAD | 405 + `Allow: GET, HEAD` | Unmodified default |
  * | **Anything else the reader throws** | **503 + `Retry-After: 30`** | **Unmodified default** |
@@ -214,15 +214,21 @@ export function decidePublicPage(
    * the two have to agree: whatever this returns is the status on a page the
    * client is simultaneously deciding what to draw.
    *
-   * **404 today, and 200 the day stage 3b lands.** There is no page behind the
-   * address yet, App.tsx draws the 404 page for it, and an address with nothing
-   * at it should say so — a 200 would put a real head on a page that has nothing
-   * on it, which is the claim this file's `503` argument is about. When
-   * `PublicLibraryPage` exists this becomes a 200 with the default head; it
-   * never gets an article head, because it is not an article.
+   * **200 with the default head**, since 2026-09-04 — `PublicLibraryPage`
+   * (src/web/PublicLibraryPage.tsx) is what the client draws here, and the two
+   * have to agree or one of them serves a 404 for a page the other renders.
+   *
+   * **`head: null` is not a placeholder.** A `PublicHead` is composed from *an
+   * article* and becomes `og:` tags naming one (page-head.ts), so there is
+   * nothing here for it to be built from — and there is nothing we would want
+   * it to say either, because a preview card is a promise about a specific
+   * document. A pasted `/read/public` unfurls as whatever the shell's own
+   * `<title>` says, which is the app's name, and that is the honest answer.
+   * The page's real title is set by React on mount, like every other page that
+   * is not a shared article (src/web/page-title.ts).
    * docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3b.
    */
-  if (slug === PUBLIC_LIBRARY_SLUG) return { status: 404, headers, head: null };
+  if (slug === PUBLIC_LIBRARY_SLUG) return { status: 200, headers, head: null };
 
   /* And the slug before the store, so a malformed address is a 400 whatever
      this deployment is configured with — the same ordering, and the same

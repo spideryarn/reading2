@@ -97,6 +97,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 | [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
 | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
+| [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the page that draws it — **the only defence it holds is which route it asks**. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
 `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
@@ -177,6 +178,36 @@ listing's exact order, so `limit` bounds the database's work and not only the re
 
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
+
+#### And since 2026-09-04 there is a page over it, which holds one defence
+
+`/read/public` ([public-shelf.md](public-shelf.md), `PublicLibraryPage` in
+[`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx)) is now the **third**
+signed-out surface, after `/read/<slug>` and the marketing pages. A page is not where the predicate
+lives and it must not become one, so the only thing it can get wrong is worth naming exactly: **a
+page can leak a private article in one way, by asking for one.** The listing route cannot answer with
+one whatever happens to it later; an owner-scoped route asked from this page would.
+
+So the guard is an inventory rather than an absence — `tests/public-shelf-page.test.tsx` records the
+page's whole conversation with the server and asserts it is one request, to `/api/public/library`,
+with `credentials: "omit"`, no `Authorization`, and **no call into the auth module at all** (that
+module is stubbed wholesale, because a mount effect reaching for a session would make no request and
+leave a URL list looking clean). It asserts the same request signed in as signed out, which is the
+rule the whole namespace follows and is the property the obvious "improvement" — enrich the page for
+somebody who has an account — would break. A test that seeded a private article and looked for its
+title in the DOM would have gone green the day somebody swapped the loader for `useShelf`.
+
+**The inventory is of the page's requests, not of the tab's, and that is a known hole rather than an
+oversight.** Production mounts `App`, which initialises a session and starts the job service before
+it reaches this branch, so an `App` arm that later wrapped this page in something owner-scoped would
+leave every assertion green. GPT Sol raised it reviewing the built page, 2026-09-04; closing it needs
+a suite that renders `<App />` and **nothing in `tests/` does**, so it is recorded as the next guard
+rather than half-built. It is a gap in the guard and not a disclosure: today's branches render this
+page and nothing else.
+
+**The page shows the shelf is not the catalogue**, which is a smaller point and still worth one
+sentence: its own copy says an article that is not listed is one nobody has shared, so a reader
+cannot mistake absence for concealment. [privacy.md](privacy.md) is what an owner is told.
 
 **Diagram used to be deliberately *not* here, and since 2026-09-04 it is.** `POLICY` marked it
 owners-only unconditionally, because its pictures POST for embeddings and spend money. What changed

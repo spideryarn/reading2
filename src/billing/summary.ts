@@ -40,9 +40,9 @@ import { accountSnapshot, entitlementFromRow, hasLapsed, usageFor } from "../sto
 import { allTiers } from "../store/pg-tiers.js";
 import { STORE } from "../store/live.js";
 import { planEndsAt } from "../billing-plan.js";
-import type { BillingSummary, ReaderPlan, TierOffer } from "../billing-plan.js";
-import { isTerminalStatus, offerableTiers } from "./tiers.js";
-import type { TierRow } from "./tiers.js";
+import type { BillingSummary, Purchase, ReaderPlan, TierOffer } from "../billing-plan.js";
+import { isTerminalStatus, tiersToOffer } from "./tiers.js";
+import type { Standing, TierRow } from "./tiers.js";
 
 /** A row of `billing_tiers`, with only what a pricing card needs on it. */
 function toOffer(tier: TierRow): TierOffer {
@@ -75,33 +75,59 @@ function toOffer(tier: TierRow): TierOffer {
  */
 export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSummary> {
   if (STORE !== "postgres") {
-    return { plan: { kind: "off" }, offers: [], manageable: false, canCheckout: false };
+    return { plan: { kind: "off" }, manageable: false, purchase: { kind: "none" } };
   }
 
   /* Cached for thirty seconds, which is right here for the same reason it is
      right for admission and wrong for `tierToSell`: this is a read-out, not a
      sale. Nothing chargeable is minted from it. */
   const tiers = await allTiers();
-  const offers = offerableTiers(tiers).map(toOffer);
   const row = await accountSnapshot(ownerId);
   /* The same question `openPortal` decides on — see `BillingSummary.manageable`. */
   const manageable = Boolean(row?.stripeCustomerId);
-  /* **The same question `startCheckout` decides on**, and deliberately not a
-     derivation from `plan`: `hasOpenSubscription` there is a subscription id
-     with a status that is not *terminal*, which is a shorter list than
-     unentitled. See `BillingSummary.canCheckout`. */
-  const canCheckout = !(row?.stripeSubscriptionId && !isTerminalStatus(row.status));
-  const summary = (plan: ReaderPlan): BillingSummary => ({
-    plan,
-    offers,
-    manageable,
-    canCheckout,
-  });
+  /* **The same question `startCheckout` decides on**: `hasOpenSubscription`
+     there is a subscription id with a status that is not *terminal*, which is a
+     shorter list than unentitled. */
+  const open = Boolean(row?.stripeSubscriptionId && !isTerminalStatus(row.status));
+
+  /* **Computed before the administrator branch, and it is pure**, so moving it
+     up costs nothing: `entitlementFromRow` reads the row we already have.
+     An exempt reader still buys and manages like anybody else — being outside
+     the quota is not being unable to hold a subscription — so their standing
+     has to be worked out the same way. */
+  const entitlement = entitlementFromRow(row, tiers, new Date());
+  const stale = "kind" in entitlement;
+  /* **Three states, and the middle one is the only one that names a tier.** An
+     open subscription whose entitlement is free (`unpaid`, `incomplete`) or
+     whose period we cannot read is `unresolved` — nothing is sold beside it,
+     which is exactly what `canCheckout: false` did for those accounts before
+     this was tier-aware. See `Standing`.
+
+     **The row, not `entitlement.limit`**: a mid-period plan change leaves a
+     prorated override in that number, and ranking it would offer a Researcher a
+     switch to Researcher. A tier that has vanished from the table between the
+     entitlement and this line is `unresolved` too — nothing to rank against
+     beats guessing. */
+  const on = stale || entitlement.tier !== "paid" ? undefined : tiers.find((t) => t.id === entitlement.tierId);
+  const standing: Standing = !open
+    ? { kind: "unsubscribed" }
+    : on
+      ? { kind: "subscribed", on }
+      : { kind: "unresolved" };
+  const choice = tiersToOffer(tiers, standing);
+  /* The rows become the wire's trimmed shape here and nowhere else. The tuple is
+     rebuilt by hand rather than `.map`ped, because `map` returns an array and
+     the non-empty guarantee is the point of the type. */
+  const purchase: Purchase =
+    choice.kind === "checkout" || choice.kind === "switch"
+      ? { kind: choice.kind, tiers: [toOffer(choice.tiers[0]), ...choice.tiers.slice(1).map(toOffer)] }
+      : choice;
+
+  const summary = (plan: ReaderPlan): BillingSummary => ({ plan, manageable, purchase });
 
   if (isAdmin(ownerId)) return summary({ kind: "exempt" });
 
-  const entitlement = entitlementFromRow(row, tiers, new Date());
-  if ("kind" in entitlement) return summary({ kind: "unknown" }); // stale
+  if (stale) return summary({ kind: "unknown" });
 
   const usage = await usageFor(ownerId, entitlement);
   /* **In-flight counts as used**, because it counts at the wall (`refusalFor` in
@@ -114,7 +140,7 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
        matched it a moment ago, so the fallback is for a tier deleted between
        these two lines — unreachable, and an id on screen beats an empty
        heading. */
-    const name = tiers.find((t) => t.id === entitlement.tierId)?.productName ?? entitlement.tierId;
+    const name = on?.productName ?? entitlement.tierId;
     return summary({
       kind: "paid",
       tierId: entitlement.tierId,

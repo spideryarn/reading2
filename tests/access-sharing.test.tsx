@@ -258,7 +258,15 @@ describe("finding out who can read this", () => {
  */
 it("tells the owner a shared article is listed, not merely reachable by link", () => {
   for (const copy of [SHARING_ON, sharingConfirmBody("A piece")]) {
-    expect(copy).toMatch(/\blist(?:s|ed)\b/);
+    expect(copy).toMatch(/\banyone can read\b/i);
+    /* **`publicly` is load-bearing, and the first version of this left it
+       out.** GPT Sol asked the opposite question of this guard — what rewrite
+       stays green while telling an owner the wrong thing — and answered it:
+       *"Anyone can read this without signing in, and it's listed only in your
+       private library."* matched an inflection of *list* and passed. The
+       material consent change is public discoverability, so that is the word
+       the assertion has to hold. */
+    expect(copy).toMatch(/\blist(?:s|ed)(?: it)? publicly\b/i);
     expect(copy).not.toMatch(/with the link can read/);
   }
 });

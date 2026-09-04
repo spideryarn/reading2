@@ -31,8 +31,9 @@ import {
   offerableTiers,
   quotaRules,
   tierForPrice,
+  tiersToOffer,
 } from "../src/billing/tiers.js";
-import type { TierRow } from "../src/billing/tiers.js";
+import type { Standing, TierRow } from "../src/billing/tiers.js";
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { readTiers } from "../src/store/pg-tiers.js";
@@ -132,6 +133,108 @@ describe("which price sells which tier", () => {
       tier({ sortOrder: 10 }),
     ]);
     expect(offered.map((t) => t.id)).toEqual(["reader", "researcher"]);
+  });
+});
+
+/**
+ * **What may be sold to whom** — the gate that used to be a boolean.
+ *
+ * `canCheckout` meant *has no open subscription*, so a paying Reader was drawn
+ * no button on either page while Stripe's Portal would have taken the switch
+ * (docs/project/billing.md § *Reader → Researcher*). These are the cases that
+ * make it tier-aware, and every one of them is over fixture rows: no database,
+ * because the decision is arithmetic on the catalogue and nothing else.
+ */
+describe("what may be sold to a reader in a given standing", () => {
+  const READER = tier({ sortOrder: 10 });
+  const RESEARCHER = tier({
+    id: "researcher",
+    productName: "Spideryarn Researcher",
+    ingestsPerPeriod: 150,
+    lookupKey: "spideryarn_researcher_monthly",
+    stripePriceId: "price_researcher",
+    sortOrder: 20,
+  });
+  const CATALOGUE = [READER, RESEARCHER];
+  const idsOf = (purchase: ReturnType<typeof tiersToOffer>): string[] =>
+    purchase.kind === "checkout" || purchase.kind === "switch"
+      ? purchase.tiers.map((t) => t.id)
+      : [];
+
+  it("sells everything on the shelf to somebody with no subscription", () => {
+    const purchase = tiersToOffer(CATALOGUE, { kind: "unsubscribed" });
+    expect(purchase.kind).toBe("checkout");
+    expect(idsOf(purchase)).toEqual(["reader", "researcher"]);
+  });
+
+  /* The case the whole change is for. */
+  it("offers a Reader the tier above and not the one they are on", () => {
+    const purchase = tiersToOffer(CATALOGUE, { kind: "subscribed", on: READER });
+    expect(purchase.kind).toBe("switch");
+    expect(idsOf(purchase)).toEqual(["researcher"]);
+  });
+
+  it("offers the largest tier nothing, and says so as its own answer", () => {
+    expect(tiersToOffer(CATALOGUE, { kind: "subscribed", on: RESEARCHER })).toEqual({
+      kind: "top",
+    });
+  });
+
+  /**
+   * **A tie is not higher.** Two tiers allowing the same number are two ways to
+   * pay for the same thing, and a button that takes money and changes nothing is
+   * worse than no button.
+   */
+  it("does not offer a sideways move to a tier that allows the same", () => {
+    const twin = tier({ id: "twin", stripePriceId: "price_twin", sortOrder: 15 });
+    expect(tiersToOffer([READER, twin], { kind: "subscribed", on: READER }).kind).toBe("top");
+  });
+
+  /**
+   * **The trap the row parameter exists for, held by the compiler.**
+   *
+   * `Entitlement.limit` carries the prorated override a mid-period plan change
+   * leaves behind — a Researcher who switched up on day 27 is entitled to 33
+   * this month against a tier that sells 150 — and ranking *that* number against
+   * the catalogue would offer them the plan they are already on. Taking a row
+   * makes the wrong number unpassable, and this is where that stays true: widen
+   * the parameter to `number | TierRow` and the `@ts-expect-error` below has
+   * nothing to suppress, so `npm run typecheck` goes red (it covers `tests/`,
+   * where `vitest` never type-checks anything).
+   */
+  it("refuses an allowance where it wants the tier, so a prorated number cannot rank", () => {
+    // @ts-expect-error — an allowance is not a tier, and that is the point
+    const wrong: Standing = { kind: "subscribed", on: 150 };
+    expect(wrong.kind).toBe("subscribed");
+  });
+
+  /**
+   * Nothing is sold beside a subscription that entitles nothing — `unpaid`,
+   * `incomplete`, or one whose period we cannot read. That is exactly what the
+   * old boolean did for those accounts, kept.
+   */
+  it("sells nothing beside a subscription it cannot resolve", () => {
+    expect(tiersToOffer(CATALOGUE, { kind: "unresolved" })).toEqual({ kind: "none" });
+  });
+
+  /* `none`, not `checkout` with an empty list: the emptiness is in the type. */
+  it("answers none rather than an empty offer when nothing is on sale", () => {
+    expect(tiersToOffer([tier({ stripePriceId: null })], { kind: "unsubscribed" })).toEqual({
+      kind: "none",
+    });
+  });
+
+  /**
+   * **Ascending, because nothing downstream will put it right.** `PlanCards`
+   * draws plans in the order it is handed them and promotes nothing, so a
+   * filter that reordered would read as unrelated offers rather than a ladder.
+   */
+  it("leaves the order alone, so what survives is still cheapest first", () => {
+    const jumbled = [RESEARCHER, READER];
+    expect(idsOf(tiersToOffer(jumbled, { kind: "unsubscribed" }))).toEqual([
+      "reader",
+      "researcher",
+    ]);
   });
 });
 
