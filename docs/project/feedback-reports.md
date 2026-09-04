@@ -30,34 +30,80 @@ where they were standing when they wrote it, and `at=spya-…` in the URL is the
 looking at.
 
 **`is:unresolved` is the whole of the bookkeeping.** An issue still open is a report nobody has
-finished. That is why the last step of finishing one is `update_issue(status: "resolved")` — skip it
-and the next run of the loop does the work again.
+finished. That is why the last step of finishing one is always a status write — skip it and the next
+run of the loop does the work again. There are three of them: § Three ways a report ends.
+
+## Who sent it
+
+The reader's address is on the Sentry issue (`contexts.feedback.contact_email`), and whether it is an
+administrator's is [`src/admin.ts`](../../src/admin.ts).
+
+**From Greg or another admin: build it.** No debate about whether it is worth doing — the person who
+decides that is the person who filed it. What survives is *how*:
+[simplest version first](vision.md#simpler-first), so if the full request is a week's work the agent
+builds the afternoon-sized version and names the deferred rest in the plan doc. It does not stop to
+ask permission it already has.
+
+**From a reader, and it's a problem: investigate all of them.** Reproduce it first — a symptom is a
+lead, not a diagnosis. Then fix it, if three things hold: you are confident it is genuinely a bug,
+the fix sits with [what this product is for](vision.md), and it doesn't drag much complexity in
+behind it. If it fails one of those, it is a suggestion, so treat it as one.
+
+**From a reader, and it's a suggestion: this is where the judgment is.** Ask **Fable** — the product
+call is what Fable is for — and **GPT Sol**
+([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)) where the question is whether the
+effort buys the benefit. Between them: does this make it better for readers who never asked for it,
+and is it what we are trying to build? Four ways it can go, and all four are legitimate:
+
+- build what they asked for;
+- build a **tweaked** version — simpler, more general, or narrower — which is often the right answer;
+- **decline** it, with the reason written down;
+- **write it up and wait.** If it is in doubt, this is the answer. Do the research and the plan doc
+  properly, and stop before implementing.
 
 ## The run
 
 It is [engineering-manager.md](../reusable/engineering-manager.md), with the reports as the input:
 
-1. **Read the queue**, in full. Reports arrive in batches and several usually touch one area — the
-   staging falls out of that, not out of the order Sentry lists them in.
-2. **Group into stages** by area and by size, cheapest first. A stage ends green and committed.
-3. **Ask Fable for the product calls** before building: what the reader actually wants underneath
-   what they asked for, and which half of it is worth doing now. Feedback is a request for an
-   outcome, not a spec for a mechanism.
-4. **Build it**, delegated, and **review each stage with GPT Sol**.
-5. **Resolve the Sentry issue and write the note** — both, for every report, including the ones
-   deferred.
+1. **Read the queue, in full, before starting anything.** Two reports that turn out to be one bug
+   become one agent's brief; the rest are independent and the fan-out below assumes it.
+2. **One background Opus agent per report**, each in **its own worktree** (`EnterWorktree`, then
+   `npm run worktree:setup` — [worktrees.md](worktrees.md)), each running
+   [engineering-manager.md](../reusable/engineering-manager.md) with its own subagents beneath it.
+   **Three at a time at most**: they share one local Supabase, one dev server and one box, and past
+   three the tests start going red for reasons that are nobody's bug.
+3. **Each agent decides for itself** what to build, using § Who sent it above — Fable and GPT Sol are
+   its calls to make, not this loop's.
+4. **It lands on `dev` and stops there**: green tests, a GPT Sol review of the code,
+   `git push origin HEAD:dev`. **The loop never deploys.** Production is `npm run deploy`, and it
+   stays Greg's.
+5. **Then the bookkeeping** — § Three ways a report ends.
 
-**A deferred report is a finished report.** If the answer is "not now", say so in the note with the
-reason and resolve it anyway; leaving it unresolved means the loop rediscovers it every three hours
-and re-derives the same "not now".
+## Three ways a report ends
+
+Every report ends in exactly one of these, and **none of them is "still unresolved"** — an issue left
+open is one the loop rediscovers in three hours and re-derives the same answer for.
+
+- **Shipped** — on `dev`. `update_issue(status: "resolved")`.
+- **Declined** — the reason in the note. `resolved` too: a decision is a finish.
+- **Awaiting Greg** — the plan doc written, nothing built.
+  `update_issue(status: "ignored", ignoreMode: "forever", reason: <one line>)`, which takes it out of
+  the queue without claiming it is done, **and** a line in
+  [`awaiting-approval.md`](../user-feedback/awaiting-approval.md): the date, the Sentry short id, one
+  sentence, and a link to the plan doc.
+
+**Read `awaiting-approval.md` first, every run, and report what is on it.** `ignored` is invisible;
+that file is the only thing standing between a written-up proposal and it quietly ageing out. When
+Greg answers, the line moves to shipped or declined and comes off.
 
 ## The note, in `docs/user-feedback/`
 
 One file per report, named `yyMMdd_HHmm-kebab-description.md` — the timestamp is when the reader
 sent it, from `First Seen`, so the directory sorts by when things were reported.
 
-It holds the reader's words verbatim in a blockquote, the Sentry short id, and what we did — which
-is usually one line and a link to the plan doc, because the plan doc is where reasoning belongs.
+It holds the reader's words verbatim in a blockquote, the Sentry short id, **which of the three
+endings it got**, and what we did — usually one line and a link to the plan doc, because the plan
+doc is where reasoning belongs.
 These files are a **record that a report was dealt with**, not a second place to design.
 
 ## What a report is not

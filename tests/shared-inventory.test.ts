@@ -39,6 +39,7 @@ const NOTHING: PublicArtefacts = {
   ideas: false,
   quotes: false,
   timeline: false,
+  sketch: false,
 };
 const EVERYTHING: PublicArtefacts = {
   arc: true,
@@ -47,6 +48,7 @@ const EVERYTHING: PublicArtefacts = {
   ideas: true,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
@@ -264,6 +266,10 @@ const WIRE_ROW = {
      `NEVER_SHARED` on 2026-09-04.
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */
   comments: "comments",
+  /* The Sketch is what Diagram *draws* for a reader without the experimental
+     switch, so its inventory row is Diagram's. It has no row of its own.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch. */
+  sketch: "diagram",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {
@@ -284,6 +290,7 @@ describe("reading the flags off the wire", () => {
       ideas: true,
       quotes: true,
       timeline: true,
+      sketch: true,
     };
     expect([...ARTEFACT_KEYS].sort()).toEqual(Object.keys(probe).sort());
   });
@@ -358,6 +365,7 @@ describe("what counts as shareable", () => {
       arc: null,
       tweets: null,
       timeline: null,
+      sketch: null,
       glossary: STALE,
       ideas: null,
       quotes: null,
@@ -374,6 +382,7 @@ describe("what counts as shareable", () => {
       arc: null,
       tweets: null,
       timeline: null,
+      sketch: null,
       glossary: { ...STALE, entries: [] },
       ideas: null,
       quotes: null,
@@ -383,6 +392,7 @@ describe("what counts as shareable", () => {
       arc: null,
       tweets: null,
       timeline: null,
+      sketch: null,
       glossary: null,
       ideas: null,
       quotes: null,

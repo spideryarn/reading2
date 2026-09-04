@@ -152,7 +152,7 @@ it("calls it Shared, and not the opposite", () => {
 });
 
 describe("the card", () => {
-  it("marks an article anyone with the link can read", () => {
+  it("marks an article anyone can read", () => {
     paint(
       createElement(ShelfCard, {
         entry: entry({ visibility: "public" }),
@@ -165,7 +165,7 @@ describe("the card", () => {
     /* The sentence, not merely the word: a chip saying "Shared" and nothing
        else leaves the owner to guess whether it means *shared with me* or
        *shared by me*. It is the owner's own card's sentence, reused. */
-    expect(badges()[0]?.title).toContain("Anyone with the link can read this");
+    expect(badges()[0]?.title).toContain("Anyone can read this without signing in");
   });
 
   it("says nothing whatever about a private one", () => {

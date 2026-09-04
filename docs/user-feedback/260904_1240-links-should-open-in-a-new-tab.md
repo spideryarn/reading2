@@ -22,17 +22,24 @@ desktop too, so there is one behaviour to explain rather than two. On coarse poi
 reveals the link card and the second opens the tab — the reveal-then-commit pattern the spine bands,
 glossary terms and footnote markers already use.
 
-It is written at ingress, by a client-only DOMPurify hook, which means **it reaches every article
-already on the shelf** rather than only newly-ingested ones. Deliberately *not* in the shared
-sanitiser policy: that governs what is *stored* — the export, the public payload, the model prompts —
-and none of those should carry a browser-targeting attribute.
+It is written at ingress, by a client-only pass that runs on every load, which means **it reaches
+every article already on the shelf** rather than only newly-ingested ones — and every place
+`block.html` is later injected, the note preview card and the figure lightbox included. Deliberately
+*not* in the shared sanitiser policy: that governs what is *stored* — the export, the public payload,
+the model prompts — and none of those should carry a browser-targeting attribute.
+
+*It shipped as a client-only DOMPurify **hook**, and that part was wrong: it made the browser
+sanitiser stop being byte-for-byte the server one, and `tests/sanitize-client.test.ts` went red the
+same day. Moved to [`src/web/external-links.ts`](../../src/web/external-links.ts), applied by
+`sanitizeArticle` immediately after the sanitiser, 2026-09-04 — same behaviour, same timing, and the
+security seam back to one policy.*
 
 ## The measurement that inverted a comment
 
 `TableView.tsx` had claimed since August that DOMPurify **keeps** an author's `target`. It does not;
 it drops it. That was measured rather than assumed, and it matters both ways: it is what makes this
-rule safe, because now only our hook can write a `target`, so there is no author-supplied one to
-collide with.
+rule safe, because now only our own pass can write a `target`, so there is no author-supplied one to
+collide with — and it is why the order is sanitise first, rewrite second.
 
 ## The collision, and why it cost no code
 

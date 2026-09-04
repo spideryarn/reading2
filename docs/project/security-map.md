@@ -82,7 +82,8 @@ An agent about to edit one of these is editing a defence, not a helper.
 |---|---|
 | [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) | **one policy**: DOMPurify config, embed allowlist, hooks. Node-free, so both bindings share it |
 | [`src/sanitize.ts`](../../src/sanitize.ts) | the server binding, called from stage 3 in [`src/blocks.ts`](../../src/blocks.ts) — cleans the stored artefact |
-| [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`App.tsx`](../../src/web/App.tsx) — guards the render |
+| [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`App.tsx`](../../src/web/App.tsx) — guards the render. **Policy only**: it must stay byte-for-byte what the server binding produces, and `tests/sanitize-client.test.ts` says so |
+| [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
 | [`src/routes.ts`](../../src/routes.ts) | `slugPart()` for every capture that becomes a directory name; the one `requireUser` call |
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
 | [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, and `isAllowed` |
@@ -209,6 +210,18 @@ discoverability, not authority.
 > start.** Sketch reaches its ~$0.20 cost through `useSketch`'s auto-runner and `armActivation`,
 > not through the two POSTs named above, so an audit that checks only those two would clear it
 > wrongly — which is the same shape of mistake as `useSketchCaption` above.
+
+**That was built later the same day, and this is where the boundary now is.** A visitor's picture is
+the Sketch, out of the payload (`PublicSketch`), and `useSketch` is mounted in exactly one component
+— `OwnerSketch` — which the visitor arm of `SketchAccess` never reaches, because that arm **has no
+slug in it**. `SketchView` was split into that owner half and a presentational `SketchBody` for this
+reason and no other: a `readOnly` prop would have left the auto-runner mounted for a stranger.
+`profileHash` is the field to notice not crossing — it is who the drawing was made for.
+
+The check that would fail if this were undone is
+`tests/public-network-trace.test.tsx`: handing every reader `{ kind: "owner", slug }` turns eleven
+of its tests red, and the failure output shows a visitor being offered *$0.20* and *Draw the
+argument*. Verified by doing it, 2026-09-04.
 
 
 ### The owner is shown the inventory before they publish

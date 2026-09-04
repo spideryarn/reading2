@@ -2103,7 +2103,7 @@ that could still hold a hash — getting that wrong deletes a picture somebody i
 looking at. Named here so the next person knows it was decided rather than
 forgotten.
 
-## A visitor gets Force, and only Force
+## A visitor gets the Sketch, and only the Sketch
 
 Since 2026-09-04 a signed-out reader of a Public-readable article can open this mode.
 [260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 2, and
@@ -2116,9 +2116,31 @@ POST. Force is the default, so *merely opening* `?mode=diagram` bought embedding
 recorded as "real work and not slice 1a's", and it turned out to be a prop:
 [`DiagramPanel`](../../src/web/DiagramPanel.tsx) takes a `DiagramAccess` union, and the visitor arm
 
-- **pins `kind` to `force`**, in the component, whatever `?diagram=` says;
+- **pins `kind` to `sketch`**, in the component, whatever `?diagram=` says — it was `force` for one
+  day, and Greg changed the picture on 2026-09-04: *"only Sketch will be visible to those without
+  Experimental Features"*, and, asked whether a visitor could therefore *draw* one, **an
+  already-drawn Sketch only**;
 - **turns off all three fetching hooks** — `useSimilar`, `useProjection` and `useSketchCaption`;
-- **renders no picker at all**, rather than a hidden one.
+- **renders no picker at all**, rather than a hidden one;
+- and carries **the drawing itself**, out of the article payload.
+
+### The Sketch a visitor sees is one somebody already paid for
+
+`article_revisions.sketch` crosses as `PublicSketch` — `title`, `caption`, `scenes`, and none of
+`version`, `generator`, `slug`, `sourceHash` or **`profileHash`**, that last being *who the picture
+was drawn for* and so a fact about a person rather than about the article.
+
+**`useSketch` is mounted in exactly one place**, `OwnerSketch`, and that is the boundary rather than
+a tidy-up: the hook carries the auto-runner, so **mounting it is the decision to spend**.
+`SketchView` was split on 2026-09-04 into that owner half and a presentational `SketchBody`, and the
+visitor arm of `SketchAccess` **has no slug in it** — there is nothing to hand a hook even if
+somebody wired one.
+
+**Most articles have no sketch**, because `sketch` is not in `DEFAULT_INGEST_STEPS`. So the
+commonest thing a visitor meets here is *"Nobody has drawn this one yet."* and nothing else — where
+the owner's version of that screen names the price and carries the button.
+`tests/public-network-trace.test.tsx` asserts the visitor's carries neither, and handing a visitor
+the owner's arm turns eleven of its tests red.
 
 **The pin is the gate; the missing picker is only presentation.** `?diagram=` is ordinary query
 state, so a pasted `?diagram=trail` — or the Back button onto one — names a picture without pressing
@@ -2143,6 +2165,9 @@ by a shared `?mode=diagram` URL. What their switch — off by decision — still
 chips, and they have none of those anyway: a visitor gets no picker at all.
 [experimental-features.md](experimental-features.md), and
 [Who sees which chip](#who-sees-which-chip-2026-09-04) above.
+
+**And the picture they get is the Sketch, not Force** — later the same day, and the two changes were
+made by different hands within an hour. See the section above.
 
 ## What is deliberately not here
 

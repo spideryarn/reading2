@@ -654,7 +654,7 @@ a design question rather than a plumbing one. Worth doing; worth doing on purpos
 row (both through `Actions` in [`ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx), so the two views
 cannot disagree), it archives rather than erases, the Undo strip is the confirmation, and **Show
 deleted** at the foot of the shelf is the way back once the strip has gone. All of that landed on
-2026-08-26 and is written up in [library.md](../project/library.md#delete-means-archive-and-undo-is-the-confirmation).
+2026-08-26 and is written up in [library.md](../project/library.md#archive-and-undo-is-the-confirmation).
 So this pass is the metadata page's half, and the placeholder above is what it replaces.
 
 ### The reason the placeholder gave was right, and it is now answered

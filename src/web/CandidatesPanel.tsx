@@ -762,6 +762,8 @@ function Composer({
       <textarea
         className="cnd-box"
         rows={2}
+        /* Enter sends, per the handler below, so the soft keyboard says so. */
+        enterKeyHint="send"
         value={text}
         placeholder="Scope the search — a method, a subfield, people to leave out…"
         onChange={(e) => setText(e.target.value)}

@@ -1762,6 +1762,23 @@ export interface PublicArtefacts {
    * docs/plans/260904c-more-modes-on-a-shared-link.md.
    */
   timeline: boolean;
+  /**
+   * **The seventh, and the only one that is a picture somebody paid for.**
+   *
+   * Greg, 2026-09-04: *"We're now going to share the Diagrams, though only
+   * Sketch will be visible to those without Experimental Features"* — and,
+   * asked whether that meant a visitor could *draw* one: **an already-drawn
+   * Sketch only.**
+   *
+   * That distinction is the whole of why this flag exists. Every other artefact
+   * here is cheap to be wrong about; a Sketch costs about $0.20 and two to
+   * three minutes, so *is there one* has to be a fact in the payload rather
+   * than something a visitor's client discovers by asking. With the flag, a
+   * visitor either sees the drawing or is told nobody has made one — and there
+   * is no state in which their browser can start the job.
+   * docs/project/security-map.md § the hazard this section is really about.
+   */
+  sketch: boolean;
 }
 
 export interface ArticleSharing extends VisibilityState {
@@ -1841,7 +1858,7 @@ export interface ArticleMetadata {
   slug: string;
   /** Where the artefacts actually are, repo-relative — `example` for the fixture. */
   dir: string;
-  /** In pipeline order — `STEP_ORDER` in src/pipeline.ts. */
+  /** In pipeline order — `STEP_ORDER` in src/step-order.ts. */
   stages: StageState[];
   /**
    * How many questions have been asked about this article.
@@ -2137,7 +2154,7 @@ export interface Comment {
    See docs/project/ingest-queue.md. */
 
 /**
- * One stage of the pipeline. Ordered by `STEP_ORDER` in src/pipeline.ts.
+ * One stage of the pipeline. Ordered by `STEP_ORDER` in src/step-order.ts.
  *
  * `tweets` and `glossary` are in that order but **not** in
  * `DEFAULT_INGEST_STEPS` — they are steps you can ask for by name, not ones a

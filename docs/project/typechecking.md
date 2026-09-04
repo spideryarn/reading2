@@ -70,6 +70,20 @@ Before `tests/tsconfig.json` existed, the tests were checked by nothing at all. 
 through vitest, which strips the types without looking at them — so a test could assert against a
 function signature that had not existed for weeks and stay green.
 
+**So "the tests pass" and "the tests compile" are two claims, and only one of them is usually
+checked.** `npm run typecheck` is the wrapper that makes the second one; `npm test` never does, and
+neither does `tsc -p tsconfig.json` on its own, because that project does not include `tests/`. Two
+ways this bites, both met on 2026-09-04:
+
+- **A type error inside a guard.** `tests/owner-isolation.test.ts` had a dead `=== undefined` arm
+  against a `string | null`, and its `includes(null)` was reaching the right answer by accident.
+  Every run was green; only `npm run typecheck` said anything.
+- **A correct annotation that narrows too far.** An `as const` on a shared fixture froze `blocks`
+  into a `readonly` tuple, which the function under test will not take. Not a missing type — a
+  *right* one, applied a step too tightly, and invisible to every test that used it.
+
+The habit that follows: after editing a test file, run `npm run typecheck` and not only the file.
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed

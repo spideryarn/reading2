@@ -601,6 +601,40 @@ Fixed on the way, on its own merits: the line under an address no longer hides `
 when no provider is recorded — it used to sit behind `providers.length > 0`, which hid it on exactly
 the account with least else to say.
 
+### The line at the bottom says which build you are looking at
+
+Greg, 2026-09-04:
+
+> indicate somewhere in /admin exactly when the last deploy happened
+
+`Built 2 hours ago · 8ca6bc7`, faint, under the two entries on the index, with the exact compile
+time and the whole sha in the tooltip. Nothing new is collected to draw it: `vite.config.ts`
+compiles the commit **and the build time** into the bundle, from the stamp
+[`build-stamp.ts`](../../scripts/build-stamp.ts) resolves — the same one that goes into
+`dist/build.json` and into the Sentry release. (The serverless function calls that resolver a second
+time for a stamp of its own, which is what `/api/health` reports: the two agree on the commit by
+construction and differ on `builtAt` by however long the first build took.) The client half is read
+in one place, [`src/web/build-stamp.ts`](../../src/web/build-stamp.ts), which is also where the
+`typeof` guard lives that keeps an unbuilt page — vitest, or the dev server, where `define` does not
+run — from being a `ReferenceError` on the first line of the app.
+
+**It asks nothing over the network**, which is the point: no request to fail, and no way to be right
+about a deployment other than the one that drew the page.
+
+**It says "Built", not "Deployed".** GPT Sol's review was right that a compile time overclaims in
+three ordinary cases, and the wording is the fix for all three: a tab left open across a deploy goes
+on reporting the build it loaded with; Vercel compiles and then promotes, a minute or two later; and
+an instant rollback restores an older build carrying its own older stamp, so the moment of the
+rollback appears nowhere. Fetching `/api/health` instead — the option passed over — would have fixed
+only the first, at the price of a request that can fail and a second answer to reconcile. What the
+line does answer exactly is **which bundle you are looking at and how old it is**, which is what
+*was my change in this?* needs. Off a build it says so — "Running unbuilt" — rather than drawing a
+confident timestamp of the epoch.
+
+The comparison that is a *check* rather than a report is elsewhere and stays there:
+[`scripts/deploy.ts`](../../scripts/deploy.ts) asserts both artefacts name the sha it just pushed
+([deployment.md](deployment.md)).
+
 ## How it is checked
 
 Five suites, and the split is deliberate — no one of them could catch what the others catch.

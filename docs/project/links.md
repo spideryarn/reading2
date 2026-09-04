@@ -135,21 +135,46 @@ So an `http(s)` link whose origin is not ours gets `target="_blank" rel="noopene
 all behave exactly as they do everywhere else, which is what an interception in a click handler
 would have taken away.
 
-**It is written by the browser sanitiser at ingress** ([`src/web/sanitize.ts`](../../src/web/sanitize.ts)),
-not by stage 2 or 3, and that placement is the decision. `ARTICLE_CONFIG` governs what is *stored* —
-the export, the public payload, every model prompt — and this is a fact about our reading view, not
-about the author's markup. Running at ingress also means it reaches every article already on the
-shelf, with nothing re-extracted.
+**It is written at ingress, beside the browser sanitiser and not inside it**
+([`src/web/external-links.ts`](../../src/web/external-links.ts), applied by `sanitizeArticle` in
+[`src/web/sanitize.ts`](../../src/web/sanitize.ts)), and that placement is two decisions rather than
+one.
+
+*Not in the pipeline*, because `ARTICLE_CONFIG` governs what is *stored* — the export, the public
+payload, every model prompt — and this is a fact about our reading view, not about the author's
+markup. Running at ingress also means it reaches every article already on the shelf, with nothing
+re-extracted, and it reaches **every** sink `block.html` is later injected into: the prose column,
+the note preview card (whose links are live, outside `.prose`, and mostly external), and the figure
+lightbox. A pass bolted onto one sink would leave the other two navigating in place.
+
+*Not inside the sanitiser*, because the two sanitiser bindings have to be the same function. It was
+written as a client-only DOMPurify hook on 2026-09-04 and the browser binding immediately stopped
+matching the server one — `tests/sanitize-client.test.ts` went red the same day, and the comment at
+the top of it is the argument: two passes that disagree "look like defence in depth and are really
+two half-policies". A sanitiser answers *what is allowed*; where a link opens is *how it is
+presented*. So it is one policy, identical on both sides, and then this, afterwards, on the browser
+only. There is no per-render cost: it runs once per article load, not on the render path
+[`tests/prose-not-rebuilt.test.tsx`](../../tests/prose-not-rebuilt.test.tsx) guards.
 
 **`target` is not in the sanitiser's allowlist, and that is what makes it safe.** DOMPurify drops an
 author's own `target` (measured 2026-09-04; `tests/prose-links-new-tab.test.ts` pins it), so by the
-time the hook runs no anchor carries one and the only `target` a reader can meet is ours. A
-publisher cannot aim a link at `_top`. *A comment in `TableView.tsx` claimed the sanitiser kept an
-article's `target`; it never did.*
+time the second pass runs no anchor carries one and the only `target` a reader can meet is ours — a
+publisher cannot aim a link at `_top`. **That is why the order is sanitise, then rewrite**, and it is
+the reason the two passes cannot simply be swapped for convenience. *A comment in `TableView.tsx`
+claimed the sanitiser kept an article's `target`; it never did.*
 
 Left alone: an in-article `#fragment`, a relative href, a `mailto:` or `tel:` — a blank tab left
 behind by a hand-off to another app is litter — and a link back into Spideryarn, which should stay
 in Spideryarn.
+
+**"Every link" means more than `<a href>`.** An `<area>` in an image map is a link, and so is an
+`<a>` inside inline SVG, which may spell its destination `xlink:href`; all three survive the
+sanitiser. There are **0 of any of them in 5,301 stored blocks** (measured 2026-09-04), so this is the
+promise being true rather than a hole being closed — but a promise with three quiet exceptions is not
+one, and nothing else would ever have noticed. An SVG anchor that said only `xlink:href` is also
+given a plain `href`, so the hover card, `internalTarget` and the touch rule all find the link the
+same way this pass did; widening the rewrite without that would have swapped one disagreement for
+another. Found by a GPT Sol review, 2026-09-04.
 
 ### On a coarse pointer the first tap reveals and the second opens
 
@@ -164,7 +189,7 @@ built: `tapSelector` gained `.prose a[target="_blank"]` and `onCommit` gained a 
 
 Two things about that selector are deliberate. It is keyed on **`target`, not on the href**, because
 the rule is *"a link that is about to take you out of the app shows itself first"* and that attribute
-is exactly the set of links that do — and only our own sanitiser can write one, so a publisher can
+is exactly the set of links that do — and only our own ingress can write one, so a publisher can
 neither opt in nor out. And **a glossary term inside a link still wins**: `closest` returns the
 innermost match, so a tap on the underlined words finds the `mark.term` and the link is never the
 hit. That keeps the rule a reader has already learnt for the 13% of this corpus's links whose text
