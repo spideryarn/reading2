@@ -11,12 +11,24 @@
  * 1. A signed-in reader sees the plan line, in the words `/profile` uses — and
  *    in the three states where the headline alone does not say what they are on
  *    (`lapsed`, a cancelling `paid`, `unknown`), the explaining sentence too.
- * 2. **A signed-out reader causes no request at all.** This is the half a
- *    screenshot cannot check and the half that rots: somebody moves the hook up
- *    into `PricingPage` to save a prop, every visible assertion here stays
- *    green, and the busiest signed-out page starts firing a 401 per view. The
- *    stub therefore records *every* URL and the test asserts the list is empty,
- *    rather than asserting the absence of a sentence.
+ * 2. **A signed-out reader causes no request at all** — as far as this file can
+ *    see, and the boundary is worth stating because the test reads like a
+ *    stronger claim than it is. This is the half a screenshot cannot check and
+ *    the half that rots: somebody moves the hook up into `PricingPage` to save a
+ *    prop, every visible assertion here stays green, and the busiest signed-out
+ *    page starts firing a 401 per view. The stub therefore records *every* URL
+ *    and the test asserts the list is empty, rather than asserting the absence
+ *    of a sentence — and it records every call into `lib/supabase.js` too, so a
+ *    mount effect that reached for a session would be caught even though the
+ *    module it reached into is a stub that would make no request.
+ *
+ *    **What it cannot see**, because that module is replaced wholesale: the real
+ *    client being constructed, a token refresh inside it, or a regression in
+ *    `lib/supabase.js` itself. GPT Sol checked that separately on 2026-09-04 —
+ *    signed-out `/pricing`, the real Supabase module, empty browser storage, a
+ *    global fetch recorder, **zero requests** — so the guarantee holds today;
+ *    this file is the part of it that runs on every commit, and it is the
+ *    component's half. docs/plans/260904b-stage1-code-review-sol.md, finding 6.
  * 3. **A direct A→B sign-in must not show B the plan it read for A.** The prop
  *    was a boolean once, which is enough to decide whether to ask and not
  *    enough to say who asked: the route does not change on an account switch,
@@ -49,13 +61,40 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BillingSummary } from "../src/billing-plan.js";
 
+/**
+ * Every call the page makes into the auth module, in order.
+ *
+ * `vi.hoisted` because `vi.mock`'s factory is lifted above the imports and
+ * cannot close over an ordinary `const`. The signed-out case asserts this is
+ * empty: a stubbed module makes no request, so the URL recorder below would stay
+ * empty even if something asked it for a session, and "no request" is not the
+ * property that rots — "nothing on this page reaches for the reader" is.
+ */
+const { supabaseCalls } = vi.hoisted(() => ({ supabaseCalls: [] as string[] }));
+
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
-      getSession: async () => ({ data: { session: { access_token: "TOKEN" } } }),
-      refreshSession: async () => ({ data: { session: null } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      getSession: async () => {
+        supabaseCalls.push("getSession");
+        return { data: { session: { access_token: "TOKEN" } } };
+      },
+      refreshSession: async () => {
+        supabaseCalls.push("refreshSession");
+        return { data: { session: null } };
+      },
+      onAuthStateChange: () => {
+        supabaseCalls.push("onAuthStateChange");
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
     },
+  },
+  /* The sign-in panel imports this and calls it only when Google is pressed —
+     which is the thing worth watching: a version that asked on mount whether
+     Google was configured would put a request on every signed-out view. */
+  googleSignInAvailable: async () => {
+    supabaseCalls.push("googleSignInAvailable");
+    return true;
   },
   callbackUrl: () => "https://spideryarn.test/auth/callback",
   CALLBACK_PATH: "/auth/callback",
@@ -144,6 +183,7 @@ let asked: string[];
 beforeEach(() => {
   vi.unstubAllGlobals();
   asked = [];
+  supabaseCalls.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -286,17 +326,57 @@ describe("the pricing page's current-plan line", () => {
        appeared" either — that passes if the request is made and the answer
        thrown away, which is the 401-per-view failure this prop prevents. */
     expect(asked).toEqual([]);
+    /* And nothing reached for the reader either — see the header on what this
+       does and does not prove. */
+    expect(supabaseCalls).toEqual([]);
     expect(planLine(page)).toBeNull();
     /* And the page is still the page: the prices are the reason a stranger is
        here, and they come from `Plans`, which holds no state and needs nothing. */
     expect(page.textContent).toContain("Researcher");
   });
 
-  it("still shows the prices, and invents no plan, when the read fails", async () => {
+  it("says the read failed, and offers another go, rather than a page of dead prices", async () => {
+    /* **This test used to assert only that the prices survived**, which blessed
+       the bug: with no summary there are no buy buttons either, so a signed-in
+       reader whose billing read failed got prices, nothing to press, and no
+       explanation — and quota refusals now send people to this page. GPT Sol,
+       docs/plans/260904b-stage1-code-review-sol.md, finding 2. */
     const page = await show(ALICE, () => null);
     expect(askedBilling()).toEqual(["/api/billing/usage"]);
+    /* No plan is invented, which is the half the old test was right about. */
     expect(planLine(page)).toBeNull();
     expect(page.textContent).toContain("Researcher");
+    /* `/profile`'s own sentence, so the two pages do not describe one failure
+       two ways. */
+    expect(page.textContent).toContain("Couldn't read your plan");
+
+    /* And *Try again* really re-reads, rather than being a button that looks
+       like a way out — the failure mode this whole finding is about. */
+    const retry = [...page.querySelectorAll("button")].find((b) => b.textContent === "Try again");
+    expect(retry, "no way to retry a failed billing read").toBeTruthy();
+    await act(async () => {
+      retry?.click();
+    });
+    await settle();
+    expect(askedBilling()).toEqual(["/api/billing/usage", "/api/billing/usage"]);
+  });
+
+  it("draws the plan once the retry succeeds, rather than staying on the error", async () => {
+    /* The other half: a *Try again* that re-reads and then does not update the
+       page is the same dead end one request later. */
+    let working = false;
+    const page = await show(ALICE, () => (working ? FREE : null));
+    expect(page.textContent).toContain("Couldn't read your plan");
+
+    working = true;
+    const retry = [...page.querySelectorAll("button")].find((b) => b.textContent === "Try again");
+    await act(async () => {
+      retry?.click();
+    });
+    await settle();
+
+    expect(planLine(page)?.textContent).toContain("Free — 1 of 3 articles used");
+    expect(page.textContent).not.toContain("Couldn't read your plan");
   });
 
   /* --------------------------------------------------- the account switch -- */

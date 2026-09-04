@@ -356,9 +356,9 @@ describe("the add page, which is the fifth copy and was found in a browser", () 
    * `/add/<url>` posts on mount and had exactly the spelling this whole file is
    * about: a boolean `failed`, and `queue.error` rendered beside it. So the
    * quota's 402 — *"You have added all 3 articles a free account can add… the
-   * Upgrade button on your profile page sets one up. [pay-free]"* — was replaced
-   * by the generic *"It didn't get as far as the queue"* before anybody could
-   * read it, taking the link to `/profile` with it. **That is the entire point
+   * pricing page sets one up. [pay-free]"* — was replaced by the generic
+   * *"It didn't get as far as the queue"* before anybody could read it, taking
+   * the link to the plans with it. **That is the entire point
    * of the surface it was added to**: the refusal names a button, and the page
    * that was meant to hand the reader that button showed them nothing.
    *
@@ -395,7 +395,10 @@ describe("the add page, which is the fifth copy and was found in a browser", () 
     /* After a perfectly successful poll. Still the server's sentence, and still
        the way out of it. */
     expect(host.textContent).toContain(QUOTA);
-    expect([...host.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toContain("/profile");
+    /* `/pricing` since 2026-09-04, when the buying moved to the page with the
+       prices on it — QuotaNotice.tsx. What this line is holding is unchanged:
+       the refusal still arrives with somewhere to press. */
+    expect([...host.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toContain("/pricing");
   });
 
   it("does not offer a Try again under a refusal that says trying again will not help", async () => {
