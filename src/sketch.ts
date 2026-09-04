@@ -39,7 +39,7 @@ import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
+import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import {
   accept,
@@ -484,7 +484,7 @@ ${skeleton}`;
 }
 
 function parseJson(raw: string): unknown {
-  return parseJsonFrom<unknown>(stripFence(raw), "the model's answer");
+  return parseJsonAnswer<unknown>(raw, "the model's answer");
 }
 
 /* ------------------------------------------------------------------ the run */

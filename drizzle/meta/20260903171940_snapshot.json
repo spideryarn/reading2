@@ -1,5 +1,5 @@
 {
-  "id": "b7876f19-c6a0-406c-83db-748fac2c0dfc",
+  "id": "99ed01cf-e716-4083-8347-d3b6d6660bbd",
   "prevId": "9627fa00-df08-440e-b8cc-35b3292b0d18",
   "version": "7",
   "dialect": "postgresql",
@@ -1095,12 +1095,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "cancel_at": {
-          "name": "cancel_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "livemode": {
           "name": "livemode",
@@ -2533,6 +2527,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "requeues": {
+          "name": "requeues",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "url_key": {
           "name": "url_key",

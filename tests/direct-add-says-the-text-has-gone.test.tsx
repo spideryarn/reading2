@@ -51,6 +51,22 @@ import type { UseJobs } from "../src/web/useJobs.js";
 /** Every URL and upload id the page asked to queue, in order. */
 const queued: string[] = [];
 
+/**
+ * Whether the posed `addUpload` succeeds.
+ *
+ * **It has to be answerable both ways since 2026-09-03**, because the upload
+ * arm's tense now depends on it. This page used to say *"the text has been
+ * sent"* the moment it rendered, whatever came back. It says that only once the
+ * POST has produced a job, because until then nothing has reached a model
+ * provider and the past tense is a false statement about somebody's manuscript.
+ * `textHasGone` in AddPage.tsx, and GPT Sol's third finding on
+ * docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md.
+ *
+ * A URL is unaffected, and the case below still asserts it: that arm posts
+ * before the first paint and has no state in which it has not.
+ */
+let uploadQueues = true;
+
 const queue: UseJobs = {
   jobs: [],
   loaded: true,
@@ -67,7 +83,7 @@ const queue: UseJobs = {
   },
   addUpload: async (uploadId: string) => {
     queued.push(uploadId);
-    return null as Job | null;
+    return uploadQueues ? ({ id: "job-1" } as Job) : null;
   },
   run: async () => null,
   cancel: async () => {},
@@ -90,6 +106,7 @@ let root: Root;
 
 beforeEach(() => {
   queued.length = 0;
+  uploadQueues = true;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -99,6 +116,14 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
 });
+
+/** Let the posed POST resolve and its state land, then read the page again. */
+async function settled(): Promise<string> {
+  await act(async () => {
+    await Promise.resolve();
+  });
+  return host.textContent ?? "";
+}
 
 function render(source: Parameters<typeof AddPage>[0]["source"]): string {
   act(() => {
@@ -116,10 +141,34 @@ describe("the direct-add pages disclose where the text went", () => {
     expect(text).toContain(DIRECT_ADD_SENT_TEXT_AWAY);
   });
 
-  it("says it on /add/upload/<id> too, where there is not even an address to look at", () => {
-    const text = render({ kind: "upload", uploadId: "up_abc123" });
+  it("says it on /add/upload/<id> too, where there is not even an address to look at", async () => {
+    /* **Flushed, because the upload arm's tense is now state.** `addUpload`
+       resolves in a microtask, `setStarted` runs then, and the past tense
+       follows from it — where before 2026-09-03 the sentence was the same on
+       every render and reading it synchronously was enough. */
+    render({ kind: "upload", uploadId: "up_abc123" });
+    const text = await settled();
     expect(queued).toEqual(["up_abc123"]);
     expect(text).toContain(DIRECT_ADD_SENT_TEXT_AWAY);
+  });
+
+  it("uses the present tense on an upload the server would not queue", async () => {
+    /* **The same rule, pointed the other way**, and new on 2026-09-03. The page
+       is reached at byte zero now, so `POST /api/jobs {uploadId}` can be refused
+       — the bytes have not arrived yet, the quota is spent — and then nothing
+       has gone anywhere. Saying *"has been sent"* there is as false as omitting
+       the sentence altogether, and it is about a manuscript.
+
+       The disclosure is still made either way, which is what this file exists
+       for. Only its tense moves. */
+    uploadQueues = false;
+    render({ kind: "upload", uploadId: "up_refused" });
+    const text = await settled();
+    expect(queued).toEqual(["up_refused"]);
+    expect(text).toContain(ADDING_SENDS_TEXT_AWAY);
+    expect(text, "the page claimed a refused upload had gone to a provider").not.toContain(
+      DIRECT_ADD_SENT_TEXT_AWAY,
+    );
   });
 
   it("uses the past tense, not the add box's present tense", () => {

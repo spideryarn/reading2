@@ -91,6 +91,7 @@
  * where there is room for the word "matches" beside it.
  */
 import {
+  memo,
   type CSSProperties,
   useCallback,
   useEffect,
@@ -303,7 +304,26 @@ export function bandPress(
   return touch && armed !== id ? "reveal" : "jump";
 }
 
-export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
+/**
+ * **Memoised, for the reason `TableView` is** — and it is the larger of the
+ * two counts. performance.md's own example line reads `Spine=114 TableView=104`.
+ *
+ * `useReadingPosition` writes `?at=` as the reader scrolls, which re-renders
+ * `Reader`, which re-rendered this. None of its four props depends on `at`:
+ * `outline` and `matches` are memos over the article and the search
+ * (App.tsx:1505, 2104), `layoutKey` is a string, and `onJump` is `jumpTo`, a
+ * `useCallback` over a nuqs setter.
+ *
+ * The rail's own scroll listener is unaffected — it lives inside, writes to a
+ * `data-` attribute and to local state, and a memo does not touch either. That
+ * is the point: the rail should re-render when the *reader moves*, not when
+ * their parent does.
+ *
+ * docs/plans/260904a-more-scroll-cpu-wins.md.
+ */
+export const Spine = memo(SpineInner);
+
+function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
   useRenderCount("Spine");
   /**
    * Which band's card is open, and what opened it.

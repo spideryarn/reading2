@@ -51,13 +51,23 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
+import { formatBytes } from "../uploads.js";
 import { KEEP_A_TAB_OPEN } from "../job-state.js";
-import { DIRECT_ADD_SENT_TEXT_AWAY, worthRetrying } from "../messages.js";
+import {
+  ADDING_SENDS_TEXT_AWAY,
+  codeOfMessage,
+  DIRECT_ADD_SENT_TEXT_AWAY,
+  UPLOAD_STILL_ARRIVING,
+  worthRetrying,
+} from "../messages.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
+import { type Transfer, uploadEngine } from "./uploadEngine.js";
+import { useUpload } from "./useUpload.js";
+import { apiFetch, readJson } from "./lib/api.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -72,10 +82,58 @@ import { useJobs } from "./useJobs.js";
  */
 export type AddSource = { kind: "url"; url: string } | { kind: "upload"; uploadId: string };
 
+/**
+ * How often a page waiting on another tab's transfer asks whether it has landed.
+ *
+ * Three seconds, and the number is picked from what it is waiting for rather
+ * than from what feels responsive: the thing that ends the wait is a 40 MB
+ * upload on a slow connection, so being three seconds late to notice it is
+ * invisible, and asking ten times as often would be ten times the Storage
+ * `head` for the same answer. The engine's own transfer needs none of this —
+ * it knows.
+ */
+const ARRIVAL_POLL_MS = 3000;
+
+/**
+ * The code on `UPLOAD_STILL_ARRIVING`, which is what the waiting page matches on.
+ *
+ * **The code and not the sentence.** Comparing prose means a client on an older
+ * bundle, mid-deploy, holds one wording while the server has sent another — and
+ * then a page that should be waiting for a file simply never starts, silently.
+ * The bracketed codes exist for exactly this (docs/project/copy.md), and
+ * `codeOfMessage` is how you read one. GPT Sol, finding 4.
+ *
+ * Derived from the message rather than written out, so the two cannot drift.
+ */
+const UPLOAD_WAIT_CODE = codeOfMessage(UPLOAD_STILL_ARRIVING.message);
+
 export function AddPage({ source: origin }: { source: AddSource }) {
   const queue = useJobs();
   const [started, setStarted] = useState<string | null>(null);
   const url = origin.kind === "url" ? origin.url : "";
+  /**
+   * **This tab's transfer, if it is the one this address is about.**
+   *
+   * Since 2026-09-03 the reader arrives here with **zero bytes sent** — the
+   * shelf mints the grant, navigates, and leaves `uploadEngine` to finish the
+   * PUT and queue the ingest wherever they go next
+   * (docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md). So there
+   * are two quite different situations behind one address:
+   *
+   *  - **the engine has it** — this page is a window onto a transfer that is
+   *    already being seen through. It must not post anything; the engine will,
+   *    and posting alongside it is how one upload becomes two requests.
+   *  - **nothing has it** — a reload, a second tab, a bookmark, a share sheet.
+   *    Then this page posts, exactly as it always did. If the bytes are still
+   *    moving in the *other* tab the server answers *still arriving* and takes
+   *    nothing, and `stillArriving` below watches for them.
+   *
+   * Compared by upload id rather than merely "is there a transfer", because the
+   * engine holds one at a time and it may be a different file entirely.
+   */
+  const transfer = useUpload();
+  const mine =
+    origin.kind === "upload" && transfer?.uploadId === origin.uploadId ? transfer : null;
 
   /* What the server will actually fetch, worked out here so the page can show
      it. Typing `example.com/an-essay` into the address bar is meant to work
@@ -87,10 +145,15 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      and it is the same function the server derives the slug with, so a second
      opinion here could only ever be a way for the two to disagree. */
   const source = normaliseUrl(url);
-  /* An upload has nothing to validate here — the file is already in the object
-     store and the server has already refused everything it could refuse before
-     minting the grant. So `ok` is about the *address*, and an upload simply has
-     not got one. */
+  /* An upload has nothing to validate *here*: the checks that can be made from
+     a filename and a size were made before the grant, and the ones over the
+     bytes belong to the acquisition step. So `ok` is about the **address**, and
+     an upload simply has not got one.
+
+     It used to add "the file is already in the object store", which stopped
+     being true on 2026-09-03 — this page is now reached at byte zero, and
+     whether the bytes are there is a question the *server* answers, once, in
+     `uploadHasArrived`. */
   const ok = origin.kind === "upload" || slugFromUrl(source) !== "";
 
   /* What the "have we posted this one already" guard compares. Not a boolean —
@@ -158,6 +221,18 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   const failureRef = useRef(queue.lastFailure);
   failureRef.current = queue.lastFailure;
 
+  /**
+   * Whether the engine is the one driving this address.
+   *
+   * A ref as well as the value, because the posting effect must **not** re-run
+   * when a transfer finishes — it would see `posted.current` already set and do
+   * nothing, which is right, but only by accident. Reading it through a ref
+   * keeps the effect's dependency list honest about what it actually depends on.
+   */
+  const engineHasIt = mine !== null;
+  const engineRef = useRef(engineHasIt);
+  engineRef.current = engineHasIt;
+
   useEffect(() => {
     /* Cleared rather than simply skipped. Going from a URL we would add to one
        we would not — by editing the address bar, which does not remount this
@@ -168,6 +243,11 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       setFailure(null);
       return;
     }
+    /* **The engine owns this one.** It is going to post when the bytes land,
+       and a second POST from here is how one upload turns into two requests for
+       one claim. The server survives that — `queueAnUpload` answers the loser
+       with the winner's job — but surviving a race is not a reason to run one. */
+    if (engineRef.current) return;
     const want = `${attempt}\u0000${wanted}`;
     if (posted.current === want) return;
     posted.current = want;
@@ -216,6 +296,92 @@ export function AddPage({ source: origin }: { source: AddSource }) {
        Biome asks for them by name and it is right to. */
   }, [wanted, ok, attempt, uploadId, source]);
 
+  /**
+   * **The engine's outcome, adopted as this page's.**
+   *
+   * When the engine owns the transfer it is the thing that posted `/api/jobs`,
+   * so the job id arrives on the snapshot rather than out of this page's own
+   * request. Adopting it into `started` means everything below — the card, the
+   * navigation on `done`, the tab title — goes on reading one variable and does
+   * not have to know which of the two routes produced it.
+   */
+  const queuedJobId = mine?.phase.kind === "queued" ? mine.phase.job.id : null;
+  useEffect(() => {
+    if (queuedJobId) setStarted(queuedJobId);
+  }, [queuedJobId]);
+
+  /* The file turned out to be an article the reader already has, and retention
+     has taken its job — `queueAnUpload` answers 200 `{article}`. Nothing to
+     watch, so this is the same navigation the `done` effect below does,
+     arriving earlier. `replace`, for the reason that effect gives. */
+  const alreadyArticle = mine?.phase.kind === "article" ? mine.phase.slug : null;
+  useEffect(() => {
+    if (alreadyArticle) navigate(readHref(alreadyArticle), { replace: true });
+  }, [alreadyArticle]);
+
+  /**
+   * **Waiting for a transfer this page cannot see.**
+   *
+   * Reload `/add/upload/<id>` while the original tab is still sending, or open
+   * the address in a second one, and this page holds no `File` and no request in
+   * flight — it cannot know when the bytes land. So the server refuses with
+   * `UPLOAD_STILL_ARRIVING`, taking no claim and no quota slot
+   * (`uploadHasArrived` in src/routes.ts), and this watches
+   * `GET /api/uploads/:id` until the object is there, then asks for another go.
+   *
+   * **A GET on a timer rather than a POST on a timer.** Re-posting would be a
+   * mutation in a loop, and the one thing it mutates is a claim that can be
+   * taken exactly once.
+   *
+   * It gives up when the record can no longer become anything — the grant has
+   * expired with nothing at that key, which is a transfer that is not coming
+   * back. `asOf` reports that without writing anything, so asking is free.
+   */
+  const stillArriving =
+    failure?.reason !== undefined &&
+    failure.reason !== null &&
+    codeOfMessage(failure.reason) === UPLOAD_WAIT_CODE;
+  useEffect(() => {
+    if (!stillArriving || uploadId === undefined) return;
+    let live = true;
+    const timer = setInterval(() => {
+      void (async () => {
+        const seen = await readJson<{ arrived?: boolean; status?: string }>(
+          await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`),
+        ).catch(() => null);
+        if (!live || !seen) return;
+        /* Nothing to act on yet, and the timer stays armed. */
+        const done = seen.status === "expired" || seen.arrived === true;
+        if (!done) return;
+        /* **Closed synchronously, before either branch below acts.** A `GET`
+           slower than the interval leaves two callbacks in flight, and if both
+           come back `arrived` both bump `attempt` — two POSTs for one upload,
+           which at the reader's last quota slot can hand the loser a 402 about a
+           job the winner has already made. `resolveExistingUpload` closes
+           *sequential* repeats; it cannot close two requests that both read
+           `pending`. GPT Sol, finding 4. */
+        live = false;
+        clearInterval(timer);
+        if (seen.status === "expired") {
+          /* Stopped by the reader, or its grant swept — `cancelUpload` in
+             src/upload-records.ts puts a record here. `null` rather than a
+             sentence: the page's own line plus a Try again is the honest
+             rendering, and `UPLOAD_MISSING`'s words belong to a job that in this
+             case was never made. */
+          setFailure({ reason: null });
+          return;
+        }
+        /* `attempt` is what the posting effect's guard compares, so bumping it
+           is how this asks for another go — the same door Retry knocks on. */
+        setAttempt((n) => n + 1);
+      })();
+    }, ARRIVAL_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [stillArriving, uploadId]);
+
   const job = queue.jobs.find((j) => j.id === started) ?? null;
 
   useEffect(() => {
@@ -248,9 +414,31 @@ export function AddPage({ source: origin }: { source: AddSource }) {
             genuinely nothing to name, and saying "your file" is better than an
             empty line that fills in a second later. */}
         <p className="tw:mt-2 tw:mb-0 tw:font-mono tw:text-[13px] tw:break-all tw:text-muted-foreground">
-          {origin.kind === "upload" ? (job?.upload?.filename ?? "your file") : ok ? source : url}
+          {origin.kind === "upload"
+            ? /* The engine knows the filename from the moment the reader chose
+                 it, where the job only learns it on the first poll — so when
+                 this tab owns the transfer there is no second of "your file". */
+              (mine?.filename ?? job?.upload?.filename ?? "your file")
+            : ok
+              ? source
+              : url}
         </p>
       </header>
+
+      {/* **The transfer, while it is this tab's to show.** Everything below
+          this is about a job, and until the bytes have landed there is no job —
+          which is the whole difference the background upload made to this page.
+          Above the disclosure sentence rather than below it, because it is what
+          the reader came here to watch. */}
+      {mine && <Sending transfer={mine} />}
+      {/* **Queueing gets a line and no button.** One small request, and it
+          cannot be undone — see `cancel` in uploadEngine.ts. Saying so beats
+          both a Stop that declines and a bar that has silently stopped moving. */}
+      {mine?.phase.kind === "queueing" && (
+        <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
+          Your file is safely uploaded. Starting the import…
+        </p>
+      )}
 
       {!ok && (
         <p className="tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">
@@ -278,10 +466,30 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           address we refused to queue is the one case where nothing was sent,
           and the past tense would be a lie about it. Above the progress card
           rather than under it, so it is read in the seconds spent watching the
-          steps rather than after the navigation has already left. */}
+          steps rather than after the navigation has already left.
+
+          **And the tense goes back to the present while a file is still going
+          up**, which is new on 2026-09-03 and is the same rule applied to a
+          state that did not exist before. A reader who pressed Add ten seconds
+          ago is watching their own bytes move towards *our* object store; not
+          one word of the article has reached a model provider, and there is a
+          Stop button on this page. Saying it "has been sent" then would be
+          false in exactly the way this whole pair of sentences exists to
+          prevent, and it would be false at the one moment the reader could
+          still act on it. `ADDING_SENDS_TEXT_AWAY` is the shelf's wording and
+          it is right here too, for the same reason: the choice is still open.
+
+          **And the question is "has this been queued", not "has the transfer
+          stopped"** — see `textHasGone`. Asking it the other way round, which is
+          what the first version did, put the past tense over a file the reader
+          had just pressed Stop on, over a queue request refused 402, and in a
+          second tab that then said the text had gone and that the file was still
+          arriving in consecutive sentences. GPT Sol, 2026-09-03, finding 3. */}
       {ok && (
         <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
-          {DIRECT_ADD_SENT_TEXT_AWAY}
+          {textHasGone(mine, origin.kind === "upload", started !== null)
+            ? DIRECT_ADD_SENT_TEXT_AWAY
+            : ADDING_SENDS_TEXT_AWAY}
         </p>
       )}
 
@@ -298,7 +506,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           them the other way round is the bug this pair was written to fix —
           see `failure` above. */}
       <QuotaNotice
-        message={failure?.reason ?? queue.error}
+        message={engineFailure(mine) ?? failure?.reason ?? queue.error}
         className="tw:mb-4 tw:text-sm tw:text-destructive"
       />
 
@@ -306,9 +514,28 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           and one poll, usually a fraction of a second. Deliberately *not*
           behind `useSlow` like the shelf's "Reading the shelf…": there the page
           is full of cards while you wait, and here it would be a heading and
-          nothing else. */}
-      {ok && !job && !failed && (
+          nothing else.
+
+          **Not while a transfer is running**, which is the state `Sending`
+          above is already describing at length. "Queueing it…" over a progress
+          bar would be naming a request that has not been made and will not be
+          for another two minutes. */}
+      {ok && !job && !failed && !mine && (
         <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>
+      )}
+
+      {/* **Waiting on a transfer in another tab.** This page posted, the server
+          answered that the bytes are not there yet and took nothing, and the
+          poll above is watching for them. Said out loud because the alternative
+          is a page that looks stuck: no card, no bar, no error.
+          `UPLOAD_STILL_ARRIVING` in src/messages.ts is the server's own words
+          for the same state; this is the reader-side version, which can say
+          *another tab* because it knows this one is not doing it. */}
+      {stillArriving && (
+        <p className="tw:text-sm tw:text-muted-foreground">
+          Waiting for the file to finish arriving — it's being sent from another tab. This will
+          start on its own.
+        </p>
       )}
 
       {/* **Only when another go could come out differently.** `worthRetrying`
@@ -321,7 +548,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
 
           The generic line goes with it: when the refusal above says what
           happened, "It didn't get as far as the queue" adds nothing. */}
-      {failed && worthRetrying(failure?.reason) && (
+      {failed && !stillArriving && worthRetrying(failure?.reason) && (
         <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
           It didn't get as far as the queue.{" "}
           <button
@@ -332,6 +559,58 @@ export function AddPage({ source: origin }: { source: AddSource }) {
             Try again
           </button>
           .
+        </p>
+      )}
+
+      {/* **The engine's own Try again, which is a different button.** It knows
+          which phase failed and repeats only that: the bytes after a transport
+          failure, or the queue request alone once the bytes have landed and
+          `POST /api/jobs` was the thing refused. Re-PUTting a file that is
+          already in Storage comes back `409 Duplicate` and would strand the
+          reader short of the thing that actually broke — GPT Sol's finding 4 on
+          the plan. The button above bumps `attempt` and re-posts, which is the
+          right recovery for the pages the engine is not driving.
+
+          It says which it will do, because the two differ by minutes on the
+          connection this feature exists for.
+
+          **A `queueing` failure always gets one, even a quota refusal**, and
+          that is the exception `worthRetrying` cannot make for itself. Its rule
+          is right everywhere else: a quota code is `blocked`, because the count
+          will be the same next time, and offering a retry under a sentence that
+          has just said trying again will not help teaches the reader to distrust
+          the sentence. But this button is *precisely* what a reader presses
+          after upgrading — their file is already in Storage, and the alternative
+          is uploading 40 MB again to reach a POST that costs nothing. Hiding it
+          made the recovery this whole feature promises reachable only from
+          DevTools. GPT Sol, finding 1. */}
+      {mine?.phase.kind === "failed" &&
+        (mine.phase.at === "queueing" || worthRetrying(mine.phase.reason)) && (
+        <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          <button
+            type="button"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight tw:underline"
+            onClick={() => uploadEngine.retry()}
+          >
+            Try again
+          </button>
+          {mine.phase.at === "queueing"
+            ? " — the file is safely uploaded, so this only asks again."
+            : " — this sends the file again from the start."}
+        </p>
+      )}
+
+      {/* Stopped, and it stays stopped — and since 2026-09-03 that is the
+          **server's** position rather than this tab's. `cancel()` sends
+          `DELETE /api/uploads/:id`, which moves the record `pending → expired`,
+          so a reload of this address is answered instead of polled at, and a
+          second tab cannot queue an upload whose object happened to land in the
+          moment before Stop was pressed. Without that DELETE, *"nothing was
+          added"* was a claim only the browser was making. GPT Sol, finding 2. */}
+      {mine?.phase.kind === "cancelled" && (
+        <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          You stopped that upload, so nothing was added. Choosing the file again on the shelf
+          starts over.
         </p>
       )}
 
@@ -356,6 +635,115 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </Link>
       </p>
     </main>
+  );
+}
+
+/**
+ * Whether this tab is still moving bytes, or about to be.
+ *
+ * The three phases in which nothing has left the machine for a model provider —
+ * hashing, asking for the grant, and the PUT to our own object store.
+ * `Sending` renders on exactly these.
+ */
+function stillSending(transfer: Transfer | null): boolean {
+  const kind = transfer?.phase.kind;
+  return kind === "hashing" || kind === "granting" || kind === "sending";
+}
+
+/**
+ * **Has the article's text actually gone to a model provider yet?**
+ *
+ * The predicate behind the disclosure sentence's tense, and it is asked the
+ * right way round: *has an ingest been queued*, not *has the transfer stopped*.
+ *
+ * The first version asked `!stillSending(...)`, and that was false in four
+ * ordinary states at once, every one of them a wrong statement about somebody's
+ * manuscript. Press Stop halfway through the PUT and the page changed to *"the
+ * article's text has been sent to a third-party model provider"* about a file
+ * that never left the browser. So did a queue-time 402 or 503. So did a second
+ * tab watching another tab's transfer — which said the text had been sent and
+ * that the file was still arriving, in consecutive sentences. GPT Sol, finding
+ * 3, and it is the finding I most wanted broken.
+ *
+ * So: past tense only once something **queued** it. For a URL that is the whole
+ * page — the effect posts before the first paint, and there is no state in which
+ * it has not. For an upload it is an engine outcome of `queued` or `article`, or
+ * this page's own POST having come back with a job id.
+ *
+ * **`started`, not `job`.** `started` is set the instant `addUpload` resolves;
+ * `job` waits for the next poll to bring that job back, up to a second later. A
+ * second of present tense over a request that has already gone is the safe
+ * direction to be wrong in, and it is still wrong. What it must not do is read
+ * true when the POST was *refused* — a page that says the text has gone about a
+ * file the server would not take is the same lie in the other direction, and
+ * `addUpload` answers null there.
+ */
+function textHasGone(transfer: Transfer | null, isUpload: boolean, posted: boolean): boolean {
+  if (!isUpload) return true;
+  const kind = transfer?.phase.kind;
+  return kind === "queued" || kind === "article" || posted;
+}
+
+/** The sentence for a transfer that stopped, or null. `QuotaNotice` renders it. */
+function engineFailure(transfer: Transfer | null): string | null {
+  return transfer?.phase.kind === "failed" ? transfer.phase.reason : null;
+}
+
+/**
+ * **The bytes, going.** The state this page did not have before 2026-09-03.
+ *
+ * Everything else here is about a job, and there is no job until the file has
+ * landed — so without this the reader who pressed Add on a 40 MB PDF saw a
+ * heading, a filename and nothing else for two minutes.
+ *
+ * A `<progress>` and bytes rather than a spinner and a percentage, matching the
+ * shelf's own row exactly: the two questions during a long upload are *is it
+ * moving* and *how much is left*, and a rounded percentage answers the first
+ * badly — it sits on the same integer for seconds at a time.
+ *
+ * Stop is here as well as on the shelf because this is where the reader is. A
+ * transfer nobody on this page can stop is a page they have to leave to escape.
+ */
+function Sending({ transfer }: { transfer: Transfer }) {
+  if (!stillSending(transfer)) return null;
+  const sent = transfer.phase.kind === "sending" ? transfer.phase.sent : 0;
+  return (
+    <div className="tw:mb-4" aria-live="polite">
+      <div className="tw:flex tw:items-baseline tw:gap-3 tw:text-sm tw:text-muted-foreground">
+        <span className="tw:flex-1">
+          {transfer.phase.kind === "sending"
+            ? `Sending your file — ${formatBytes(sent)} of ${formatBytes(transfer.bytes)}`
+            : "Getting your file ready…"}
+        </span>
+        <button
+          type="button"
+          className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight tw:underline"
+          onClick={() => uploadEngine.cancel()}
+        >
+          Stop
+        </button>
+      </div>
+      <progress
+        className="tw:mt-2 tw:h-1 tw:w-full"
+        value={sent}
+        max={transfer.bytes}
+        aria-label={`Uploading ${transfer.filename}`}
+      />
+      {/* **The tab has to stay open, and this is the one place it is true of the
+          *file* rather than of the ingest.** `KEEP_A_TAB_OPEN` below says a
+          Spideryarn tab must stay open for the job to keep advancing, and adds
+          that it will continue when you return. That second half is false here:
+          the bytes exist only in this browser until they reach Storage, so
+          closing this tab loses them outright, and there is nothing to come back
+          to. Hence its own sentence.
+
+          Going to another page inside Spideryarn is fine, and saying so is most
+          of the point — the whole change is that the reader may. */}
+      <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+        Keep this tab open until the file has gone — you can carry on using
+        Spideryarn in it. Closing it stops the upload.
+      </p>
+    </div>
   );
 }
 

@@ -446,13 +446,19 @@ describe("what the list says", () => {
   });
 
   it("drops paragraph rows when the band covers the viewport, whatever the prop says", () => {
-    /* `proseBeside` is derived from `fit.modeW > 0`, which is exact only while
-       the spine is on: the stylesheet's full-screen rule is a literal
+    /* `proseBeside` is derived from `fit.modeW > 0`, which was exact only while
+       the spine was on: the stylesheet's full-screen rule was a literal
        `max-width: 843px` while fitMode subtracts the rail's width, so with
-       `?spine=0` the two disagree from 832px to 843px. In that window the prop
-       says "beside" and the article is in fact hidden underneath. So the panel
-       measures the rendered band instead of trusting the prop. GPT Sol,
-       2026-08-28. */
+       `?spine=0` the two disagreed from 832px to 843px. In that window the prop
+       said "beside" and the article was in fact hidden underneath. GPT Sol,
+       2026-08-28; fixed at the source on 2026-09-03, when the stylesheet
+       stopped deriving the crossover and read `.band-covers` from App.tsx
+       instead.
+
+       The panel still measures the rendered band rather than trusting the prop,
+       and this test still holds that: it hands the prop a lie and expects the
+       measurement to win, which is what makes the behaviour independent of
+       whatever the covering rule is keyed on next. */
     /* The real geometry at the breakpoint: at 843px the band's rect is
        [12, 843] in an 843px window — it covers the article completely. Note
        its WIDTH is only 831, which is why a width-based check silently never

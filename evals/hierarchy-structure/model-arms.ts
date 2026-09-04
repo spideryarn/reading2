@@ -48,6 +48,9 @@ import type { Block, Tree } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
 
+/** How long any one structure call may take before it counts as a failure. */
+export const CALL_TIMEOUT_MS = 10 * 60_000;
+
 /** What one paid call reports back, for the results file and the noise floor. */
 export interface CallStats {
   ms: number;
@@ -60,6 +63,19 @@ export interface CallStats {
   costUsd: number | null;
   /** The generation endpoint's answer for the same call — the provider's own number. */
   providerCostUsd: number | null;
+  /**
+   * **Which upstream actually served it**, as OpenRouter names it in the
+   * response (`provider`).
+   *
+   * Recorded because `provider: { zdr: true }` on the way out is a *request*,
+   * and this eval's whole claim to be measuring a deployable recipe rests on
+   * it having been honoured. With the name here, `verify-zdr.ts` can check the
+   * answer against OpenRouter's own list of zero-retention endpoints after the
+   * run; without it there is nothing to check and "measured under ZDR" is a
+   * sentence in a write-up rather than a fact. It also names who owns a
+   * latency figure, which for a model with one ZDR provider is the whole story.
+   */
+  upstream: string | null;
 }
 
 /**
@@ -307,17 +323,6 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       upstream: (message as unknown as { provider?: string | null }).provider ?? null,
     });
 
-    if (wasRefused(message)) throw new Error("the model refused the structure request");
-    if (message.stop_reason === "max_tokens") {
-      throw new Error(
-        `truncated at max_tokens=${maxTokens} (${message.usage.output_tokens} output tokens) — ` +
-          `the answer cannot be scored`,
-      );
-    }
-    const raw = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
     const stats: CallStats = {
       ms: Date.now() - startedAt,
       inputTokens: u.input_tokens ?? null,
@@ -329,39 +334,152 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       generationId: streamGenerationId ?? message.id ?? null,
       costUsd: streamCostUsd,
       providerCostUsd: null, // verify-costs.ts fills this from the provider's record
+      upstream: (message as unknown as { provider?: string | null }).provider ?? null,
     };
+
+    /* Arm outcomes, not bench faults — the same distinction the chat wire
+       makes, and for the same reason: one arm's refusal must not take the
+       other ten down with it. Both of these billed, so the stats travel. */
+    if (wasRefused(message)) {
+      throw new ArmFailure("the model refused the structure request", [stats]);
+    }
+    if (message.stop_reason === "max_tokens") {
+      throw new ArmFailure(
+        `truncated at max_tokens=${maxTokens} (${message.usage.output_tokens} output tokens) — ` +
+          `the answer cannot be scored`,
+        [stats],
+      );
+    }
+    const raw = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
     assertCallAccounted(stats, `messages wire, ${call.model}`);
     return { raw, stats };
   });
 };
 
 /**
+ * **The chat request body, as a value, so a test can read it.**
+ *
  * chat/completions, for the models the Messages wire cannot reach. Effort maps
- * onto OpenRouter's `reasoning.effort` (high|medium|low are all valid there).
- * `max_tokens` AND `max_completion_tokens` are both sent: Luna advertises the
- * second, providers ignore parameters they do not take silently
- * (src/models.ts § the completion ceilings), and a truncated answer is caught
- * below by `finish_reason` rather than trusted to the parameter.
+ * onto OpenRouter's `reasoning.effort`; which values a given model actually has
+ * is a fact about that model, recorded in arms.ts § `Candidate`.
+ *
+ * Pulled out of `sendChat` when `provider` was added, and the reason is the
+ * standing one: an arm's routing constraint that never reaches the wire is
+ * invisible from both ends — OpenRouter answers 200 either way, and the
+ * write-up says "measured under zero data retention" over a request that asked
+ * for nothing of the sort. Inlined in the call it could only be checked by a
+ * live call; as a value, `tests/hierarchy-structure-eval.test.ts` reads it.
  */
+export function chatBody(req: {
+  call: CallSpec;
+  system: string;
+  user: string;
+  maxTokens: number;
+}): Record<string, unknown> {
+  const { call, system, user, maxTokens } = req;
+  return {
+    model: call.model,
+    reasoning: { effort: call.effort },
+    /* Absent for the arms that must match production's default routing;
+       `ZDR` for every candidate, because a model we could not ship must not be
+       allowed to win (arms.ts § ZDR). Omitted rather than sent empty:
+       `provider: {}` and no `provider` key are the same request, but only one
+       of them says so to a reader. */
+    ...(call.provider ? { provider: call.provider } : {}),
+    /**
+     * **`max_tokens` alone. `max_completion_tokens` used to be sent beside it
+     * and that combination cannot be routed at all.**
+     *
+     * The old reasoning was belt-and-braces: Luna advertises the second
+     * spelling, and "providers ignore parameters they do not take silently".
+     * `require_parameters: true` is precisely the flag that revokes that
+     * premise — it means *only* upstreams supporting every parameter sent — so
+     * a spare parameter stops being a no-op and becomes an empty routing set.
+     *
+     * Measured, not reasoned: with `deepseek/deepseek-v4-flash-0731` and
+     * `z-ai/glm-5.3-flash`, one variable at a time, 2026-09-03. Bare, plus
+     * `reasoning`, plus `provider.zdr`, plus `require_parameters` all returned
+     * 200 and billed normally; adding `max_completion_tokens` returned
+     * **404 "No endpoints found that can handle the requested parameters"**,
+     * with and without `zdr`. It is the parameter, not the retention policy.
+     *
+     * Dropping it is safe rather than a trade: every model this wire serves
+     * lists `max_tokens` in its catalogue record, Luna included, so the second
+     * spelling was never buying anything. Truncation is still caught below by
+     * `finish_reason`, which is where the check belonged anyway.
+     */
+    max_tokens: maxTokens,
+    /* The settled figure, in-band, per call — what assertCallAccounted requires. */
+    usage: { include: true },
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  };
+}
+
+/** The chat wire's usage, as `CallStats` — shared by the success path and the
+    truncation failure, which bills in full and must carry its money out. */
+function statsFor(
+  json: {
+    usage?: {
+      prompt_tokens?: number | null;
+      completion_tokens?: number | null;
+      completion_tokens_details?: { reasoning_tokens?: number | null } | null;
+      cost?: number | null;
+    };
+    id?: string;
+    provider?: string;
+  },
+  startedAt: number,
+): CallStats {
+  return {
+    ms: Date.now() - startedAt,
+    inputTokens: json.usage?.prompt_tokens ?? null,
+    outputTokens: json.usage?.completion_tokens ?? null,
+    reasoningTokens: json.usage?.completion_tokens_details?.reasoning_tokens ?? null,
+    generationId: json.id ?? null,
+    costUsd: typeof json.usage?.cost === "number" ? json.usage.cost : null,
+    providerCostUsd: null, // verify-costs.ts fills this from the provider's record
+    upstream: json.provider ?? null,
+  };
+}
+
 export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
   const key = apiKey();
   const startedAt = Date.now();
   return withDeclaredExternalCall("hierarchy-structure-chat", { model: call.model }, async ({ observe }) => {
+    /**
+     * **A ceiling, because a hung upstream is indistinguishable from a slow
+     * one and an eval runs unattended.**
+     *
+     * There was no timeout until 2026-09-03, and the first long-fixture panel
+     * sat on its first arm for twenty minutes with nothing written and no way
+     * to tell a provider thinking hard from a socket that would never answer.
+     * Ten minutes is deliberately generous — Sonnet's own structure call on the
+     * longest fixture here takes about 140 seconds, so this is four times the
+     * slowest thing measured — and blowing it is the arm's outcome, not the
+     * bench's: a recipe that cannot answer inside ten minutes is a recipe a
+     * reader would never wait for.
+     */
     const res = await declaredFetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: call.model,
-        reasoning: { effort: call.effort },
-        max_tokens: maxTokens,
-        max_completion_tokens: maxTokens,
-        /* The settled figure, in-band, per call — what assertCallAccounted requires. */
-        usage: { include: true },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
+      body: JSON.stringify(chatBody({ call, system, user, maxTokens })),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    }).catch((err: unknown) => {
+      const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+      if (timedOut) {
+        throw new ArmFailure(
+          `no answer within ${CALL_TIMEOUT_MS / 60_000} minutes — recorded as this recipe's outcome, ` +
+            `since a reader would not wait either`,
+          [],
+        );
+      }
+      throw err;
     });
     const json = (await res.json()) as {
       error?: { message?: string };
@@ -379,25 +497,67 @@ export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
     /* Before any early return: a refusal that reports usage still cost money —
        the same ordering the PDF bake-off's OpenRouter arm uses. */
     observe.openRouter(json);
+    /**
+     * **These are the arm's outcome, not the bench's fault, and the difference
+     * decides whether the other ten arms get to run.**
+     *
+     * Until 2026-09-03 every one of these was a plain `Error`, which `treeFor`
+     * re-throws — so a single candidate answering 404 "no endpoints found"
+     * killed the whole panel, and the surviving arms' `run.json` looked like a
+     * finished run. That is exactly what the first calibration attempt did.
+     *
+     * A routing refusal, a truncation, a refusal to answer and an empty body
+     * are all facts about *this recipe*: this model, at this effort, under this
+     * routing policy, cannot produce a tree for this article. Recorded as
+     * `outcome: "threw"`, which is what reliability is measured from. What still
+     * crashes the run is a bench fault — no credential, no network, a bug here
+     * — because blaming an arm for the bench would put a fabricated failure in
+     * a results file. GPT Sol's review, finding 1.
+     */
     if (!res.ok || json.error) {
-      throw new Error(`chat wire ${res.status}: ${json.error?.message?.slice(0, 400) ?? "no error body"}`);
+      throw new ArmFailure(
+        `chat wire ${res.status}: ${json.error?.message?.slice(0, 400) ?? "no error body"}`,
+        /* No stats: a routing refusal never reached a model and billed nothing.
+           An empty `calls` array is the honest record of that, and it is why
+           the verifiers count expected cells rather than stored calls. */
+        [],
+      );
     }
     const choice = json.choices?.[0];
-    if (!choice?.message?.content) throw new Error("chat wire returned no message content");
+    if (!choice?.message?.content) {
+      /**
+       * **This one billed, and the first version of it recorded nothing** —
+       * `calls: []`, which is the record of a call that never reached a model.
+       * Both DeepSeek arms failed this way in the 2026-09-03 screening panel,
+       * and the run therefore showed them as free failures while OpenRouter had
+       * charged for tens of thousands of reasoning tokens. A cost that lands as
+       * zero, again (docs/reusable/silent-success.md).
+       *
+       * The stats also carry `upstream`, which is what makes the failure
+       * diagnosable at all: a direct probe of the same model, same body, same
+       * ZDR policy answered perfectly through OpenInference, so an empty
+       * `content` here is a fact about *which of the ~20 zero-retention
+       * providers the request was load-balanced onto*, not about the model.
+       * Without the provider name in the record there is no way to tell those
+       * two apart, and the model gets the blame.
+       */
+      throw new ArmFailure(
+        `chat wire returned no message content (${json.usage?.completion_tokens ?? "?"} completion ` +
+          `tokens, ${json.usage?.completion_tokens_details?.reasoning_tokens ?? "?"} of them reasoning) ` +
+          `— the upstream produced only reasoning and no answer`,
+        [statsFor(json, startedAt)],
+      );
+    }
     /* `length` is not an error anywhere in the app, which src/models.ts flags
        as the first thing to bite on this wire — here it is one. */
     if (choice.finish_reason === "length") {
-      throw new Error(`truncated (finish_reason: length) at max ${maxTokens} — the answer cannot be scored`);
+      throw new ArmFailure(
+        `truncated (finish_reason: length) at max ${maxTokens} — the answer cannot be scored`,
+        /* This one DID bill, in full, and the money belongs on the arm. */
+        [statsFor(json, startedAt)],
+      );
     }
-    const stats: CallStats = {
-      ms: Date.now() - startedAt,
-      inputTokens: json.usage?.prompt_tokens ?? null,
-      outputTokens: json.usage?.completion_tokens ?? null,
-      reasoningTokens: json.usage?.completion_tokens_details?.reasoning_tokens ?? null,
-      generationId: json.id ?? null,
-      costUsd: typeof json.usage?.cost === "number" ? json.usage.cost : null,
-      providerCostUsd: null, // verify-costs.ts fills this from the provider's record
-    };
+    const stats = statsFor(json, startedAt);
     assertCallAccounted(stats, `chat wire, ${call.model}`);
     return { raw: choice.message.content, stats };
   });

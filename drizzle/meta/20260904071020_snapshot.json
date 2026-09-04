@@ -1,6 +1,6 @@
 {
-  "id": "5e99d0fc-61a2-48b7-9f86-17c81c660b22",
-  "prevId": "b7876f19-c6a0-406c-83db-748fac2c0dfc",
+  "id": "bf64c06d-e960-4f02-99eb-7f96a8a54211",
+  "prevId": "99ed01cf-e716-4083-8347-d3b6d6660bbd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2549,6 +2549,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "requeues": {
+          "name": "requeues",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "url_key": {
           "name": "url_key",

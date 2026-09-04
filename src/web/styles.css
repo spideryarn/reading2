@@ -312,6 +312,60 @@
 .reader.spine-on { --spine-w: 12px; }
 .reader.spine-off { --spine-w: 0px; }
 
+/* **The status-bar strip is nobody's, so the reading view claims it.**
+
+   `viewport-fit=cover` lays the document across the whole physical screen and
+   every piece of chrome adds back the edge it faces (§ tokens). The controls
+   bar faces this one and adds it as `top: var(--safe-top)` — it *starts* below
+   the clock, which is right — so `[0, --safe-top)` belongs to whoever is behind
+   it, and behind it is the article.
+
+   The masthead was covering that, incidentally rather than deliberately: its
+   `padding: calc(1.25rem + var(--safe-top)) …` paints `--page` up into the
+   inset, and it is the top of the page until you scroll. So the strip was
+   covered exactly while nothing was moving, and the two states where something
+   is:
+
+    - **A mode band covering the article** (§ a band with no room), where the
+      masthead is `display: none` and 59px of prose scrolls along the top of the
+      screen above a panel that is supposed to be covering it. Greg, 2026-09-03,
+      on the installed app: *"Most of the modes don't display correctly any more
+      on mobile. When activated, they occlude the text (which you can see
+      scrolling behind, peeking out at the top and bottom."*
+    - **Plain and Hierarchy, once the masthead has scrolled away** and the bar
+      has stuck. Same strip, same prose, and it was there first.
+
+   One backstop answers both, and it is a backstop rather than a taller bar for
+   three reasons: it changes no layout, it does not need to know whether a
+   sticky element is currently stuck — which CSS cannot ask — and it is outside
+   `.controls`, which is `overflow: auto hidden` at ≤731px and would clip a
+   pseudo-element of its own. GPT Sol proposed it over the taller bar this was
+   written as first, 2026-09-03. An offset `box-shadow` was the other candidate
+   and is wrong for an arithmetic reason worth keeping: it leaves a gap whenever
+   `--safe-top > --bar-h`, which is 59 against 44 on the device in question.
+
+   **z-index 39 is the whole of its correctness**: over the article and the
+   table head, under the controls bar (40), the band (44), the spine (45), the
+   dock (96) and every dialog. `--page` is the bar's own background and the
+   masthead's, so where it overlaps the masthead's inset padding it is
+   invisible.
+
+   **Zero-height on every machine we develop on**, which is why nobody saw the
+   hole and why this rule cannot be checked by looking —
+   `scripts/safe-area-check.ts` is how, and
+   docs/postmortems/260903f-the-mode-band-stopped-short-of-the-notch.md is why.
+   `.reader::after` is the overflow fade, below; this is the other one. */
+.reader::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--safe-top);
+  background: var(--page);
+  z-index: 39;
+}
+
 body {
   margin: 0;
   background: var(--page);
@@ -3626,6 +3680,17 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
   font-style: italic;
 }
+/* What the control drew for *this* article — the Sketch's own caption, in the
+   Sketch chip's card. The one line in these cards that is not the same words
+   for every reader, so it is quoted rather than blended into the description
+   above it: the rule says "and here is what came back", and it keeps its full
+   ink because it is the most specific thing in the card. `ControlTip`
+   § `drawn`. Specificity ladder as `.tip-soon-learned` above. */
+.tip-soon p.tip-soon-drawn {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink);
+}
 
 /* ---------------------------------------------------------------- /design --
    The design reference page. See DesignPage.tsx for what it is for.
@@ -5326,11 +5391,31 @@ td.text.has-hit[data-hues="8"] {
   font-family: var(--font-ui);
   font-size: 0.79rem;
 }
+/* The card's two ways out: "open in a new tab" on a link, and "in the glossary"
+   on a term.
+
+   **The padding is the tap target, and it is not behind a media query.** These
+   were 17px tall, which a browser pass at 390×844 flagged on 2026-09-03. The
+   obvious answer — grow them under `(pointer: coarse)` — is the one this
+   codebase has already been stopped for once, because that query describes only
+   the *primary* pointer and a touchscreen laptop is neither thing (touch.md).
+   Everything else here decides per event, from `pointerType`, and CSS cannot
+   see that.
+
+   So everyone gets the bigger target, and the reason that costs nothing is
+   Fable's, 2026-09-03: on touch the small button already satisfies WCAG 2.5.8,
+   because tapping the words a second time is the equivalent control the
+   exception is written for — so this is comfort rather than compliance, and 44px
+   would be paying Apple's price for a primary control that this is not. **The
+   reader with no second route is the one holding a mouse**, for whom a click on
+   the words selects text and this button is the only way through. ~30px,
+   one rule, no device detection. */
 .prose-card-link,
 .prose-card-open {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  padding-block: 0.4rem;
   color: var(--ink-faint);
   font-family: inherit;
   font-size: inherit;
@@ -5343,7 +5428,9 @@ td.text.has-hit[data-hues="8"] {
    not jump about between one term and the next. */
 .prose-card-open {
   margin-left: auto;
-  padding: 0;
+  /* Horizontal only. A `padding: 0` shorthand here — which is what this was —
+     silently puts back the 17px target the rule above exists to fix. */
+  padding-inline: 0;
   border: none;
   background: none;
   cursor: pointer;
@@ -11080,16 +11167,37 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 
 /* ------------------------------------------------ § a band with no room ----
    **A mode is a full-screen panel once the band and the prose cannot share a
-   screen** — and that happens at a *different* width from everything in
-   § a narrow window above, which is why this is its own query rather than a few
-   more lines in that one.
+   screen.**
 
-   **843px, and it is derived rather than chosen**, exactly like the 731 above:
-   `MODE_MIN (288) + PROSE_MIN (544) + the spine (12)` is 844, the last width at
-   which `fitMode` can give the band its minimum and the prose its floor. One
-   pixel under, it hands the band `modeW: 0` instead. `tests/chat.test.ts` pins
-   the 844/843 crossover so this number and that one cannot drift apart, and
-   tests/spine-width.test.ts checks the query below against layout.ts directly.
+   **It is the one width-shaped behaviour in this file that is not written as a
+   width, and it cannot be.** The crossover is `MODE_MIN + PROSE_MIN` against the window
+   **minus the rail** — 844 with the rail on, 832 with `?spine=0` — and a media
+   query cannot see a query parameter. It was `@media (max-width: 843px)` from
+   2026-08-27 to 2026-09-03, and across **832–843 with the rail off** the two
+   halves disagreed: `fitMode` handed the band 288–299px and squeezed the table
+   to make room for it, while this query widened that same band to the whole
+   window and laid it over the article the table had just made room for. GPT Sol
+   measured it on 2026-08-28; the comment describing it sat in layout.ts for six
+   days, which is a paper trail rather than a fix.
+
+   The fix is not a fourth hand-copied breakpoint — that is a *fifth* copy of a
+   number `tests/spine-width.test.ts` exists because there are already too many
+   of, and a conditional one at that. It is to stop the stylesheet deriving a
+   fact it cannot see. `App.tsx` already writes `--mode-w` from `fit.modeW`, so
+   it writes **`band-covers` on `.reader`** from the same value, and these rules
+   key off the class. One decision, in the one place that can make it, and the
+   spine's width may now move without any of this moving with it.
+
+   **`.band-covers` is on `.reader` whenever `fit.modeW` is 0, which includes
+   pages with no band at all** — so every rule here also names `.mode-band`, and
+   that is load-bearing rather than tidy.
+
+   **Measured in Chrome, 2026-09-03**, chat mode at 838px with `?spine=0`: band
+   `[0, 294]` against a table `[294, 838]`, masthead visible, nothing overlapping.
+   Re-inject the old `@media (max-width: 843px)` on that same page and the band
+   becomes `[0, 838]` over a table still sitting at `[294, 838]` — the article
+   gone, the room it was squeezed out of wasted. Glossary, Summary, Search and
+   Outline all behave the same at 830 (covering) and 900 (beside).
 
    **Getting this wrong deletes the panel rather than making it look odd**, and
    it did for a while: these rules were written inside the narrow-window query,
@@ -11107,53 +11215,51 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    `position: fixed` and therefore costs the layout underneath it nothing.
 
    layout.ts § fitMode has what was tried first, and why a fixed element cannot
-   be one of two panes you scroll between. */
-/* spine-width-check: MODE_MIN + PROSE_MIN + SPINE_W - 1 */
-@media (max-width: 843px) {
-  /* **The window minus the rail — not the whole window.** `left: 0` was tried
-     first and the panel came out with its left-hand rail-width missing: every
-     term name lost its first letter, the slider ran off the edge, and the
-     heading read "reshold". The spine is `position: fixed` at z-index 45 and the
-     band is 44, so a band starting at zero simply spends its first 12px underneath
-     the rail — drawn, and unreadable. Nothing overflows and nothing scrolls, so
-     it looks like a panel laid out slightly wrong rather than one being covered.
+   be one of two panes you scroll between. `tests/chat.test.ts` still pins the
+   844/843 crossover on the TypeScript side. */
+/* **The window minus the rail — not the whole window.** `left: 0` was tried
+   first and the panel came out with its left-hand rail-width missing: every
+   term name lost its first letter, the slider ran off the edge, and the
+   heading read "reshold". The spine is `position: fixed` at z-index 45 and the
+   band is 44, so a band starting at zero simply spends its first 12px underneath
+   the rail — drawn, and unreadable. Nothing overflows and nothing scrolls, so
+   it looks like a panel laid out slightly wrong rather than one being covered.
 
-     Starting where the rail ends is also just what every other element on this
-     page does; the band is the full width *available*, which was always what
-     "full width" meant here. */
-  .mode-band {
-    left: calc(var(--spine-w) + var(--safe-left));
-    width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
-    border-right: none;
-  }
-
-  /* **And the article's masthead goes while a mode is open.**
-     The band is `position: fixed` from `--bar-bottom` down, which on a wider
-     window is fine because it is a 400px column starting where the bars end
-     horizontally. Full width, it lands on top of whatever is in the top-left of
-     the page — and at the top of the article that is the title, the byline and
-     the controls bar, all of them drawn and none of them reachable.
-
-     Hiding the masthead is the fix rather than moving the band, because a fixed
-     element cannot be positioned relative to a sticky one that has not stuck
-     yet. It also happens to be right on its own terms: the masthead is the
-     *article's* identity, the article is behind a full-screen panel, and with
-     it gone the controls bar sticks at zero immediately and the band sits
-     exactly underneath it — which is what says which mode you are in and offers
-     the way back. */
-  .reader:has(.mode-band) .masthead { display: none; }
-  /* **And a visitor's notice goes with it**, for the reason above and one more.
-     It sits between the masthead and the controls bar, so with the masthead
-     gone it became the first thing on the page at `y: 0` — directly under the
-     fixed corner logo, which is `position: fixed` at the same origin and cannot
-     be pushed by anything in flow. Found by a browser pass, 2026-08-29; the
-     rects were logo `(0,0,136,44)` against notice `(32,0,768,66)`.
-
-     Not merely a collision fix: the sentence and the ask belong with the
-     title, and the chip in the controls bar is the half that was always meant
-     to survive a scroll. src/web/PublicChrome.tsx § SharedNotice. */
-  .reader:has(.mode-band) .shared-notice { display: none; }
+   Starting where the rail ends is also just what every other element on this
+   page does; the band is the full width *available*, which was always what
+   "full width" meant here. */
+.reader.band-covers .mode-band {
+  left: calc(var(--spine-w) + var(--safe-left));
+  width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
+  border-right: none;
 }
+
+/* **And the article's masthead goes while a mode is open.**
+   The band is `position: fixed` from `--bar-bottom` down, which on a wider
+   window is fine because it is a 400px column starting where the bars end
+   horizontally. Full width, it lands on top of whatever is in the top-left of
+   the page — and at the top of the article that is the title, the byline and
+   the controls bar, all of them drawn and none of them reachable.
+
+   Hiding the masthead is the fix rather than moving the band, because a fixed
+   element cannot be positioned relative to a sticky one that has not stuck
+   yet. It also happens to be right on its own terms: the masthead is the
+   *article's* identity, the article is behind a full-screen panel, and with
+   it gone the controls bar sticks at zero immediately and the band sits
+   exactly underneath it — which is what says which mode you are in and offers
+   the way back. */
+.reader.band-covers:has(.mode-band) .masthead { display: none; }
+/* **And a visitor's notice goes with it**, for the reason above and one more.
+   It sits between the masthead and the controls bar, so with the masthead
+   gone it became the first thing on the page at `y: 0` — directly under the
+   fixed corner logo, which is `position: fixed` at the same origin and cannot
+   be pushed by anything in flow. Found by a browser pass, 2026-08-29; the
+   rects were logo `(0,0,136,44)` against notice `(32,0,768,66)`.
+
+   Not merely a collision fix: the sentence and the ask belong with the
+   title, and the chip in the controls bar is the half that was always meant
+   to survive a scroll. src/web/PublicChrome.tsx § SharedNotice. */
+.reader.band-covers:has(.mode-band) .shared-notice { display: none; }
 
 /* ----------------------------------------------------- § a small device ----
    Where a centimetre in *either* direction is worth having.
@@ -11330,6 +11436,38 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   ) {
     --dock-bottom: var(--dock-space);
   }
+
+  /* **And when a mode opens, both bars arrive rather than slide.**
+
+     The two guards above bring the bars back the instant `.mode-band` exists.
+     The band is `position: fixed` and takes its final bounds on the same frame;
+     the bars take 180ms of `transition: transform` to travel from off-screen —
+     so **for that window the band is the right size with nothing above or below
+     it**, and the article is painted at the top and the bottom of the screen.
+     That is the second half of Greg's report, and the half that is at the
+     bottom: § shell's backstop covers the top strip at rest and cannot cover a
+     bar that has not arrived.
+
+     Measured 2026-09-03 at 390 × 844 with the installed app's insets: scroll
+     until `data-bars="hidden"`, press Glossary, and sample every frame. At
+     t=181ms and t=410ms the top-most element at both `y: 2` and
+     `y: innerHeight - 2` was a `p` inside `div.prose`, with `.controls` still
+     at `bottom: 0` and `.dock` at `top: 844`; at t=472ms both were home. **The
+     180ms is the floor, not the number** — mounting a panel costs frames, and
+     these were real layout reads, not dropped ones.
+
+     A slide is how a bar announces that it is *getting out of the way*; a bar
+     coming back because the reader opened a panel is not announcing anything,
+     and there is nothing to see through in the meantime. Nothing else here
+     transitions on `.mode-band`, so this only ever fires on that switch.
+
+     GPT Sol found the ordering reviewing the first fix, 2026-09-03, and
+     predicted it from the CSS alone. */
+  :root:has(.mode-band) .controls,
+  :root:has(.mode-band) .dock {
+    transition: none;
+  }
+
   /* Tighter chrome as well, which is free and needs no state: 12px more of the
      article at every scroll position.
 
@@ -12991,7 +13129,14 @@ table.only-prose thead { display: none; }
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-label { font-size: 0.78rem; font-weight: 600; }
-.fb-hint { font-weight: 400; color: var(--ink-faint); }
+/* The three things we ask a bug report for, under the label and above the one
+   box — FeedbackDialog.tsx says why they are not hidden in the disclosure. */
+.fb-hint {
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
 .fb-input {
   width: 100%;
   padding: 0.45rem 0.55rem;

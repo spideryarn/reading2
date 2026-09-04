@@ -273,11 +273,46 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  * | `deepgram/nova-3` (dedicated) | 1.0s | 18.2% |
  *
  * Every dedicated model got `Spideryarn` and the block id `spya-k3m9qt` wrong.
- * This one, *told what the words might be*, got them right every run. The
- * dedicated endpoint cannot be told: `POST /api/v1/audio/transcriptions`
- * accepts OpenAI's `prompt` parameter, returns 200, and ignores it — verified
- * by sending a field called `wibble_not_a_real_field` and getting the same 200.
- * docs/reusable/silent-success.md, with a status code on it.
+ * This one, *told what the words might be*, got them right every run.
+ *
+ * **The dedicated endpoint ignores the parameter OpenAI uses for that**:
+ * `POST /api/v1/audio/transcriptions` accepts `prompt`, returns 200, and
+ * changes nothing — verified by sending a field called
+ * `wibble_not_a_real_field` and getting the same 200.
+ * docs/reusable/silent-success.md, with a status code on it. That is the
+ * precise claim and it used to be written here as the broader one, that a
+ * dedicated transcriber "cannot be told" its vocabulary at all — which a GPT
+ * Sol review on 2026-09-03 pointed out is false: Deepgram's `keyterm` and
+ * Groq's own `prompt` live under `provider.options` and were never tried. That
+ * route is open and unmeasured; see the plan below.
+ *
+ * ## Re-opened and kept, 2026-09-03
+ *
+ * That table settled the *route* and left the *model* confounded — it gave the
+ * Gemini models a vocabulary and everybody else none. Asked properly over every
+ * audio-capable model OpenRouter lists, on this app's own request, in
+ * docs/plans/260903i-which-model-transcribes-dictation.md. The plan owns the
+ * numbers; three things belong here, beside the line they would change:
+ *
+ * - **Nothing reachable transcribes better.** Given its vocabulary, this model
+ *   made zero word errors and found every hard term on every clip that had one.
+ *   So did the two challengers. The differences that looked real all lived in
+ *   clips whose words nobody had, and the honest conclusion is that model
+ *   choice is not what limits this feature — the vocabulary is.
+ * - **The newer sibling is worse**, which is worth knowing because a version
+ *   bump is the change nobody benchmarks. `google/gemini-3.5-flash-lite` was
+ *   the only arm to put word errors into the clip with no jargon in it.
+ * - **The flash tier cannot be had at this latency**, whatever it is worth: it
+ *   spends ~120 reasoning tokens before transcribing and that endpoint answers
+ *   `400 Reasoning is mandatory for this endpoint and cannot be disabled`.
+ *
+ * **OpenAI is absent because it cannot be reached, not because it lost.**
+ * `openai/gpt-audio` and `-mini` have no zero-data-retention endpoint on
+ * OpenRouter — `zdr` is what lets the button promise a reader's voice is not
+ * stored — and their `input_audio` rejects the webm `MediaRecorder` produces
+ * while taking a wav in the same request. `npm run eval:dictation-gate`
+ * re-checks both and prints the one-constraint-at-a-time diagnosis; run it
+ * before believing any leaderboard about this feature.
  *
  * **Do not add `provider: { order: ["anthropic"] }` to this call.** See the
  * warning under `CAPABLE_MODEL_OPENROUTER`: pointed at a Gemini model that

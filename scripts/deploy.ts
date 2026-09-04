@@ -45,6 +45,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 import { sslDecisionFor } from "../src/db/ssl.js";
+import { readEnvProd } from "../src/env.js";
 import { describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
 import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
@@ -76,6 +77,7 @@ import {
   type LogQuery,
   type VercelDeployment,
 } from "./deploy-checks.js";
+import { storageBucketProblems } from "./storage-buckets.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCOPE = "greg-detre";
@@ -754,6 +756,35 @@ function fileAt(sha: string, repoPath: string): string | null {
 }
 
 /**
+ * **Do production's Storage buckets still match the file that describes them?**
+ *
+ * The prevention docs/postmortems/260828a-the-config-file-is-not-the-bucket.md
+ * asked for and nobody wired up. `bucketDrift` was written the day after that
+ * incident and then ran only when somebody remembered — so when the same drift
+ * happened again, on production, nothing said a word until a reader watched an
+ * image upload throw a 415 (2026-09-03).
+ *
+ * Before the migrations rather than after, for the reason the rollback check
+ * gives above: a refusal that arrives after the schema has advanced has cost
+ * something, and this one costs one GET.
+ *
+ * The config comes from the **commit**, like every other gate here — see
+ * `fileAt`. The credentials come from `.env.prod` through the shared
+ * `readEnvProd` rather than this file's own `envFile`: it is the same reader
+ * `scripts/check-buckets.ts --prod` uses, so the gate and the repair command
+ * cannot come to disagree about which project production is.
+ */
+async function storageBuckets(sha: string): Promise<void> {
+  step("Storage");
+  const { target, problems } = await storageBucketProblems({
+    configToml: fileAt(sha, "supabase/config.toml"),
+    found: readEnvProd(),
+  });
+  if (target) info(target);
+  record("storage buckets match supabase/config.toml", problems);
+}
+
+/**
  * Say which database is about to change, and what is about to change in it,
  * **before** anything changes.
  *
@@ -1376,6 +1407,9 @@ async function main(): Promise<void> {
   try {
     const sha = await preflight();
     gatesAt(sha);
+    if (failures.length) return summarise(null);
+
+    await storageBuckets(sha);
     if (failures.length) return summarise(null);
 
     /**

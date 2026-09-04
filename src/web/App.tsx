@@ -26,6 +26,7 @@ import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
 import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
+import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PricingPage } from "./PricingPage.js";
@@ -36,7 +37,15 @@ import { useExperimental } from "./useExperimental.js";
 import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
-import { type ArticleView, LIBRARY_HREF, navigate, type Route, useRoute } from "./router.js";
+import {
+  type ArticleView,
+  LIBRARY_HREF,
+  navigate,
+  type Route,
+  searchWithout,
+  useAddressSearch,
+  useRoute,
+} from "./router.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackButton } from "./FeedbackButton.js";
 import { Metadata } from "./Metadata.js";
@@ -374,7 +383,19 @@ export function App() {
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
-    if (route.kind === "pricing") return <PricingPage />;
+    /* `readerId={null}` is what stops the page asking `/api/billing/usage` who
+       this is — a 401 on the one page a stranger is most likely to be sent, for
+       a line that is not about them. PricingPage.tsx § which plan. */
+    if (route.kind === "pricing") return <PricingPage readerId={null} />;
+    /* **The sixth, since 2026-09-03, and the only one that is not a page
+       somebody was sent.** A stranger at an address nobody minted is exactly
+       the reader this gate's default fails: the pitch at `/asdf` is a plausible
+       page for an address that means nothing, which is the silence the 404 page
+       exists to break — and it is worse signed out than signed in, because a
+       stranger has no corner logo and no shelf to notice they are not on.
+       Bare, like `PrivacyPage` above: `NotFoundPage` draws its own way home.
+       docs/plans/260903j-not-found-page.md. */
+    if (route.kind === "not-found") return <NotFoundPage signedIn={false} />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -480,7 +501,22 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <PricingPage />
+        {/* **`key`, for the same reason the shelf above has one.** A direct A→B
+            sign-in leaves the route alone, so without this React keeps the
+            instance and `useBilling`'s one effect never re-runs — B would read
+            A's tier and A's usage count. Keyed and identified, like `Library`.
+            GPT Sol's review of this change, 2026-09-03. */}
+        <PricingPage key={user.id} readerId={user.id} />
+      </>
+    );
+  /* An address nobody minted, with the corner logo every other standalone page
+     gets — signed in there *is* a shelf for it to link at, which is the same
+     reason the privacy page is bare above and dressed here. NotFoundPage.tsx. */
+  if (route.kind === "not-found")
+    return (
+      <>
+        <HomeLogo />
+        <NotFoundPage signedIn />
       </>
     );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
@@ -494,9 +530,14 @@ function SignedIn({
     );
   /* **The admin pages, and the check here is not the gate.**
 
-     A reader who is not the administrator gets the shelf, exactly as they would
-     for `/nonsense` — router.ts has no 404 page by design, and an address you
-     are not allowed to use is an address that does not mean anything to you.
+     A reader who is not the administrator gets the shelf — **and since
+     2026-09-03 that is no longer the same thing as `/nonsense`**, which now has
+     a page of its own (NotFoundPage.tsx). This one deliberately did not follow
+     it. The reason is the one docs/project/admin.md already gives for the
+     server answering 403 rather than 404: these pages exist, visibly, in the
+     bundle every signed-in reader downloads, so pretending the address means
+     nothing buys nothing and costs a true sentence.
+
      Nothing is being hidden by it: these components are in the bundle every
      signed-in reader downloads, so the only refusal that counts is the server's
      on `/api/admin/`, and it would refuse a hand-written `fetch` from this page
@@ -2257,6 +2298,103 @@ function Reader({
     [jumpTo],
   );
 
+  /* ------------------------------------------- TableView's four callbacks --
+     Lifted out of the JSX, and the only reason is identity.
+
+     `TableView` is wrapped in `memo`, so a render of `Reader` that changes none
+     of its 28 props must not produce new ones — and an arrow written inline in
+     the JSX is a new function on every render, which alone would defeat the
+     whole thing. The other 24 props were already stable (memos, `useState`
+     setters, primitives); these four were not.
+
+     That matters here more than it usually would, because `useReadingPosition`
+     writes `?at=` as the reader scrolls, which re-renders `Reader` 77-79 times
+     during one scroll of a long article. Each of those used to reconcile 551
+     rows. See docs/plans/260904a-more-scroll-cpu-wins.md.
+
+     Everything each of them closes over is itself stable: `useState` setters,
+     nuqs setters (`useQueryState` returns a `useCallback` whose own dependencies
+     are memoised — nuqs 2.10.0, dist/index.js:724), `blockText` (a memo) and
+     `owner`, which is a prop of `Reader`. */
+
+  const openChatThread = useCallback(
+    (id: BlockId) => {
+      setChatDraft(null);
+      void setNote(null);
+      void setThread(id);
+    },
+    [setNote, setThread],
+  );
+
+  /* A conversation anchored to the whole block — the other half of what an
+     anchor can be, and the one that draws no mark in the prose. The paragraph's
+     opening words go into the composer so the reader can see which one they
+     pressed; a six-character id is not something you can check you clicked
+     correctly.
+
+     **Handed over only to an owner, and that is the whole gate.** It used to go
+     to everybody with an `if (!owner) return;` inside it, so a visitor got a
+     chat button on every paragraph whose press did nothing. The absent callback
+     is what makes the button absent (BlockGutter.tsx), and the sentence about
+     what chat costs is still one press away in the Chat band. The place a
+     visitor meets the boundary is `onSelect` below, which they reach by accident
+     and which stays silent for that reason.
+
+     The `owner ?` ternary stays at the call site rather than moving in here, so
+     that the prop is `undefined` — not a function that does nothing — and the
+     button is genuinely absent. It is identity-stable either way, because
+     `owner` is. */
+  const chatAboutBlock = useCallback(
+    (blockId: BlockId) => {
+      void setNote(null);
+      void setThread(null);
+      setChatDraft({
+        kind: "draft",
+        anchor: { blockId },
+        opening: blockText.get(blockId) ?? "",
+      });
+    },
+    [blockText, setNote, setThread],
+  );
+
+  const selectProse = useCallback(
+    (anchor: { blockId: BlockId; quote: string; start: number } | null) => {
+      if (!anchor) return;
+      /* **The one control a visitor meets by accident**, since selecting prose
+         is something people do while reading rather than a button they chose to
+         press. So it is silent: they keep their selection and the page does not
+         grow a box about an account. The ask lives where they went looking for
+         something — the marked modes and the notice under the title. */
+      if (!owner) return;
+      /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
+         call the reader had not asked for; then it opened an ask box; since
+         2026-08-28 it opens a *comment* box, where saving is free and the model
+         is a tick-box. Greg's call — see
+         docs/plans/260828a-comments-and-bookmarks.md. */
+      void setNote(null);
+      void setThread(null);
+      setChatDraft(null);
+      setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
+      /* **The browser's selection is deliberately left alone**, which is a
+         reversal. It used to be cleared because it sat on top of the mark we had
+         just drawn and hid it. There is now no mark to reveal — nothing is
+         stored until the reader asks — so clearing it would leave them looking
+         at a quote in a box with no idea which words on the page it came from. */
+    },
+    [owner, setNote, setThread],
+  );
+
+  const openCommentDialog = useCallback((id: BlockId) => void setNote(id), [setNote]);
+
+  /**
+   * The whole query string, subscribed to — the input to the block permalinks.
+   *
+   * The only subscription in this file that is not a `useQueryState`, and it is
+   * here because those are key-isolated and this needs *all* of them. See the
+   * `carried` prop on `TableView` below.
+   */
+  const addressSearch = useAddressSearch();
+
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
 
@@ -2314,7 +2452,24 @@ function Reader({
          fills. It is `fit.alone` and nothing computed here on purpose — the
          same fact under two definitions is how `proseVisible` came to exist.
          layout.ts § `Fit.alone`, styles.css § plain, centred. */
-      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}`}
+      /* `band-covers` is the same idea and exists for a sharper reason: it is
+         the *stylesheet's* only way to know that the mode band has no room
+         beside the prose and is lying over it instead. That crossover is
+         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         moves with `?spine=0` — and a media query cannot see a query
+         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         from 832 to 843 with the rail off the two disagreed: layout.ts
+         squeezed the table to make room for a band the stylesheet had already
+         thrown over the article.
+
+         So the fact is written here, from the one number that computes it,
+         beside the `--mode-w` it is derived from. `fit.modeW === 0` is also
+         true when no band is open at all, which is why every rule keyed off
+         this class also names `.mode-band` — styles.css § a band with no room,
+         tests/spine-width.test.ts. */
+      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
+        fit.modeW === 0 ? " band-covers" : ""
+      }`}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never
@@ -2521,6 +2676,25 @@ function Reader({
         article={article}
         sections={sections}
         layoutKey={layoutKey}
+        /* The permalink query — every parameter the address has, including the
+           ones added after this line was written, minus the one the link is
+           about to set.
+
+           **`useAddressSearch` rather than a bare `location.search`**, and the
+           difference is the whole correctness of this: reading the global here
+           would be right only if `Reader` re-rendered on every URL change, and
+           it does not. nuqs subscriptions are key-isolated, so ten reading
+           parameters owned by child components — `deep`, `diagram`, `dhue`,
+           `referee`, `remember` and five more — change the address without
+           waking this component at all. Until `TableView` was memoised, `?at=`
+           re-rendered it once a second and hid that; it does not any more.
+           router.ts § `watchHistoryWrites`. Found by GPT Sol, 2026-09-04.
+
+           No `useMemo`: it is a string, and strings compare by value. A render
+           caused only by `?at=` produces an equal one, so `memo(TableView)`
+           holds; any other parameter produces a different one and it correctly
+           does not. TableView.tsx § `Props.carried`. */
+        carried={searchWithout(addressSearch, "at")}
         geometry={geometry}
         columns={fit.columns}
         layout={fit}
@@ -2537,68 +2711,17 @@ function Reader({
         chats={chats}
         chatCounts={chatCounts}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
-        onOpenChat={(id) => {
-          setChatDraft(null);
-          void setNote(null);
-          void setThread(id);
-        }}
-        /* A conversation anchored to the whole block — the other half of what an
-           anchor can be, and the one that draws no mark in the prose. The
-           paragraph's opening words go into the composer so the reader can see
-           which one they pressed; a six-character id is not something you can
-           check you clicked correctly.
-
-           **Handed over only to an owner, and that is the whole gate.** It used
-           to go to everybody with a `if (!owner) return;` inside it, so a
-           visitor got a chat button on every paragraph whose press did nothing.
-           The absent callback is what makes the button absent (BlockGutter.tsx),
-           and the sentence about what chat costs is still one press away in the
-           Chat band. The place a visitor meets the boundary is `onSelect` below,
-           which they reach by accident and which stays silent for that reason. */
-        onChatAbout={
-          owner
-            ? (blockId) => {
-                void setNote(null);
-                void setThread(null);
-                setChatDraft({
-                  kind: "draft",
-                  anchor: { blockId },
-                  opening: blockText.get(blockId) ?? "",
-                });
-              }
-            : undefined
-        }
+        onOpenChat={openChatThread}
+        /* The gate, and only the gate — the body is `chatAboutBlock` above,
+           which explains why it is `undefined` rather than a no-op here. */
+        onChatAbout={owner ? chatAboutBlock : undefined}
         terms={termSelections}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}
         hitHues={hitHues}
         hitStrength={hitStrength}
-        onSelect={(anchor) => {
-          if (!anchor) return;
-          /* **The one control a visitor meets by accident**, since selecting
-             prose is something people do while reading rather than a button
-             they chose to press. So it is silent: they keep their selection and
-             the page does not grow a box about an account. The ask lives where
-             they went looking for something — the marked modes and the notice
-             under the title. */
-          if (!owner) return;
-          /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
-             call the reader had not asked for; then it opened an ask box; since
-             2026-08-28 it opens a *comment* box, where saving is free and the
-             model is a tick-box. Greg's call — see
-             docs/plans/260828a-comments-and-bookmarks.md. */
-          void setNote(null);
-          void setThread(null);
-          setChatDraft(null);
-          setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
-          /* **The browser's selection is deliberately left alone**, which is a
-             reversal. It used to be cleared because it sat on top of the mark
-             we had just drawn and hid it. There is now no mark to reveal —
-             nothing is stored until the reader asks — so clearing it would
-             leave them looking at a quote in a box with no idea which words on
-             the page it came from. */
-        }}
-        onOpenComment={(id) => void setNote(id)}
+        onSelect={selectProse}
+        onOpenComment={openCommentDialog}
       />
       {owner && annotating && (
         <AnnotateDialog

@@ -57,6 +57,13 @@ import { loadEnvLocal } from "./env.js";
 import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
+import {
+  pdfChunkTooBig,
+  pdfPagesCutOff,
+  pdfPagesFiltered,
+  pdfTooManyPages,
+} from "./messages.js";
+import { whyUnusable } from "./store/artifacts.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { PDF_READER_MODEL } from "./models.js";
@@ -374,10 +381,68 @@ export interface ChunkReading {
   stripped: number;
   /** OpenRouter's normalised reason. `length` means truncated, and truncated means failed. */
   finish: string;
-  /** The provider's own word for it — `RECITATION` arrives here, as `content_filter` above. */
+  /**
+   * The provider's own word for it — `RECITATION` arrives here, as
+   * `content_filter` above.
+   *
+   * **Never logged, never shown, never wrapped in an `Error`.** Pass it through
+   * `knownNativeFinish` first, which answers with one of *our* strings. See
+   * that function.
+   */
   nativeFinish?: string | undefined;
   usage: { input: number; output: number };
   ms: number;
+}
+
+/**
+ * **The provider's word for a refusal, replaced by one of ours.**
+ *
+ * `native_finish_reason` is whatever the upstream put in its JSON. It is
+ * *expected* to be a short enum — `RECITATION`, `SAFETY`, `content_filter` —
+ * and expectation is not a constraint: nothing in this codebase or in
+ * OpenRouter's contract stops a provider putting a sentence, a stack trace, or
+ * a quotation from the document there. docs/project/logging.md § *any moment
+ * where a provider's own text becomes an `Error`* is the rule, and it says in
+ * as many words that provider values are not to be trusted because they are
+ * expected to be short enums.
+ *
+ * It was being logged verbatim as a field, which put an unbounded outside string
+ * into the log where a redaction list cannot reach it. GPT Sol, reviewing the
+ * built stage 1, finding 3.
+ *
+ * So the value is *matched*, never carried: the answer is always one of the
+ * literals below, and anything unrecognised is `"unrecognised"` — which is the
+ * useful fact anyway, since a value we have never seen is exactly what would
+ * send somebody to look at the raw response.
+ *
+ * The list is the union of what the providers this path can route to say when
+ * they stop early — OpenAI's and OpenRouter's normalised lower-case forms, and
+ * Google's upper-case ones, which is where `RECITATION` comes from. Matching is
+ * case-insensitive so the two spellings of one reason are one entry.
+ */
+const NATIVE_FINISH_REASONS = [
+  "blocklist",
+  "content_filter",
+  "image_safety",
+  "length",
+  "max_tokens",
+  "other",
+  "prohibited_content",
+  "recitation",
+  "refusal",
+  "safety",
+  "spii",
+  "stop",
+  "stop_sequence",
+] as const;
+
+export type NativeFinish = (typeof NATIVE_FINISH_REASONS)[number] | "unrecognised";
+
+export function knownNativeFinish(raw: string | undefined): NativeFinish | undefined {
+  if (raw === undefined) return undefined;
+  /* `find` over our own array rather than a lookup keyed on the input: the
+     input never becomes a key, an index or a property name anywhere. */
+  return NATIVE_FINISH_REASONS.find((known) => known === raw.toLowerCase()) ?? "unrecognised";
 }
 
 /**
@@ -419,14 +484,24 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
       if (!key) throw new Error("OPENROUTER_API_KEY is not set — see docs/project/setup-dev.md.");
       const data = Buffer.from(pdf).toString("base64");
       if (data.length > MAX_ENCODED_BYTES) {
-        /* `blocked`, for the same reason as the page cap above: the chunk plan
-           is worked out from the same cached bytes every time, so a retry
-           encodes the same megabytes and meets the same limit. */
-        throw stageFailure(
-          "blocked",
-          `A chunk of this PDF encodes to ${Math.round(data.length / 1024 / 1024)} MB, over the ` +
-            `${MAX_ENCODED_BYTES / 1024 / 1024} MB a request can carry. Fewer pages per chunk.`,
-        );
+        const megabytes = Math.round(data.length / 1024 / 1024);
+        const limit = MAX_ENCODED_BYTES / 1024 / 1024;
+        /* **The reader's sentence and the diagnostic, which are not the same
+           sentence.** The `blocked` kind is unchanged and for the reason the
+           page cap gives: the chunk plan is worked out from the same cached
+           bytes every time, so a retry encodes the same megabytes and meets the
+           same limit. What changed on 2026-09-03 is that this went through the
+           form that discards the sentence, so the reader was told only that the
+           step did not finish. *"Fewer pages per chunk"* is an instruction to
+           whoever tunes `planChunks` and stays here, in the log.
+
+           `{ authored }`: two numbers, both arithmetic over a byte length and
+           our own constant. Nothing here came off a wire. */
+        throw stageFailure(pdfChunkTooBig(megabytes, limit), {
+          authored:
+            `A chunk of this PDF encodes to ${megabytes} MB, over the ${limit} MB a request can ` +
+            `carry. Fewer pages per chunk.`,
+        });
       }
       const started = performance.now();
       /* **Each attempt is its own metered call**, which falls out of the retry
@@ -1129,13 +1204,26 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 
        The refusal now comes out of `pass0` itself, before it has read a page —
        see the comment on the guard there. The reader-facing sentence is
-       unchanged; only the moment it arrives is. */
+       unchanged; only the moment it arrives is.
+
+       **And until 2026-09-03 nobody was told any of it.** The sentence below
+       went through `stageFailure(kind, detail)`, which sets the kind and treats
+       the sentence as a log-only diagnostic — so a 142-page paper was refused
+       with `stepGaveUp`'s generic `blocked` copy, no page count, no limit, no
+       Retry, and Sentry withheld the diagnostic too. That is the report this
+       whole plan came out of:
+       docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md.
+
+       `{ authored }`: `err.pages` is `doc.numPages` off pdf.js's page tree and
+       `err.limit` is our own `MAX_PAGES`. Two numbers, and the rest is fixed
+       prose — the plan reference in it is for whoever is tuning the cap, which
+       is why the reader gets a different sentence rather than this one. */
     if (err instanceof TooManyPages) {
-      throw stageFailure(
-        "blocked",
-        `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
+      throw stageFailure(pdfTooManyPages(err.pages, err.limit), {
+        authored:
+          `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
           `not a technical one — see docs/plans/260826c-pdf-ingestion.md.`,
-      );
+      });
     }
     throw err;
   }
@@ -1276,18 +1364,56 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
               /* `length` is a truncated answer, and a truncated answer is a lost page —
                  the previous version's own bug, shipped as a shorter article. Say which
                  it was before the scoring says "the model lost content", because that
-                 is the right symptom and the wrong diagnosis. */
+                 is the right symptom and the wrong diagnosis.
+
+                 **Both of these were bare `throw new Error` until 2026-09-03**,
+                 which `readerFailureOf` reads as *nobody declared a sentence* —
+                 so text plainly written for a reader, page numbers and all,
+                 arrived as the generic retryable copy. A type-level fix to
+                 `stageFailure` could never have caught a bare throw, which is
+                 why the plan audits these by hand:
+                 docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 1.
+
+                 `{ authored }` on both, and it is page numbers and fixed prose
+                 in each. The provider's own word for the refusal is the one
+                 thing that could not travel under that claim — see below. */
               if (reading.finish === "length") {
-                throw new Error(
-                  `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
-                );
+                throw stageFailure(pdfPagesCutOff(chunk.pages), {
+                  authored: `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
+                });
               }
               if (reading.finish === "content_filter") {
-                throw new Error(
-                  `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}` +
-                    `${reading.nativeFinish ? ` (${reading.nativeFinish})` : ""}. Verbatim transcription` +
-                    ` of long boilerplate is a known trigger; a smaller chunk sometimes gets through.`,
-                );
+                /**
+                 * **`nativeFinish` goes to the log as a field, not into the
+                 * diagnostic**, and that is what makes the diagnostic
+                 * authorable.
+                 *
+                 * It is the provider's own word for the refusal — `RECITATION`
+                 * and its cousins — so it is text from outside, and
+                 * `{ authored }` around a string carrying it would be exactly
+                 * the claim src/job-failure.ts says must never be made. Splitting
+                 * it out costs one log line and leaves the half worth having —
+                 * the pages, and the remedy — able to reach Sentry.
+                 *
+                 * **And the log is not a safe harbour for it either**, which
+                 * this line got wrong for a day: `knownNativeFinish` matches the
+                 * value against our own list and logs the literal it matched, so
+                 * what reaches Pino is a string this file wrote. GPT Sol,
+                 * reviewing the built stage 1, finding 3.
+                 */
+                const refusal = knownNativeFinish(reading.nativeFinish);
+                if (refusal) {
+                  log("pipeline").warn(
+                    { slug: opts.slug, chunk: key, nativeFinish: refusal },
+                    "the provider's safety filter refused a pdf chunk",
+                  );
+                }
+                throw stageFailure(pdfPagesFiltered(chunk.pages), {
+                  authored:
+                    `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}.` +
+                    ` Verbatim transcription of long boilerplate is a known trigger; a smaller chunk` +
+                    ` sometimes gets through.`,
+                });
               }
               result = checkChunk(reading, chunk, pass, alone);
               if (result.ok || attempt >= ATTEMPTS) break;
@@ -1505,7 +1631,9 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
  * both halves of it — so the only caller left is the command line, and it is
  * where the call now lives. The guard survives, because re-running the command
  * on a slug that a real fetch produced should not replace that fetch's final
- * URL, content type and redirect chain with what a local file can know.
+ * URL, content type and redirect chain with what a local file can know — and it
+ * asks that question by reading the manifest rather than by weighing the file,
+ * which is `alreadyKept` below.
  *
  * **It stores the object as well as writing the files, and did not until now.**
  * `storeRawSource` is what puts the bytes under their own hash and what
@@ -1530,7 +1658,7 @@ export async function keepTheOriginal(
      test that cannot see the store cannot tell that apart from success. */
   store?: RawSourceStore,
 ): Promise<void> {
-  if (await readFile(path.join(opts.dataDir, "raw.json"), "utf-8").catch(() => null)) return;
+  if (await alreadyKept(opts.dataDir)) return;
   const stored = await storeRawSource(opts.bytes, "pdf", store ?? blobStore());
   await mkdir(opts.dataDir, { recursive: true });
   await writeFile(path.join(opts.dataDir, "raw.pdf"), opts.bytes);
@@ -1554,6 +1682,64 @@ export async function keepTheOriginal(
     `${JSON.stringify(manifest, null, 2)}\n`,
     "utf-8",
   );
+}
+
+/**
+ * **Is there already a manifest here worth keeping?** — and a file that does
+ * not parse into one is not, however many bytes it has.
+ *
+ * This asked `readFile(…).catch(() => null)` and believed anything non-empty
+ * until 2026-09-03, which made a crash permanent. `writeFile` truncates before
+ * it writes, so a process killed inside `keepTheOriginal` leaves a `raw.json`
+ * that exists and is half a manifest; the old check saw a truthy string, took
+ * the early return, and neither the object nor the manifest was ever written.
+ * Nothing rewrites that file — the guard kept seeing one — and `readRaw` in
+ * src/fetch.ts is tolerant, so it answers `null` for ever after.
+ *
+ * **What that costs, stated no higher than it is.** An earlier draft of this
+ * comment said the callers read that `null` as *assume HTML*; they did until
+ * 2026-08-31 and `readRaw`'s own header says so, which makes repeating it here
+ * exactly the mistake this fix is part of a sweep for. What is actually lost is
+ * **provenance across re-runs**: the object never reaches the bucket, and
+ * `articleMetadata` in src/api.ts — the surviving caller — can no longer say
+ * where the document came from. The current invocation still extracts, because
+ * it holds the bytes in memory. GPT Sol caught the overstatement in review.
+ * Named and left alone on purpose in
+ * docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md § One more
+ * instance, six days before it was fixed.
+ *
+ * **Parsing is not enough on its own**, which is why this asks `whyUnusable`
+ * rather than only `JSON.parse`: `{}` parses perfectly and is not a manifest,
+ * and a check that accepted it would skip on a file no later stage can use.
+ * That is the same one-field test both artefact stores already apply to a
+ * `raw` (src/store/artifacts.ts § SHAPE) — the most tolerant test that still
+ * means something, and shared rather than re-guessed here so the two cannot
+ * come to disagree about what a manifest is.
+ *
+ * **Absent is the safe answer**, and it is safe in a way the old one was not:
+ * the cost of getting it wrong is re-writing files this function was about to
+ * write anyway, from bytes already in memory. Nothing is re-bought — unlike
+ * `usableChunkReading` above, where a miss is a paid model call.
+ *
+ * The discard is logged, because it is the only surviving trace that an
+ * earlier run was killed halfway through writing this file.
+ */
+async function alreadyKept(dataDir: string): Promise<boolean> {
+  const text = await readFile(path.join(dataDir, "raw.json"), "utf-8").catch(() => null);
+  if (text === null) return false;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    log("pipeline").warn({ dataDir }, "raw.json does not parse; recording the PDF again");
+    return false;
+  }
+  const unusable = whyUnusable("raw", value);
+  if (unusable) {
+    log("pipeline").warn({ dataDir, unusable }, "raw.json is not a manifest; recording the PDF again");
+    return false;
+  }
+  return true;
 }
 
 /** The check for one chunk's reading, with the two things only this stage knows: the context page and the bibliography. */

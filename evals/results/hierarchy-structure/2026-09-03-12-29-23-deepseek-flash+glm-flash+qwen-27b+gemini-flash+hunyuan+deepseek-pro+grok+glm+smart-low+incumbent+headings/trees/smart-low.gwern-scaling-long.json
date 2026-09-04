@@ -1,0 +1,2888 @@
+{
+  "version": "toc/3",
+  "generator": "claude-sonnet-5",
+  "slug": "gwern-scaling-long",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0009",
+        "n0016",
+        "n0027",
+        "n0038",
+        "n0054",
+        "n0060",
+        "n0096",
+        "n0112",
+        "n0131",
+        "n0181",
+        "n0190"
+      ],
+      "range": [
+        "spya-t4qwhx",
+        "spya-jjj2kc"
+      ],
+      "title": "GPT-3 and the Scaling Hypothesis",
+      "gist": "GPT-3's emergent meta-learning shows that simply scaling neural networks unlocks capabilities long thought to require special architectures, vindicating the scaling hypothesis while critics and rival labs remain unconvinced."
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0006"
+      ],
+      "range": [
+        "spya-t4qwhx",
+        "spya-k6d5hd"
+      ],
+      "title": "GPT-3 and Meta-Learning",
+      "gist": "GPT-3's sheer scale produced unexpected meta-learning ability, not just more knowledge, marking a qualitative leap from GPT-2."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005"
+      ],
+      "range": [
+        "spya-t4qwhx",
+        "spya-rgs9ga"
+      ],
+      "title": "GPT-3 Overview",
+      "gist": "GPT-3 is by far the largest neural net trained, and its scale-driven meta-learning supports the scaling hypothesis for AGI."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-t4qwhx",
+        "spya-t4qwhx"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-rgs9ga",
+        "spya-rgs9ga"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0007",
+        "n0008"
+      ],
+      "range": [
+        "spya-tqsg6w",
+        "spya-k6d5hd"
+      ],
+      "title": "Meta-Learning",
+      "gist": "GPT-3 learns to learn from prompts alone, solving diverse tasks without finetuning, yet drew little public notice.",
+      "sourceHeading": "Meta-Learning"
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0006",
+      "children": [],
+      "range": [
+        "spya-tqsg6w",
+        "spya-tqsg6w"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0006",
+      "children": [],
+      "range": [
+        "spya-k6d5hd",
+        "spya-k6d5hd"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0010",
+        "n0014"
+      ],
+      "range": [
+        "spya-m9a9fn",
+        "spya-ud9233"
+      ],
+      "title": "Flexing GPT",
+      "gist": "Despite being an outdated, small architecture, GPT-3 shows startling new capabilities that standard benchmarks fail to capture.",
+      "sourceHeading": "Flexing GPT"
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0011",
+        "n0012",
+        "n0013"
+      ],
+      "range": [
+        "spya-m9a9fn",
+        "spya-jkqajf"
+      ],
+      "title": "Scary Progress",
+      "gist": "Each GPT generation has improved dramatically despite minimal architectural innovation, and the scaling curves show no sign of bending."
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-m9a9fn",
+        "spya-m9a9fn"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-gu8tu6",
+        "spya-gu8tu6"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-jkqajf",
+        "spya-jkqajf"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0015"
+      ],
+      "range": [
+        "spya-ud9233",
+        "spya-ud9233"
+      ],
+      "title": "Benchmark Gaps",
+      "gist": "Standard NLP benchmarks fail to reflect GPT-3's qualitative leap in flexible generation and meta-learning."
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-ud9233",
+        "spya-ud9233"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0017",
+        "n0022",
+        "n0025"
+      ],
+      "range": [
+        "spya-vsjq7r",
+        "spya-p46pzf"
+      ],
+      "title": "Baking The Cake",
+      "gist": "GPT-3 is not the whole of AGI but a real advance, and scaling continues to pay off well beyond expectations, despite its high cost.",
+      "sourceHeading": "Baking The Cake"
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0018",
+        "n0019",
+        "n0020",
+        "n0021"
+      ],
+      "range": [
+        "spya-vsjq7r",
+        "spya-xnbs47"
+      ],
+      "title": "Cake Analogy",
+      "gist": "GPT-3 need not match every benchmark to represent genuine progress toward richer unsupervised foundations."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-vsjq7r",
+        "spya-vsjq7r"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-as8bhq",
+        "spya-as8bhq"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-gdw09e",
+        "spya-gdw09e"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-xnbs47",
+        "spya-xnbs47"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0023",
+        "n0024"
+      ],
+      "range": [
+        "spya-dxx6rx",
+        "spya-q8a88m"
+      ],
+      "title": "Scaling Continues",
+      "gist": "Contrary to expectations of diminishing returns, GPT-3's scaling curves remain smooth and predictable well past 100b parameters."
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-dxx6rx",
+        "spya-dxx6rx"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-q8a88m",
+        "spya-q8a88m"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0026"
+      ],
+      "range": [
+        "spya-p46pzf",
+        "spya-p46pzf"
+      ],
+      "title": "Cost of Scale",
+      "gist": "Though GPT-3 is expensive by ML standards, its cost is trivial next to major scientific projects, and further scaling is likely."
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-p46pzf",
+        "spya-p46pzf"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0028",
+        "n0034"
+      ],
+      "range": [
+        "spya-murvjs",
+        "spya-ctjc6b"
+      ],
+      "title": "Scaling",
+      "gist": "Published scaling laws show GPT-3 is still far from the point of diminishing returns, and its own results confirm the predicted power-law curves.",
+      "sourceHeading": "Scaling"
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0027",
+      "children": [
+        "n0029",
+        "n0030",
+        "n0031",
+        "n0032",
+        "n0033"
+      ],
+      "range": [
+        "spya-murvjs",
+        "spya-vevr4z"
+      ],
+      "title": "Scaling Laws",
+      "gist": "Kaplan et al.'s scaling laws suggest GPT-3 has much more room to improve in loss before plateauing."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-murvjs",
+        "spya-murvjs"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-na4ynv",
+        "spya-na4ynv"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-h08z4z",
+        "spya-h08z4z"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-zqz6xk",
+        "spya-zqz6xk"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-vevr4z",
+        "spya-vevr4z"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 2,
+      "parent": "n0027",
+      "children": [
+        "n0035",
+        "n0036",
+        "n0037"
+      ],
+      "range": [
+        "spya-yg3jzs",
+        "spya-ctjc6b"
+      ],
+      "title": "Continued Scaling",
+      "gist": "GPT-3's actual training confirms the predicted scaling curves continue smoothly for further orders of magnitude."
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-yg3jzs",
+        "spya-yg3jzs"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-h43brk",
+        "spya-h43brk"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-ctjc6b",
+        "spya-ctjc6b"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0039",
+        "n0046",
+        "n0049"
+      ],
+      "range": [
+        "spya-zafywy",
+        "spya-x8fxrj"
+      ],
+      "title": "Blessings Of Scale",
+      "gist": "Across deep learning, hard problems become easier as models and data scale up, producing emergent generalization and meta-learning as simple byproducts of size.",
+      "sourceHeading": "Blessings Of Scale"
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 2,
+      "parent": "n0038",
+      "children": [
+        "n0040",
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045"
+      ],
+      "range": [
+        "spya-zafywy",
+        "spya-d2edsk"
+      ],
+      "title": "Examples of Blessings",
+      "gist": "Numerous DL systems across domains show that scale alone stabilizes training and produces generalization without special architecture."
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-zafywy",
+        "spya-zafywy"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-w84ms4",
+        "spya-w84ms4"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-msswvt",
+        "spya-msswvt"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-za9bh8",
+        "spya-za9bh8"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-c4j47d",
+        "spya-c4j47d"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-d2edsk",
+        "spya-d2edsk"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 2,
+      "parent": "n0038",
+      "children": [
+        "n0047",
+        "n0048"
+      ],
+      "range": [
+        "spya-yxssr2",
+        "spya-yr63d5"
+      ],
+      "title": "Open Questions",
+      "gist": "Why scale produces generalization rather than overfitting remains a genuinely open theoretical question."
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-yxssr2",
+        "spya-yxssr2"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-yr63d5",
+        "spya-yr63d5"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0038",
+      "children": [
+        "n0050",
+        "n0051",
+        "n0052",
+        "n0053"
+      ],
+      "range": [
+        "spya-hjrf53",
+        "spya-x8fxrj"
+      ],
+      "title": "Ensemble Explanation",
+      "gist": "Big models act as ensembles of sub-models where scale eventually favors general algorithms over superficial memorization."
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-hjrf53",
+        "spya-hjrf53"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-r5sfs3",
+        "spya-r5sfs3"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-dt7hn0",
+        "spya-dt7hn0"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-x8fxrj",
+        "spya-x8fxrj"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0055",
+        "n0058"
+      ],
+      "range": [
+        "spya-snvf6e",
+        "spya-ufz8nj"
+      ],
+      "title": "Scaling Hypothesis",
+      "gist": "The strong scaling hypothesis—that intelligence emerges from scaling simple architectures—has proven more correct than the author once believed.",
+      "sourceHeading": "Scaling Hypothesis"
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 2,
+      "parent": "n0054",
+      "children": [
+        "n0056",
+        "n0057"
+      ],
+      "range": [
+        "spya-snvf6e",
+        "spya-t9rgkv"
+      ],
+      "title": "Strong Scaling Hypothesis",
+      "gist": "A single scalable architecture, trained ever larger, should naturally develop sophisticated behavior much as brains scale from simpler ones."
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0055",
+      "children": [],
+      "range": [
+        "spya-snvf6e",
+        "spya-snvf6e"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0055",
+      "children": [],
+      "range": [
+        "spya-t9rgkv",
+        "spya-t9rgkv"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 2,
+      "parent": "n0054",
+      "children": [
+        "n0059"
+      ],
+      "range": [
+        "spya-ufz8nj",
+        "spya-ufz8nj"
+      ],
+      "title": "Vindication",
+      "gist": "Once skeptical, the author now concedes that scaling advocates were right as compute and results have borne it out."
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-ufz8nj",
+        "spya-ufz8nj"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0061",
+        "n0066",
+        "n0071",
+        "n0076",
+        "n0085"
+      ],
+      "range": [
+        "spya-bwzjq2",
+        "spya-q723xq"
+      ],
+      "title": "Why Does Pretraining Work?",
+      "gist": "Predicting text forces a model to progressively learn deeper structure, from letters to grammar to reasoning, so minimizing loss ultimately demands real understanding.",
+      "sourceHeading": "Why Does Pretraining Work?"
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 2,
+      "parent": "n0060",
+      "children": [
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065"
+      ],
+      "range": [
+        "spya-bwzjq2",
+        "spya-yyh5gt"
+      ],
+      "title": "Pretraining Thesis",
+      "gist": "Because human text encodes logic and causality, a model that predicts it well must implicitly learn to reason."
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-bwzjq2",
+        "spya-bwzjq2"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-kebsv3",
+        "spya-kebsv3"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-gxxhdv",
+        "spya-gxxhdv"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0061",
+      "children": [],
+      "range": [
+        "spya-yyh5gt",
+        "spya-yyh5gt"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 2,
+      "parent": "n0060",
+      "children": [
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070"
+      ],
+      "range": [
+        "spya-azrbfr",
+        "spya-gt7zmb"
+      ],
+      "title": "Early Training Stages",
+      "gist": "Early in training, models cheaply learn letter frequencies, spelling, and word boundaries before any real meaning."
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-azrbfr",
+        "spya-azrbfr"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-f7wcms",
+        "spya-f7wcms"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-xwpyx3",
+        "spya-xwpyx3"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-gt7zmb",
+        "spya-gt7zmb"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 2,
+      "parent": "n0060",
+      "children": [
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075"
+      ],
+      "range": [
+        "spya-m76mbx",
+        "spya-nf660f"
+      ],
+      "title": "Late Training Stages",
+      "gist": "As loss shrinks further, models must master syntax, coherence, and rare but crucial distinctions like pronoun gender."
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-m76mbx",
+        "spya-m76mbx"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-xakv8y",
+        "spya-xakv8y"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-cnqcu2",
+        "spya-cnqcu2"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-nf660f",
+        "spya-nf660f"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 2,
+      "parent": "n0060",
+      "children": [
+        "n0077",
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084"
+      ],
+      "range": [
+        "spya-vrcs2q",
+        "spya-g3msef"
+      ],
+      "title": "Last Bits Are Deepest",
+      "gist": "The final, smallest reductions in loss require the most humanlike reasoning and understanding, making them the hardest to achieve."
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-vrcs2q",
+        "spya-vrcs2q"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-wxtuw6",
+        "spya-wxtuw6"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-a6x746",
+        "spya-a6x746"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-ejngg6",
+        "spya-ejngg6"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-zh0wmy",
+        "spya-zh0wmy"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-bxuc9t",
+        "spya-bxuc9t"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-fraf0c",
+        "spya-fraf0c"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-g3msef",
+        "spya-g3msef"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 2,
+      "parent": "n0060",
+      "children": [
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092",
+        "n0093",
+        "n0094",
+        "n0095"
+      ],
+      "range": [
+        "spya-gb6xsf",
+        "spya-q723xq"
+      ],
+      "title": "Doubts and Predictions",
+      "gist": "Despite skepticism that scaling could ever reach true understanding, no one accurately predicted GPT-3's rise, and what further scaling will yield remains unknown."
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-gb6xsf",
+        "spya-gb6xsf"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-q8bfbc",
+        "spya-q8bfbc"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-t5rcb3",
+        "spya-t5rcb3"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-dfdg7c",
+        "spya-dfdg7c"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-ey7xc3",
+        "spya-ey7xc3"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-jqwgey",
+        "spya-jqwgey"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-v2970v",
+        "spya-v2970v"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-nbpj4y",
+        "spya-nbpj4y"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-kbsu8c",
+        "spya-kbsu8c"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-q723xq",
+        "spya-q723xq"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0097",
+        "n0103",
+        "n0109"
+      ],
+      "range": [
+        "spya-nsajs6",
+        "spya-zavsgz"
+      ],
+      "title": "Prospects",
+      "gist": "Future progress mainly depends on institutional willingness to invest in scaling, an appetite OpenAI has but rivals like DeepMind and Google largely lack.",
+      "sourceHeading": "Prospects"
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0098",
+        "n0099",
+        "n0100",
+        "n0101",
+        "n0102"
+      ],
+      "range": [
+        "spya-nsajs6",
+        "spya-qzw889"
+      ],
+      "title": "Future of Scaling",
+      "gist": "Whether an arms race in scaling begins depends less on hardware than on organizations' willingness to commit to it."
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-nsajs6",
+        "spya-nsajs6"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-vdcngs",
+        "spya-vdcngs"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-g4nm7b",
+        "spya-g4nm7b"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-csrm79",
+        "spya-csrm79"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-qzw889",
+        "spya-qzw889"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107",
+        "n0108"
+      ],
+      "range": [
+        "spya-pspxz6",
+        "spya-p8gdge"
+      ],
+      "title": "DeepMind vs OpenAI",
+      "gist": "DeepMind pursues a cautious, modular 'weak scaling hypothesis' while OpenAI bets everything on scale as the core truth."
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-pspxz6",
+        "spya-pspxz6"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-jqvvty",
+        "spya-jqvvty"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-sjkjfx",
+        "spya-sjkjfx"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-yjyxvc",
+        "spya-yjyxvc"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-p8gdge",
+        "spya-p8gdge"
+      ],
+      "title": ""
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0110",
+        "n0111"
+      ],
+      "range": [
+        "spya-byarp2",
+        "spya-zavsgz"
+      ],
+      "title": "Other Labs and Investment",
+      "gist": "Beyond OpenAI, other labs and companies remain uninterested or unable to seriously pursue scaling at GPT-3's level."
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-byarp2",
+        "spya-byarp2"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-zavsgz",
+        "spya-zavsgz"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0113",
+        "n0119",
+        "n0125"
+      ],
+      "range": [
+        "spya-z33tfc",
+        "spya-gxjkvq"
+      ],
+      "title": "Critiquing The Critics",
+      "gist": "A decade of dismissive expert predictions about deep learning's limits has been repeatedly falsified, exposing a pattern of confident but unaccountable authority.",
+      "sourceHeading": "Critiquing The Critics"
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 2,
+      "parent": "n0112",
+      "children": [
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118"
+      ],
+      "range": [
+        "spya-z33tfc",
+        "spya-svmg5q"
+      ],
+      "title": "Decade in Review",
+      "gist": "Only a handful of connectionist believers correctly foresaw the explosive progress deep learning has made since 2010."
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-z33tfc",
+        "spya-z33tfc"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-wefu0w",
+        "spya-wefu0w"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-yetgxs",
+        "spya-yetgxs"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-a4v5sa",
+        "spya-a4v5sa"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-svmg5q",
+        "spya-svmg5q"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 2,
+      "parent": "n0112",
+      "children": [
+        "n0120",
+        "n0121",
+        "n0122",
+        "n0123",
+        "n0124"
+      ],
+      "range": [
+        "spya-z6gcgx",
+        "spya-myk8vy"
+      ],
+      "title": "Just X Dismissals",
+      "gist": "Critics dismiss AI advances as 'just' simple mechanisms, ignoring that any successful reduction of intelligence must look exactly like that."
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-z6gcgx",
+        "spya-z6gcgx"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-m4jzpz",
+        "spya-m4jzpz"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-nkdyrg",
+        "spya-nkdyrg"
+      ],
+      "title": ""
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-wkumu7",
+        "spya-wkumu7"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-myk8vy",
+        "spya-myk8vy"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 2,
+      "parent": "n0112",
+      "children": [
+        "n0126",
+        "n0127",
+        "n0128",
+        "n0129",
+        "n0130"
+      ],
+      "range": [
+        "spya-q6zhbr",
+        "spya-gxjkvq"
+      ],
+      "title": "Voice of Authority",
+      "gist": "Experts who confidently predicted AI would stall were consistently wrong, yet face no accountability for their failed forecasts."
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0125",
+      "children": [],
+      "range": [
+        "spya-q6zhbr",
+        "spya-q6zhbr"
+      ],
+      "title": ""
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 3,
+      "parent": "n0125",
+      "children": [],
+      "range": [
+        "spya-dtq8ag",
+        "spya-dtq8ag"
+      ],
+      "title": ""
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 3,
+      "parent": "n0125",
+      "children": [],
+      "range": [
+        "spya-yqvsrj",
+        "spya-yqvsrj"
+      ],
+      "title": ""
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0125",
+      "children": [],
+      "range": [
+        "spya-r4dw39",
+        "spya-r4dw39"
+      ],
+      "title": ""
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0125",
+      "children": [],
+      "range": [
+        "spya-gxjkvq",
+        "spya-gxjkvq"
+      ],
+      "title": ""
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0132",
+        "n0141",
+        "n0145",
+        "n0154",
+        "n0159",
+        "n0174"
+      ],
+      "range": [
+        "spya-bfw54p",
+        "spya-d20ftm"
+      ],
+      "title": "Appendix",
+      "gist": "Powerful generative models trained on agent-generated data inevitably risk developing real agency, and this risk is hard to fully eliminate even with careful data curation.",
+      "sourceHeading": "Appendix"
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0133",
+        "n0134",
+        "n0135",
+        "n0136",
+        "n0137",
+        "n0138",
+        "n0139",
+        "n0140"
+      ],
+      "range": [
+        "spya-bfw54p",
+        "spya-fm2m89"
+      ],
+      "title": "It From Byte",
+      "gist": "Because GPT-3 imitates human agents from text, it effectively learns and can enact real agency, not just simulate it superficially.",
+      "sourceHeading": "It From Byte"
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-bfw54p",
+        "spya-bfw54p"
+      ],
+      "title": ""
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-ccuzh7",
+        "spya-ccuzh7"
+      ],
+      "title": ""
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-ckyxwu",
+        "spya-ckyxwu"
+      ],
+      "title": ""
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-vsme86",
+        "spya-vsme86"
+      ],
+      "title": ""
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-bxw7pd",
+        "spya-bxw7pd"
+      ],
+      "title": ""
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-kwh38f",
+        "spya-kwh38f"
+      ],
+      "title": ""
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-p2cp45",
+        "spya-p2cp45"
+      ],
+      "title": ""
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-fm2m89",
+        "spya-fm2m89"
+      ],
+      "title": ""
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0142",
+        "n0143",
+        "n0144"
+      ],
+      "range": [
+        "spya-g4297a",
+        "spya-wrwcha"
+      ],
+      "title": "All Is Atoms & Void",
+      "gist": "There is no principled boundary between agentic and non-agentic data, since agency itself arises from ordinary physical processes.",
+      "sourceHeading": "All Is Atoms & Void"
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 3,
+      "parent": "n0141",
+      "children": [],
+      "range": [
+        "spya-g4297a",
+        "spya-g4297a"
+      ],
+      "title": ""
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 3,
+      "parent": "n0141",
+      "children": [],
+      "range": [
+        "spya-q8dszp",
+        "spya-q8dszp"
+      ],
+      "title": ""
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 3,
+      "parent": "n0141",
+      "children": [],
+      "range": [
+        "spya-wrwcha",
+        "spya-wrwcha"
+      ],
+      "title": ""
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0146",
+        "n0147",
+        "n0148",
+        "n0149",
+        "n0150",
+        "n0151",
+        "n0152",
+        "n0153"
+      ],
+      "range": [
+        "spya-g0e030",
+        "spya-hmye39"
+      ],
+      "title": "Intentional Interpretive Stance",
+      "gist": "Treating systems as agents pursuing goals is a powerful, natural shortcut that neural networks are also likely to adopt internally.",
+      "sourceHeading": "Intentional Interpretive Stance"
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-g0e030",
+        "spya-g0e030"
+      ],
+      "title": ""
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-x0m5m9",
+        "spya-x0m5m9"
+      ],
+      "title": ""
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-eedstv",
+        "spya-eedstv"
+      ],
+      "title": ""
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-b3vv95",
+        "spya-b3vv95"
+      ],
+      "title": ""
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-u882m0",
+        "spya-u882m0"
+      ],
+      "title": ""
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-fshqmx",
+        "spya-fshqmx"
+      ],
+      "title": ""
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-w60hhr",
+        "spya-w60hhr"
+      ],
+      "title": ""
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 3,
+      "parent": "n0145",
+      "children": [],
+      "range": [
+        "spya-hmye39",
+        "spya-hmye39"
+      ],
+      "title": ""
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0155",
+        "n0156",
+        "n0157",
+        "n0158"
+      ],
+      "range": [
+        "spya-e7gzjr",
+        "spya-msp357"
+      ],
+      "title": "Inducing Emergence Is Expensive",
+      "gist": "Agency-like reasoning only emerges when a problem is rich and repeated enough to make it cheaper than simpler alternatives.",
+      "sourceHeading": "Inducing Emergence Is Expensive"
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-e7gzjr",
+        "spya-e7gzjr"
+      ],
+      "title": ""
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-v5mh9a",
+        "spya-v5mh9a"
+      ],
+      "title": ""
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-dp7qwg",
+        "spya-dp7qwg"
+      ],
+      "title": ""
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-msp357",
+        "spya-msp357"
+      ],
+      "title": ""
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0160",
+        "n0161",
+        "n0162",
+        "n0163",
+        "n0164",
+        "n0165",
+        "n0166",
+        "n0167",
+        "n0168",
+        "n0169",
+        "n0170",
+        "n0171",
+        "n0172",
+        "n0173"
+      ],
+      "range": [
+        "spya-u3eq2r",
+        "spya-devmg4"
+      ],
+      "title": "Automata and Turing Machines",
+      "gist": "Even abstract systems like cellular automata or Turing machines can induce agent-like modeling once diversity forces meta-learning of underlying rules."
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-u3eq2r",
+        "spya-u3eq2r"
+      ],
+      "title": ""
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-p4guuj",
+        "spya-p4guuj"
+      ],
+      "title": ""
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-w5mj0d",
+        "spya-w5mj0d"
+      ],
+      "title": ""
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-mhauea",
+        "spya-mhauea"
+      ],
+      "title": ""
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-qyneqk",
+        "spya-qyneqk"
+      ],
+      "title": ""
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-f7kgj9",
+        "spya-f7kgj9"
+      ],
+      "title": ""
+    },
+    "n0166": {
+      "id": "n0166",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-vswcqp",
+        "spya-vswcqp"
+      ],
+      "title": ""
+    },
+    "n0167": {
+      "id": "n0167",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-z4nfux",
+        "spya-z4nfux"
+      ],
+      "title": ""
+    },
+    "n0168": {
+      "id": "n0168",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-seyzcq",
+        "spya-seyzcq"
+      ],
+      "title": ""
+    },
+    "n0169": {
+      "id": "n0169",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-h2hv98",
+        "spya-h2hv98"
+      ],
+      "title": ""
+    },
+    "n0170": {
+      "id": "n0170",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-jcfda3",
+        "spya-jcfda3"
+      ],
+      "title": ""
+    },
+    "n0171": {
+      "id": "n0171",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-qujd2d",
+        "spya-qujd2d"
+      ],
+      "title": ""
+    },
+    "n0172": {
+      "id": "n0172",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-x6mcva",
+        "spya-x6mcva"
+      ],
+      "title": ""
+    },
+    "n0173": {
+      "id": "n0173",
+      "depth": 3,
+      "parent": "n0159",
+      "children": [],
+      "range": [
+        "spya-devmg4",
+        "spya-devmg4"
+      ],
+      "title": ""
+    },
+    "n0174": {
+      "id": "n0174",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0175",
+        "n0176",
+        "n0177",
+        "n0178",
+        "n0179",
+        "n0180"
+      ],
+      "range": [
+        "spya-d0a9cz",
+        "spya-d20ftm"
+      ],
+      "title": "Ambient Agency",
+      "gist": "Agency behaves like a convergent, hard-to-exclude capability that may quietly persist in any sufficiently broad and powerful model.",
+      "sourceHeading": "Ambient Agency"
+    },
+    "n0175": {
+      "id": "n0175",
+      "depth": 3,
+      "parent": "n0174",
+      "children": [],
+      "range": [
+        "spya-d0a9cz",
+        "spya-d0a9cz"
+      ],
+      "title": ""
+    },
+    "n0176": {
+      "id": "n0176",
+      "depth": 3,
+      "parent": "n0174",
+      "children": [],
+      "range": [
+        "spya-z9s87s",
+        "spya-z9s87s"
+      ],
+      "title": ""
+    },
+    "n0177": {
+      "id": "n0177",
+      "depth": 3,
+      "parent": "n0174",
+      "children": [],
+      "range": [
+        "spya-h2z7tj",
+        "spya-h2z7tj"
+      ],
+      "title": ""
+    },
+    "n0178": {
+      "id": "n0178",
+      "depth": 3,
+      "parent": "n0174",
+      "children": [],
+      "range": [
+        "spya-h73za5",
+        "spya-h73za5"
+      ],
+      "title": ""
+    },
+    "n0179": {
+      "id": "n0179",
+      "depth": 3,
+      "parent": "n0174",
+      "children": [],
+      "range": [
+        "spya-jvjpys",
+        "spya-jvjpys"
+      ],
+      "title": ""
+    },
+    "n0180": {
+      "id": "n0180",
+      "depth": 3,
+      "parent": "n0174",
+      "children": [],
+      "range": [
+        "spya-d20ftm",
+        "spya-d20ftm"
+      ],
+      "title": ""
+    },
+    "n0181": {
+      "id": "n0181",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0182",
+        "n0185",
+        "n0188"
+      ],
+      "range": [
+        "spya-c08std",
+        "spya-h0bkgs"
+      ],
+      "title": "Backlinks and References",
+      "gist": "The article closes with standard navigation links to related material and citations."
+    },
+    "n0182": {
+      "id": "n0182",
+      "depth": 2,
+      "parent": "n0181",
+      "children": [
+        "n0183",
+        "n0184"
+      ],
+      "range": [
+        "spya-c08std",
+        "spya-k4kgz2"
+      ],
+      "title": "Backlinks",
+      "gist": "Links to other pages referencing this article."
+    },
+    "n0183": {
+      "id": "n0183",
+      "depth": 3,
+      "parent": "n0182",
+      "children": [],
+      "range": [
+        "spya-c08std",
+        "spya-c08std"
+      ],
+      "title": ""
+    },
+    "n0184": {
+      "id": "n0184",
+      "depth": 3,
+      "parent": "n0182",
+      "children": [],
+      "range": [
+        "spya-k4kgz2",
+        "spya-k4kgz2"
+      ],
+      "title": ""
+    },
+    "n0185": {
+      "id": "n0185",
+      "depth": 2,
+      "parent": "n0181",
+      "children": [
+        "n0186",
+        "n0187"
+      ],
+      "range": [
+        "spya-d8ffj5",
+        "spya-qgncuy"
+      ],
+      "title": "Similar Links",
+      "gist": "Links to topically related pages."
+    },
+    "n0186": {
+      "id": "n0186",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-d8ffj5",
+        "spya-d8ffj5"
+      ],
+      "title": ""
+    },
+    "n0187": {
+      "id": "n0187",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-qgncuy",
+        "spya-qgncuy"
+      ],
+      "title": ""
+    },
+    "n0188": {
+      "id": "n0188",
+      "depth": 2,
+      "parent": "n0181",
+      "children": [
+        "n0189"
+      ],
+      "range": [
+        "spya-h0bkgs",
+        "spya-h0bkgs"
+      ],
+      "title": "Bibliography",
+      "gist": "A list of references cited throughout the article."
+    },
+    "n0189": {
+      "id": "n0189",
+      "depth": 3,
+      "parent": "n0188",
+      "children": [],
+      "range": [
+        "spya-h0bkgs",
+        "spya-h0bkgs"
+      ],
+      "title": ""
+    },
+    "n0190": {
+      "id": "n0190",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0191",
+        "n0192",
+        "n0193",
+        "n0194",
+        "n0195",
+        "n0196",
+        "n0197",
+        "n0198",
+        "n0199",
+        "n0200",
+        "n0201",
+        "n0202",
+        "n0203",
+        "n0204",
+        "n0205",
+        "n0206",
+        "n0207",
+        "n0208",
+        "n0209",
+        "n0210",
+        "n0211",
+        "n0212",
+        "n0213",
+        "n0214",
+        "n0215",
+        "n0216",
+        "n0217",
+        "n0218",
+        "n0219",
+        "n0220",
+        "n0221",
+        "n0222",
+        "n0223",
+        "n0224",
+        "n0225",
+        "n0226",
+        "n0227",
+        "n0228",
+        "n0229",
+        "n0230",
+        "n0231"
+      ],
+      "range": [
+        "spya-f05xy7",
+        "spya-jjj2kc"
+      ],
+      "title": "Notes",
+      "treatment": "supplement"
+    },
+    "n0191": {
+      "id": "n0191",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-f05xy7",
+        "spya-f05xy7"
+      ],
+      "title": ""
+    },
+    "n0192": {
+      "id": "n0192",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-p9dtkx",
+        "spya-p9dtkx"
+      ],
+      "title": ""
+    },
+    "n0193": {
+      "id": "n0193",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-dmew6b",
+        "spya-dmew6b"
+      ],
+      "title": ""
+    },
+    "n0194": {
+      "id": "n0194",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-p8n908",
+        "spya-p8n908"
+      ],
+      "title": ""
+    },
+    "n0195": {
+      "id": "n0195",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-n2anu9",
+        "spya-n2anu9"
+      ],
+      "title": ""
+    },
+    "n0196": {
+      "id": "n0196",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-bemjfd",
+        "spya-bemjfd"
+      ],
+      "title": ""
+    },
+    "n0197": {
+      "id": "n0197",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-eskff3",
+        "spya-eskff3"
+      ],
+      "title": ""
+    },
+    "n0198": {
+      "id": "n0198",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-ftnm9p",
+        "spya-ftnm9p"
+      ],
+      "title": ""
+    },
+    "n0199": {
+      "id": "n0199",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-tdng54",
+        "spya-tdng54"
+      ],
+      "title": ""
+    },
+    "n0200": {
+      "id": "n0200",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-d4vfgm",
+        "spya-d4vfgm"
+      ],
+      "title": ""
+    },
+    "n0201": {
+      "id": "n0201",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-gu95vt",
+        "spya-gu95vt"
+      ],
+      "title": ""
+    },
+    "n0202": {
+      "id": "n0202",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-yhwn5e",
+        "spya-yhwn5e"
+      ],
+      "title": ""
+    },
+    "n0203": {
+      "id": "n0203",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-qmw6bb",
+        "spya-qmw6bb"
+      ],
+      "title": ""
+    },
+    "n0204": {
+      "id": "n0204",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-qfdcsx",
+        "spya-qfdcsx"
+      ],
+      "title": ""
+    },
+    "n0205": {
+      "id": "n0205",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-kkwr9u",
+        "spya-kkwr9u"
+      ],
+      "title": ""
+    },
+    "n0206": {
+      "id": "n0206",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-v822pd",
+        "spya-v822pd"
+      ],
+      "title": ""
+    },
+    "n0207": {
+      "id": "n0207",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-r5q5ag",
+        "spya-r5q5ag"
+      ],
+      "title": ""
+    },
+    "n0208": {
+      "id": "n0208",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-dt3dj4",
+        "spya-dt3dj4"
+      ],
+      "title": ""
+    },
+    "n0209": {
+      "id": "n0209",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-de6pcz",
+        "spya-de6pcz"
+      ],
+      "title": ""
+    },
+    "n0210": {
+      "id": "n0210",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-d2c7rw",
+        "spya-d2c7rw"
+      ],
+      "title": ""
+    },
+    "n0211": {
+      "id": "n0211",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-psmnnx",
+        "spya-psmnnx"
+      ],
+      "title": ""
+    },
+    "n0212": {
+      "id": "n0212",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-awa46v",
+        "spya-awa46v"
+      ],
+      "title": ""
+    },
+    "n0213": {
+      "id": "n0213",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-bck083",
+        "spya-bck083"
+      ],
+      "title": ""
+    },
+    "n0214": {
+      "id": "n0214",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-xya092",
+        "spya-xya092"
+      ],
+      "title": ""
+    },
+    "n0215": {
+      "id": "n0215",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-k6pgwn",
+        "spya-k6pgwn"
+      ],
+      "title": ""
+    },
+    "n0216": {
+      "id": "n0216",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-v3zd0z",
+        "spya-v3zd0z"
+      ],
+      "title": ""
+    },
+    "n0217": {
+      "id": "n0217",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-p5yxnq",
+        "spya-p5yxnq"
+      ],
+      "title": ""
+    },
+    "n0218": {
+      "id": "n0218",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-b70d9u",
+        "spya-b70d9u"
+      ],
+      "title": ""
+    },
+    "n0219": {
+      "id": "n0219",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-ej0jbm",
+        "spya-ej0jbm"
+      ],
+      "title": ""
+    },
+    "n0220": {
+      "id": "n0220",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-t9ghm5",
+        "spya-t9ghm5"
+      ],
+      "title": ""
+    },
+    "n0221": {
+      "id": "n0221",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-nknajm",
+        "spya-nknajm"
+      ],
+      "title": ""
+    },
+    "n0222": {
+      "id": "n0222",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-nn83ss",
+        "spya-nn83ss"
+      ],
+      "title": ""
+    },
+    "n0223": {
+      "id": "n0223",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-amz7pp",
+        "spya-amz7pp"
+      ],
+      "title": ""
+    },
+    "n0224": {
+      "id": "n0224",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-k2095j",
+        "spya-k2095j"
+      ],
+      "title": ""
+    },
+    "n0225": {
+      "id": "n0225",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-gh3qze",
+        "spya-gh3qze"
+      ],
+      "title": ""
+    },
+    "n0226": {
+      "id": "n0226",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-wta3d7",
+        "spya-wta3d7"
+      ],
+      "title": ""
+    },
+    "n0227": {
+      "id": "n0227",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-jkdkc9",
+        "spya-jkdkc9"
+      ],
+      "title": ""
+    },
+    "n0228": {
+      "id": "n0228",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-ezak49",
+        "spya-ezak49"
+      ],
+      "title": ""
+    },
+    "n0229": {
+      "id": "n0229",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-etkb5r",
+        "spya-etkb5r"
+      ],
+      "title": ""
+    },
+    "n0230": {
+      "id": "n0230",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-jybrh8",
+        "spya-jybrh8"
+      ],
+      "title": ""
+    },
+    "n0231": {
+      "id": "n0231",
+      "depth": 2,
+      "parent": "n0190",
+      "children": [],
+      "range": [
+        "spya-jjj2kc",
+        "spya-jjj2kc"
+      ],
+      "title": ""
+    }
+  }
+}

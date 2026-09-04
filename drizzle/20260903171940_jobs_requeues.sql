@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."jobs" ADD COLUMN "requeues" integer DEFAULT 0 NOT NULL;

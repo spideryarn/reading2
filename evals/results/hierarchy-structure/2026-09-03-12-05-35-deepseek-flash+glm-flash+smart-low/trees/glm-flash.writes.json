@@ -1,0 +1,362 @@
+{
+  "version": "toc/3",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0015",
+        "n0019"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-zz20s6"
+      ],
+      "title": "Writes and Write-Nots",
+      "gist": "AI will remove the pressure to write, splitting the world into those who can write and think and those who can't.",
+      "sourceHeading": "Writes and Write-Nots"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0011"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-zzw20p"
+      ],
+      "title": "Writing is hard",
+      "gist": "Writing is required by prestigious jobs but is fundamentally difficult because it demands clear thinking."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-ts48cj"
+      ],
+      "title": "Few can write",
+      "gist": "Writers discover how many people have trouble writing, because writing well requires thinking clearly, which is hard."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hqt79k",
+        "spya-hqt79k"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-t97070",
+        "spya-t97070"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hkx6yy",
+        "spya-hkx6yy"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-zpa7s8",
+        "spya-zpa7s8"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-tphbr6",
+        "spya-tphbr6"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-vp6ghy",
+        "spya-vp6ghy"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-ts48cj",
+        "spya-ts48cj"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0012",
+        "n0013",
+        "n0014"
+      ],
+      "range": [
+        "spya-u97r7e",
+        "spya-zzw20p"
+      ],
+      "title": "Pressure to write",
+      "gist": "The clash between pervasive expectations of writing and its difficulty explains why even eminent professors plagiarize mundane boilerplate."
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-u97r7e",
+        "spya-u97r7e"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-xdmpa0",
+        "spya-xdmpa0"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-zzw20p",
+        "spya-zzw20p"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0016"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-hg7u0a"
+      ],
+      "title": "AI blows it open",
+      "gist": "AI removes all pressure to write, leaving only good writers and people who can't write at all."
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 2,
+      "parent": "n0015",
+      "children": [
+        "n0017",
+        "n0018"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-hg7u0a"
+      ],
+      "title": "Writes and write-nots",
+      "gist": "AI now lets anyone have writing done for them, so the middle ground of ok writers will disappear."
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-gm3xu0",
+        "spya-gm3xu0"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-hg7u0a",
+        "spya-hg7u0a"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0020",
+        "n0024"
+      ],
+      "range": [
+        "spya-z79mew",
+        "spya-zz20s6"
+      ],
+      "title": "Why it's bad",
+      "gist": "Because writing is thinking, a world of write-nots will be a world of think-nots, like strength after preindustrial work — only those who choose it will have it."
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 2,
+      "parent": "n0019",
+      "children": [
+        "n0021",
+        "n0022",
+        "n0023"
+      ],
+      "range": [
+        "spya-z79mew",
+        "spya-arj7ry"
+      ],
+      "title": "Writing is thinking",
+      "gist": "It's bad because writing is thinking — thinking without writing, as Lamport said, only thinks it's thinking."
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-z79mew",
+        "spya-z79mew"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-z7zzwv",
+        "spya-z7zzwv"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-arj7ry",
+        "spya-arj7ry"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 2,
+      "parent": "n0019",
+      "children": [
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028"
+      ],
+      "range": [
+        "spya-xk7vyy",
+        "spya-zz20s6"
+      ],
+      "title": "Thinks and think-nots",
+      "gist": "A world of write-nots will be a world of think-nots, and as with strength after preindustrial times, only those who choose to will remain smart."
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-xk7vyy",
+        "spya-xk7vyy"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-rqzp97",
+        "spya-rqzp97"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-smzw4j",
+        "spya-smzw4j"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-zz20s6",
+        "spya-zz20s6"
+      ],
+      "title": ""
+    }
+  }
+}

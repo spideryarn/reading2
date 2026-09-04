@@ -108,12 +108,12 @@ bar still holds the article, so `auth-return.ts` lands you on it after Google re
 `/login` is the one exception, because it is a page somebody was *sent* rather than a statement
 about who they are. It keeps the compact screen.
 
-**The Alpha sign is deliberate and it is load-bearing**, not decoration — Greg asked for it to be
-prominent, and it is a badge beside the wordmark *and* a strip under it. The page has screenshots on
-it, so the thing a stranger must not conclude is that this is a product they can sign up for.
-Access is not open — see [§ Whose data is it](#whose-data-is-it); the alternative to saying so
-plainly is a Google button that works and then hands a stranger a reading tool somebody else is
-paying for.
+**The Beta badge beside the wordmark is what is left of a louder sign.** While access was closed
+it was a badge *and* a strip under it, because the page has screenshots on it and the thing a
+stranger must not conclude was that this is a product they can sign up for. Since 2026-09-03 it is:
+Stripe is live, sign-up is open to anyone, and the strip is deleted. The badge stays, because the
+software is genuinely young — see [§ Whose data is it](#whose-data-is-it) for what a new account
+does and does not get.
 
 The screenshots live in `src/web/assets/` and are all of one article — *The Mythology of AI
 Consciousness*, which is on the public web with nothing sensitive in it. Imported through Vite

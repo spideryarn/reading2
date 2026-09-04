@@ -1,13 +1,9 @@
 # Delete `SPIDERYARN_STORE` and the filesystem store
 
-**Status, 2026-09-03. Fourth draft, and the build has started.** GPT Sol returned *not ready* on the
-first draft and *ready with changes* on the second; those changes are in. The three pre-build spikes
-the second review asked for have all run, and each of them moved the plan — the sections below carry
-what they found.
-
-**Landed in the working tree:** D′1a (`guardDbStore` is idempotent) and stage A's witness 1
-([`scripts/store-migration-candidates.ts`](../../scripts/store-migration-candidates.ts)).
-**Prototyped, not landed:** stage E's `scripts/stage.ts`.
+**Status, 2026-09-04. Fourth draft; five of thirteen stages are on `dev`.** GPT Sol returned *not
+ready* on the first draft and *ready with changes* on the second; those changes are in. The three
+pre-build spikes the second review asked for have all run, and each of them moved the plan — the
+sections below carry what they found.
 
 **This plan absorbed [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)
 on Greg's decision** — see stage T. That is the largest change to its shape since it was written.
@@ -16,15 +12,40 @@ on Greg's decision** — see stage T. That is the largest change to its shape si
 three later stages consume it**:
 
 ```
-A (store inventory) ✅ → B0 → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
+A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
+  → T-D (activation) → T-E (pollution)
   → C → B → D → E → F (hinge) → G → H → I
 ```
 
-**Stage A is done.** Both witnesses are built, the registry is checked in with 93 classified entries,
-and its guard has been watched failing four different ways. **B0 is next**, and it needs a quiet box.
+## What is on `dev`, 2026-09-04
 
-The `pdf` spike is independent and can happen any time before E.
-**All of D′ is off the list: D′1 is landed, D′2 was scheduled twice, D′3 is cancelled.**
+| stage | what landed |
+|---|---|
+| **A** | Both witnesses, the store inventory, and a guard watched failing four ways. |
+| **B0** | **Nothing** — it had been done on 2026-09-01 and a stale docstring said otherwise. |
+| **T-B** | [`scripts/db-test-create.ts`](../../scripts/db-test-create.ts) — a private, migrated database per run, ~4.6s. Reviewed; three blocking findings folded in. |
+| **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
+| **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
+
+**Nothing yet changes the default `npm test`.** That is deliberate and it is T-D's job. The factory
+and its integration tests are behind `SPIDERYARN_TEST_DB_FACTORY=1`.
+
+**The `pdf` spike is done** and moved stage E — see § `pdf`. **All of D′ is off the list: D′1 is
+landed, D′2 was scheduled twice, D′3 is cancelled.**
+
+## What this day cost, and what it bought
+
+Two stages of the thirteen turned out to be **already done or wrong about the tree**, and four
+separate counts in this document drifted inside a single day. That is not incidental to the job; it
+is the job. The flag exists because the repo has two stores, and the reason it is still here is that
+*nobody could tell what depended on which* — the same fog that made B0 a phantom stage and made
+`store-guarded.test.ts` say "eighteen" over an array of twenty-one.
+
+**The single most valuable thing found so far is not in the flag at all.** Running the Postgres
+suites against a clean database showed **fifty of them writing rows under an ambient owner none of
+them names**, which passes today only because somebody seeded it into the shared database weeks ago.
+See stage T-C.
+
 
 **Three corrections to our own draft of this order, two from review and one from the tree moving:**
 
@@ -73,6 +94,20 @@ our own re-derivation went stale within the day.** Numbers taken in the primary 
 morning of 2026-09-03 were wrong by the afternoon because this worktree merged 31 commits:
 `fs.ts` went 574 → 576, `createFsArtifactStore` gained `illustrated-step-registration.test.ts`, and
 every line number in `jobs.ts` and `pipeline.ts` drifted by ~90.
+
+**Third data point, 2026-09-03 afternoon.** A fact-check was dispatched over this whole document off
+the back of stage B0's finding, and re-derived the load-bearing numbers again. Every one had moved
+*again*, in one day: the registry 92 → **94**; witness `ranAndTouchedNothing` 499 → **498**; the
+candidates script 1,160 → **1,194** first-party files and 192 → **196** executable; flag mentions
+81 → **88**; `pgReady` call sites 82 → **87**; `.insert(articles)` 28 → **29**. Note that the "92,
+not 93" correction *was already stale in the commit that made it* — `59f01c9d` added two registry
+entries and the corrected number in the same change.
+
+**The rule this settles: no count in this document is an input to a stage.** Where a stage needs a
+number, it re-runs the command; where a check needs a list, it holds the list rather than a length
+(`tests/store-guarded.test.ts` § *Written out, not counted*, which had to learn this the hard way —
+its comment said "eighteen" over an array of twenty-one). Counts here are for judging size, and for
+nothing else.
 
 **So: this document carries no line numbers for moving files, and every count below is a
 *measurement with a date on it*, not a fact.** Stage A exists to turn them into a checked-in
@@ -587,39 +622,595 @@ route families to 260903e's Stage C list rather than discovering them one at a t
 Acceptable because keys are content-addressed, but it is a stated limitation, not a thing a reader
 should find out.
 
-### B0 — take `RUN_LOCK` off the seed window, first, on its own
+#### T-B is built — [`scripts/db-test-create.ts`](../../scripts/db-test-create.ts), 2026-09-03
 
-**Found at the start of the build, and the repo had already done the hard half.**
-[`tests/helpers/scratch-article.ts`](../../tests/helpers/scratch-article.ts) records its own
-measurement, 2026-09-01, 16 concurrent processes each seeding a **uniquely named** article:
+**Reviewed by GPT Sol, which returned three blocking findings, and all five are folded in** —
+[`260903f-test-database-factory-review-sol.md`](260903f-test-database-factory-review-sol.md). What
+follows is the state *after* that round.
+
+Nothing is wired into `npm test`; that is still T-D. A run is 4–5s (`createdb` + restore ≈ 1s, 65
+migrations ≈ 3.7s), and [`tests/db-test-create.test.ts`](../../tests/db-test-create.test.ts) is 57
+tests — **43 of them pure and always on, 14 gated**, measured both ways:
+
+| | result | databases created |
+|---|---|---|
+| `npx vitest run tests/db-test-create.test.ts` | 43 passed, 14 skipped | **0**, checked against `pg_database` |
+| `SPIDERYARN_TEST_DB_FACTORY=1 …` | 57 passed | 0 left behind afterwards |
+
+**Four things 260903e assumed that turned out not to hold**, each measured rather than reasoned:
+
+1. **There are no Postgres client binaries on this box's host.** `command -v pg_dump` finds nothing;
+   the only `psql`/`pg_dump`/`pg_restore` are inside the Supabase container. So the tools run through
+   `docker exec`, which is also the better answer — client and server are then the same build, so a
+   version-skew refusal cannot happen. The container is found by matching `DATABASE_URL`'s published
+   port and then **proved** by comparing `pg_control_system().system_identifier` over TCP with the
+   one seen inside it. That is not defensive programming: `docker ps` on 2026-09-03 shows
+   `supabase_db_hellozenno` on 54322 beside `supabase_db_spideryarn2` on 54362, so port-matching
+   alone is a guess that agrees with itself.
+2. **The restore has to run as `supabase_admin`, not `postgres`.** The dump carries six event
+   triggers and `postgres` is not a superuser on a Supabase stack, so `--exit-on-error
+   --single-transaction` correctly takes the whole restore down. The clone is still `OWNER postgres`,
+   matching the shared database, so the migrator can create the `spideryarn` schema. Sol confirmed
+   the split is sound: without `--no-owner`, `pg_restore` restores each object's original ownership,
+   and the database owner can still create the new app schema.
+3. **`pg_restore` does not "continue past errors and exit 0".** 260903e's gloss on the silent success
+   was wrong in a way worth correcting: `pg_restore` exits 1 whenever it ignored an error, so the
+   exit code was always sufficient to *detect* — the spike's mistake was grepping instead of reading
+   it. What `--exit-on-error --single-transaction` buys is **atomicity**. Measured, restoring the
+   real archive into a clone that already had an `auth` schema:
+
+   | | exit | `storage.buckets` afterwards |
+   |---|---|---|
+   | no flags | 1 | **present** — a half-restored database that looks migratable |
+   | with the flags | 1 | absent — rolled back |
+
+   Sol adds that `--single-transaction` already implies `--exit-on-error`, so writing both is
+   redundant. Kept anyway, because the pair states the intent.
+4. **`spideryarn_test_spike` will never be scavenged**, because the safety rule dates a database from
+   its own name and that name carries no date. Dropped by hand on 2026-09-03, and 260903e's risk note
+   is answered.
+
+##### The scavenger, after Sol: the fix was to stop asking Postgres to force anything
+
+260903e's two fences plus a re-check were **not enough, and a re-check cannot be made enough.** The
+scan and the re-read are both observations taken *before* the drop, so either can be stale when it
+lands. Sol's sequence: run A is over six hours old and momentarily idle, both checks see zero
+sessions, A connects, and `DROP DATABASE … WITH (FORCE)` terminates it.
+
+**So the drop is split in two, and the difference between the halves is the whole safety argument:**
+
+| | |
+|---|---|
+| `dropStaleTestDatabase` — the scavenger's | **plain `DROP DATABASE`.** Postgres refuses while any session is connected, so a late arrival makes the drop *fail*, which is the outcome we want. The refusal is returned, not thrown, and recorded as one more spared database with a reason. |
+| `dropTestDatabase` — teardown | **`WITH (FORCE)`**, called only by the run that minted that exact database and is finished with it. |
+
+**Reproduced, not reasoned.** Restoring `WITH (FORCE)` in the scavenger's half and re-running the
+test that covers it did not merely fail an assertion — Postgres emitted
+`FATAL 57P01 … terminating connection due to administrator command` and killed the connection the
+test was holding open. On this box that connection is another agent's test run, and the symptom
+lands in *their* worktree as unexplained red. The control refuses to run unless its anchor matches
+exactly once, so a mutation that patched nothing cannot report success.
+
+**This still does not make the six-hour rule mean "unowned", and the plan should not pretend it
+does.** Sol's second sequence has no race in it at all: a run that is old but alive, sitting between
+two lazily-opened pools, has zero sessions throughout. Age is presumed staleness, not ownership, and
+a clock corrected forward by more than the threshold makes a brand-new database look old.
+**The real fix is a lease** — the run holds one dedicated connection to its own database for its
+whole life, so "somebody is inside it" becomes continuously true rather than sampled, and the
+non-forced drop then refuses for the entire life of the owning run. **That is T-D's**, because the
+lease has to be held by the run; a factory function cannot hold one.
+
+Also from that finding: a non-finite or negative `olderThanMs` and an invalid `now` are now refused
+outright — `NaN` silently defeated every age comparison — and `only` is documented as a **test
+capability rather than a fence**, since it proves knowledge of a name, not ownership.
+
+##### The configurable prefix is gone, because it was the injection surface
+
+Reviewing the diff I found `dropTestDatabase` and `createEmptyDatabase` interpolating the database
+name into a quoted identifier — `CREATE`/`DROP DATABASE` take no bound parameters — behind a
+`startsWith` prefix check only, so `spideryarn_test_a"; …` satisfied the fence and closed the
+identifier. Watched failing: the call came back `DROP DATABASE cannot run inside a transaction
+block`, which is Postgres refusing the *chained* form rather than this file refusing the input — a
+protection that belongs to `DROP DATABASE` being non-transactional, and one that would not cover an
+interpolation site whose first statement is an ordinary one.
+
+My first fix was `assertMintedName`, requiring the whole minted shape. **Sol reproduced a hole in
+it**: `parseTestDatabaseName(name, prefix)` strips the *caller-controlled* prefix before validating,
+and the prefix check only required it to *begin* with `spideryarn_test_`, so the payload simply moved
+into the prefix.
+
+**The fix was to delete the parameter, not to validate it.** It had no caller anywhere in the repo,
+and its only uses were tests of a fence that existed solely because the parameter existed — a
+circular justification. `TEST_DB_PREFIX` is now a module constant, which removes the parameter, the
+fence, the injection surface and several tests together. Sol also agreed that refusing a legacy name
+like `spideryarn_test_spike` from `--drop` is right: it lacks the evidence to be called
+factory-owned, so removing one should stay deliberate.
+
+##### The ledger check was a count, which is the third one today
+
+`count(*) === journal.length` passes when one row is missing and another is duplicated. It now
+compares **identities** — the journal's tags and drizzle's own sha256 of each `.sql` file against the
+set the ledger holds — and `ledgerProblems` is pure over two lists, so the case a count cannot see
+is exercisable without corrupting a real ledger. Control: reinstating the length comparison turned
+`expected [] to deeply equal [ …(2) ]` — the identity version finds two problems where the count
+finds none.
+
+**That is the third instance of a length standing in for a list in one day**, after
+`store-guarded.test.ts`'s "eighteen" over an array of twenty-one and this document's own drifting
+counts. See § *Counts are perishable here*.
+
+The migrator's `Target:` line is now parsed and compared by host, port and pathname rather than by
+two independent substring searches.
+
+##### The event-trigger rationale was overstated
+
+The clone retains all six event triggers, which is still right — but the reason given was wrong.
+**Only `pgrst_ddl_watch` and `pgrst_drop_watch` are notification-only.** The other four react to
+extension creation and removal and can grant privileges, recreate the GraphQL placeholder, or create
+a role. They are dormant here because our migrations create no extensions, which is a different and
+weaker claim than "a `NOTIFY` nobody listens for", and it is the one the file now makes.
+`archiveProblems` also asserts the inventory, so a **seventh** trigger appearing in the shared
+database is a failure rather than a silent inheritance.
+
+##### What T-C and T-D inherit
+
+- `vitest.config.ts`, `package.json`, `scripts/check.ts`, `tests/store-migration-registry.ts` and
+  `.env.local` are untouched.
+- The integration half is run with `SPIDERYARN_TEST_DB_FACTORY=1` until T-D gives it a lane.
+  `REQUIRE_POSTGRES=1` turns an unreachable stack into a failure rather than a skip **but does not
+  opt in by itself** — `scripts/check.ts` sets it, and a gate that started creating databases
+  because somebody ran `npm run check` is what this variable exists to prevent.
+- `baseUrl()` is memoised on purpose, so T-D's setup file can overwrite `process.env.DATABASE_URL`
+  with the private database without the scavenger following it to the wrong cluster.
+- **The lease connection is T-D's**, per the scavenger section above.
+- **Storage is still shared.** Not addressed here, and a stated limitation rather than an oversight.
+
+#### T-C is built — the lane map, its guards, and the tail a clean database exposes, 2026-09-03
+
+Still opt-in. `vitest.config.ts`, `package.json` and `scripts/check.ts` are untouched; the three
+vitest projects and the wiring into `npm test` are T-D's and land in one commit after this.
+
+What landed:
+
+- **`TEST_LANES`** in [`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts)
+  — one lane for each of the **93** test files that open a Postgres connection of their own. Four
+  `shared-services`, 89 `private-postgres`.
+- **`OWNER_AUDIT`** in the same file — one verdict per *(file, owner uuid)* pair. Sol's review
+  turned this from a file-keyed exception list into a pair-keyed audit; see below.
+- **Three guard cases plus a compiler check** — the third rebuilt after review — in
+  [`tests/store-migration-registry.test.ts`](../../tests/store-migration-registry.test.ts)
+  § *the test-lane map*, over a live static scan of every test file.
+- **[`tests/helpers/seed-local-accounts.ts`](../../tests/helpers/seed-local-accounts.ts)** and its
+  suite [`tests/seed-local-accounts.test.ts`](../../tests/seed-local-accounts.test.ts) — the one fix
+  that removes 49 of the 54 reds, described below.
+- One test fixed: `tests/admin-feedback-store.test.ts`, for a reason worth reading.
+- The 260903e spike setup [`tests/setup/spike-db.ts`](../../tests/setup/spike-db.ts) gained a real
+  positive control (`current_database()`, not the name in the URL it wrote) and calls the seeder.
+  **T-D promotes both halves into the private lane's own setup.**
+
+##### The universe is 93 files, and the predicate is mechanical
+
+Every test file whose *code lines* contain `pgReady(` or `new Pool(`/`new Client(`. 85 call
+`pgReady`, 15 build their own connection, union 93. Comment lines are dropped, because 86 files
+contain the string `pgReady` and only 85 call it — `store-seams-have-two-implementations` discusses
+it in a paragraph. **`tests/db-test-create.test.ts` and `tests/migration-reconciliations.test.ts`
+were invisible to a first draft that looked only for `pgReady` and `new Pool`**: they use `new
+Client`, and the factory's own suite is the last file that should have been missed.
+
+##### The four in `shared-services`, and how each was settled
+
+| file | how decided |
+|---|---|
+| `tests/auth-user-seeding.test.ts` | **Measured.** Red on a private database: it seeds a row and asks `GET /auth/v1/admin/users` to list it, and GoTrue answers about `postgres`. `expected [ …(11) ] to include '6fece419-…'` |
+| `tests/seed-admin-signin.test.ts` | Signs in through the Auth service. Same service, same database. |
+| `tests/admin-store.test.ts` | **Reasoned, and the measurement is the argument for moving it, not against.** It is *green* on a private database while checking nothing: accounts come from GoTrue over HTTP so its `users.length > 0` control still fires, and every aggregate beside them is `?? 0` out of the empty clone. `typeof 0` is `"number"` however wrong the number is. |
+| `tests/db-test-create.test.ts` | **Chosen by contract, not by a red, and the measurement says so**: 57/57 pass in the private lane as well as the shared one, because `dumpSharedSchema` hardcodes `-d postgres` and the host and port are the same either way. What is wrong is quieter — `baseUrl()`'s documented job is to mean *the shared database*, and in the private lane it silently means a clone, so the factory's own suite would be minting siblings of a clone and T-D's lane would create a database in order to create databases. The file whose job is to police the factory is the worst place to leave that ambiguity. |
+
+**`tests/store-realtime-sessions.test.ts` is not among them, and 260903e's first list was wrong to
+include it** — checked here rather than inherited. Its Postgres half seeds its own `auth.users` row
+through `seedAuthUser` and drives `pgRealtimeSessionStore` over Drizzle; `Realtime` in the name is
+the feature's, not the service's. **It passed on a private database, first time, unchanged.**
+
+##### The tail is one row, fifty-odd times over
+
+Ran 91 of the 93 one file at a time against a factory-minted database under `REQUIRE_POSTGRES=1`,
+so a skip counted as a failure (`db-test-create` and `migration-reconciliations` were run
+separately, being the two the first scan had missed). **54 red** — out of the 76 files that ran
+before the seeder below existed; the last 15 of that run were already benefiting from it, so 54/76
+is the bare-clone figure and the run's own 54/91 understates it.
+
+The commonest failure by a wide margin, and it is the same line every time:
 
 ```
-with the lock     max seed 4.9–6.1s   (the last one waits for fifteen turns)
-without the lock  max seed 1.0–2.0s
+insert or update on table "articles" violates foreign key constraint "articles_owner_fk"
+Key (owner_id)=(f4d08b58-…) is not present in table "users".
 ```
 
-`loadArticleIntoPg` takes `RUN_LOCK` around its load window, which serialises **every seed in the
-whole test run**. The one thing that genuinely needed it is fixed at the source: N clones of one
-corpus article share a `raw_sources` row keyed `(sha256, kind)`, and the old
-`select … for update` locked nothing over zero rows, so all but one clone lost its transaction to a
-duplicate key. `writeRawSource` is now conflict-tolerant and reads the row back
-([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts), `tests/store-raw-source-race.test.ts`). The
-docstring's own conclusion: *"for these suites the lock really is pure queue. It is kept anyway for
-now, because removing it is a change to `loadArticleIntoPg`'s contract and belongs in one deliberate
-commit rather than as a side effect of converting a test file."*
+That id is not a fixture. It is the **ambient owner** — what `currentOwnerId()` answers outside a
+request, from `SPIDERYARN_OWNER_ID` in `.env.local` (`src/owner.ts` § `environmentOwnerId`) — and
+suites write rows owned by it without ever naming it, because `npm run db:seed-owner` put that row
+in the shared database weeks ago and everything has been quietly borrowing it.
 
-**This is that commit, and B is why it is now worth making.** B multiplies the number of suites that
-seed; doing it after B means paying the queue through the whole conversion and then re-measuring
-everything.
+**47 of the 54 reds are a key into `auth.users`** — `articles_owner_fk`,
+`ingest_events_owner_fk`, `ai_calls_owner_id_users_id_fk` and their siblings; 23 tables carry one,
+and a schema-only clone can satisfy none of them. **Two more of the remaining seven are the same
+cause wearing a different symptom**: `a-claim-that-lost-its-draft` fails an outcome assertion and
+`claim-session-postgres` reports *"case 1 has to have published before this case runs"*, and both
+went green on the seeder with no edit. **So 49 of 54, one cause.**
 
-**It is measured, not reasoned.** Re-run the 16-process concurrent-seed experiment before and after
-on a **quiet box** — a measurement taken at load 144 says nothing, and this box reached that on
-2026-09-03 with two suites running. Ten runs after, not one: the failure it used to have was a lost
-race, and a race that does not fire is indistinguishable from one that cannot.
+**So the fix is one place, not fifty edits.** `tests/helpers/seed-local-accounts.ts` writes the rows
+a local database is *expected* to have — derived from `SEEDED_ACCOUNTS` in
+[`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts), the repo's own declaration of what
+`db:seed-owner` guarantees, plus whatever `SPIDERYARN_OWNER_ID` names if it is not one of them.
+Derived rather than hand-copied, so a fourth account added there arrives for free — a hand-copied
+list of ids is the shape that stopped `db:export` writing `shelf.json`.
 
-**And it is the one change here that can hurt other agents**, since every worktree shares this
-helper and a flaky seed would surface as somebody else's unrelated red. If the measurement is not
-clean, leave the lock alone and say so — B is slower, not blocked.
+The alternative considered and rejected: fifty files each calling `seedAuthUser` on the same id.
+They would all say the same thing, drift separately, and bury the genuinely interesting owner
+dependencies — a *second* owner, a fixture id — under fifty that are not interesting at all.
+
+**What it costs, stated rather than discovered:** a private database is no longer a bare clone. It
+carries three or four `auth.users` rows, so no suite can use it to prove *"this works with no
+accounts at all"*. Nothing needs that today.
+
+Re-run in full on a fresh database with the seeder in the lane setup: **86 of 91 green**, and one of
+the five reds is `auth-user-seeding` failing exactly as its shared lane predicts.
+
+**The three files 260903e named are the proof that it is one cause and not three.** All three were
+red on a bare clone and green after the seeder, with **no edit to any of them**:
+
+| | bare clone | with the seeder |
+|---|---|---|
+| `tests/store-checkpoints.test.ts` | red | green |
+| `tests/store-artefacts-pg.test.ts` | red | green |
+| `tests/blocks-baseline.test.ts` | red | green |
+
+**And this is where the cost-recording families went.** § T says *"every route or job suite that
+records cost needs its owner row in `auth.users` — 5 of 5 writes refused without it. Add the route
+families to 260903e's Stage C list rather than discovering them one at a time."* They are all in
+`TEST_LANES` — the scan takes every file that opens a connection, so there is no family to remember
+— and the seeder is what satisfies them, because the owner they record cost against *is* the ambient
+owner. `ai-calls-spend-pg`, `billing-admission`, `billing-quota-race`, `billing-settlement` and
+`running-slot` are green in the private lane.
+
+##### What is left after the seeder — the catalogued tail
+
+| shape | files | what it needs |
+|---|---|---|
+| **`billing_tiers.stripe_price_id` is NULL in a clone** | `billing-checkout`, `billing-usage-route`, `plans-match-tiers` | The tiers themselves come from a migration (`20260902181004_seed_billing_tiers.sql`); the **price ids** are written by `npx tsx scripts/stripe-setup.ts --apply` against the shared database and are not in it. `offerableTiers` filters on `stripePriceId !== null`, so a clone offers nothing: two of the three throw `billing_tiers has no active 'reader' row with a stripe_price_id` from their own helper, and `plans-match-tiers` fails as `the table advertises "Reader" and no active tier sells it`. |
+
+**The recommended fix for that family, not taken here — and the first version of this
+recommendation was unsafe.** It said: backfill a plainly fake `price_local_test_…` onto the `reader`
+row, **only when `stripe_price_id` is null**. GPT Sol found two defects, both certain, and this
+paragraph is the corrected version.
+
+- **Null is not evidence of a private database.** Null is the *legitimate* state on any machine
+  where nobody has run `npx tsx scripts/stripe-setup.ts --apply` — a fresh clone of the repo, or the
+  Mac. On such a machine the "safe" conditional fires against the shared `postgres` and **persists a
+  Stripe price id that does not exist** into a developer's own database. Nullness cannot tell
+  private from shared, and no refinement of it can.
+- **`reader` is not the only tier.** `20260902181004_seed_billing_tiers.sql` creates `reader` *and*
+  `researcher`, both `active`, both with a null price id, and `plans-match-tiers` requires every
+  paid row the UI advertises to be offerable. Filling `reader` alone leaves `researcher` red — a fix
+  that turns three failures into one and looks like progress.
+
+So the safe version is: **positively prove the target is a factory-owned private database** — the
+name matches what `scripts/db-test-create.ts` mints, and nothing weaker — then backfill **every**
+active paid tier the UI requires, derived from what the page advertises rather than from a list of
+tier ids somebody typed. Never infer privateness from the data.
+
+None of the three suites asserts anything about a price id's *value*, so a placeholder preserves
+each claim exactly: `plans-match-tiers` compares the website's copy against the `amounts` the
+migration seeded, and the other two only need the route to have something to sell. Left for T-D
+because it needs all three suites' Stripe stubs read, and now also because it needs the
+private-database proof that only T-D's lane can supply.
+
+**One found and fixed, and it is a third shape worth naming:**
+`tests/admin-feedback-store.test.ts` § *says there are more only when it has seen one more* wrote
+**one** feedback row and then asked for a page of `n - 1`. On the shared database the table always
+held several, so that was a sensible limit; on an empty one `n` is 1 and `n - 1` is **zero**, which
+the store legitimately clamps to one — so the length assertion failed on a suite that was already
+careful enough to *measure* the count rather than assume it. The class is **boundary arithmetic that
+is only non-degenerate because the table was not empty**, and measuring the count is not a defence
+against it. Fixed by writing two rows, with the floor raised to `> 1` so the case cannot go
+degenerate again silently.
+
+##### Storage is not isolated, and the docs now say so
+
+The private lane clones the SQL. The bucket does not move: `blobStore` talks to the Storage service
+over HTTP and that service is bound to `postgres`, so two runs share one bucket and
+`storage.objects` in a clone is permanently empty. Acceptable, because every key this repo writes is
+content-addressed — two runs writing the same bytes write the same object. But it is a **stated
+limitation** in `TEST_LANES`'s own docstring, not something a reader discovers:
+**Two files reach it**, and the count was wrong twice before it was right —
+`tests/helpers-load-article.test.ts` and `tests/source-store.test.ts`; see the review section
+below for why the other three candidates do not.
+
+##### The guards, and the violation planted in each
+
+**Five reds, each watched and each naming what was broken.** The violation was a *new file* rather
+than an edited line wherever it could be — `tests/zz-lane-control.test.ts`, one `pgReady(` call and
+one literal owner uuid — because the line a control breaks is otherwise the least stable text in the
+file and a peer may have edited it minutes ago.
+
+| planted | what it said |
+|---|---|
+| the control file exists, with no lane | `test files that open a Postgres connection and have no lane in TEST_LANES …: [ "tests/zz-lane-control.test.ts" ]` |
+| … given a lane, still no `seedAuthUser` | `files naming a fixed owner uuid … that neither seed it nor appear in UNSEEDED_OWNER_EXCEPTIONS …: [ "tests/zz-lane-control.test.ts" ]` — **the file-keyed guard this round replaced**; its pair-keyed successor's controls are in the review section below |
+| … declared, with a nine-character reason | `the reason recorded for tests/zz-lane-control.test.ts: expected 9 to be greater than 40` |
+| the control file deleted, its entries left behind | `TEST_LANES entries the scan does not find …: [ "tests/zz-lane-control.test.ts" ]` |
+| the same, for the exception list | `UNSEEDED_OWNER_EXCEPTIONS entries that are no longer true …: [ "tests/zz-lane-control.test.ts" ]` |
+
+**Those two rows are about the guard as first built, and it was replaced** — the owner half is
+now pair-keyed, with five controls of its own. Kept rather than rewritten because a superseded
+control that was actually watched is evidence about the *mechanism*, and quietly restating it as
+though it had always been pair-keyed is how a record stops being one.
+
+**And the sixth is the compiler's, which is why no vitest case looks for it.** *"A file in no lane or
+in two"* was the brief; a `Record` cannot hold a file twice, so duplicating
+`"tests/store-comments.test.ts"` with the other lane is not a runtime fact to assert on —
+`npm run typecheck` answers
+
+```
+tests/store-migration-registry.ts(1174,3): error TS1117: An object literal cannot have
+  multiple properties with the same name.
+```
+
+Watched, then put back. The guard case says where that half went, so the next reader does not
+conclude it was forgotten.
+
+**The scan's controls are in both directions.** Each assertion is a set difference, and a difference
+is empty when its inputs are empty — a regex edited into never matching, or a moved `tests/`
+directory, would pass all three in silence. So the scan must find more than 70 Postgres files, more
+than 5 files naming a fixed owner uuid, and more than 5 seeding one, before any difference is
+believed.
+
+##### Six things 260903e § Stage C got wrong, and what was done instead
+
+Its design held. Its inventory and its proposed scan did not, and the two errors pull in opposite
+directions — the scan looks for the wrong thing, and the tail is far bigger than the three files
+named.
+
+1. **Sol's marker list misses the commonest case entirely.** It proposed grepping for
+   `DEV_OWNER_ID`, `ADMIN_USER_ID_LOCAL`, `auth.users`, `SUPABASE_URL`, `blobStore` and `new Pool`.
+   **The dominant failure has none of those markers**: it is `currentOwnerId()`, which names no id
+   at all. Measured over the 76 files run before the seeder existed — 54 of them red — **only 20 of
+   the 54 carry any of Sol's six markers. 34 do not**, and 19 of those 34 use `currentOwnerId()`,
+   the rest reaching an owner through a helper. So the proposed scan would have found rather more
+   than a third of the tail and vouched, silently, for the rest.
+2. **`require every fixed owner … to call `seedAuthUser` or be a declared exception` is unusable as
+   literally written.** Applied to every fixed owner it demands fifty declarations or fifty edits,
+   and either way fifty entries saying the same thing. The version that earns its keep is narrower:
+   the *lane* provides the accounts a local database is expected to have, and the guard covers the
+   owners it cannot. **And the narrow version was still too coarse**: keyed by file it treated one
+   seed call as covering every owner in the file, which Sol's review then caught. Pair-keyed, it
+   is a couple of dozen entries — a list, deliberately without a total beside it, since this is
+   the count that has now drifted four times.
+3. **`new Pool` is not the whole pool predicate.** `tests/db-test-create.test.ts` and
+   `tests/migration-reconciliations.test.ts` use `new Client`, so a scan for `pgReady` and
+   `new Pool` misses both — including the factory's own suite, which is the last file that should
+   have been invisible to a lane guard.
+4. **`admin-store.test.ts` is in the shared lane for a different reason than the one given.**
+   260903e says *"an empty clone yields no accounts"*. It does not: the accounts come from GoTrue
+   over HTTP and GoTrue reads `postgres`, so the list is non-empty and the suite is **green on a
+   private database while checking nothing**. The right reason is that its claim is about a join
+   with one real side and one empty one.
+5. **The shared lane has a fourth member 260903e does not list** — `tests/db-test-create.test.ts`,
+   for the contract reason above.
+6. **`store-realtime-sessions` really is not shared**, and this was checked rather than taken from
+   the plan: it seeds its own `auth.users` row and drives `pgRealtimeSessionStore` over Drizzle,
+   and it passed on a private database first time, unchanged.
+
+##### The T-C review found one real hole, and it was in the guard rather than the manifest
+
+[`260903f-lane-manifest-review-sol.md`](260903f-lane-manifest-review-sol.md), 2026-09-03. Verdict:
+**would not ship the guards under the claim that they prove completeness.** It confirmed the
+substance — no wrongly assigned private-lane suite; `store-realtime-sessions` correctly private; all
+four shared assignments defensible including `db-test-create` by contract; the marker-scan
+correction right; `environmentOwnerId` correct on a differently-configured machine, reproduced
+including the invalid-uuid throw; and only one emptiness oracle in the tree, which is shared-lane,
+so the baseline seeding invalidates nothing. What follows is what changed.
+
+**1 — the owner guard was file-complete, not owner-complete.** It treated a `seedAuthUser(` call
+anywhere in a file as covering **every** literal owner in it, and the witness was already in the
+tree: `tests/store-jobs-parity.test.ts` declares `STRANGER` and seeds only `OWNER` and `OWNER_B`.
+Safe today because `STRANGER` is read-only, and **green on the day that stops being true**.
+
+Rebuilt as `OWNER_AUDIT`, keyed *(file, owner uuid)*, two verdicts:
+
+| | |
+|---|---|
+| `seeded` | the file puts a row in `auth.users` for this owner. **Mostly checked, not promised** — the scan resolves each seed call's balanced-paren arguments plus one enclosing `for (… of […])`, and where it sees the owner there no reason is required. |
+| `no-row-needed` | a foreign key is checked on **write**, and this owner is never on the writing side of one. Always with a reason, saying what the owner is for *and* what would change if that stopped being true. |
+
+Keyed by uuid rather than by the constant's name, because the uuid is the identity the foreign key
+checks — a renumbered constant goes stale and the guard says so — and the reason names `OUTSIDER` or
+`STRANGER` out loud for the reader.
+
+**Watched failing, with `STRANGER` as the witness**, before it was exempted:
+
+```
+fixed owners under the auth.users foreign key with no verdict in OWNER_AUDIT …
+  [ "tests/store-jobs-parity.test.ts STRANGER 00000000-0000-4000-8000-0000000000b5" ]
+```
+
+Four more planted and watched, so every assertion in the case has been seen to fire by name:
+
+| planted | what it said |
+|---|---|
+| a `seeded` verdict in a file with no seed call | `declared \`seeded\` in a file that contains no seedAuthUser or seedLocalAccounts call: [ "tests/zz-lane-control.test.ts" ]` |
+| `no-row-needed` on an owner the scan sees seeded | `declared \`no-row-needed\` while the file demonstrably seeds them — the verdict is stale` |
+| a verdict for a uuid the file does not contain | `OWNER_AUDIT entries the scan no longer finds — the constant was renamed, its uuid changed, or the file stopped naming a fixed owner` |
+| a twelve-character reason | `verdicts that need a reason and have none …: [ "tests/source-store.test.ts 00000000-…c8" ]` |
+
+**Detection is three rules, and each catches what the others miss** — which is the answer to *"why
+not just one regex"*. (1) a uuid literal on a line that says `owner`: alone it missed `STRANGER` in
+`store-uploads-parity`, declared without an `as OwnerId`. (2) a `const NAME = "uuid"` whose name is
+later used in an **owner position** — `ownerId:`, `owner_id`, `setRequestOwner(`, `runAsOwner(`,
+`as:`, `sub:`, derived from the seams rather than from a list of names somebody thought of, since a
+fixture called `PROPRIETOR` would defeat a name list: alone it missed the inline literal in
+`store-ai-calls`. (3) anything resolvable inside a seed window, which is also a *widening* — a row
+put in `auth.users` is an owner by definition, and it is how `store-realtime-sessions`' second owner
+arrives at all.
+
+**And the counts drifted again — the fourth time in one day.** The report and the first draft of
+this section said 20 literal-owner files, 10 of them seeding; Sol re-derived 18 and 9; the
+pair-level scan says 18 files. **No total is written into `OWNER_AUDIT` or into this section**, per
+§ *Counts are perishable here* — the entries are the list, and a number beside them is a second
+claim that can be wrong on its own. The guard holds floors (`> 15` pairs, `> 5` seeded, `> 5` files
+with a seed call) rather than pins, because a floor cannot go stale into a false green.
+
+**2 — the lane guard is a syntactic inventory guard, and now says so.** Sol reproduced the inventory
+independently and audited direct `pg` imports and `getDb()` use without finding an omission, so it
+is not vacuous. But the predicate reads *text*, so it cannot see an aliased or namespaced
+constructor, a helper of a file's own that connects elsewhere, a dynamic `import()`, or a transitive
+`getDb()`. The docstrings on both `TEST_LANES` and `laneScan` now say that in as many words, and
+name T-D's `DATABASE_URL`-poisoning obligation as the backstop — an over-claimed guard is worse than
+a modest one, and this plan has spent a day on that class. Connection-opening **helpers**
+(`pg-ready`, `corpus-lock`, `run-lock`, `lock-lifecycle`) were added to the scan as an import-
+specifier match; re-derived, they add **nothing today** — every file importing one also calls
+`pgReady(` or builds a pool — so it is a forward guard, and saying so is the point.
+
+The first version of that clause matched the bare helper names and **flagged the guard file itself**,
+which contains them in its own array. Caught on the first run; matched as an import specifier now.
+
+**3 — the Stripe backfill recommendation was unsafe and is rewritten**, above. Both defects were
+real: nullness cannot tell a private database from a shared one, and `researcher` is active with a
+null price id beside `reader`.
+
+**4 — `admin-store`'s oracle could be vacuous, and now cannot.** Sol's point: it requires non-empty
+auth accounts while every aggregate accepts zero, and `pg-admin.ts` fills a missing `group by` row
+with `?? 0` — so on a database where nobody has uploaded anything, all seven counts are the literal
+`0` this file supplied, never the string node-postgres hands back for `bigint`, which is the entire
+bug the file was written for. Added: a per-run owner seeded through `seedAuthUser`, four `uploads`
+rows of which exactly **three** are `verified`, and `expect(mine?.uploads).toBe(3)`. Exact equality
+rather than `>= 1`, because `"3" >= 1` is true in JavaScript — the same trap the file's own header
+records about `"3" > 2`. `uploads` because it is the only aggregate needing no article, no revision
+and no `onTheShelf()`. Per-run id and a `finally` that removes both the rows and the account,
+because this suite runs against the shared `postgres` that peers are inside.
+
+**Proved both halves, with one mutation.** Replacing `count()` with an unmapped
+`sql<number>\`count(*)\`` in `pg-admin.ts` § `uploads` — the original bug, reinstated:
+
+| run | result |
+|---|---|
+| shared `postgres` | `expected '3' to be 3`, and the pre-existing `typeof` case also went red *because this box happens to have uploads for the dev admin* |
+| a factory-minted clone | **the two pre-existing cases passed** while the bug was live — Sol's vacuity point, measured — and the new case failed |
+
+The clone run also produced independent confirmation of the lane: the new case failed as
+`the seeded account 3e10b9ea-… is not in the admin list`, because the row went into the clone while
+GoTrue reads `postgres`. That is `admin-store` belonging to `shared-services`, said by a failure
+rather than by an argument. Mutation reverted; `src/` is clean.
+
+**5 — three exception reasons were wrong, and one of them was wrong in the file itself.**
+
+- **`export-route` was backwards.** It said seeding the outsider would let the 404 arrive for a
+  second reason; it would *remove* one — *"the requester does not exist"*. And the suite already has
+  better evidence: the owner goes through the same path for a 200, and removing the ownership
+  predicate was watched answering 200 for the outsider too. **The wrong reasoning came from that
+  file's own docstring**, which claimed seeding a second owner would mean driving GoTrue's admin API
+  — it would not; `seedAuthUser` inserts directly over the same connection and touches no service.
+  Corrected in `tests/export-route.test.ts` as well as in the audit.
+- **`public-visibility-pg`'s outsider is not read-only** — it is the `as:` of a `PUT`. What makes it
+  safe is that the `UPDATE` carries `owner_id = OUTSIDER` in its `WHERE`: no row matches, nothing is
+  written, the id never lands in a column. `store-uploads-parity`'s `STRANGER` is the same shape
+  through `claim({ owner })`, and its entry says so.
+- **`owner-isolation` conflated two roles.** Alice and Bob are request-context identities for the
+  `AsyncLocalStorage` half; the persisted fixture is owned by the ambient owner. Each of its three
+  pairs now says which job it belongs to.
+- And **`seedAuthUser` is not "driving GoTrue"** anywhere any more.
+
+**6 — the Storage count was wrong twice, and the second answer was Sol's.** The registry said three
+files reach the real bucket; Sol said one. **It is two.** Five suites mention `src/store/blobs.js`:
+`illustrated-route` and `store-export-bundle` `vi.mock` it (the second to a store that *throws* on
+any read), and `store-export-raw` imports only a type — so Sol is right about those three. But
+`tests/source-store.test.ts` calls `storeRawSource(bytes, kind)` with its **default third
+argument**, which is `blobStore()`. Nothing in the file says "bucket", which is why one count
+missed the mocks and the other missed the default. The way to see it is to follow what `blobStore()`
+is *called by*, not what a test file mentions — recorded in `TEST_LANES`'s docstring with both
+wrong answers, because the shape of the mistake is the useful part.
+
+##### What T-C deliberately left for T-D
+
+- **`vitest.config.ts`, `package.json` and `scripts/check.ts` are untouched.** Three disjoint
+  projects and the wiring into `npm test` land in one commit, per Sol's blocking finding that B and
+  C cannot be separated.
+- **An obligation, not a suggestion: the unit project must delete or poison `DATABASE_URL` after
+  `.env.local` has loaded.** The lane scan is a *syntactic* inventory guard — it reads the text a
+  file contains, so it cannot see an aliased constructor (`new PgPool()`), a helper of a file's own
+  that connects elsewhere, a dynamic `import()`, or a transitive `getDb()` inside application code.
+  A test that escapes it today reaches the shared database and passes, silently. Poisoning
+  `DATABASE_URL` in the unit lane is the **semantic backstop** that a syntactic guard cannot be, and
+  it costs one line in a setup file. *After* `.env.local` has loaded, for the ordering reason in
+  260903e § *The ordering trap* — before it, the file simply puts the shared URL back.
+  A transitive-import guard is **not** an alternative and should not be tried: Sol measured of the
+  order of a hundred and fifty test files outside the lane map that can *reach* a module importing
+  `pg`, nearly all of them legitimate unit tests that mock it or never execute that path, so a
+  manifest built that way would cover half the suite and mean nothing.
+- **The lease connection** (T-B's scavenger section) — a factory function cannot hold one.
+- **Promoting `tests/setup/spike-db.ts`** into the private lane's real setup: the ordering, the
+  `current_database()` control and the `seedLocalAccounts` call, none of which changes.
+- **`docs/project/testing.md`** — 260903e § Stage F says explicitly to update it *alongside*
+  activation rather than after it. T-C changes no behaviour, so documenting a lane nothing selects
+  yet would be wrong in the other direction. The Storage limitation is stated in `TEST_LANES`'s own
+  docstring in the meantime.
+- **The `billing_tiers.stripe_price_id` family**, above, with the recommended fix and its trap.
+- **Residue within one run.** The private lane is one database for the whole invocation, so a row an
+  earlier file leaves behind is visible to a later one. Per-run isolation removes dev servers,
+  peers, and residue from killed runs — not the run's own. Nothing in the 93 currently depends on
+  it, and 260903e's Stage G (per-worker) is where that changes if it starts to.
+
+### B0 — take `RUN_LOCK` off the seed window — **already done, and this plan was wrong about it**
+
+**Nothing to build. It landed on 2026-09-01 in `df7a7980`, two days before this plan was written.**
+`LoadOptions.serialise` defaults to `false`, and `withRunLock` has exactly one caller in the tree —
+[`load-article.ts`](../../tests/helpers/load-article.ts) § `withRunningJob`, gated on that flag. The
+four places that pass `true` are all legitimate and none of them is the seed path B multiplies:
+`store-parity` (×2) and `store-roundtrip`, which load a **fixed** slug; the suite that tests the
+option itself; and `scripts/db-seed-dev.ts`, which is a dev script rather than part of the run.
+`tests/helpers/scratch-article.ts` — the helper the ~48 converted suites use — never passes it.
+
+**So the 16-process measurement this stage called for was not needed**, and running it would have
+measured a change that was already in the tree.
+
+**Why we believed otherwise, which is the part worth keeping.** `scratch-article.ts`'s own docstring
+opened *"`loadArticleIntoPg` takes `RUN_LOCK` around its load window, which serialises every seed in
+the whole test run"* and closed *"It is kept anyway for now, because removing it is a change to
+`loadArticleIntoPg`'s contract and belongs in one deliberate commit."*
+
+**The sequence, all on 2026-09-01, and the middle step is the one that matters:**
+
+| | |
+|---|---|
+| `9671fcfa` 13:20 | wrote the paragraph. **True when written.** |
+| `df7a7980` 14:45 | flipped `serialise` to opt-in in `load-article.ts`, **and did not touch this file**. The paragraph became false, silently. |
+| `e3ef75fd` 15:13 | **edited that very paragraph**, adding the `raw_sources` narrative, and left its top and tail describing the world before the flip. |
+
+So it was not merely un-updated. It was revised half an hour after being falsified, by someone
+reading it closely enough to rewrite its middle, and the two false sentences survived because
+nothing connects a comment to the code it describes.
+
+It then stayed wrong for two days and was read as fact by this plan, by the brief that drew stage B0
+out of it, and by a review that did not challenge it. **The class is a comment that survives the
+change it describes** — the same shape as [silent-success](../reusable/silent-success.md), one level
+up: not a check that agrees with the bug, but *prose* that agrees with the code it used to describe.
+The tell was available cheaply — `grep -rn "serialise: true"` returns four lines and none of them is
+this file — and the lesson for the rest of this plan is to **grep the call sites before believing a
+docstring's account of them**, especially where the plan's next stage depends on the answer.
+
+**This section got the attribution wrong on its first attempt**, blaming `df7a7980` for prose it
+never touched — a `--stat` on that commit lists eight files and `scratch-article.ts` is not among
+them. Caught by the fact-check dispatched off the back of this very finding, which is the argument
+for dispatching it: the correction to a stale-prose bug was itself stale prose within the hour.
+
+
+Fixed in the same commit as this note: the docstring now says what the code does, and records that
+it was wrong and for how long, so the next reader is not the fourth to be misled.
+
+**What B0 changes for the stages after it: nothing.** B was already going to get the unserialised
+seed. The ~19–24s of serial demand that `load-article.ts` warns about is a description of what
+`serialise: true` *would* cost at B's scale, not a debt B has to pay.
+
 
 ### B — convert the ungated route suites (parallelisable)
 
@@ -794,6 +1385,53 @@ The same degraded second line D′1a was written to abolish, arriving through a 
 with a non-enumerable `SCRUBBED` symbol and one line at the top of `mayPassThrough`. It is the one
 allowlist entry that needs no judgement — *we* wrote its message, and it is one of the two sentences
 in `messages.ts`. The diagnostic then stays where the failure actually happened.
+
+**Tightened since, by another worktree, and this plan is recording it rather than discovering it
+later.** `ad22f508` (merged here 2026-09-03) replaced the bare mark test with `alreadyScrubbed`,
+which requires the mark **and** `Object.isFrozen(err)` — so a mark alone is no longer a pass, and an
+attacker-shaped object carrying the symbol cannot borrow the exemption. The same commit made the
+`name`/`stack` reads null-safe, so a thrown `null` no longer takes the guard down with it. That
+worktree also converged independently on `Symbol.for` over a module-private symbol, for the reason
+recorded in D′1a: a private symbol breaks under module duplication.
+
+**Two worktrees have now landed on this file within a day without either knowing about the other**,
+which is the third such collision in this plan (260903e, the glossary delete, and now this). It is
+not a problem to solve here, but it is the reason this document re-derives rather than inherits.
+
+**And the "unforgeable" claim is not true, measured 2026-09-03.** `ad22f508`'s message says *"make
+the scrubbed-error mark unforgeable"* and `db-errors.ts` says the mark *"can only be put here"*.
+Neither holds. `SCRUBBED` is `Symbol.for("spideryarn.scrubbedDbError")`, and `Symbol.for` reads a
+**process-global registry any module can reach** — that was the deliberate choice, for a good reason
+(a module-private symbol breaks under module duplication), but it means the key is public by
+construction.
+
+What actually rejects the committed forge test in
+[`store-guard-idempotent.test.ts`](../../tests/store-guard-idempotent.test.ts) is **the freeze, not
+the mark** — that test marks its error and leaves it unfrozen. Probed both arms directly:
+
+| the forged error | result |
+|---|---|
+| carries the real `SCRUBBED` key, **not** frozen | scrubbed to `STORAGE_FAILED` — the committed test's case |
+| carries the real `SCRUBBED` key **and** is frozen | **passes through unscrubbed**, `SENTINEL-frozen` intact |
+
+So the boundary is *mark plus freeze*, and **a forger can supply both** in two lines. The same
+finding is P1 of [`260903e-merge-review-sol.md`](260903e-merge-review-sol.md), reached independently
+by another worktree's reviewer.
+
+**What the real defence is, and it should be the one written down.** Nothing can make a guarded
+store throw an attacker-constructed object: the errors reaching `mayPassThrough` come from Drizzle,
+from `pg`, or from our own named classes, and an attacker controls article *content* — Drizzle's
+bound parameters — not the shape of a thrown object. That is a sound argument and it is why this is
+**not** live. It is also a much narrower claim than "unforgeable", and the gap matters: if some later
+path rethrows a caller-supplied object, the boundary fails silently and the comment says it cannot.
+
+**Not fixed here, deliberately.** `db-errors.ts` is another worktree's active area as of
+2026-09-03, that reviewer already has the finding, and CLAUDE.md's rule is to stay inside your stage
+and talk through artefacts rather than reaching into somebody else's code. This paragraph is the
+artefact. **What this plan must not do is inherit the stronger claim** — D′1's account of the
+boundary is exactly as strong as the paragraph above, and no stronger. The right long-term fix is
+probably to stop describing the freeze as an integrity check *and* an authenticity check, since it
+is only the first; whoever fixes it should say which of the two the code is actually buying.
 
 #### And it surfaced a live instance of 260901d's class, seven times over
 
@@ -1020,9 +1658,79 @@ article". **Rename rather than alias**: an alias is a second name to keep in ste
 `npm run fetch` failing loudly with *"Missing script"* is better than it quietly doing something
 else. Per CLAUDE.md's rename rule, sweep the whole repo for the old name.
 
-**`pdf` takes a local file path**, minting an upload record and enqueuing
+#### `pdf` — spiked 2026-09-03, and it is not a stage CLI at all
+
+**The draft said:** *"`pdf` takes a local file path, minting an upload record and enqueuing
 `{ upload, steps: ["extract"] }` — the same full-ingest shape, entered through an upload instead of
-a URL.
+a URL."* **Four of those clauses are wrong.** The spike ran the whole thing end to end against the
+local database and Supabase Storage — a 1-page PDF ingested to a published revision in 20.1s for
+$0.0142 — so what follows is measured, not read.
+
+**1. `steps: ["extract"]` fails immediately, and `fetch,extract` fails *after paying*.**
+`extract` is not the step that acquires an upload; `fetch` is (`acquireUpload`,
+[`pipeline.ts`](../../src/pipeline.ts)). Measured: `No fetched document for "…" — run the fetch step
+first`, job `error` in 0.16s, leaving an article row and a failed revision behind. With
+`--steps=fetch,extract`, `extract` made its paid model call ($0.0006, 8.3s) and *then* the commit
+threw `PublishRefused: … it has no blocks; it has no tree` — the transcription thrown away with the
+draft. **This is the argument the plan already makes for turning `fetch` into `ingest`, and it
+applies verbatim here.** The plan contradicted itself. The only shape that works is the default
+ingest: `fetch, extract, blocks, hierarchy, assets`.
+
+**2. Mint is two of five steps, not the whole thing.** The CLI must copy `queueAnUpload`'s order —
+mint, **put the bytes**, **claim**, enqueue, **`noteSlug`**. `settleUpload(…, "verified")` runs only
+`if (record.status === "claimed")` ([`pipeline.ts`](../../src/pipeline.ts)), so skipping the claim
+leaves the record `pending` for ever with no slug. **The article is fine and the record silently is
+not** — which is why the spike's first two runs looked like successes.
+
+**3. It needs no grant issuer** — a simplification, measured both ways. Signed grants exist so a
+*browser* can write; a CLI already holds the service key and can
+`blobStore().putIfAbsent(stagingKey(id), …)` directly. Identical result, 0.05s.
+
+**4. `--force` is meaningless for `pdf`.** `enqueue` gives every upload
+`{kind: "minted", slug: slugWithShortId(…)}` unconditionally, so two runs of one file are two
+articles — Greg's own decision, in [`jobs.ts`](../../src/jobs.ts). So `pdf` is a **second** exception
+to *"every command but `fetch` refuses if the reader has no article under that slug"*, and the
+contract above should say so.
+
+**And the finding that outranks all four: `npm run pdf` is the PDF extraction-quality tool, not a
+stage runner.** Today it prints the pages, the chunk plan, and `report(checked)` — the per-chunk
+recall table from [`pdf-score.ts`](../../src/pdf-score.ts) — then the title, the records, mean recall
+over N pages, token counts and retries. **That is where the numbers in `evals/pdf/README.md` came
+from.** The queue path surfaces none of it: the job's entire `detail` for extract is the title.
+Replacing this command with a queue ingest **silently retires the PDF quality tooling**, which is
+not a thing the plan noticed it was proposing.
+
+**Decision: split the name in two, rather than convert it.** The ingest entry point is a new name;
+the quality tool keeps its behaviour under an eval name (`npm run eval:pdf-read`), pointed at
+`output/`. Its file writes are `output/<slug>.html` and `data/<slug>/meta.json` **for a human to
+look at, not store artefacts**, so stage G does not force this and the tool can keep writing them.
+This is a technical fork rather than a product one, so it goes to Sol with the stage rather than to
+Greg — but it is recorded here because "we quietly deleted the PDF eval tooling" is exactly the kind
+of thing a plan should not let happen by omission.
+
+**Two more things the stage inherits:**
+
+- **`blobStore()` falls back to `fsBlobs()` when either Supabase credential is missing**
+  ([`blobs.ts`](../../src/store/blobs.ts)), rather than refusing the way `postgresBlobStore()` does.
+  After stage F removes the flag, `npm run pdf` on a machine with no Supabase would happily write
+  bytes under `data/_blobs/`. **The CLI should ask `postgresBlobStore("npm run pdf")` for its
+  store.** Flagged as a code read, *not* measured — `.env.local` is applied over `process.env`, so
+  the spike could not unset the key to prove it. Worth proving in stage F.
+- **A second test file the plan did not name.**
+  [`stage2c-raw-bytes.test.ts`](../../tests/stage2c-raw-bytes.test.ts) has a describe block *"npm run
+  pdf keeps the original where the reader can reach it"*, and `keepTheOriginal`
+  ([`pdf-read.ts`](../../src/pdf-read.ts)) **has no caller but `main()` and that test** — delete
+  `main()` and it becomes exported dead code with a green test describing a command that no longer
+  exists. `paid-cli-ledger.test.ts` also names `src/pdf-read.ts` in eight places, including an AST
+  gate and negative controls that mutate the source, so it is more than the one-line rewrite the
+  plan implied.
+
+**The measured plumbing cost: ~0.2s**, all of it. Mint 0.05s, PUT 0.04s, claim 0.01s, enqueue 0.01s,
+fetch step 0.12–0.16s. Process wall was 5.0s, of which ~4.5s is module import — which also settles
+the `blocks` spike's *"startup roughly doubles"* note as **a load artefact**: 47s was a box at load
+100. **`pdf` is 3–5 hours of the day and a half, under an hour of it plumbing** — and that estimate
+holds only if the split above is settled before anyone starts.
+
 
 **`npm run labels` is retired**, per the same review. There is no `labels` step and adding one is a
 pipeline redesign to preserve a debugging command: `hierarchy.md` is explicit that hierarchy

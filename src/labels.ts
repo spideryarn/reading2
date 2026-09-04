@@ -41,7 +41,7 @@ import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { parseJsonFrom, stripFence } from "./parse-json.js";
+import { parseJsonAnswer } from "./parse-json.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
 /* **The one thing this file logs**, and only from the checkpoint seam: a
    store that could not be read or written. src/pipeline.ts owns the one line
@@ -1112,12 +1112,12 @@ export function parseShortfall(
  * hand-written parser produces, and it produces it silently.
  */
 function readPairs(raw: string): Map<number, string> {
-  /* `stripFence` then `parseJsonFrom`, never bare `JSON.parse`. The reasoning
-     that used to sit here — including that `redact` is path-based and so reaches
-     neither the message nor the stack, and that src/hierarchy.ts learned this before
-     this file was written without it — is now in src/parse-json.ts §
-     `stripFence`, next to the code it is about. */
-  const parsed = parseJsonFrom<{ labels?: unknown }>(stripFence(raw), "the nav labels");
+  /* `parseJsonAnswer`, never bare `JSON.parse`. The reasoning that used to sit
+     here — including that `redact` is path-based and so reaches neither the
+     message nor the stack, and that src/hierarchy.ts learned this before this
+     file was written without it — is now in src/parse-json.ts, next to the code
+     it is about. */
+  const parsed = parseJsonAnswer<{ labels?: unknown }>(raw, "the nav labels");
   if (!Array.isArray(parsed.labels)) {
     /* No sample of the text. The shape is the whole diagnosis, and a sample
        here would be the same leak by hand that `parseJsonFrom` just prevented. */

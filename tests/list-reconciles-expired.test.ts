@@ -60,7 +60,7 @@ const HOISTED = vi.hoisted(() => {
 });
 
 import { mintId } from "../src/ids.js";
-import { listJobs } from "../src/jobs.js";
+import { listJobs, REQUEUE_BUDGET } from "../src/jobs.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { STEPS } from "../src/pipeline.js";
 import { expireLeaseForTests, forgetForTests, fsJobStore } from "../src/store/jobs-fs.js";
@@ -135,24 +135,82 @@ function aJob(owner: OwnerId): Job {
 async function abandoned(owner: OwnerId): Promise<Job> {
   const job = aJob(owner);
   await fsJobStore.enqueueOrGet(job, { workKey: `k-${job.id}`, reservesName: false });
+  await abandonAgain(job, owner);
+  return job;
+}
+
+/** The same thing to a job that is already in the queue: claim it, then lapse. */
+async function abandonAgain(job: Job, owner: OwnerId): Promise<void> {
   const claimed = await fsJobStore.claim(job.id, owner, mintAttempt(), LEASE, CAP);
   expect(claimed.kind).toBe("claimed");
   expireLeaseForTests(job.id);
   /* The row is untouched and still says `running`, which is exactly the state
      the reader's card is frozen on. */
   expect((await fsJobStore.get(job.id, owner))?.status).toBe("running");
-  return job;
+}
+
+/**
+ * **Use up the job's resumption budget**, so the next lapse is an ending.
+ *
+ * Since 2026-09-03 a lapsed claim with budget left goes back to `queued` on its
+ * own row rather than ending — src/jobs.ts § `REQUEUE_BUDGET`, and
+ * src/store/jobs.ts § `settleExpired` for the contract. So the cases here that
+ * are about an *ending* have to get the job to one, and they say so rather than
+ * quietly assuming the first lapse is fatal, which is what they used to.
+ *
+ * Driven through `listJobs`, not through the store, because the thing under test
+ * in this file is what a reader's poll does.
+ */
+async function spendBudget(job: Job, owner: OwnerId): Promise<void> {
+  for (let i = 0; i < REQUEUE_BUDGET; i++) {
+    await as(owner, () => listJobs());
+    expect((await fsJobStore.get(job.id, owner))?.status).toBe("queued");
+    await abandonAgain(job, owner);
+  }
 }
 
 describe("listing your jobs", () => {
   /**
-   * **The settled version, on the poll the reader is actually looking at.**
+   * **The unfrozen version, on the poll the reader is actually looking at.**
    *
    * Watched red before `listJobs` reconciled at all: the job came back
    * `running`, which is the frozen card this stage exists to unfreeze.
+   *
+   * **What it comes back as changed on 2026-09-03.** It used to be `error` plus
+   * a Retry button; a lapsed claim with budget left is now put back in the queue
+   * on its own row instead, so the reader's next poll drives it on rather than
+   * asking them to press anything — and the job keeps its slug, its article and
+   * its article's checkpoints, which a new job could not. src/jobs.ts §
+   * `REQUEUE_BUDGET`.
    */
-  it("settles a job whose claimant stopped answering, and says so in the same answer", async () => {
+  it("puts a job whose claimant stopped answering back in the queue, in the same answer", async () => {
     const job = await abandoned(ALICE);
+
+    const listed = await as(ALICE, () => listJobs());
+    const seen = listed.find((one) => one.id === job.id);
+    expect(seen?.status).toBe("queued");
+    /* Nothing failed, so the card must not say anything did. */
+    expect(seen?.error).toBeUndefined();
+    expect(seen?.failureKind).toBeUndefined();
+    expect(seen?.slug, "the resumption moved the job to a different article").toBe(job.slug);
+
+    /* And it really is in the store that way, not merely rewritten on the way
+       out. A `listJobs` that patched its own answer would pass the lines above
+       and leave the next reader's card exactly as frozen. */
+    expect((await fsJobStore.get(job.id, ALICE))?.status).toBe("queued");
+  });
+
+  /**
+   * **And the resumptions run out**, which is the other half and the one that
+   * keeps a job that overruns every lease from buying model calls for ever.
+   *
+   * The ending is the one this file used to assert on the first lapse: `error`,
+   * `retry`, and the button. A press of it makes a *new* job with a fresh
+   * budget, so the reader is the outer loop.
+   */
+  it("settles a job that has used up its resumptions, and offers the button", async () => {
+    const job = await abandoned(ALICE);
+    await spendBudget(job, ALICE);
 
     const listed = await as(ALICE, () => listJobs());
     const seen = listed.find((one) => one.id === job.id);
@@ -160,10 +218,6 @@ describe("listing your jobs", () => {
     /* `retry`, so the card offers the button — the whole point of settling it
        rather than leaving it spinning. */
     expect(seen?.failureKind).toBe("retry");
-
-    /* And it really is settled in the store, not merely rewritten on the way
-       out. A `listJobs` that patched its own answer would pass the lines above
-       and leave the next reader's card exactly as frozen. */
     expect((await fsJobStore.get(job.id, ALICE))?.status).toBe("error");
   });
 
@@ -226,7 +280,9 @@ describe("listing your jobs", () => {
 
     const listed = await as(BOB, () => listJobs());
     expect(listed.map((one) => one.id)).not.toContain(hers.id);
-    expect(listed.find((one) => one.id === his.id)?.status).toBe("error");
+    /* `queued`, because a first lapse is now a resumption rather than an ending
+       — what matters here is that Bob's row moved and Alice's did not. */
+    expect(listed.find((one) => one.id === his.id)?.status).toBe("queued");
 
     const untouched = await fsJobStore.get(hers.id, ALICE);
     expect(untouched?.status).toBe("running");
@@ -268,8 +324,12 @@ describe("listing your jobs", () => {
     await as(ALICE, () => listJobs());
     expect(sweep).toHaveBeenCalledTimes(1);
     /* The date is for tests only — production compares against the store's own
-       clock — so the first argument stays `undefined` and the owner is second. */
-    expect(sweep).toHaveBeenCalledWith(undefined, ALICE);
+       clock — so the first argument stays `undefined` and the owner is second.
+       The budget is third, and passing it is what makes a restart mid-ingest a
+       pause rather than an abandoned job: a `listJobs` that dropped it would
+       still sweep, still be owner-scoped, and quietly end every interrupted
+       import. */
+    expect(sweep).toHaveBeenCalledWith(undefined, ALICE, REQUEUE_BUDGET);
   });
 
   /**
@@ -284,8 +344,26 @@ describe("listing your jobs", () => {
    * Watched red twice: once with the log statement removed (empty capture), and
    * once with `{ count }` alone in place of the settlements (the id missing).
    */
-  it("writes down which jobs it settled, ids and endings", async () => {
+  it("writes down which jobs it moved, ids and endings", async () => {
     const job = await abandoned(ALICE);
+
+    /**
+     * **The resumption first, because it is now the common one** — and because
+     * a line calling it a settlement would be reporting an ending that did not
+     * happen, in the one place there is no other account of what did.
+     */
+    const resumed = await logLinesWhile(async () => {
+      await as(ALICE, () => listJobs());
+    });
+    const back = resumed
+      .split("\n")
+      .filter((one) => one.trim() !== "")
+      .map((one) => JSON.parse(one) as Record<string, unknown>)
+      .find((one) => one.where === "list");
+    expect(back?.msg).toBe("put 1 back in the queue — job(s) whose claimant stopped answering");
+    expect(back?.settled).toEqual([{ id: job.id, status: "queued" }]);
+
+    await spendBudget(job, ALICE);
 
     let listed: Job[] = [];
     const lines = await logLinesWhile(async () => {
@@ -307,7 +385,7 @@ describe("listing your jobs", () => {
       .split("\n")
       .filter((one) => one.trim() !== "")
       .map((one) => JSON.parse(one) as Record<string, unknown>)
-      .find((one) => one.msg === "settled 1 job(s) whose claimant stopped answering");
+      .find((one) => one.msg === "settled 1 — job(s) whose claimant stopped answering");
 
     expect(line).toBeDefined();
     expect(line?.count).toBe(1);

@@ -75,8 +75,47 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { localMagicLink } from "./seed-local-session.js";
 
+/**
+ * Which Chrome, and it is not the same one on every machine.
+ *
+ * This was the macOS path as a bare constant until 2026-09-03, which made the
+ * whole instrument unrunnable on the remote box — where there is exactly one
+ * browser, system Chrome at `/usr/bin/google-chrome-stable`, and the reason
+ * [browser-control.md](../docs/project/browser-control.md) says the mechanism
+ * is decided by the machine rather than by preference. The failure was at
+ * least loud (`ENOENT`), which is more than most of the traps on
+ * [performance.md](../docs/project/performance.md) manage.
+ *
+ * `SPIDERYARN_CHROME` wins, so a machine with Chrome somewhere else needs no
+ * edit here.
+ */
 const CHROME =
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  process.env.SPIDERYARN_CHROME ||
+  (process.platform === "darwin"
+    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    : "/usr/bin/google-chrome-stable");
+
+/**
+ * A headless box has no screen, and a tab with no screen is not a fair test.
+ *
+ * Chrome will not start at all without one, and the two ways out are not
+ * equivalent for our purpose. `--headless=new` composites for real but is
+ * still its own rendering path; an **X server** — the box has Xvfb, and
+ * `:99` is the one noVNC shows — gives an ordinary visible tab, which matters
+ * more here than anywhere else: `document.visibilityState` drives the pauses
+ * in `useJobs` and `useNow`, `requestAnimationFrame` does not run at all in a
+ * hidden document, and the single most repeated trap on
+ * [performance.md](../docs/project/performance.md) is a harness that could not
+ * produce a genuinely-visible reading and concluded the renderer was frozen.
+ *
+ * So: an inherited `DISPLAY` is used as-is, and otherwise we go headless and
+ * say so. `--display :99` forces one.
+ */
+const display = (() => {
+  const i = process.argv.indexOf("--display");
+  return i === -1 ? process.env.DISPLAY : process.argv[i + 1];
+})();
+const HEADLESS = process.platform !== "darwin" && !display;
 /**
  * Chrome's debugging port, chosen by Chrome rather than by us.
  *
@@ -112,9 +151,19 @@ async function readDebugPort(profile: string, deadlineMs = 20_000): Promise<numb
   throw new Error(`Chrome never wrote ${file} — did it fail to start?`);
 }
 
+/**
+ * A flag's value, where **another flag is not a value**.
+ *
+ * `--cpu-profile --scroll` used to mean "write the profile to a file called
+ * `--scroll`", and because `has("scroll")` is a separate lookup the run still
+ * scrolled — so the only symptom was a strangely-named file. GPT Sol,
+ * 2026-09-03. A following `--…` now means "no value given".
+ */
 const flag = (name: string, fallback: string): string => {
   const i = process.argv.indexOf(`--${name}`);
-  return i === -1 ? fallback : (process.argv[i + 1] ?? fallback);
+  if (i === -1) return fallback;
+  const next = process.argv[i + 1];
+  return next === undefined || next.startsWith("--") ? fallback : next;
 };
 const has = (name: string): boolean => process.argv.includes(`--${name}`);
 
@@ -149,6 +198,137 @@ const INTERESTING = [
 ] as const;
 
 type Metrics = Record<string, number>;
+
+/**
+ * Refuse to carry a real session anywhere but this machine.
+ *
+ * Checked on the parsed hostname rather than a substring, for the reason
+ * `seed-local-session.ts` gives: `http://localhost.attacker.example/` contains
+ * "localhost" and is not it.
+ */
+function assertLocalOrigin(u: string, flagName: string): void {
+  const { hostname, protocol } = new URL(u);
+  const local = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  if (!local || (protocol !== "http:" && protocol !== "https:")) {
+    throw new Error(
+      `${flagName} points at ${u} — a session may only be carried between local origins`,
+    );
+  }
+}
+
+/** Wait until the page is actually standing on `origin`, or say so and stop. */
+async function waitForOrigin(cdp: Cdp, origin: string, deadlineMs = 15_000): Promise<void> {
+  const until = Date.now() + deadlineMs;
+  while (Date.now() < until) {
+    const at = await cdp.send<{ result: { value: string } }>("Runtime.evaluate", {
+      expression: "location.origin",
+      returnByValue: true,
+    });
+    if (at.result.value === origin) return;
+    await sleep(200);
+  }
+  throw new Error(`the browser never reached ${origin} — nothing was written`);
+}
+
+/** The shape `Profiler.stop` returns. Only the fields we read are named. */
+interface CpuProfile {
+  nodes: {
+    id: number;
+    callFrame: { functionName: string; url: string; lineNumber: number };
+    children?: number[];
+  }[];
+  /** One entry per sample: the id of the node that was on top of the stack. */
+  samples?: number[];
+  /** Deltas in microseconds, one per sample. */
+  timeDeltas?: number[];
+}
+
+/**
+ * Turn a sampling profile into the only two lists worth reading.
+ *
+ * **Self time, not total time.** A flame graph's fat frame is usually
+ * `performSyncWorkOnRoot`, which tells you React was busy and nothing about
+ * why. Self time is where the samples actually landed, so the answer is a
+ * function you can go and open.
+ *
+ * Frames are grouped by `functionName @ file:line`, because the same name in
+ * two files is two functions and summing them would invent a hotspot that is
+ * not there. Our own code is separated from `node_modules` and the browser's
+ * own frames, since "46% of script is ours" and "46% is React's reconciler"
+ * point at completely different fixes.
+ *
+ * **That split is a dev-server fact and says nothing in production.** Vite
+ * serves our modules at `/src/…` in dev; a production build is one
+ * `/assets/main-*.js` containing our code *and* React, and a raw CDP profile is
+ * not source-map-resolved — so every frame looks foreign and the split would
+ * read "0% of it in src/" no matter what was hot. GPT Sol, 2026-09-03. It is
+ * therefore printed only when the frames can carry it, and the ranking — which
+ * is the useful half — is printed either way. Load the `.cpuprofile` in
+ * DevTools to get names back, since DevTools applies the source map.
+ */
+function reportProfile(profile: CpuProfile, out: string): void {
+  if (out) {
+    writeFileSync(out, JSON.stringify(profile));
+    console.log(`cpu profile written to ${out} (load it in DevTools → Performance)`);
+  }
+  const { nodes, samples, timeDeltas } = profile;
+  if (!samples?.length || !timeDeltas?.length) {
+    console.log("  ⚠ profile has no samples — did the window contain any script at all?");
+    return;
+  }
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const self = new Map<string, { ms: number; ours: boolean }>();
+  let total = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const node = byId.get(samples[i] as number);
+    /* `timeDeltas[i]` is the gap *before* sample i, which is the interval the
+       sample stands for. Microseconds. */
+    const ms = (timeDeltas[i] ?? 0) / 1000;
+    if (!node || ms <= 0) continue;
+    const f = node.callFrame;
+    const name = f.functionName || "(anonymous)";
+    /* Chrome's synthetic frames — (program), (idle), (garbage collector) —
+       carry no url. (idle) is not cost and must not be totalled with the rest,
+       or every percentage below is quietly diluted by however long the page
+       spent doing nothing. */
+    if (name === "(idle)" || name === "(program)") continue;
+    const where = f.url ? `${f.url.replace(/^https?:\/\/[^/]+/, "")}:${f.lineNumber + 1}` : "";
+    const ours = where.startsWith("/src/") || where.startsWith("/scripts/");
+    const key = where ? `${name} @ ${where}` : name;
+    const prev = self.get(key);
+    if (prev) prev.ms += ms;
+    else self.set(key, { ms, ours });
+    total += ms;
+  }
+  if (total <= 0) {
+    console.log("  ⚠ profile totalled no script time — the page was idle, or the sampler missed");
+    return;
+  }
+  const ranked = [...self.entries()].sort((a, b) => b[1].ms - a[1].ms);
+  const ourMs = ranked.reduce((n, [, v]) => n + (v.ours ? v.ms : 0), 0);
+  /* Only a dev server can tell our frames from React's; see the docstring. A
+     bundle says so rather than reporting a meaningless 0%. */
+  const bundled = ranked.some(([key]) => key.includes("/assets/"));
+  console.log(
+    `\ncpu profile: ${total.toFixed(0)}ms of script in ${samples.length} samples` +
+      (bundled
+        ? " — built bundle, so src/ cannot be told from node_modules here"
+        : ` — ${((ourMs / total) * 100).toFixed(0)}% of it in src/`),
+  );
+  const show = (label: string, rows: [string, { ms: number }][]) => {
+    if (rows.length === 0) return;
+    console.log(`  ${label}`);
+    for (const [key, v] of rows.slice(0, 12)) {
+      console.log(`    ${v.ms.toFixed(0).padStart(6)}ms ${((v.ms / total) * 100).toFixed(1).padStart(5)}%  ${key}`);
+    }
+  };
+  if (bundled) {
+    show("hottest (self time):", ranked);
+  } else {
+    show("hottest in src/ (self time):", ranked.filter(([, v]) => v.ours));
+    show("hottest elsewhere (self time):", ranked.filter(([, v]) => !v.ours));
+  }
+}
 
 /**
  * One CDP connection, with request ids and a promise per outstanding call.
@@ -300,28 +480,187 @@ interface PageState {
    measurement — it only has to catch "the page is one screen". */
 const window$innerHeightGuess = 800;
 
-async function wheel(cdp: Cdp, ms: number): Promise<void> {
+/**
+ * Where the synthetic pointer sits while it scrolls.
+ *
+ * It was `400, 400` as a bare constant, which is **over `table.zoom`** on the
+ * reading view — and every `<tr>` there carries an `onMouseEnter`. That made
+ * "does hover fire during a scroll?" a question the harness could not be used
+ * to ask, because it had already answered it one way. It can now be moved off
+ * the table (`--wheel-x 5`, the spine rail), and the run prints where the point
+ * actually landed, because a "pointer away" run that was secretly still over
+ * the table looks exactly like a null result.
+ *
+ * The answer, 2026-09-04, for anyone who does not want to re-run it: 77-79
+ * `TableView` renders over the table against 74-76 off it, which is noise, and
+ * a capture-phase listener saw **0** `mouseenter` events from 60 synthetic
+ * wheels against 12 from three real `mouse.move`s. Chrome does not recompute
+ * hover from a compositor scroll under a stationary synthetic pointer.
+ */
+const WHEEL_X = Number(flag("wheel-x", "400"));
+const WHEEL_Y = Number(flag("wheel-y", "400"));
+
+/**
+ * What the wheel loop actually managed to do — and it is not a detail.
+ *
+ * This used to `await` each `Input.dispatchMouseEvent` **before** sleeping, so a
+ * page whose main thread was busy acknowledged more slowly and therefore
+ * received *fewer wheel events*. The slower side of every comparison was being
+ * asked to do less work, which biases every before/after on this harness in the
+ * flattering direction: the 2026-09-03 dev runs dispatched 90 events against the
+ * static clone's 370, and production 325-335 against 370.
+ *
+ * So the send is no longer awaited, and the loop runs on a **fixed schedule**
+ * against its own start time rather than accumulating each iteration's drift.
+ * Both sides of a comparison now get the same number of events. `sendMs*` is
+ * kept, because how long the browser takes to acknowledge input is a real signal
+ * about main-thread load — it is simply no longer allowed to change the input.
+ */
+interface WheelStats {
+  /** How many events went out. Should equal `ms / STEP_MS` on any page now. */
+  dispatched: number;
+  wallMs: number;
+  /** Ack latency, measured but no longer gating the loop. */
+  sendMsTotal: number;
+  sendMsMax: number;
+  /** Acks that alone took longer than the step — main-thread congestion. */
+  sendMsOverStep: number;
+  /** Sends that failed outright. Never seen; here so a silent zero is not one. */
+  failed: number;
+}
+
+async function wheel(cdp: Cdp, ms: number): Promise<WheelStats> {
   const STEP_MS = 60;
-  const until = Date.now() + ms;
+  const start = Date.now();
+  const until = start + ms;
   let deltaY = 120;
   let sinceFlip = 0;
+  const s: WheelStats = {
+    dispatched: 0,
+    wallMs: 0,
+    sendMsTotal: 0,
+    sendMsMax: 0,
+    sendMsOverStep: 0,
+    failed: 0,
+  };
+  const inFlight: Promise<void>[] = [];
   while (Date.now() < until) {
-    await cdp.send("Input.dispatchMouseEvent", {
-      type: "mouseWheel",
-      x: 400,
-      y: 400,
-      deltaX: 0,
-      deltaY,
-      pointerType: "mouse",
-    });
+    const t0 = Date.now();
+    /* Deliberately not awaited — see `WheelStats`. Collected so the run cannot
+       finish with sends still outstanding, and so a rejection is counted rather
+       than becoming an unhandled promise. */
+    inFlight.push(
+      cdp
+        .send("Input.dispatchMouseEvent", {
+          type: "mouseWheel",
+          x: WHEEL_X,
+          y: WHEEL_Y,
+          deltaX: 0,
+          deltaY,
+          pointerType: "mouse",
+        })
+        .then(
+          () => {
+            const took = Date.now() - t0;
+            s.sendMsTotal += took;
+            if (took > s.sendMsMax) s.sendMsMax = took;
+            if (took > STEP_MS) s.sendMsOverStep += 1;
+          },
+          () => {
+            s.failed += 1;
+          },
+        ),
+    );
+    s.dispatched += 1;
     sinceFlip += 1;
     // ~15 seconds in one direction, then back, so we never park at an end.
     if (sinceFlip > 250) {
       deltaY = -deltaY;
       sinceFlip = 0;
     }
-    await sleep(STEP_MS);
+    /* Against `start`, not against now: sleeping a flat `STEP_MS` after
+       whatever the iteration cost is how the old loop drifted. */
+    const nextAt = start + s.dispatched * STEP_MS;
+    const wait = nextAt - Date.now();
+    if (wait > 0) await sleep(wait);
   }
+  await Promise.all(inFlight);
+  s.wallMs = Date.now() - start;
+  return s;
+}
+
+/**
+ * How smooth the scroll actually was, which is the number a reader feels.
+ *
+ * Everything else here is CPU, and CPU is a budget rather than an experience: a
+ * page can sit at 49% of a core and still miss one frame in fourteen, which is
+ * exactly what the reading view was doing on 2026-09-04 while the same document
+ * with its scripts stripped missed one in three hundred. Nobody had looked,
+ * because nothing measured it.
+ *
+ * An rAF loop in the page, recording inter-frame deltas and `scrollY`. It costs
+ * one callback a frame, which is inside the noise of the thing it measures — but
+ * it is *in* both sides of any comparison, so read a difference rather than an
+ * absolute.
+ *
+ * `totalDistance` is the other half of why this exists: it is `dispatched x
+ * deltaY` when every wheel event landed, and less when they did not, which is
+ * how the harness's old ack-gated pacing was caught. See `WheelStats`.
+ */
+async function startFrameProbe(cdp: Cdp): Promise<void> {
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      window.__scrollProbe = { deltas: [], scrollYs: [], running: true };
+      let last = null;
+      function tick(t) {
+        const p = window.__scrollProbe;
+        if (!p || !p.running) return;
+        if (last !== null) p.deltas.push(t - last);
+        last = t;
+        p.scrollYs.push(window.scrollY || document.documentElement.scrollTop || 0);
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })()`,
+  });
+}
+
+interface FrameStats {
+  frames: number;
+  medianMs: number;
+  p95Ms: number;
+  maxMs: number;
+  /** A missed frame at 60Hz. The headline: this over `frames` is the jank rate. */
+  droppedOver32ms: number;
+  /** Every pixel travelled, up and down. `dispatched x 120` when nothing was lost. */
+  totalDistance: number;
+  netDistance: number;
+}
+
+async function stopFrameProbe(cdp: Cdp): Promise<FrameStats> {
+  const r = await cdp.send<{ result: { value: FrameStats } }>("Runtime.evaluate", {
+    expression: `(() => {
+      const p = window.__scrollProbe;
+      if (!p) return { frames: 0, medianMs: 0, p95Ms: 0, maxMs: 0, droppedOver32ms: 0, totalDistance: 0, netDistance: 0 };
+      p.running = false;
+      const deltas = p.deltas.slice().sort((a, b) => a - b);
+      const ys = p.scrollYs;
+      let totalDistance = 0;
+      for (let i = 1; i < ys.length; i++) totalDistance += Math.abs(ys[i] - ys[i - 1]);
+      const pct = (q) => deltas.length ? deltas[Math.min(deltas.length - 1, Math.floor(q * deltas.length))] : 0;
+      return {
+        frames: deltas.length + 1,
+        medianMs: pct(0.5),
+        p95Ms: pct(0.95),
+        maxMs: deltas.length ? deltas[deltas.length - 1] : 0,
+        droppedOver32ms: deltas.filter(d => d > 32).length,
+        totalDistance,
+        netDistance: ys.length ? Math.abs(ys[ys.length - 1] - ys[0]) : 0,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return r.result.value;
 }
 
 async function main(): Promise<void> {
@@ -341,8 +680,11 @@ async function main(): Promise<void> {
      redirect: the app is on PKCE, and a browser that did not start the flow has
      no code verifier to finish it with. Start on the origin so the module graph
      is loaded and the app's own SDK instance is importable. */
-  const link = has("local-sign-in") ? await localMagicLink(url) : null;
-  const startUrl = link ? new URL(url).origin : url;
+  /* Where the signing-in happens, which is not always where the measuring
+     happens. Empty unless `--sign-in-via` is passed; see the carry below. */
+  const via = flag("sign-in-via", "");
+  const link = has("local-sign-in") ? await localMagicLink(via || url) : null;
+  const startUrl = link ? new URL(via || url).origin : url;
 
   let chrome: ChildProcess | null = null;
   let cdp: Cdp | null = null;
@@ -365,9 +707,15 @@ async function main(): Promise<void> {
         "--disable-backgrounding-occluded-windows",
         "--disable-renderer-backgrounding",
         "--disable-background-timer-throttling",
+        // No screen on this machine. See HEADLESS above for why an X display
+        // is preferred when there is one: a headless tab is honest about its
+        // visibility, but an ordinary visible tab is what we ship.
+        ...(HEADLESS ? ["--headless=new", "--disable-gpu"] : []),
         startUrl,
       ],
-      { stdio: "ignore" },
+      // `--display` has to reach the child as an env var; Chrome has no flag
+      // for it. An inherited DISPLAY already arrives this way.
+      { stdio: "ignore", env: display ? { ...process.env, DISPLAY: display } : process.env },
     );
 
     PORT = await readDebugPort(profile);
@@ -411,6 +759,63 @@ async function main(): Promise<void> {
       const said = signIn.result.value;
       if (!said.startsWith("ok:")) throw new Error(`local sign-in failed — ${said}`);
       console.log(`signed in locally (${said.slice(3)})`);
+
+      /* Carry that session to another origin, which is the only way to measure
+         a **production build** signed in.
+
+         The trick above needs `import('/src/web/lib/supabase.ts')`, and only a
+         dev server serves a module at its source path — so against `vite
+         preview` it throws, and "nothing here has been measured on a
+         production build" stayed an open item on performance.md for a week.
+         `--sign-in-via <dev origin>` signs in there and copies the stored
+         token across, which is not the same thing as writing the session
+         ourselves: the string moved is the one the SDK wrote, in whatever
+         format that version of the SDK writes, so it cannot drift out of step
+         with the client that has to read it. Only the *origin* changes, and
+         both are localhost.
+
+         `sb-…-auth-token` is the SDK's own key and its name follows the
+         Supabase URL's host, so it is matched by prefix rather than spelled
+         out here. `spideryarn.lastUser` rides along because the app reads it
+         on boot. */
+      const target = new URL(url).origin;
+      if (via && target !== new URL(via).origin) {
+        /* **Both ends, before anything is minted or moved.** GPT Sol's finding,
+           2026-09-03: `seed-local-session.ts` checks `SUPABASE_URL` and nothing
+           else, so without this a `--url https://elsewhere/` would have copied a
+           live bearer token into a stranger's `localStorage` and then run their
+           JavaScript — and a hostile `--sign-in-via` could serve its own
+           `/src/web/lib/supabase.ts` and be handed the magic-link hash. Both
+           origins are asked separately because they are separately dangerous. */
+        assertLocalOrigin(via, "--sign-in-via");
+        assertLocalOrigin(url, "--url");
+        const dump = await cdp.send<{ result: { value: string } }>("Runtime.evaluate", {
+          /* The session, and the one key the app reads on boot — named, not a
+             namespace sweep, so a future `spideryarn.*` key holding something
+             that should not travel does not start travelling silently. */
+          expression: `JSON.stringify(Object.fromEntries(Object.entries(localStorage)
+            .filter(([k]) => k.startsWith('sb-') || k === 'spideryarn.lastUser')))`,
+          returnByValue: true,
+        });
+        const carried = JSON.parse(dump.result.value) as Record<string, string>;
+        const keys = Object.keys(carried);
+        if (keys.length === 0) throw new Error("nothing to carry — the SDK stored no session");
+        /* Navigate first: `localStorage` is per origin, so this has to be
+           written while the browser is standing on the origin that will read
+           it. Blank rather than the article, so the app does not boot signed
+           out and cache a 401 before the token lands. */
+        await cdp.send("Page.navigate", { url: `${target}/favicon.ico` });
+        /* **Wait for the origin, not for a guess at how long it takes.** A
+           fixed sleep that expires early writes the token back into the origin
+           it came from and measures a signed-out page — which renders fine and
+           costs almost nothing, so it reads as a good result. */
+        await waitForOrigin(cdp, target);
+        await cdp.send("Runtime.evaluate", {
+          expression: `(() => { const s = ${JSON.stringify(JSON.stringify(carried))};
+            for (const [k, v] of Object.entries(JSON.parse(s))) localStorage.setItem(k, v); })()`,
+        });
+        console.log(`carried ${keys.length} storage keys to ${target}`);
+      }
       await cdp.send("Page.navigate", { url });
     }
 
@@ -489,8 +894,59 @@ async function main(): Promise<void> {
     console.log(
       `measuring ${seconds}s${has("hidden") ? " (tab hidden)" : ""}${scrolling ? " while scrolling" : ""}…`,
     );
-    if (scrolling) await wheel(cdp, seconds * 1000);
-    else await sleep(seconds * 1000);
+    /* A sampling profile of the measured window, when asked for.
+
+       **`ScriptDuration` says how much; only this says what.** The split into
+       script / layout / style names a *kind* of work — enough to know whether
+       to look at React or at CSS, and no further. Every scroll investigation
+       on performance.md so far has had to close that last gap by reasoning
+       about the code instead of by measuring it, which is how the diagram
+       memo's `atRow` dependency survived two rounds, and how a grep over the
+       wrong set of files came to read exactly like a grep that found
+       everything.
+
+       Off unless `--cpu-profile` is passed, because the sampler is not free —
+       it perturbs the very number the rest of this script reports. A run that
+       profiles is a run for *finding* the cost; a run that does not is the one
+       whose percentage you quote. Never the same run. */
+    /* Where the wheel pointer actually landed, printed unconditionally when
+       scrolling — because a "pointer away from the table" run that was secretly
+       still over it looks exactly like a null result, and that is the shape
+       docs/reusable/silent-success.md is about. */
+    if (scrolling) {
+      const at = await cdp.send<{ result: { value: unknown } }>("Runtime.evaluate", {
+        expression: `(() => {
+          const t = document.querySelector('table.zoom');
+          const el = document.elementFromPoint(${WHEEL_X}, ${WHEEL_Y});
+          return {
+            x: ${WHEEL_X}, y: ${WHEEL_Y},
+            insideTable: !!(t && el && t.contains(el)),
+            over: el ? el.tagName + (el.className ? '.' + String(el.className).slice(0, 40) : '') : null,
+          };
+        })()`,
+        returnByValue: true,
+      });
+      console.log(`wheel pointer: ${JSON.stringify(at.result.value)}`);
+    }
+    const profiling = has("cpu-profile");
+    if (profiling) {
+      await cdp.send("Profiler.enable");
+      /* 100µs rather than the 1ms default: a scroll's work is thousands of
+         short frame callbacks, and at 1ms most of them fall between samples. */
+      await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
+      await cdp.send("Profiler.start");
+    }
+    let wheelStats: WheelStats | null = null;
+    let frameStats: FrameStats | null = null;
+    if (scrolling) {
+      await startFrameProbe(cdp);
+      wheelStats = await wheel(cdp, seconds * 1000);
+      frameStats = await stopFrameProbe(cdp);
+    } else await sleep(seconds * 1000);
+    if (profiling) {
+      const prof = await cdp.send<{ profile: CpuProfile }>("Profiler.stop");
+      reportProfile(prof.profile, flag("cpu-profile", ""));
+    }
     /* The in-page probe's render counts, when the URL asked for it (`?perf=1`).
        CPU is the number that matters, but it is noisy and it does not say
        *which component* spent it. A render count is exact, causal, and answers
@@ -555,9 +1011,26 @@ async function main(): Promise<void> {
           },
         ]),
       ),
+      /* Null unless `--scroll`. `wheel.dispatched` belongs beside every CPU
+         figure it sits next to: two runs are only comparable if they were given
+         the same input, and until 2026-09-04 the busier one silently got less
+         of it. `frames.droppedOver32ms` is the only number here a reader would
+         recognise. */
+      wheel: wheelStats,
+      frames: frameStats,
     };
 
     console.log(JSON.stringify(result, null, 2));
+    if (frameStats && wheelStats) {
+      const jank = frameStats.frames
+        ? Math.round((frameStats.droppedOver32ms / frameStats.frames) * 1000) / 10
+        : 0;
+      console.log(
+        `scroll: ${wheelStats.dispatched} wheels → ${frameStats.totalDistance}px, ` +
+          `p95 frame ${frameStats.p95Ms}ms, worst ${frameStats.maxMs}ms, ` +
+          `${frameStats.droppedOver32ms}/${frameStats.frames} frames over 32ms (${jank}%)`,
+      );
+    }
     if (json) {
       writeFileSync(json, JSON.stringify(result, null, 2));
       console.log(`wrote ${json}`);

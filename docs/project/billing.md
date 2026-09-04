@@ -318,6 +318,19 @@ resubscribing instead. It is chosen from the **billing row** — a subscription 
 allowlist does not entitle — and not from `used > limit`, which is the same answer most of the time
 and a wrong one the day somebody lowers a tier's `ingests_per_period`.
 
+**"Lifetime" starts at the ledger, not at the account.** `ingest_events` began empty and the
+creating migration carries no backfill, so every article added before billing launched on
+2026-09-02 is grandfathered and counts against nobody. That was deliberate — charging the existing
+readership retrospectively for what it had already added was never the intent — but it means the
+free three are *lifetime from launch* rather than lifetime absolutely, and an early account can hold
+far more than three articles while still having its full free allowance. Worth knowing before
+reading a usage number and concluding the wall has failed. It also bounds what may honestly be said
+on the website: `/pricing` states the rule going forwards and stops short of *"every article you
+have ever added"*, which is false for exactly these accounts —
+[website-text.md § The pricing page](website-text.md#the-pricing-page). Recorded here on 2026-09-03
+after a review found the claim on the page; until then it lived only in
+[the build plan](../plans/260902i-stripe-payments-and-subscription-tiers.md).
+
 ## The first live sale, and the four things it measured
 
 Greg bought Reader on the live account on **2026-09-03 at 11:37 UTC** — `cus_VBwqG2jsgqOKh4`,
@@ -449,6 +462,20 @@ Built 2026-09-03, and it is the half that had been missing: the refusal copy had
 over [`useBilling.ts`](../../src/web/useBilling.ts). It says which plan, how much of it is used, and
 what may be bought, and it has the two buttons that leave for Stripe. There is nothing else to it,
 because there is nothing else to build: Checkout and the Portal are hosted.
+
+**`/pricing` says which plan you are on too**, in one line under the price table — `describePlan`'s
+headline, plus its `detail` in the three states where the headline alone does not say what you are
+on (`lapsed`, a **cancelling** `paid`, and `unknown`), and a link back to `/profile` rather than a
+second Upgrade button. It is the only other place a reader is told their own plan, and it asks the
+route **only when signed in**, by a `readerId` prop from `App.tsx` — an id rather than a boolean, so
+that a direct A→B sign-in cannot leave A's tier and usage under B's session, which is the shelf's
+`<Library key={user.id}>` bug and was this page's too before review caught it.
+[website-text.md § The pricing page](website-text.md#the-pricing-page) has the reasoning.
+
+Note that the cancellation warning above means the `cancelling` detail this page renders is
+**currently always absent in production**: `cancelling` is computed from `cancel_at_period_end`,
+which Stripe no longer sets. So both surfaces stay silent about a plan that is ending, and fixing
+the sync fixes both at once.
 
 **`GET /api/billing/usage`** is what it reads — [`src/billing/summary.ts`](../../src/billing/summary.ts),
 with the wire shape and the words in the pure [`src/billing-plan.ts`](../../src/billing-plan.ts).

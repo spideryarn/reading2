@@ -270,6 +270,40 @@ second, cannot be styled, truncates at the OS's own idea of a line, and does not
 exist at all on a touch device — for a sentence whose job is to explain what a
 picture *is*, that is close to not being there.
 
+#### The Sketch chip also says what was actually drawn, 2026-09-03
+
+Greg:
+
+> The "Down the page is time…" tooltip for Diagram/Sketch mode is annoying — it
+> shows whenever the mouse is hovering over the Sketch diagram. Perhaps append
+> that text instead to the tooltip when I hover over the Sketch button.
+
+It was an SVG `<title>` inside the drawn picture, which is a native tooltip over
+every pixel of it — [tooltips.md](tooltips.md) has why that is the worst case of
+the paragraph above. So the picture's own caption moved to the one card where a
+reader is choosing between pictures: a third paragraph on the Sketch chip's
+hover card, between what the picture is and what it costs, and the only line in
+any of these cards that is not the same words for every article.
+
+It costs one free GET per Diagram open —
+[`useSketchCaption`](../../src/web/useSketch.ts), deliberately not `useSketch`,
+because a second `useSketch` on the page is a second `useAutoRun` and a hover
+card must not be able to start a $0.20 draw.
+
+**And deliberately not gated on the picture**, which is the one thing the review
+changed. Gating it on `kind !== "sketch"` saves a duplicate free GET while
+`SketchView` is reading the same artefact, and costs two real faults: the same
+chip gives a card one paragraph shorter once you have pressed it, and the reset
+that comes with the gate blanks the caption on the way back, so a card opened in
+that window grows a paragraph while you are reading it. ⟨Fable, code review⟩,
+2026-09-03.
+
+The same review took the `title` attribute off the single-scene picture's name
+in the bar ([`SketchView.tsx`](../../src/web/SketchView.tsx)) and gave it the
+card the multi-scene row already had — with the SVG `<title>` gone, that
+attribute was the only copy of the caption left in the panel on a touch device,
+which is the one place a `title` shows nothing at all.
+
 ### And then everything under the chips, 2026-08-30
 
 > add detailed tooltips to the various diagram-buttons etc to explain how things
@@ -1515,9 +1549,11 @@ glossary, and three consequences follow from it rather than from taste:
 - **It is in `FORCE_ONLY_WHEN_NAMED` for a third reason the others do not have**,
   and it is about the clock rather than the money: every step self-aborts at 400s
   inside an 800s invocation that must also fit a `hierarchy` measured at 320s. A
-  positional cascade that swept this in beside `hierarchy` would not waste a call, it
-  would run the invocation out of time — and that fails as a platform kill that
-  takes the whole job rather than as a recorded failure.
+  positional cascade that swept this in beside `hierarchy` would not *merely* waste
+  a call, it would run the invocation out of time — and that fails as a platform
+  kill that takes the whole job rather than as a recorded failure. (The *merely*
+  went missing here and nowhere else, which inverted the sentence;
+  `src/pipeline.ts` § `FORCE_ONLY_WHEN_NAMED` has always had it.)
 
 **The first converted step, and for a while the only one.** Writing a file inside
 `run()` works on a laptop and cannot work through a store that puts the artefact
@@ -1789,13 +1825,61 @@ failure a future model silently ignoring `output_format` would cause.
 **It is the only step whose input is another step's artefact**, and that has two
 consequences worth knowing before touching either.
 
-**It refuses rather than pulls.** `useStepJob` posts `steps: [step]` and pipeline
-order does not put a prerequisite in front of it, so a run whose Sketch is
-**absent, stale, or drawn for a different reader profile** fails with a sentence
-ending *"Draw the Sketch first — it is the chip one to the left"* — always before
-the brief call, so nothing is spent finding out. Not
+**The step refuses rather than pulls, and the panel offers to do both.** A run
+naming `illustrated` alone still fails when the Sketch is **absent, stale, or
+drawn for a different reader profile**, with a sentence ending *"Draw the Sketch
+first — it is the chip one to the left"* — always before the brief call, so
+nothing is spent finding out. What changed on 2026-09-03 is the panel:
+
+> Also, let's have a way to generate it in one click even if there's no Sketch
+> ready yet (it should first trigger that and then append the Illustrated to the
+> queue after it automatically in one click).
+>
+> — Greg, 2026-09-03
+
+**The chain had been refused the day before, and that reasoning is why the button
+looks the way it does** rather than something to delete: *"not
 `enqueue(["sketch", "illustrated"])`, which turns one press into a hidden $0.20
-charge and a three-minute wait that nothing warned about.
+charge and a three-minute wait that nothing warned about"*. **The objection was
+to the hiding, not to the chain** — so the chain landed and the price did not.
+Each of the three refusal branches keeps its explanatory sentence and its "press
+the chip one to the left" route — a reader who would rather look at the Sketch
+before buying a painting is not doing anything wrong — and gains a *"Draw the
+Sketch, then paint"* button, sitting under `SKETCH_THEN_PAINT_COST`
+([`IllustratedView.tsx`](../../src/web/IllustratedView.tsx)), which names both
+prices and both waits and says that Stop takes effect after the step that is
+running. It is built from `SKETCH_PRICE`/`SKETCH_WAIT` and
+`ILLUSTRATED_PRICE`/`ILLUSTRATED_WAIT` rather than from a fifth number, because
+only one of the two sentences is ever on screen at a time — nothing would show
+them disagreeing.
+
+**The chain is the server's, not the browser's.** `drawThenPaint`
+([`useIllustrated.ts`](../../src/web/useIllustrated.ts)) posts one job naming
+both steps and `STEP_ORDER` already puts `illustrated` after `sketch`, so
+`orderSteps` does the sequencing. The alternative — two POSTs sequenced by the
+client — puts the ordering in a tab that can be closed halfway through.
+
+**And it is unforced, deliberately**, which is what makes `stale` and
+`profile-changed` **re-draw rather than adopt**: `stepIsDone` decides whether the
+Sketch half runs, and the sketch step stamps against the same `sourceHash` and
+`profileHash` the route reports those two states from, so a Sketch the panel
+calls out of date is one the step cannot call current.
+
+**The reason written here until 2026-09-03 was wrong**, and the correction is
+left visible because two other copies of it were wrong the same way
+([`useIllustrated.ts`](../../src/web/useIllustrated.ts) and a test's own
+docstring). It said *"forcing would have to name `sketch`, and `cascadeForce`
+sweeps in every step after the first forced one, so a Sketch that was genuinely
+current would be redrawn for nothing"*. A force from that button names
+**`illustrated`** — `useStepJob.start` sends `force: [step]`, its own step — and
+`sketch` comes *before* it, while [`cascadeForce`](../../src/jobs.ts) starts at
+the first forced name and looks only at what follows. Nor could it be swept in
+from further back: **both** steps are in `FORCE_ONLY_WHEN_NAMED`. So the Sketch
+half is unforced whatever that button does, and `stepIsDone` is the only thing
+deciding it. What unforced buys is on the painting half instead — `work_key`
+hashes `force` (`workKeyFor`, [`src/jobs.ts`](../../src/jobs.ts)), so a forced
+press and an unforced one are two keys and two $0.27–$0.40 jobs where the queue
+would otherwise collapse them into one. GPT Sol, reviewing stages 2–3.
 
 Stale and wrong-profile are refused for reasons of their own. A picture painted
 from a stale Sketch is **born stale**, because the panel's `stale` covers the

@@ -18,14 +18,33 @@
  * src/store/blobs.ts § `postgresBlobStore`. Without it the export reads
  * `data/_blobs/` and writes a directory that looks like a complete backup and
  * is not.
+ *
+ * ## And it reads the database you named, which took until 2026-09-03
+ *
+ * The header above worries about writing to the wrong *place* and never worried
+ * about reading from the wrong *database*. This called `loadEnvLocal()` and
+ * nothing else, so `.env.local` beat the command line — which is the file's
+ * documented rule and the right one for the app — and
+ * `DATABASE_URL=<remote> npm run db:export` exported **the laptop**, printing
+ * `✓ <slug>` per article the whole way. A directory that looks like a backup of
+ * production and is a backup of a developer machine, produced by the one tool
+ * anybody reaches for after losing something.
+ * docs/reusable/silent-success.md. Six of eleven `db-*` scripts had already
+ * been given `resolveTargetUrl`; this one had been *named* as sharing the trap
+ * in docs/project/database.md since 2026-09-01 and left alone, which is
+ * docs/plans/260903e-sweep-recorded-rather-than-fixed-defects.md's whole subject.
  */
 
 import { closeDb } from "../src/db/client.js";
 import type { RawSourceStore } from "../src/store/blobs.js";
-import { loadEnvLocal } from "../src/env.js";
+import { withoutPassword } from "../src/db/ssl.js";
+import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
 import { exportArticle, exportBlobStore, exportableSlugs } from "../src/store/export.js";
 import path from "node:path";
 
+/* Kept explicit even though `resolveTargetUrl` calls it too: this script reads
+   other variables out of `.env.local` as well, and the load being visible here
+   is what says so. It memoises, so the second call costs nothing. */
 loadEnvLocal();
 
 const argv = process.argv.slice(2);
@@ -41,6 +60,50 @@ if (!outRoot) {
   );
   process.exit(1);
 }
+
+/**
+ * **The shell's `DATABASE_URL` wins**, as it does for `db-migrate` and
+ * `db-check` and for the same reason: the target of a rollback is an
+ * **argument**, not configuration. src/env.ts § `resolveTargetUrl` holds the
+ * rule and the two camps it settles.
+ *
+ * Below the `--out` check so that a bare `npm run db:export` answers the
+ * question it was actually asked, and above everything that opens anything.
+ */
+const url = resolveTargetUrl({ shellWins: true });
+if (!url) {
+  console.error(
+    "DATABASE_URL is not set.\n" +
+      "  Local: npm run db:start, then it comes from .env.local.\n" +
+      "  See docs/project/supabase-local.md.",
+  );
+  process.exit(1);
+}
+
+/**
+ * **Written back, and this line is the fix rather than the `Target:` one below.**
+ *
+ * Unlike its siblings this script builds no pool of its own: `getDb()`
+ * (src/db/client.ts) and `postgresBlobStore()` (src/store/blobs.ts) each read
+ * `process.env.DATABASE_URL` for themselves, so resolving a URL into a local
+ * `const` and printing it would announce one database and export another —
+ * which is a worse bug than the one being fixed, and the exact shape
+ * docs/reusable/silent-success.md is about. One resolution, written where every
+ * reader of it looks. tests/db-export-target.test.ts asserts a *downstream*
+ * consumer saw this value, not merely that the line was printed.
+ *
+ * Safe after the load above: `loadEnvLocal` memoises, so nothing will put
+ * `.env.local`'s value back over the top of this.
+ */
+process.env.DATABASE_URL = url;
+
+/**
+ * Say out loud which database is about to be read. The same line `db-migrate`
+ * and `db-check` print, and the one CLAUDE.md tells every agent to read instead
+ * of the success line — a rollback that quietly exported the wrong database
+ * announces itself here or not at all.
+ */
+console.log(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)"}`);
 
 /* **Before the database is opened and before anything is written.** The refusal
    is only worth having if it arrives while the output directory is still empty:

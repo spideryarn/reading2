@@ -486,10 +486,13 @@ export function Library({
 
           **`here` because this page is App.tsx's fallback**, exactly as the
           landing page is signed out: a non-administrator at `/admin` gets the
-          shelf, and so does every unrecognised address, because `parseRoute`
-          has no 404. Without this the row offered those readers a Home link to
-          the shelf they were already looking at. GPT Sol, 2026-09-03.
-          SiteFooter.tsx § `here`. */}
+          shelf. Without this the row offered that reader a Home link to the
+          shelf they were already looking at. GPT Sol, 2026-09-03.
+
+          Every unrecognised address landed here too until later the same day,
+          when they got a page of their own — NotFoundPage.tsx. One address
+          still needs this, which is one more than none. SiteFooter.tsx §
+          `here`. */}
       <SiteFooter here="library" />
     </main>
   );

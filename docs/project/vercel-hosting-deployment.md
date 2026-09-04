@@ -64,7 +64,7 @@ earlier and nothing else, while every ingest on the site was dying at step 1.
 get_runtime_logs  projectId, teamId, deploymentId, query: "ENOENT", since: "6h"
 ```
 
-Three things, each learned by getting it wrong first:
+Four things, each learned by getting it wrong first:
 
 - **Scope it to a `deploymentId`, or it times out** and returns *no logs* — which reads exactly like
   finding nothing. Take the id from `/api/health`'s `build.deploymentId`, or from
@@ -79,7 +79,17 @@ Three things, each learned by getting it wrong first:
   `"level":"error"`. Vercel had tagged both `[info/serverless]`, because everything Pino writes goes
   to stdout and Vercel classifies the *stream*, not our JSON. Grep `"level":"error"` as a **string**.
 
-That last one is the dangerous one: it answers a real outage with silence, and silence reads as
+- **A job id will not find the step that failed; a slug fragment will.** Learned chasing the two
+  `MalformedJson` failures of 2026-09-03. `query: "spya-gmftyn"` matches only the
+  `POST /api/jobs/<id>/advance` request-path lines — dozens of them, all `200`, none carrying the
+  error — because the id is in the path but the failure line names the **slug**. `query` on a
+  fragment of the slug (`np5eep`) found it at once. The line to look for is
+  `msg: "step failed: <step> — <slug>"`, and its `err.message` is the only copy of a step's
+  diagnostic that exists anywhere: Sentry withholds that sentence on purpose
+  ([job-failure.ts](../../src/job-failure.ts) § The log, and not Sentry), and nothing writes it to a
+  store. One day of retention, then it is gone.
+
+That `level` one is the dangerous one: it answers a real outage with silence, and silence reads as
 health. Why our lines look like that at all is
 [logging.md § two traps](logging.md#two-traps-worth-knowing-before-they-bite).
 

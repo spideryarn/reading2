@@ -1802,6 +1802,36 @@ export const jobs = spideryarn.table(
     reservesName: boolean("reserves_name").notNull().default(false),
 
     /**
+     * **How many times this job has been given back to the queue after its
+     * claimant stopped answering.** The budget's counter, and nothing else reads
+     * it.
+     *
+     * `settleExpired` (src/store/pg-jobs.ts) used to end every lapsed claim
+     * `error`, so a deploy landing during an ingest — or a step that overran its
+     * lease — cost the reader their job and sent them to the Retry button. It
+     * now puts the job back to `queued` on **this same row** instead, which is
+     * what the filesystem store's `sweepStopped` has always done on restart, and
+     * what keeps the slug, the article and therefore the article's checkpoints.
+     *
+     * **A counter rather than a flag, because without one it never stops.** A
+     * job that overruns every lease would requeue for ever, buying model calls
+     * nobody is waiting for. The budget is the caller's — `REQUEUE_BUDGET` in
+     * src/jobs.ts, beside `LEASE_MS` — and enforcing it is the store's, the same
+     * division `leaseMs` and `maxRunning` already have.
+     *
+     * **On the row, not in memory**, because the claimant that overran and the
+     * process that sweeps it are routinely different machines. Nothing resets
+     * it: a job is one attempt-with-resumptions, and pressing Retry makes a
+     * *new* job with a fresh budget — so the reader is the outer loop, which is
+     * deliberate.
+     *
+     * Defaulted `0` so that every row written before this column existed has a
+     * full budget, which is the harmless direction: it can only offer a resume
+     * that would not otherwise have happened.
+     */
+    requeues: integer("requeues").notNull().default(0),
+
+    /**
      * **`urlKey(url)`** (src/ingest.ts), persisted so that `jobs_active_source`
      * can be an index rather than a comparison in TypeScript.
      *

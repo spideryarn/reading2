@@ -83,6 +83,26 @@ import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSketch } from "./useSketch.js";
 import { UseProfile } from "./WrittenForYou.js";
 
+/**
+ * **What a draw costs and how long it takes, in exactly one place each.**
+ *
+ * *One model call, 121–194 seconds, about $0.20 — measured over seven draws of
+ * five articles* (docs/project/diagram.md § What it costs). Constants rather
+ * than prose because this panel is no longer the only place that has to say it:
+ * Illustrated's *"Draw the Sketch, then paint"* names both halves of what one
+ * press buys, and two sentences about one price are two sentences that can
+ * drift apart. Only one of them would be on screen at a time, so nothing would
+ * ever show the disagreement.
+ *
+ * `SKETCH_WAIT` keeps the wording this panel has always shown rather than the
+ * measured range: *about two minutes* is what a reader has been told since the
+ * mode shipped, and widening it to *two to three* is a copy change nobody has
+ * asked for. The measurement is one link away, above.
+ */
+export const SKETCH_PRICE = "about $0.20";
+/** Measured 121–194 s; the wording is this panel's own. See `SKETCH_PRICE`. */
+export const SKETCH_WAIT = "about two minutes";
+
 /** One drawing primitive as an element. Nothing here knows a colour. */
 function Shape({ p }: { p: Prim }) {
   const style = p.tone === undefined ? undefined : ({ "--cat-rgb": `var(--cat-${p.tone}-rgb)` } as React.CSSProperties);
@@ -625,8 +645,8 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
             is owed the sentence. */}
         <p className="sk-empty-why">
           A model reads the whole article, works out what shape the argument is, and draws that. It
-          is the slowest thing here — about two minutes — and it costs a model call, so it is never
-          drawn until you ask.
+          is the slowest thing here — {SKETCH_WAIT} — and it costs one model call, {SKETCH_PRICE}, so
+          it is never drawn until you ask.
         </p>
         <div className="sk-run">
           <UseProfile
@@ -787,9 +807,43 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
             </TooltipGroup>
           </div>
         ) : (
-          <span className="sk-title" title={sketch.caption}>
-            {sketch.title}
-          </span>
+          /* **One scene, so the row above collapses to a name — and the name
+             carries the same card the row's first chip would have.** It held a
+             `title` attribute until 2026-09-03, which is the regression
+             docs/project/tooltips.md argues against everywhere else in this
+             app: a second's wait, no styling, the OS's idea of a line, and
+             nothing at all on touch. It survived because the SVG `<title>`
+             beside it was showing the same sentence anyway; taking that away
+             (§ no `<title>` here) left this the only copy in the panel, on the
+             device with no hover. ⟨Fable, code review⟩.
+
+             `how` is the overview chip's own sentence, because with one scene
+             this *is* the overview and a reader hovering it is asking the same
+             question. */
+          <Tooltip
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head={sketch.title}
+                what={sketch.caption}
+                how="The whole argument at once, and this article's picture has only the one part — so there is no row of parts to step along and nothing here opens into a scene of its own."
+              />
+            }
+          >
+            {/* **A tab stop, for the reason the lane legend's `<li>` has one**
+                (DiagramPanel.tsx § the lane legend): `Tooltip`'s keyboard route
+                is focus, and a plain `<span>` cannot take it, so without this
+                the caption would be reachable by pointer only — the same
+                failure the `title` attribute had. No key handler goes on it:
+                the arrows belong to the article
+                (tests/arrows-belong-to-the-article.test.tsx). */}
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: see above — the tab stop exists so the card carrying this picture's caption is reachable by keyboard */}
+            <span className="sk-title" tabIndex={0}>
+              {sketch.title}
+            </span>
+          </Tooltip>
         )}
         <Tooltip
           placement="bottom"
@@ -872,11 +926,27 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           onKeyDown={onKey}
           onBlur={() => setHover(null)}
         >
-          <title>{scene.caption ?? sketch.caption}</title>
-          {/* **Everything that is drawn hangs off one group, so the zoom has a
-              single thing to move.** The `<title>` stays outside it: it is what
-              the accessibility tree reads, not something on the canvas, and an
-              animation has no business touching it. */}
+          {/* **No `<title>` here, and that is on purpose.** An SVG `<title>`
+              is a native tooltip over *every pixel of the picture*, so the
+              caption came up wherever the pointer rested — between the boxes,
+              on a box the card below was already describing, over and over as
+              the reader moved. Greg, 2026-09-03: *"The 'Down the page is
+              time…' tooltip for Diagram/Sketch mode is annoying — it shows
+              whenever the mouse is hovering over the Sketch diagram."* It was
+              never carrying the accessible name either: `aria-label` above
+              wins over `<title>` for the *name*, and a `<title>` beside it
+              lands on the *description* — so the tree was announcing the
+              caption twice and this took away the duplicate, not the name.
+              ⟨Fable⟩, 2026-09-03.
+
+              The caption's homes are now the bar above the picture — a scene's
+              own hover card, or the title's, where there is only one scene —
+              and the Sketch chip's card in `DiagramPanel`, which is where Greg
+              asked for it. All three are targets a reader aims at; this was
+              every pixel of the picture.
+
+              **Everything that is drawn hangs off one group, so the zoom has a
+              single thing to move.** */}
           <g ref={attachStage} className="sk-stage">
           {/* biome-ignore lint/suspicious/noArrayIndexKey: a drawing primitive has no identity of its own — `paintScene` is a pure function of the scene, so the whole list is replaced together whenever the scene changes and an index cannot come to mean a different thing. Minting ids would be inventing identity to satisfy a rule about preserving it. */}
           {painted.behind.map((p, i) => (

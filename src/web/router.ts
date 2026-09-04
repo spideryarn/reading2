@@ -141,8 +141,11 @@ export type Route =
    *
    * **Parsing this says nothing about being allowed to see it.** The route
    * exists for everybody; App.tsx renders the shelf instead for anybody who is
-   * not the administrator, which is what this file already does with every
-   * other address it does not recognise. The refusal that matters is the
+   * not the administrator — **and deliberately not the 404 page**, which is
+   * where an address this file does not recognise goes since 2026-09-03. The
+   * reason is docs/project/admin.md's: these pages are in every signed-in
+   * reader's bundle, so 403 is the honest posture and a 404 would be pretending
+   * about something anyone can see is there. The refusal that matters is the
    * server's, on `/api/admin/`.
    */
   | { kind: "admin"; page: AdminPage }
@@ -182,7 +185,28 @@ export type Route =
    * inside a stranger's URL, which ingest then fetches. Their access log, our
    * auth code. GPT Sol found it; docs/plans/260826w-auth-supabase.md has the diagram.
    */
-  | { kind: "callback" };
+  | { kind: "callback" }
+  /**
+   * **An address nobody minted** — `/asdf`, `/read/a/b`, `/privacy/cookies`.
+   * See NotFoundPage.tsx, and docs/plans/260903j-not-found-page.md for the
+   * decision it reverses.
+   *
+   * Every one of these was `library` until 2026-09-03, on the reasoning that a
+   * mistyped address lands you somewhere useful. What that could not do is say
+   * anything: a link that has rotted and a link that was never right both
+   * showed the reader a plausible page at an address that means nothing.
+   *
+   * **It is not the same as "an address you may not use", and neither of those
+   * became this.** `/admin` parses for everybody and App.tsx sends a
+   * non-administrator to the shelf — a deliberate 403 posture rather than a
+   * 404, because the page is in everybody's bundle already and pretending
+   * otherwise buys nothing ([docs/project/admin.md](../../docs/project/admin.md)).
+   * A slug you do not own parses as `read`, and the server's answer lands on
+   * `NotSharedPage`, which says what this page must not: something about a
+   * document. `/admin/nonsense` *is* this, because that is an address rather
+   * than a refusal.
+   */
+  | { kind: "not-found" };
 
 /**
  * The path segment for each view. `article` has none — the reading view is the
@@ -227,18 +251,49 @@ const ADD_PREFIX = "/add/";
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
 
 /**
- * Anything that isn't an article is the library, including nonsense.
+ * Anything that isn't a route we minted is `not-found`, since 2026-09-03.
  *
- * No 404 page, deliberately: a mistyped path lands you on the shelf, which is
- * both a useful place to be and self-explanatory. That covers an unknown third
- * segment too — `/read/foo/nonsense` is the shelf, exactly as `/nonsense` is,
- * rather than an article page with a blank middle.
+ * **This reverses the rule this comment used to state.** It said: *"No 404
+ * page, deliberately: a mistyped path lands you on the shelf, which is both a
+ * useful place to be and self-explanatory."* Greg went to `/asdf`, got the
+ * homepage, and asked where the 404 was — which is the answer to whether it was
+ * self-explanatory. The shelf is a useful place to be and it is silent, so a
+ * link that has rotted and a link that was never right both look like nothing
+ * happened. docs/plans/260903j-not-found-page.md.
+ *
+ * That covers an unknown third segment too — `/read/foo/nonsense` is
+ * `not-found`, exactly as `/nonsense` is, rather than an article page with a
+ * blank middle.
+ *
+ * **Two things still fall through to the shelf, and both are answers rather
+ * than shrugs:** the root, in its three spellings, and `/add` with nothing
+ * after it — the shelf is where the add box is. Each is marked below. An
+ * `/add/` that carries something unusable is neither: it stays an `add` route,
+ * and `AddPage` says what is wrong with the address the reader typed.
  *
  * The trailing slash is optional at both lengths, because Greg wrote the routes
  * as `/read/[slug]/` and `/read/[slug]/metadata/` and a link that gains or
  * loses one should not stop working.
  */
 export function parseRoute(pathname: string): Route {
+  /* **The shelf, and it has to be said out loud now.** It was the fall-through
+     until 2026-09-03, so the root had never needed a branch of its own — and
+     the moment the fall-through became `not-found`, `/` would have become a 404
+     with nothing in the file to notice. The empty string is here for the same
+     reason: `parseRoute("")` is what a caller passes when it has no address,
+     and it means the same thing as `/`.
+
+     **`/index.html` is the third spelling of the root**, and it is here because
+     of what it is rather than because anything links to it: it is the file this
+     whole app is, served under its own name by Vite and by every static host,
+     so a reader who reaches it is at the front door however they got there.
+     Nothing in the app writes it and the manifest starts at `/`, so it had been
+     the shelf only by accident of the fall-through — GPT Sol found it about to
+     go the other way, 2026-09-03. An app that 404s its own entry point is a bug
+     report nobody should have to file. */
+  if (pathname === "/" || pathname === "" || pathname === "/index.html") {
+    return { kind: "library" };
+  }
   // Not under /read/, because it is not about an article. It is the one page in
   // the app with no data behind it at all.
   if (/^\/design\/?$/.test(pathname)) return { kind: "design" };
@@ -257,7 +312,7 @@ export function parseRoute(pathname: string): Route {
   if (new RegExp(`^${PRICING_HREF}/?$`).test(pathname)) return { kind: "pricing" };
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
-     matches nothing here and falls through to the shelf, which is what every
+     matches nothing here and falls through to `not-found`, which is what every
      unrecognised address does. Greg wrote both of these with a trailing slash,
      so both spellings work at both lengths. */
   const adminPath = /^\/admin(?:\/(users|feedback))?\/?$/.exec(pathname);
@@ -286,31 +341,55 @@ export function parseRoute(pathname: string): Route {
     "i",
   ).exec(pathname);
   if (uploaded) return { kind: "add-upload", uploadId: (uploaded[1] as string).toLowerCase() };
-  if (pathname.startsWith(ADD_PREFIX)) {
+  /* **`/add` without the slash is named here**, and it used to be free. It does
+     not start with `ADD_PREFIX`, so it reached the fall-through and got the
+     shelf along with every other unmatched address — which stopped being the
+     same answer on 2026-09-03. Its own test says where it goes and why, so this
+     is the branch that keeps that true rather than a new behaviour. */
+  if (pathname === "/add" || pathname.startsWith(ADD_PREFIX)) {
     const url = addUrlFrom(pathname);
     if (url) return { kind: "add", url };
+    /* **The shelf, not `not-found`**, and the only survivor of that change
+       besides the root. A bare `/add` is not a mistyped address, it is an
+       address with nothing in it yet — and the shelf is where the add box is,
+       so the reader lands on the thing they were reaching for.
+
+       **This is only reached when the segment is empty**, which is `/add` and
+       `/add/` and nothing else: `addUrlFrom` hands back whatever follows the
+       prefix without judging it, so `/add/not a url` is an `add` route and
+       `AddPage` says *that isn't a web address we can fetch* over the thing the
+       reader actually typed. That is a better answer than either of ours, and
+       it is why this branch is not the general "the add address was no good"
+       case. GPT Sol's review, 2026-09-03, where the claim that it was is the
+       finding. */
     return { kind: "library" };
   }
   const m = /^\/read\/([^/]+)(?:\/(metadata|tweets))?\/?$/.exec(pathname);
-  if (!m) return { kind: "library" };
+  if (!m) return { kind: "not-found" };
   // A malformed escape would throw out of decodeURIComponent and take the whole
   // render with it, over a hand-mangled address bar.
   let slug: string;
   try {
     slug = decodeURIComponent(m[1] ?? "");
   } catch {
-    return { kind: "library" };
+    return { kind: "not-found" };
   }
   /* **The same `isSlug` the server uses**, and not merely "is it non-empty".
      `/read/Upper` used to become an article route: the client would ask for it,
      the API would refuse it with the 400 it gives every malformed slug, and the
-     reader would get an error page instead of the shelf. A mistyped address is
-     supposed to land you on the shelf — see this function's header — and an
-     address the server can never answer is a mistyped address. GPT Sol's stage 2
-     design § 5. `src/ingest.ts` is an approved shared import
-     (tests/client-imports.test.ts), so both sides ask one function rather than
-     two regexes drifting apart. */
-  if (!isSlug(slug)) return { kind: "library" };
+     reader would get an error page. An address the server can never answer is a
+     mistyped address — GPT Sol's stage 2 design § 5 — and that premise is
+     unchanged; what changed on 2026-09-03 is where a mistyped address goes.
+     `src/ingest.ts` is an approved shared import (tests/client-imports.test.ts),
+     so both sides ask one function rather than two regexes drifting apart.
+
+     **The edge refuses it too, independently.** `/read/:slug` is rewritten to
+     the serverless function, and `decidePublicPage` (src/public/page.ts)
+     answers 400 for a malformed slug. Not the *same* verdict — that one says
+     the request was malformed, this one says there is nothing here to read —
+     but two refusals rather than the client papering over a server that would
+     have served it. */
+  if (!isSlug(slug)) return { kind: "not-found" };
   // The alternation in the regex is the validation: anything that reached here
   // is a known segment or nothing at all.
   const view = (m[2] ?? "article") as ArticleView;
@@ -359,8 +438,10 @@ export const LIBRARY_HREF = "/";
  *
  * Constants rather than strings at the call sites for the reason `CALLBACK_HREF`
  * below is one: the regex in `parseRoute` and the `href` on a link are the two
- * halves of the same fact, and a link that does not parse is a link that quietly
- * lands on the shelf.
+ * halves of the same fact, and a link that does not parse is a link that goes
+ * to the 404 page. Louder than it used to be — it landed quietly on the shelf
+ * until 2026-09-03 — but a broken link is still a broken link, and the constant
+ * is what stops there being one.
  */
 export const ADMIN_HREF = "/admin";
 export const ADMIN_USERS_HREF = "/admin/users";
@@ -374,7 +455,9 @@ export const LOGIN_HREF = "/login";
  * string was written out at three call sites before the quota's refusal copy
  * needed a fourth (`QuotaNotice` in QuotaNotice.tsx), which is the point at
  * which a typo stops being a broken link and starts being a reader who has just
- * been refused an article landing on the shelf with no way forward.
+ * been refused an article and cannot reach the page that would let them do
+ * anything about it. Since 2026-09-03 they would at least be told — that is the
+ * 404 page — which makes the typo visible rather than harmless.
  */
 export const PROFILE_HREF = "/profile";
 /**
@@ -443,7 +526,9 @@ export function addHref(url: string): string {
  * contain neither, and every URL worth adding contains both.
  *
  * Returns `""` for `/add/` with nothing after it, which `parseRoute` reads as
- * "go to the shelf".
+ * "go to the shelf". **Anything non-empty is handed back unjudged** — this
+ * function does not ask whether it is a URL, and `AddPage` is what tells the
+ * reader it is not.
  */
 export function addUrlFrom(pathname: string, search = "", hash = ""): string {
   if (!pathname.startsWith(ADD_PREFIX)) return "";
@@ -644,6 +729,21 @@ function hasKey(pair: string, name: string): boolean {
 }
 
 /**
+ * One parameter dropped, everything else kept **exactly as it was written**.
+ *
+ * The public form of the pair below, for callers who are rebuilding an address
+ * around a parameter of their own — `blockHref` in BlockRef.ts, which drops
+ * `at` because it is about to write its own. They get `hasKey`'s scar for free,
+ * which is the point of exporting this rather than letting the next caller
+ * write `filter(p => !p.startsWith("at="))` and rediscover `?%61t=`.
+ *
+ * No leading `?` on the way in or out.
+ */
+export function searchWithout(search: string, name: string): string {
+  return withoutPairs(search, (pair) => hasKey(pair, name));
+}
+
+/**
  * Drop the pairs a rewrite is consuming, and keep every other one **exactly as
  * it was written**. Text, never `URLSearchParams` — see `settleAddress`.
  */
@@ -756,6 +856,75 @@ function subscribe(onChange: () => void): () => void {
     window.removeEventListener("popstate", onChange);
     window.removeEventListener(NAVIGATED, onChange);
   };
+}
+
+/**
+ * Hear **every** write to the address bar, including the ones nuqs makes.
+ *
+ * `subscribe` above listens for `popstate` and our own `NAVIGATED`, and misses
+ * the third source entirely: a `useQueryState` setter, which writes through
+ * `history.replaceState` and tells nuqs's own module-level emitter. That gap
+ * does not matter to `useRoute` — a parameter change never changes the pathname
+ * — but it matters a great deal to anything that wants the *query string*,
+ * because **nuqs subscriptions are key-isolated**: its adapter filters
+ * `location.search` down to the keys each hook watches and hands back the
+ * cached snapshot when those are unchanged (`nuqs/dist/adapters/react.js`). So
+ * a component subscribed to `?note=` is not woken by `?dhue=`, and a component
+ * subscribed to nothing is not woken at all.
+ *
+ * That was invisible until `TableView` was memoised. Ten reading parameters are
+ * owned by child components — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`,
+ * `dx`, `dhue`, `referee`, `remember` — and a change to any of them re-renders
+ * only that child. `blockHref` reads the query to build 551 permalinks, and it
+ * used to get away with it because `?at=` re-rendered the whole reading view
+ * once a second while anybody scrolled. Take that away and the staleness stops
+ * healing itself. GPT Sol's audit, 2026-09-04.
+ *
+ * **A patch rather than a list of parameters**, which was the alternative and is
+ * the reason this exists: an inventory of the thirty-five parsers in params.ts
+ * would be correct until somebody adds the thirty-sixth, and the failure would
+ * be a quietly wrong link rather than anything that breaks. This cannot go out
+ * of date.
+ *
+ * Patching `history` is not a new kind of thing here — nuqs's own
+ * `enableHistorySync()` does exactly this, and main.tsx has the long note on
+ * why we opted into it. Two wrappers on one function is fine: both run, in
+ * whichever order they were installed. Called explicitly from main.tsx rather
+ * than at import time, so the order is a decision rather than an accident of
+ * which module was reached first.
+ *
+ * Idempotent, because a second patch would double every event.
+ */
+let historyWatched = false;
+export function watchHistoryWrites(): void {
+  if (historyWatched) return;
+  historyWatched = true;
+  for (const name of ["pushState", "replaceState"] as const) {
+    const real = history[name].bind(history);
+    history[name] = (...args: Parameters<History["pushState"]>) => {
+      real(...args);
+      window.dispatchEvent(new Event(NAVIGATED));
+    };
+  }
+}
+
+/**
+ * The query string, as state — `"?a=1&b=2"`, or `""`.
+ *
+ * A **string** snapshot, so `useSyncExternalStore`'s `Object.is` compares it by
+ * value and a write that changes nothing re-renders nothing. `URLSearchParams`
+ * here would be a fresh object every call and would loop forever, which is the
+ * same trap `useRoute` below records.
+ *
+ * Only useful once `watchHistoryWrites` has been called; without it this hook
+ * would miss every nuqs write, which is most of them.
+ */
+export function useAddressSearch(): string {
+  return useSyncExternalStore(
+    subscribe,
+    () => location.search,
+    () => "",
+  );
 }
 
 /**

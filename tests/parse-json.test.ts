@@ -42,11 +42,18 @@
  * bytes.
  */
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MalformedJson, parseJsonFrom, readJsonOrNull, stripFence } from "../src/parse-json.js";
+import {
+  MalformedJson,
+  objectEnd,
+  parseJsonAnswer,
+  parseJsonFrom,
+  readJsonOrNull,
+  stripFence,
+} from "../src/parse-json.js";
 
 const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -304,6 +311,34 @@ describe("parseJsonFrom", () => {
     expect(prose.message).not.toContain("ZQHELPERDD");
   });
 
+  it("says a complete document with material after it is exactly that", () => {
+    /* Stage 3 of docs/plans/260903k. *"It breaks at position 5409 of 13547
+       characters"* is what the hierarchy failure said, and it is
+       indistinguishable from a syntax error part-way through a document — so it
+       sent that diagnosis chasing a token ceiling for half an hour, when in
+       fact the tree was whole and 8,138 characters of something else followed
+       it. Nothing keeps the response (§ `raw_response` is gone, src/db/schema.ts),
+       so this sentence is the whole of what a future debugger gets. */
+    const err = grab(() => parseJsonFrom('{"a":1} and then ZQHELPEREE', "the model's answer"));
+    expect(err.message).toMatch(/complete/i);
+    expect(err.message).not.toMatch(/breaks at position/);
+    /* And the branch answers its question with a `JSON.parse` of its own, whose
+       error quotes the prefix. That error must go nowhere: no `cause`, nothing
+       in the message, nothing in the stack — the same guarantee as
+       `readJsonOrNull`, for the same reason. */
+    expect(err.cause).toBeUndefined();
+    expect(JSON.stringify({ message: err.message, stack: err.stack })).not.toContain("ZQHELPEREE");
+  });
+
+  it("does not mistake a syntax error part-way through for material after the end", () => {
+    /* The precision guard on the branch above. A sentence that fired on
+       anything carrying an offset would be worse than the one it replaced,
+       because it would be confidently wrong rather than merely vague. */
+    const err = grab(() => parseJsonFrom('{"a" 1, "b": 2} extra', "the model's answer"));
+    expect(err.message).toMatch(/breaks at position/);
+    expect(err.message).not.toMatch(/complete/i);
+  });
+
   it("carries a greppable code rather than relying on the wording", () => {
     // `code` is on src/log.ts's SAFE_ERROR_PROPS allowlist, so it survives into
     // the line; the message wording is not a thing to build a filter on.
@@ -392,10 +427,281 @@ describe("stripFence", () => {
   });
 
   it("leaves prose before the object alone, because parseHits needs it there", () => {
-    /* src/search.ts is the one caller that hunts for the first `{` itself, and
-       it can only do that if this has not already thrown the prose away. */
+    /* `parseHits` in src/search.ts and `parseJsonAnswer` in src/parse-json.ts
+       both hunt for the first `{` themselves, and neither can do that if this
+       has already thrown the prose away. */
     expect(stripFence(`Here you go:\n${F}json\n{"a":1}\n${F}`)).toContain("Here you go:");
   });
+});
+
+/* ------------------------------------------------------------- objectEnd -- */
+
+describe("objectEnd", () => {
+  it("stops at the first structure's own close, ignoring everything after it", () => {
+    expect(objectEnd(`{"a":1}`)).toBe(6);
+    expect(objectEnd(`{"a":1} and then some prose {`)).toBe(6);
+    expect(objectEnd(`[1,2,3] and then some prose`)).toBe(6);
+    expect(objectEnd(`{"a":{"b":[1]}}x`)).toBe(14);
+  });
+
+  it("does not count braces inside a string, which is the whole reason it exists", () => {
+    /* A naive depth count, or a `lastIndexOf("}")`, gets both of these wrong —
+       and the second one is what a gist quoting the article looks like. */
+    expect(objectEnd(`{"gist":"} not the end","n":2} after`)).toBe(29);
+    expect(objectEnd(`{"gist":"say \\"}\\" out loud","n":2} after`)).toBe(34);
+  });
+
+  it("answers -1 when the structure never closes, which is the cut-off case", () => {
+    expect(objectEnd(`{"a": "unterminated`)).toBe(-1);
+    expect(objectEnd(`{"a":[1,2`)).toBe(-1);
+  });
+});
+
+/* -------------------------------------------------------- parseJsonAnswer --
+   Eleven stages used to spell `parseJsonFrom(stripFence(raw), …)`, which
+   assumes the model's JSON *is* the whole response. On 2026-09-03 the
+   hierarchy and timeline steps both died in production because it is not:
+   prose before the fence in one, 8,138 characters after a complete tree in the
+   other. docs/plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md. */
+
+/** The two production shapes, and the neighbours they sit between. */
+const WRAPPED: ReadonlyArray<readonly [string, string]> = [
+  // The timeline failure: the fence is not at index 0, so nothing is stripped
+  // and the first character is a letter.
+  ["prose before a fenced document", `Here you go:\n${F}json\n{"a":1}\n${F}`],
+  // The hierarchy failure: the close fence is not at the very end, so it
+  // survives `stripFence` and lands after a complete document.
+  ["a close fence followed by prose", `${F}json\n{"a":1}\n${F}\nHope that helps!`],
+  ["a complete document followed by prose", `{"a":1}\n\nLet me know if I can help.`],
+  ["a fourth backtick on the close fence", `${F}json\n{"a":1}\n${F}\``],
+  ["prose on both sides of the fence", `Sure:\n${F}\n{"a":1}\n${F}\nThat's the lot.`],
+];
+
+describe("parseJsonAnswer", () => {
+  it.each(WRAPPED)("digs the document out of %s", (_name, raw) => {
+    expect(parseJsonAnswer<{ a: number }>(raw, "the model's answer")).toEqual({ a: 1 });
+  });
+
+  it("does not let a brace inside a string value end the document early", () => {
+    /* The case that makes string-aware scanning necessary rather than
+       decorative: every gist, quote and glossary definition is article prose,
+       and article prose contains braces. A depth counter that ignored strings
+       would cut this document off at the `}` inside the gist. */
+    const raw = `{"gist":"a } and a { in the prose","n":2}\n\nDone.`;
+    expect(parseJsonAnswer(raw, "the model's answer")).toEqual({
+      gist: "a } and a { in the prose",
+      n: 2,
+    });
+  });
+
+  it("parses everything that parsed before, and identically", () => {
+    /* The compatibility floor. `AWKWARD` is the eighteen inputs `stripFence`
+       was pinned against; every one of them that `JSON.parse(stripFence(…))`
+       accepts today must come out of `parseJsonAnswer` with the same value. */
+    for (const [name, input] of PARSED_BEFORE) {
+      expect(parseJsonAnswer(input, "the model's answer"), `${name}: changed`).toEqual(
+        JSON.parse(stripFence(input)),
+      );
+    }
+  });
+
+  it("actually does more than the two lines it replaces", () => {
+    /* Test the test — docs/reusable/silent-success.md. The floor above is
+       satisfied perfectly by a function that is still just
+       `parseJsonFrom(stripFence(raw), …)`, so this says the opposite thing:
+       there are inputs the old spelling threw on and this one reads. */
+    expect(PARSED_BEFORE.length).toBeGreaterThan(8);
+    for (const [name, raw] of WRAPPED) {
+      expect(() => JSON.parse(stripFence(raw)), `${name}: the old spelling handled this`).toThrow();
+    }
+  });
+
+  it("still throws MalformedJson on a genuine syntax error, with no content", () => {
+    const err = grab(() =>
+      parseJsonAnswer(`${F}json\n{"a" 1, "note":"ZQANSWERAA"}\n${F}`, "the model's answer"),
+    );
+    expect(err).toBeInstanceOf(MalformedJson);
+    expect(err.message).toContain("the model's answer");
+    expect(err.message).not.toContain("ZQANSWERAA");
+    // src/log.ts follows `cause` chains, so a wrapped SyntaxError would put
+    // V8's quotation back into the line. Same assertion as for `parseJsonFrom`.
+    expect(err.cause).toBeUndefined();
+    expect(JSON.stringify({ message: err.message, stack: err.stack })).not.toContain("ZQANSWERAA");
+  });
+
+  it("still says a truncated answer was cut off, rather than something else", () => {
+    /* The token ceiling, which is a real and different failure: the stages
+       check `stop_reason` first, but a stream that stopped for any other
+       reason mid-object arrives here. Extraction must not turn "it never
+       closed" into "it broke at an offset". */
+    const err = grab(() =>
+      parseJsonAnswer(`${F}json\n{"events": [{"when": "ZQANSWERBB`, "the model's answer"),
+    );
+    expect(err.message).toMatch(/cut off|ends part-way/i);
+    expect(err.message).not.toContain("ZQANSWERBB");
+  });
+
+  it("says an answer that was never JSON was never JSON", () => {
+    const err = grab(() => parseJsonAnswer("I'm sorry, ZQANSWERCC", "the model's answer"));
+    expect(err.message).toMatch(/does not begin/i);
+    expect(err.message).not.toContain("ZQANSWERCC");
+  });
+
+  /* ------------------------------------------------ ambiguity is a failure --
+     The rule these five share: **an answer this cannot read unambiguously
+     throws, and never picks.** Picking the first document is the easy version
+     and it is the one that had to be deleted — see `parseJsonAnswer` in
+     src/parse-json.ts § Why the third one, and docs/reusable/silent-success.md.
+     A refusal costs the reader a Retry click; a wrong pick corrupts an artefact
+     and says nothing. */
+
+  it("refuses two complete documents rather than choosing between them", () => {
+    // Deliberately not `{ a: 1 }`. This test replaces one that asserted
+    // exactly that, which a cross-family review rejected before it shipped.
+    grab(() => parseJsonAnswer(`{"a":1}\n\nOr perhaps:\n{"a":2}`, "the model's answer"));
+  });
+
+  it("refuses a discarded first attempt followed by the real answer", () => {
+    /* The counterexample that decided the policy, in the stage where it does
+       most damage. src/timeline.ts treats zero events as a legitimate result,
+       so "take the first document" stores an article with no timeline, tells
+       nobody, and the reader never learns the answer was thrown away. */
+    const raw = `I first considered {"events":[]}.\nFinal answer:\n{"events":[{"when":"1787"}]}`;
+    const err = grab(() => parseJsonAnswer(raw, "the model's answer"));
+    expect(err).toBeInstanceOf(MalformedJson);
+    /* And the sentence has to be worth reading, because nothing keeps the
+       response: this shape reaches `diagnose` as a complete document plus
+       trailing material, which is exactly what it is. */
+    expect(err.message).not.toContain("1787");
+  });
+
+  it("refuses one complete document followed by a truncated second one", () => {
+    // The other half of the same shape: `{"events":[]}` is whole and `{"events":[`
+    // is not, so a first-document rule would store the empty one as the answer.
+    grab(() => parseJsonAnswer(`{"events":[]}\nActually:\n{"events":[`, "the model's answer"));
+  });
+
+  it("refuses a valid JSON fragment in the preamble ahead of the real document", () => {
+    /* Not the same shape as the two above: here the fragment is a plausible
+       *example*, not a rejected attempt. Both have to fail, and for the same
+       reason — nothing in the response says which one the model meant. */
+    const raw = `The shape is {"a":0} — here is the answer:\n${F}json\n{"a":1}\n${F}`;
+    const err = grab(() => parseJsonAnswer(raw, "the model's answer"));
+    expect(err).toBeInstanceOf(MalformedJson);
+  });
+
+  it("refuses an unclosed brace in the preamble, rather than guessing which brace opens the answer", () => {
+    /* The policy stated as a test name, because the alternative is tempting:
+       walk on to the *next* `{` and try again. That is an unbounded number of
+       parses of a whole answer, and every extra candidate is another chance to
+       return something the model did not mean. `objectEnd` says -1 here — the
+       scan from the stray brace never balances — and -1 is a refusal. */
+    const raw = `Note that the shape is {like this\n${F}json\n{"a":1}\n${F}`;
+    expect(grab(() => parseJsonAnswer(raw, "the model's answer"))).toBeInstanceOf(MalformedJson);
+  });
+
+  it("refuses an array-rooted document rather than returning an object from inside it", () => {
+    /* The same class as the bug this whole change fixes, one level down, and it
+       survived the first version of the fix. The answer here is the ARRAY; the
+       first `{` is inside it, `objectEnd` closes on that inner object, and no
+       second `{` exists to trip the ambiguity check — so the helper handed back
+       `{"a":1}`, a sub-value of the intended document, successfully.
+       `[{"a":1},{"a":2}]` threw only by luck, because it happens to contain a
+       second `{`. A `[` before the first `{` is now a refusal. */
+    const raw = `${F}json\n[{"a":1}]\n${F}\n\nNote.`;
+    expect(grab(() => parseJsonAnswer(raw, "the model's answer"))).toBeInstanceOf(MalformedJson);
+  });
+
+  it("leaves a bare array root exactly as it was, since step one parses the response whole", () => {
+    // No trailing material, so extraction is never reached and today's
+    // behaviour stands. The refusal above is about *digging into* an array.
+    expect(parseJsonAnswer(`[{"a":1}]`, "the model's answer")).toEqual([{ a: 1 }]);
+  });
+
+  it("still reads a document followed by prose containing a footnote marker", () => {
+    /* The other half of a deliberate asymmetry: a `[` **before** the first `{`
+       is a refusal, a `[` **after** the span is ignored. A model's closing
+       remark about an article is full of `[1]`, and refusing on those would
+       throw away the main shape this change exists to read. */
+    expect(parseJsonAnswer(`{"a":1}\n\nSee [1] and [2] for the sources.`, "x")).toEqual({ a: 1 });
+  });
+
+  it("does not go hunting for a root array, because no caller asks for one", () => {
+    /* All eleven prompts ask for a root object — `{"arc":…}`, `{"root":…}`,
+       `{"labels":…}`, `{"tweets":…}`. Scanning for `[` as well would buy
+       nothing and would latch onto the `[1]` of a footnote marker in a
+       preamble, which articles are full of. A bare array with nothing around it
+       still parses, because step one parses the response whole. */
+    expect(parseJsonAnswer(`[1,2,3]`, "the arc response")).toEqual([1, 2, 3]);
+    const trailing = grab(() => parseJsonAnswer(`[1,2,3]\nThat's it.`, "the arc response"));
+    expect(trailing).toBeInstanceOf(MalformedJson);
+    const footnote = grab(() =>
+      parseJsonAnswer(`See [1] below.\n${F}json\n[1,2,3]\n${F}`, "the arc response"),
+    );
+    expect(footnote).toBeInstanceOf(MalformedJson);
+  });
+});
+
+/* --------------------------------------------------- the caller inventory --
+   Every test above exercises the helper. **None of them can notice a stage
+   that never started calling it** — the eleventh file, left on the two lines
+   that failed in production, passes every assertion in this file by not being
+   mentioned in it. So this asserts on the source, which is the only place the
+   answer lives. docs/reusable/silent-success.md § the check that shares an
+   assumption with the code. */
+
+/** The eleven stages that ask a model for JSON. */
+const STAGES = [
+  "arc",
+  "glossary",
+  "hierarchy",
+  "ideas",
+  "illustrated",
+  "labels",
+  "quiz",
+  "quotes",
+  "sketch",
+  "timeline",
+  "tweets",
+] as const;
+
+describe("the stages that parse a model's JSON", () => {
+  it.each(STAGES)("src/%s.ts reads the answer with parseJsonAnswer", async (stage) => {
+    const source = await readFile(path.join(ROOT, "src", `${stage}.ts`), "utf8");
+    /* `[<(]`, because six of the eleven pass a type argument —
+       `parseJsonAnswer<{ ideas?: unknown }>(raw, …)`. A plain
+       `toContain("parseJsonAnswer(")` failed on exactly those six, which is
+       what this test is for. */
+    expect(source).toMatch(/parseJsonAnswer[<(]/);
+    /* The specific two lines this whole change exists to remove. A stage that
+       still spells them is a stage that still dies on a model's preamble,
+       whatever the helper does. */
+    expect(source).not.toMatch(/parseJsonFrom[<(][^)]*stripFence\(/);
+  });
+
+  it("would notice a stage that had not moved", async () => {
+    /* Test the test. `src/search.ts` is the twelfth caller of the same
+       machinery and deliberately does NOT go through the helper — it keeps its
+       own three-way error mapping — so it must fail the loop's first
+       assertion; and the pattern in the second has to match the line it is
+       looking for. If either stops holding, the loop above has stopped
+       discriminating and would pass on a stage that never moved. */
+    const search = await readFile(path.join(ROOT, "src", "search.ts"), "utf8");
+    expect(search).not.toMatch(/parseJsonAnswer[<(]/);
+    expect(`  return parseJsonFrom(stripFence(raw), "x");`).toMatch(
+      /parseJsonFrom[<(][^)]*stripFence\(/,
+    );
+  });
+});
+
+/** Every `AWKWARD` input the two lines this replaces already accepted. */
+const PARSED_BEFORE = AWKWARD.filter(([, input]) => {
+  try {
+    JSON.parse(stripFence(input));
+    return true;
+  } catch {
+    return false;
+  }
 });
 
 /* ---------------------------------------------------------- readJsonOrNull -- */

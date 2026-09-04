@@ -174,8 +174,9 @@ the other docs and to the code. Not descriptions of code, which the code already
 The rules are here; the reasons are behind the links. Several exist because of a specific accident,
 and the write-up is worth reading once.
 
-**This is an alpha, and speed wins.** There are no real users yet, so we optimise for how fast we
-can move. It is not the end of the world if something is briefly broken — a database migration that
+**This is a beta, and speed still wins.** There are real, paying readers since 2026-09-03, but the
+readership is small and knows what it signed up for, so we go on optimising for how fast we can
+move. It is not the end of the world if something is briefly broken — a database migration that
 lands before the code that matches it, and breaks production for the minutes in between, is fine.
 What we are not trading away is design: write code that will still be good to work with in six
 months. It loosens nothing in **Real data belongs to the reader** below.

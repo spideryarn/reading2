@@ -1413,6 +1413,17 @@ export class IdsNotCarried extends Error {
  * every anchor a reader can leave — is a function of the blocks. An empty run is
  * not an article that happens to be short; it is a fetch or an extraction that
  * failed while returning normally.
+ *
+ * **The message is fixed prose around `slug` and must stay that way.** Stage
+ * 3's catch (src/pipeline.ts § `blocks`) forwards it to Sentry under
+ * `{ authored }`, which is the claim that we wrote every character of it;
+ * `slug` is permitted there because docs/project/logging.md permits ids and
+ * slugs outright and `captureFailure` already sends this one as a tag.
+ * Interpolating a stretch of the document, or another error's message, would
+ * break that claim without anything going red.
+ *
+ * The reader is shown `ARTICLE_HAD_NO_TEXT` (src/messages.ts) instead; this
+ * half is the log's.
  */
 export class NoBlocksProduced extends Error {
   constructor(readonly slug: string) {

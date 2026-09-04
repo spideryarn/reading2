@@ -23,13 +23,14 @@
  * permit rather than after made an article of ten small images come back with
  * six of them refused for budget.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Assets } from "../src/assets.js";
 import {
   ASSETS_BUDGET_MS,
   ASSETS_VERSION,
   collectAssets,
+  describeStorageFailure,
   GATE,
   imageUrlsIn,
   MAX_ARTICLE_BYTES,
@@ -44,7 +45,8 @@ import {
   type FetchLike,
 } from "../src/fetch.js";
 import { hashBlocks } from "../src/source-hash.js";
-import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
+import { type BlobHead, CorruptObject, type PutResult, type RawSourceStore } from "../src/store/blobs.js";
+import { supabaseBlobs } from "../src/store/blobs-supabase.js";
 import type { Block } from "../src/types.js";
 
 /* ------------------------------------------------------------------ *
@@ -422,9 +424,304 @@ describe("one bad image never fails the step", () => {
     expect(run.assets.entries.every((e) => e.status === "failed" && e.reason === "storage")).toBe(
       true,
     );
-    /* Deduplicated names, and no message and no URL — a message can carry a
-       key and a URL is somebody's reading. */
-    expect(run.storageErrors).toEqual(["CorruptObject"]);
+    /* Deduplicated, and the message comes too — redacted, because a message
+       can carry a key and a URL is somebody's reading. */
+    expect(run.storageErrors).toEqual([
+      "CorruptObject: the object at sha256/… does not hash to its own name",
+    ]);
+  });
+
+  /**
+   * **The production 415, through the real Storage client.**
+   *
+   * The `sources` bucket on production allowed only `application/pdf` and
+   * `text/html` from 2026-08-27 to 2026-09-03, so every image of every article
+   * ingested there was refused with `415 mime type image/jpeg is not
+   * supported`, marked `failed`, and left hot-linked — and the only trace was
+   * one log line reading `storageErrors: ["Error"]`. A repo-wide config break
+   * was indistinguishable from one publisher being flaky.
+   * docs/plans/260903j-illustrated-415-and-one-click-paint.md.
+   *
+   * So this goes through `supabaseBlobs` itself rather than a fake that throws
+   * a hand-written message: what is being pinned is the *status and reason
+   * reaching the caller*, and half of that is produced by `fail()` in
+   * src/store/blobs-supabase.ts. A fake would pin our own guess at its wording.
+   * `fetch` is stubbed, so this is still offline.
+   */
+  it("hands back the status and the reason when the bucket refuses the mime type", async () => {
+    const refusal = JSON.stringify({
+      statusCode: "415",
+      error: "invalid_mime_type",
+      message: "mime type image/jpeg is not supported",
+    });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      /* `storeRawSource` asks `head` first; nothing is there. */
+      if (url.includes("/object/info/")) return new Response("{}", { status: 404 });
+      if (init?.method === "POST") {
+        return new Response(refusal, {
+          status: 415,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`the test stub was not expecting ${init?.method ?? "GET"} ${url}`);
+    });
+    try {
+      const run = await collectAssets({
+        blocks: [img("https://cdn.test/a.jpg")],
+        fetchImpl: scripted({ "https://cdn.test/a.jpg": JPEG }).impl,
+        blobs: supabaseBlobs("https://proj.supabase.co", "service-key"),
+      });
+      expect(run.failed).toBe(1);
+      expect(reasons(run.assets)).toEqual(["storage"]);
+      expect(run.storageErrors).toEqual([
+        "Storage put failed (415): mime type image/jpeg is not supported",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  /**
+   * **The sneaky case, not the happy one.** Passing the message through is only
+   * safe if the message cannot carry the two things src/log.ts forbids: a
+   * secret, and somebody's reading. Both are reachable — a signed upload grant
+   * is a URL with a JWT in its query string, and an error thrown by anything
+   * holding the image's own address puts a publisher URL in the text. Neither
+   * is hypothetical enough to leave to a comment.
+   */
+  it("keeps URLs and tokens out of the message it hands back, and bounds its length", async () => {
+    const messages = [
+      "Storage put failed (500): upstream refused " +
+        "https://proj.supabase.co/storage/v1/object/sign/sources/sha256/deadbeef.jpeg" +
+        "?token=eyJhbGciOiJIUzI1NiJ9.eyJrIjoic291cmNlcyJ9.c2lnbmF0dXJl",
+      `fetch failed while storing https://cdn.private-letter.test/2026/09/scan.jpeg ${"x".repeat(400)}`,
+      /* A grant token with no URL around it, so the token rule is reddenable on
+         its own rather than riding on the URL rule. */
+      "Storage put failed (400): grant eyJhbGciOiJIUzI1NiJ9.eyJrIjoiZ3JhbnQifQ.c2ln has expired",
+    ];
+    let nth = 0;
+    const leaky: RawSourceStore = {
+      ...fakeBlobs(),
+      async putIfAbsent(): Promise<PutResult> {
+        const message = messages[nth % messages.length];
+        nth += 1;
+        throw new Error(message);
+      },
+    };
+    const run = await collectAssets({
+      blocks: [
+        img("https://cdn.test/a.png"),
+        img("https://cdn.test/b.gif"),
+        img("https://cdn.test/c.jpg"),
+      ],
+      fetchImpl: scripted({
+        "https://cdn.test/a.png": PNG,
+        "https://cdn.test/b.gif": GIF,
+        "https://cdn.test/c.jpg": JPEG,
+      }).impl,
+      blobs: leaky,
+    });
+
+    expect(run.storageErrors).toHaveLength(3);
+    const said = run.storageErrors.join(" | ");
+    expect(said).not.toMatch(/https?:\/\//);
+    expect(said).not.toContain("proj.supabase.co");
+    expect(said).not.toContain("cdn.private-letter.test");
+    expect(said).not.toContain("eyJ");
+    /* Redacted, not swallowed: what actually went wrong is still there. */
+    expect(said).toContain("Storage put failed (500)");
+    expect(said).toContain("fetch failed");
+    expect(said).toContain("has expired");
+    for (const one of run.storageErrors) expect(one.length).toBeLessThanOrEqual(200);
+  });
+
+  /**
+   * **Deduplication stopped bounding the array when the message came along.**
+   *
+   * `err.name` collapsed every corrupt object in an article to the single entry
+   * `"CorruptObject"`, so `new Set` was a bound as well as a tidy-up. A message
+   * is not like that: `CorruptObject` embeds the key it is complaining about
+   * (src/store/blobs.ts § `CorruptObject`), so N of them are N distinct
+   * ~200-char strings, all in one pino line. The cardinality is the
+   * environment's to choose now, which it never was before.
+   */
+  it("bounds how many distinct failures it hands back, and says how many it dropped", async () => {
+    const urls = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `https://cdn.test/n${i}.png`);
+    let nth = 0;
+    const allDifferent: RawSourceStore = {
+      ...fakeBlobs(),
+      async putIfAbsent(key): Promise<PutResult> {
+        nth += 1;
+        /* The real shape: one message per object, each naming its own key. */
+        throw new CorruptObject(key);
+      },
+    };
+    const run = await collectAssets({
+      blocks: urls.map((u) => img(u)),
+      /* Distinct bytes per image, so each lands on its own canonical key and
+         so each message is genuinely different. */
+      fetchImpl: scripted(Object.fromEntries(urls.map((u, i) => [u, new Uint8Array([...PNG, i])])))
+        .impl,
+      blobs: allDifferent,
+    });
+
+    expect(run.failed).toBe(8);
+    expect(nth).toBe(8);
+    /* Five of them, plus a line saying what is missing — never all eight. */
+    expect(run.storageErrors).toHaveLength(6);
+    expect(run.storageErrors.at(-1)).toBe("+3 more");
+    for (const one of run.storageErrors.slice(0, -1)) {
+      expect(one.startsWith("CorruptObject: The object at ")).toBe(true);
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The sanitizer itself
+ * ------------------------------------------------------------------ */
+
+/**
+ * **The redactor, driven directly, on the shapes it is wrong about.**
+ *
+ * The test above throws real errors through `collectAssets`, which is what
+ * proves the wiring — but an `Error` normalises `name` and `message` on the way
+ * through, and the holes GPT Sol found on 2026-09-03 were all in the parts that
+ * are not the message:
+ *
+ *  - `name` was never redacted **and** the empty-message path returned it
+ *    without the length cap, so a publisher URL in `err.name` came out whole,
+ *    539 characters of it;
+ *  - the token rule only knew JWTs beginning `eyJ`, so `sb_secret_…` — the
+ *    shape of a current Supabase service key — went straight through;
+ *  - the URL rule required a scheme, so `//cdn.private-letter.test/…` did too.
+ *
+ * Each case below reddens on the removal of exactly one rule. The order that
+ * makes them all work is: compose the whole line first, redact *that*, then
+ * slice — redacting the parts and slicing the join is how a cap gets skipped
+ * and a field gets missed.
+ */
+describe("what a storage failure is allowed to say", () => {
+  const MAX = 200;
+  /** An error is not always an `Error`; anything can be thrown. */
+  const thrown = (name: string, message: string) => ({ name, message });
+
+  it("keeps the status, which is the whole difference between them and us", () => {
+    expect(describeStorageFailure(new Error("Storage put failed (415): mime type image/jpeg is not supported"))).toBe(
+      "Storage put failed (415): mime type image/jpeg is not supported",
+    );
+  });
+
+  /**
+   * **These assert the whole line, not `not.toContain`.**
+   *
+   * A rule that takes a *fragment* of its target strands the rest and leaves
+   * the next rule nothing to recognise — which is how the `eyJ` rule sat in
+   * front of the generic one for an afternoon, redacting two segments of a
+   * three-segment token and passing every `not.toContain` written for it. The
+   * needle you thought to name being gone is not the same as nothing being
+   * left. Equality is the only assertion that can see a survivor.
+   */
+  it("redacts the name too, not only the message", () => {
+    const said = describeStorageFailure(
+      thrown("https://cdn.private-letter.test/2026/09/scan.jpeg", "could not be stored"),
+    );
+    expect(said).toBe("<url> could not be stored");
+  });
+
+  it("caps the line even when there is no message at all", () => {
+    /* The `if (!safe) return name` early return skipped the slice as well as
+       the redaction, so this was one 539-character entry in a pino line. */
+    const said = describeStorageFailure(thrown(`FetchOf ${"publisher.example/".repeat(40)}`, ""));
+    expect(said.length).toBeLessThanOrEqual(MAX);
+  });
+
+  it("redacts a Supabase key in its current shape, not only a JWT", () => {
+    const said = describeStorageFailure(
+      new Error("Storage put failed (401): sb_secret_SUPERSECRETVALUE1234 was rejected"),
+    );
+    expect(said).toBe("Storage put failed (401): <token> was rejected");
+  });
+
+  it("redacts an ordinary URL, whatever its scheme", () => {
+    const said = describeStorageFailure(
+      new Error("Storage put failed (500): upstream https://cdn.private-letter.test/a.jpeg said no"),
+    );
+    expect(said).not.toContain("private-letter");
+    expect(said).toBe("Storage put failed (500): upstream <url> said no");
+  });
+
+  it("redacts a protocol-relative URL, which has no scheme to match on", () => {
+    const said = describeStorageFailure(
+      new Error("fetch failed for //cdn.private-letter.test/2026/09/scan.jpeg"),
+    );
+    expect(said).toBe("fetch failed for <url>");
+  });
+
+  it("redacts a JWT whose header does not happen to start eyJ", () => {
+    /* `eyJ` is base64 of `{"` — a header with a leading space encodes to
+       `IHsi`, and the anchored rule missed it. Three dot-separated base64url
+       runs is the shape, whatever the first bytes decode to. */
+    const said = describeStorageFailure(
+      new Error("grant IHsiYWxnIjoiSFMyNTYifQ.IHsiayI6ImdyYW50In0.c2lnbmF0dXJlSGVyZQ has expired"),
+    );
+    expect(said).toBe("grant <token> has expired");
+  });
+
+  it("takes such a token WHOLE, leaving no segment of it behind", () => {
+    /* **The ordering bug, in one assertion.** The `eyJ` rule used to run first
+       and ate `<payload>.<signature>` as a two-segment JWS, leaving the header
+       in the log and the generic rule — the one whose comment claims this exact
+       input — with nothing to match. What survived carried no secret, but a
+       rule that does not do what it says is the thing this file's own comments
+       keep warning about. Found by probing, not by reading, 2026-09-03.
+
+       Equality rather than three `not.toContain`s: a missed segment is a
+       *survivor*, so the assertion has to be about the whole line. */
+    expect(
+      describeStorageFailure(
+        new Error("token IHsiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxMjM0NSJ9.SflKxwRJSMeKKF2QT4fwpM expired"),
+      ),
+    ).toBe("token <token> expired");
+  });
+
+  it("takes a five-part token whole too, rather than the first three of it", () => {
+    /* A JWE is header.key.iv.ciphertext.tag. `{2,}` rather than exactly two
+       more dot-groups is what stops two segments being left in the log. */
+    const jwe = [
+      "IHsiYWxnIjoiUlNBLU9BRVAifQ",
+      "QVFJREJBVUdCd2dKQ2dzTQ",
+      "TFRJek5EVTJOemc1TUE",
+      "Y2lwaGVydGV4dGdvZXNoZXJl",
+      "dGFnZ29lc2hlcmVhYWFh",
+    ].join(".");
+    expect(describeStorageFailure(new Error(`grant ${jwe} expired`))).toBe("grant <token> expired");
+  });
+
+  it("redacts a two-segment JWS, which is not three of anything", () => {
+    /* The generic rule cannot reach this one — two segments, and the second is
+       four characters — so the `eyJ` rule earns its place by taking it whole. */
+    expect(describeStorageFailure(new Error("grant eyJhbGciOiJIUzI1NiJ9.c2ln has expired"))).toBe(
+      "grant <token> has expired",
+    );
+  });
+
+  it("redacts a JWT whose middle segment is too short for the generic rule", () => {
+    /* The other half of the same seam: three segments, but one of them is
+       three characters, so only the `eyJ` rule can match — and it has to take
+       all three rather than stopping where the short one starts. */
+    expect(
+      describeStorageFailure(new Error("grant eyJhbGciOiJIUzI1NiJ9.abc.SflKxwRJSMeKKF2QT4fwpM x")),
+    ).toBe("grant <token> x");
+  });
+
+  it("drops the generic name and keeps a real diagnosis", () => {
+    expect(describeStorageFailure(new Error("something went wrong"))).toBe("something went wrong");
+    expect(describeStorageFailure(thrown("CorruptObject", "sha256/abc"))).toBe(
+      "CorruptObject: sha256/abc",
+    );
+    expect(describeStorageFailure(thrown("", ""))).toBe("Error");
+    expect(describeStorageFailure(null)).toBe("Error");
   });
 });
 

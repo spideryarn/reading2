@@ -36,6 +36,7 @@ import { ARMS, armByName, type ArmSpec, type Comparison } from "./arms.js";
 import { defaultCorpus, entryForDir } from "./corpus.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
 import { ArmFailure, runModelArm, type CallStats } from "./model-arms.js";
+import { preflightEfforts, type EffortRecord } from "./preflight.js";
 import { repairedBlockCount, type BuildReport } from "../../src/hierarchy.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
 
@@ -121,6 +122,34 @@ interface RunFile {
   notes: string[];
   arms: ArmSpec[];
   results: ArmResult[];
+  /**
+   * **Every cell this run set out to fill**, written before the first call.
+   *
+   * Without it an interrupted run is indistinguishable from a complete one:
+   * `run.json` is checkpointed after every article × arm, so a panel that dies
+   * on candidate six leaves five results, a well-formed file, and no way for a
+   * later reader — or either verifier — to know that candidates six, seven and
+   * eight were ever supposed to be there. The survivors then get summarised as
+   * "the bake-off", with the arms that failed hardest simply absent. GPT Sol's
+   * review of this change, finding 1, and it is the same shape as everything
+   * else in docs/reusable/silent-success.md: the missing thing looks like the
+   * thing that was never asked for.
+   */
+  expected: { arm: string; slug: string }[];
+  /**
+   * What OpenRouter's catalogue said about each paid model's reasoning ladder,
+   * read immediately before the first call. Archived rather than merely
+   * checked: a results file that says `effort: "low"` is only meaningful
+   * alongside evidence that "low" was a rung this model had on the day.
+   * See preflight.ts.
+   */
+  effortCatalogue?: EffortRecord[];
+  /**
+   * Set only when every expected cell has a result. `verify-costs.ts` and
+   * `verify-zdr.ts` both refuse a run without it, so an incomplete panel cannot
+   * be reconciled, cannot pass, and therefore cannot be quoted.
+   */
+  completedAt?: string;
   /** Only under --sensitivity: the heading rule at other stub thresholds. */
   sensitivity?: SensitivityRow[];
 }
@@ -456,22 +485,37 @@ async function main(): Promise<void> {
   );
   await mkdir(path.join(runDir, "trees"), { recursive: true });
 
-  const runFile: RunFile = {
-    startedAt: new Date().toISOString(),
-    commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8" }).trim(),
-    notes: STANDING_NOTES,
-    arms: [...arms],
-    results: [],
-  };
-  const checkpoint = async () =>
-    writeFile(path.join(runDir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
-
   /* Loaded once, then repeats INTERLEAVED — doc1 r1, doc2 r1, doc3 r1, doc1
      r2, … — and the call order persisted per result, so a drift over the
      minutes of a run (a provider warming a cache, a rate limiter engaging)
      lands across every document's repeats rather than inside one document's. */
   const articles = [];
   for (const dir of articleDirs) articles.push(await loadArticle(dir));
+
+  const runFile: RunFile = {
+    startedAt: new Date().toISOString(),
+    commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8" }).trim(),
+    notes: STANDING_NOTES,
+    arms: [...arms],
+    /* Written before the first call, so the file says what was attempted even
+       if the process dies on cell six of eleven. See `RunFile.expected`. */
+    expected: articles.flatMap((a) => arms.map((arm) => ({ arm: arm.name, slug: a.slug }))),
+    results: [],
+  };
+  const checkpoint = async () =>
+    writeFile(path.join(runDir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
+  await checkpoint();
+
+  /* Before the first penny: does each arm's model actually have the effort the
+     arm asks for? OpenRouter maps an unsupported level onto the nearest one it
+     has, so the alternative to asking is a results file labelled with an effort
+     that never ran. preflight.ts has the reasoning; the answer is archived
+     beside the results because a later reader needs the ladder, not just the
+     rung. */
+  if (arms.some((a) => a.kind !== "headings" && a.kind !== "disk")) {
+    runFile.effortCatalogue = await preflightEfforts(arms);
+    await checkpoint();
+  }
   let callOrder = 0;
   for (let run = 1; run <= repeat; run++) {
     for (const article of articles) {
@@ -569,6 +613,22 @@ async function main(): Promise<void> {
     runFile.sensitivity = await sensitivity(articleDirs);
     await checkpoint();
   }
+
+  /* The marker goes on last, and only if every cell it promised has a row.
+     `--repeat` means one expected cell can have several results, so the test is
+     coverage, not a count. */
+  const filled = new Set(runFile.results.map((r) => `${r.arm} ${r.slug}`));
+  const missing = runFile.expected.filter((e) => !filled.has(`${e.arm} ${e.slug}`));
+  if (missing.length === 0) {
+    runFile.completedAt = new Date().toISOString();
+  } else {
+    console.error(
+      `\n${missing.length} of ${runFile.expected.length} cells produced no result ` +
+        `(${missing.map((m) => `${m.arm}/${m.slug}`).join(", ")}). The run is marked incomplete ` +
+        `and both verifiers will refuse it.`,
+    );
+  }
+  await checkpoint();
 
   console.log(`\nWrote ${path.relative(process.cwd(), runDir)}/`);
 }

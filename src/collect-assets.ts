@@ -406,12 +406,158 @@ export interface AssetsRun {
   /** Bytes actually downloaded. */
   bytes: number;
   /**
-   * The error names behind every `storage` failure, deduplicated, for the
-   * caller to log. Names only — never a message, which can carry a key, and
-   * never a URL, which is somebody's reading.
+   * What went wrong behind every `storage` failure, for the caller to log —
+   * see `describeStorageFailure`. Redacted: no URLs, which are somebody's
+   * reading, and no tokens, which are keys. Deduplicated and capped by
+   * `boundStorageErrors`, so a run of them ends `"+12 more"` rather than
+   * putting twelve more strings in one log line.
    */
   storageErrors: string[];
   elapsedMs: number;
+}
+
+/** How much of a storage failure is worth a log line. */
+const MAX_STORAGE_CHARS = 200;
+
+/** How many *different* ones are worth a log line. */
+const MAX_STORAGE_ENTRIES = 5;
+
+/**
+ * The distinct failures, capped, with a count of what was left out.
+ *
+ * **Deduplication stopped being a bound the moment the message came along.**
+ * `err.name` collapsed every corrupt object in an article to one entry, so
+ * `new Set` bounded the array as a side effect of tidying it. A message does
+ * not collapse: `CorruptObject` names the key it is complaining about
+ * (src/store/blobs.ts § `CorruptObject`), so N of them are N distinct
+ * ~200-char strings, and how many there are is the environment's to choose
+ * rather than ours. The 415 this was written for dedups to one string and is
+ * not the case that needs the cap; a bad backfill is.
+ *
+ * Five, because the question a reader of this line is asking is "is this one
+ * publisher or is it everything", and five answers it.
+ */
+function boundStorageErrors(all: readonly string[]): string[] {
+  const distinct = [...new Set(all)];
+  if (distinct.length <= MAX_STORAGE_ENTRIES) return distinct;
+  /* Said rather than silently dropped: a truncated list that does not admit it
+     is a smaller number reported as the whole number. */
+  return [
+    ...distinct.slice(0, MAX_STORAGE_ENTRIES),
+    `+${distinct.length - MAX_STORAGE_ENTRIES} more`,
+  ];
+}
+
+/**
+ * Everything replaced on the way out, in the order it is applied.
+ *
+ * **Order is part of each rule, not an accident of the list.** The URL rules run
+ * first so that a grant inside a query string is gone before anything has to
+ * recognise it as a token; after that it does not matter which placeholder a
+ * secret ends up under, only that it is one.
+ *
+ * The rule that matters is: **an earlier rule must never take a fragment of what
+ * a later one would take whole.** A partial match strands the rest *and* leaves
+ * the later rule with nothing to recognise, which is the same "a partly redacted
+ * URL is still a URL" failure one level up. It has happened once already, on the
+ * day these were written: the `eyJ` rule ran before the generic one and ate
+ * `<payload>.<signature>` out of
+ * `IHsiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxMjM0NSJ9.SflKxwRJSMeKKF2QT4fwpM` as a
+ * two-segment JWS, leaving the header sitting in the log and the generic rule —
+ * whose whole purpose is that token — unable to fire. Nothing secret survived,
+ * but the clause did not do what its comment said. Found by probing, 2026-09-03.
+ * So the **more general token rule goes first**, and both of them consume as
+ * many dot-separated segments as are there rather than a fixed two.
+ */
+const REDACTIONS: readonly (readonly [RegExp, string])[] = [
+  /* Any scheme, not just http — an error about our own bucket can name a
+     `supabase:` or `postgres:` URL just as happily. */
+  [/\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, "<url>"],
+  /* Protocol-relative, which the rule above cannot see because it has no
+     scheme to anchor on. `//cdn.publisher.test/2026/09/scan.jpeg` is exactly as
+     much of a reading history as the schemeful spelling, and it is what an
+     `<img src="//…">` produces. The lookbehind keeps this off the second half
+     of something that has already been redacted, and off a path like
+     `sha256//x`. GPT Sol, 2026-09-03.
+
+     **`:` is in that lookbehind on purpose.** Without it this rule also ate the
+     `//host/path` out of a schemeful URL, leaving a bare `https:` — redacted,
+     but it made the rule above unreddenable: deleting it broke no test, which
+     is a clause nothing can prove is doing anything
+     (docs/reusable/silent-success.md). Each rule now owns one shape. */
+  [/(?<![A-Za-z0-9.:])\/\/[^\s/]+\.[^\s/]+\S*/g, "<url>"],
+  /* Supabase's current key format, which is not a JWT at all: `sb_secret_…`
+     for the service role and `sb_publishable_…` for the anon key. The rule
+     below would never have matched one. */
+  [/\bsb_[a-z]+_[A-Za-z0-9_-]{8,}/g, "<token>"],
+  /* Any dot-separated run of base64url segments, whatever the first bytes
+     decode to. `eyJ` is only base64 of `{"`, so a header serialised with a
+     leading space encodes to `IHsi` instead and the rule below never sees it.
+     Ten characters a segment because runs that long, three or more of them, are
+     a token and not a sentence; `{2,}` rather than exactly two more so that a
+     five-part JWE goes in one piece instead of leaving two segments behind.
+
+     **Before the `eyJ` rule, and that is load-bearing** — see the header. */
+  [/\b[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,}){2,}\b/g, "<token>"],
+  /* A bare JWT that the rule above is too strict for: the `eyJ` start earns it
+     shorter segments and as few as two of them, which is a JWS. */
+  [/\beyJ[A-Za-z0-9_-]{4,}(?:\.[A-Za-z0-9_-]+)+/g, "<token>"],
+];
+
+/**
+ * What a `storage` failure gets to tell the caller's log.
+ *
+ * **The name alone is not a diagnosis.** Until 2026-09-03 this was
+ * `err.name`, which is `"Error"` for every refusal Storage issues — so a
+ * production `sources` bucket that had allowed only `application/pdf` and
+ * `text/html` since 2026-08-27 refused *every image of every article* with a
+ * 415, and the only trace was one log line reading `storageErrors: ["Error"]`.
+ * A repo-wide config break and one flaky publisher looked identical, for four
+ * days, while the images that step exists to un-hot-link stayed hot-linked.
+ * docs/plans/260903j-illustrated-415-and-one-click-paint.md.
+ *
+ * The message carries the status (`Storage put failed (415): …`, built by
+ * `fail` in src/store/blobs-supabase.ts), which is the whole difference between
+ * "the publisher" and "us", so the status has to survive the redaction.
+ *
+ * **So it is redacted before it goes anywhere**, because src/log.ts forbids two
+ * things and a message can hold either. A signed upload grant is a URL with a
+ * JWT in its query string, and anything thrown while holding the image's own
+ * address puts a publisher URL in the text — which is a reading history one
+ * step removed. Both are replaced wholesale rather than trimmed: a partly
+ * redacted URL is still a URL. `data:` never appears, because `isRehostableUrl`
+ * (src/assets.ts) admits only http and https in the first place.
+ *
+ * Bounded too, because the message is somebody else's and `fail`'s 200-char cap
+ * on a foreign body is not a promise every thrower makes.
+ *
+ * ## Compose, then redact, then slice — and the first version did none of that
+ *
+ * It redacted `message` alone, joined the result to `name`, and returned `name`
+ * on its own whenever the message was empty — skipping the redaction *and* the
+ * cap on that path. `err.name` is not a constant: anything can be thrown, and
+ * `name` is an ordinary writable property, so a publisher URL landing there
+ * came out whole, 539 characters of it, straight into a log line. One string,
+ * redacted as one string, cut once at the end is the only shape where a new
+ * field cannot be forgotten. GPT Sol, reviewing stage 1, 2026-09-03.
+ *
+ * Exported for tests/collect-assets.test.ts, which drives it directly: an
+ * `Error` normalises what you can put in `name`, and the holes were all in the
+ * parts that are not the message.
+ */
+export function describeStorageFailure(err: unknown): string {
+  const thrown = err as { name?: unknown; message?: unknown } | null | undefined;
+  const name = typeof thrown?.name === "string" ? thrown.name.trim() : "";
+  const said = typeof thrown?.message === "string" ? thrown.message.trim() : "";
+  /* `Error: …` says nothing, so the generic name is dropped rather than
+     prefixed; a real one (`CorruptObject`) is the diagnosis and stays. */
+  const whole = said ? (name && name !== "Error" ? `${name}: ${said}` : said) : name;
+
+  let safe = whole;
+  for (const [pattern, replacement] of REDACTIONS) safe = safe.replace(pattern, replacement);
+  /* The cap last, over the whole redacted line, so there is one place a length
+     is decided and it is after everything that can lengthen or shorten it. */
+  return safe.trim().slice(0, MAX_STORAGE_CHARS).trimEnd() || "Error";
 }
 
 /**
@@ -649,12 +795,14 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
          outage, a bug. **Recorded and carried past**, because one image must
          never fail the step.
 
-         The error's *name* is handed back for the caller to log, and nothing
+         What went wrong is handed back for the caller to log, and nothing
          here logs it itself: this module is not in src/log.ts's component list
          and should not be, so the one place that already owns a `pipeline`
          logger does the saying. A corrupt canonical object needs a human, and a
-         count with no name in it would not tell anybody which human. */
-      storageErrors.push((err as Error).name || "Error");
+         count with nothing in it would not tell anybody which human — nor
+         whether a human is needed at all. `describeStorageFailure` above is
+         what makes a message safe to hand over. */
+      storageErrors.push(describeStorageFailure(err));
       fail(url, "storage");
     } finally {
       release();
@@ -731,7 +879,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
     failed,
     deduped,
     bytes: spent,
-    storageErrors: [...new Set(storageErrors)],
+    storageErrors: boundStorageErrors(storageErrors),
     elapsedMs: Date.now() - startedAt,
   };
 }

@@ -1,0 +1,1199 @@
+{
+  "startedAt": "2026-09-03T12:29:23.795Z",
+  "commit": "890d19f6489a7204141fa6c6dc3992bbb5429b5b",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "deepseek-flash",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "glm-flash",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "z-ai/glm-5.3-flash",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "qwen-27b",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "qwen/qwen3.8-27b",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "gemini-flash",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "google/gemini-3.8-flash",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "hunyuan",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "tencent/hy4-preview",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "deepseek-pro",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "deepseek/deepseek-v4-pro-0813",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "grok",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "x-ai/grok-4.3",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "glm",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "z-ai/glm-5.3",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "headings",
+      "kind": "headings",
+      "comparison": "baseline"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "deepseek-flash",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "glm-flash",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "qwen-27b",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "gemini-flash",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "hunyuan",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "deepseek-pro",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "grok",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "glm",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "smart-low",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "headings",
+      "slug": "gwern-scaling-long"
+    }
+  ],
+  "results": [
+    {
+      "arm": "deepseek-flash",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "chat wire returned no message content",
+      "calls": []
+    },
+    {
+      "arm": "glm-flash",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 137
+        },
+        "parts": {
+          "count": 15,
+          "words": [
+            899,
+            166,
+            320,
+            659,
+            212,
+            1343,
+            189,
+            2511,
+            1553,
+            1692,
+            1,
+            3074,
+            5,
+            6,
+            7
+          ],
+          "balanceCv": 1.1318970978334224
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.9370629370629371
+        },
+        "fanout": {
+          "mean": 3.6481481481481484,
+          "max": 26,
+          "within5to9": 0.18518518518518517
+        },
+        "headings": {
+          "boundaries": 42,
+          "boundariesOnHeadings": 0.40476190476190477,
+          "headingsCut": 0.7083333333333334,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.5,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 54,
+          "meanWords": 3.3703703703703702,
+          "within2to6": 0.8703703703703703,
+          "copiedHeadings": 18,
+          "retention": 0.8023148148148148
+        },
+        "gists": {
+          "count": 54,
+          "coverage": 1,
+          "meanWords": 23.703703703703702,
+          "multiSentence": 0.018518518518518517,
+          "templateRepetition": 0.09259259259259259,
+          "retention": 0.7678032626192242
+        }
+      },
+      "calls": [
+        {
+          "ms": 131119,
+          "inputTokens": 19095,
+          "outputTokens": 6677,
+          "reasoningTokens": 1886,
+          "generationId": "gen-1788438941-oFoxpVBKMvLAkybmlicq",
+          "costUsd": 0.003101375,
+          "providerCostUsd": 0.003101375,
+          "upstream": "Z.AI"
+        }
+      ],
+      "repaired": {
+        "ranges": 4,
+        "blocks": 5,
+        "largest": 2,
+        "where": [
+          "root > child 11 (overlap, 1)",
+          "root > child 10 > child 4 (over, 1)",
+          "root > child 12 > child 2 (gap, 1)",
+          "root > child 12 > child 4 (gap, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "qwen-27b",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The node at root > child 2 > child 1 has a range that runs backwards — its start block comes 1 block(s) after its end block in the article.",
+      "calls": [
+        {
+          "ms": 156203,
+          "inputTokens": 19732,
+          "outputTokens": 13646,
+          "reasoningTokens": 11108,
+          "generationId": "gen-1788439073-wJFifcB74xTAWhaQ5GZa",
+          "costUsd": 0.0349542,
+          "providerCostUsd": 0.0349542,
+          "upstream": "Parasail"
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 9,
+        "largest": 4,
+        "where": [
+          "root > child 2 (gap, 4)",
+          "root > child 6 (overlap, 1)",
+          "root > child 1 > child 2 (short, 4)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 2 > child 1"
+        ]
+      }
+    },
+    {
+      "arm": "gemini-flash",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 4,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 6,
+          "words": [
+            2256,
+            1532,
+            2511,
+            1553,
+            1692,
+            3093
+          ],
+          "balanceCv": 0.27187870678638093
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.766666666666667,
+          "max": 19,
+          "within5to9": 0.5333333333333333
+        },
+        "headings": {
+          "boundaries": 22,
+          "boundariesOnHeadings": 0.6363636363636364,
+          "headingsCut": 0.5833333333333334,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.5,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 30,
+          "meanWords": 2.7666666666666666,
+          "within2to6": 0.8333333333333334,
+          "copiedHeadings": 14,
+          "retention": 0.5989583333333334
+        },
+        "gists": {
+          "count": 30,
+          "coverage": 1,
+          "meanWords": 16.366666666666667,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5071861471861472
+        }
+      },
+      "calls": [
+        {
+          "ms": 18276,
+          "inputTokens": 19657,
+          "outputTokens": 1816,
+          "reasoningTokens": 0,
+          "generationId": "gen-1788439229-0lavd0vzmdLwHS45nndW",
+          "costUsd": 0.02155275,
+          "providerCostUsd": 0.02155275,
+          "upstream": "Google"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "hunyuan",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 5,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 15,
+          "words": [
+            899,
+            166,
+            320,
+            659,
+            212,
+            1343,
+            189,
+            2511,
+            1553,
+            1692,
+            1,
+            3074,
+            5,
+            6,
+            7
+          ],
+          "balanceCv": 1.1318970978334224
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3.86,
+          "max": 16,
+          "within5to9": 0.34
+        },
+        "headings": {
+          "boundaries": 33,
+          "boundariesOnHeadings": 0.7272727272727273,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.74,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 50,
+          "meanWords": 2.68,
+          "within2to6": 0.76,
+          "copiedHeadings": 37,
+          "retention": 0.7564102564102565
+        },
+        "gists": {
+          "count": 50,
+          "coverage": 1,
+          "meanWords": 17.56,
+          "multiSentence": 0,
+          "templateRepetition": 0.26,
+          "retention": 0.6000596462361169
+        }
+      },
+      "calls": [
+        {
+          "ms": 346235,
+          "inputTokens": 19093,
+          "outputTokens": 25056,
+          "reasoningTokens": 21302,
+          "generationId": "gen-1788439247-ml4Liz9tMLgOuU5keMqf",
+          "costUsd": 0.078588618,
+          "providerCostUsd": 0.078588618,
+          "upstream": "Tencent"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "deepseek-pro",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 6,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "chat wire returned no message content",
+      "calls": []
+    },
+    {
+      "arm": "grok",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 7,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 6,
+          "words": [
+            2044,
+            212,
+            1343,
+            2700,
+            3246,
+            3092
+          ],
+          "balanceCv": 0.5053804214828701
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.8601398601398601
+        },
+        "fanout": {
+          "mean": 8.526315789473685,
+          "max": 30,
+          "within5to9": 0.42105263157894735
+        },
+        "headings": {
+          "boundaries": 13,
+          "boundariesOnHeadings": 0.8461538461538461,
+          "headingsCut": 0.4583333333333333,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.631578947368421,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 19,
+          "meanWords": 3.3157894736842106,
+          "within2to6": 0.8421052631578947,
+          "copiedHeadings": 11,
+          "retention": 0.78125
+        },
+        "gists": {
+          "count": 19,
+          "coverage": 1,
+          "meanWords": 17.894736842105264,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5949061086831985
+        }
+      },
+      "calls": [
+        {
+          "ms": 21558,
+          "inputTokens": 18765,
+          "outputTokens": 2567,
+          "reasoningTokens": 1111,
+          "generationId": "gen-1788439605-xeCidf9olrjXlMXLb56I",
+          "costUsd": 0.02967215,
+          "providerCostUsd": 0.02967215,
+          "upstream": "xAI"
+        }
+      ],
+      "repaired": {
+        "ranges": 7,
+        "blocks": 10,
+        "largest": 2,
+        "where": [
+          "root > child 2 (gap, 2)",
+          "root > child 4 (gap, 2)",
+          "root > child 1 > child 3 (short, 2)",
+          "root > child 6 > child 2 (overlap, 1)",
+          "root > child 6 > child 3 (overlap, 1)",
+          "root > child 6 > child 4 (overlap, 1)",
+          "root > child 6 > child 5 (overlap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 1 > child 3",
+          "root > child 4",
+          "root > child 5",
+          "root > child 6",
+          "root > child 6 > child 5"
+        ]
+      }
+    },
+    {
+      "arm": "glm",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 8,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            899,
+            1145,
+            1555,
+            2700,
+            3245,
+            3075,
+            18
+          ],
+          "balanceCv": 0.628090426359679
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.986013986013986
+        },
+        "fanout": {
+          "mean": 5.333333333333333,
+          "max": 16,
+          "within5to9": 0.3939393939393939
+        },
+        "headings": {
+          "boundaries": 25,
+          "boundariesOnHeadings": 0.84,
+          "headingsCut": 0.875,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.7878787878787878,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 33,
+          "meanWords": 2.393939393939394,
+          "within2to6": 0.7272727272727273,
+          "copiedHeadings": 25,
+          "retention": 0.625
+        },
+        "gists": {
+          "count": 33,
+          "coverage": 1,
+          "meanWords": 23.78787878787879,
+          "multiSentence": 0,
+          "templateRepetition": 0.12121212121212122,
+          "retention": 0.6851918312204476
+        }
+      },
+      "calls": [
+        {
+          "ms": 83198,
+          "inputTokens": 19096,
+          "outputTokens": 8516,
+          "reasoningTokens": 5640,
+          "generationId": "gen-1788439627-TKcPyuUFJ4Dn2dthGGNi",
+          "costUsd": 0.0642048,
+          "providerCostUsd": 0.0642048,
+          "upstream": "BaseTen"
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 1,
+        "largest": 1,
+        "where": [
+          "root > child 6 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 3 > child 3",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 4 > child 5",
+          "root > child 7"
+        ]
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 9,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 11,
+          "words": [
+            1065,
+            320,
+            659,
+            212,
+            1343,
+            189,
+            2511,
+            1553,
+            1692,
+            3076,
+            17
+          ],
+          "balanceCv": 0.8332418380992219
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.108695652173913,
+          "max": 14,
+          "within5to9": 0.2826086956521739
+        },
+        "headings": {
+          "boundaries": 33,
+          "boundariesOnHeadings": 0.45454545454545453,
+          "headingsCut": 0.625,
+          "l1OnHeadings": 0.9,
+          "sourceHeadingShare": 0.32608695652173914,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 46,
+          "meanWords": 2.5869565217391304,
+          "within2to6": 0.8478260869565217,
+          "copiedHeadings": 15,
+          "retention": 0.6827956989247312
+        },
+        "gists": {
+          "count": 46,
+          "coverage": 1,
+          "meanWords": 18.02173913043478,
+          "multiSentence": 0,
+          "templateRepetition": 0.08695652173913043,
+          "retention": 0.5048051259624148
+        }
+      },
+      "calls": [
+        {
+          "ms": 76018,
+          "inputTokens": 28625,
+          "outputTokens": 7699,
+          "reasoningTokens": 3054,
+          "generationId": "gen-1788439710-t4AcYHpTDmIxddJ3NYvt",
+          "costUsd": 0.13424,
+          "providerCostUsd": 0.13424,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 9,
+        "blocks": 8,
+        "largest": 1,
+        "where": [
+          "root > child 4 (overlap, 1)",
+          "root > child 11 (gap, 1)",
+          "root > child 4 > child 1 (gap, 1)",
+          "root > child 8 > child 1 (gap, 1)",
+          "root > child 9 > child 1 (gap, 1)",
+          "root > child 10 > child 2 (gap, 1)",
+          "root > child 10 > child 6 (short, 1)",
+          "root > child 11 > child 2 (gap, 1)",
+          "root > child 11 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 11 > child 1",
+          "root > child 11 > child 2",
+          "root > child 11 > child 3"
+        ]
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 10,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            1065,
+            979,
+            1555,
+            2700,
+            3245,
+            3075,
+            18
+          ],
+          "balanceCv": 0.6271629416804435
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.333333333333333,
+          "max": 18,
+          "within5to9": 0.5454545454545454
+        },
+        "headings": {
+          "boundaries": 24,
+          "boundariesOnHeadings": 0.7083333333333334,
+          "headingsCut": 0.7083333333333334,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.42424242424242425,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 33,
+          "meanWords": 2.8181818181818183,
+          "within2to6": 0.8484848484848485,
+          "copiedHeadings": 12,
+          "retention": 0.8253968253968254
+        },
+        "gists": {
+          "count": 33,
+          "coverage": 1,
+          "meanWords": 23.727272727272727,
+          "multiSentence": 0,
+          "templateRepetition": 0.12121212121212122,
+          "retention": 0.5477026529638224
+        }
+      },
+      "calls": [
+        {
+          "ms": 149189,
+          "inputTokens": 28625,
+          "outputTokens": 16435,
+          "reasoningTokens": 12329,
+          "generationId": "gen-1788439787-LmBcNO2oZKd7y2pzGbKa",
+          "costUsd": 0.2216,
+          "providerCostUsd": 0.2216,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 2",
+          "root > child 3",
+          "root > child 3 > child 3",
+          "root > child 4",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 4 > child 5",
+          "root > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 4",
+          "root > child 5 > child 5",
+          "root > child 6",
+          "root > child 6 > child 3",
+          "root > child 6 > child 4",
+          "root > child 7"
+        ]
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 11,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 16,
+          "otherProblems": 0,
+          "advice": 110
+        },
+        "parts": {
+          "count": 11,
+          "words": [
+            899,
+            166,
+            320,
+            659,
+            212,
+            1343,
+            189,
+            2511,
+            1553,
+            1692,
+            3093
+          ],
+          "balanceCv": 0.8251889934286649
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.6643356643356644
+        },
+        "fanout": {
+          "mean": 9.9375,
+          "max": 30,
+          "within5to9": 0.1875
+        },
+        "headings": {
+          "boundaries": 13,
+          "boundariesOnHeadings": 1,
+          "headingsCut": 0.5416666666666666,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.875,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 16,
+          "meanWords": 2.3125,
+          "within2to6": 0.625,
+          "copiedHeadings": 15,
+          "retention": 0.3333333333333333
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": 2,
+      "flat": false
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    },
+    {
+      "model": "z-ai/glm-5.3-flash",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "max",
+      "mandatory": true
+    },
+    {
+      "model": "qwen/qwen3.8-27b",
+      "supportedEfforts": [
+        "xhigh",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "xhigh",
+      "mandatory": false
+    },
+    {
+      "model": "google/gemini-3.8-flash",
+      "supportedEfforts": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "medium",
+      "mandatory": true
+    },
+    {
+      "model": "tencent/hy4-preview",
+      "supportedEfforts": [
+        "high",
+        "low",
+        "none"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro-0813",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    },
+    {
+      "model": "x-ai/grok-4.3",
+      "supportedEfforts": [
+        "high",
+        "medium",
+        "low",
+        "none"
+      ],
+      "defaultEffort": "low",
+      "mandatory": false
+    },
+    {
+      "model": "z-ai/glm-5.3",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "max",
+      "mandatory": true
+    },
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-09-03T12:52:16.098Z"
+}
