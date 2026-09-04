@@ -348,54 +348,21 @@ async function whyNotMoveRow(
   );
 }
 
-/** Create, find or replace one tier's product and price, and record the id. */
-export async function ensureTier(
+/**
+ * Reconcile the price the lookup key already points at.
+ *
+ * Split out of `ensureTier` to keep that function readable once it grew three
+ * refusals; the decisions are unchanged. Every path that would move the row is
+ * guarded by `whyNotMoveRow` before it writes.
+ */
+async function reconcileExistingPrice(
+  stripe: StripeTierSetup,
   tier: TierRow,
+  live: Stripe.Price,
   apply: boolean,
-  /**
-   * Injectable for the same reason `ensurePortalConfiguration` is: the branches
-   * worth testing are the ones that **refuse**, and a refusal is only observable
-   * by seeing what was *not* called. The real client satisfies this at the call
-   * site, so a moved SDK signature is a compile error there.
-   */
-  injected?: StripeTierSetup,
 ): Promise<Step[]> {
   const steps: Step[] = [];
 
-  /* **Before the client is built**, not after: there is nothing to ask Stripe
-     about a row that sells at no price, and constructing a client first made
-     this branch reachable only by a process holding a live key — so the test for
-     it could not exist. Order is the whole fix. */
-  if (Object.keys(tier.amounts).length === 0) {
-    /* **An active tier with no amounts is an invalid row, not a quiet skip.**
-       Nothing can be sold at no price, so the run did not do its job — and if
-       the row still carries an *old* `stripe_price_id` it also slips past
-       `stripe:check`, whose per-currency comparison loops over zero currencies
-       and finds nothing wrong. Two scripts passing over the same broken
-       source-of-truth row, saying nothing. GPT Sol, 2026-09-03.
-
-       Only when the tier is **active**: a retired tier with its prices removed
-       is a normal end state, and failing on it would make every later run red
-       for a row nobody sells. */
-    steps.push({
-      what: tier.id,
-      ...(tier.active ? { failed: true as const } : {}),
-      detail: tier.active
-        ? "SKIPPED — active but has no rows in billing_tier_prices, so it sells nothing"
-        : "SKIPPED — no rows in billing_tier_prices (retired, so nothing to do)",
-    });
-    return steps;
-  }
-
-  const stripe = injected ?? (await stripeClient());
-  const existing = await stripe.prices.list({
-    lookup_keys: [tier.lookupKey],
-    expand: ["data.currency_options", "data.product"],
-    limit: 2,
-  });
-  const live = existing.data[0];
-
-  if (live) {
     await syncProductWords(stripe, live.product, tier, apply, steps);
     const wrong = differences(live, tier);
     if (wrong.length === 0) {
@@ -448,7 +415,57 @@ export async function ensureTier(
       detail: `replaced ${live.id} (${wrong.join(", ")}) with ${replacement.id} at ${money(tier)}`,
     });
     return steps;
+  
+}
+
+/** Create, find or replace one tier's product and price, and record the id. */
+export async function ensureTier(
+  tier: TierRow,
+  apply: boolean,
+  /**
+   * Injectable for the same reason `ensurePortalConfiguration` is: the branches
+   * worth testing are the ones that **refuse**, and a refusal is only observable
+   * by seeing what was *not* called. The real client satisfies this at the call
+   * site, so a moved SDK signature is a compile error there.
+   */
+  injected?: StripeTierSetup,
+): Promise<Step[]> {
+  const steps: Step[] = [];
+
+  /* **Before the client is built**, not after: there is nothing to ask Stripe
+     about a row that sells at no price, and constructing a client first made
+     this branch reachable only by a process holding a live key — so the test for
+     it could not exist. Order is the whole fix. */
+  if (Object.keys(tier.amounts).length === 0) {
+    /* **An active tier with no amounts is an invalid row, not a quiet skip.**
+       Nothing can be sold at no price, so the run did not do its job — and if
+       the row still carries an *old* `stripe_price_id` it also slips past
+       `stripe:check`, whose per-currency comparison loops over zero currencies
+       and finds nothing wrong. Two scripts passing over the same broken
+       source-of-truth row, saying nothing. GPT Sol, 2026-09-03.
+
+       Only when the tier is **active**: a retired tier with its prices removed
+       is a normal end state, and failing on it would make every later run red
+       for a row nobody sells. */
+    steps.push({
+      what: tier.id,
+      ...(tier.active ? { failed: true as const } : {}),
+      detail: tier.active
+        ? "SKIPPED — active but has no rows in billing_tier_prices, so it sells nothing"
+        : "SKIPPED — no rows in billing_tier_prices (retired, so nothing to do)",
+    });
+    return steps;
   }
+
+  const stripe = injected ?? (await stripeClient());
+  const existing = await stripe.prices.list({
+    lookup_keys: [tier.lookupKey],
+    expand: ["data.currency_options", "data.product"],
+    limit: 2,
+  });
+  const live = existing.data[0];
+
+  if (live) return [...steps, ...(await reconcileExistingPrice(stripe, tier, live, apply))];
 
   /* **No price carries the lookup key any more** — archived, deleted, or moved
      by hand. The branch below mints a fresh one and records it, which moves the
@@ -556,8 +573,55 @@ export interface SubscriptionLookup {
  * unbounded loop, and hitting it is reported as a failure rather than shrugged
  * off — see `unfinishedSubscriptions`.
  */
-const SUBSCRIPTION_PAGE = 100;
-const MAX_SUBSCRIPTION_PAGES = 200;
+export const PAGE_SIZE = 100;
+const MAX_PAGES = 200;
+
+/**
+ * **Read a Stripe list to the end, or throw.**
+ *
+ * One definition of exhaustiveness, because there are now two sweeps that need
+ * it — the subscription scan below and `stripe-check.ts`'s stale-invoice sweep —
+ * and a second copy of this rule is a second place for it to be softened.
+ *
+ * The rule has been wrong twice in this file's history, both times in the
+ * direction of quietly returning less than promised: first reading one page and
+ * reporting `has_more` as a non-blocking warning, then returning the partial
+ * list when Stripe said `has_more` but handed back a page with no id to continue
+ * from. A function whose whole promise is "all of them" must not be able to
+ * answer "some of them" — the caller cannot tell the two apart, and every guard
+ * built on it then passes for the wrong reason.
+ *
+ * **It is still not a snapshot**, and no pagination can be: the list moves while
+ * it is read, so a row created ahead of the cursor is never seen. Callers that
+ * need a proof rather than a preflight have to say so — `ensureTier` refuses
+ * outright in live mode for exactly this reason.
+ *
+ * @param what plural noun for the error message, e.g. "subscriptions"
+ * @throws on reaching the page cap, and on `has_more` with an empty page
+ */
+export async function everyPage<T extends { id: string }>(
+  what: string,
+  fetchPage: (startingAfter: string | undefined) => Promise<{ data: T[]; has_more: boolean }>,
+): Promise<T[]> {
+  const all: T[] = [];
+  let startingAfter: string | undefined;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const batch = await fetchPage(startingAfter);
+    all.push(...batch.data);
+    if (!batch.has_more) return all;
+
+    startingAfter = batch.data[batch.data.length - 1]?.id;
+    if (!startingAfter) {
+      throw new Error(
+        `Stripe reported more ${what} but returned an empty page, so this scan is incomplete`,
+      );
+    }
+  }
+  throw new Error(
+    `more than ${MAX_PAGES * PAGE_SIZE} ${what} — this check cannot see them all, so do not trust it`,
+  );
+}
 
 /**
  * **Every subscription that is not over, paginated to exhaustion.**
@@ -579,50 +643,19 @@ const MAX_SUBSCRIPTION_PAGES = 200;
  * direction that costs a warning rather than a stranded customer
  * (src/billing/tiers.ts).
  *
- * ## Exhaustive, or it throws
- *
- * The first version read one page of 100 and reported `has_more` as a warning —
- * the same bug as the exit-zero refusal, one level up: a guard built against a
- * bounded read, made non-blocking, so subscriber 101 could be stranded while the
- * check exited 0.
- *
- * **And it is still not a snapshot.** Cursor pagination reads a moving list, so
- * a checkout that completes *ahead of the cursor* during the scan is never seen.
- * That is why `ensureTier` does not rely on this scan alone in live mode — see
- * the refusal there. This function is a good preflight and cannot be a proof.
- *
- * @throws when the page cap is reached, and when Stripe says `has_more` but
- * hands back a page with no id to continue from. Returning a partial list from a
- * function whose whole promise is exhaustiveness puts the blind spot back one
- * level deeper, which is the shape this file keeps finding.
+ * Exhaustive or throwing, via `everyPage` — which is also where the reasoning
+ * about why it still is not a snapshot lives.
  */
 export async function unfinishedSubscriptions(stripe: SubscriptionLookup): Promise<Stripe.Subscription[]> {
-  const all: Stripe.Subscription[] = [];
-  let startingAfter: string | undefined;
-
-  for (let page = 0; page < MAX_SUBSCRIPTION_PAGES; page++) {
-    const batch = await stripe.subscriptions.list({
+  const all = await everyPage("subscriptions", (startingAfter) =>
+    stripe.subscriptions.list({
       status: "all",
-      limit: SUBSCRIPTION_PAGE,
+      limit: PAGE_SIZE,
       expand: ["data.items"],
       ...(startingAfter ? { starting_after: startingAfter } : {}),
-    });
-    all.push(...batch.data.filter((s) => !isTerminalStatus(s.status)));
-    if (!batch.has_more) return all;
-
-    startingAfter = batch.data[batch.data.length - 1]?.id;
-    /* `has_more` with nothing to page from. Returning `all` here was the quiet
-       truncation: a caller cannot tell it from an exhaustive read. */
-    if (!startingAfter) {
-      throw new Error(
-        "Stripe reported more subscriptions but returned an empty page, so this scan is incomplete",
-      );
-    }
-  }
-  throw new Error(
-    `more than ${MAX_SUBSCRIPTION_PAGES * SUBSCRIPTION_PAGE} subscriptions — ` +
-      "this check cannot see them all, so do not trust it",
+    }),
   );
+  return all.filter((s) => !isTerminalStatus(s.status));
 }
 
 /** Which of those subscriptions are billing on `priceId`. Pure, so it is testable. */

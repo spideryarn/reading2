@@ -204,6 +204,49 @@ describe("what Stripe is told, which decides whether it retries", () => {
   });
 
   /**
+   * **The one event whose whole purpose is the log line.** A subscription whose
+   * invoice cannot be finalised is never collected and never reaches `past_due`
+   * — `past_due` is defined against the latest *finalized* invoice — so no
+   * subscription event will ever mention it. The resync changes no entitlement
+   * and is not supposed to; it is handled so that somebody finds out.
+   */
+  it("syncs and returns 200 for an invoice that could not be finalised", async () => {
+    const sync = vi.fn(async () => synced);
+    const reply = await serve(
+      eventBody({
+        type: "invoice.finalization_failed",
+        data: {
+          object: {
+            id: "in_1",
+            object: "invoice",
+            customer: "cus_1",
+            last_finalization_error: { code: "customer_tax_location_invalid" },
+          },
+        },
+      }),
+      sync,
+    );
+    expect(sync).toHaveBeenCalledWith("cus_1");
+    expect(reply.status).toBe(200);
+    expect(reply.body.handled).toBe(true);
+  });
+
+  /**
+   * **`invoice.created` must never be handled**, and this is the guard rather
+   * than the comment that asks for it. Stripe delays finalising *every*
+   * automatic-collection invoice on the account for up to 72 hours if an
+   * endpoint fails to 2xx that event, so subscribing to it would let one outage
+   * of this function stall every renewal we have. The next person's instinct on
+   * reading the finalisation handler above will be to add its sibling.
+   */
+  it("still ignores invoice.created, which would let one outage stall every renewal", async () => {
+    const sync = vi.fn(async () => synced);
+    const reply = await serve(eventBody({ type: "invoice.created" }), sync);
+    expect(sync).not.toHaveBeenCalled();
+    expect(reply.body.handled).toBe(false);
+  });
+
+  /**
    * The window this covers is real and short: Checkout completes, Stripe fires
    * immediately, and our own success callback has not yet written the mapping.
    * A 200 here would throw away the only event that said so.

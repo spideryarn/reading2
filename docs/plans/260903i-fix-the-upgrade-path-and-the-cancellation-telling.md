@@ -1273,3 +1273,38 @@ with an hour left gives `max(33, 150)`. **Store the delta instead of the absolut
 
 The column is unshipped, so the rename is free. `not_negative` must go or become a bound on the
 result, since a delta is legitimately negative.
+
+### Stage 4's sweep, built 2026-09-04 (the `stripe:check` half only)
+
+`checkStaleInvoices` in [`scripts/stripe-check.ts`](../../scripts/stripe-check.ts): two
+`invoices.list` passes, `draft` and `open`, with `created: { lt: cutoff }` so Stripe does the age
+filter, paginated to exhaustion by the shared `everyPage`. It fails the run and **names what it
+found** — id, status, age in days, and the subscription — because "3 stale invoices" sends whoever is
+reading to the Dashboard to work out which, and this is the sort of line read at 3am.
+
+**`lt` rather than `lte`** is what stops the boundary flapping: an invoice created exactly three days
+ago is not yet stale, so two runs a second apart cannot disagree about it. `now` is a parameter, so
+that boundary is testable without waiting three days.
+
+**Three days is a starting number, not a measured one**, and the constant says so. Nothing has ever
+been observed sitting in `draft` or `open` on this account, so there is no distribution to take a
+percentile from.
+
+**The trap that would have made this a permanently-passing check.** On the pinned API version an
+invoice carries its subscription at `parent.subscription_details.subscription` and there is **no
+top-level `invoice.subscription` field at all** — verified against three real sandbox invoices, which
+report `has top-level 'subscription' key? false`. The obvious filter compiles under `any`, matches
+nothing, and reports a clean sweep on an account full of stale invoices: a pass indistinguishable
+from the pass you wanted. Mutating the filter to the non-existent field reddens four tests, which is
+the guard that matters most here.
+
+**Proved end to end against real Stripe, not only fixtures.** A standalone draft was created in the
+sandbox, the sweep's own filter was confirmed to return it (`1 draft, ours included: true`), the
+sweep classified it correctly as not-a-subscription's and ignored it, and the draft was deleted. That
+closes the gap between "my fixture says so" and "Stripe returns that shape". What is *not* proved is
+the positive case against real data — a genuinely stuck subscription invoice cannot be manufactured
+on demand — so that half rests on the unit tests plus the shape verification above.
+
+`everyPage` was extracted while doing this, so the subscription scan and the invoice sweep share one
+definition of "exhaustive or throw". That rule had already been wrong twice in opposite directions,
+and a second copy is a second place for it to be softened.

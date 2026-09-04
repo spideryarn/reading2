@@ -17,8 +17,10 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { checkPortal, checkTier, tiersToCheck } from "../scripts/stripe-check.js";
-import type { StripePortalCheck, StripeTierCheck } from "../scripts/stripe-check.js";
+import type Stripe from "stripe";
+
+import { checkPortal, checkStaleInvoices, checkTier, tiersToCheck } from "../scripts/stripe-check.js";
+import type { StripeInvoiceCheck, StripePortalCheck, StripeTierCheck } from "../scripts/stripe-check.js";
 import { portalFeatures } from "../scripts/stripe-setup.js";
 import type { TierRow } from "../src/billing/tiers.js";
 
@@ -424,5 +426,144 @@ describe("which tiers each half of the script gets", () => {
     } as unknown as StripePortalCheck;
     await checkPortal(stripe, TIERS);
     expect(asked[0]).toMatchObject({ expand: ["data.features.subscription_update.products"] });
+  });
+});
+
+/**
+ * **The stale-invoice sweep.**
+ *
+ * A subscription whose invoice never finalises stays `active` for ever and is
+ * never collected — `past_due` is defined against the latest *finalized*
+ * invoice, so there is no dunning, no status change, and nothing else in this
+ * repo would ever notice. The sweep is what turns that into a line somebody
+ * reads.
+ *
+ * **The fixture is the load-bearing part of these tests.** On the pinned API
+ * version an invoice names its subscription at
+ * `parent.subscription_details.subscription`; there is no top-level
+ * `invoice.subscription` at all. The obvious filter compiles under `any`,
+ * matches nothing, and reports a clean sweep on an account full of stale
+ * invoices — a pass that looks exactly like the pass you wanted. So every
+ * fixture here is shaped the way Stripe really returns one, and the first test
+ * below fails if the filter never matches.
+ */
+describe("uncollected subscription invoices", () => {
+  const NOW = new Date("2026-09-10T12:00:00Z");
+  const DAY = 24 * 60 * 60;
+  const at = (daysAgo: number) => Math.floor(NOW.getTime() / 1000) - daysAgo * DAY;
+
+  /** An invoice as Stripe returns one: the subscription hangs off `parent`. */
+  const invoice = (id: string, status: string, daysAgo: number, subscription = "sub_1") => ({
+    id,
+    status,
+    created: at(daysAgo),
+    parent: { type: "subscription_details", quote_details: null, subscription_details: { subscription } },
+  });
+
+  /** A one-off invoice somebody is composing by hand — not a subscription's. */
+  const standalone = (id: string, status: string, daysAgo: number) => ({
+    id,
+    status,
+    created: at(daysAgo),
+    parent: null,
+  });
+
+  const fakeInvoices = (byStatus: Record<string, unknown[]>) => {
+    const asked: Stripe.InvoiceListParams[] = [];
+    const stripe = {
+      invoices: {
+        list: async (params: Stripe.InvoiceListParams) => {
+          asked.push(params);
+          return { data: byStatus[String(params.status)] ?? [], has_more: false };
+        },
+      },
+    } as unknown as StripeInvoiceCheck;
+    return { stripe, asked };
+  };
+
+  it("passes when nothing has been sitting uncollected", async () => {
+    const { stripe } = fakeInvoices({});
+    const checks = await checkStaleInvoices(stripe, NOW);
+    expect(blocking(checks)).toEqual([]);
+    expect(checks.map((c) => c.detail).join(" ")).toMatch(/no subscription invoice has been uncollected/);
+  });
+
+  /**
+   * **The one that fails if the `parent` filter never matches.** If the sweep
+   * looked for `invoice.subscription`, this invoice would be dropped and the run
+   * would report a clean account — so this test is the mutation guard for the
+   * whole feature.
+   */
+  it("fails on a draft invoice a subscription generated", async () => {
+    const { stripe } = fakeInvoices({ draft: [invoice("in_stuck", "draft", 9, "sub_abc")] });
+    const said = blocking(await checkStaleInvoices(stripe, NOW)).join(" ");
+    expect(said).toMatch(/1 subscription invoice\(s\) uncollected for more than 3 days/);
+    expect(said).toMatch(/in_stuck \(draft, 9d, sub_abc\)/);
+  });
+
+  it("fails on an open invoice too, which is finalised and still unpaid", async () => {
+    const { stripe } = fakeInvoices({ open: [invoice("in_unpaid", "open", 5)] });
+    expect(blocking(await checkStaleInvoices(stripe, NOW)).join(" ")).toMatch(/in_unpaid \(open, 5d/);
+  });
+
+  /* Named with ids and ages, because "3 stale invoices" sends somebody to the
+     Dashboard to work out which, and this may well be read at 3am. */
+  it("names every invoice it found, with its age and subscription", async () => {
+    const { stripe } = fakeInvoices({
+      draft: [invoice("in_a", "draft", 4, "sub_a")],
+      open: [invoice("in_b", "open", 30, "sub_b")],
+    });
+    const said = blocking(await checkStaleInvoices(stripe, NOW)).join(" ");
+    expect(said).toMatch(/in_a \(draft, 4d, sub_a\)/);
+    expect(said).toMatch(/in_b \(open, 30d, sub_b\)/);
+    expect(said).toMatch(/2 subscription invoice\(s\)/);
+  });
+
+  /* A standalone draft is somebody's work in progress, not money we expected. */
+  it("ignores an invoice that no subscription generated", async () => {
+    const { stripe } = fakeInvoices({ draft: [standalone("in_manual", "draft", 40)] });
+    expect(blocking(await checkStaleInvoices(stripe, NOW))).toEqual([]);
+  });
+
+  /**
+   * **The boundary, which must not flap.** Stripe does the age filter, so the
+   * assertion is on what we *ask* for: `lt` and not `lte`, meaning an invoice
+   * created exactly three days ago is not yet stale and two runs a second apart
+   * cannot disagree about it.
+   */
+  it("asks Stripe for invoices strictly older than the window", async () => {
+    const { stripe, asked } = fakeInvoices({});
+    await checkStaleInvoices(stripe, NOW);
+    expect(asked).toHaveLength(2);
+    expect(asked.map((a) => a.status)).toEqual(["draft", "open"]);
+    for (const params of asked) {
+      expect(params.created).toEqual({ lt: at(3) });
+      expect(params.created).not.toHaveProperty("lte");
+    }
+  });
+
+  /* Exhaustive or throwing, by the same `everyPage` the subscription scan uses:
+     a sweep that quietly reads one page is a sweep that passes for the wrong
+     reason. */
+  it("reads past the first page", async () => {
+    let n = 0;
+    const pages = [
+      { data: [invoice("in_p1", "draft", 8)], has_more: true },
+      { data: [invoice("in_p2", "draft", 8)], has_more: false },
+    ];
+    const stripe = {
+      invoices: {
+        list: async (p: Stripe.InvoiceListParams) =>
+          p.status === "draft" ? (pages[n++] ?? { data: [], has_more: false }) : { data: [], has_more: false },
+      },
+    } as unknown as StripeInvoiceCheck;
+    expect(blocking(await checkStaleInvoices(stripe, NOW)).join(" ")).toMatch(/in_p2/);
+  });
+
+  it("throws rather than sweeping half the account", async () => {
+    const stripe = {
+      invoices: { list: async () => ({ data: [invoice("in_x", "draft", 8)], has_more: true }) },
+    } as unknown as StripeInvoiceCheck;
+    await expect(checkStaleInvoices(stripe, NOW)).rejects.toThrow(/cannot see them all/);
   });
 });

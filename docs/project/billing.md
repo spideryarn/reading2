@@ -862,14 +862,43 @@ Tests sign payloads offline with the SDK's own signer, and `api.stripe.com` is r
 [`tests/setup/provider-guard.ts`](../../tests/setup/provider-guard.ts) so no test can reach Stripe
 for real with the key sitting in `.env.local`.
 
-**No invoice event is one of the four, and there is one worth adding.** Entitlement reads
-`subscription.status`, and Stripe leaves a subscription **`active` when an invoice cannot be
-finalised** — an automatic-tax or customer-location failure being the likely cause here, since
-Managed Payments computes tax on every renewal. Nothing is collected and nothing is refused: the
-reader keeps their allowance on a renewal we were never paid for, and the only signal is
-`invoice.finalization_failed`, which we ignore. Not seen in the wild, and the cost is bounded by one
-month of one subscription — but it is the one invoice event whose absence changes what somebody gets
-for free. GPT Sol, 2026-09-03.
+**One invoice event is handled, and it is the only one whose absence changes what somebody gets for
+free.** Entitlement reads `subscription.status`, and Stripe leaves a subscription **`active` when an
+invoice cannot be finalised**: nothing is collected and nothing is refused, so the reader keeps their
+allowance on a renewal we were never paid for. There is no subscription event to wait for, because
+`past_due` is defined against the latest *finalized* invoice — Stripe says outright that
+*"Subscriptions remain active if invoices can't be finalized"*. Found by GPT Sol, 2026-09-03; handled
+2026-09-04.
+
+**What was built is detection, not a hold**, and the reason is worth keeping: Sol's likely cause —
+automatic tax failing — turns out to be one Stripe's own documentation contradicts itself about. Its
+[tax page](https://docs.stripe.com/tax/customer-locations) says a *subscription* invoice finalises
+**without** tax rather than sticking in draft, while its
+[recurring-taxes page](https://docs.stripe.com/billing/taxes/collect-taxes?tax-calculation=stripe-tax)
+says it cannot finalise at all. Both read 2026-09-04. A stored, entitlement-suppressing billing hold
+is not something to build on a premise the vendor disagrees with itself about — and detection is also
+the generous reading, since being wrong costs us a month of service rather than costing a paying
+reader their access. `past_due` is entitled here on purpose for the same reason.
+
+So there are two instruments and no policy:
+
+- **`invoice.finalization_failed` is in `HANDLED_EVENTS`** and logs at `error`, with the invoice id,
+  `last_finalization_error.code` and `automatic_tax.status`. The resync it triggers changes no
+  entitlement and is not meant to — **the log line is the mechanism**.
+- **`stripe:check` sweeps for uncollected invoices** — any subscription invoice still `draft` or
+  `open` more than three days after creation fails the run, whatever the cause, which is strictly
+  more than the event sees. Three days is a starting number nobody has measured.
+
+Two traps recorded where somebody will meet them. **Never handle `invoice.created`**: Stripe delays
+finalising *every* automatic-collection invoice on the account for up to 72 hours if an endpoint
+fails to return 2xx to it, so one outage of our function would stall every renewal. And on the pinned
+API version the subscription link is **`invoice.parent.subscription_details.subscription`** — there is
+no top-level `invoice.subscription`, so the obvious filter compiles, matches nothing, and reports a
+clean sweep for ever. Verified against three real sandbox invoices rather than against the types.
+
+**Adding an event to `HANDLED_EVENTS` does nothing on its own** — the live endpoint has its own
+`enabled_events`, and an event we handle but never receive looks exactly like one that never fires.
+See [Pointing Stripe at it](#pointing-stripe-at-it) below.
 
 ### Pointing Stripe at it
 

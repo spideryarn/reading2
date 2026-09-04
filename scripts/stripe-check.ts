@@ -49,7 +49,9 @@ import { readTiers } from "../src/store/pg-tiers.js";
 
 import {
   EXPAND_PORTAL_PRODUCTS,
+  PAGE_SIZE,
   PRODUCT_TAX_CODE,
+  everyPage,
   portalDrift,
   portalProducts,
   unfinishedSubscriptions,
@@ -473,6 +475,110 @@ async function checkNobodyIsStranded(
 }
 
 /**
+ * **How long an unpaid subscription invoice may sit before it is a fault.**
+ *
+ * **Three days is a starting number, not a measured one.** Nothing has been
+ * observed sitting in `draft` or `open` on this account, so there is no
+ * distribution to pick a percentile from; three is long enough to clear an
+ * ordinary retry cycle and short enough that a stuck invoice is found in the
+ * same week it stuck. Move it when there is a real one to measure against.
+ */
+const INVOICE_STALE_DAYS = 3;
+
+/** The slice of Stripe the invoice sweep needs. */
+export interface StripeInvoiceCheck {
+  readonly invoices: {
+    list(params: Stripe.InvoiceListParams): Promise<{ data: Stripe.Invoice[]; has_more: boolean }>;
+  };
+}
+
+/**
+ * **Is any subscription invoice sitting uncollected?**
+ *
+ * A subscription whose invoice is never finalised stays `active` for ever and is
+ * never collected: `past_due` is defined against the latest *finalized* invoice,
+ * so an unfinalised one produces no dunning, no status change, and no webhook
+ * that changes anything. Stripe says it plainly — *"Subscriptions remain active
+ * if invoices can't be finalized, which means that users may still be able to
+ * access your product while you're not able to collect payments"*.
+ *
+ * This is a **sweep, not an event handler**, and that is the point: it sees every
+ * uncollected invoice whatever the cause — finalisation failure, a card that
+ * never resolves, a hand-made draft nobody sent — where subscribing to
+ * `invoice.finalization_failed` sees only the one cause somebody predicted. The
+ * event is still worth having; it is not a substitute for looking.
+ *
+ * **Do not add `invoice.created` to the webhook to do this instead.** Stripe
+ * delays finalising *every* automatic-collection invoice on the account for up
+ * to 72 hours if an endpoint fails to return 2xx to that event, so one Vercel
+ * outage would stall every renewal on the account.
+ * `invoice.finalization_failed` carries no such penalty.
+ * docs/plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md.
+ *
+ * ## Two details that decide whether this works at all
+ *
+ * **The subscription link is `parent.subscription_details`.** On the pinned API
+ * version there is no top-level `invoice.subscription` field — `Invoice` has
+ * `parent: Invoice.Parent | null` and nothing else. The obvious filter
+ * (`inv.subscription`) compiles under `any`, matches nothing, and reports a
+ * clean sweep on an account full of stale invoices, which is the failure this
+ * script exists to catch wearing the costume of a pass.
+ *
+ * **`lt`, not `lte`.** Stripe does the age filter, and a strict comparison means
+ * an invoice created *exactly* three days ago is not yet stale — so the boundary
+ * cannot flap between two runs a second apart.
+ *
+ * @param now injected so the boundary is testable without waiting three days
+ */
+export async function checkStaleInvoices(stripe: StripeInvoiceCheck, now: Date): Promise<Check[]> {
+  const nowSeconds = Math.floor(now.getTime() / 1000);
+  const cutoff = nowSeconds - INVOICE_STALE_DAYS * 24 * 60 * 60;
+
+  /* Two passes because `status` takes one value. `draft` is "never finalised";
+     `open` is "finalised and never paid" — different causes, same symptom for a
+     reader, and both are money we are not collecting. */
+  const found: Stripe.Invoice[] = [];
+  for (const status of ["draft", "open"] as const) {
+    found.push(
+      ...(await everyPage(`${status} invoices`, (startingAfter) =>
+        stripe.invoices.list({
+          status,
+          created: { lt: cutoff },
+          limit: PAGE_SIZE,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        }),
+      )),
+    );
+  }
+
+  /* A standalone draft somebody is composing by hand is not a fault. Only an
+     invoice a *subscription* generated is money we expected to collect. */
+  const stale = found.filter((i) => i.parent?.subscription_details != null);
+  if (stale.length === 0) {
+    return [ok("invoices", `no subscription invoice has been uncollected for ${INVOICE_STALE_DAYS} days`)];
+  }
+
+  /* Named, with ages: "3 stale invoices" sends somebody to the Dashboard to work
+     out which, and this may well be read at 3am. */
+  const described = stale
+    .map((i) => {
+      const days = Math.floor((nowSeconds - i.created) / (24 * 60 * 60));
+      const sub = i.parent?.subscription_details?.subscription;
+      return `${i.id} (${i.status}, ${days}d, ${typeof sub === "string" ? sub : (sub?.id ?? "?")})`;
+    })
+    .sort();
+
+  return [
+    bad(
+      "invoices",
+      `${stale.length} subscription invoice(s) uncollected for more than ${INVOICE_STALE_DAYS} days: ` +
+        `${described.join("; ")} — the subscription stays active and never enters dunning, so this is ` +
+        "access being given away. Finalise or void them in the Dashboard.",
+    ),
+  ];
+}
+
+/**
  * Is anything going to tell us a subscription happened?
  *
  * Only meaningful in live mode: locally the deliveries come from `stripe listen`,
@@ -514,6 +620,7 @@ async function main(): Promise<void> {
   if (sellable.length === 0) checks.push(bad("tiers", "no active rows in billing_tiers — there is nothing to sell"));
   for (const tier of sellable) checks.push(...(await checkTier(stripe, tier)));
   checks.push(...(await checkPortal(stripe, portal)));
+  checks.push(...(await checkStaleInvoices(stripe, new Date())));
   checks.push(...(await checkWebhook(stripe)));
 
   for (const check of checks) console.log(`  ${check.mark} ${check.what.padEnd(20)} ${check.detail}`);
