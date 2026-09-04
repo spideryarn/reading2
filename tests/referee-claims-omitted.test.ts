@@ -18,31 +18,60 @@
  * start spending. Mocking the run there would take that sentence away from it.
  * So the mock lives here, where the header says what it is.
  *
- * Writes under `data/<throwaway slug>/`, which is gitignored, and removes it.
+ * ## It ran on the filesystem store until 2026-09-04, and that is the point
+ *
+ * The fixture was a hand-written `data/<slug>/blocks.json` and the read-back
+ * went through `loadClaimsRun` (src/referee-claims-store.ts), which reads the
+ * data root and never consults `src/store/` — so the number this file is about
+ * was being carried through the store that is **not deployed**
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B). That matters more here than in most of the twenty-six: `claimsOmitted`
+ * is a *column* in Postgres and a key in a JSON object on files, so the
+ * filesystem round trip carries any field anybody adds, for free and for ever,
+ * while the Postgres one drops the field it was not told about and reports
+ * success — which is what `finish` in src/store/pg-referee-claims.ts warns
+ * about at length. This file was checking the store that cannot have the bug.
+ *
+ * It now pins `postgres` before any import, seeds through `scratchArticleInPg`,
+ * and reads back through `refereeClaimsStore.load`.
  */
-import { mkdir, rm, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import path from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement. Same
+ * block, same reason, as tests/referee-routes-postgres.test.ts.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
-import { acceptAny, asTestOwner, AUTHED_HEADERS } from "./helpers/authed.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
 
 /** How many claims the validator threw away past its cap, for this run. */
 const TRUNCATED = 3;
 
-const CLAIMS: Claim[] = [
-  {
-    id: "spya-clm001:0",
-    blockId: "spya-clm001",
-    start: 0,
-    claim: "The method cuts annotation error.",
-    quote: "The method cuts annotation error.",
-    passages: [],
-    discarded: 0,
-  },
-];
+/**
+ * The one claim the mocked run answers with, anchored in `beforeAll`.
+ *
+ * A literal `spya-clm001` would have done on files, where nothing checks a
+ * block id against anything. It is written from the seeded article instead
+ * because a fixture id that names no block of the article under test is the
+ * kind of thing that goes on passing while meaning nothing —
+ * `ScratchArticle.blocks`.
+ */
+let CLAIM: Claim;
 
 /* `importActual` and spread, not a bare object: src/store/pg-referee-claims.ts
    imports `CLAIMS_TIMEOUT_MS` from this module, so replacing the whole of it
@@ -56,7 +85,7 @@ vi.mock("../src/referee-claims-run.js", async () => ({
     yield {
       type: "done" as const,
       outcome: {
-        claims: CLAIMS,
+        claims: [CLAIM],
         model: "a-test-model",
         dropped: {
           malformed: 0,
@@ -70,44 +99,29 @@ vi.mock("../src/referee-claims-run.js", async () => ({
   },
 }));
 
-const { handleApi } = await import("../src/routes.js");
-const { loadClaimsRun } = await import("../src/referee-claims-store.js");
-
 const SLUG = "test-referee-claims-omitted";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-afterEach(() => rm(DIR, { recursive: true, force: true }));
 
-async function seedArticle(): Promise<void> {
-  await mkdir(DIR, { recursive: true });
-  /* `loadArticle` reads blocks.json **and** tree.json and skips the directory
-     unless both are there, so a fixture with only the first is a 404 that looks
-     exactly like the route refusing — the trap tests/referee-claims-routes.test.ts
-     already fell into once and wrote down. */
-  await writeFile(path.join(DIR, "tree.json"), JSON.stringify({ nodes: [] }), "utf8");
-  await writeFile(
-    path.join(DIR, "meta.json"),
-    JSON.stringify({ slug: SLUG, title: "A paper with too many claims", url: "https://x.test/p" }),
-    "utf8",
-  );
-  await writeFile(
-    path.join(DIR, "blocks.json"),
-    JSON.stringify({
-      blocks: [
-        {
-          id: "spya-clm001",
-          tag: "p",
-          kind: "prose",
-          level: 0,
-          text: "The method cuts annotation error.",
-          words: 5,
-          html: "<p>The method cuts annotation error.</p>",
-          gistable: true,
-        },
-      ],
-    }),
-    "utf8",
-  );
-}
+const { reachable } = await pgReady({
+  suite: "tests/referee-claims-omitted.test.ts",
+  tables: ["spideryarn.referee_claims", "spideryarn.revision_blocks"],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { refereeClaimsStore, STORE } = await import("../src/store/index.js");
+
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  /* The positive control. A flag that failed to take looks exactly like this
+     file working: the filesystem store carries every key of the run object it
+     is handed, so the bug this file is about cannot exist there. */
+  it("is the Postgres one", () => {
+    expect(STORE).toBe("postgres");
+  });
+});
 
 async function post(url: string): Promise<{ status: number; text: string }> {
   const req = Object.assign(
@@ -149,12 +163,39 @@ async function post(url: string): Promise<{ status: number; text: string }> {
   return { status, text };
 }
 
-describe("what the route stores about its own cap", () => {
+when("what the route stores about its own cap", { timeout: 60_000 }, () => {
+  let article: ScratchArticle;
+
+  beforeAll(async () => {
+    /* `ownerId: TEST_OWNER` and not the default: a request authenticated by
+       ./helpers/authed.ts runs as `TEST_SUB`, and the Postgres reader filters
+       every article by owner, so an article seeded as anybody else is a 404
+       that reads exactly like a broken route —
+       ./helpers/scratch-article.ts § `ScratchOptions.ownerId`. */
+    article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+    const block = article.blocks.find((b) => b.text.trim().length > 30);
+    if (!block) throw new Error("the fixture article has no block long enough to quote");
+    const quote = block.text.trim().slice(0, 24);
+    CLAIM = {
+      id: `${block.id}:0`,
+      blockId: block.id,
+      start: block.text.indexOf(quote),
+      claim: "The method cuts annotation error.",
+      quote,
+      passages: [],
+      discarded: 0,
+    };
+  });
+
+  afterAll(async () => {
+    await article?.remove();
+    await closeDb();
+  });
+
   it("carries the count of claims it cut, so the panel can say how many", async () => {
-    await seedArticle();
     const reply = await post(`/api/referee/claims/${SLUG}`);
 
-    const run = await asTestOwner(() => loadClaimsRun(SLUG));
+    const run = await asTestOwner(() => refereeClaimsStore.load(SLUG));
     expect(
       run,
       `the run was not stored at all — the route answered ${reply.status}: ${reply.text.slice(0, 300)}`,
@@ -163,7 +204,8 @@ describe("what the route stores about its own cap", () => {
       run?.claimsOmitted,
       `validateClaims counted ${TRUNCATED} claims past the cap and the route dropped ` +
         `the number on the floor, so the panel can only say that some were cut. ` +
-        `src/routes.ts § runRefereeClaims.`,
+        `src/routes.ts § runRefereeClaims, and \`finish\` in ` +
+        `src/store/pg-referee-claims.ts, which is where a column can go missing.`,
     ).toBe(TRUNCATED);
   });
 });

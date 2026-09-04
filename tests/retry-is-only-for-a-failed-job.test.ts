@@ -28,26 +28,80 @@
  * `tests/retry-after-a-failed-refresh.test.ts` calls `forceForRetry` and
  * `cascadeForce` by hand, so it stays green if `retryJob` stops passing the
  * force set, if `enqueue` drops it, or if the flags never reach the record. The
- * last case here reads the new job's flags **out of `data/_jobs/`**, which is
+ * last case here reads the new job's flags **back out of the store**, which is
  * the only thing a later request will see.
  *
- * ## Why this needs no network, no model call and no database
+ * ## The store, since 2026-09-04 — and the sentence that used to be here
  *
- * The old job is driven by `advanceJobWith` over **fake steps and a fake
- * artefact store**, the arrangement `tests/jobs-walk.test.ts` set up and for the
- * same reason: the job store is real, the session is real, and what is faked is
- * the thing underneath that would otherwise cost money. Sol was right that the
- * claim in the other file — that an end-to-end retry test needs paid calls — was
- * overclaimed.
+ * This header used to carry a section headed *"Why this needs no network, no
+ * model call and no database"*. Two thirds of that is still true and the last
+ * third was the problem: the file ran on the **filesystem** queue, so every
+ * refusal it pinned was `retryJob` reading a JSON file, and `enqueue` writing
+ * one. Production's `retryJob` reads `spideryarn.jobs` through
+ * `pgJobStore.get(id, owner)` — a `where id = $1 and owner_id = $2` — and the
+ * record its last case is about is a `steps` JSONB column, not a file. Stage B
+ * of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * is the move. It still needs no network and no model call.
  *
- * The one real thing that runs is the **new** job's pump, which `enqueue`
- * starts: its first step is `fetch`, the slug has no source URL, and
- * `requireUrl` (src/pipeline.ts) throws before anything reaches the network.
- * That is the same offline failure `tests/owner-jobs.test.ts` is built on.
+ * **What the conversion bought**, beyond running the code that ships: the
+ * fixtures are now jobs that had to survive the queue's real unique indexes to
+ * exist at all, and the *"the refusal must not have queued anything"*
+ * assertions — the ones that are about money rather than about a status code —
+ * are now counted out of the table a second request would read.
  *
- * ## The mutations, watched red on 2026-09-01
+ * **What it cost is an article per case**, and a fake step that can no longer
+ * hand back `{ made: name }`:
  *
- * Each applied to `retryJob` in src/jobs.ts, run, and taken out again.
+ * - `claimSession` opens this claim's draft by carrying the published revision
+ *   forward, so a job walked against a bare slug has nothing to open and
+ *   nothing to publish into. `scratchArticleInPg` seeds one per slug.
+ * - `SHAPE` (src/store/artifacts.ts) is applied by **both** stores, and `raw`
+ *   additionally needs a manifest whose `storedSha256` names a real
+ *   `raw_sources` row — `writeRawSource` in src/store/artifacts-pg.ts refuses
+ *   anything else. So a fake step returns **the artefacts the seeded article was
+ *   made from**, read straight out of the committed corpus (`CORPUS_FILES`
+ *   below). No step does any work, and every write is one the store accepts.
+ * - The seeded articles get a **per-slug `.invalid` URL**, which the filesystem
+ *   fixtures did not need to think about. Two of the cases queue a real retry,
+ *   whose pump runs the real `fetch` step, and `requireUrl` now finds a URL
+ *   because there is an article row to find it on — the corpus's own
+ *   `paulgraham.com`. Left alone this file would fetch the web. A distinct
+ *   address per slug also keeps `freeSlug`'s shelf lookup from adopting one of
+ *   this file's own articles for another.
+ *
+ * ## The reads are faked, and only the reads
+ *
+ * `NOTHING_IS_FRESH` answers *no* to the six questions `stepIsDone` asks, so
+ * every step in a case runs rather than skipping — which on a seeded article,
+ * whose artefacts are all present, they otherwise would not. The spread is the
+ * one `tests/article-cache-call-site.test.ts` uses. It does **not** defeat
+ * `assertProduced`: `pgStoreSession.commit` builds its own
+ * `readsPgArtifacts(ref, tx)` inside the transaction it just wrote in
+ * (src/store/pg-session.ts), so the postcondition sees the step's own writes
+ * and nothing this file supplied.
+ *
+ * ## Every byte assertion, one at a time
+ *
+ * - **`jobsOnDisk(slug)`**, the money assertion, counted. **Converted**, to
+ *   `pgJobStore.list(owner)` filtered by slug — `spideryarn.jobs`, column
+ *   `slug`. `list` is what `GET /api/jobs` answers from, so it is literally
+ *   *"what a later request sees"*. The force flags the last case reads are the
+ *   `steps` JSONB column of that row.
+ * - **the `data/_jobs/` sweep and the `rm` of `data/<slug>/` in `afterAll`**.
+ *   **Incidental scaffolding, converted** to a delete of `spideryarn.jobs` rows
+ *   by slug and then `ScratchArticle.remove()` — jobs first, because
+ *   `jobs.draft_revision_id` is a foreign key into the revision an article
+ *   delete would be trying to cascade away.
+ *
+ * Nothing was dropped, and nothing moved to `tests/jobs-fs-adapter.test.ts`:
+ * none of these was a claim *about* the filesystem adapter.
+ *
+ * ## The mutations, watched red on 2026-09-01 — against the filesystem version
+ *
+ * Each applied to `retryJob` in src/jobs.ts, run, and taken out again. They are
+ * kept because the cases they redden are unchanged; what they are *not* is
+ * evidence about Postgres, which is what the mutation below the fixture is for.
  *
  * - **the status check deleted** — two cases, and the second is why the message
  *   is asserted as well as the code:
@@ -75,31 +129,103 @@
  *   'fetch', 'extract', 'blocks', …(1) ] to deeply equal [ 'fetch', 'extract',
  *   'blocks', …(2) ]`. The missing one is `tweets`, which is the argument
  *   `forceForRetry`'s own comment makes and which nothing exercised until now.
+ *
+ * ## The mutation for the conversion, watched red on 2026-09-04
+ *
+ * The four above are all in `src/jobs.ts` and would have reddened this file on
+ * either store, so none of them is evidence that it now reaches Postgres. This
+ * one is: **`failureKind: ending.failureKind ?? null` deleted from `finishIn`**
+ * (src/store/pg-jobs.ts) — the write of the `failure_kind` column, which has no
+ * filesystem counterpart at all, the JSON record simply carrying the field.
+ *
+ * ```
+ * × refuses a failure another attempt cannot change
+ *   AssertionError: the fixture has to carry the kind the guard reads:
+ *     expected undefined to be 'ours'
+ * ```
+ *
+ * **What it does not cover, which is most of the file.** One column's write is
+ * not the family:
+ *
+ * - **`finishIn`'s other five columns** — `status`, `steps`, `error`,
+ *   `attempt_id`, `lease_expires_at` — are each their own statement of fact and
+ *   none of them was mutated. `steps` is the one the last case is really about.
+ * - **The fence.** `finishIn` writes `where` `liveAttempt(id, attempt)`, four
+ *   conditions this repo has now dropped three times; every job here is settled
+ *   by its own live claimant, so a fence that admitted a stale one would go
+ *   unnoticed.
+ * - **`get`'s `where owner_id = $1`**, which is the predicate the *header* leans
+ *   on when it says `retryJob` reads through `pgJobStore.get(id, owner)`.
+ *   Deleting it would leave this file green: every case here is one owner asking
+ *   about their own job. `tests/owner-jobs.test.ts` is what covers that, and it
+ *   mutated exactly that line.
+ * - **`claim`'s article line and `tryEnqueue`'s classifier.** The fixtures
+ *   insert cleanly and claim unopposed, so neither branch is exercised.
  */
-import { rm } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+/**
+ * `SPIDERYARN_STORE=postgres` before **any** import.
+ *
+ * `src/jobs.ts` picks its store **once, at module load** — `const store:
+ * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
+ * hoisted above every statement in a module, so a plain assignment here would
+ * leave the whole file on the filesystem queue with nothing saying so.
+ */
+const HOISTED = vi.hoisted(() => {
+  const previousStore = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return { previousStore };
+});
+
+import { eq } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { jobs as jobsTable } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { stageFailure } from "../src/job-failure.js";
-import { advanceJobWith, cancelJob, forgetJob, getJob, retryJob } from "../src/jobs.js";
+import { advanceJobWith, cancelJob, claimSession, getJob, retryJob } from "../src/jobs.js";
 import type { AdvanceParts } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
-import type {
-  ArtifactKind,
-  ArtifactMap,
-  ArtifactParts,
-  ArtifactStore,
-} from "../src/store/artifacts.js";
-import { fsJobStore } from "../src/store/jobs-fs.js";
-import { mintAttempt } from "../src/store/jobs.js";
-import { fsStoreSession } from "../src/store/session.js";
-import { jobFilesOnDisk } from "./helpers/job-files.js";
+import type { ArtifactKind, ArtifactParts, ArtifactReads } from "../src/store/artifacts.js";
+import { STORE } from "../src/store/live.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
+import type { StoreSession } from "../src/store/session.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { FIXTURE_ROOT } from "./helpers/require-fixture.js";
+import { scratchArticleInPg, SCRATCH_SOURCE, type ScratchArticle } from "./helpers/scratch-article.js";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+
+loadEnvLocal();
+
 const OWNER = DEV_OWNER_ID;
+
+const { reachable } = await pgReady({
+  suite: "tests/retry-is-only-for-a-failed-job.test.ts",
+  tables: ["spideryarn.jobs", "spideryarn.articles"],
+});
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* **Not gated on `reachable`.** A flag that failed to take would run every
+       case below against the filesystem queue, which answers all of them
+       happily — and the `where owner_id = $1` and the `steps` column that are
+       the point of the conversion would never be consulted. A control that
+       vanishes when the database is missing vanishes exactly when it matters. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
 /**
  * **`it`, with this file's owner in scope for the whole body.**
@@ -110,12 +236,12 @@ const OWNER = DEV_OWNER_ID;
  * queued under `DEV_OWNER_ID`. On a machine that has run
  * `scripts/setup-local.ts` the two disagree and every case fails with *"the
  * fixture job is not in the store"*, which reads as a broken fixture rather
- * than as two owners. Scoping the body rather than each call keeps the tests
- * readable and covers the ones added next. Same reason as `advanceAsOwner` in
- * tests/jobs-walk.test.ts.
+ * than as two owners. Under Postgres it is sharper still: the disagreement is a
+ * `where owner_id = $1` that matches nothing. Same reason as `advanceAsOwner`
+ * in tests/jobs-walk.test.ts.
  */
 const itAsOwner = (name: string, body: () => Promise<void>) =>
-  it(name, () => runAsOwner(OWNER, body));
+  it(name, () => runAsOwner(OWNER, body), 60_000);
 
 /** Its own slug stem, so nothing here meets another suite's fixtures. */
 const SLUG_PREFIX = "test-retry-guard-";
@@ -125,52 +251,92 @@ const SLUGS = ["done", "queued", "permanent", "refresh", "cancelled"].map(
   (name) => `${SLUG_PREFIX}${name}`,
 );
 
-/** Every job this file made, so the shared `data/_jobs/` is left as it was. */
-const MADE: string[] = [];
+/**
+ * **An address that cannot be reached, and a different one per slug.**
+ *
+ * Two things at once, both new with the database. The retried jobs in cases 4
+ * and 5 are driven by the real pump, whose first step is `fetch`, and
+ * `requireUrl` resolves the URL from the **article row** — which now exists, and
+ * on the corpus's own metadata would be `paulgraham.com`. And `freeSlug` asks
+ * the shelf which slug already holds a `urlKey`, so five articles sharing one
+ * address would let one case's retry adopt another case's slug.
+ */
+const urlFor = (slug: string) => `https://spideryarn-test.invalid/${slug}`;
 
 /* ------------------------------------------------------------ the artefacts -- */
 
 /**
- * An artefact store in a `Map`, so a fake step can finish without a fixture.
+ * **The artefacts the seeded article was made from**, by step and kind.
  *
- * Copied from tests/jobs-walk.test.ts, which explains the shape: nothing under
- * test reads the values, because `stepIsDone` asks `has` and `assertProduced`
- * asks whether `read` comes back non-null.
+ * A fake step has to hand back something the Postgres store will accept, and
+ * `{ made: name }` is not it — see the header. Reading them out of the committed
+ * corpus is the cheapest source that satisfies `SHAPE` *and* the `raw_sources`
+ * foreign key, because `scratchArticleInPg` loaded these very bytes a moment
+ * ago: `raw.json`'s `storedSha256` names the row its own seed inserted.
+ *
+ * `slug` and the URL are overridden to match the clone, for the same reason
+ * `cloneCorpusArticle` rewrites them: an article whose metadata names a
+ * different slug loads under a name no route will ask for, and a `raw` manifest
+ * carrying `paulgraham.com` would put that address back on the row the seed
+ * deliberately made unreachable.
  */
-function memoryArtifacts(): ArtifactStore {
-  const held = new Map<string, unknown>();
-  const running = new Set<string>();
-  const key = (slug: string, step: StepName, kind: ArtifactKind) => `${slug}|${step}|${kind}`;
+const CORPUS_FILES: Partial<Record<ArtifactKind, string>> = {
+  raw: `data/${SCRATCH_SOURCE}/raw.json`,
+  meta: `data/${SCRATCH_SOURCE}/meta.json`,
+  tree: `data/${SCRATCH_SOURCE}/tree.json`,
+  labels: `data/${SCRATCH_SOURCE}/labels.json`,
+  tweets: `data/${SCRATCH_SOURCE}/tweets.json`,
+  blocks: `output/${SCRATCH_SOURCE}.blocks.json`,
+  extractedHtml: `output/${SCRATCH_SOURCE}.html`,
+  stampedHtml: `output/${SCRATCH_SOURCE}.html`,
+};
 
-  return {
-    has: async (slug, step, kinds) =>
-      kinds.length > 0 && kinds.every((kind) => held.has(key(slug, step, kind))),
-    hasEarlierBlocks: async () => false,
-    async read<K extends ArtifactKind>(slug: string, step: StepName, kind: K) {
-      return (held.get(key(slug, step, kind)) ?? null) as ArtifactMap[K] | null;
-    },
-    async readBaseline<K extends ArtifactKind>(slug: string, step: StepName, kind: K) {
-      const value = held.get(key(slug, step, kind)) as ArtifactMap[K] | undefined;
-      return value === undefined
-        ? { state: "absent" as const }
-        : { state: "present" as const, value };
-    },
-    write: async (slug, step, parts) => {
-      for (const [kind, value] of Object.entries(parts)) {
-        held.set(key(slug, step, kind as ArtifactKind), value);
-      }
-    },
-    stampFor: async () => null,
-    beginStep: async (slug, step) => {
-      running.add(`${slug}|${step}`);
-      return mintAttempt();
-    },
-    finishStep: async (slug, step) => {
-      running.delete(`${slug}|${step}`);
-    },
-    interrupted: async (slug, step) => running.has(`${slug}|${step}`),
-  } as ArtifactStore;
+/** One read per kind for the whole file, because the bytes never change. */
+const corpusCache = new Map<ArtifactKind, unknown>();
+
+async function corpusArtefact(kind: ArtifactKind): Promise<unknown> {
+  const relative = CORPUS_FILES[kind];
+  if (relative === undefined) {
+    throw new Error(
+      `no corpus artefact for "${kind}" — add it to CORPUS_FILES, or use a step that does not ` +
+        `declare it. A fake step cannot invent one: the Postgres store shape-checks every write.`,
+    );
+  }
+  if (!corpusCache.has(kind)) {
+    const text = await readFile(path.join(FIXTURE_ROOT, relative), "utf8");
+    corpusCache.set(kind, relative.endsWith(".json") ? (JSON.parse(text) as unknown) : text);
+  }
+  return corpusCache.get(kind);
 }
+
+/** The corpus artefact, with this clone's slug and address written into it. */
+async function partFor(slug: string, kind: ArtifactKind): Promise<unknown> {
+  const value = await corpusArtefact(kind);
+  if (typeof value !== "object" || value === null) return value;
+  const copy = { ...(value as Record<string, unknown>) };
+  if (typeof copy.slug === "string") copy.slug = slug;
+  if (typeof copy.url === "string") copy.url = urlFor(slug);
+  if (typeof copy.requestedUrl === "string") copy.requestedUrl = urlFor(slug);
+  return copy;
+}
+
+/**
+ * Everything `stepIsDone` asks, answering **no**.
+ *
+ * `has: false` is the load-bearing one: a step whose artefacts are current is
+ * skipped before it is ever run, and on a seeded article every step's artefacts
+ * are current. A skipped step never throws the failure a case is built around,
+ * and never commits the product the last case counts — so this is what makes
+ * the fixtures reach the states they claim.
+ */
+const NOTHING_IS_FRESH = {
+  interrupted: async () => false,
+  has: async () => false,
+  read: async () => null,
+  readBaseline: async () => ({ state: "absent" as const }),
+  stampFor: async () => null,
+  hasEarlierBlocks: async () => false,
+} as unknown as ArtifactReads;
 
 /* ---------------------------------------------------------------- the steps -- */
 
@@ -180,7 +346,11 @@ function memoryArtifacts(): ArtifactStore {
  * `body` is where a case puts what it wants to happen while a step runs: throw
  * the failure the job is supposed to end on, or press Stop from outside.
  */
-function fakeStep(name: StepName, body: () => Promise<void> | void = () => {}): PipelineStep {
+function fakeStep(
+  slug: string,
+  name: StepName,
+  body: () => Promise<void> | void = () => {},
+): PipelineStep {
   return {
     name,
     label: STEPS[name].label,
@@ -189,7 +359,9 @@ function fakeStep(name: StepName, body: () => Promise<void> | void = () => {}): 
     async run(): Promise<StepProduct> {
       await body();
       const parts = Object.fromEntries(
-        STEPS[name].produces.map((kind) => [kind, { made: name }]),
+        await Promise.all(
+          STEPS[name].produces.map(async (kind) => [kind, await partFor(slug, kind)]),
+        ),
       ) as ArtifactParts;
       return { parts, detail: `${name} ran` };
     },
@@ -225,20 +397,30 @@ async function queueJob(slug: string, names: StepName[], force: boolean): Promis
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, { workKey: `retry-guard-${wanted.id}`, reservesName: false });
-  MADE.push(job.id);
+  const { job } = await pgJobStore.enqueueOrGet(wanted, {
+    workKey: `retry-guard-${wanted.id}`,
+    reservesName: false,
+  });
   return job;
 }
 
-/** The real filesystem session over the fake artefacts, and the fake steps. */
-function partsFor(
-  artifacts: ArtifactStore,
-  steps: Partial<Record<StepName, PipelineStep>>,
-): AdvanceParts {
-  return {
-    session: async () => fsStoreSession({ artifacts, jobs: fsJobStore }),
-    steps: { ...STEPS, ...steps } as AdvanceParts["steps"],
-  };
+/**
+ * **Production's own session factory, with only the freshness reads replaced.**
+ *
+ * `claimSession` is exported for exactly this (src/jobs.ts § *Exported so a test
+ * can drive the real one*): a test may supply fake **steps**, because the
+ * thirteen real ones cost money, but the session under them has to be the one
+ * production builds or this is a test of its own wiring. Spreading it is safe —
+ * `pgStoreSession` returns an object of closures, not methods that need a
+ * `this`.
+ */
+function session(job: Job, attempt: string): Promise<StoreSession> {
+  return claimSession(job, attempt).then((real) => ({ ...real, reads: NOTHING_IS_FRESH }));
+}
+
+/** The real session over the fake steps. */
+function partsFor(steps: Partial<Record<StepName, PipelineStep>>): AdvanceParts {
+  return { session, steps: { ...STEPS, ...steps } as AdvanceParts["steps"] };
 }
 
 /**
@@ -258,15 +440,13 @@ async function runToTheEnd(
   const job = await queueJob(slug, names, options.force ?? false);
   const bodies = options.bodies?.(job) ?? {};
   const steps = Object.fromEntries(
-    names.map((name) => [name, fakeStep(name, bodies[name])]),
+    names.map((name) => [name, fakeStep(slug, name, bodies[name])]),
   ) as Partial<Record<StepName, PipelineStep>>;
   /* Inside this file's owner: `advanceJobWith` asks `currentOwnerId()`, which
      outside a request is `SPIDERYARN_OWNER_ID` where `.env.local` sets one, and
      the fixture above is queued under `DEV_OWNER_ID`. Without the scope the
      claim answers `gone` on a machine that has run scripts/setup-local.ts. */
-  const advanced = await runAsOwner(OWNER, () =>
-    advanceJobWith(job.id, partsFor(memoryArtifacts(), steps)),
-  );
+  const advanced = await runAsOwner(OWNER, () => advanceJobWith(job.id, partsFor(steps)));
   expect(advanced?.done, "the fixture job has to have finished for the case to mean anything").toBe(
     true,
   );
@@ -277,21 +457,33 @@ async function runToTheEnd(
 
 /* --------------------------------------------------------------- the reads -- */
 
-/** The job records on disk for one slug — the money assertion, counted. */
-async function jobsOnDisk(slug: string): Promise<Job[]> {
-  const out: Job[] = [];
-  for (const { record } of await jobFilesOnDisk()) {
-    if (record.slug === slug) out.push(record as Job);
-  }
-  return out;
+/**
+ * The jobs this slug has, **through the store** — the money assertion, counted.
+ *
+ * `pgJobStore.list(owner)` is what `GET /api/jobs` answers from (`listJobs`,
+ * src/jobs.ts), so this is literally what a later request sees: rows of
+ * `spideryarn.jobs`, filtered by the `slug` column. It replaces a `readdir` of
+ * `data/_jobs/`.
+ *
+ * **One caveat worth writing down rather than discovering.** `list` is subject
+ * to `KEEP_FINISHED` retention — `trimFinished(owner, 50)` runs after every
+ * ending — so this could in principle undercount if fifty other finished jobs
+ * landed under `DEV_OWNER_ID` between a fixture ending and the assertion. Every
+ * count below is taken immediately after its own job, which is the newest, and
+ * the newest survives its own sweep by construction
+ * (docs/postmortems/260903e-…).
+ */
+async function jobsForSlug(slug: string): Promise<Job[]> {
+  return (await pgJobStore.list(OWNER)).filter((j) => j.slug === slug);
 }
 
 /**
  * Wait for a job to stop moving, so cleanup does not race the pump.
  *
  * The retried jobs really are driven, by the pump `enqueue` starts, and their
- * first step fails offline in milliseconds. Deleting a record from under a
- * write in flight puts it straight back.
+ * first step is `fetch` against an address that does not resolve — see
+ * `urlFor`. Deleting a row from under a write in flight is a lost update rather
+ * than a missing file, which is quieter and worse.
  */
 async function settle(id: string): Promise<Job | null> {
   for (let n = 0; n < 200; n++) {
@@ -304,16 +496,46 @@ async function settle(id: string): Promise<Job | null> {
 
 /* --------------------------------------------------------------- the cases -- */
 
-describe("retrying a job", () => {
-  afterAll(async () => {
-    for (const id of MADE) await forgetJob(id).catch(() => undefined);
-    for (const { path: full, record } of await jobFilesOnDisk()) {
-      if (record.slug?.startsWith(SLUG_PREFIX)) await rm(full, { force: true });
-    }
+/** One seeded article per slug, so a claim has a draft to open and publish. */
+const seeded = new Map<string, ScratchArticle>();
+
+when("retrying a job", () => {
+  beforeAll(async () => {
     for (const slug of SLUGS) {
-      await rm(path.join(ROOT, "data", slug), { recursive: true, force: true });
+      /* Owned by `DEV_OWNER_ID` explicitly, because that is who the walk runs
+         as: the Postgres reader filters every article by owner, so a fixture
+         seeded as somebody else is invisible and every claim would refuse. */
+      seeded.set(
+        slug,
+        await scratchArticleInPg(slug, {
+          ownerId: OWNER,
+          /* The address the seed goes in with — see `urlFor`. `mutate` runs on
+             the cloned directory before the load, so this is what reaches the
+             `article_revisions` columns `requireUrl` later reads. */
+          mutate: async (dir) => {
+            for (const name of ["raw.json", "meta.json"]) {
+              const at = path.join(dir, name);
+              const value = JSON.parse(await readFile(at, "utf8")) as Record<string, unknown>;
+              if (typeof value.url === "string") value.url = urlFor(slug);
+              if (typeof value.requestedUrl === "string") value.requestedUrl = urlFor(slug);
+              await writeFile(at, JSON.stringify(value));
+            }
+          },
+        }),
+      );
     }
-  });
+  }, 180_000);
+
+  afterAll(async () => {
+    /* Jobs first: a job row's `draft_revision_id` is a foreign key into the
+       revision the article delete would be trying to cascade away. By slug
+       rather than by id, so a case that died mid-walk leaves nothing behind. */
+    for (const slug of SLUGS) {
+      await getDb().delete(jobsTable).where(eq(jobsTable.slug, slug));
+      await seeded.get(slug)?.remove();
+    }
+    await closeDb();
+  }, 120_000);
 
   /* ------------------------------------------------------------------ 1 -- */
 
@@ -338,7 +560,7 @@ describe("retrying a job", () => {
     /* **The assertion that is about money rather than about a status code.** A
        refusal that threw *after* queueing the work would pass the line above
        and cost exactly what the hole cost. */
-    expect(await jobsOnDisk(slug), "the refusal must not have queued anything").toHaveLength(1);
+    expect(await jobsForSlug(slug), "the refusal must not have queued anything").toHaveLength(1);
   });
 
   /* ------------------------------------------------------------------ 2 -- */
@@ -359,10 +581,12 @@ describe("retrying a job", () => {
       status: 409,
       message: expect.stringContaining("hasn't failed"),
     });
-    expect(await jobsOnDisk(slug)).toHaveLength(1);
+    expect(await jobsForSlug(slug)).toHaveLength(1);
 
     /* Left terminal rather than queued, so it does not hold this slug for the
-       rest of the worker's life. */
+       rest of the run — under Postgres that is `jobs_active_slug`, a real
+       partial unique index, and a queued row left behind would refuse the next
+       job on this article rather than merely sitting in a map. */
     await cancelJob(job.id);
   });
 
@@ -393,7 +617,7 @@ describe("retrying a job", () => {
       status: 409,
       message: expect.stringContaining("same way"),
     });
-    expect(await jobsOnDisk(slug)).toHaveLength(1);
+    expect(await jobsForSlug(slug)).toHaveLength(1);
   });
 
   /* ------------------------------------------------------------------ 4 -- */
@@ -407,9 +631,10 @@ describe("retrying a job", () => {
    *
    * 1. the retry is **allowed**, and a new job is queued;
    * 2. the new job's own record carries a force flag on **every** step, read
-   *    back out of `data/_jobs/` rather than off the object `retryJob`
-   *    returned. That is the wiring: `retryJob` → `forceForRetry` → `enqueue` →
-   *    `cascadeForce` → `newStep` → the file a later request reads.
+   *    back out of the store rather than off the object `retryJob` returned.
+   *    That is the wiring: `retryJob` → `forceForRetry` → `enqueue` →
+   *    `cascadeForce` → `newStep` → the `spideryarn.jobs` row, `steps` column,
+   *    that a later request reads.
    *
    * **`tweets` is in the list on purpose.** It is in `FORCE_ONLY_WHEN_NAMED`
    * (src/pipeline.ts), so `cascadeForce` will not sweep it in by position — only
@@ -438,11 +663,10 @@ describe("retrying a job", () => {
 
     const retried = await retryJob(failed.id);
     if (!retried) throw new Error("the retry of a real failure was refused");
-    MADE.push(retried.id);
     expect(retried.id).not.toBe(failed.id);
 
-    const [record] = (await jobsOnDisk(slug)).filter((j) => j.id === retried.id);
-    expect(record, "the new job is not in `data/_jobs/`").toBeTruthy();
+    const [record] = (await jobsForSlug(slug)).filter((j) => j.id === retried.id);
+    expect(record, "the new job is not in the jobs table").toBeTruthy();
     expect(
       (record as Job).steps.filter((s) => s.force === true).map((s) => s.name),
       "the retry must ask for every step the refresh asked for, `tweets` included",
@@ -477,7 +701,6 @@ describe("retrying a job", () => {
 
     const retried = await retryJob(stopped.id);
     if (!retried) throw new Error("the retry of a cancelled job was refused");
-    MADE.push(retried.id);
     expect(retried.status).toBe("queued");
 
     await settle(retried.id);
