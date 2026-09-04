@@ -2021,6 +2021,105 @@ is the reach stage A's witness was built to count. This predicts which of the re
 it: the three chat route suites, both referee route suites, and anything reading a shelf or a
 profile.
 
+#### The review found the evidence was reported and not retained — 2026-09-04
+
+[260903f-stage-b-ten-conversions-review-sol.md](260903f-stage-b-ten-conversions-review-sol.md).
+Verdict: *land with named follow-ups*, and the approach is right — *"explicit store selection, real
+per-run Postgres, serialized files, non-vacuous readbacks"*. It checked every one of the ten for a
+surviving filesystem-only reader and found none, and it compared each file against its
+pre-conversion self assertion by assertion and found **nothing lost**. The one changed meaning is
+`expect(STORE).toBe("files")` becoming `postgres`.
+
+**The finding that matters is about the process, not the conversions.** The plan requires each
+converted file to *retain* its mutation and what that mutation does not cover. **Eight of the ten
+retain nothing.** The mutations were run — the agents reported them, and this document repeated the
+reports — but the evidence was never written into the artefact, so nothing distinguishes *watched
+red* from *reported green*. Confirmed by grep before acting on it: only `list-reconciles-expired`
+carries a real record (*"Watched red with the final `store.list(owner)` replaced by `return listed`:
+one call, not two"*), and `second-job-queues` carries the green one.
+
+That is this plan's own subject turned on the plan: **a claim of evidence is not evidence**, and the
+orchestrator relayed ten subagent reports without opening the files. The rule *"'Done, all tests
+pass' is a claim, not a result — read the diff"* exists for exactly this and was not followed.
+
+**Re-run, not reconstructed.** Writing a plausible note from reading the code would manufacture the
+evidence rather than retain it, which is worse than having none. The eight go back through the
+mutation, the run and the watch.
+
+**The process fix is a guard, and it is deferred rather than dropped.** A convention that a comment
+should be there is the same instrument that just failed. The evidence wants a typed home — a
+`mutation` field on the `STORE_MIGRATION` entry, carrying what was broken, what the run printed, and
+what it does not cover, with a test requiring it of every converted file. Not done in this batch
+because three agents were editing
+[`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts) concurrently and a
+type change would have collided. **Do it when the registry is quiet, before stage B closes.**
+
+##### Two registry accounts that disagree with the code, both verified
+
+Both are `mechanisms` lists that under-state what the converted file still reaches. Neither
+invalidates a Postgres assertion; both would leave stage G's account wrong.
+
+1. **`quiz-mark-route` still reaches the filesystem ledger.** Its entry says *"the provider is stubbed
+   to reject, so no ledger row"*, and that is wrong twice. `src/ai-call.ts`'s streaming wrapper
+   records spend through a `finally`, so a rejection and an aborted stream both record — and
+   **[`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) line 74 returns `fsCostStore` whenever
+   `NODE_ENV === "test"`, so the ledger ignores the store flag altogether in tests.** The 2026-09-03
+   witness corroborates it: `ai-calls-fs:fsCostStore.record`. Wants `ledger-redirect` added — and it
+   is a reminder that pinning a file to Postgres does not pin its ledger, which is the whole reason
+   **C** is a stage.
+2. **`the-query-string-does-not-decide-the-route` uses a symbol from the condemned module.** Its GET
+   always calls `sweepChat`, and the *Postgres* sweep writes `CHAT_SWEPT` — declared in
+   [`src/store/fs.ts`](../../src/store/fs.ts) line 390 and imported by
+   [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts) line 81. Not a filesystem read returning an
+   empty answer; a shared symbol living in the half being deleted. Wants `shared-mechanism` naming
+   it, and it is one for stage G's list: **deleting `fs.ts` moves this string, it does not remove
+   it.**
+
+Both edits wait for the registry to be quiet, for the same reason the guard does.
+
+##### And it agreed with the two calls this plan had already made
+
+The green mutation's conclusion was checked against the code and confirmed: `tryEnqueue` returns
+immediately after a clean insert, so the two accepted-job cases never reach the classifier at all,
+and the double-click case reaches `sameWork` with a row that already agrees on owner, slug and work
+key — so removing the work-key predicate *cannot* change that answer. The file exercises `sameWork`
+but not the necessity of its predicate, and none of `sourceTaken`, `nameTaken` or the id-collision
+path.
+
+And on the four entries left as `database-integration`: *"I agree with the plan's resolution: rerun
+the witness and remove these entries rather than inventing a completed/transitional category.
+Shrinking the map is cleaner than recategorising."*
+
+##### The review could not run anything, and said so
+
+The managed sandbox denied the local Postgres connection (`connect EPERM 127.0.0.1:54362`), the
+private setup then installed its poison URL, and collection failed with zero tests. Every finding
+above is reasoned rather than reproduced, and the review **says so itself, unprompted, in its own
+verdict** rather than letting a retained log stand in for a run it did not do. That is the behaviour
+the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
+but it means the follow-ups were verified here, in this tree, and not there.
+
+#### The witness has no instrument — the step this plan scheduled cannot be run
+
+`STORE_MIGRATION` membership is driven by the **dynamic** witness — which files *executed* a condemned
+function — so a converted file genuinely does stop being witnessed, and the resolution recorded above
+holds. (Had it been witness 1's static import graph it would not: a converted route suite still
+imports the app, which still imports `src/store/index.ts`, which still imports `fs.ts` until stage G.)
+
+**But the script that produced [`tests/store-migration-witness.json`](../../tests/store-migration-witness.json)
+is not in the repo.** The JSON records `what`, `measured`, `store`, the eight `instrumentedModules`,
+`notInstrumented` and two `knownBlindSpots` — everything except the command. So *"re-run the witness at
+the end of stage B"* was scheduled against a tool that does not exist, and it would have been
+discovered at the end of stage B.
+
+It is this document's own § *Counts are perishable here — re-derive, never inherit* failing on the
+one input it cannot re-derive, and the repo's rule that an inventory records **the command**, scope
+and run date. Being rebuilt as `scripts/store-migration-witness.ts`, committed this time, with the
+original's proving discipline made repeatable rather than described: the 2026-09-03 run hit four
+positive controls with method-level detail and four clean negative controls, and an instrument that
+silently stopped hooking would produce an empty `touched` — the shape that passes the registry guard
+while proving nothing.
+
 #### The tail was measured, and it is 16.75 hours, not 7 — 2026-09-04
 
 The twelve done average 30-40 minutes, so the obvious extrapolation says the remaining fourteen are
