@@ -31,9 +31,24 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pgReady } from "./helpers/pg-ready.js";
+
+/**
+ * The handler reaches Postgres through its own `getDb()`, so this file closes
+ * that pool — docs/project/testing.md § *The last file's pool is not pollution*.
+ *
+ * **Imported here rather than at the top of the file**, because a static import
+ * of `src/db/client.ts` pulls in `src/log.ts` before the `vi.mock` factory below
+ * has had its `logged` binding initialised — the whole file then fails to
+ * collect with *"Cannot access 'logged' before initialization"*. Watched
+ * happening, 2026-09-04.
+ */
+afterAll(async () => {
+  const { closeDb } = await import("../src/db/client.js");
+  await closeDb();
+});
 
 /** What `listArticles` was asked, and how often. The whole point of the cache. */
 const listArticles = vi.fn(async () => [] as unknown[]);

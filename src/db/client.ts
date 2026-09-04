@@ -33,6 +33,8 @@
  * in production.
  */
 
+import { basename } from "node:path";
+
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
@@ -65,6 +67,51 @@ let database: Db | undefined;
 function poolMax(): number {
   const configured = Number(process.env.DATABASE_POOL_MAX);
   return Number.isFinite(configured) && configured > 0 ? configured : 5;
+}
+
+/**
+ * **What this pool calls itself in `pg_stat_activity`.**
+ *
+ * It used to call itself nothing, and that had a cost: on a box where ten
+ * worktrees each run a dev server against the same local `postgres`, a sample of
+ * the shared database came back with seven anonymous sessions writing to
+ * `spideryarn.*` and no way to say whose they were. Anything reading
+ * `pg_stat_activity` — the scavenger in `scripts/db-test-create.ts`, the
+ * shared-lane failure report in `tests/setup/shared-db.ts` — could then only
+ * describe them as *unattributed*. GPT Sol, 2026-09-04,
+ * docs/plans/260903f-pollution-verdict-design-sol.md.
+ *
+ * `spideryarn` first so that a prefix match finds every one of ours; then
+ * `basename(process.cwd())`, which locally is the worktree name and is the thing
+ * a person needs in order to know which terminal to go to; then the pid, because
+ * one worktree runs more than one process.
+ *
+ * **`PGAPPNAME` wins when it is set**, which is `pg`'s own default behaviour
+ * (`connection-parameters.js`) and is how a test run labels every connection it
+ * makes, including the ones this function would otherwise name.
+ *
+ * **Where it is useful is the direct local stack.** In production `DATABASE_URL`
+ * is Supabase's *transaction* pooler, which shares backend connections between
+ * clients, so no promise is made that a name set here stays attached to one
+ * logical client end to end over there. Nothing queries on it either way.
+ *
+ * **What goes in it.** Never the URL and never a key. It does carry the working
+ * directory's last path segment, which is visible in `pg_stat_activity` and can
+ * reach the server's logs — that is a directory name somebody chose, so read it
+ * as "this is what it contains" rather than as a promise that it is harmless.
+ *
+ * Postgres allows only printable ASCII here — anything else is escaped — and
+ * truncates at `NAMEDATALEN`, **silently**. So it is sanitised and cut to bytes
+ * here rather than left to the server, and `.slice()` would have been the wrong
+ * cut anyway: it counts UTF-16 units, not bytes. GPT Sol, 2026-09-04.
+ * https://www.postgresql.org/docs/current/runtime-config-logging.html#GUC-APPLICATION-NAME
+ */
+function applicationName(): string {
+  const asked = process.env.PGAPPNAME?.trim();
+  const raw = asked || `spideryarn ${basename(process.cwd())}:${process.pid}`;
+  // Printable ASCII only, then a byte-wise cut on a whole-character boundary.
+  const ascii = raw.replace(/[^\x20-\x7e]/g, "?");
+  return Buffer.from(ascii, "ascii").subarray(0, 63).toString("ascii");
 }
 
 /** The URL, or a readable explanation of what to do about its absence. */
@@ -106,7 +153,12 @@ export function getDb(): Db {
     logger.warn({ mode: ssl.mode }, "database connection is not verifying the server certificate");
   }
 
-  pool = new Pool({ connectionString: url, max: poolMax(), ssl: ssl.ssl });
+  pool = new Pool({
+    connectionString: url,
+    max: poolMax(),
+    ssl: ssl.ssl,
+    application_name: applicationName(),
+  });
 
   // A pool emits `error` for a connection that dies while idle — a pooler
   // recycling it, a network blip. Unhandled, that is an `error` event on an
