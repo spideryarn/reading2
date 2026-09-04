@@ -544,15 +544,14 @@ function usableStructure(value: unknown, fingerprint: string): string | null {
    * built and passed the invariants), so this guards drift rather than today.
    * ⟨GPT Sol, on the code, 2026-09-04.⟩
    *
-   * **What it does not cover, stated rather than implied:** an answer that
-   * parses here and then fails `buildTree` or `assertTreeSound` below still
-   * throws, and still throws on the next attempt. The lever for that is
-   * `PROMPT_VERSION`, which the key carries precisely so a change in what this
-   * stage does with an answer stops every stored answer being reused — a fuller
-   * fix would re-buy the call in place, and that means a retry loop around the
-   * whole call-and-build stretch, which is more machinery than the risk earns
-   * today. Parsing is cheap and covers the case that can arise without a code
-   * change at all.
+   * **This is the cheap half of the gate, not the whole of it.** An answer that
+   * parses here and then fails `buildTree`, `appendSupplement` or
+   * `assertTreeSound` used to be accepted and then throw for ever; the full
+   * parse-build-assert run now happens on the candidate in `generateHierarchy`,
+   * which demotes it to a miss. Kept here because a value of the wrong shape
+   * should never reach that far, and because `usable` in the log line below
+   * means "the row was for this question and held an answer", which is a
+   * different fact from "the answer still builds".
    */
   try {
     parseJson(entry.answer);
@@ -1756,6 +1755,97 @@ export async function generateHierarchy(opts: {
   const { maxTokens, params } = structureRequest(body);
 
   /**
+   * **Everything between one answer and one tree, in one place** — parse, build,
+   * append the apparatus, and assert the invariants. It throws if any of them
+   * refuses, and that is what makes it usable as a gate as well as a step.
+   *
+   * It exists as a function because it is called **twice on two different
+   * questions**: once on a stored answer, where a throw means "this row is not
+   * usable, buy the call again", and once on a fresh one, where a throw is the
+   * run failing. Anything less than all four checks on the stored side is the
+   * hole GPT Sol found — see the checkpoint read below.
+   *
+   * `body`, so the root's range ends at the last body block and every check in
+   * `buildTree` — the tiling, the "covers the whole article" guard — is asked
+   * about the argument the model was actually shown.
+   *
+   * **Appended before `generateLabels`, not after.** `labels.json` records
+   * `structureHash(opts.tree)` (src/labels.ts), so a supplement added afterwards
+   * would make the labels stale at birth — a freshness stamp that is wrong the
+   * moment it is written, and nothing would ever say so. There is no later
+   * gist-composition pass to worry about: composition is an instruction to the
+   * model in SYSTEM above, and `buildTree` copies back what it returns.
+   * `planBatches` needs no supplement branch of its own — its `own` filter is
+   * `isStructural`, which is false for every supplement block, so the node
+   * contributes no sibling set and costs no call.
+   *
+   * **The structural half of the invariants runs here, before a label is paid
+   * for.** Everything `checkTree` can fail on at this point — the ranges, the
+   * tiling, the coverage, the gists, the titles, `sourceHeading`, the supplement
+   * rules — is decided by the structure answer and cannot change in
+   * `generateLabels`, because `mergeLabels` touches leaves only and only sets or
+   * deletes `navLabel`. So the answer is already known here, and the version of
+   * this file that only asked after the merge paid for a full batch run to learn
+   * something it could have been told for free. On job spya-v2f7b3 that happened
+   * three times in one ingest, each time discarding a label run that had
+   * *succeeded* — and stage 4 is the most expensive step in the pipeline.
+   *
+   * **This does not replace the call after `mergeLabels`, and must not.** One
+   * `fail` in `checkTree` reads `navLabel` — the phantom-row rule at
+   * tree-invariants.ts, a leaf that carries a label but anchors a block
+   * `isStructural` says may never have one. There are no labels yet at this
+   * line, so that check is vacuous here and only the later call can make it.
+   * Two calls, deliberately: this one is a cost guard, the one below is the
+   * guarantee about the file. `checkTree` is pure and takes microseconds.
+   * docs/postmortems/260830a-the-article-with-one-heading.md.
+   */
+  const treeFrom = (answer: string): { tree: Tree; built: BuildReport } => {
+    const { root } = parseJson(answer);
+    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
+    let tree: Tree;
+    try {
+      tree = appendSupplement(buildTree(root, {}, body, slug, built), groups);
+    } catch (err) {
+      /**
+       * **A run that threw still says what it had mended on the way**, because
+       * the success log at src/pipeline.ts never gets a report when `buildTree`
+       * throws — a monitoring path that goes dark exactly when somebody would
+       * look at it. GPT Sol, finding 7.
+       *
+       * No tiling fault reaches here any more (`planChildRanges` derives the
+       * partition rather than checking it), so what throws now is a range that
+       * runs backwards, an endpoint that is not a block id, or a root that
+       * misses the article's ends. The repair figures are still worth attaching:
+       * a node whose siblings were all mended and which then failed on an
+       * invented id is a different story from one that failed on its own.
+       *
+       * `where`, `kind`, `at` and `size` are all derived from the shape of the
+       * answer rather than from anything in it, so they are safe to put in a
+       * message that will be logged and copied onto the job card — see
+       * `nameValue` above for the rule and why this file has to keep restating
+       * it.
+       */
+      if (built.repairs.length === 0) throw err;
+      const spent = [...new Set(built.repairs.map((r) => r.at))].length;
+      throw new Error(
+        `${err instanceof Error ? err.message : String(err)}\n` +
+          `  Before this it mended ${spent} boundary(ies), moving ` +
+          `${repairedBlockCount(built.repairs)} block(s): ` +
+          `${built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`).join("; ")}. ` +
+          `This line is the only place those numbers are visible on a run that failed.`,
+      );
+      /* No `cause`, for the reason the label stage gives at the same shape:
+         src/log.ts follows cause chains and would write the original message into
+         the log a second time under another key. It is already in the text. */
+    }
+    assertTreeSound(blocks, tree);
+    /* The report goes back with the tree because `HierarchyRun` reports what was
+       mended in the tree it is returning — which, on a resumed run, is the
+       stored answer's build rather than a fresh one's. */
+    return { tree, built };
+  };
+
+  /**
    * **The tree an earlier attempt already paid for, if it left one.**
    *
    * The most expensive call in the pipeline — 508 seconds and about two dollars
@@ -1791,6 +1881,40 @@ export async function generateHierarchy(opts: {
       "could not read the structure checkpoint; the table of contents will be asked for again",
     );
   }
+
+  /**
+   * **A stored answer is resumed only if it still becomes a tree**, and this is
+   * the whole of the gate: parse, build, supplement, invariants — the same four
+   * the write is placed after.
+   *
+   * `usableStructure` asked only whether the answer parsed. An answer that
+   * parses and then fails `buildTree`, `appendSupplement` or `assertTreeSound`
+   * was accepted, skipped the call, and threw — and threw again on every attempt
+   * after, because the only thing that overwrites a row is a run that reaches
+   * the write, and no run ever would. **A permanently wedged article whose only
+   * lever was a `PROMPT_VERSION` bump**, i.e. a deploy, for one reader's PDF.
+   * Today's writer cannot create such a row; an older one, a hand-written one,
+   * or a change to what this file does with an answer that nobody bumped the
+   * version for, all can. ⟨GPT Sol, on the code, 2026-09-04, finding 6.⟩
+   *
+   * So a throw here demotes the row to a miss, the call below buys a fresh
+   * answer, and the write at the end replaces what was poisoning it. **The cost
+   * of being wrong in this direction is one call; the cost of the other is an
+   * article that can never be built again.**
+   */
+  let cached: { tree: Tree; built: BuildReport } | null = null;
+  if (raw !== null) {
+    try {
+      cached = treeFrom(raw);
+    } catch (err) {
+      log("pipeline").warn(
+        { slug, key: structureFingerprint, err },
+        "the stored table of contents no longer builds; asking for it again and replacing it",
+      );
+      raw = null;
+    }
+  }
+
   const structureResumed = raw !== null;
   if (structureResumed) {
     opts.onProgress?.("reusing the table of contents an earlier attempt paid for");
@@ -1874,77 +1998,10 @@ export async function generateHierarchy(opts: {
     }
   }
 
-  const { root } = parseJson(raw);
-  /* `body`, so the root's range ends at the last body block and every check in
-     `buildTree` — the tiling, the "covers the whole article" guard — is asked
-     about the argument the model was actually shown. */
-  const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
-  let structure: Tree;
-  try {
-    structure = appendSupplement(buildTree(root, {}, body, slug, built), groups);
-  } catch (err) {
-    /**
-     * **A run that threw still says what it had mended on the way**, because the
-     * success log at src/pipeline.ts never gets a report when `buildTree`
-     * throws — a monitoring path that goes dark exactly when somebody would
-     * look at it. GPT Sol, finding 7.
-     *
-     * No tiling fault reaches here any more (`planChildRanges` derives the
-     * partition rather than checking it), so what throws now is a range that
-     * runs backwards, an endpoint that is not a block id, or a root that misses
-     * the article's ends. The repair figures are still worth attaching: a node
-     * whose siblings were all mended and which then failed on an invented id
-     * is a different story from one that failed on its own.
-     *
-     * `where`, `kind`, `at` and `size` are all derived from the shape of the
-     * answer rather than from anything in it, so they are safe to put in a
-     * message that will be logged and copied onto the job card — see `nameValue`
-     * above for the rule and why this file has to keep restating it.
-     */
-    if (built.repairs.length === 0) throw err;
-    const spent = [...new Set(built.repairs.map((r) => r.at))].length;
-    throw new Error(
-      `${err instanceof Error ? err.message : String(err)}\n` +
-        `  Before this it mended ${spent} boundary(ies), moving ` +
-        `${repairedBlockCount(built.repairs)} block(s): ` +
-        `${built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`).join("; ")}. ` +
-        `This line is the only place those numbers are visible on a run that failed.`,
-    );
-    /* No `cause`, for the reason the label stage gives at the same shape:
-       src/log.ts follows cause chains and would write the original message into
-       the log a second time under another key. It is already in the text. */
-  }
-
-  /* **Appended before `generateLabels`, not after.** `labels.json` records
-     `structureHash(opts.tree)` (src/labels.ts), so a supplement added afterwards
-     would make the labels stale at birth — a freshness stamp that is wrong the
-     moment it is written, and nothing would ever say so. There is no later
-     gist-composition pass to worry about: composition is an instruction to the
-     model in SYSTEM above, and `buildTree` copies back what it returns.
-     `planBatches` needs no supplement branch of its own — its `own` filter is
-     `isStructural`, which is false for every supplement block, so the node
-     contributes no sibling set and costs no call. */
-
-  /* **The structural half of the invariants, before a label is paid for.**
-     Everything `checkTree` can fail on here — the ranges, the tiling, the
-     coverage, the gists, the titles, `sourceHeading`, the supplement rules — is
-     decided by the structure call above and cannot change in `generateLabels`,
-     because `mergeLabels` touches leaves only and only sets or deletes
-     `navLabel`. So the answer is already known at this line, and the version of
-     this file that only asked after the merge paid for a full batch run to
-     learn something it could have been told for free. On job spya-v2f7b3 that
-     happened three times in one ingest, each time discarding a label run that
-     had *succeeded* — and stage 4 is the most expensive step in the pipeline.
-
-     **This does not replace the call after `mergeLabels`, and must not.** One
-     `fail` in `checkTree` reads `navLabel` — the phantom-row rule at
-     tree-invariants.ts, a leaf that carries a label but anchors a block
-     `isStructural` says may never have one. There are no labels yet at this
-     line, so that check is vacuous here and only the later call can make it.
-     Two calls, deliberately: this one is a cost guard, the one below is the
-     guarantee about the file. `checkTree` is pure and takes microseconds.
-     docs/postmortems/260830a-the-article-with-one-heading.md. */
-  assertTreeSound(blocks, structure);
+  /* Built already if it came out of the checkpoint — the gate up there is this
+     same function, because an answer that cannot become a tree has to read as a
+     miss rather than as a resumption. */
+  const { tree: structure, built } = cached ?? treeFrom(raw);
 
   /**
    * **Kept only now, and the lateness is the design.**
@@ -1961,10 +2018,12 @@ export async function generateHierarchy(opts: {
    * which is the same deal `keepBatch` takes in src/labels.ts. Failing a run
    * that has just succeeded, over a saving, would be a cache that had become an
    * outage.
+   *
+   * **And this is what un-poisons a row.** `structureResumed` is false when the
+   * stored answer was refused above, so the write lands on the same key and the
+   * store's last-write-wins replaces it (src/store/checkpoints-pg.ts). Without
+   * that there would be no way out of a bad row but a deploy.
    */
-
-
-
   if (!structureResumed) {
     const entry: StructureCheckpointEntry = { fingerprint: structureFingerprint, answer: raw };
     try {

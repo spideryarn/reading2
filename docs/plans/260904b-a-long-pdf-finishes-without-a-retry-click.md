@@ -754,63 +754,6 @@ finish.
 chunk passes"* and `ATTEMPTS`' *"then it fails… The failure is still visible and still hard"*. A
 chunk that fails twice is published with a quality note.
 
-### Stage 5b — a child's range the wrong way round is a repair, not a refusal — **DONE 2026-09-04**
-
-Found by a real end-to-end ingest that got past everything above and then died at `hierarchy`, having
-spent ~500 s and **$1.26**, with nothing checkpointed (the write is correctly after the build) and a
-Retry button for the reader:
-
-> The node at root > child 4 > child 3 has a range that runs backwards — its start block comes 4
-> block(s) after its end block in the article.
-
-**The refusal was circular.** `spanOf` in `planChildRanges` lumped `lo > hi` in with "this id is not
-in the article"; one such child left the *whole* sibling set unplanned; `visit` then fell back to the
-raw proposal and the guard for a node nobody planned fired on a node that would have planned
-perfectly well. It declined to plan *because* of the fault, then threw *because* it had not planned.
-Measured refusal rate on the production recipe over 23 stored eval calls: **~9%**, on a corpus topping
-out at 499 blocks against this document's 2,025 — a floor, not an estimate. On this document, 1 in 2.
-
-**Ends are never used**, which is what makes ordering safe rather than a guess: every end is derived
-from the next start ([`src/hierarchy.ts`](../../src/hierarchy.ts) § `planChildRanges`), so the whole
-effect of a transposition is which of the two numbers is read as the start. Reading the smaller one
-is the section the answer plainly meant.
-
-Run against the real saved answer (`m4-kuhn-structure-raw.json`, 2,025 blocks), with the fix in the
-code rather than applied to the proposal outside it:
-
-| | outcome | boundaries | blocks moved | largest | `checkTree` | kinds |
-|---|---|---|---|---|---|---|
-| **A** as the model wrote it | BUILT | 30 | 40 | 5 | 0 | gap 26, short 3, overlap 1 |
-| **B** `root > child 4 > child 3` reversed by 4 — **the live failure** | **BUILT** (was REFUSED) | 30 | 73 | 34 | 0 | gap 25, short 3, **reversed 1**, overlap 1 |
-| **C** same, pairs ordered outside the code | BUILT | 30 | 71 | 30 | 0 | gap 25, short 3, overlap 2 |
-| **D** untouched answer, ordering on — **the control** | BUILT | 30 | 40 | 5 | 0 | identical to A |
-
-D is the one that matters as much as B: **ordering changes nothing on an answer that was already
-sound** (0 pairs ordered). B against C is the difference between mending it in the checker and mending
-it in the plan — 73 blocks against 71, and the fault named `reversed` rather than buried in
-`overlap` — because `recordBoundaryFaults` goes on measuring against what the model **literally
-wrote**, never against the tidied value.
-
-**Four things it was important not to get wrong.** A new `PartitionRepair["kind"]`, `"reversed"`, so
-the mend is counted and reported like the others rather than applied in silence — and it is the only
-kind recorded at size 0, because a transposition is a fault whether or not it moved anything. **The
-invented-id branch still nulls the group**: that refusal is correct and its message names the id.
-**The guard in `visit` stays**, because a backwards range at the root has no parent to plan it, and
-neither does one in a set an invented id left unplanned — both still refuse, both are tested.
-And `reversed` *replaces* `gap`/`overlap` on the child's own start entry rather than adding a second
-entry beside it: two entries would double-count one movement in `repairedBlockCount` and break the
-invariant the fuzz asserts, that two faults in one node never share a coordinate.
-
-**The property test never found this because its generator could not produce it** — it excluded
-backwards ranges by construction, on the grounds that they were refusals with messages of their own.
-It now transposes one child in eight, and a control asserts the fuzz still produces them
-(`withReversed > 100` of 3,000). A property test only holds over the inputs its generator can make.
-
-**Done when:** the live shape builds, is counted as `reversed`, and `checkTree` reports nothing ✓; the
-root case still refuses ✓; `tests/hierarchy-repairs.test.ts` (32) and the structure eval (55) green ✓.
-`docs/project/hierarchy.md` § The one thing it loses, and what still throws, and the two comments in
-`evals/hierarchy-structure/floor.ts` that said a backwards range still throws, are corrected.
-
 ### Stage 6 — sectioning, only if stage 1 says one pass cannot safely fit
 
 Its first step is nearly free: put the mechanical skeleton from

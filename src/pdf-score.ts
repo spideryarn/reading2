@@ -293,9 +293,9 @@ function protect(text: string): string[] {
  * own token, so the tolerance is a named case rather than a side effect of not
  * knowing where words end.
  */
-function protectedFaults(want: string[], have: string): string[] {
+function protectedFaults(want: string[], have: string, extra: readonly string[] = []): string[] {
   const haystack = new Set<string>();
-  for (const token of protectedOf(have)) {
+  for (const token of protectedOf(have, extra)) {
     haystack.add(flatten(token));
     haystack.add(flatten(token).replace(/-/gu, ""));
   }
@@ -331,11 +331,12 @@ function protectedFaults(want: string[], have: string): string[] {
  * entry *longer*, so a truncated number still matches nothing. The test that
  * says so sits next to the two that need the joins.
  *
- * **And every way a printed page number could have been welded to the numbered
- * heading underneath it** \u2014 `defusedFolios` below, which is the one place this
- * file makes a haystack entry *shorter*.
+ * **And whatever `extra` the caller has for it** — in practice `defusedFolios`
+ * below, the one place this file makes a haystack entry *shorter*. It is passed
+ * in rather than derived here because it needs to know which page each line came
+ * from, and by this point the pages of a chunk are one string.
  */
-function protectedOf(text: string): string[] {
+function protectedOf(text: string, extra: readonly string[]): string[] {
   const raw = text.normalize("NFKC").split(/\s+/);
   const all = [...raw];
   for (let i = 0; i < raw.length - 1; i++) {
@@ -348,26 +349,22 @@ function protectedOf(text: string): string[] {
     const third = raw[i + 2];
     if (third !== undefined) all.push(first + second + third);
   }
-  all.push(...defusedFolios(text));
+  all.push(...extra);
   return protect(all.join(" "));
 }
 
 /**
  * A numbered heading, as a whole token: `4.`, `16.3.`, `9.5.10.`.
  *
- * The trailing dot is required and it is doing work \u2014 it is most of what keeps
+ * The trailing dot is required and it is doing work — it is most of what keeps
  * this rule off an ordinary year. `2012` is not a numbered heading; `2012.` at
- * the start of a line is, as far as this can tell, and that residual cost is
- * written down under `defusedFolios`.
+ * the start of a line is, as far as this can tell.
  */
 const NUMBERED_HEADING = /^\d+(?:\.\d+)*\.$/u;
 
-/** How many digits of folio to try stripping. Nothing paginates past four. */
-const MAX_FOLIO_DIGITS = 4;
-
 /**
  * **The page number the text layer welded onto the heading below it, taken back
- * off again.**
+ * off again — and only the page number this document actually prints there.**
  *
  * `pass0` in src/pdf.ts concatenates pdf.js text items with no separator unless
  * the item carries `hasEOL`, and pdf.js does not set it on a folio printed on
@@ -375,51 +372,128 @@ const MAX_FOLIO_DIGITS = 4;
  * and a paper that numbers its sections three deep produce this, verbatim, from
  * Kuhn's "A Landscape of Consciousness":
  *
- *     \u2026Molecular Biology 190 (2024) 28\u2013169\u240a649.5.10. Mansell's perceptual\u2026
+ *     …Molecular Biology 190 (2024) 28–169␊649.5.10. Mansell's perceptual…
  *
  * `64` is the printed folio and `9.5.10.` is the heading. `protect` above
  * tokenises on whitespace, so the haystack holds `649.5.10` and never `9.5.10`
- * \u2014 and a model that correctly obeys rule 6 and drops the running furniture
+ * — and a model that correctly obeys rule 6 and drops the running furniture
  * writes a clean `9.5.10.` and is scored as having *invented* it. Eight
  * headings on that one document, every one genuinely printed where the model
  * put it. `protectedOf` can already *join* two tokens pdf.js split; nothing
  * could *split* one it had merged. Confirmed twice independently on the real
- * file \u2014 docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md
- * \u00a7 The checker defect.
+ * file — docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md
+ * § The checker defect.
  *
- * **Three constraints keep this from becoming the `2012 \u2192 12` hole again**, and
- * each is load-bearing rather than tidy:
+ * **The first version of this stripped one to four leading digits from any
+ * line-initial numbered heading, and that was a hole, not a rule.** GPT Sol
+ * scored a page printing `12.3. Genuine heading` against a transcription saying
+ * `2.3. Genuine heading` and the check passed it: any heading with a multi-digit
+ * first component admitted every truncation of it. Corrupting a section number
+ * is precisely the class `protect` exists to catch, and suppressing that retry
+ * publishes a silently wrong article — much worse than the ~8 wasted retries the
+ * rule was written to save. So the strip is now **one exact number, the folio
+ * `folioOffset` elected for this document, on the page it belongs to**, and
+ * every case it cannot corroborate goes back to being a fault.
+ *
+ * **Three constraints keep it there**, and each is load-bearing rather than
+ * tidy:
  *
  * - **Line-initial only.** A folio is the first thing on its line and nothing
- *   else is. Without this clause the very next test along breaks: the page
- *   prints `1843\u201379`, the model writes `43\u201379`, and a free-floating digit strip
- *   would wave it through.
- * - **The whole token must be a numbered heading** \u2014 digits, dots, and a final
- *   dot. `2012a)` and `1843\u201379` are not, so neither is ever a candidate.
- * - **At most `MAX_FOLIO_DIGITS` stripped, and at least one digit left.** So
- *   `9.8.12.` \u2014 a heading with no folio fused to it, line-initial, on the very
- *   page where `12` was a *true* positive \u2014 yields nothing at all, because its
- *   leading digit run is one digit long.
- *
- * The cost, stated because it is real: a line that begins `2012.` \u2014 a year
- * ending a sentence exactly at a line break \u2014 would admit `12`. The folio would
- * settle it and `pass0` does know the file page, but deriving the *printed*
- * folio needs the running-header offset, and that is a document-level
- * inference for one narrow case. Simplest version first; measured on Kuhn this
- * rule adds 260 haystack entries across 142 pages and gets all ten of the
- * verified cases right.
+ *   else is. Without this clause the neighbouring test breaks: the page prints
+ *   `1843–79`, the model writes `43–79`, and a free-floating digit strip would
+ *   wave it through.
+ * - **The whole token must be a numbered heading** — digits, dots, and a final
+ *   dot. `2012a)` and `1843–79` are not, so neither is ever a candidate.
+ * - **What is left when the folio comes off must be a numbered heading too.**
+ *   That is what tells a folio welded to a heading from a heading that merely
+ *   opens with this page's number: folio 77 against `77.3.` leaves `.3.`, which
+ *   is nothing, so a model that shortens that heading to `3.` is still caught.
  */
-function defusedFolios(text: string): string[] {
+function defusedFolios(text: string, folio: string | null): string[] {
+  if (folio === null) return [];
   const out: string[] = [];
   for (const line of text.normalize("NFKC").split("\n")) {
     const first = line.trim().split(/\s+/)[0];
-    if (first === undefined || !NUMBERED_HEADING.test(first)) continue;
-    const run = /^\d+/u.exec(first)?.[0] ?? "";
-    for (let cut = 1; cut < run.length && cut <= MAX_FOLIO_DIGITS; cut++) {
-      out.push(first.slice(cut));
-    }
+    if (first === undefined || !first.startsWith(folio)) continue;
+    if (!NUMBERED_HEADING.test(first)) continue;
+    const heading = first.slice(folio.length);
+    if (!NUMBERED_HEADING.test(heading)) continue;
+    out.push(heading);
   }
   return out;
+}
+
+/** How many leading digits of a line could be a folio. Nothing paginates past four. */
+const MAX_FOLIO_DIGITS = 4;
+
+/**
+ * How much of a document has to agree before a number counts as its folio.
+ *
+ * Measured on Kuhn, whose 142 pages start at journal page 28: the offset 27 is
+ * line-initial on **141** of them and the runner-up on **10**, so the winner
+ * clears every one of these by a distance. They are written as a share and a
+ * ratio rather than as counts so that a short document is held to the same
+ * standard as a long one — and `pages` is there because two or three pages
+ * cannot corroborate anything, however unanimous they look.
+ */
+const FOLIO_AGREEMENT = { pages: 3, share: 0.5, margin: 2 } as const;
+
+/** Computed once per document: `check` runs per chunk, and there are 69 of them. */
+const folioOffsets = new WeakMap<Pass0, number | null>();
+
+/**
+ * **How far the printed page numbers run ahead of the file's, if this document
+ * prints page numbers at all.**
+ *
+ * The folio is knowable and it is worth knowing, because it is the one thing
+ * that says which leading digits on a line are furniture rather than content.
+ * Every page votes for every offset its line-initial digit runs could imply —
+ * `649.5.10.` on file page 37 votes for 5, 63 and 648 — and an offset wins only
+ * by being the same on most of the document. An offprint whose folios restart,
+ * a book with roman front matter, a page of prose with no number printed on it:
+ * none of those elects anything, and `defusedFolios` then does nothing at all.
+ * That is the intended answer. **A wasted retry costs money; a suppressed
+ * genuine fault costs the reader an article with a wrong number in it.**
+ *
+ * The stronger fix is upstream: `pass0` knows the text-layer item boundary
+ * between the folio and the heading and throws it away. Keeping it would mean
+ * none of this had to be inferred. src/pdf.ts § `pass0`, and the plan's stage 5.
+ */
+function folioOffset(pass: Pass0): number | null {
+  const known = folioOffsets.get(pass);
+  if (known !== undefined) return known;
+  const support = new Map<number, number>();
+  for (const p of pass.pages) {
+    const voted = new Set<number>();
+    for (const line of p.text.normalize("NFKC").split("\n")) {
+      const run = /^\d+/u.exec(line.trim())?.[0];
+      if (run === undefined) continue;
+      for (let take = 1; take <= run.length && take <= MAX_FOLIO_DIGITS; take++) {
+        voted.add(Number(run.slice(0, take)) - p.page);
+      }
+    }
+    for (const offset of voted) support.set(offset, (support.get(offset) ?? 0) + 1);
+  }
+  const ranked = [...support].sort((a, b) => b[1] - a[1]);
+  const winner = ranked[0];
+  const runnerUp = ranked[1];
+  const elected =
+    winner === undefined ||
+      winner[1] < FOLIO_AGREEMENT.pages ||
+      winner[1] < pass.pages.length * FOLIO_AGREEMENT.share ||
+      (runnerUp !== undefined && winner[1] < runnerUp[1] * FOLIO_AGREEMENT.margin)
+      ? null
+      : winner[0];
+  folioOffsets.set(pass, elected);
+  return elected;
+}
+
+/** The page number printed on this page, as the text layer would hold it. */
+function folioOf(pass: Pass0, page: number): string | null {
+  const offset = folioOffset(pass);
+  if (offset === null) return null;
+  const folio = page + offset;
+  return folio > 0 ? String(folio) : null;
 }
 
 /**
@@ -598,12 +672,20 @@ function spansOf(base: string[], aligned: boolean[], present: boolean[]): PageSc
  * page proved. The `harder` fixture prints its DOI in the running header of
  * every page, so pass 0 correctly calls it furniture, and a model that
  * transcribed the DOI was then accused of making it up.
+ *
+ * `defused` is what `defusedFolios` recovered from the page(s) `onPage` holds,
+ * computed by `check` because only it knows which line came from which page and
+ * what folio was printed on it. It joins the haystack for the two checks that
+ * ask "is this on the page" and not the one that asks "did the model keep this":
+ * the entries describe the *page*, so putting them in a haystack built from the
+ * model's own words would answer a question nobody asked.
  */
 export function scorePage(
   page: number,
   baseline: string[],
   records: PdfRecord[],
   onPage: string = baseline.join("\n"),
+  defused: readonly string[] = [],
 ): PageScore {
   const base = baseline.flatMap(tokens);
   /* Everything, for recall and the missing runs: the page has to have been
@@ -651,9 +733,9 @@ export function scorePage(
     order: matched ? round(aligned.filter(Boolean).length / matched) : 0,
     spans: spansOf(base, aligned, mask),
     absent: protectedFaults(protect(baselineText), text),
-    invented: protectedFaults(protect(shownText), onPage),
+    invented: protectedFaults(protect(shownText), onPage, defused),
     unshown: [
-      ...protectedFaults(protect(hiddenText), onPage),
+      ...protectedFaults(protect(hiddenText), onPage, defused),
       ...[...hiddenText.matchAll(MARKUP)].map((m) => m[0]),
       ...(hiddenText.match(GARBAGE) ?? []),
     ].slice(0, 10),
@@ -749,6 +831,13 @@ export function check(
     failures.push(`Records claim page ${page}, which this chunk did not ask for.`);
   }
 
+  /* **Per page, because a folio belongs to a page**, and by the time the chunk
+     score below has joined four pages into one string there is no way to tell
+     which line was printed under which number. Computed here, added to the
+     haystack there. */
+  const defusedOn = (page: number): string[] =>
+    defusedFolios(pass.pages.find((p) => p.page === page)?.text ?? "", folioOf(pass, page));
+
   const notes: string[] = [];
   const pages: PageScore[] = [];
   for (const page of requested) {
@@ -758,6 +847,7 @@ export function check(
         baselineFor(pass, page),
         records.filter((r) => r.page === page),
         pass.pages.find((p) => p.page === page)?.text,
+        defusedOn(page),
       ),
     );
   }
@@ -789,13 +879,16 @@ export function check(
     );
   }
 
+  const scoredPages = [...(options.context === undefined ? [] : [options.context]), ...checkable];
   const overall = scorePage(
     checkable[0] ?? 0,
     checkable.flatMap((page) => baselineFor(pass, page)),
     records.filter((r) => checkable.includes(r.page)).sort((a, b) => a.page - b.page),
-    [...(options.context === undefined ? [] : [options.context]), ...checkable]
-      .map((page) => pass.pages.find((p) => p.page === page)?.text ?? "")
-      .join("\n"),
+    scoredPages.map((page) => pass.pages.find((p) => p.page === page)?.text ?? "").join("\n"),
+    /* Each page's own folio taken off its own headings — this is the score that
+       gates, so a fused folio the per-page rows forgive and this one does not
+       would buy the retry anyway. */
+    scoredPages.flatMap(defusedOn),
   );
 
   if (overall.recall !== null) {

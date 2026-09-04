@@ -304,6 +304,55 @@ describe("generateHierarchy and the structure checkpoint", () => {
     expect(checkpoints.entries.size).toBe(0);
   });
 
+  /**
+   * **A stored answer that parses and then does not build is not allowed to be
+   * permanent** ⟨GPT Sol, on the code, 2026-09-04, finding 6⟩.
+   *
+   * The gate used to ask only whether the answer parsed. An answer that parses
+   * and then fails `buildTree`, `appendSupplement` or `assertTreeSound` was
+   * accepted, skipped the call, and threw — on this attempt and on every attempt
+   * after it, because the row could only be overwritten by a run that got as far
+   * as the write, and no run ever would. The only lever was a `PROMPT_VERSION`
+   * bump, i.e. a deploy, for one article.
+   *
+   * Shipping code does not write such a row (the write is after every one of
+   * those checks), so both poisons here are planted by hand — which is exactly
+   * how it is reachable: an older row, a hand-written one, or a change to what
+   * this file does with an answer that nobody bumped the version for.
+   */
+  const POISON: [string, string][] = [
+    /* Parses, builds, and the invariants refuse it: an internal node with no
+       gist has nothing to render at its own zoom level. */
+    ["survives the parse and fails the invariants", JSON.stringify({
+      root: { title: "No gist here", range: ["spya-chk001", "spya-chk003"] },
+    })],
+    /* Parses, and `buildTree` throws on a block id the article does not have. */
+    ["survives the parse and fails to build", JSON.stringify({
+      root: { title: "Bad", gist: "Names a block that is not there.", range: ["spya-nope01", "spya-chk003"] },
+    })],
+  ];
+
+  for (const [what, answer] of POISON) {
+    it(`buys the tree again when the stored answer ${what}`, async () => {
+      const checkpoints = memoryCheckpoints();
+      const key = structureKey(canonicalStructureRequest(structureRequest(BLOCKS).params));
+      await checkpoints.write("structure-checkpoint", "hierarchy-structure", key, {
+        fingerprint: key,
+        answer,
+      });
+
+      const run = await generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+      expect(structureCalls, "the stored answer was replayed rather than replaced").toBe(1);
+      expect(run.structureResumed).toBe(false);
+      /* And the row is gone, replaced by one that works — otherwise the next
+         attempt pays the same 508 seconds to learn the same thing. */
+      expect(checkpoints.entries.get(`hierarchy-structure:${key}`)).toEqual({
+        fingerprint: key,
+        answer: SOUND,
+      });
+    });
+  }
+
   it("ignores a stored value of the wrong shape rather than trusting it", async () => {
     /* The store validates nothing — src/store/checkpoints.ts § What the store
        knows about a key: nothing — so the caller is the gate. A row written by
