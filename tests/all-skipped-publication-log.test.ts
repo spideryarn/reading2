@@ -59,12 +59,16 @@
  *
  * ## The mutations, watched red
  *
- * **2026-09-01, on the filesystem harness:** `errorFields(err)` in place of
- * `{ errorType: … }` in `walkClaim`'s catch — the shape this rule exists to
- * forbid. It fails on `not.toContain(SENTINEL)`, with the whole `Failed query: …
- * params: …` message in the line.
+ * **Mutation.** 2026-09-01, on the filesystem harness: `errorFields(err)` put in
+ * place of `{ errorType: … }` in `walkClaim`'s catch — the shape this rule
+ * exists to forbid. The run went red on `not.toContain(SENTINEL)`, with the
+ * whole `Failed query: … params: …` message sitting in the captured line.
  *
- * **2026-09-04, on the Postgres one** — see the note above `afterAll`.
+ * **Blind to.** The store underneath. That run was on the filesystem harness,
+ * where no Drizzle error exists at all, so it says nothing about whether the
+ * coordinator's catch is reached on the path that ships — which is the whole
+ * reason the file was converted. The 2026-09-04 mutation is the one that
+ * reaches the store, and it is recorded above `afterAll` rather than here.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -254,7 +258,7 @@ when("a claim where every step skipped and the publication failed", () => {
   }, 120_000);
 
   /**
-   * **The mutation, watched red on 2026-09-04.** `error: ending.error ?? null`
+   * **Mutation.** Watched red on 2026-09-04: `error: ending.error ?? null`
    * in `finishIn` (src/store/pg-jobs.ts) replaced by `error: null` — the column
    * this recovery exists to write, on the statement that writes it. The first
    * case fails on `expect(advanced?.job.error).toContain("Nothing was published
@@ -264,7 +268,7 @@ when("a claim where every step skipped and the publication failed", () => {
    * about `job.error` really are a Postgres round trip, which they were not on
    * the filesystem store.
    *
-   * **What it does not cover.** Not the log line, which is this file's actual
+   * **Blind to.** Not the log line, which is this file's actual
    * subject: every one of the `logged` assertions — the door's sentence, the
    * class, and the three absences — passed with the mutation in. And one column
    * of one statement: `status`, `steps`, `failureKind`, `title` and the fence in

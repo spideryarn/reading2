@@ -914,15 +914,17 @@ async function expireLease(id: string): Promise<void> {
 /**
  * ## The mutation for this block, watched red on 2026-09-04
  *
- * `settleExpired` in [`src/store/pg-jobs.ts`](../src/store/pg-jobs.ts), with
- * `leaseIsOver` in its `lapsed` predicate replaced by `leaseIsLive` — the
+ * **The predicate is the whole of what replaced `expireLeaseForTests`**, and it
+ * is Postgres-only in a way that matters rather than incidentally: the
+ * filesystem adapter rewrote a `Date.now()` field this process had written, and
+ * `clock_timestamp()` is the row's own clock. The fence is left alone, which is
+ * why this is one predicate rather than the pair.
+ *
+ * **Mutation.** `settleExpired` in [`src/store/pg-jobs.ts`](../src/store/pg-jobs.ts),
+ * with `leaseIsOver` in its `lapsed` predicate replaced by `leaseIsLive` — the
  * negation `src/store/job-fence.ts` spells out next door, so the sweep looks at
- * the wrong side of the deadline and nothing lapses. That predicate is the whole
- * of what replaced `expireLeaseForTests`, and it is Postgres-only in a way that
- * matters rather than incidentally: the filesystem adapter rewrote a
- * `Date.now()` field this process had written, and `clock_timestamp()` is the
- * row's own clock. The fence is left alone, which is why this is one predicate
- * rather than the pair.
+ * the wrong side of the deadline and nothing lapses. The run printed `2 failed
+ * | 58 passed`:
  *
  * ```
  * × gets inside a job whose claimant stopped answering, from the advance itself
@@ -932,14 +934,16 @@ async function expireLease(id: string): Promise<void> {
  * 2 failed | 58 passed
  * ```
  *
- * **The second red is a bonus and is worth reading.** *Refuses while somebody
- * else holds the claim* lives in the other block, and it goes red because its
- * fixture claim is made with a 60-second lease that the advance's own sweep then
- * declines to leave alone — so under this mutation the assertion that the
- * fixture claim succeeded fails first. The two blocks are not as independent as
- * their headings suggest.
+ * **Blind to.** Which block a red belongs to, and the second one here is worth
+ * reading for it. *Refuses while somebody else holds the claim* lives in the
+ * other block, and it goes red because its fixture claim is made with a
+ * 60-second lease that the advance's own sweep then declines to leave alone —
+ * so under this mutation the assertion that the fixture claim succeeded fails
+ * first. The two blocks are not as independent as their headings suggest, and a
+ * red here does not localise the way its heading implies.
  *
- * **What it does not cover.** One predicate is not the family.
+ * **Blind to.** One predicate is not the family, and four things in particular
+ * are outside what that single deletion reached.
  *
  * - The sweep's **other two conjuncts** — `status = 'running'` and the optional
  *   `owner_id` scoping — are unmutated, and the owner one would stay green here
@@ -952,9 +956,10 @@ async function expireLease(id: string): Promise<void> {
  *   cases below are really about — `jobs_active_work` handing back the running
  *   job, `jobs_active_slug` letting a second job queue behind it. Neither was
  *   mutated, and both are the predicates that replaced a `Map` lookup.
- * - **`finishIn`'s `failure_kind` column**, which the first case asserts. It was
- *   mutated in `tests/retry-is-only-for-a-failed-job.test.ts` on the same day
- *   and went red there, so it is covered — but not by this file.
+ * - **Blind to.** `finishIn`'s `failure_kind` column, which the first case
+ *   asserts, and which this mutation leaves entirely alone. It was mutated in
+ *   `tests/retry-is-only-for-a-failed-job.test.ts` on the same day and went red
+ *   there, so it is covered — but not by this file, and not by anything above.
  */
 when("running a job", () => {
   it("hands back the job already working on a slug rather than starting a second", async () => {
@@ -1504,20 +1509,25 @@ async function productOf(slug: string, name: StepName, detail: string): Promise<
  * it demands a `revision_step_runs` row saying `done` **as well as** every
  * artefact reading back.
  *
- * Deleting the row half — `if (run?.status !== "done") return false;` — left
- * **60 passed of 60**.
+ * **Mutation.** `hasArtefacts`, with the row half of it deleted — `if
+ * (run?.status !== "done") return false;` taken out, so an artefact set with no
+ * `revision_step_runs` row behind it counts as done. The run printed `60 passed
+ * of 60`: it stayed green.
  *
  * **The green is not a dead-code artefact, and that was checked rather than
  * assumed.** A control in the same function — `if (run) return false;`, so that
  * nothing is ever done — turned three cases red, including *picks up at the
  * first step the artefacts say is not done*. So `hasArtefacts` is thoroughly on
- * this block's path; what nothing here distinguishes is **artefacts present**
- * from **a step recorded as having run**. A revision holding a previous run's
- * artefacts with no run row of its own would be skipped, and every case below
- * would still pass. `tests/store-artefacts-pg.test.ts` is where that belongs.
+ * this block's path.
  *
- * **What else the mutation does not cover.** `hasArtefacts`'s artefact loop and
- * its `siteFor` validation; `stepInterrupted`, which `stepIsDone` asks first and
+ * **Blind to.** What nothing here distinguishes: *artefacts present* from *a
+ * step recorded as having run*. A revision holding a previous run's artefacts
+ * with no run row of its own would be skipped, and every case below would still
+ * pass. `tests/store-artefacts-pg.test.ts` is where that belongs.
+ *
+ * **Blind to.** What else that deletion leaves untouched: `hasArtefacts`'s
+ * artefact loop and its `siteFor` validation; `stepInterrupted`, which
+ * `stepIsDone` asks first and
  * which no case here puts into the `running` state; and `stampForStep`, which
  * decides freshness for the stages that stamp and which none of these steps
  * exercises.

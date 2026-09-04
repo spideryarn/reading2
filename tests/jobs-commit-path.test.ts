@@ -115,12 +115,13 @@
  *
  * ## The mutation, watched red on 2026-09-04 — and what it does *not* cover
  *
- * `publishRevisionIn` deleted from the `done` branch of `settleIn`
- * (src/store/pg-session.ts), replaced with `announce = {}`: an ending that
- * finishes the job row and neither publishes the draft nor clears the pointer
- * to it. That is **case 5** of the settlement state machine, it is the branch
- * the second test below drives, and the filesystem session could not have had
- * it — it opens no draft at all.
+ * **Mutation.** `publishRevisionIn` deleted from the `done` branch of
+ * `settleIn` (src/store/pg-session.ts), replaced with `announce = {}`: an
+ * ending that finishes the job row and neither publishes the draft nor clears
+ * the pointer to it. That is **case 5** of the settlement state machine, it is
+ * the branch the second test below drives, and the filesystem session could not
+ * have had it — it opens no draft at all. Watched on 2026-09-04, and the run
+ * printed one failure:
  *
  * ```
  * × ends a claim where every step skipped, through the session and not around it
@@ -128,8 +129,11 @@
  *     expected 'db20832d-8f91-42a7-963f-d3a0d901b1fd' to be null
  * ```
  *
- * **The first test stayed green under it, and that is the finding.** Every
- * assertion in it — the artefacts read back, the block ids in the stamped HTML,
+ * **Blind to.** The first test, which stayed green under that same mutation:
+ * a commit that published nothing looks exactly like one that did, so not one
+ * of its read-backs is load-bearing against this branch. That greenness is the
+ * finding, not a disappointment. Every assertion in it — the artefacts read
+ * back, the block ids in the stamped HTML,
  * `stepIsDone` — is satisfied by the *carried* copy in the published revision,
  * which for this fixture is byte-for-byte what the stage would have written. So
  * a commit that published nothing looks exactly like one that did. That is the
@@ -137,8 +141,8 @@
  * to escape; this file does not, and the draft pointer is what it has instead.
  * A reader adding a case here should not assume the read-backs are load-bearing.
  *
- * What one deleted call does **not** cover, and none of it is covered elsewhere
- * in this file:
+ * **Blind to.** What one deleted call cannot reach, and none of which is
+ * covered elsewhere in this file:
  *
  * - **the other four settlement cases.** `keep` (between the steps of a walk),
  *   `release` (case 1), the cancel-during-a-step resolution (case 4) and the

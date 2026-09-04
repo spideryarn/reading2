@@ -36,19 +36,20 @@
  * what that red does not reach. Two were run here, and the second is the more
  * useful of them because it did not go red at all.
  *
- * **1 — the call site this file exists for, and it went red.** `src/jobs.ts`,
- * the `cacheArticle:` argument, put back to later-steps-only:
+ * **Mutation.** 1 — the call site this file exists for, and it went red.
+ * `src/jobs.ts`, the `cacheArticle:` argument, put back to later-steps-only:
  * `cacheArticleForStep(job.steps.map((s) => s.name), job.steps.indexOf(step))`
  * made `cacheArticleForStep(job.steps.map((s) => s.name).slice(job.steps
- * .indexOf(step)), 0)`. **1 failed of 4** — *marks BOTH steps of a same-group
- * pair*, on `expected [ true, false ] to deeply equal [ true, true ]`, which is
- * `24335207`'s bug to the value. The other two walks are unmoved, correctly:
- * neither has a same-group pair in it to lose.
+ * .indexOf(step)), 0)`. The run printed `1 failed of 4` — *marks BOTH steps of
+ * a same-group pair*, on `expected [ true, false ] to deeply equal [ true,
+ * true ]`, which is `24335207`'s bug to the value. The other two walks are
+ * unmoved, correctly: neither has a same-group pair in it to lose.
  *
- * **2 — the Postgres half of the claim above, and it STAYED GREEN.**
+ * **Mutation.** 2 — the Postgres half of the claim above, and it STAYED GREEN.
  * `src/store/pg-session.ts` § `commit`, `if (product.parts) {` made
  * `if (false && product.parts) {` — every step's product silently not written
- * into the draft. **4 passed of 4**, and `assertProduced` in the same
+ * into the draft. The run printed `4 passed of 4`, stayed green, and
+ * `assertProduced` in the same
  * transaction, whose whole job is to refuse a step that finished without
  * writing, did not fire.
  *
@@ -62,14 +63,16 @@
  * something this file can see**: it would pass over a session that persisted
  * nothing.
  *
- * **What neither covers.** Mutation 1 reaches the call site's arguments and not
+ * **Blind to.** Mutation 1 reaches the call site's arguments and not
  * `cacheArticleForStep` or `sharesArticleCache` beneath it — tests/article-cache
  * -group.test.ts owns those, and Sol's original demonstration was that it stays
- * green under exactly this mutation. Neither mutation says anything about what
- * the walk *persists*: no assertion here reads a row back, `READS` fakes away
- * every freshness question, and mutation 2 shows the two facts are connected.
- * Nor about publication — the job publishes at the end of each walk and nothing
- * below looks at the revision it left.
+ * green under exactly this mutation.
+ *
+ * **Blind to.** What the walk *persists*, which neither mutation says anything
+ * about: no assertion here reads a row back, `READS` fakes away every freshness
+ * question, and mutation 2 is the proof that the two facts are connected. Nor
+ * publication — the job publishes at the end of each walk and nothing below
+ * looks at the revision it left.
  */
 import { vi } from "vitest";
 

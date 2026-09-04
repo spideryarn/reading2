@@ -58,23 +58,6 @@
  * would — which is the state the `fetch` step actually fails in. The rows are
  * taken away by slug in `afterAll`.
  *
- * ## The mutation, watched red on 2026-09-04
- *
- * `steps: ending.steps` in `finishIn` (src/store/pg-jobs.ts) made
- * `steps: ending.steps.map((s) => ({ ...s, error: undefined }))` — a field lost
- * on the way to a column, which is the precise failure `persisted` was written
- * for. **5 of 8 red**, and see `persisted` for what that count says about the
- * function's own justification.
- *
- * **What it does not cover.** The `jsonb` column and not the `text` one beside
- * it: `job.error` survives this mutation untouched, so the band's field is
- * covered by nothing here. Nor `releaseStepIn`, which writes the same `steps`
- * array *between* steps and is what a reader watching a multi-step job actually
- * sees — every job in this file has one step and ends on the first failure, so
- * the mid-walk writer is never exercised. Nor the fence in the same `where`, nor
- * `claimIn`. And this file still cannot see a step whose product was never
- * written: nothing here asserts on a revision.
- *
  * **The race this file was seen losing is gone.** It had failed once under heavy
  * load on a read-after-write against `data/_jobs/` — a test of the very store
  * being deleted. There is no `data/_jobs/` in it any more, and neither
@@ -86,6 +69,23 @@
  *
  * See docs/project/copy.md § The seam between the two audiences, and
  * docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md § Stage 2.
+ *
+ * ## The mutation, watched red on 2026-09-04
+ *
+ * **Mutation.** `steps: ending.steps` in `finishIn` (src/store/pg-jobs.ts) made
+ * `steps: ending.steps.map((s) => ({ ...s, error: undefined }))` — a field lost
+ * on the way to a column, which is the precise failure `persisted` was written
+ * for. *5 of 8 red*, and see `persisted` for what that count says about the
+ * function's own justification.
+ *
+ * **Blind to.** The `jsonb` column and not the `text` one beside it:
+ * `job.error` survives this mutation untouched, so the band's field is
+ * covered by nothing here. Nor `releaseStepIn`, which writes the same `steps`
+ * array *between* steps and is what a reader watching a multi-step job actually
+ * sees — every job in this file has one step and ends on the first failure, so
+ * the mid-walk writer is never exercised. Nor the fence in the same `where`, nor
+ * `claimIn`. And this file still cannot see a step whose product was never
+ * written: nothing here asserts on a revision.
  */
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 

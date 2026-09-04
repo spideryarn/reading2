@@ -209,6 +209,22 @@ async function post(pathname: string, body: unknown): Promise<Result> {
 const ask = (body: unknown) => post(`/api/chat/${SLUG}`, body);
 
 when("an anchor on the way in", () => {
+  /**
+   * **Mutation.** The pilot conversion's own, recorded in
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   * § the pilot table rather than watched again here: `anchorQuote: quoteOf(…)`
+   * made `anchorQuote: null` in `pg-chat.ts`, and the run printed `4 failed`.
+   * Sharper than it was meant to be — a null `anchor_quote` beside a non-null
+   * `anchor_start` violates the `chat_threads_anchor_both` CHECK, so the route
+   * 500s, where the filesystem store would have written the fourth anchor shape
+   * and said nothing.
+   *
+   * **Blind to.** Which of the two it proves. Because that mutation trips a
+   * CHECK rather than a read, the reds do not separate *the quote was written*
+   * from *the row was written at all*, and the case below asserting the anchor
+   * comes back whole is doing the second of those jobs, not the first. The
+   * `anchorStart` column beside it was never mutated.
+   */
   it("accepts a selection and stores it on the thread", async () => {
     const out = await ask({
       threadId: "spya-anchr2",
@@ -257,9 +273,27 @@ when("an anchor on the way in", () => {
   it("refuses a block that is not in this article", async () => {
     /* Well-formed, so the id check passes; the article is what says no. Without
        this, Postgres answers with a foreign-key violation out of a transaction
-       — a 500 where a 400 belonged. **That sentence is now checkable**: on the
-       filesystem store there was no foreign key, so deleting the check turned
-       this case into an ordinary 200 rather than into the failure it names. */
+       — a 500 where a 400 belonged.
+
+       **Mutation.** `checkAnchor` in src/routes.ts, with `if (!block) throw
+       httpError(400, "anchor.blockId is not a block of this article");` made
+       `if (!block) return;`, so a well-formed id belonging to no block of this
+       article goes through to the store. Watched on 2026-09-04; the run printed
+       `1 failed | 19 passed (20)` and this case failed with `expected 500 to be
+       400`.
+
+       **That is the sentence above made checkable**: on the filesystem store
+       there was no foreign key for the guard to stand in front of, so the same
+       deletion turned this case into an ordinary 200 and it could not tell the
+       guard from its absence.
+
+       **Blind to.** One branch of `checkAnchor` and no other. The `start` past
+       the end of a block, the whitespace-folded `quote` comparison beneath it
+       and the `isSpideryarnId` shape check in `parseAnchor` above it are three
+       further refusals this deletion never touches, and the seven `it.each`
+       cases stayed green under it — a well-formed id is where it starts. Nor
+       does the assertion say which statement raised the 500: it reads a status
+       code, so a 500 arriving from any other cause would look the same. */
     const out = await ask({
       threadId: "spya-anchr3",
       question: "what?",

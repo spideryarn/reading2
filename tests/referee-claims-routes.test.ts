@@ -221,13 +221,24 @@ when("Referee's claims routes", { timeout: 60_000 }, () => {
       expect(reply.status).toBe(200);
       expect(typeof reply.body.sourceHash).toBe("string");
       /* **And the young run is still pending**, which is the other half of the
-         sweep and was not asserted anywhere until 2026-09-04. Deleting
-         `lt(created_at, cutoff)` from `sweep` — the guard that is the entire
-         difference between the two stores here — left this file green, because
-         nothing in it began a run and then asked whether a GET had left it
-         alone. On Vercel the GET arrives on a different process from the one
-         streaming the answer, so without that guard every poll errors a run
-         that is still arriving. `CLAIMS_ORPHAN_GRACE_MS`. */
+         sweep and was not asserted anywhere until 2026-09-04.
+
+         **Mutation.** Deleting `lt(created_at, cutoff)` from `sweep` — the
+         guard that is the entire difference between the two stores here. It
+         **stayed green** the first time, because nothing in the file began a
+         run and then asked whether a GET had left it alone; the line below was
+         written because of that, and re-run against it on 2026-09-04 the same
+         deletion gives *1 failed | 6 passed (7)*, this case, `expected 'error'
+         to be 'pending'`. On Vercel the GET arrives on a different process from
+         the one streaming the answer, so without that guard every poll errors a
+         run that is still arriving. `CLAIMS_ORPHAN_GRACE_MS`.
+
+         **Blind to.** Where the boundary actually falls. This line and the case
+         below stand either side of one threshold and neither moves a clock, so
+         a `cutoff` built from the wrong constant, or compared against the wrong
+         column, keeps both green. The `status = 'pending'` half of the same
+         `where` — what stops a GET re-erroring a run that already finished — is
+         reached by nothing here. */
       expect((reply.body.run as { status: string }).status).toBe("pending");
     });
 
@@ -235,7 +246,20 @@ when("Referee's claims routes", { timeout: 60_000 }, () => {
       /* Written before the model is called, precisely so a crash leaves
          evidence — and evidence nothing ever clears is a spinner for ever. This
          process is not running it and it is older than the grace window, so the
-         GET repairs it. */
+         GET repairs it.
+
+         **Mutation.** `sweep` in src/store/pg-referee-claims.ts writing
+         `status: "pending"` where it writes `status: "error"`, so an abandoned
+         run is found, stamped with `CLAIMS_SWEPT` and left exactly as
+         spinning as it was. Re-run 2026-09-04: *1 failed | 6 passed (7)*, this
+         case, `expected 'pending' to be 'error'`.
+
+         **Blind to.** What the referee is then shown. It pins the status the
+         column ends up holding, in the response and in a second `load`, and
+         nothing here reads `error` back — a sweep that wrote the status without
+         the sentence, or with the wrong one, passes both assertions. `begin`
+         and `finish`, which is where a real run's status comes from, are not
+         reached by it either. */
       await asTestOwner(() => refereeClaimsStore.begin(SLUG, abandoned()));
       const reply = await call("GET", URL);
       expect((reply.body.run as { status: string }).status).toBe("error");

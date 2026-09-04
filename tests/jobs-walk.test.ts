@@ -61,13 +61,17 @@
  *
  * ## The mutation for the conversion, watched red on 2026-09-04
  *
- * The seven below are about the **coordinator** and were watched against the
+ * The seven below are about the *coordinator* and were watched against the
  * filesystem queue, so none of them is evidence that this file now reaches
- * Postgres. This one is: `claimIn` in [`src/store/pg-jobs.ts`](../src/store/pg-jobs.ts),
- * with `eq(jobs.status, "queued")` deleted from the `UPDATE`'s `where`. That
- * single predicate is what the whole conversion was justified by — *"claim
- * once, release only on handoff"* used to be a claim about a process-local
- * `Map`, and under Postgres it is one line of SQL.
+ * Postgres. This one is.
+ *
+ * **Mutation.** `claimIn` in [`src/store/pg-jobs.ts`](../src/store/pg-jobs.ts),
+ * with `eq(jobs.status, "queued")` deleted from the `UPDATE`'s `where`, and the
+ * run printed `2 failed | 9 passed` — the two named in the block below.
+ *
+ * **That single predicate is what the whole conversion was justified by** —
+ * *"claim once, release only on handoff"* used to be a claim about a
+ * process-local `Map`, and under Postgres it is one line of SQL.
  *
  * ```
  * × does not let go of the claim between steps
@@ -75,7 +79,7 @@
  * 2 failed | 9 passed
  * ```
  *
- * **What it does not cover.** One predicate is not the family. `claimIn`'s
+ * **Blind to.** One predicate is not the family. `claimIn`'s
  * `where` has three other conjuncts — `id`, `owner_id` and `cancelling = false`
  * — and none of them was mutated; `owner_id` in particular would stay green
  * here, because every case is one owner claiming their own job (`owner-jobs`
@@ -86,12 +90,12 @@
  * every commit in this file is made by the live claimant, so a fence that
  * stopped comparing would go unnoticed.
  *
- * **And one thing this file cannot see at all**, worth naming because
+ * **Blind to.** And one thing this file cannot see at all, worth naming because
  * `tests/article-cache-call-site.test.ts` measured it: because every fake step
  * hands back the seeded article's *own* artefacts, a `commit` that wrote
  * nothing at all is satisfied by the draft's carried-forward copy, and
  * `assertProduced` with it. So *the products are written for real* is the
- * mechanism this file runs on and is not a claim it tests.
+ * mechanism this file runs on and **is not a claim it tests**.
  *
  * ## The mutation that reddened each, watched on 2026-08-30
  *
@@ -115,6 +119,16 @@
  * - **`runInJob` is in effect**: call `walkClaim` directly rather than through
  *   `runInJob` — which is the state production actually shipped in, and nothing
  *   caught it (docs/plans/260830k-v1-stages01-review-sol.md critical 1).
+ *
+ * **Mutation.** Seven, then, one per case listed above, all seven watched red on
+ * 2026-08-30 against the coordinator in `src/jobs.ts`.
+ *
+ * **Blind to.** Every one of those seven was watched on the filesystem queue and
+ * against `src/jobs.ts` alone, so not one of them reaches a line of SQL: a
+ * `claimIn` that had lost its `where` entirely would have left all seven green.
+ * That is what the conversion mutation at the top of this header is for, and it
+ * is why the seven are not evidence that this file now runs on the store that
+ * ships.
  */
 import { vi } from "vitest";
 

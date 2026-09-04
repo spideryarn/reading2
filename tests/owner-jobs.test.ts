@@ -40,7 +40,8 @@
  * predicate that fell back to "everybody" was still a filter somebody had
  * written. Under Postgres the equivalent mistake — a `list` that forgets its
  * `where` — is one deleted line, and it is deleted from the only place the rows
- * can come out of. The mutation recorded in § B is exactly that line.
+ * can come out of. The mutation above *is not in Bob's list* is exactly that
+ * line, deleted and watched.
  *
  * A `fetch` step on a slug with no source URL fails immediately and offline,
  * which is how a job gets queued here without buying anything.
@@ -192,6 +193,21 @@ when("a job Alice queued", () => {
    * the source URL, the uploaded filename, the reader's own guidance text and
    * the error message. It was also the index Bob needed before he could start
    * naming other people's slugs at the rest of the API.
+   *
+   * **Mutation.** `.where(eq(jobs.ownerId, owner))` deleted from
+   * `pgJobStore.list` (src/store/pg-jobs.ts), leaving the `select` and its
+   * `orderBy` — the one line that is now the whole of the isolation, and a line
+   * the filesystem store did not have. Watched on 2026-09-04; the run printed
+   * `2 failed | 8 passed (10)`, this case and *gets the environment's own jobs
+   * and nobody else's*, both on `expected [ 'spya-dwxmfe' ] to not include
+   * 'spya-dwxmfe'`.
+   *
+   * **Blind to.** `list` alone, and only its owner column. The other six
+   * refusals below go through `get`, `cancelJob`, `retryJob`, `advanceJob` and
+   * `forgetJob`, each with a `where` of its own that this deletion never
+   * reaches, and each of them stayed green. Nor is the ordering touched: two
+   * readers is enough to catch a `where` that has gone, and not enough to catch
+   * one comparing the wrong column to a value that happens to differ.
    */
   it("is not in Bob's list", async () => {
     const bobs = await as(BOB, () => listJobs());

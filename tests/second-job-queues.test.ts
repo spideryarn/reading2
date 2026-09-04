@@ -36,6 +36,34 @@
  * this slug* is what makes the accepted job wait its turn rather than being
  * refused. Stage B of
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+ *
+ * ### The mutations for the conversion — 2026-09-04
+ *
+ * **Mutation.** `tryEnqueue` in src/store/pg-jobs.ts, the re-read classifier
+ * with `row.workKey === ticket.workKey` deleted from `mine`. *4 passed (4)* —
+ * it STAYED GREEN, and is the origin of the rule that a green mutation is a
+ * finding. That branch runs only on an insert conflict; the two cases with a
+ * differently-shaped job insert cleanly, and the double-click case, which does
+ * conflict, has exactly one other active row for a looser predicate to pick.
+ *
+ * **Blind to.** How the classification is *reached*. Nothing in this file
+ * distinguishes `sameWork` from `created` by anything but the id that comes
+ * back, so the whole of `tryEnqueue`'s three-way answer — the slug reservation
+ * and the source-address branch below `mine` — is untested here, and so is the
+ * retry loop above it. tests/enqueue-owns-the-article.test.ts is where the
+ * classification is held.
+ *
+ * **Mutation.** The other direction, so that the file is known to be able to go
+ * red at all: the same insert's `workKey: ticket.workKey` written as `workKey:
+ * job.slug`, collapsing every job on one article onto one key. *3 failed | 1
+ * passed (4)*, all three on `expected 500 to be 202`.
+ *
+ * **Blind to.** What that one says is narrow: the three went red as a crash,
+ * not on the id assertion each case is about, so it proves this suite runs
+ * against the real insert and nothing more. The claim these cases exist for —
+ * a *different* second job gets a new id rather than a 409 — lives in
+ * `jobs_active_work` in src/db/schema.ts, and no mutation of TypeScript can
+ * reach an index.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";

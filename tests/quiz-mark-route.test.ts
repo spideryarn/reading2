@@ -67,8 +67,9 @@
  * Three red, and **the first stayed green, which is the finding.** All in
  * `src/routes.ts`.
  *
- * **1 — "checked *first*" (claim 2), and it STAYED GREEN.** `refuseAMovedQuiz`:
- * the two `if` blocks swapped, so the batch is checked before the staleness.
+ * **Mutation.** 1 — "checked *first*" (claim 2), and it STAYED GREEN.
+ * `refuseAMovedQuiz`: the two `if` blocks swapped, so the batch is checked
+ * before the staleness.
  * **10 passed of 10.** The reason is in *refuses a source-stale quiz before it
  * looks at the batch at all*: it sends the **correct** batch id, so under
  * either order the batch check simply passes and the staleness one throws. The
@@ -77,7 +78,7 @@
  * is not tested by this file.** A case with *both* wrong — a stale article and
  * a superseded batch — is the one that would pin it, and there isn't one.
  *
- * **2 — the fall-forward (claim 3).** `const question = found.quiz
+ * **Mutation.** 2 — the fall-forward (claim 3). `const question = found.quiz
  * .questions[at];` made `… ?? found.quiz.questions[0];`, which is the
  * fall-forward the header calls the invisible failure. **1 failed of 10**:
  * *answers 404 for a question id that is not in this quiz*, `expected 200 to be
@@ -86,9 +87,9 @@
  * by the batch check one line earlier and never reaches the lookup. Its 409 is
  * evidence about claim 1, not about claim 3.
  *
- * **3 — the second read (claim 5), the one the move to Postgres is for.** The
- * line `refuseAMovedQuiz(await loadQuiz(slug), batchId);` after `loadArticle`
- * deleted. **1 failed of 10**: *refuses when a revision lands after the quiz was
+ * **Mutation.** 3 — the second read (claim 5), the one the move to Postgres is
+ * for. The line `refuseAMovedQuiz(await loadQuiz(slug), batchId);` after
+ * `loadArticle` deleted. **1 failed of 10**: *refuses when a revision lands after the quiz was
  * checked and before the article was read*, `expected 200 to be 409`. The
  * control beside it, *still marks when nothing moved*, stayed green — so the
  * pair distinguishes a re-check from a second chance to fail, which is what it
@@ -96,20 +97,22 @@
  * had: the gap is filled by a real `publishRevision`, and a store with no
  * revisions has no gap.
  *
- * **4 — the abort (claim 6).** `signal: gone,` made `signal: new
+ * **Mutation.** 4 — the abort (claim 6). `signal: gone,` made `signal: new
  * AbortController().signal,` — a live signal that nothing ever fires, so the
  * frames stop and the provider call does not. **1 failed of 10**: *aborts the
  * provider request, not just the writing of frames*, `expected false to be
  * true`.
  *
- * **What the four do not cover.** Claim 4 — *every refusal happens before a
- * single SSE header is written* — has no mutation here at all: it is asserted
- * by `streamed === false` on four cases, but nothing above moves `sse(res)`
- * relative to the checks, so the claim rests on reading the code. The 400/413
- * body validation is untouched. And none of the four reaches `loadQuiz`'s own
- * `stale` computation — every mutation above assumes `found.stale` is right and
- * only moves what is done with it; a `sourceHash` comparison that was wrong
- * would sail through all ten tests.
+ * **Blind to.** Claim 4 — *every refusal happens before a single SSE header is
+ * written* — has no mutation here at all: it is asserted by `streamed ===
+ * false` on four cases, but nothing above moves `sse(res)` relative to the
+ * checks, so the claim rests on reading the code. The 400/413 body validation
+ * is untouched.
+ *
+ * **Blind to.** `loadQuiz`'s own `stale` computation, which none of the four
+ * reaches — every mutation above assumes `found.stale` is right and only moves
+ * what is done with it; a `sourceHash` comparison that was wrong would sail
+ * through all ten tests.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
