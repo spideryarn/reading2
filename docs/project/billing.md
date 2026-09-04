@@ -286,6 +286,11 @@ Greg bought Reader on the live account on **2026-09-03 at 11:37 UTC** — `cus_V
 `sub_1UBYxALv4piDbwcbVew6jxqN`, on `acct_1UBW3NLv4piDbwcb`. Live mode gets exactly one first
 customer, so what it settled is written down here rather than re-derived.
 
+The day also produced four faults, recorded below beside the things they bite. Why none of them was
+visible to a green suite, a passing `stripe:check` or a code review is
+[260904a](../postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md);
+the fixes are [260903i](../plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md).
+
 **One: the live round trip works, end to end and unattended.** Hosted Checkout → signed webhook →
 `syncSubscriptionFromStripe` → a production `billing_accounts` row reading `status=active`,
 `livemode=true`, the right price and a period ending 2026-10-03. `last_synced_at` was **11 seconds**
