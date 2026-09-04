@@ -46,7 +46,7 @@ describe("shelf state", () => {
   });
 
   it("tells the metadata page whether this one is deleted", async () => {
-    /* The page has its own Delete button (src/web/Metadata.tsx), and a Delete
+    /* The page has its own Archive button (src/web/Metadata.tsx), and an Archive
        button that cannot tell whether the article is already deleted is a
        button offering to do a thing that has been done. `null` and not
        `undefined` on the way out: on `ArticleMetadata` the question is always
@@ -63,7 +63,7 @@ describe("shelf state", () => {
   });
 
   it("keeps the original date when archiving something already archived", async () => {
-    // Undo is one click away, and pressing Delete twice must not quietly reset
+    // Undo is one click away, and pressing Archive twice must not quietly reset
     // the clock on "when did I get rid of this".
     const first = await setArchived(SLUG, true, new Date("2026-01-01T00:00:00.000Z"));
     const second = await setArchived(SLUG, true, new Date("2026-06-01T00:00:00.000Z"));

@@ -122,11 +122,11 @@ export function useShelf(readerId: string): Shelf {
    * Slugs with an archive already in flight.
    *
    * The card is removed only after the server answers (see `archive`), so for
-   * those few milliseconds the Delete button is still on screen and still
+   * those few milliseconds the Archive button is still on screen and still
    * clickable. Two clicks used to mean two requests, and the second one's
    * *reply* is the problem rather than the second write: archiving twice is
-   * idempotent and keeps the original date, but a reader who presses Delete,
-   * Delete, Undo can have the late second reply land after the undo and run
+   * idempotent and keeps the original date, but a reader who presses Archive,
+   * Archive, Undo can have the late second reply land after the undo and run
    * `setArticles(list => list.filter(...))` over a list the article has just
    * been restored to. The shelf then shows it gone while the server has it
    * back — and the Undo strip that would fix it has been re-armed for an
@@ -313,7 +313,7 @@ export function useShelf(readerId: string): Shelf {
    * Every verb below is a request that can land after the reader has changed,
    * and each of them writes something a person can see — a list, the Undo
    * strip's title, an error. `archive` is the one that shows it worst: its
-   * answer sets `undoable`, and Library.tsx draws *"Deleted <title>"* from it,
+   * answer sets `undoable`, and Library.tsx draws *"Archived <title>"* from it,
    * so A's article title can appear on B's screen with a button that would
    * un-archive it. Cheap to prevent, so prevented.
    */

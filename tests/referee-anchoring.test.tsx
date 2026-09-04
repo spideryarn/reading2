@@ -217,22 +217,28 @@ function BothHarness({ dialog }: { dialog: "annotate" | "comment" }) {
           ? createElement(CommentDialog, {
               key: "dialog",
               comment: live,
-              placing: true,
               position: 1,
               total: 1,
-              pending: 0,
               hasPrev: false,
               hasNext: false,
               onPrev: () => {},
               onNext: () => {},
               onClose: () => {},
-              onDelete: () => {},
-              onRetry: () => {},
-              onDeepen: () => {},
-              onDiscuss: () => {},
-              onEdit: () => {},
-              onPlace: () => {},
-              error: comments.error,
+              /* The verbs live on `access` since 2026-09-04, so a visitor's
+                 dialog can carry none of them.
+                 src/web/CommentDialog.tsx § CommentAccess. */
+              access: {
+                kind: "owner" as const,
+                placing: true,
+                pending: 0,
+                onDelete: () => {},
+                onRetry: () => {},
+                onDeepen: () => {},
+                onDiscuss: () => {},
+                onEdit: () => {},
+                onPlace: () => {},
+                error: comments.error,
+              },
             })
           : null,
     ]),

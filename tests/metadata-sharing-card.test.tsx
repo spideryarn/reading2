@@ -20,7 +20,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article } from "../src/types.js";
+import type { Article, PublicArtefacts } from "../src/types.js";
 import { CARD } from "../src/web/card.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -185,14 +185,22 @@ async function open(): Promise<void> {
  * cannot say what a shared link would carry, so a body with no `available` is a
  * different test rather than a shorter fixture. See § the inventory could not be
  * read at the foot of this file.
+ *
+ * **Typed**, so the next artefact added to `PublicArtefacts` goes red at
+ * `npm run typecheck` rather than here. `sketch` arrived on 2026-09-04
+ * (415ffe2a) and this fixture did not: a literal missing a key is rejected by
+ * the parser and reads as *"the store could not say"*, so three tests in this
+ * file failed on an unknown inventory, which is nowhere near what they are
+ * about.
  */
-const ALL_BUILT = {
+const ALL_BUILT: PublicArtefacts = {
   arc: true,
   tweets: true,
   glossary: true,
   ideas: true,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 describe("the sharing card, on the page that owns it", () => {
@@ -206,7 +214,7 @@ describe("the sharing card, on the page that owns it", () => {
 
     await open();
 
-    expect(host.textContent).toContain("Anyone with the link can read this");
+    expect(host.textContent).toContain("Anyone can read this without signing in");
     /* **The line the browser pass found missing.** Nothing has been pressed —
        this is what a reload shows, and the version that kept `publicAt` in
        component state had nothing to put here. */
@@ -230,7 +238,7 @@ describe("the sharing card, on the page that owns it", () => {
 
     expect(host.textContent).toContain("Only you can read this");
     expect(host.textContent).toContain("We could not work out what a shared link would carry");
-    expect(host.textContent).not.toContain("Share with anyone who has the link");
+    expect(host.textContent).not.toContain("Share with anyone");
   });
 
   /**
@@ -258,7 +266,8 @@ describe("the sharing card, on the page that owns it", () => {
         ideas: false,
         quotes: false,
         timeline: false,
-      },
+        sketch: false,
+      } satisfies PublicArtefacts,
     };
 
     await open();
@@ -268,9 +277,9 @@ describe("the sharing card, on the page that owns it", () => {
     await act(async () => share?.click());
 
     /* **Which heading each chip sits under**, not merely that both headings
-       exist. A component that rendered every row under "Anyone with the link
-       gets these" would pass a `textContent` check and be the worst possible
-       version of this feature. */
+       exist. A component that rendered every row under the *shared* heading
+       would pass a `textContent` check and be the worst possible version of
+       this feature. */
     const under = (heading: string): string[] => {
       const head = [...host.querySelectorAll("p")].find((p) =>
         (p.textContent ?? "").includes(heading),
@@ -287,13 +296,13 @@ describe("the sharing card, on the page that owns it", () => {
       );
     };
 
-    expect(under("Anyone with the link gets these")).toEqual(
+    expect(under("Anyone who opens it gets these")).toEqual(
       expect.arrayContaining(["Glossary", "Tweets"]),
     );
     expect(under("Not built yet")).toEqual(
       expect.arrayContaining(["Ideas", "Quotes", "The arc"]),
     );
-    expect(under("Anyone with the link gets these")).not.toContain("The arc");
+    expect(under("Anyone who opens it gets these")).not.toContain("The arc");
     expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Search"]));
   });
 
@@ -365,7 +374,7 @@ describe("the sharing card, on the page that owns it", () => {
 
     expect(host.textContent).toContain("could not check");
     expect(host.textContent).not.toContain("Only you can read this");
-    expect(host.textContent).not.toContain("Anyone with the link");
+    expect(host.textContent).not.toContain("Anyone can read this");
     /* And the rest of the page still renders — a bad `sharing` must not take
        the metadata page down with it. */
     expect(host.textContent).toContain("At a glance");
@@ -377,7 +386,7 @@ describe("the sharing card, on the page that owns it", () => {
     await open();
 
     expect(host.textContent).toContain("Only you can read this");
-    expect(host.textContent).toContain("Share with anyone who has the link");
+    expect(host.textContent).toContain("Share with anyone…");
     // No stale timestamp from a previous article or a previous render.
     expect(host.textContent).not.toContain("Shared since");
   });
@@ -444,6 +453,7 @@ describe("the sharing card, on the page that owns it", () => {
         ideas: false,
         quotes: false,
         timeline: false,
+        sketch: false,
       },
     };
 

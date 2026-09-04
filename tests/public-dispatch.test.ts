@@ -35,6 +35,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { type AuthedUser, requireUser, type VerifiedUser } from "../src/auth.js";
 import { runInRequest } from "../src/owner.js";
+import { pathOf } from "../src/public/route-names.js";
 import { PUBLIC_ROUTES } from "../src/public/routes.js";
 import { handleApi, serveAuthenticatedApi } from "../src/routes.js";
 import { originalUrl } from "../src/vercel.js";
@@ -333,7 +334,13 @@ describe("the closed public namespace", () => {
     for (const path of [
       "/api/public",
       "/api/public/",
-      "/api/public/library",
+      /* **`/api/public/library` used to be in this list** and is a real route
+         since 2026-09-04. Its near misses take its place, and they are the ones
+         worth having: a collection pattern anchored only at the front would
+         serve `/api/public/library/anything` as the list with a segment nobody
+         read, and a plural is the spelling somebody will type. */
+      "/api/public/library/anything",
+      "/api/public/libraries",
       "/api/public/article",
       "/api/public/glossary/example",
       "/api/public/../library",
@@ -384,9 +391,15 @@ describe("the closed public namespace", () => {
        walks the same list, so this is a claim about every route there is rather
        than about the two somebody remembered. Slice 1b adds four. */
     expect(PUBLIC_ROUTES.length).toBeGreaterThan(0);
+    /* **Both kinds**, since 2026-09-04. `pathOf` is the one line that knows a
+       collection route's `path()` takes nothing — it lives in the inventory leaf
+       rather than here, so all three sweeps ask it the same way. And the set is
+       asserted rather than assumed: a sweep that walked an inventory which had
+       quietly lost its collection route would go on passing over one kind. */
+    expect(new Set(PUBLIC_ROUTES.map((r) => r.kind))).toEqual(new Set(["slug", "collection"]));
     for (const route of PUBLIC_ROUTES) {
       for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE"]) {
-        const path = route.path("example");
+        const path = pathOf(route, "example");
         const r = await call(method, path);
         expect({ path, method, status: r.status }).toEqual({ path, method, status: 405 });
         expect(r.headers.Allow).toBe("GET, HEAD");
@@ -404,7 +417,7 @@ describe("the closed public namespace", () => {
    * The socket case is the next one; this is the one that pins our own code.
    */
   it("answers HEAD exactly as it answers GET, without a body", async () => {
-    for (const path of PUBLIC_ROUTES.map((route) => route.path("example"))) {
+    for (const path of PUBLIC_ROUTES.map((route) => pathOf(route, "example"))) {
       const get = await call("GET", path);
       const head = await call("HEAD", path);
       expect({ path, status: head.status }).toEqual({ path, status: get.status });
@@ -433,11 +446,22 @@ describe("the closed public namespace", () => {
    * mistyped URLs is an error tracker nobody reads — which is the reasoning
    * src/routes.ts already gives for not reporting 404s.
    *
-   * Every route in the inventory, because the decode is shared and a route
-   * added later gets it for free — the point of `PUBLIC_ROUTES`.
+   * Every route in the inventory **that takes a slug**, because the decode is
+   * shared and a slug route added later gets it for free — the point of
+   * `PUBLIC_ROUTES`.
+   *
+   * **The filter is the deliberate half.** A collection route captures nothing,
+   * so there is no slug to mis-encode and `pathOf` would hand back the same
+   * constant path six times — six requests that answer 501 and prove nothing,
+   * while looking exactly like coverage. `kind === "slug"` narrows the type too,
+   * so `route.path(bad)` is the arity the compiler already agrees with.
    */
   it("400s percent-encoding that cannot be decoded, rather than 500ing", async () => {
-    for (const route of PUBLIC_ROUTES) {
+    const slugRoutes = PUBLIC_ROUTES.filter((route) => route.kind === "slug");
+    /* Not vacuous: if the last slug route ever left the inventory this would
+       silently pass over nothing at all. */
+    expect(slugRoutes.length).toBeGreaterThan(0);
+    for (const route of slugRoutes) {
       for (const bad of ["%", "%2", "%zz", "%E0%A4%A", "a%", "%C3%28"]) {
         const r = await call("GET", route.path(bad));
         expect({ route: route.name, bad, status: r.status }).toEqual({
@@ -548,6 +572,41 @@ describe("the closed public namespace", () => {
     expect(r.status).toBe(501);
   });
 
+  /**
+   * **The collection route reaches the handler too**, and by the same evidence.
+   *
+   * 501 is the filesystem store refusing, which is what a route that matched and
+   * ran looks like in this file — a 404 would mean the pattern missed. Said
+   * separately from the sweeps above because those prove what the route
+   * *refuses*; this is the one line that proves it is reachable at all, and
+   * without it every refusal above could be passing over a route that matches
+   * nothing.
+   */
+  it("and the slugless collection route reaches the public handler as well", async () => {
+    const r = await call("GET", "/api/public/library");
+    expect(r.handled).toBe(true);
+    expect(r.status).toBe(501);
+    expect(r.body.error).toMatch(/needs Postgres/);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  /**
+   * **And it is anchored at the end**, so nothing after the name is quietly
+   * ignored.
+   *
+   * `/api/public/library/x` is the shape a slug route has, and a collection
+   * pattern written `^/api/public/library` would serve the whole list for it —
+   * a request carrying a segment nobody read, answered as if it had not. The
+   * closed room's own 404 is the right answer, and it is the answer.
+   */
+  it("and refuses a segment after the collection's name rather than ignoring it", async () => {
+    for (const path of ["/api/public/library/x", "/api/public/library/", "/api/public/librarys"]) {
+      const r = await call("GET", path);
+      expect({ path, status: r.status }).toEqual({ path, status: 404 });
+      expect(r.body.error, path).toMatch(/No public API route/);
+    }
+  });
+
   /** And an authenticated route with no header is still 401, unchanged. */
   it("leaves the gate exactly where it was", async () => {
     const r = await call("GET", "/api/library");
@@ -606,8 +665,8 @@ describe("the closed public namespace", () => {
 
   /** And an unknown path inside the room stays inside it, query string or not. */
   it("is not escaped by a query string", async () => {
-    const restored = originalUrl("/api/index?__spy_path=public%2Flibrary&archived=1");
-    expect(restored).toBe("/api/public/library?archived=1");
+    const restored = originalUrl("/api/index?__spy_path=public%2Fnothing-here&archived=1");
+    expect(restored).toBe("/api/public/nothing-here?archived=1");
     const r = await call("GET", restored ?? "");
     expect(r.status).toBe(404);
     expect(r.body.error).toMatch(/No public API route/);

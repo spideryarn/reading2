@@ -54,7 +54,7 @@
  */
 
 import { log } from "../log.js";
-import { makeLookUpTerm } from "../term-lookup.js";
+import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
   AdminStore,
   ArticleReader,
@@ -342,6 +342,23 @@ export const glossaryLookupStore: GlossaryLookupStore = guarded(
 export const lookUpTerm = makeLookUpTerm({
   reader,
   lookups: glossaryLookupStore,
+  ...(STORE === "postgres" ? {} : { assertWritable: fsAssertWritableGlossary }),
+});
+
+/**
+ * Explaining a term the reader typed into the glossary's box.
+ *
+ * **The same parts as `lookUpTerm` above, minus the store**, because nothing is
+ * saved — src/types.ts § `AskedTermAnswer` has the three reasons, the sharpest
+ * being that the glossary blob is published with a shared article. So there is
+ * no `lookups` seam here and no second copy of the anchor rule: both verbs are
+ * built from `anchorIn` in src/term-lookup.ts, which is the whole argument for
+ * that file existing.
+ *
+ * `assertWritable` for the same file-shaped reason as its neighbour.
+ */
+export const askAboutTerm = makeAskAboutTerm({
+  reader,
   ...(STORE === "postgres" ? {} : { assertWritable: fsAssertWritableGlossary }),
 });
 

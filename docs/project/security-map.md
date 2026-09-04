@@ -82,7 +82,8 @@ An agent about to edit one of these is editing a defence, not a helper.
 |---|---|
 | [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) | **one policy**: DOMPurify config, embed allowlist, hooks. Node-free, so both bindings share it |
 | [`src/sanitize.ts`](../../src/sanitize.ts) | the server binding, called from stage 3 in [`src/blocks.ts`](../../src/blocks.ts) — cleans the stored artefact |
-| [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`App.tsx`](../../src/web/App.tsx) — guards the render |
+| [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`App.tsx`](../../src/web/App.tsx) — guards the render. **Policy only**: it must stay byte-for-byte what the server binding produces, and `tests/sanitize-client.test.ts` says so |
+| [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
 | [`src/routes.ts`](../../src/routes.ts) | `slugPart()` for every capture that becomes a directory name; the one `requireUser` call |
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
 | [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, and `isAllowed` |
@@ -94,6 +95,8 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/injection-scan.ts`](../../src/injection-scan.ts) | hidden text in the raw source, found before the model reads it. It reports and decides nothing, and it does not read PDFs |
 | [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
+| [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
+| [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
 `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
@@ -128,14 +131,98 @@ was checked against the source rather than taken on trust:
   page's half.
 - **Hand-built allowlist DTOs**, below.
 
+#### And since 2026-09-04 there is a second ownerless query, which enumerates
+
+`GET /api/public/library` lists every public article, for somebody who has named nothing. That is a
+different risk from `publicSlug`, and the difference is worth stating rather than assuming: a lookup
+hands one article to a caller who already knew its slug — and every slug minted since 2026-08-31
+ends in an unguessable short id — while a listing answers *what is there*. A wrong predicate on the
+lookup leaks the article somebody was already asking for; a wrong predicate on the listing publishes
+the shelf.
+
+`publicLibraryQuery` ([`src/store/public-library.ts`](../../src/store/public-library.ts)) is
+therefore a **closed query rather than a reusable predicate** — there is no exported
+*"visibility is public"* clause for anybody to bolt onto another query — and it carries the same
+readability bar as `loadArticle`/`loadHead` (a tree and at least one block), so a damaged revision
+cannot become a card whose destination 404s. It selects seven named columns, orders totally, and is
+bounded.
+
+**The existing static guard could not have caught a bad one.** `tests/owner-isolation.test.ts` greps
+`src/store/` for `eq(articles.slug, …)`, and a listing has no slug in it. That file now has a second
+section, *ownerless enumeration*, which inventories every query naming the `articles` table
+reachable from the public import graph, permits exactly two, reads the listing's **generated SQL**
+for the public predicate and the absence of `owner_id`, pins its seven columns, and runs it against
+two owners over private, public-readable and public-but-unreadable rows. Each of those was watched
+failing against a deliberately broken query before it was believed.
+
+**And the guard covers the corridor as well as the room, since 2026-09-04.** A GPT Sol review of the
+built code found the hole one level up: a request runs the transport before either public door, so a
+query written into `serveApi`'s pre-auth dispatch or `serve`'s wrapper would be reachable by a
+stranger and invisible to a graph rooted at `src/public/`. So the guard also cuts each transport's
+**anonymous region** — the dispatcher minus the one call that hands off to the authenticated half,
+which keeps the `catch` and the `finally` inside it — and asserts that region names no table and
+imports nothing outside a short pinned list. The list of transports is *derived* by asking which
+modules import a public entry point, so a third one fails the guard rather than escaping it. The
+detector parses ([`tests/helpers/article-queries.ts`](../../tests/helpers/article-queries.ts)) rather
+than matching `.from(articles)`, because a table alias, a relational query and raw SQL all walked
+past the regex it replaced.
+
+**A row bound is not a byte bound**, and the same review said so. Nothing constrains a title or an
+`<h1>`, so the listing's projection caps every text column it returns with `left()` **in the SQL** —
+after the rows are built it is too late, the bytes have crossed. `PUBLIC_CARD_CHARS` in
+[`src/store/public-library.ts`](../../src/store/public-library.ts) holds the numbers, and a fixture
+with a 5,000-character title, gist, site name and `<h1>` measures them. A partial index
+(`articles_public_listing`, `drizzle/20260904175802_*`) covers `visibility = 'public'` in the
+listing's exact order, so `limit` bounds the database's work and not only the reply.
+
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
 
-**What is deliberately *not* here:** diagram mode. `src/web/visitor.ts`'s `POLICY` table marks it
-owners-only unconditionally, because all three of its pictures POST for embeddings and spend money —
-two of four did until the free one, Tree, was cut on 2026-08-30;
-the gate is real on the server too, since `/api/similar/:slug` and `/api/projection/:slug` sit
-behind `requireUser`. The client-side gate is a courtesy; the server-side one is the defence.
+**Diagram used to be deliberately *not* here, and since 2026-09-04 it is.** `POLICY` marked it
+owners-only unconditionally, because its pictures POST for embeddings and spend money. What changed
+is not the cost of those pictures but that the panel now takes a `DiagramAccess` union
+([`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)): a visitor's arm pins `?diagram=` to the free
+picture and disables **three** fetching hooks. The third, `useSketchCaption`, had no `enabled`
+argument at all — for an owner there is no purchase to gate — so it was an unconditional GET to an
+authenticated route on every mount, and an audit of the other two would have missed it.
+[260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 2.
+
+**The server-side gate is unchanged and is still the defence**: `/api/similar/:slug` and
+`/api/projection/:slug` sit behind `requireUser`, and the sketch and illustrated jobs behind it too.
+What has changed is that the **client-side pin is now load-bearing rather than a courtesy** — it is
+what stops a pasted `?diagram=trail` mounting a picture that would buy something, and
+`tests/public-network-trace.test.tsx` asserts once per picture that arriving at each of the five
+spends nothing. Removing the pin turns two of those red, which was checked rather than assumed.
+
+**The experimental-features switch is not a gate of any kind**, and must never be relied on as one.
+Since 2026-09-04 it decides how many Diagram picture chips an *owner* is shown
+([experimental-features.md](experimental-features.md)); nothing on the server reads it, a hidden
+chip's picture is still reachable by URL on purpose, and no server handler consults it. It changes
+discoverability, not authority.
+
+> **The hazard this section is really about, restated now that the sharing is built.** Diagram is in
+> every reader's bar since 2026-09-04, with only Sketch chipped for a reader who has not turned the
+> switch on. That is an *owner* change: a visitor is still pinned to free Force, and
+> `tests/public-network-trace.test.tsx` asserts an owner arriving at `?mode=diagram` POSTs nothing.
+>
+> The constraint the next person inherits is unchanged and is the important sentence here: **a
+> Sketch shown to a visitor has to be a stored artefact in the payload, never a job a visitor can
+> start.** Sketch reaches its ~$0.20 cost through `useSketch`'s auto-runner and `armActivation`,
+> not through the two POSTs named above, so an audit that checks only those two would clear it
+> wrongly — which is the same shape of mistake as `useSketchCaption` above.
+
+**That was built later the same day, and this is where the boundary now is.** A visitor's picture is
+the Sketch, out of the payload (`PublicSketch`), and `useSketch` is mounted in exactly one component
+— `OwnerSketch` — which the visitor arm of `SketchAccess` never reaches, because that arm **has no
+slug in it**. `SketchView` was split into that owner half and a presentational `SketchBody` for this
+reason and no other: a `readOnly` prop would have left the auto-runner mounted for a stranger.
+`profileHash` is the field to notice not crossing — it is who the drawing was made for.
+
+The check that would fail if this were undone is
+`tests/public-network-trace.test.tsx`: handing every reader `{ kind: "owner", slug }` turns eleven
+of its tests red, and the failure output shows a visitor being offered *$0.20* and *Draw the
+argument*. Verified by doing it, 2026-09-04.
+
 
 ### The owner is shown the inventory before they publish
 
@@ -145,9 +232,26 @@ on an already-shared article publishes it and asks nobody. The list is *derived*
 [`src/web/shared-inventory.ts`](../../src/web/shared-inventory.ts) sweeps `MODES` through
 `visitorGap`, the same function the reading view's dimmed buttons come from, so a mode added next
 month appears on the withheld side whether or not its author opens the file. Only the rows that are
-not modes at all are prose — the text, the pictures and the provenance; the owner's comments,
-lookups, profile, rename, uploaded file and the cost of it all; and the **arc and the tweet thread**,
-which cross like an artefact but have no mode to be swept. `tests/shared-inventory.test.ts` holds
+not modes at all are prose — the text, the pictures, the provenance and, since 2026-09-04, **the
+owner's comments**; the lookups, profile, rename, uploaded file and the cost of it all; and the
+**arc and the tweet thread**, which cross like an artefact but have no mode to be swept.
+
+**The comments row moved from the withheld side to the shared side**, and it is the only row that
+ever has ([260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 3). Two kinds of
+comment still never cross, and both are refused **in SQL** — `PUBLIC_COMMENTS_WHERE` in
+[`public-reader.ts`](../../src/store/public-reader.ts) — rather than dropped by the projection,
+because a filter in a `map` is one satisfied typechecker away from being widened:
+
+- a **referee's** note (`criterion_id is null`). Leaving `criterionId` and `valence` out of the DTO
+  does not make the row a reading note; it publishes the body of a peer review with its context
+  stripped off, which is worse than publishing it whole.
+- an **unfinished or failed** model call. Published without its error, its retry and its polling, it
+  is an item a visitor can neither act on nor understand.
+
+The read is `publicCommentsQuery`, which names its columns and **repeats `publicSlug` in its own
+`where`** — a naked `articleId` is not authority. `comments` is the fifth table in
+`tests/public-imports.test.ts`'s allowlist and the first ever added to it; that test's own comment
+says what a sixth would have to prove. `tests/shared-inventory.test.ts` holds
 them to `PublicArticle`'s key set with a total record, so a new field on the wire fails to compile
 until somebody decides which line covers it.
 

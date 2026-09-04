@@ -453,9 +453,12 @@ Four decisions worth keeping:
   Entering search mode clears `?spine=`, so a reader who had put the rail away gets it back rather
   than half a feature drawn where they cannot see it.
 
-Because the spine now carries the coarse levels, the **L0 column is the first thing auto-fit gives
-up** on a narrow window (below), and what the article *is* lives in the masthead, so that giving it
-up costs nothing.
+Because the spine now carries the coarse levels, **auto-fit never opens the L0 column at all** —
+not "first to go on a narrow window", but never a candidate in the first place, on any window (below)
+— and what the article *is* lives in the masthead, so that costs nothing. A reader can still ask for
+it with `?cols=0,1,2` ([url-state.md](url-state.md)); the window just stops offering it unasked.
+[SPIDERYARN-READING2-Z], 2026-09-04: Greg on an iPad had reached `?cols=1,2` by hand and asked
+whether that shouldn't be the default.
 
 ### The arc
 
@@ -470,10 +473,12 @@ for every article, forever. A column in this view means *this level's value at y
 column with one cell is a constant, carrying zero information per pixel travelled — and it was not
 even new information, because the same sentence was in the masthead an inch above it.
 
-It was not free, either. L0 appears whenever three gist columns fit, which is from ~1100px up — so
-on any laptop at full screen. Across 1100–1440px it squeezed L1 and L2 down to 176–229px *and* held
-the prose at its 544px floor. Removing it gives both gist columns their full 240px and hands 50–240px
-back to the reading column.
+It was not free, either — at the time this was written, L0 appeared automatically whenever three gist
+columns fit, from ~1100px up, so on any laptop at full screen. Across 1100–1440px it squeezed L1 and
+L2 down to 176–229px *and* held the prose at its 544px floor. Turning the constant sentence into the
+arc bought back some of that cost without giving up the column; auto-fit no longer opening L0 at all
+([above](#too-many-levels-fit-the-columns-dont-just-scroll-them)) buys back the rest — a reader who
+wants it is one `?cols=0,1,2` away.
 
 So the question became: is there anything that is genuinely **article-level** and still **varies
 vertically**? One thing, and it is not a level of the tree:
@@ -550,14 +555,18 @@ So the view now **chooses which columns to show, and how wide**, in
 [`src/web/App.tsx` § fitting](../../src/web/App.tsx):
 
 - **Shrink first, drop second.** Gist columns squeeze from a comfortable 15rem down to 11rem before a
-  level is given up. At 1000px three 15rem columns don't fit but two 11.5rem ones do, and two levels
-  of context beat one.
-- **Give up the coarse levels first.** They are what the spine is already showing; the finest gist is
-  the one that earns its place next to the paragraph it summarises. So L0 goes, then L1.
+  level is given up. At 1035px two columns at 15rem don't fit, but the same two squeezed to ~14.9rem
+  do — two levels of context beat one.
+- **L0 is never a candidate, and after that the coarser of what's left wins.** The spine already
+  shows what L0 would (above), so automatic fit's starting set is L1 and L2, not L0/L1/L2 —
+  [SPIDERYARN-READING2-Z](../plans/260904b-address-user-feedback-reports-batch.md). Squeezed further
+  than that, L2 goes before L1: the finest gist is the one that earns its place next to the paragraph
+  it summarises, but a reader down to one column is choosing between "the part I'm in" and "the
+  paragraph I'm in", and the part is what orients them.
 - **The reading column takes the slack**, so the table fills the window exactly when it can and
-  overflows by a known amount when it can't. At 1600px: L0/L1/L2 at 240px and 868px of prose. At
-  760px: one gist column at 204px and 544px of prose, fitting exactly. At 700px there is no gist
-  column left and the prose column *is* the window.
+  overflows by a known amount when it can't. At 1600px: L1/L2 at 240px and 1108px of prose. At
+  760px: one gist column — L1 — at 204px and 544px of prose, fitting exactly. At 700px there is no
+  gist column left and the prose column *is* the window.
 
   **Auto-fit never overflows**, and this line said it overflowed by 44px at 700px until 2026-08-28.
   That stopped being true on 2026-08-27, when `gistsThatFit` was allowed to return zero rather than

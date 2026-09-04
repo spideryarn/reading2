@@ -33,6 +33,7 @@ import {
   markReturnPath,
   noteMarkerAt,
   notePreviewHtml,
+  noteStartAt,
   type NoteBlock,
 } from "../src/web/notes-view.js";
 
@@ -480,4 +481,137 @@ describe("gwern, whose longest note is eight blocks", () => {
       expect(found?.blockId).toBe(found?.note.blocks[0]?.id);
     }
   }, SLOW);
+});
+
+/* -------------------------------------------------------------------------- */
+/* 5. The number at the note, and the region it sits in                        */
+/* -------------------------------------------------------------------------- */
+
+/* Reported from an iPad on 2026-09-04 (SPIDERYARN-READING2-14): the reader
+   followed a marker to the bottom of a gwern piece and found nine unnumbered
+   paragraphs that read as body prose. The back-links were there — this is what
+   was not. docs/project/links.md § What the reader meets at the note. */
+describe("what is drawn at the note", () => {
+  const first = "spya-note-dddddddddd";
+  const second = "spya-note-eeeeeeeeee";
+  const blocks: NoteBlock[] = [
+    body("spya-clm001", `<p>A claim.${marker(first, "spya-not001", "1", "fnrefA")}</p>`),
+    body("spya-clm002", `<p>Another.${marker(second, "spya-not002", "2", "fnrefB")}</p>`),
+    note({
+      id: "spya-not001",
+      noteId: first,
+      html: `<li id="spya-not001" data-spya-note="${first}">The first note.</li>`,
+    }),
+    /* The note's second block. Gwern's longest note is eight of these, and
+       numbering each would claim the piece has eight more notes than it does. */
+    note({
+      id: "spya-not001b",
+      noteId: first,
+      html: `<li id="spya-not001b" data-spya-note="${first}">…continued.</li>`,
+    }),
+    note({
+      id: "spya-not002",
+      noteId: second,
+      html: `<li id="spya-not002" data-spya-note="${second}">The second note.</li>`,
+    }),
+  ];
+  const index = buildNoteIndex(blocks);
+
+  it("numbers each note from the marker that cites it", () => {
+    expect(noteStartAt(index, "spya-not001")?.label).toBe("1");
+    expect(noteStartAt(index, "spya-not002")?.label).toBe("2");
+  });
+
+  it("numbers only the block a note starts at", () => {
+    expect(noteStartAt(index, "spya-not001b")).toBe(null);
+    expect(noteStartAt(index, "spya-clm001")).toBe(null);
+  });
+
+  it("knows where the region begins", () => {
+    expect(index.first).toBe("spya-not001");
+    expect(noteStartAt(index, "spya-not001")?.opensRegion).toBe(true);
+    expect(noteStartAt(index, "spya-not002")?.opensRegion).toBe(false);
+  });
+
+  /* The author's own number, not our count. Wikipedia writes `[5]`, and a note
+     printed `5` beside a marker reading `[5]` is us disagreeing with the page
+     about its own apparatus. */
+  it("keeps the author's own dress", () => {
+    const bracketed = "spya-note-ffffffffff";
+    const one = buildNoteIndex([
+      body("spya-clm003", `<p>Cited.${marker(bracketed, "spya-not003", "[5]", "fnrefC")}</p>`),
+      note({
+        id: "spya-not003",
+        noteId: bracketed,
+        html: `<li id="spya-not003" data-spya-note="${bracketed}">The note.</li>`,
+      }),
+    ]);
+    expect(noteStartAt(one, "spya-not003")?.label).toBe("[5]");
+  });
+
+  /* A label long enough to be prose is markup we did not write, and printing it
+     in a 2rem margin would push the note's first line somewhere strange. */
+  it("falls back to its own count for a label that is not a number", () => {
+    const odd = "spya-note-9999999999";
+    const one = buildNoteIndex([
+      body(
+        "spya-clm004",
+        `<p>Cited.${marker(odd, "spya-not004", "see the appendix", "fnrefD")}</p>`,
+      ),
+      note({
+        id: "spya-not004",
+        noteId: odd,
+        html: `<li id="spya-not004" data-spya-note="${odd}">The note.</li>`,
+      }),
+    ]);
+    expect(noteStartAt(one, "spya-not004")?.label).toBe("1");
+  });
+
+  /* A note nothing cites has no marker to take a number from, and it must not
+     take one a cited note is already using. */
+  it("still numbers a note with no marker, without colliding", () => {
+    const orphan = "spya-note-1111111111";
+    const one = buildNoteIndex([
+      ...blocks,
+      note({
+        id: "spya-not005",
+        noteId: orphan,
+        html: `<li id="spya-not005" data-spya-note="${orphan}">Nobody cites this.</li>`,
+      }),
+    ]);
+    expect(noteStartAt(one, "spya-not005")?.label).toBe("3");
+  });
+
+  it("offers a heading when the source has none", () => {
+    expect(index.titled).toBe(false);
+    expect(noteStartAt(index, "spya-not001")?.needsHeading).toBe(true);
+  });
+
+  it("does not offer a second heading when the source wrote one", () => {
+    const titled = buildNoteIndex([
+      blocks[0]!,
+      { id: "spya-hdg001", tag: "h2", html: "<h2>Footnotes</h2>", text: "Footnotes" },
+      blocks[2]!,
+    ]);
+    expect(titled.titled).toBe(true);
+    expect(noteStartAt(titled, "spya-not001")?.needsHeading).toBe(false);
+  });
+
+  /* **`Bibliography` is not a notes heading**, and gwern's page is why: it ends
+     with one, immediately above the notes. Reading it as a heading for them is
+     how the fix silently does nothing on the very page it was reported from. */
+  it("does not count a bibliography heading as introducing the notes", () => {
+    const biblio = buildNoteIndex([
+      blocks[0]!,
+      { id: "spya-hdg002", tag: "h2", html: "<h2>Bibliography</h2>", text: "Bibliography" },
+      blocks[2]!,
+    ]);
+    expect(biblio.titled).toBe(false);
+  });
+
+  it("says nothing at all about an article with no notes", () => {
+    const none = buildNoteIndex([body("spya-clm005", "<p>Just prose.</p>")]);
+    expect(none.first).toBe(null);
+    expect(noteStartAt(none, "spya-clm005")).toBe(null);
+  });
 });

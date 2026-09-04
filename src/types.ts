@@ -512,6 +512,41 @@ export interface GlossaryLookup {
 }
 
 /**
+ * **What the glossary's *Look up a term* box hands back** — one answer about
+ * one passage, and nothing that outlives the request.
+ *
+ * A reader asked for a box that would "look for that term and add it to the
+ * glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). This is the first half of
+ * that and deliberately not the second: **nothing here is stored**, and no
+ * `GlossaryEntry` is minted. The glossary is a wholesale JSON document
+ * (src/db/schema.ts § `glossary`) which a *"find more terms"* run recomputes,
+ * and which src/store/public-reader.ts publishes to everyone a shared article
+ * is shared with — so an entry a reader added would be merged away by the first
+ * and **published by the second**. Persistence needs its own owner-scoped table
+ * and its own decision about the public projection; until then this answers the
+ * question and keeps the reader's words to itself.
+ * docs/project/glossary.md § Looking a term up.
+ *
+ * `lookup` is a {@link GlossaryLookup} so the panel draws this with the same
+ * component it draws a checked entry with — same call, same shape, one piece of
+ * rendering. It is **not** written to `glossary_lookups`: that table is keyed by
+ * entry id and there is no entry.
+ */
+export interface AskedTermAnswer {
+  /** What the reader typed, normalised — never their raw string, and never stored. */
+  term: string;
+  /** The block the question was anchored to, so the panel can offer a jump. */
+  blockId: BlockId;
+  /**
+   * **The article's own words, not the reader's.** Where the two differ — case,
+   * a plural, a possessive — the piece wins, because that is the passage the
+   * model was told the reader had selected and it is the text that is there.
+   */
+  quote: string;
+  lookup: GlossaryLookup;
+}
+
+/**
  * The article's glossary. Stage 5d, `data/<slug>/glossary.json`.
  *
  * Generated on demand rather than as part of every ingest — `glossary` is in
@@ -968,7 +1003,7 @@ export interface Quotes {
    * **Document order**, fixed at write time.
    *
    * Stored in the article's own order rather than in any ranked one, for the
-   * reason glossary.md § Five ways to break this quietly gives as its second:
+   * reason glossary.md § Six ways to break this quietly gives as its second:
    * sorting on write makes `?rank=document` mean whatever the last writer felt
    * like, and the panel's fallback order silently becomes a ranking.
    */
@@ -1727,6 +1762,23 @@ export interface PublicArtefacts {
    * docs/plans/260904c-more-modes-on-a-shared-link.md.
    */
   timeline: boolean;
+  /**
+   * **The seventh, and the only one that is a picture somebody paid for.**
+   *
+   * Greg, 2026-09-04: *"We're now going to share the Diagrams, though only
+   * Sketch will be visible to those without Experimental Features"* — and,
+   * asked whether that meant a visitor could *draw* one: **an already-drawn
+   * Sketch only.**
+   *
+   * That distinction is the whole of why this flag exists. Every other artefact
+   * here is cheap to be wrong about; a Sketch costs about $0.20 and two to
+   * three minutes, so *is there one* has to be a fact in the payload rather
+   * than something a visitor's client discovers by asking. With the flag, a
+   * visitor either sees the drawing or is told nobody has made one — and there
+   * is no state in which their browser can start the job.
+   * docs/project/security-map.md § the hazard this section is really about.
+   */
+  sketch: boolean;
 }
 
 export interface ArticleSharing extends VisibilityState {
@@ -3253,7 +3305,7 @@ export interface FeedbackDiagnostics {
  * for.
  *
  * `feedback` is the only table in this app an ordinary account holder can add
- * rows to — capped at ten an hour each (`FEEDBACK_HOURLY_CAP`), which is a
+ * rows to — rate-capped per owner (`FEEDBACK_HOURLY_CAP`), which is a
  * ceiling on the rate and not on the total. An unbounded select on it is a
  * response whose size is decided by whoever wrote the most, so the ceiling is
  * here rather than in the caller's good intentions.

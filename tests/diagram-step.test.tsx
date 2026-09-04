@@ -236,6 +236,7 @@ async function mount(opts: { atRow?: number | null } = {}) {
     root.render(
       <DiagramPanel
         access={{ kind: "owner" }}
+        experimental
         slug="s"
         root={tree}
         kind="drift"

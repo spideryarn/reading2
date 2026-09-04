@@ -329,7 +329,9 @@ describe("fitView in a mode — the band replaces the columns", () => {
   it("leaves the ToC layout untouched when there is no mode band", () => {
     const f = fitView({ ...article, showText: true, chosen: null, windowWidth: 1600 });
     expect(f.modeW).toBe(0);
-    expect(f.columns).toEqual([0, 1, 2]);
+    // Automatic fit's own default — spine + L1 + L2, never L0. See
+    // tests/layout.test.ts § "the default hierarchy view (no ?cols=)".
+    expect(f.columns).toEqual([1, 2]);
   });
 });
 

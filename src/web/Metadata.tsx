@@ -81,18 +81,25 @@
  *    (docs/project/content-extraction.md), and how well that reading was
  *    checked is a fact about trust that nothing else on this page carries.
  *
- * ## The fourth pass, 2026-08-27: Delete this article, and Put back
+ * ## The fourth pass, 2026-08-27: Archive this article, and Put back
  *
  * Greg:
  *
  * > Add "Delete this article" functionality, both to Metadata and Homepage.
  * > Ideally it would Archive, i.e. soft-delete, so it can be undone.
  *
- * The homepage half already existed and needed nothing — Delete on the card and
- * on the table row, archive rather than erase, Undo strip, Show deleted
- * (Library.tsx, ShelfEntry.tsx). This is the half that was still a dimmed
- * placeholder here: `DeleteArticle`, below, which carries the reasoning,
- * including why it has no strip and no dialog and why its undo never expires.
+ * The homepage half already existed and needed nothing — the button on the card
+ * and on the table row, archive rather than erase, Undo strip, the disclosure
+ * at the foot of the shelf (Library.tsx, ShelfEntry.tsx). This is the half that
+ * was still a dimmed placeholder here: `ArchiveArticle`, below, which carries
+ * the reasoning, including why it has no strip and no dialog and why its undo
+ * never expires.
+ *
+ * **Every one of those said "Delete" until 2026-09-04**, having only ever
+ * archived — and Greg filed a report asking for the archive feature he was
+ * already looking at. The second half of his own sentence above is what the
+ * interface now says out loud. docs/project/library.md § Archive, and Undo is
+ * the confirmation.
  *
  * ## The fifth pass, 2026-08-27: rename it from here
  *
@@ -106,7 +113,7 @@
  * across all three, in TitleEditor.tsx, because a rename has three outcomes
  * that look identical when the happy path works. The one thing this page does
  * that the masthead does not is **withhold the pencil on the fixture**, which
- * is `showingFixture` again and exactly the refusal Delete makes below.
+ * is `showingFixture` again and exactly the refusal Archive makes below.
  *
  * ## What it deliberately does not say
  *
@@ -135,6 +142,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNod
 import { useQueryState } from "nuqs";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import {
+  Archive,
   ArrowLeft,
   Blocks,
   Bot,
@@ -165,7 +173,6 @@ import {
   RefreshCw,
   ScanLine,
   Target,
-  Trash2,
   TriangleAlert,
   Undo2,
   Upload,
@@ -442,7 +449,7 @@ export function Metadata({
    * `articleMetadata` follows it, deliberately, so that the two pages describe
    * the same thing (src/api.ts). Two places on this page need to know: the
    * `fixture` chip below, which has said so since the page was built, and —
-   * since 2026-08-27 — Delete, which must not be offered. The shelf has no
+   * since 2026-08-27 — Archive, which must not be offered. The shelf has no
    * entry under this slug, so the PATCH behind it would 404; a button that can
    * only fail is worse than no button, because pressing it is how you find out.
    * Found by a cross-model review. One derivation, used twice, rather than the
@@ -563,7 +570,7 @@ export function Metadata({
             replaces the heading and what a failed write says are all
             TitleEditor.tsx's — the masthead needs the same three.
 
-            **Not offered on the fixture**, for exactly the reason Delete is not
+            **Not offered on the fixture**, for exactly the reason Archive is not
             (see `showingFixture` above): there is no shelf row under this
             address, so the PATCH behind it would 404. */}
         <EditableTitle
@@ -574,7 +581,7 @@ export function Metadata({
              a state that is really "not yet told" — so the first version drew
              the pencil for a moment on every address, including the ones where
              pressing it PATCHes a row that does not exist. Withheld until the
-             answer is in, which is the same standard Delete holds itself to a
+             answer is in, which is the same standard Archive holds itself to a
              few sections down. GPT Sol, 2026-08-27. */
           offer={hasShelfRow}
           inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
@@ -747,8 +754,9 @@ export function Metadata({
             link cannot be un-rung (messages.ts § SHARING_CANNOT_UNRING) —
             below two screenfuls of notes and file paths.
 
-            Still above Delete, and Delete is still last: nothing destructive
-            sits above something somebody came here to read.
+            Still above Archive, and Archive is still last: nothing that takes
+            the article off the shelf sits above something somebody came here to
+            read.
 
             **Not offered on the fixture.** That address has no row of its own
             (`showingFixture` above), so the `PUT` behind the switch would 404,
@@ -855,7 +863,7 @@ export function Metadata({
         {/* -------------------------------------------------- 7. export it --
             Below sharing because both are decisions about where this article's
             data goes, and above the machinery because this one is a thing the
-            owner does rather than a thing we did. Still above Delete, which
+            owner does rather than a thing we did. Still above Archive, which
             stays last. */}
         <ExportSection slug={slug} offer={hasShelfRow} />
 
@@ -876,14 +884,14 @@ export function Metadata({
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
-        {/* ------------------------------------------------ 9. deleting it --
-            Last on the page, and last on purpose: a destructive control belongs
-            past everything somebody might have come here to read, not beside
-            it. Under the technical section rather than over it for the same
-            reason — that is the least urgent thing here, and it is still not
-            something to scroll a Delete button past. */}
-        <Section label="Delete this article">
-          <DeleteArticle
+        {/* ----------------------------------------------- 9. archiving it --
+            Last on the page, and last on purpose: the control that takes the
+            article off the shelf belongs past everything somebody might have
+            come here to read, not beside it. Under the technical section rather
+            than over it for the same reason — that is the least urgent thing
+            here, and it is still not something to scroll this button past. */}
+        <Section label="Archive this article">
+          <ArchiveArticle
             slug={slug}
             archivedAt={provenance?.archivedAt}
             failed={Boolean(provenanceError)}
@@ -1066,7 +1074,7 @@ function ExportSection({
   return (
     <Section label="Export">
       <div className={`${CARD} tw:p-4`}>
-        {/* An inline button in the card, in `DeleteArticle`'s shape rather than
+        {/* An inline button in the card, in `ArchiveArticle`'s shape rather than
             the toolbar's `IconButton` — this one has a label to carry and no
             row to fit into. Quiet at rest, tinted on hover, and **not** the
             destructive tint: nothing here changes the article. */}
@@ -1585,7 +1593,14 @@ function TechnicalDetails({
 }
 
 /**
- * Delete, which archives — and Put back, which is the whole reason it may.
+ * Archive — and Put back, which is the whole reason it may.
+ *
+ * **It was called Delete until 2026-09-04**, and the handler behind it has
+ * never done anything but archive. That gap is the whole of report
+ * SPIDERYARN-READING2-19: Greg asked for an archive feature, from this page and
+ * from the shelf, that had existed since 2026-08-26 — because the word on the
+ * button told him he was looking at something else. Renaming a control is a
+ * smaller act than building one and it was the entire fix.
  *
  * ## Why the placeholder that stood here for two days was right, and what changed
  *
@@ -1595,11 +1610,11 @@ function TechnicalDetails({
  * nine-second Undo strip, and *"a page you can navigate away from is a bad
  * place to put the only chance to change your mind"*.
  *
- * That reason has been answered twice over. The shelf grew a **Show deleted**
+ * That reason has been answered twice over. The shelf grew a **Show archived**
  * disclosure the same week, so the strip stopped being the only way back
  * ([Library.tsx](Library.tsx)); and this control does not use a strip at all.
  * An archived article stays readable by direct link — only the shelf filters
- * (docs/project/library.md) — so the reader who deletes it from here is still
+ * (docs/project/library.md) — so the reader who archives it from here is still
  * looking at its page afterwards, and the honest thing for that page to show is
  * the state it is now in, with the way out of it, and no clock. **The undo here
  * never expires.** That is a stronger promise than the shelf's, not a weaker
@@ -1609,14 +1624,14 @@ function TechnicalDetails({
  *
  * `undefined` is *we have not been told yet* — the metadata request is in
  * flight, or it failed. Neither may show a button at all, and the failed one
- * must not say which way round things are: a page that shows Delete over an
- * already-deleted article, or Put back over a live one, has made a claim about
+ * must not say which way round things are: a page that shows Archive over an
+ * already-archived article, or Put back over a live one, has made a claim about
  * the reader's library out of a request that established nothing. The same rule
  * `AboutYou` above is arranged around, found by the same review.
  *
  * There is a fourth state above those three, and it is a refusal rather than an
  * ignorance: an address with **no article of its own**, which `loadArticle` and
- * `articleMetadata` both answer with the fixture. Nothing to delete, and the
+ * `articleMetadata` both answer with the fixture. Nothing to archive, and the
  * PATCH would 404, so the section says so instead of offering a button whose
  * only outcome is an error. `showingFixture` at the call site.
  *
@@ -1626,7 +1641,7 @@ function TechnicalDetails({
  * was written first and removed as redundant when a review pointed at the outer
  * one.
  */
-function DeleteArticle({
+function ArchiveArticle({
   slug,
   archivedAt,
   failed,
@@ -1682,9 +1697,9 @@ function DeleteArticle({
          answer `purpose` (src/routes.ts § patchShelf), both stores persist and
          then rebuild the entry to return it, and a response can simply be lost
          on the way back. Every one of those fails after the archive has
-         happened. A page that then says "Nothing changed" and offers Delete
+         happened. A page that then says "Nothing changed" and offers Archive
          again is telling the reader something it has no way to know — and the
-         Delete they press next is the one that looks like it did nothing.
+         Archive they press next is the one that looks like it did nothing.
 
          So: ask. The answer to "did that work" is a fresh read, not the
          request's own exit code. If even the re-read fails we are honestly
@@ -1705,13 +1720,13 @@ function DeleteArticle({
 
   /* Not ignorance but a refusal, and it comes first because it is the one state
      where the answer is known and the act is still impossible: nothing under
-     this address is ours to delete. */
+     this address is ours to archive. */
   if (fixture) {
     return (
       <div className={`${CARD} tw:p-4`}>
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
           This address has no article of its own — the reading view is showing the example fixture,
-          so there is nothing here to delete. The{" "}
+          so there is nothing here to archive. The{" "}
           <Link href={LIBRARY_HREF} className="tw:text-highlight">
             library
           </Link>{" "}
@@ -1724,7 +1739,7 @@ function DeleteArticle({
   /* Rendered whenever `at` is unknown, which is three situations and not one:
      the first request is in flight, it failed, or a write failed and the
      re-read after it failed too. No button in any of them — a *disabled*
-     Delete would still be telling the reader the article is on the shelf, and
+     Archive would still be telling the reader the article is on the shelf, and
      none of the three establishes that. */
   if (at === undefined) {
     const lost = failed || acted !== null;
@@ -1737,7 +1752,7 @@ function DeleteArticle({
           {...(lost ? { role: "alert" as const } : {})}
         >
           {lost
-            ? "Couldn't check whether this one is deleted, so there is nothing safe to offer here. Reload the page."
+            ? "Couldn't check whether this one is archived, so there is nothing safe to offer here. Reload the page."
             : "Checking…"}
         </p>
         {error ? (
@@ -1749,11 +1764,11 @@ function DeleteArticle({
     );
   }
 
-  const deleted = at !== null;
+  const archived = at !== null;
   const when = timeAgo(at ?? undefined, now);
 
   /* **One `<button>` element in both states, not two behind a ternary.** The
-     reader presses Delete with the keyboard; if the two states were separate
+     reader presses Archive with the keyboard; if the two states were separate
      elements React would unmount the one they are standing on and mount a
      different one, and focus would fall to `<body>` — so the next Tab starts
      from the top of the page and a screen reader loses its place, at the exact
@@ -1763,43 +1778,51 @@ function DeleteArticle({
 
      The conditional children below are `? … : null` at fixed positions for the
      same reason: React reconciles a fixed set of JSX children by position, and
-     a `null` holds its slot — inserting the "Deleted" line without one would
+     a `null` holds its slot — inserting the "Archived" line without one would
      shift the button along by one and remount it after all. */
   return (
     <div className={`${CARD} tw:p-4`}>
-      {deleted ? (
+      {archived ? (
         /* `status`, not `alert`, for the same reason the shelf's Undo strip is:
            the reader did this on purpose, so it is a confirmation rather than an
            emergency.
 
            `timeAgo` on a `useNow` clock rather than this file's own `ago`, and
            both halves of that matter. The clock, because this line is written
-           the instant the reader presses Delete: `ago` reads `Date.now()` once
-           during render, so "Deleted just now" would still say "just now" an
+           the instant the reader presses Archive: `ago` reads `Date.now()` once
+           during render, so "Archived just now" would still say "just now" an
            hour later, on a page nothing else re-renders. And `timeAgo`, because
            it hands back `undefined` for a date it cannot parse instead of
            feeding `NaN` to `Intl.RelativeTimeFormat`, which throws. Both found
            by a cross-model review, 2026-08-27. */
         <p role="status" className="tw:m-0 tw:mb-3 tw:text-sm tw:text-foreground">
-          {when ? `Deleted ${when}.` : "Deleted."}
+          {when ? `Archived ${when}.` : "Archived."}
         </p>
       ) : null}
 
       <button
         type="button"
-        onClick={() => void set(!deleted)}
+        onClick={() => void set(!archived)}
         disabled={busy}
         className={`tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
-          deleted
+          archived
             ? "tw:text-highlight tw:hover:bg-highlight/10 tw:focus-visible:bg-highlight/10"
-            : /* Quiet at rest and destructive on hover, which is the shelf's own
-                 Delete (ShelfEntry.tsx `IconButton destructive`) — one convention
-                 for the one act, and the heading above already carries the weight. */
-              "tw:text-muted-foreground tw:hover:bg-destructive/10 tw:hover:text-destructive tw:focus-visible:bg-destructive/10 tw:focus-visible:text-destructive"
+            : /* Quiet at rest and tinted on hover — the shelf's own Archive
+                 button (ShelfEntry.tsx), one convention for the one act, and the
+                 heading above already carries the weight.
+
+                 **Not the destructive red**, which it wore until 2026-09-04.
+                 Red is this app's word for *this cannot be undone*, and the
+                 paragraph directly below promises the opposite for ever. There
+                 is now no destructive tint anywhere on this page, which is the
+                 honest answer: the one thing here that cannot be un-rung is
+                 publishing, and that is guarded by a question rather than by a
+                 colour (AccessSharing.tsx). */
+              "tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground"
         }`}
       >
-        {deleted ? <Undo2 size={14} /> : <Trash2 size={14} />}
-        {busy ? (deleted ? "Putting back…" : "Deleting…") : deleted ? "Put back" : "Delete"}
+        {archived ? <Undo2 size={14} /> : <Archive size={14} />}
+        {busy ? (archived ? "Putting back…" : "Archiving…") : archived ? "Put back" : "Archive"}
       </button>
 
       {/* What it actually does, said before it is done rather than in a confirm
@@ -1807,7 +1830,7 @@ function DeleteArticle({
           this same spot for ever, and a modal asking you to confirm something
           undoable trains people to click through modals. */}
       <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
-        {deleted ? (
+        {archived ? (
           <>
             It is off the library and out of library search. It is not erased, and this offer does
             not expire.
@@ -1817,7 +1840,7 @@ function DeleteArticle({
             It comes off the library and out of library search. Nothing is erased — the article, its
             block ids and every question you have asked about it stay exactly where they are, this
             page and the reading view keep working, and Put back is here and under{" "}
-            <em className="tw:not-italic tw:text-foreground">Show deleted</em> on the{" "}
+            <em className="tw:not-italic tw:text-foreground">Show archived</em> on the{" "}
             <Link href={LIBRARY_HREF} className="tw:text-highlight">
               library
             </Link>

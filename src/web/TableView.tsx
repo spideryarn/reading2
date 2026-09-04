@@ -41,9 +41,11 @@ import { internalTarget } from "./internal-links.js";
 import {
   markReturnPath,
   noteMarkerAt,
+  noteStartAt,
   type NoteIndex,
   type NoteMarker,
   type NoteReturn,
+  type NoteStart,
 } from "./notes-view.js";
 import type { Section } from "./position.js";
 import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
@@ -635,6 +637,31 @@ function TableViewInner({
   }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
 
   /**
+   * **Apparatus, dressed as apparatus** — which block starts a note, what the
+   * author numbered it, and where the region begins.
+   *
+   * A footnote is body prose to every other rule in this column: same face,
+   * same measure, same ink, `gistable` like any paragraph. So a reader who
+   * followed a marker to the foot of a gwern piece landed among nine unnumbered
+   * paragraphs with nothing to say what they were (SPIDERYARN-READING2-14). The
+   * spine and the outline had dressed a supplement differently since the day
+   * notes landed; this is the prose column catching up.
+   *
+   * Memoised rather than looked up per row for the reason `proseHtml` above is:
+   * this component re-renders on a pointer crossing from one row to the next,
+   * and the answer changes only when the article does.
+   */
+  const noteStarts = useMemo(() => {
+    const out = new Map<BlockId, NoteStart>();
+    if (!notes) return out;
+    for (const block of blocks) {
+      const start = noteStartAt(notes, block.id);
+      if (start) out.set(block.id, start);
+    }
+    return out;
+  }, [blocks, notes]);
+
+  /**
    * The back-link that leads to where the reader came from, marked.
    *
    * Written onto the injected html rather than through `annotateHtml`, and the
@@ -726,9 +753,25 @@ function TableViewInner({
                paragraph at a time. Leaves are 1:1 with blocks (src/hierarchy.ts). */
             <th
               data-nav-depth={geometry.leafDepth}
-              className={`pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
+              className={`text pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
             >
-              Text<span className="depth-tag">verbatim</span>
+              {/* **Two spans, and neither is decoration.** The prose below is
+                  centred in its cell (styles.css § text), so a heading left at
+                  the cell's edge names a column whose text starts 180px to its
+                  right — the masthead had the same defect and was fixed the same
+                  way. `.th-measure` is the box that does the moving: it carries
+                  the article's font *purely so that `65ch` means there what it
+                  means in the prose*, and `.th-name` puts the head's own type
+                  back. They have to be two elements because one element cannot
+                  both resolve a `ch` in the reading face and be set in the
+                  chrome's. The other headers are untouched — they sit over
+                  columns that are not centred and are right as they are.
+                  styles.css § the header over the article's column. */}
+              <span className="th-measure">
+                <span className="th-name">
+                  Text<span className="depth-tag">verbatim</span>
+                </span>
+              </span>
             </th>
           )}
         </tr>
@@ -809,9 +852,19 @@ function TableViewInner({
             e.preventDefault();
             return;
           }
-          /* A link asking for its own tab gets one. `target` is article-supplied
-             and the sanitiser keeps it — and the keywords are ASCII
-             case-insensitive, so `_SELF` is `_self`. */
+          /* A link asking for its own tab gets one, and the browser does it
+             natively — which is what keeps a middle click, a ⌘-click and a
+             long-press "Open in New Tab" behaving exactly as they do anywhere
+             else.
+
+             **The `target` is ours, never the article's.** DOMPurify drops an
+             author's `target` (measured 2026-09-04), and the pass that runs
+             straight after it at ingress writes `_blank` onto every link that
+             leaves the app — src/web/external-links.ts, and
+             SPIDERYARN-READING2-10. This test is still
+             written against the attribute rather than against the href, because
+             the attribute is the thing that decides what the browser will do.
+             The keywords are ASCII case-insensitive, so `_SELF` is `_self`. */
           const to = link.getAttribute("target")?.toLowerCase();
           if (to && to !== "_self") return;
           const blockId = internalTarget(e.target as Element, document);
@@ -1021,11 +1074,19 @@ function TableViewInner({
                    the stylesheet floors its height so none of them can hang
                    below the row and take a click meant for the next one.
                    § the gutter in styles.css has the reasoning. */
+                /* `note` on every block of the notes region and `note-open` on
+                   its first, which is the one that carries the rule across the
+                   column and the heading. Both come off the note index rather
+                   than off `block.role`, so the stylesheet and the hover card
+                   agree about what a note is — notes-view.ts § isNoteBlock is
+                   the one definition. See `noteStarts` above. */
                 className={`text pin-right kind-${block.kind}${
                   block.context ? ` ctx-${block.context.type}` : ""
                 } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }${cmtsByBlock.has(block.id) ? " has-marks" : ""}`}
+                }${cmtsByBlock.has(block.id) ? " has-marks" : ""}${
+                  notes?.noteOf.has(block.id) ? " note" : ""
+                }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,
                    2026-08-25, so a match is findable while scrolling past at
                    speed. Its intensity is scaled *harder* than the wash by the
@@ -1091,6 +1152,26 @@ function TableViewInner({
                   onJump={onJump}
                   announce={announce}
                 />
+                {/* **The heading the source never wrote.** Gwern's page ends
+                    `## Bibliography` and then nine bare `<li>`s; Wikipedia
+                    writes its own `References` and gets nothing from us. A real
+                    element rather than CSS `content`, because it is a landmark
+                    a reader may be scrolling to find and generated content is
+                    neither selectable nor searchable in the page. */}
+                {noteStarts.get(block.id)?.needsHeading && (
+                  <div className="notes-head">Notes</div>
+                )}
+                {/* The author's own number, in the margin the note's prose is
+                    indented by. `aria-hidden` because the note's `<li>` is
+                    already announced as a list item and the number is a
+                    landmark for the eye — the reader who needs to *know* which
+                    note this is arrived by a marker, and the back-link beside
+                    them says so. */}
+                {noteStarts.has(block.id) && (
+                  <span className="note-num" aria-hidden="true">
+                    {noteStarts.get(block.id)?.label}
+                  </span>
+                )}
                 <div
                   className="prose"
                   /* Looked up, not built here — and the lookup is the fix.

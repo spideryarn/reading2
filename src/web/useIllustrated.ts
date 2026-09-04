@@ -112,7 +112,7 @@ export interface UseIllustrated {
    *
    * The two verbs are two because `work_key` includes `force`: a forced press
    * landing inside an unforced automatic start is a second key, is not
-   * de-duplicated, and buys a second four-to-seven-minute, $0.27–$0.40 job.
+   * de-duplicated, and buys a second four-to-seven-minute, $0.40–$0.65 job.
    * useSketch.ts § `ensure` has the longer version.
    */
   ensure(): Promise<void>;
@@ -163,7 +163,7 @@ export interface UseIllustrated {
    * **What unforced actually buys is de-duplication of the painting half.**
    * `work_key` is computed over the request with `force` in it (`workKeyFor`,
    * src/jobs.ts), so a forced press and an unforced one are two keys and two
-   * $0.27–$0.40 jobs: two tabs, or a press either side of a poll, and the reader
+   * $0.40–$0.65 jobs: two tabs, or a press either side of a poll, and the reader
    * pays twice — `ensure` above, at length. There is nothing for a force to
    * overcome here in any case, because this verb is offered only from the empty
    * state, where there is no painting for the step to skip. Narrower than the

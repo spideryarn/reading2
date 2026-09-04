@@ -197,16 +197,22 @@ describe("what the page puts first", () => {
     expect(order.indexOf("Access & sharing")).toBeLessThan(order.indexOf("Your reading"));
   });
 
-  it("puts the machinery last, above only the thing that deletes the article", async () => {
+  it("puts the machinery last, above only the thing that takes the article off the shelf", async () => {
     await mount();
     const order = sections();
 
     /* **The last two by name, not a pair of index comparisons.** "Technical
-       details is somewhere after Your reading and somewhere before Delete" is
+       details is somewhere after Your reading and somewhere before Archive" is
        satisfied by a page that has grown two more sections underneath it — and
-       "nothing destructive sits above something somebody came here to read" is
-       a claim about the *end* of the page. GPT Sol, 2026-09-03. */
-    expect(order.slice(-2)).toEqual(["Technical details", "Delete this article"]);
+       "nothing that takes the article away sits above something somebody came
+       here to read" is a claim about the *end* of the page. GPT Sol,
+       2026-09-03.
+
+       **It said "Delete this article" until 2026-09-04**, over a control that
+       has only ever archived — the rename that answers report
+       SPIDERYARN-READING2-19. This line is the pin on the section heading;
+       tests/shelf-archive-label.test.tsx pins the shelf's own two. */
+    expect(order.slice(-2)).toEqual(["Technical details", "Archive this article"]);
     /* And the first, which is the half of Greg's "directly underneath the
        title" that a section list can actually check. */
     expect(order[0]).toBe("In one sentence");
@@ -402,5 +408,109 @@ describe("how well we read the PDF", () => {
     await mount({ source: "pdf", pages: 8, pagesChecked: 8, recall: 1 });
 
     expect(host.textContent).toContain("None found");
+  });
+});
+
+/**
+ * **The button in that last section, pinned to the act it carries out.**
+ *
+ * The section heading is pinned above by name, and a heading is not a control:
+ * the button under it could be relabelled "Delete", given a bin, or rewired to
+ * something else entirely, and every case above would still pass. GPT Sol,
+ * 2026-09-04, finding 5.
+ *
+ * So this asks `tests/shelf-archive-label.test.tsx`'s three questions of the
+ * metadata page's own control — the word, the icon, and the request — for the
+ * reason that file gives: **it said "Delete this article", with a bin, in
+ * destructive red, over a handler that has only ever set `archived_at`**, and
+ * Greg filed a report asking for the archive feature the app had had for nine
+ * days, because the only word on screen said the opposite.
+ */
+describe("the button that takes the article off the shelf", () => {
+  /** Every request the page makes, so the PATCH can be read back off it. */
+  let calls: { url: string; init: RequestInit | undefined }[];
+
+  const META = {
+    slug: SLUG,
+    dir: DIR,
+    stages: STAGES,
+    comments: 0,
+    profile: null,
+    purpose: null,
+    archivedAt: null,
+  };
+
+  beforeEach(() => {
+    calls = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      const json = { headers: { "content-type": "application/json" }, status: 200 };
+      /* The route answers with the entry it stored, and the button reads the
+         date off *that* rather than off the boolean it sent — `ArchiveArticle`
+         in Metadata.tsx says why. */
+      if (init?.method === "PATCH") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ entry: { slug: SLUG, archivedAt: "2026-09-04T11:00:00.000Z" } }),
+            json,
+          ),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify(META), json));
+    });
+  });
+
+  const button = () =>
+    [...(host.querySelector("main")?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (b) => ["Archive", "Put back", "Delete"].includes(b.textContent?.trim() ?? ""),
+    );
+
+  it("says Archive, and never Delete", async () => {
+    await mount();
+
+    expect(button()?.textContent?.trim()).toBe("Archive");
+    /* Absent rather than merely not asked for: a revert of the rename, or a
+       second button appearing beside this one, is exactly the drift worth
+       catching. */
+    expect(host.querySelector("main")?.textContent).not.toContain("Delete this article");
+  });
+
+  /**
+   * **A bin says "delete" as loudly as the word does**, and the red said it a
+   * third time. Checked by class, because lucide renders its own name onto the
+   * `<svg>` — the same instrument tests/shelf-archive-label.test.tsx uses.
+   */
+  it("draws a box rather than a bin, and is not tinted destructive", async () => {
+    await mount();
+
+    expect(button()?.querySelector(".lucide-archive"), "the archive box").toBeTruthy();
+    expect(button()?.querySelector(".lucide-trash-2"), "no bin").toBeNull();
+    expect(button()?.className, "the colour of something irreversible").not.toContain(
+      "destructive",
+    );
+  });
+
+  /**
+   * **The act, not the word.** With the case above, this is the whole point of
+   * the section: the label and the request are pinned to each other, so neither
+   * can move without the other. `{ archived: true }` and not a `DELETE` — there
+   * is no article-deletion route on the server at all (src/routes.ts).
+   */
+  it("archives the article when it is pressed, and then offers to put it back", async () => {
+    await mount();
+    await act(async () => {
+      button()?.click();
+    });
+
+    const patch = calls.find((c) => c.init?.method === "PATCH");
+    expect(patch, "no PATCH was sent").toBeTruthy();
+    expect(patch?.url).toBe(`/api/library/${SLUG}`);
+    expect(JSON.parse(String(patch?.init?.body))).toEqual({ archived: true });
+    /* And nothing anywhere asked the server to erase it. */
+    expect(calls.some((c) => c.init?.method === "DELETE")).toBe(false);
+
+    /* The same element, relabelled — the reversibility the word promises, on
+       screen. */
+    expect(button()?.textContent?.trim()).toBe("Put back");
   });
 });

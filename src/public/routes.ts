@@ -42,8 +42,13 @@
 import type { ServerResponse } from "node:http";
 
 import { isSlug } from "../ingest.js";
-import { PUBLIC_ROUTE_NAMES, type PublicRouteName } from "./route-names.js";
+import {
+  PUBLIC_ROUTE_NAMES,
+  type PublicCollectionRouteName,
+  type PublicSlugRouteName,
+} from "./route-names.js";
 import { STORE } from "../store/live.js";
+import { pgPublicLibraryReader } from "../store/public-library.js";
 import { pgPublicReader } from "../store/public-reader.js";
 
 /**
@@ -144,19 +149,34 @@ export function isPublicNamespace(path: string): boolean {
  * the reading needs jsdom — see that file's header for the 803ms this saves and
  * the cross-lane test failure that found it. They are joined here, once, and the
  * joining is checked below.
+ *
+ * **A union, because the reader's arity follows the route's kind.** A single
+ * `read(slug?: string)` would compile for both and would let a collection
+ * handler take a slug it never receives, or a slug handler be registered against
+ * a route that captures nothing. Here the two cannot be swapped, and
+ * `servePublicApi`'s `switch` below has a `never` arm so a third kind added
+ * later fails to compile rather than falling out of the loop into the 404.
  */
-export interface PublicRoute extends PublicRouteName {
-  read(slug: string): Promise<unknown>;
-}
+export type PublicRoute =
+  | (PublicSlugRouteName & { read(slug: string): Promise<unknown> })
+  | (PublicCollectionRouteName & { read(): Promise<unknown> });
 
 /**
  * What each route reads, by name.
  *
  * A record rather than a second list, so it cannot fall out of *order* with the
  * names — only out of *coverage*, which the guard below catches on module load.
+ *
+ * **Two records rather than one**, split the way the union is: a reader in the
+ * wrong record is a type error at the line somebody wrote it, which is the
+ * cheapest place to find out. The coverage guard below reads both.
  */
-const READS: Record<string, (slug: string) => Promise<unknown>> = {
+const SLUG_READS: Record<string, (slug: string) => Promise<unknown>> = {
   article: (slug) => pgPublicReader.loadArticle(slug),
+};
+
+const COLLECTION_READS: Record<string, () => Promise<unknown>> = {
+  library: () => pgPublicLibraryReader.listPublic(),
 };
 
 /**
@@ -178,22 +198,40 @@ const READS: Record<string, (slug: string) => Promise<unknown>> = {
  * They fail in both directions on purpose: a name with no reader is a route the
  * dispatcher would match and then crash on, and a reader with no name is a
  * handler nothing can reach — the second is harmless today and is exactly what
- * a typo in `READS` looks like, so it should not be silent either.
+ * a typo in either reader record looks like, so it should not be silent either.
  */
 export const PUBLIC_ROUTES: readonly PublicRoute[] = PUBLIC_ROUTE_NAMES.map((route) => {
-  const read = READS[route.name];
-  if (!read) {
-    throw new Error(
-      `The public route "${route.name}" has no reader in src/public/routes.ts. ` +
-        "Every name in PUBLIC_ROUTE_NAMES needs one; see route-names.ts.",
-    );
+  /* The `switch` is what makes each name look for its reader in the *right*
+     record: a `library` entry in `SLUG_READS` is not a reader this finds, so a
+     misfiled one is the same loud module-load failure as a missing one. */
+  switch (route.kind) {
+    case "slug": {
+      const read = SLUG_READS[route.name];
+      if (read) return { ...route, read };
+      break;
+    }
+    case "collection": {
+      const read = COLLECTION_READS[route.name];
+      if (read) return { ...route, read };
+      break;
+    }
+    default: {
+      const unreachable: never = route;
+      throw new Error(`Unknown public route kind: ${JSON.stringify(unreachable)}`);
+    }
   }
-  return { ...route, read };
+  throw new Error(
+    `The public route "${route.name}" has no reader in src/public/routes.ts. ` +
+      "Every name in PUBLIC_ROUTE_NAMES needs one, in the record for its kind; " +
+      "see route-names.ts.",
+  );
 });
 
 {
   const named = new Set(PUBLIC_ROUTE_NAMES.map((route) => route.name));
-  const orphans = Object.keys(READS).filter((name) => !named.has(name));
+  const orphans = [...Object.keys(SLUG_READS), ...Object.keys(COLLECTION_READS)].filter(
+    (name) => !named.has(name),
+  );
   if (orphans.length) {
     throw new Error(
       `src/public/routes.ts has readers for routes that do not exist: ${orphans.join(", ")}. ` +
@@ -299,20 +337,47 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
 
      A loop over `PUBLIC_ROUTES` rather than one `if` per route, so that the
      four checks happen once and a route added later cannot be added with three
-     of them. **A loop over one route, since `metadata` was deleted on
-     2026-09-02, and it stays a loop**: the four checks and the three sweeps
-     that drive off this inventory are what make the next route safe to add, and
-     unrolling them into an `if` would hand that back. The authenticated half is
-     deliberately still an `if` chain — see `serveAuthenticatedApi` — because it
-     has forty routes with genuinely different shapes. */
+     of them. It was a loop over a single route between 2026-09-02 (when
+     `metadata` was deleted) and 2026-09-04 (when `library` arrived), and staying
+     a loop through that is what made the second one four lines rather than a
+     project. The authenticated half is deliberately still an `if` chain — see
+     `serveAuthenticatedApi` — because it has forty routes with genuinely
+     different shapes. */
   for (const route of PUBLIC_ROUTES) {
     const matched = route.pattern.exec(path);
     if (!matched) continue;
+    /* **Method first, and once**, whatever kind of route this is: it costs
+       nothing, and a 405 that depended on which route you asked for would be
+       four rules instead of one. */
     requireReadMethod(res, method);
-    const slug = slugFrom(matched);
-    requirePostgres();
-    send(res, 200, await route.read(slug), method);
-    return;
+
+    /* **The `switch` is the only thing that differs between the two kinds**, and
+       it is exhaustive — a third kind added to the union stops this file
+       compiling rather than falling out of the loop into the 404 below.
+
+       `requirePostgres()` is called inside each arm rather than hoisted above
+       the switch, and that ordering is the point: a slug is validated *before*
+       the store is consulted, so a malformed request is a 400 whatever this
+       server is configured with. Hoisted, the same request would be a 400 on one
+       machine and a 501 on another. A collection has no slug to validate, so
+       there is nothing for its check to come after. */
+    switch (route.kind) {
+      case "slug": {
+        const slug = slugFrom(matched);
+        requirePostgres();
+        send(res, 200, await route.read(slug), method);
+        return;
+      }
+      case "collection": {
+        requirePostgres();
+        send(res, 200, await route.read(), method);
+        return;
+      }
+      default: {
+        const unreachable: never = route;
+        throw new Error(`Unknown public route kind: ${JSON.stringify(unreachable)}`);
+      }
+    }
   }
 
   /**

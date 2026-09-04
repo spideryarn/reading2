@@ -132,7 +132,7 @@ do to an article was open it. Then Greg asked for the verbs:
 > — Greg, 2026-08-26
 
 Five buttons, revealed on hover and on focus: **Edit title**, **Re-fetch and rebuild**, **Open the
-original**, **Copy link**, **Delete**. Re-run is not new machinery — it is
+original**, **Copy link**, **Archive**. Re-run is not new machinery — it is
 `POST /api/jobs { slug, force: ["fetch"] }`, the route the add box already uses; without the `force`
 the queue skips every step whose artefact is on disk, which is every step.
 
@@ -152,7 +152,7 @@ The action row is hidden with `opacity`, **never `display: none`**. A hidden ele
 focusable, so hiding the row until hover would delete it outright for anyone navigating by keyboard —
 and every check anybody ran with a mouse would look fine.
 
-### Delete means archive, and Undo is the confirmation
+### Archive, and Undo is the confirmation
 
 > Archive, with an Undo — the card disappears from the shelf straight away … Underneath, the row is
 > flagged hidden rather than removed, so nothing is destroyed.
@@ -162,28 +162,72 @@ and every check anybody ran with a mouse would look fine.
 So there is **no confirmation dialog**: the Undo strip is the confirmation, and it costs the common
 case nothing. `GET /api/library?archived=1` is the other half of the shelf.
 
-A **Show deleted** disclosure at the foot of the shelf is the other way back, and it is not
-optional decoration: without it Delete is permanent from the interface the moment the nine-second
+A **Show archived** disclosure at the foot of the shelf is the other way back, and it is not
+optional decoration: without it Archive is permanent from the interface the moment the nine-second
 Undo strip goes, which would make "nothing is destroyed" true of the database and false of the
 product. It does not fetch until opened.
 
 **An archived article is still readable by direct link.** Only the shelf filters. That is a decision
 rather than an oversight — the shelf is a shelf, not an access control list, and a link that stops
 working is a worse surprise than a card that is out of sight. The library *search* is the exception:
-an archived article is out of the index entirely, because a hit that opens an article you deleted
+an archived article is out of the index entirely, because a hit that opens an article you archived
 reads as a ghost.
+
+**And archiving takes it out of the public listing too**, which is the one place the shelf rule bends.
+[`publicLibraryQuery`](../../src/store/public-library.ts) asks for `visibility = 'public'`, a
+published revision **and `archived_at is null`** — so an article its owner has shared *and* archived
+is answered at its own link and named in no list. (That query is all there is today: `/read/public`
+still renders a 404 in [`App.tsx`](../../src/web/App.tsx), and the showcase page that will use it is
+[260904b](../plans/260904b-pricing-page-and-public-showcase.md).)
+
+The clause went in on 2026-09-04, when GPT Sol asked which way the asymmetry ran. The first version
+had no clause, on the rule above — visibility is a property of the work, archiving is a property of
+one person's shelf — and the consequence is what settles it: without it an owner loses sight of the
+article on their own shelf while strangers go on finding it, and since the payload carries no
+`archived_at` at all, nothing on either end would ever show that it had. Listing is the half
+archiving owns; the link is the half sharing owns, and `publicSlug` is deliberately left alone.
+
+#### This section was called "Delete means archive", and that was the bug
+
+Greg's choice above was made on 2026-08-26 and built the same day. **Every control that carried it
+out was labelled "Delete", with a bin in it, until 2026-09-04** — the card, the table row, the
+metadata page, the shelf's own "Show deleted" disclosure — and nothing a reader could see said the
+act was reversible.
+
+On 2026-09-04 Greg filed [SPIDERYARN-READING2-19](../plans/260904d-archive-articles-centre-the-text-and-a-done-key.md)
+asking for exactly this feature: *"I want to be able to 'archive' an article, from Homepage shelf and
+article Metadata. This should be easy to reverse, and by default the Homepage shelf shouldn't show
+archived articles."* All of it already worked, and had for nine days. **He could not tell, because
+the button was called Delete.**
+
+So the fix was the word, and that is the lesson worth keeping: *a reader cannot tell a reversible
+act from a destructive one by watching the row disappear — only the label says which it was.* The
+label, the icon and the destructive red were three ways of saying the same wrong thing, so all three
+moved: **Archive** on a box glyph, at the shelf's ordinary weight rather than in the colour this app
+reserves for what cannot be undone. `tests/shelf-archive-label.test.tsx` pins the label to
+`shelf.archive` in both renderers, and `tests/metadata-page-order.test.tsx` pins the section
+heading, so it cannot drift back quietly.
+
+Nothing under the interface changed: no schema change, no API change, no store change.
+`archived_at`, `?archived=1` and `shelf.archive` were always the words in the database, on the wire
+and in the client, so the rename **narrowed** the vocabulary rather than adding to it.
+
+**Permanent deletion was deferred**, deliberately and in writing, though Greg's report raised it —
+*"maybe there should also be a way to permanently delete"*. It gets its own plan: one production
+database, real readers' articles, and a mis-tap that nothing can undo is a different kind of feature
+from this one.
 
 #### The same act on the article's own page, where the undo never expires
 
-Since 2026-08-27 the [metadata page](../plans/260825e-metadata-page.md) has the third Delete — same
+Since 2026-08-27 the [metadata page](../plans/260825e-metadata-page.md) has the third Archive — same
 `PATCH /api/library/<slug>` with `{ archived }`, so there is one archive and not two that could
 drift, and the button had been a dimmed placeholder there for exactly two days.
 
 What is different is the confirmation, and the difference falls out of the paragraph above. A card
 vanishing off the shelf needs a strip to catch it, because the reader is looking at a list the
-article has just left. Delete on `/read/<slug>/metadata` leaves the reader looking at the article's
+article has just left. Archive on `/read/<slug>/metadata` leaves the reader looking at the article's
 *own* page, which keeps working — so instead of a strip with a clock on it, the section simply says
-`Deleted 3 minutes ago` with **Put back** beside it, for as long as it is true. That is the stronger
+`Archived 3 minutes ago` with **Put back** beside it, for as long as it is true. That is the stronger
 promise of the two, and it is affordable only because this page is about one article. The state
 comes from `ArticleMetadata.archivedAt`, off the same shelf read that already answers `purpose`, so
 it costs no extra request. Both stores answer it, and there is a test per store —
@@ -241,7 +285,7 @@ It also keeps `setLoaded` under the rule that everything reaching it has been sa
 and would have had to be spelled as an exemption, and an exemption is how a guard stops meaning
 anything.
 
-The metadata page withholds the pencil on the fixture, for the same reason its Delete button is
+The metadata page withholds the pencil on the fixture, for the same reason its Archive button is
 withheld there: an address with no article of its own has no shelf row, so the PATCH would 404, and
 pressing the button is how you would find out. It withholds it **until the metadata request lands**,
 too — `provenance` is null both before the answer arrives and after it fails, so "not the fixture"
@@ -565,12 +609,37 @@ had not loaded. It reads `Article.visibility`, which the Postgres store fills an
 store cannot, and it draws **nothing** when nobody could say.
 [260904b-sharing-mark-on-the-article-masthead.md](../plans/260904b-sharing-mark-on-the-article-masthead.md).
 
-**A badge, not a filter.** There is deliberately no way to sort or narrow the shelf by this until
+**A badge, not a filter.** There is deliberately no way to sort or narrow *this* shelf by it until
 there is enough shared material for it to be worth anything — Greg's decision on
 [260902j-public-read-only-access-audit-and-improvements.md](../plans/260902j-public-read-only-access-audit-and-improvements.md).
 The visitor's side of the same fact is `ViewOnlyChip` in
 [`src/web/PublicChrome.tsx`](../../src/web/PublicChrome.tsx), and it says something else: *you may
 not change this*, where this says *anyone with the link can read this*.
+
+**There is a second shelf now, and it is not this one narrowed.** `/read/public` lists every public
+article, to anybody, signed in or not — Greg, 2026-09-04: *"create a `/read/public/` page that lists
+Public-readable pages … to showcase what Spideryarn is capable of."* It is a separate query
+([`src/store/public-library.ts`](../../src/store/public-library.ts)), a separate DTO
+([`src/public-library-types.ts`](../../src/public-library-types.ts)) and a separate card, and none of
+them is a widened `LibraryEntry`: there is no `opens`, `lastOpenedAt`, `comments`, `titleOverridden`,
+`archivedAt` or `purpose`, because every one of those is a fact about a *person's* relationship with
+a document rather than about the document. The decision above is unchanged — this shelf is not a
+filter over the owner's — and the promise it changes (a shared article becomes *discoverable*, not
+only reachable by link) is
+[260904b-pricing-page-and-public-showcase.md](../plans/260904b-pricing-page-and-public-showcase.md)
+§ 1.
+
+The name `public` is reserved as an article slug, because `/read/public` would otherwise be an
+address two things claim: `isReservedSlug` in [`src/ingest.ts`](../../src/ingest.ts), refused at
+`lockOrCreateArticle`, which is the one line that brings an article address into existence.
+
+**Nobody is signed in, so the shelf has three ceilings rather than one.** 200 rows, a `left()` cap on
+every text column it returns (`PUBLIC_CARD_CHARS`) because nothing bounds a title or an `<h1>` and a
+fetched document may be 32 MB, and a partial index on `(public_at desc nulls last, slug) where
+visibility = 'public'` so the row cap bounds the database's work and not only the reply. All three
+came out of GPT Sol's review of the built code, 2026-09-04; the argument for each is in
+[`src/store/public-library.ts`](../../src/store/public-library.ts) and
+[security-map.md](security-map.md#and-since-2026-09-04-there-is-a-second-ownerless-query-which-enumerates).
 
 ### Where the numbers on it come from, and why nobody derives them twice
 
@@ -810,8 +879,8 @@ IndexedDB is asynchronous, and a blocked read can outlast 600ms.
 
 The price is a moment of staleness: a rename or an archive patches the React list and not the saved
 body, so the first paint can show an old title or a card the reader deleted, and counts and order can
-jump when the live answer lands. Accepted rather than overlooked — renames are cosmetic and Delete is
-archive.
+jump when the live answer lands. Accepted rather than overlooked — renames are cosmetic and Archive
+is a flag.
 
 ## Offline, the shelf lists only what it can open
 

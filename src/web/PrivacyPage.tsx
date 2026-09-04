@@ -274,13 +274,34 @@ export function PrivacyPage() {
         <p>
           Your articles and notes are yours. Another reader signed into Spideryarn cannot see them.
         </p>
+        {/* **Rewritten 2026-09-04, and the sentence that went said "Your notes,
+            your comments and your conversations are not shared".** Two of those
+            three now are: a shared link carries the reader's comments, what
+            they wrote, and what the model answered. Greg's decision.
+            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+
+            **Conversations are still true and are said separately**, rather
+            than being quietly dropped along with the other two. A reader who
+            read the old sentence should be able to find out which half of it
+            survived; a page that just stopped mentioning conversations would
+            leave them guessing.
+
+            The list of what goes out is deliberately *not* exhaustive here —
+            the Access & Sharing card derives the full inventory at the moment
+            of sharing (src/web/shared-inventory.ts), and two lists of the same
+            thing is how one of them goes stale. This says the shape of it and
+            points at the card. */}
         <p>
           Two exceptions, and both are worth knowing. If you mark an article{" "}
-          <strong className="tw:text-foreground">public</strong>, anyone with the link can read it
-          without signing in — that is what the setting is for. They get the article, its outline,
-          its arc, the glossary, the ideas, the quotes and the thread, some of which the model wrote
-          knowing what your profile says about you, even though the profile itself is not shared.
-          Your notes, your comments and your conversations are not shared. And{" "}
+          <strong className="tw:text-foreground">public</strong>, anyone can read it without signing
+          in, and it is listed publicly where somebody who was never sent the link can find it —
+          that is what the setting is for. They get the article, its outline,
+          its arc, the glossary, the ideas, the quotes, the timeline and the thread, some of which
+          the model wrote knowing what your profile says about you, even though the profile itself
+          is not shared. <strong className="tw:text-foreground">They also get your comments</strong>
+          {" "}— the passages you marked, what you wrote about them, and what the model answered when
+          you asked. Your chat conversations are not shared, and neither is your profile. The
+          sharing card lists exactly what will go out before you turn it on. And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
           written in order to fix a bug or make the thing better. We won’t sell it, publish it, or
@@ -289,11 +310,17 @@ export function PrivacyPage() {
       </Section>
 
       {/* **The third false claim, and the worst of them.** The page said
-          "delete an article and it goes". The Delete button calls
-          `shelf.archive` (ShelfEntry.tsx), which sets `archived_at` and
-          destroys nothing — the article is restorable under "show deleted" and
-          every artefact stays. GPT Sol found it by reading the button rather
-          than the sentence, which is the only way it could have been found.
+          "delete an article and it goes". The button calls `shelf.archive`
+          (ShelfEntry.tsx), which sets `archived_at` and destroys nothing — the
+          article is restorable under "Show archived" and every artefact stays.
+          GPT Sol found it by reading the button rather than the sentence, which
+          is the only way it could have been found.
+
+          **On 2026-09-04 the button was renamed to match**, so this section no
+          longer has to explain away a word: it says what Archive does, and then
+          answers the question that word leaves open — how to have an article
+          actually erased. docs/project/library.md § Archive, and Undo is the
+          confirmation.
 
           The list of what survives a *real* erasure is longer than the two
           things the second draft named, and Sol enumerated it against the
@@ -344,11 +371,17 @@ export function PrivacyPage() {
 
       <Section title="Deleting things">
         <p>
-          The <strong className="tw:text-foreground">Delete</strong> button on your shelf is really
-          an archive: it takes the article off the shelf and you can bring it back under “show
-          deleted”. Nothing is destroyed, and your notes on it are still there. That is deliberate —
-          undo matters more than tidiness — but it is not what the word usually means, so: if you
-          want an article actually erased, email us and we will do it.
+          The <strong className="tw:text-foreground">Archive</strong> button on your shelf takes an
+          article off the shelf and out of your library search, and you can bring it back at any
+          time under “Show archived”. Nothing is destroyed, and your notes on it are still there.
+          There is no button that really erases an article — undo matters more than tidiness — so if
+          you want one actually gone, email us and we will do it.
+        </p>
+        <p>
+          If you had shared an article and then archive it, it stops being listed anywhere public —
+          but the link you gave out still opens it. Archiving is about your shelf; sharing is about
+          the link. To close the link, use{" "}
+          <strong className="tw:text-foreground">Stop sharing</strong> on the article’s own page.
         </p>
         <p>
           Same for the account. There is no “delete my account” button yet; email us and we delete

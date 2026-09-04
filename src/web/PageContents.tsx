@@ -112,7 +112,7 @@ export function PageContents({
       /* **At the bottom of the document, the last entry — unconditionally.**
          The rule below cannot reach it: a short last section stops scrolling
          while its heading is still near the *bottom* of the viewport, never
-         crossing 96px, so clicking "Delete this article" left "Technical
+         crossing 96px, so clicking "Archive this article" left "Technical
          details" marked. This component's own docstring claimed the scroll
          handler avoided the bottom-of-page problem an IntersectionObserver has;
          it had the same problem, by a different route. GPT Sol, 2026-09-03. */

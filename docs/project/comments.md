@@ -694,6 +694,59 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:5273/api/article/<slug
 A comment whose POST never reached the server is **not** written to disk, so it disappears on
 reload rather than leaving a permanent unanswered mark. Nothing to clean up.
 
+## A shared link carries them, since 2026-09-04
+
+**This is the one part of the feature that changed what a promise meant.** Until then the sharing
+card said comments and notes never left, and [privacy.md](privacy.md) said the same in the reader's
+own words. Greg decided they should go out:
+[260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 3.
+
+**What a visitor gets:** the passage, the reader's own words, the model's answer, and its citations.
+**What they may do with it:** read it, step through the list, and nothing else — no edit box, no
+delete, no retry, no *search the web*, and no follow-up composer. Absent, not disabled: a greyed-out
+box that says "ask a follow-up" is an invitation to press it, and the press would spend the owner's
+money.
+
+The seam is `CommentAccess` in [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) — a
+discriminated union whose visitor arm carries **none of the eight verbs**, so there is nothing in
+scope for a later edit to reach. That is the same shape as `QuotesAccess` and `ReaderCapability`, and
+it is deliberately not a `readOnly` boolean beside the callbacks.
+
+### Two rows never cross, and the refusal is in SQL
+
+`PUBLIC_COMMENTS_WHERE` in [`public-reader.ts`](../../src/store/public-reader.ts):
+
+- **`criterion_id is null`.** A comment with a criterion is [referee](referee-mode.md) work — a peer
+  reviewer's placement of a passage on a scale, not a reading note. Dropping `criterionId` and
+  `valence` from the projection does **not** make the row a reading note; it publishes the body of a
+  peer review with its context stripped off, which is worse. The row goes.
+- **`status in ('none','done')`.** A `pending` or `error` row published without its error, its retry
+  and its polling is an item a visitor cannot act on or understand.
+
+Both were found by GPT Sol reviewing the plan, not by anybody writing the feature.
+
+### The read is its own query, and that is the interesting constraint
+
+The obvious implementation — resolve the article id, hand it to `listFor(articleId)` in
+[`pg-comments.ts`](../../src/store/pg-comments.ts) — was blocked. `listFor` is an unrestricted
+`.select()`, and more importantly *"obtain an article id, then read a child table by id"* is the
+escape hatch [`tests/public-imports.test.ts`](../../tests/public-imports.test.ts) exists to close.
+That test keeps child tables out of the public graph and was written after somebody demonstrated the
+hole in six lines.
+
+So `publicCommentsQuery` names its columns, joins `articles`, and **repeats the `publicSlug`
+predicate in its own `where`** — a naked `articleId` is not authority. The tripwire's allowlist grew
+from four tables to five, deliberately, and its comment says what a sixth line would have to prove.
+
+### Citations are re-judged, not copied
+
+Every `Citation.url` goes through `publicCitationUrl` ([`src/urls.ts`](../../src/urls.ts)), which
+refuses a credential in the address (`https://user:token@…`) and a host a stranger could not have
+reached anyway. **The query string is kept**, unlike `safePublicCanonical` — a canonical is a claim
+about *which document this is*, and a query makes it the wrong claim; a citation is *where that came
+from*, and half the public web addresses its articles with a query. A citation that fails is dropped
+rather than blanked, and if none survives the key comes off entirely.
+
 ## Deliberate limits
 
 - **A selection under 8 characters is ignored.** Every one of these costs a model call, and a

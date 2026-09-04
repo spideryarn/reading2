@@ -205,6 +205,23 @@ export async function transcribe(
   const started = Date.now();
   const vocabulary = await vocabularyFor(where);
   const vocabularyMs = Math.round(since(started));
+  /* **An empty vocabulary is a bug, and it has no other symptom.**
+     `RECIPES` gives every place `site` — the app's own words, a constant, no
+     store read and nothing to fail — so there is no legitimate way to arrive
+     here with nothing to say. If we ever do, the transcript is merely a bit
+     worse and nobody finds out: docs/reusable/silent-success.md, and
+     docs/project/dictation.md § The ways it fails, failure 3, which is the class
+     Greg's 2026-09-04 report ("often when I mention Spideryarn, it spells it
+     wrong") suspected. The length rather than the words, for the reason every
+     other line in this file gives: a vocabulary carries an article's prose.
+     The successful case is counted on the `dictation transcribed` line below;
+     this one fires whether or not the call that follows it succeeds. */
+  if (vocabulary === "") {
+    line.warn(
+      { where: where.kind, vocabularyMs },
+      "dictation vocabulary came back empty",
+    );
+  }
   return transcribeWith(audio, format, vocabulary, {
     signal,
     startedAt: started,

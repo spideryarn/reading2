@@ -456,6 +456,8 @@ describe("all five roles", () => {
       quotes: null,
       tweets: null,
       timeline: null,
+      comments: [],
+      sketch: null,
     });
     expect(built.blocks.map((b) => b.role)).toEqual([undefined, ...ROLES]);
     expect(built.blocks.filter((b) => b.treatment === "supplement").length).toBe(4);

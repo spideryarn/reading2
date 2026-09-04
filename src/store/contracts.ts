@@ -42,7 +42,7 @@
  * divergence this migration is meant to make impossible.
  */
 
-import type { AdminUser } from "../admin.js";
+import { isAdmin, type AdminUser } from "../admin.js";
 import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
@@ -1677,18 +1677,44 @@ export class MissingAttempt extends Error {
 }
 
 /**
- * **Ten reports an hour, per owner.**
+ * **Thirty reports an hour, per owner.**
  *
  * Said plainly, and the plan says it too: this stops a loop and one account
  * hammering. It is not a defence against account farming and does not pretend
  * to be. It is the first authenticated write in this repo with no natural
  * ceiling — a comment is bounded by passages, a job by articles — which is why
  * it has one at all.
+ *
+ * It was ten until 2026-09-04, when Greg hit it in an afternoon's testing. Ten
+ * was low enough to stop the person the button is *for* — somebody who has just
+ * found four things wrong on one page — so it is three times that. Nothing about
+ * the argument above changes: a loop still runs out, and a farm still would not.
  */
-export const FEEDBACK_HOURLY_CAP = 10;
+export const FEEDBACK_HOURLY_CAP = 30;
 
 /** The window the cap counts over. */
 export const FEEDBACK_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * The cap this owner is held to, or `null` for **no cap at all**.
+ *
+ * `null` only for an administrator, and the reason is what the cap is for: it
+ * stops a loop and one account hammering, and the account that files reports on
+ * purpose all afternoon while testing is the one account we do not need
+ * protecting from. Greg, 2026-09-04, having been refused mid-session.
+ *
+ * **A third value rather than a large number** — `Infinity` would still travel
+ * into `.limit()` on the counting query and into a comparison that means
+ * something else. `null` is a shape the caller has to narrow, so the whole
+ * count-and-compare is skipped rather than made vacuous.
+ *
+ * The owner id **is** the account id — every `owner_id` in the schema points at
+ * `auth.users(id)` — so this asks `isAdmin` the same question src/routes.ts asks
+ * of `/api/admin`, and there is no second list of who counts.
+ */
+export function feedbackHourlyCap(ownerId: string): number | null {
+  return isAdmin(ownerId) ? null : FEEDBACK_HOURLY_CAP;
+}
 
 /**
  * **A bug report, filed by a reader who is looking at the thing that went
@@ -1708,7 +1734,8 @@ export const FEEDBACK_WINDOW_MS = 60 * 60 * 1000;
 export interface FeedbackStore {
   /**
    * File one report. **Append-only, idempotent, and rate-limited, in one
-   * transaction.**
+   * transaction** — rate-limited for everybody `feedbackHourlyCap` gives a
+   * number to, which is everybody but the administrator.
    *
    * The owner comes from `currentOwnerId()`, like every other write here; it is
    * never an argument, so a caller cannot file a report as somebody else.

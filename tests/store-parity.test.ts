@@ -1075,7 +1075,7 @@ when("the filesystem and Postgres stores agree", () => {
       const all = await store.searchLibrary(word, LOTS);
 
       /* **An archived article is already gone**, and both stores mean that on
-         purpose — Delete means archive (docs/project/library.md), and
+         purpose — the shelf's Archive is a flag (docs/project/library.md), and
          `readArticle` in src/library-search.ts drops an archived slug before it
          reads a single block. So the precondition below cannot hold for one,
          and asserting it reports a working exclusion as a broken one.

@@ -55,8 +55,10 @@
  */
 
 import type { Assets } from "./assets.js";
+import type { SketchScene } from "./sketch-scene.js";
 import type {
   Arc,
+  Citation,
   BlockContext,
   BlockId,
   BlockKind,
@@ -163,6 +165,21 @@ export interface PublicArticle extends PublicArtefactSet {
   tree: Tree;
   arc?: Arc;
   /**
+   * **The owner's comments — a required array, unlike every artefact above.**
+   *
+   * The optional keys in `PublicArtefactSet` answer *did anybody build one of
+   * these*, where absent means nobody ran the step. Comments are not built and
+   * there is no step: an article with none is an article nobody wrote on, which
+   * is an ordinary and very common state rather than a missing artefact. So the
+   * empty case is `[]` and it means what it says.
+   *
+   * GPT Sol's correction, and it took a union member out of `VisitorGap` with
+   * it: *"No saved items yet is content inside an accessible panel, not
+   * something preventing access."* An empty comments drawer is an empty drawer.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md.
+   */
+  comments: PublicComment[];
+  /**
    * The article's own images and which of them we hold — the same `Assets` the
    * owner gets, and for the same reason `tree` and `arc` are not forked: it
    * says nothing about a person. Every URL in it is already in the `blocks`
@@ -242,6 +259,7 @@ export interface PublicArtefactSet {
   quotes?: PublicQuotes;
   tweets?: PublicTweets;
   timeline?: PublicTimeline;
+  sketch?: PublicSketch;
 }
 
 /**
@@ -352,6 +370,101 @@ export interface PublicTweets {
 export interface PublicTimeline {
   /** In the order they are to be shown. **Never re-sorted by a reader.** */
   events: TimelineEvent[];
+}
+
+/**
+ * **The model's drawing of the argument, as a visitor gets it.**
+ *
+ * Since 2026-09-04 a shared link carries the Sketch the owner already paid to
+ * have drawn — and only that. Greg's decision, and the second half of it
+ * matters more than the first: *an already-drawn Sketch*. Nothing in a
+ * visitor's client can start one.
+ *
+ * **The scenes cross whole**, like `Idea[]` and `TimelineEvent[]` and unlike
+ * the glossary. A `SketchScene` is geometry and the model's own labels — boxes,
+ * regions, edges, coordinates, tones — plus `SketchNode.block`, which is a
+ * block id of the article the visitor is already reading and is what makes
+ * pressing a box jump the prose. There is nothing in the shape that is about a
+ * person, so a hand-copy would be a hundred lines of transcription with a typo
+ * in it and no extra safety. If a field about a reader is ever added to a
+ * scene, this comment is wrong and `tests/public-dto.test.ts` is what says so.
+ *
+ * **What does not cross**, and one of these is not like the others:
+ *
+ * - `version`, `generator`, `slug`, `sourceHash` — pipeline facts, as
+ *   everywhere else in this file.
+ * - **`profileHash`**, which is the interesting one. It is *who the picture was
+ *   drawn for*: a hash of the owner's reader profile. It says nothing legible
+ *   on its own, and that is not the point — it is a fact about a person rather
+ *   than about the article, and the same rule already keeps `Summaries` and
+ *   `Sketch` provenance off the wire. A visitor is looking at a drawing made
+ *   for somebody else, and does not get to know anything about them.
+ */
+export interface PublicSketch {
+  /** A name for the shape, not for the article. */
+  title: string;
+  caption: string;
+  /** `scenes[0]` is the overview; the rest are what a node's `opens` reaches. */
+  scenes: SketchScene[];
+}
+
+/**
+ * **One of the owner's comments, as a visitor gets it.**
+ *
+ * Since 2026-09-04 a shared link carries the reader's marks on the passages,
+ * what they wrote about them, and what the model answered when they asked.
+ * Greg's decision, and the one thing in this file that is a **privacy** choice
+ * rather than a pipeline one: everything else here is the article or a model's
+ * work on it, and this is a person's own words.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+ *
+ * ## What is not here, and which kind of reason each one is
+ *
+ * **Operational** — `error`, `attemptId`, `leaseExpiresAt`, `model`,
+ * `searches`, `status`. How our machine got on, not what the reader said. The
+ * public read filters to finished rows in SQL, so `status` would be a constant
+ * on the wire as well as an internal fact.
+ *
+ * **Somebody else's feature** — `criterionId` and `valence`. A comment with a
+ * criterion is a **referee's** placement of a passage on a scale, not a reading
+ * note (src/types.ts § `Comment.criterionId` draws exactly that line). Dropping
+ * the two fields would publish the *body* of a peer review with its context
+ * removed, which is worse than publishing it whole. **So the row is filtered
+ * out entirely**, in the query, and these two keys are absent as a second
+ * statement of the same decision. GPT Sol found this; the plan has it as a
+ * blocking finding.
+ *
+ * **Pointing at something a visitor has not got** — `threadId`. It names a chat
+ * conversation, and chat is not shared (chat-tools.md § a transcript cannot be
+ * published by column allowlist). A key whose only use is to open something
+ * that is not there is worse than no key.
+ *
+ * **Ordinary provenance** — `articleId`, `ownerId`, `updatedAt`. The first two
+ * are ours; the third would say *"edited"* on a screen with nothing to compare
+ * it against.
+ */
+export interface PublicComment {
+  /** Stable identity, so `?comment=` and the gutter mark agree. */
+  id: string;
+  blockId: BlockId;
+  /** The article's own characters, at the offsets the mark was made against. */
+  quote: string;
+  start: number;
+  createdAt: string;
+  /** The reader's own words. Absent on a bare bookmark, never `""`. */
+  body?: string;
+  /** What the model said back, when the reader ticked the box. */
+  answer?: string;
+  /**
+   * Where the answer says it came from, **rebuilt and re-judged**.
+   *
+   * Every URL goes through `publicCitationUrl` (src/urls.ts) rather than
+   * crossing as stored: a citation carrying credentials, or naming a host only
+   * this machine can reach, is the one thing in a comment that a stranger must
+   * not be handed. One that fails is dropped, not blanked — a citation with no
+   * address is a footnote to nowhere.
+   */
+  citations?: Citation[];
 }
 
 /**

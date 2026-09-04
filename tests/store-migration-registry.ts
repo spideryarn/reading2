@@ -848,6 +848,32 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "answer. Already on Postgres with a scratch article; the ledger row and the seeder copy are " +
       "all that is left.",
   },
+  /**
+   * **Landed 2026-09-04, after the stored witness ran**, which is why it needs
+   * an entry at all — the hole check re-derives the static universe live, and
+   * the file arrived into it.
+   *
+   * The measurement was made rather than inferred:
+   * `npx tsx scripts/store-migration-witness.ts --files tests/reserved-article-address.test.ts`
+   * reported *ran, touched nothing*. `--files` writes no JSON, so the stored
+   * map still predates the file and the honest `evidence` is `static-only`
+   * until witness 2 is re-run — which is what would move this entry off the
+   * map, exactly as the header says.
+   */
+  "tests/reserved-article-address.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Whether `/read/public` is the public shelf in all three places that decide it — the " +
+      "client's `parseRoute`, the edge's `decidePublicPage`, and `lockOrCreateArticle`, which is " +
+      "the one line that brings an article address into existence. The first two are pure " +
+      "functions of a string. The third needs Postgres and gets it, in transactions it rolls " +
+      "back, because a refusal inside an insert path cannot be observed without the row and the " +
+      "lock. It reaches a condemned module only because `src/store/pg-revisions.ts` imports " +
+      "`src/store/pg.ts` and `src/web/router.ts` imports the app; nothing here changes when the " +
+      "filesystem store goes.",
+  },
   "tests/retry-is-only-for-a-failed-job.test.ts": {
     category: "database-integration",
     reason:
@@ -1958,6 +1984,17 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/referee-routes-postgres.test.ts": "private-postgres",
   "tests/referee-scan-route.test.ts": "private-postgres",
   "tests/remember-route.test.ts": "private-postgres",
+  /* Landed 2026-09-04 with the reservation of `/read/public`
+     (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
+     its three enforcers are pure functions and need nothing; the third is
+     `lockOrCreateArticle`, and there is no honest way to observe a refusal
+     inside an insert path without the row and the lock. Every case there runs
+     in a transaction it then rolls back, so it leaves nothing behind — but it
+     does briefly hold the article slug `public`, and two copies of that in one
+     database would meet each other on `articles_slug_unique`. No GoTrue and no
+     bucket: the owner is the dev one the clone already seeds, so no
+     `OWNER_AUDIT` entry either. */
+  "tests/reserved-article-address.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. It seeds five throwaway articles and
      walks a job over each, so it writes articles, revisions, step runs and job
      rows under five fixed slugs — and two of its cases queue a **real** retry,
