@@ -18,27 +18,55 @@
  * > Combining findings 1 and 2 gives Bob a reliable sequence: list Alice's PDF
  * > job, take its slug, then download its source.
  *
- * The ownership work had gone straight past both, because both are *outside the
- * store*: jobs are JSON under `data/_jobs/` and never touch Postgres, and
- * `sendSource` reads the filesystem directly. `ownedSlug()` guards every path
+ * The ownership work had gone straight past both, because both were *outside the
+ * store*: jobs were JSON under `data/_jobs/` and never touched Postgres, and
+ * `sendSource` read the filesystem directly. `ownedSlug()` guards every path
  * from a slug to an article, and neither of these was one.
  *
- * ## Why this suite needs no database
+ * ## Why this suite needed no database, and why that is now the reason it does
  *
- * Jobs never reach Postgres. The queue is a filesystem directory and an
- * in-memory map, so this runs everywhere `npm test` does — unlike the Postgres
- * half of tests/owner-isolation.test.ts, which skips without a database. That
- * is worth having for the finding whose consequence is somebody else's model
- * spend.
+ * Its header used to say *"jobs never reach Postgres. The queue is a filesystem
+ * directory and an in-memory map, so this runs everywhere `npm test` does"*.
+ * That sentence is what
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B falsifies: `jobs.owner_id` is a real column with a real foreign key into
+ * `auth.users`, and every one of the seven refusals below is now a `where
+ * owner_id = $1` in `src/store/pg-jobs.ts` rather than a field comparison in a
+ * process-local map.
+ *
+ * **The move made the suite stronger in one specific place.** On the filesystem
+ * store, Alice's and Bob's jobs lived in one directory that both readers could
+ * read; the isolation was `j.ownerId === owner` applied *after* the load, so a
+ * predicate that fell back to "everybody" was still a filter somebody had
+ * written. Under Postgres the equivalent mistake — a `list` that forgets its
+ * `where` — is one deleted line, and it is deleted from the only place the rows
+ * can come out of. The mutation recorded in § B is exactly that line.
  *
  * A `fetch` step on a slug with no source URL fails immediately and offline,
  * which is how a job gets queued here without buying anything.
  */
-import { rm } from "node:fs/promises";
-import path from "node:path";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+/**
+ * `SPIDERYARN_STORE=postgres` before **any** import.
+ *
+ * `src/jobs.ts` picks its store **once, at module load** — `const store:
+ * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
+ * hoisted above every statement in a module, so a plain assignment here would
+ * leave the whole file on the filesystem queue with nothing saying so. The same
+ * trap, spelled out at greater length, in tests/enqueue-owns-the-article.test.ts.
+ */
+const HOISTED = vi.hoisted(() => {
+  const previousStore = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return { previousStore };
+});
 
+import { eq } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { articles, jobs as jobsTable } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
 import {
   advanceJob,
   cancelJob,
@@ -49,16 +77,52 @@ import {
   retryJob,
 } from "../src/jobs.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
+import { STORE } from "../src/store/index.js";
 import type { Job } from "../src/types.js";
-import { jobFilesOnDisk } from "./helpers/job-files.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
-const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+
+loadEnvLocal();
 
 /** Its own slug, so nothing here collides with another suite's fixtures. */
 const SLUG = "test-owner-jobs";
 
+/**
+ * **Two readers that really exist.**
+ *
+ * `jobs.owner_id` carries a foreign key into `auth.users`, so a made-up uuid
+ * fails the *insert* rather than the ownership check — which would turn every
+ * case below into the same error and prove nothing. Seeded here rather than
+ * borrowed from `scripts/setup-local.ts`'s dev pair, because the suite's whole
+ * subject is one reader who is not the other, and a fixture that happened to be
+ * the environment's own owner would make `outside a request` below tautological.
+ *
+ * `tests/store-migration-registry.ts` § `OWNER_AUDIT` carries the verdict for
+ * both uuids.
+ */
 const ALICE = "00000000-0000-4000-8000-0000000000a7" as OwnerId;
 const BOB = "00000000-0000-4000-8000-0000000000a8" as OwnerId;
+
+const { reachable } = await pgReady({
+  suite: "tests/owner-jobs.test.ts",
+  tables: ["spideryarn.jobs"],
+});
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* A flag that failed to take is invisible otherwise: the filesystem queue
+       answers every call here happily, and the owner column whose `where`
+       clause is the subject of the file would never be consulted. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
 /** Do something as a signed-in reader, exactly as `handleApi` does. */
 function as<T>(who: OwnerId, fn: () => T): T {
@@ -80,24 +144,45 @@ async function settle(id: string): Promise<Job> {
 
 let alicesJob: Job;
 
+/**
+ * Rows first, article second.
+ *
+ * A job row's `draft_revision_id` is a foreign key into the revision the
+ * article delete would be trying to cascade away, so the order is not
+ * cosmetic — the same order tests/enqueue-owns-the-article.test.ts keeps.
+ */
 async function cleanUp(): Promise<void> {
-  for (const { path: full, record } of await jobFilesOnDisk()) {
-    if (record.slug === SLUG) await rm(full, { force: true });
-  }
-  await rm(path.join(ROOT_DATA, SLUG), { recursive: true, force: true });
+  await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
+  await getDb().delete(articles).where(eq(articles.slug, SLUG));
 }
 
 beforeAll(async () => {
+  if (!reachable) return;
+  const db = getDb();
+  await seedAuthUser(db, {
+    id: ALICE,
+    email: "owner-jobs-alice@spideryarn.local",
+    onConflictDoNothing: true,
+  });
+  await seedAuthUser(db, {
+    id: BOB,
+    email: "owner-jobs-bob@spideryarn.local",
+    onConflictDoNothing: true,
+  });
   await cleanUp();
   /* Queued as Alice, inside a request scope — which is the only way a job gets
      an owner, and the thing this suite is really about. */
   alicesJob = await as(ALICE, () => enqueue({ slug: SLUG, steps: ["fetch"] }));
   await settle(alicesJob.id);
-}, 30_000);
+}, 60_000);
 
-afterAll(cleanUp);
+afterAll(async () => {
+  if (!reachable) return;
+  await cleanUp();
+  await closeDb();
+});
 
-describe("a job Alice queued", () => {
+when("a job Alice queued", () => {
   it("belongs to her", () => {
     expect(alicesJob.ownerId).toBe(ALICE);
   });
@@ -145,7 +230,7 @@ describe("a job Alice queued", () => {
   });
 });
 
-describe("outside a request", () => {
+when("outside a request", () => {
   /**
    * **The hole that used to be here closed on 2026-08-27, and it closed because
    * the thing it existed for went away.**
@@ -153,7 +238,7 @@ describe("outside a request", () => {
    * `listJobs` used to return *everybody's* outside a request, on the grounds
    * that the housekeeping sweep is not a reader and has nobody to answer to: a
    * `prune()` that could only see its own jobs would pick the same doomed
-   * records on every pass and delete none, silently, while `data/_jobs/` grew
+   * records on every pass and delete none, silently, while the queue grew
    * without limit.
    *
    * That reasoning was sound and it was about `prune`. Retention is now

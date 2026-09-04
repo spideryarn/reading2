@@ -84,6 +84,20 @@ if (db === null) {
   process.env.DATABASE_URL = db.url;
 
   /**
+   * **Name every connection this worker is about to open**, so that the run's
+   * teardown can tell its own leftover pools from a stranger
+   * ([`private-db-global.ts`](private-db-global.ts) § *Four verdicts*).
+   *
+   * `pg` reads `PGAPPNAME` when a connection is *configured*
+   * (`node_modules/pg/lib/connection-parameters.js`), and
+   * [`src/db/client.ts`](../../src/db/client.ts) § `applicationName` honours it
+   * ahead of its own name. A setup file runs before the test file it precedes
+   * imports anything, so no pool exists yet — **and that ordering is asserted
+   * below rather than assumed**, because it is the whole reason this works.
+   */
+  process.env.PGAPPNAME = db.runTag;
+
+  /**
    * **`process.env.DATABASE_URL`, and not `db.url`.** They are the same string
    * on a good day and that is exactly the point: the control has to connect the
    * way the *suite* will, or it cannot see the failure it exists for.
@@ -101,17 +115,37 @@ if (db === null) {
   });
   await control.connect();
   try {
-    const seen = await control.query<{ db: string; leases: number }>(
+    const seen = await control.query<{ db: string; leases: number; me: string }>(
       `select current_database() as db,
               (select count(*) from pg_stat_activity
                 where datname = current_database()
                   and application_name = $1
-                  and pid <> pg_backend_pid())::int as leases`,
+                  and pid <> pg_backend_pid())::int as leases,
+              (select application_name from pg_stat_activity
+                where pid = pg_backend_pid()) as me`,
       [db.lease],
     );
     const reached = seen.rows[0]?.db ?? "(nothing)";
     if (reached !== db.name) {
       throw new Error(`this setup wrote ${db.name} and the suite reached ${reached}`);
+    }
+    /**
+     * **The ordering, asserted rather than assumed.** This client was built
+     * after the `PGAPPNAME` assignment above and passes no `application_name` of
+     * its own, so Postgres telling us what *this very backend* is called is a
+     * direct measurement that the variable was in effect when a `pg` connection
+     * was configured in this worker. If the assignment ever moves below
+     * something that connects — or `pg` stops reading the variable — this fails
+     * here, per file, instead of turning up as a false POLLUTED at teardown.
+     * **Watched failing 2026-09-04** by moving the assignment below this block.
+     */
+    if (seen.rows[0]?.me !== db.runTag) {
+      throw new Error(
+        `this worker's connections are called ${seen.rows[0]?.me || "(nothing)"} and not ` +
+          `${db.runTag}, so PGAPPNAME was not in effect when pg configured this client. ` +
+          "The run's teardown would read this worker's leftover pool as a stranger and " +
+          "fail the run as POLLUTED — see tests/setup/private-db-global.ts.",
+      );
     }
     if ((seen.rows[0]?.leases ?? 0) < 1) {
       throw new Error(

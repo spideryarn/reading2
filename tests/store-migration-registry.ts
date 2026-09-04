@@ -309,12 +309,14 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "filesystem sites are the seeder's copy step and one ledger row from the stubbed model call.",
   },
   "tests/chat-anchor-route.test.ts": {
-    category: "database-integration",
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
-      "Anchor validation at the route, asserted before a byte of the stream goes out. Its own " +
-      "header says the foreign key is deliberately left to `chat-anchor.test.ts` because `this " +
-      "harness writes to the filesystem store, which has no such thing` — so the harness is what " +
-      "changes, and the Postgres twin already exists to copy from.",
+      "**Converted in stage B on 2026-09-04**, and the sentence that made it a candidate is the " +
+      "one it deleted: its header used to leave the foreign key to `chat-anchor.test.ts` because " +
+      "`this harness writes to the filesystem store, which has no such thing`. It now pins " +
+      "`postgres` before any import and seeds through `scratchArticleInPg`; what it still reaches " +
+      "is the seeder's copy step and the ledger row the stubbed model call records.",
   },
   "tests/chat-anchor.test.ts": {
     category: "shared-mechanism-collateral",
@@ -570,12 +572,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "already has a home.",
   },
   "tests/owner-jobs.test.ts": {
-    category: "database-integration",
+    category: "shared-mechanism-collateral",
+    mechanisms: ["step-context-paths"],
     reason:
-      "The ingest queue was completely open — any authenticated Bob could list, fetch, cancel, " +
-      "retry or advance Alice's jobs. Its header's reason for needing no database is that *jobs " +
-      "never reach Postgres*, which is the sentence this migration falsifies, so every case has to " +
-      "be re-founded on the Postgres queue.",
+      "**Converted in stage B on 2026-09-04.** Any authenticated Bob could list, fetch, cancel, " +
+      "retry or advance Alice's jobs; the file's reason for needing no database was that *jobs " +
+      "never reach Postgres*, and the seven refusals are now `where owner_id = $1` in " +
+      "`pg-jobs.ts`. Alice and Bob are seeded into `auth.users` because the queue's owner column " +
+      "carries a foreign key. What is left is `runStep` computing `contextPaths(job.slug)` on the " +
+      "one `fetch` step it queues.",
   },
   "tests/pg-session-exact-base.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1306,6 +1311,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",
+  /* Converted in stage B, 2026-09-04, and the lane follows from what it now
+     seeds rather than from what it asserts: `scratchArticleInPg` writes an
+     article, a revision and its blocks under the throwaway slug, and the route
+     writes conversations against them. Nothing here goes near GoTrue or the
+     Storage bucket — the model is stubbed and the article comes out of the
+     committed corpus — so the private clone is enough, and it is what keeps the
+     `chat_threads` rows of two concurrent runs out of each other's `load()`. */
+  "tests/chat-anchor-route.test.ts": "private-postgres",
   "tests/chat-library-exclusion.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   "tests/checkpoints-durable-resume.test.ts": "private-postgres",
@@ -1350,6 +1363,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/lock-lifecycle.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",
   "tests/owner-isolation.test.ts": "private-postgres",
+  /* Converted in stage B, 2026-09-04. Its header's *jobs never reach Postgres*
+     is what the conversion falsifies, and the lane follows from the two owners
+     it now has to seed: `jobs.owner_id` is a foreign key into `auth.users`, so
+     the file writes rows into a schema GoTrue also reads. It touches no Auth
+     *service* — the rows go in over SQL — so `shared-services` would buy
+     nothing, while the private clone is what keeps a seeded `auth.users` row
+     out of the shared stack that `tests/admin-store.test.ts` reports on. */
+  "tests/owner-jobs.test.ts": "private-postgres",
   "tests/pg-ready.test.ts": "private-postgres",
   "tests/pg-session-exact-base.test.ts": "private-postgres",
   "tests/pg-session-real-step.test.ts": "private-postgres",
@@ -1579,6 +1600,14 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/db-schema.test.ts": {
     "11111111-1111-1111-1111-111111111111": { kind: "seeded" },
     "22222222-2222-2222-2222-222222222222": { kind: "seeded" },
+  },
+  /* Both arrived with the stage B conversion, 2026-09-04, and both are written
+     under: `enqueue` inserts Alice's job row and every refusal below is Bob
+     being told `null` by a `where owner_id = $1`. On the filesystem queue
+     neither needed a row at all, which is the change this pair records. */
+  "tests/owner-jobs.test.ts": {
+    "00000000-0000-4000-8000-0000000000a7": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000000000a8": { kind: "seeded" },
   },
   "tests/referee-criteria-store.test.ts": {
     "3f0a17c6-9d54-4b8e-9a2f-5c1b7e0d4a63": { kind: "seeded" },

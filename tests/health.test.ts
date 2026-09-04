@@ -31,9 +31,24 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pgReady } from "./helpers/pg-ready.js";
+
+/**
+ * The handler reaches Postgres through its own `getDb()`, so this file closes
+ * that pool — docs/project/testing.md § *The last file's pool is not pollution*.
+ *
+ * **Imported here rather than at the top of the file**, because a static import
+ * of `src/db/client.ts` pulls in `src/log.ts` before the `vi.mock` factory below
+ * has had its `logged` binding initialised — the whole file then fails to
+ * collect with *"Cannot access 'logged' before initialization"*. Watched
+ * happening, 2026-09-04.
+ */
+afterAll(async () => {
+  const { closeDb } = await import("../src/db/client.js");
+  await closeDb();
+});
 
 /** What `listArticles` was asked, and how often. The whole point of the cache. */
 const listArticles = vi.fn(async () => [] as unknown[]);
@@ -356,6 +371,10 @@ describe("the environment a deployment needs", () => {
     /* No STRIPE_PRICE_* — tiers live in `billing_tiers` since 2026-09-02, so
        there is no such variable to stub. */
     vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fixture");
+    /* Required *because* the line above sets a secret key — the `with` on its
+       EXPECTED entry. A deployment with neither is fine; one with only a
+       secret key cannot verify a single delivery. */
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_fixture");
   }
 
   /** Only the warnings, since ssl and store have their own tests above. */
@@ -401,6 +420,55 @@ describe("the environment a deployment needs", () => {
     const said = warningsFrom(await call("GET")).join(" ");
 
     expect(said).toMatch(/upload|blob|bytes/i);
+  });
+
+  /**
+   * **The half-configured deployment, which is the shape that has bitten.**
+   * Production ran with neither Stripe variable set on 2026-09-03, and
+   * `stripe:check` could not see it: that script reads the Stripe *account*,
+   * where the endpoint is registered and correct, and knows nothing about what
+   * the deployment holds. src/vercel-health.ts § `STRIPE_WEBHOOK_SECRET`.
+   */
+  it("warns when Stripe has a secret key but no webhook secret", async () => {
+    completeEnv();
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "");
+
+    const answer = await call("GET");
+
+    /* **The whole clause, not `toContain` on the bare name.** A substring match
+       here passes against an entry named `STRIPE_WEBHOOK_SECRET_MUTATED`, which
+       checks a variable nothing reads — so the first version of this test went
+       green under exactly the mutation it exists to catch. */
+    expect(warningsFrom(answer).join(" ")).toMatch(/STRIPE_WEBHOOK_SECRET is not set/);
+    /* Not merely listed — anything in `warnings` has to fail the endpoint, or
+       the deploy gate in scripts/deploy-checks.ts sails past it. */
+    expect(answer.body.ok).toBe(false);
+  });
+
+  /* A deployment with no Stripe at all is a perfectly good deployment —
+     everyone stays on the free tier — so the pair being absent together is
+     silence, not a warning. This is the case that `breaks: null` alone could
+     not express, and the reason the `with` field exists. */
+  it("says nothing about the webhook secret when Stripe is not configured at all", async () => {
+    completeEnv();
+    vi.stubEnv("STRIPE_SECRET_KEY", "");
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).not.toContain("STRIPE_WEBHOOK_SECRET");
+  });
+
+  /* `value()` trims, so a stray space in a Vercel dashboard field is not a
+     credential. Without this the endpoint would go green while every delivery
+     was refused with 503 — the precise failure the trimming exists to stop. */
+  it("treats a blank webhook secret as no webhook secret", async () => {
+    completeEnv();
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "   ");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).toMatch(/STRIPE_WEBHOOK_SECRET is not set/);
   });
 
   it("names every missing one, rather than stopping at the first", async () => {
