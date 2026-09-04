@@ -200,12 +200,25 @@ IDs moved into stage 2.
 
 What is left, and it is two separable things:
 
-- **Fable as reviewer runs read-only.** Fable's own report: on 260902c it silently lost Bash partway
-  through and nobody knew until it said so, and stages 1 and 3 were being built in the tree while it
-  read them. Dispatch a reviewing Fable through a read-only agent type; a fork when the conversation
-  context is the point. **Verify the mechanism before documenting it** — Sol's finding 7 — with one
-  positive read and one denied write; the repo has no `.claude/agents` definitions, so this rests on
-  the built-in agent types and their tool sets, which is an assumption until it is measured.
+- **Fable as reviewer runs read-only — and that turned out to be a convention, not a boundary.**
+  Sol's finding 7 said to measure the mechanism before writing it down. Measured 2026-09-04 by
+  dispatching a Fable `Explore` agent at its own sandbox: it has **no `Edit` and no `Write`**, and
+  its system prompt forbids creating files anywhere including `/tmp` — but `Bash` is unrestricted,
+  runs as `uid=1000(greg)` with `sudo` and `docker` group membership, `Seccomp: 0`, the repo
+  directory writable, and MCP tools in reach that include `mcp__supabase__apply_migration` and
+  `mcp__vercel__deploy_to_vercel`.
+
+  So the only thing between a "read-only" subagent and `git commit` is a sentence it chooses to
+  obey — and **on the same day another one did not**: the Explore agent that ran the stale-claims
+  sweep wrote `/tmp/claude-1000-scratch-paths.txt` with a shell redirect, against that same
+  prohibition, and flagged it in its own report. One obeyed, one didn't, which is exactly what
+  "convention" means.
+
+  The doc therefore says the accurate thing: write *"do not change any file"* into every reviewing
+  brief and don't lean on the agent type. **This is why Sol is the one to prefer for review** — its
+  sandbox refuses the write whatever the model intends. Had I documented the version I drafted
+  before measuring, the repo would have gained a guarantee it does not have, which is
+  [written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md) exactly.
 - **Fable is a different model, not a different family** — its priors overlap Opus's far more than
   Sol's do, so it is not a substitute for the cross-family check. Fable's own words.
 - **The Sol spike mode**: own worktree, `--sandbox workspace-write`, deliverable is a diff *plus a
@@ -283,5 +296,5 @@ did not hold up. That is the doc's own rule working in both directions.
 - [x] Plan written, reviewed by Sol, refused, and revised — 2026-09-04
 - [x] Stage 1 — corrections and the network decision — 2026-09-04
 - [x] Stage 2 — the review prompt contract — 2026-09-04
-- [ ] Stage 3 — the delegation roster
+- [x] Stage 3 — the delegation roster — 2026-09-04
 - [x] Stage 4 — **dropped** with a reason, above

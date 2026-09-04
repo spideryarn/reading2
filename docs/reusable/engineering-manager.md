@@ -96,6 +96,22 @@ evidence. Send one to run the thing, read the logs, or reproduce it.
 handing it to a different model — not doing its work yourself. Several failures in a row is the
 environment being broken; stop and ask rather than taking the whole job back.
 
+**A reviewing subagent is read-only by convention, not by construction.** Measured 2026-09-04: an
+`Explore`-type subagent has no `Edit` or `Write`, and its prompt forbids creating files — but its
+`Bash` runs as the user with the repo writable, no seccomp, and MCP tools reaching Supabase and
+Vercel. So the only thing between it and `git commit` or `apply_migration` is a sentence it chooses
+to obey, and on the same day another one wrote a file anyway and said so. Write "do not change any
+file" into every reviewing brief, and do not lean on the agent type as though it were a boundary.
+GPT Sol is the exception, and the reason to prefer it for review: its sandbox refuses the write
+whatever the model intends.
+
+**Send a spike to Sol as well as to a Claude subagent.** A `--sandbox workspace-write` run in a
+worktree of its own is already supported and, over hundreds of runs, has never been used — every one
+was a review. It is the right shape for *after* a review, when a fix wants proving: the deliverable
+is a diff **plus a red→green transcript**, read as evidence, never applied unread. Keep it separate
+from the review itself, which stays read-only for the reasons in
+[codex-cli-as-subagent.md](codex-cli-as-subagent.md).
+
 ## What the work turns up
 
 A cleanup the change exposed, a bug you tripped over, an abstraction in the way, two paths that
