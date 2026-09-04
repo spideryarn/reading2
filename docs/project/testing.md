@@ -546,6 +546,21 @@ Two habits it made explicit and worth carrying to the next eval:
 `evals/` is typechecked by the root `tsconfig.json` — it runs the same way the pipeline stages do.
 The typecheck guard ([typechecking.md](typechecking.md)) is what noticed it belonged to no project.
 
+### An eval run in a worktree measures the fixture cut, not the corpus
+
+`npm run worktree:setup` fills `data/` from `tests/fixtures/data-root/`, and those are **fixture
+cuts**: `data/constitution` is 84 blocks in a worktree and 360 in the primary. So an eval run there
+silently measures short articles while the write-up names long ones — which cost a session's
+headline numbers on 2026-09-04, found by GPT Sol reading `run.json` rather than the write-up.
+
+Every result row already carries `blocksSha256.matchesManifest`, and in a worktree it says `false`.
+**Nobody reads it**, which is the whole problem: the eval is not wrong, it is honest and unheard.
+Before quoting any eval number, check that field and the block count of what actually ran.
+
+Do not fix it by copying the primary's corpus in. `cp -rn` skips existing files, so it appears to
+work and changes nothing; copying the whole corpus brings articles the manifest does not describe.
+Run evals in the primary, or make the cut deliberate and say so in the write-up.
+
 ## A known limit, pinned by a test
 
 A block with neither text nor a `src` — in practice only `<hr>` — gets a **fresh id on every
@@ -614,6 +629,24 @@ when judging whether HEAD itself is broken, reproduce in a worktree with `node_m
 `.env.local` linked and `data/` **copied** (tests delete under it) — not in the shared working tree,
 which always carries other agents' edits. "26 files fail" from a clean checkout is this, not a
 broken commit.
+
+### Run the suite in tmux, because a killed run and a passing run look the same
+
+**A backgrounded `npm test` on the remote box is killed under load and reported as a success.**
+Measured 2026-09-03 at load ~100: the run took SIGTERM, emitted nothing, and the harness announced
+*"completed (exit code 0)"* — because that is the wrapper's status, not the suite's. A subagent hit
+the same thing the same day by passing `--reporter=basic`, which vitest 4 does not have: the run
+never started and was again reported as exit 0.
+
+So run it in `tmux` and judge it by the suite's own `Test Files` line, never by an exit code that
+reached you through something else:
+
+```
+tmux new-session -d -s gate "npm test -- --reporter=dot > LOG 2>&1; echo EXIT=\$? >> LOG"
+```
+
+"It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
+section belongs to — [silent-success.md](../reusable/silent-success.md).
 
 ### `.env.local` is loaded into tests
 

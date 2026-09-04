@@ -36,14 +36,21 @@
  * - **`pay-free`** — never subscribed, `canCheckout` is true, and `/pricing` is
  *   exactly the page that answers *what would I have to pay to add this?*
  * - **`pay-limit`** — a subscription that is working, at its monthly ceiling.
- *   There is nothing to buy: `canCheckout` is false while any non-terminal
- *   subscription exists (src/billing/summary.ts), so `/pricing` draws no button
- *   for this reader, and the hosted Portal cannot move Reader → Researcher
- *   either (docs/project/billing.md § *A paying Reader cannot become a
- *   Researcher*). What they actually need is the date it resets and the
- *   subscription they already have, and both are on `/profile` — where a
+ *   There is nothing on `/pricing` to press: `canCheckout` is false while any
+ *   non-terminal subscription exists (src/billing/summary.ts), so that page
+ *   draws this reader no button. What they need instead is the date it resets
+ *   and the subscription they already have, and both are on `/profile` — where a
  *   renewing plan's *"the allowance starts again on…"* is always drawn, while
  *   `/pricing` deliberately omits it (PricingPage.tsx § `CurrentPlan`).
+ *
+ *   **This destination is under review, and the reason it is under review is
+ *   that one of the three arguments for it has expired.** Until 2026-09-04 the
+ *   hosted Portal could not move Reader → Researcher either, so a subscriber at
+ *   their ceiling genuinely had nowhere to go. It can now; the dead end is
+ *   `canCheckout` not being tier-aware, which is ours to fix — see
+ *   docs/project/billing.md § *Reader → Researcher: open at Stripe, closed in
+ *   our own UI*. Do not re-point this link on the strength of the corrected
+ *   fact: Greg is deciding where a capped subscriber should land separately.
  * - **`pay-lapsed`** — and **the client cannot tell which kind of lapse this
  *   is.** `hasLapsed` (src/store/pg-billing.ts) covers a cancelled subscription,
  *   which is terminal and may check out again, *and* `unpaid` / `incomplete`,
