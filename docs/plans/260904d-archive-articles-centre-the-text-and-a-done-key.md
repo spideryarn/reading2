@@ -1,6 +1,8 @@
 # Three more, and one of them can destroy something
 
-**Status: in progress**, started 19:40 London on 2026-09-04, by the second run of the
+**Status: done bar one.** -18 and -19 are resolved and on `dev`; **-1A is deliberately left open**
+because the fix cannot be verified without a real phone — see *Waiting on Greg*. Started 19:40 London
+on 2026-09-04, by the second run of the
 `feedback-reports` loop ([feedback-reports.md](../project/feedback-reports.md)). The first run's
 twelve are done and written up in
 [260904b](260904b-address-user-feedback-reports-batch.md) — this is a fresh batch, not a
@@ -185,6 +187,45 @@ Still open, and cheap:
   the one that is a property of the codebase rather than of that batch is **unbounded paid calls in
   `routes.ts`**.
 
-## Questions, decisions and assumptions
+## Waiting on Greg
 
-To be filled in as the run goes. Nothing here blocks it.
+1. **-1A cannot be closed from here.** The dialog now sizes from `visualViewport` on both engines,
+   but nobody has seen it work in the installed PWA. **Open the Feedback box on your phone with the
+   keyboard up and check Send is reachable** — that closes it, and no automation here can.
+2. **Permanent delete: hard-delete, or `deleted_at` with a 30-day purge?** The purge is the boring
+   option and the same shape as `archived_at`. Recommended.
+3. **Permanent delete: what should a public link to a deleted article do?** 404 with a note, or
+   refuse to delete while the article is public.
+4. **The Feedback dialog is vertically centred on desktop**, so switching Problem ↔ Suggestion moves
+   the kind buttons 29–38px — the button you just pressed shifts under the pointer. The fix (grow
+   downward only) repositions the dialog for everybody, so it was left rather than decided.
+5. **The chat composer's Enter always sends and there is no Shift+Enter**, so on a phone a reader
+   cannot type a newline in it at all. Found while surveying, not part of any report.
+
+Plus the seven from [260904b](260904b-address-user-feedback-reports-batch.md#waiting-on-greg-decisions-taken-so-the-run-could-finish).
+
+## What this batch turned up that nobody asked for
+
+- **A regression from the previous batch**, fixed with a postmortem: making links open in a new tab
+  was done inside the *client* sanitiser, which stopped it being byte-for-byte the server one and had
+  `tests/sanitize-client.test.ts` red on `dev` since `0f754742`. Now at ingress —
+  [260904d-a-presentation-rule-inside-the-sanitiser…](../postmortems/260904d-a-presentation-rule-inside-the-sanitiser-broke-the-one-policy-invariant.md).
+- **The rule had only ever covered `<a href>`** — not `<area>`, not SVG `xlink:href`. Zero of either
+  in 5,301 stored blocks, which is exactly why no test and no browser pass would have found it.
+- **A dictation race in three dialogs** — chat, Annotate and Quiz all left the send button enabled
+  while the microphone was armed. `dictation.md` now says "disable the button too, not only the
+  guard".
+- **A sign-in key labelled Next that submitted** when a password manager had filled the field.
+- **Two tests that could not fail**, and a third whose evidence was measured against the wrong dev
+  server — see the browser-testing note below.
+
+## The lesson worth keeping from the run
+
+The doc had already written down the trap that a Vite port silently moves, two paragraphs above where
+it would have helped. What it had **not** written down is that `npm` is a wrapper and the server is
+its `node` child, so the PID you kill is not the PID that is listening. Two agents hit that within an
+hour; one of them killed the wrapper, started a "fresh" server that walked to 5302, verified against
+5301, and reported a clean re-check with byte-identical numbers — equally consistent with the fix
+working and with having measured the wrong process. It caught itself and said so.
+[browser-testing.md](../project/browser-testing.md) now carries it, with the remedy: prove *which
+code* is being served with a `curl` before trusting anything the browser says.
