@@ -2196,6 +2196,80 @@ verdict** rather than letting a retained log stand in for a run it did not do. T
 the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
 but it means the follow-ups were verified here, in this tree, and not there.
 
+#### The guard is built, and marking the 25 found four files whose evidence was not evidence
+
+`convertedInB` on the `STORE_MIGRATION` entry, and
+[store-migration-registry.test.ts](../../tests/store-migration-registry.test.ts) §
+*"makes every converted file show its working"*, which requires `**Mutation.**` and `**Blind to.**`
+in every file carrying it — with the same three checks the registry already applies to `reason`: a
+length floor, and no text repeated word for word **between** files. Watched failing on all 25 before
+the marking began, and watched failing again afterwards on a deliberately broken marker.
+
+**The exercise was meant to be transcription and was not.** Marking a claim forces somebody to read
+it, and four of the twenty-five did not survive that:
+
+- **`chat-anchor-route` — a *pilot* — had no evidence in it at all.** Its mutation lived only in this
+  document's own table. It is now in the file, attributed as *recorded, not re-watched*, which is the
+  honest label.
+- **`owner-jobs` cited this plan for its evidence** — *"the mutation recorded in § B is exactly that
+  line"*. That is precisely the failure the guard exists to close: a file whose proof is a pointer to
+  prose somewhere else. Re-run, and it now points at the case above `is not in Bob's list`.
+- **`list-reconciles-expired`'s four "watched red" notes are all *call-site* mutations** — replacing
+  `store.list(owner)`, dropping the owner argument at the call. **Not one of them reaches a line of
+  SQL**, so the conversion had no Postgres-reaching evidence at all, while reading as the
+  best-evidenced file in the batch. It was cited as such in this document. Re-run against
+  `settleExpired`'s owner predicate: `1 failed | 8 passed`.
+- **`jobs-walk`'s seven mutations were all on the filesystem queue.** A `claimIn` that had lost its
+  `where` entirely would have left every one of them green.
+
+**And the pilot's own account here needed correcting.** § *Two of the 26 are converted* says
+`anchorQuote: quoteOf(…) → null` is a mutation the filesystem store could not have caught, which is
+true, and adds that it is *"sharper than intended"* because it trips the `chat_threads_anchor_both`
+CHECK. What it does not say is the consequence: **because the route 500s, its four reds do not
+separate *the quote was written* from *the row was written at all*.** A sharper mutation is not
+automatically a better one.
+
+##### The guard had two bugs of its own, and the second was the instructive one
+
+The first stopped a marker's body at the next `**`. These files bold mid-sentence constantly, so
+`**Mutation.** Deleting **the owner term** from …` captured `"Deleting"` — eight characters — and
+would have been failed as too short, **teaching authors to strip emphasis out of good prose to satisfy
+a guard**. Caught before dispatch by running the regex against realistic prose rather than reading it.
+
+The second looked 900 characters ahead for the next marker or `*/`. A marker further than that from
+its terminator matched nothing, and because the file passed on its *other* marker, it was **silently
+not counted** — a guard under-reporting while green, which is the shape this whole plan is about.
+Caught by the agent using it, and only because it was using it. Rewritten as a scan with no window and
+therefore no cliff.
+
+#### The inventory that sized the tail was wrong in both directions
+
+The 16.75-hour figure above came from reading all fourteen remaining files and classifying every
+filesystem site. Three of its numbers have since been checked against the files, and none survived:
+
+| | inventory said | actually |
+| --- | --- | --- |
+| `jobs.test.ts` tests | ~35 | **71** |
+| `jobs-walk.test.ts` tests | 9 | **10** |
+| `routes.test.ts` filesystem sites | ~40 | **3 functions** — `cp`, `rm`, `writeFile` — over a handful of fixture slugs |
+| `routes.test.ts` "501 because filesystem" tests | ~9 | **4 assertions** |
+
+**It is not that the inventory was careless — it is that a site count is the wrong instrument.** The
+queue round's own verdict was that *"the byte assertions were the easy part — they are rows"*, and
+that the real cost was `claimSession` needing a draft and the Postgres store shape-checking products,
+neither of which any count of `readFile` calls can see. So `step-failure-seam` was called an outlier
+and took forty minutes, while `jobs-walk` was called ordinary and took ninety.
+
+**`routes.test.ts`'s 240 minutes is therefore uncertain downwards**, and B2's brief says so and asks
+for the real number rather than inheriting this one. Its fixture pattern — copy the committed fixture
+under a `test-…` slug, drive `handleApi`, clean up — is exactly the pattern `scratchArticleInPg`
+replaced in the other twenty-five, and one of its seventeen blocks announces in its own header that it
+touches no store at all.
+
+Recorded because § *Counts are perishable here* is this document's rule and this document keeps
+breaking it: **five of the six counts that went stale went stale by being copied**, and these four
+went wrong by being derived from the wrong thing, which is the harder failure to notice.
+
 #### The evidence guard: cite it, do not copy it
 
 The review's process finding — evidence reported and not retained — wants a mechanical check, because

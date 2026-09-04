@@ -134,9 +134,12 @@
  *
  * The four above are all in `src/jobs.ts` and would have reddened this file on
  * either store, so none of them is evidence that it now reaches Postgres. This
- * one is: **`failureKind: ending.failureKind ?? null` deleted from `finishIn`**
- * (src/store/pg-jobs.ts) — the write of the `failure_kind` column, which has no
- * filesystem counterpart at all, the JSON record simply carrying the field.
+ * one is.
+ *
+ * **Mutation.** `failureKind: ending.failureKind ?? null` deleted from
+ * `finishIn` (src/store/pg-jobs.ts) — the write of the `failure_kind` column,
+ * which has no filesystem counterpart at all, the JSON record simply carrying
+ * the field.
  *
  * ```
  * × refuses a failure another attempt cannot change
@@ -144,8 +147,8 @@
  *     expected undefined to be 'ours'
  * ```
  *
- * **What it does not cover, which is most of the file.** One column's write is
- * not the family:
+ * **Blind to.** Most of the file. One column's write is not the family, and
+ * the four things below are each a different mechanism it cannot reach:
  *
  * - **`finishIn`'s other five columns** — `status`, `steps`, `error`,
  *   `attempt_id`, `lease_expires_at` — are each their own statement of fact and
@@ -154,6 +157,10 @@
  *   conditions this repo has now dropped three times; every job here is settled
  *   by its own live claimant, so a fence that admitted a stale one would go
  *   unnoticed.
+ *
+ * **Blind to.** Two more, and both are predicates rather than values — a `where`
+ * clause that could be gone altogether while every case here went on passing:
+ *
  * - **`get`'s `where owner_id = $1`**, which is the predicate the *header* leans
  *   on when it says `retryJob` reads through `pgJobStore.get(id, owner)`.
  *   Deleting it would leave this file green: every case here is one owner asking

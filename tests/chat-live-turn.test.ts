@@ -51,20 +51,24 @@
  * Two, both aimed at the paragraph above, and the pair splits it in half: the
  * token being **carried** is tested here, the token being **checked** is not.
  *
- * **1 — cut the thread from `begin` to `finish`, and it went red.**
+ * **Mutation.** 1 — cut the thread from `begin` to `finish`, and it went red.
  * `src/routes.ts`: `const storeAttempt = begun.attempt;` made `const
  * storeAttempt = undefined as string | undefined;`, so `finish` is called with
- * no token and `pgChatStore.finish` throws `MissingAttempt`. **1 failed of 3**:
- * *refuses one aimed at an attempt that has been replaced*, whose last
+ * no token and `pgChatStore.finish` throws `MissingAttempt`. The run printed
+ * `1 failed of 3`: *refuses one aimed at an attempt that has been replaced*,
+ * whose last
  * assertion is the answer ending up `done`. This is the mutation the filesystem
  * store could not have had — it returns `undefined` there and takes
  * `undefined`, so the same cut moved nothing.
  *
- * **2 — remove the fence itself, and it STAYED GREEN.**
+ * **Mutation.** 2 — remove the fence itself, and it STAYED GREEN.
  * `src/store/pg-chat.ts` § `finish`: `eq(chatMessages.attemptId, attempt),`
- * deleted from the `where`, leaving only the `status = 'pending'` clause. **3
- * passed of 3.** The `MissingAttempt` throw above it still fires on an absent
- * token, which is what mutation 1 reached; what is gone is the check that the
+ * deleted from the `where`, leaving only the `status = 'pending'` clause. The
+ * run printed `3 passed of 3` — it stayed green.
+ *
+ * **Blind to.** The staleness half of that fence. The `MissingAttempt` throw
+ * above it still fires on an absent token, which is what mutation 1 reached;
+ * what is gone is the check that the
  * token is *the current one*. Nothing here ever calls `finish` with a stale
  * attempt: the retry in the second case replaces the row's `attempt_id` and
  * then the original stream is aborted rather than allowed to land, so the
@@ -74,7 +78,7 @@
  * tests/turn-order.test.ts and tests/store-chat-pg.test.ts are where the fence
  * itself is held.
  *
- * **What neither covers.** Both reach `finish`. `begin`'s own minting of the
+ * **Blind to.** Both mutations reach `finish`. `begin`'s own minting of the
  * attempt is untouched — a `begin` that wrote the same token on every row would
  * satisfy both runs. Neither says anything about the `status`/`attempt_id`
  * CHECK pair being cleared together at the end of `finish`, nor about the

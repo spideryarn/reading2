@@ -47,16 +47,18 @@
  *
  * ## The mutation, watched red on 2026-09-04
  *
- * `glossary: { ...glossary, entries }` in `pgArticleReader.loadGlossary`
- * (src/store/pg.ts) replaced by `entries: []` — the line that hands back the
- * terms the revision actually holds, with the stored lookups merged in. *refuses
- * a term the article does not actually contain* fails, its 409 becoming
- * `No glossary term "spya-zzzzzz"`, which is the proof that the entry this file
- * seeds really does come back out of Postgres rather than out of a file.
+ * **Mutation.** `glossary: { ...glossary, entries }` in
+ * `pgArticleReader.loadGlossary` (src/store/pg.ts) replaced by `entries: []` —
+ * the line that hands back the terms the revision actually holds, with the
+ * stored lookups merged in. Re-run 2026-09-04: *1 failed | 8 passed (9)*,
+ * *refuses a term the article does not actually contain*, `expected [Function]
+ * to throw error matching /does not appear in this article/ but got 'No
+ * glossary term "spya-zzzzzz" in "te…'`. That is the proof the entry this file
+ * seeds comes back out of Postgres rather than out of a file.
  *
- * **What it does not cover.** Only the read half, and only the entry list: the
- * lookup merge two lines above it, `stale`, `outdated` and the `blockHashInputs`
- * query are all untouched and nothing here would notice them going wrong. It
+ * **Blind to.** Only the read half, and only the entry list: the lookup merge
+ * two lines above it, `stale`, `outdated` and the `blockHashInputs` query are
+ * all untouched and nothing here would notice them going wrong. It
  * says nothing at all about the *write* — `pgGlossaryLookupStore.save`, which
  * the successful path below drives through an injected fake rather than through
  * the wiring, so no Postgres write is exercised by this file at any point. And
