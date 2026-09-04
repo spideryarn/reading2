@@ -116,6 +116,7 @@ artefacts on disk, not by reaching into another stage's code.
 | 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
 | 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + hierarchy agent** | `blocks.json` |
 | 4 | hierarchy — the deeply-nested table of contents, see [hierarchy.md](hierarchy.md) | **blocks + hierarchy agent** | `tree.json` (structure) |
+| 4.5 | **assets** — fetch the article's own images and host them, so a hotlink cannot rot and no reader announces themselves to the publisher's CDN ([article-images.md](article-images.md)). The one stage that calls no model | **fetch agent** ([`src/collect-assets.ts`](../../src/collect-assets.ts)) | `assets.json`, plus objects in Storage |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
 | 5c | the thread — the article as numbered posts ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
@@ -316,6 +317,14 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   stage's prompt reads** — for six of the seven that is the blocks, the tree and the head, and there
   are two head functions because there are two heads
   ([`src/source-hash.ts`](../../src/source-hash.ts)); for `assets` it is the blocks alone. [database.md](database.md#the-filesystem-era-files-under-dataslug).
+- **Process-wide mutable state must have process lifetime, which a module-level variable does not.**
+  Saving anything the server imports makes Vite re-evaluate that module *in place*, so a lock, an
+  index or a registry held in a module variable becomes a second empty copy while requests from the
+  first are still running — the fence still holds within a module and there are now two. Anything of
+  that kind goes through [`src/process-state.ts`](../../src/process-state.ts). The story that bought
+  this — eleven restarts of one eight-minute call, at $5.43 — is
+  [ingest-queue.md § On the filesystem, "one process" had to be made true](ingest-queue.md#on-the-filesystem-one-process-had-to-be-made-true),
+  told there for the queue; the rule is general.
 - **A cache whose key is deterministic must be written atomically and read tolerantly**, and the two
   are one rule. `writeFile` truncates before it writes, so a killed process leaves a file that exists
   and does not parse; the key does not change between runs, so every later run finds that same file

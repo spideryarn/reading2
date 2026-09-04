@@ -215,6 +215,16 @@ it silently shows somebody the base-currency price.
 - **The lookup key is the identity, not the name.** Never change one on a tier that has been sold:
   it is how a re-run finds the price it made last time instead of minting a second one.
 
+**And a fourth, which is a class rather than a mistake: adding a value to a billing dimension turns
+rules that were harmless into policy.** While a dimension has one value — one paid tier, one
+currency, one billing period — a tie-break nobody chose, an enumerated menu, or an assumption that
+an interval is monthly all behave correctly by accident. Add the second value and each becomes a
+decision that was never made. So a change here is not finished when the rows and
+[`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) are done: audit subscription selection's
+tie-break, the Portal's configured menu, anything that reads an interval, and the quota arithmetic
+above. [260904a](../postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md)
+names this as the next likely failure class, and its four faults are what it looks like when it fires.
+
 ### Tax: the two fields that decide what a reader is charged
 
 Both live in [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts), both were found by driving a
@@ -592,6 +602,22 @@ account. A plain "count, then decide" cannot: twenty requests all read zero and 
 
 **Nothing that opens its own transaction, and nothing that touches the network, may be called
 between the lock and the commit.** That is the rule a later change is most likely to break.
+
+### The allowance prorates, and the column holds a delta
+
+**A mid-period tier change moves the limit by what the money actually bought**, because Stripe
+prorates the price and we used to hand over the allowance whole — upgrade with an hour left, take the
+full allowance, downgrade before the roll, repeat. *Nobody uses 130 ingests in an hour* is not an
+answer: the quota is an abuse boundary against a script, and a script can. Upgrading on day 27 of 30
+takes a Reader from 20 to 33, not to 150.
+
+The two facts to hold before touching it: the stored column is a **delta**, not an absolute, and it
+is applied at the sync rather than at the change. So **writing an absolute limit — a support fix, a
+seed script — silently opts that reader out of every future tier change.** The arithmetic, the
+accrual model behind it, and the three shapes that were proposed and refuted are all in
+[`src/billing/quota-adjustment.ts`](../../src/billing/quota-adjustment.ts) and
+[260903i](../plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md); if it is ever
+wrong, the inputs are the place to look and not the formula.
 
 ### Which requests spend a slot, and why the wall is at the routes
 

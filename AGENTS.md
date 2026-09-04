@@ -31,7 +31,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
-  two) · `hierarchy.md` · `ingest-queue.md` (paste a URL, get an article) ·
+  two) · `hierarchy.md` ·
+  `article-images.md` (stage 4.5 — the figures the piece came with, hosted by us) ·
+  `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
   `prompt-caching.md` · `database.md` ·
   `sql.md` (columns over JSON, keys over good intentions) ·
