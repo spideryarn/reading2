@@ -442,6 +442,13 @@ that compiles the client.
 This is the same shape as [linting.md](linting.md): TypeScript 7 removed the API
 ESLint needed, and it removed the one Vercel's builder needs too.
 
+**Which is why `npm run build:api` alone refuses after a commit.** The API build
+compiles `dist/index.html` into the serverless function, so a stale client shell
+would ship a stale page with no other symptom. It checks `dist/build.json`
+against the current HEAD and stops — *"Client shell is not from this build …"* —
+and the thing that most often invalidates the shell is **your own commit**, made
+between the two halves. Run `npm run build`, which does both passes in order.
+
 ### Everything that bundle imports at module scope is paid for by every request
 
 `api/index.js` answers a request by `await import`ing the whole 3.5 MB
