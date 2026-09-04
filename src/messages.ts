@@ -865,7 +865,10 @@ export const STEP_STOPPED: ReaderFacingFailure = {
  * Each of these was already written out at its throw site, in prose meant for a
  * reader, and each went through `stageFailure(kind, detail)` — the form that
  * says only what *kind* of failure it is and treats the sentence as a log-only
- * diagnostic. So the reader got `stepGaveUp`'s generic copy for `blocked`,
+ * diagnostic. **That form no longer exists**: since 2026-09-04 it is spelled
+ * `stageFailure(kind, { generic: detail })`, so a throw site has to say which
+ * audience it meant and a ninth of these cannot be written by accident
+ * (src/job-failure.ts § `{ generic }`). So the reader got `stepGaveUp`'s generic copy for `blocked`,
  * which names the step and nothing else, and most of them withheld the Retry
  * button as well: a dead end and no explanation.
  * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md.

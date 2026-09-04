@@ -147,9 +147,11 @@ interface KindedError {
  *
  * ## The two forms, and which to use
  *
- * **`stageFailure(kind, detail)`** says only what kind of failure it is. The
- * reader gets `stepGaveUp`'s generic sentence for that kind (src/messages.ts),
- * naming the step and nothing else, and `detail` is the diagnostic.
+ * **`stageFailure(kind, { generic: detail })`** says only what kind of failure
+ * it is. The reader gets `stepGaveUp`'s generic sentence for that kind
+ * (src/messages.ts), naming the step and nothing else, and `detail` is the
+ * diagnostic — log only, and see `{ generic }` below for what that word is
+ * claiming.
  *
  * **`stageFailure(failure, detail?)`** says both, carrying a whole
  * `ReaderFacingFailure` — `kind` and reader sentence together, which is what
@@ -181,22 +183,61 @@ interface KindedError {
  * every place the claim has been made, which is the list an audit wants. What
  * it must never wrap is an interpolation of anything that arrived from
  * outside: `${err.message}`, a response body, a block of prose.
+ *
+ * ## `{ generic }`, for a throw site that means the reader to get the generic
+ *
+ * The two markers are parallel and each is a claim, made in one greppable word
+ * at the throw site. `{ authored }` claims **I wrote every character of this,
+ * so it is safe to send to Sentry**. `{ generic }` claims **I know the reader
+ * gets a generic sentence here, and that is correct** — this is CLI misuse, a
+ * broken invariant, a step run out of order, and there is nothing true and
+ * useful to tell a reader beyond the name of the step that gave up.
+ *
+ * Until 2026-09-04 that form was `stageFailure(kind, detail)` — a bare second
+ * string — and it read exactly like the other form, so **eight throw sites
+ * wrote a real sentence for a reader and used the form that throws it away**.
+ * The reported symptom was a 142-page PDF refused for its length telling the
+ * reader only *"Extracting the article could not be done… [jb-step-no]"*; see
+ * `stepGaveUp` in src/messages.ts and
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md. Requiring
+ * the word makes the ninth impossible to write by accident: the compiler
+ * refuses the bare string, so whoever is writing the throw has to say which of
+ * the two audiences they meant.
+ *
+ * **What this cannot catch, and it is not a small gap.** ⟨Sol⟩ It polices
+ * `stageFailure` and nothing else. A bare `throw new Error("This PDF has 142
+ * pages…")` intended for a reader still lands as the generic sentence, and no
+ * type can tell that string from a diagnostic — two of the original eight were
+ * exactly that, and were found by reading the code rather than by the compiler.
+ * So `{ generic }` narrows the class; it does not close it.
  */
-export function stageFailure(kind: FailureKind, detail: string): Error;
+export function stageFailure(kind: FailureKind, detail: { generic: string }): Error;
 export function stageFailure(
   failure: ReaderFacingFailure,
   detail?: string | { authored: string },
 ): Error;
 export function stageFailure(
   what: FailureKind | ReaderFacingFailure,
-  detail?: string | { authored: string },
+  detail?: string | { authored: string } | { generic: string },
 ): Error {
   if (typeof what === "string") {
-    return Object.assign(new Error(typeof detail === "string" ? detail : ""), {
+    /* **The type changed and the runtime deliberately did not.** `detail` is
+       `{ generic }` by the overload above, but a bare string still becomes the
+       diagnostic exactly as it did before 2026-09-04 — for the untyped callers
+       JavaScript can still produce, and because dropping a diagnostic on the
+       floor to punish the old spelling would take a log line away without
+       anything going red. The compiler is where that form is refused. */
+    const diagnostic =
+      typeof detail === "string"
+        ? detail
+        : detail !== undefined && "generic" in detail
+          ? detail.generic
+          : "";
+    return Object.assign(new Error(diagnostic), {
       failureKind: what,
     });
   }
-  if (detail !== undefined && typeof detail !== "string") {
+  if (detail !== undefined && typeof detail !== "string" && "authored" in detail) {
     return Object.assign(new Error(coded(detail.authored, what)), {
       failureKind: what.kind,
       readerFailure: what,
@@ -223,7 +264,7 @@ export function stageFailure(
    * does not buy its way past monitoring drives `sanitise` itself, so this
    * cannot come back by anybody reasoning about it again.
    */
-  return Object.assign(new Error(detail ?? what.message), {
+  return Object.assign(new Error(typeof detail === "string" ? detail : what.message), {
     failureKind: what.kind,
     readerFailure: what,
   });

@@ -300,6 +300,28 @@ Two callers outside `src/` must change ⟨Sol⟩ — `tests/job-failure.test.ts`
 **Done when:** the overload is gone, typecheck is clean, every site either declares a sentence or
 says `{ generic }`, and `src/job-failure.ts`'s header documents the marker beside `{ authored }`.
 
+**Landed 2026-09-04.** Deleting the overload named **eleven** sites, not the nine predicted: the two
+extra are both in `tests/job-failure.test.ts`, which drives the kind-only form twice rather than
+once. All eleven took `{ generic }` — every one is a broken invariant or a step run out of order,
+where the diagnostic is an instruction to whoever is running steps by hand ("run the fetch step
+first") and the reader has nothing to gain from hearing it. **None was promoted to a registered
+message**, and the one that argued for it is worth recording: the missing-extracted-HTML throw
+(`src/pipeline.ts`) carried a comment from 2026-08-31 saying *"A Retry that re-ran `extract` would
+fix it, which is exactly what this sentence tells the reader to do"* — false in both halves, since
+the reader never saw the sentence and `ours` withholds the button. The comment is corrected in
+place; whether the *kind* should be `retry` is a question about the button and was left alone.
+
+**The runtime deliberately did not change** — a bare string still becomes the diagnostic, so an
+untyped caller loses nothing from the log; the refusal is entirely in the types. The guard is an
+`@ts-expect-error` in `tests/job-failure.test.ts`, seen red (`TS2578: Unused '@ts-expect-error'
+directive`) by putting the deleted overload back.
+
+Two things found in passing, both fixed here: `tests/store-migration-registry.ts` had
+`retry-keeps-the-checkpoints.test.ts` registered **twice** — this stage's entry and another agent's,
+landing from `dev` within a day of each other — which was a duplicate key and the only thing red in
+`npm run typecheck:committed`; and `docs/project/copy.md` § Writing a new one still promised that a
+factory missing from `FROM_FACTORIES` fails silently, which stage 1 had made a compile error.
+
 ### Stage 3 — a retry keeps its article, so the checkpoints are worth having
 
 **The gate for stages 4 and 5.** An internal retry needs an explicit "adopt the old slug" allocation

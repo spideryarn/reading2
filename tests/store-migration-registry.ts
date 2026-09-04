@@ -1245,12 +1245,6 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-store.test.ts": "shared-services",
   "tests/auth-user-seeding.test.ts": "shared-services",
   "tests/db-test-create.test.ts": "shared-services",
-  /* Arrived from `dev` on 2026-09-04, after T-C's lane map was written, and the
-     lane guard refused to stay green — which is the whole point of a guard that
-     re-derives the universe rather than reading a stored answer. It calls
-     `pgReady` and its oracle is checkpoint rows it writes itself, so the
-     private lane is right and nothing about it needs the shared stack. */
-  "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
   "tests/seed-admin-signin.test.ts": "shared-services",
 
   /* ---- private-postgres: everything else that touches a database --------- */
@@ -1311,7 +1305,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/remember-route.test.ts": "private-postgres",
   /* Landed with stage 3 of 260903k on 2026-09-03 and was never given a lane —
      it drives the Postgres queue, and article identity is only expressible
-     there. Filed here on 2026-09-04 by the stage that found the gate red. */
+     there. Filed here on 2026-09-04 by the stage that found the gate red, and
+     independently by T-C when it arrived from `dev` and the lane guard refused
+     to stay green — which is the whole point of a guard that re-derives the
+     universe rather than reading a stored answer. Two identical entries were a
+     duplicate key and a red typecheck; this is the surviving one, in the
+     alphabetical run where a reader will look for it. It calls `pgReady` and
+     its oracle is checkpoint rows it writes itself, so the private lane is
+     right and nothing about it needs the shared stack. */
   "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
   "tests/run-lock.test.ts": "private-postgres",
   "tests/running-slot.test.ts": "private-postgres",

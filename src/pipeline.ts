@@ -1334,10 +1334,9 @@ export function contextPaths(slug: string): { dir: string; htmlFile: string } {
  */
 function requireUrl(ctx: StepContext): string {
   if (!ctx.url) {
-    throw stageFailure(
-      "ours",
-      `No source URL for "${ctx.slug}". Its meta.json has none, and none was given.`,
-    );
+    throw stageFailure("ours", {
+      generic: `No source URL for "${ctx.slug}". Its meta.json has none, and none was given.`,
+    });
   }
   return ctx.url;
 }
@@ -1502,7 +1501,7 @@ async function acquireUpload(
     /* `ours`: the bytes may well be sitting in Storage perfectly intact, and
        there is nothing the reader can do about our having lost the note saying
        they are theirs. */
-    throw stageFailure("ours", `No record of upload ${upload.id}.`);
+    throw stageFailure("ours", { generic: `No record of upload ${upload.id}.` });
   }
 
   /* **Awaited, not fired and forgotten.** The first version was `void
@@ -1776,7 +1775,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          anything else is a split brain by construction. */
       const manifest = await store.read(ctx.slug, "fetch", "raw");
       if (manifest === null) {
-        throw stageFailure("ours", `No fetched document for "${ctx.slug}" — run the fetch step first.`);
+        throw stageFailure("ours", {
+          generic: `No fetched document for "${ctx.slug}" — run the fetch step first.`,
+        });
       }
       let bytes: Uint8Array;
       try {
@@ -1985,10 +1986,21 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
       if (extracted === null) {
         /* `ours`, not `blocked`: nobody refused us anything, we simply cannot
-           find the document stage 2 was supposed to leave. A Retry that re-ran
-           `extract` would fix it, which is exactly what this sentence tells the
-           reader to do. */
-        throw stageFailure("ours", `No extracted HTML for "${ctx.slug}" — run the extract step first.`);
+           find the document stage 2 was supposed to leave.
+
+           **The reader never sees this sentence**, and the last clause of this
+           comment said they did — written 2026-08-31, before the seam split
+           gave a step two audiences (src/job-failure.ts § Two strings, not
+           one). "Run the extract step first" is addressed to whoever is running
+           steps by hand, so `{ generic }`: the reader gets `stepGaveUp`'s
+           `ours` copy. What that copy withholds is the Retry button, which sits
+           oddly beside the claim this comment used to make — that re-running
+           `extract` would fix it. If that claim is right the *kind* is wrong,
+           and that is a question about the button rather than about the
+           sentence, so it is left as it stands rather than changed in passing. */
+        throw stageFailure("ours", {
+          generic: `No extracted HTML for "${ctx.slug}" — run the extract step first.`,
+        });
       }
 
       let run: BlocksRun;
@@ -2155,7 +2167,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          produced. */
       const file = await store.read(ctx.slug, "blocks", "blocks");
       if (!file?.blocks) {
-        throw stageFailure("ours", `No blocks for "${ctx.slug}" — run the blocks step first.`);
+        throw stageFailure("ours", {
+          generic: `No blocks for "${ctx.slug}" — run the blocks step first.`,
+        });
       }
       const run = await generateHierarchy({
         blocks: file.blocks,
@@ -2304,7 +2318,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!file?.blocks) {
         /* `ours` rather than a fetch failure: nothing was refused, we simply
            cannot find the blocks this step is defined against. */
-        throw stageFailure("ours", `No blocks for "${ctx.slug}" — run the hierarchy step first.`);
+        throw stageFailure("ours", {
+          generic: `No blocks for "${ctx.slug}" — run the hierarchy step first.`,
+        });
       }
       const run = await collectAssets({
         blocks: file.blocks,
