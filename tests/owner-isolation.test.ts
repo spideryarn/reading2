@@ -531,9 +531,34 @@ describe("the one query that lists articles for nobody in particular", () => {
    * the query.
    */
   const LISTING = { file: "src/store/public-library.ts", fn: "publicLibraryQuery" };
+  /**
+   * **Named sites, not a count** — and the difference was found by the guard
+   * itself, on a merge, the day it was written.
+   *
+   * The first version asserted each permitted file named the table *exactly
+   * once*. That went red when `src/store/public-reader.ts` grew a second,
+   * entirely legitimate reference: `publicCommentsQuery` joins back to
+   * `articles` precisely so that `publicSlug` is re-applied to a comments read
+   * (see the comment above it — "named columns, a join back to `articles`, and
+   * `publicSlug` repeated"). A count cannot tell that apart from a smuggled
+   * enumeration, so it called a correct query an offence.
+   *
+   * The count was standing in for the thing actually worth asserting, which is
+   * that **every site is one somebody named on purpose**. So each permitted file
+   * lists its functions, and a query appearing in a function not on this list
+   * fails — which still catches a second query added anywhere in the file, and
+   * still catches the existing one being moved into a helper nothing vouches
+   * for, without forbidding a file from holding two queries that are both fine.
+   *
+   * Adding a function here is the deliberate edit. That is the point: it is one
+   * line, and it cannot be done by accident, which is what the count was for.
+   */
   const PERMITTED = [
-    { file: "src/store/public-reader.ts", fn: "publicCurrentRevisionQuery" },
-    LISTING,
+    {
+      file: "src/store/public-reader.ts",
+      fns: ["publicCurrentRevisionQuery", "publicCommentsQuery"],
+    },
+    { file: LISTING.file, fns: [LISTING.fn] },
   ];
 
   /**
@@ -628,10 +653,18 @@ describe("the one query that lists articles for nobody in particular", () => {
        nothing vouches for. The enclosing function comes off the parse tree
        rather than a `function <name>[\s\S]*?\n}` slice, so a nested closure or a
        brace in a string cannot mislead it. */
-    for (const { file, fn } of PERMITTED) {
+    for (const { file, fns } of PERMITTED) {
       const uses = await usesOf(file);
-      expect(uses.length, `${file} should name the table exactly once`).toBe(1);
-      expect(uses[0]?.fn, `${file}'s query is outside ${fn}`).toBe(fn);
+      expect(uses.length, `${file} names the articles table nowhere`).toBeGreaterThan(0);
+      const stray = uses
+        .filter((u) => u.fn === undefined || !fns.includes(u.fn))
+        .map((u) => `line ${u.line} in ${u.fn ?? "no function"} (${u.how}) ${u.text}`);
+      expect(
+        stray,
+        `${file} names the articles table outside ${fns.join(" and ")} — ` +
+          "add the function to PERMITTED if the query is meant to be there, " +
+          "and say why beside it",
+      ).toEqual([]);
     }
   });
 
