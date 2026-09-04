@@ -19,50 +19,137 @@
  *   reports is a session that reported nothing, rather than an error or an
  *   absence.
  *
- * No database. `SPIDERYARN_STORE` is unset here, so the journal is the
- * filesystem adapter and the ledger is the disposable test JSONL — both
- * redirected at their own env vars into a temp directory, so this suite cannot
- * touch a developer's own files. `fetch` is stubbed, so nothing reaches OpenAI
- * and no key is needed.
+ * ## The journal moved to Postgres on 2026-09-04
+ *
+ * This file used to say *"No database. `SPIDERYARN_STORE` is unset here"*, and
+ * pointed `SPIDERYARN_REALTIME_JOURNAL` at a JSON file in a temp directory. So
+ * the sentence at the top of this header — *the ticket writes the row before the
+ * token goes out* — was being asserted about **a file nothing in production
+ * reads**, on the store that does not deploy
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § B).
+ * The flag is now pinned to `postgres` before any import, one article is seeded
+ * under this slug, and every read-back goes through `realtimeSessionStore` — the
+ * same object `src/routes.ts` holds.
+ *
+ * **What the move bought, and it is more than tidiness.** The Postgres `issue`
+ * resolves `article_slug` to an `article_id` and writes a row under a real
+ * `auth.users` owner; `find` filters on the owner *in the query*; `markConnected`
+ * and `close` are conditional `UPDATE`s with `is null` guards doing the
+ * earliest-wins and first-close-wins work that the filesystem adapter did in
+ * JavaScript over an object it had just read. Every one of those can now be
+ * wrong in a way a file could not be.
+ *
+ * **The ledger did not move, and that is deliberate rather than an oversight.**
+ * `selected()` in src/store/ai-calls.ts returns the *filesystem* ledger whenever
+ * `NODE_ENV === "test"`, whatever the flag says, because Postgres-mode route
+ * suites once wrote 4,714 fixture rows into the development ledger. So
+ * `SPIDERYARN_LEDGER` still redirects a disposable JSONL here, `fsCostStore` is
+ * still what `ledger()` reads, and the two-lines-collapse-to-one assertion below
+ * is unchanged and still true. Stage C of the plan above owns that redirect.
+ *
+ * ## The mutation, watched red on 2026-09-04
+ *
+ * `isNull(realtimeSessions.connectedAt)` deleted from `markConnected`'s `where`
+ * in src/store/realtime-sessions-pg.ts — the earliest-wins predicate, which is
+ * SQL the filesystem adapter has no counterpart for. *records the data channel
+ * opening, and keeps the first time* fails with the two timestamps 14ms apart.
+ *
+ * **What it does not cover.** One predicate of one statement. The owner
+ * condition beside it in the same `where` is **not** covered — nothing in this
+ * file is cross-owner, so deleting `eq(ownerId)` from `markConnected`, from
+ * `close` or from `find` leaves every case green, and the second bullet at the
+ * top of this header (*the session is looked up for the authenticated owner*) is
+ * therefore a claim this file states and does not test. `tests/owner-isolation.test.ts`
+ * greps this directory for the unsanctioned spelling, which is a different and
+ * weaker guarantee. Nor does it touch `close`'s `is null` first-close-wins
+ * guard, its `coalesce` backfill, or `issue`'s slug-to-`article_id` resolution.
+ *
+ * `fetch` is stubbed, so nothing reaches OpenAI and no key is needed.
  */
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement, and
+ * `src/store/index.ts` picks `realtimeSessionStore` at its own module load.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { and, count, eq } from "drizzle-orm";
 
 import type { AiCallRow } from "../src/ai-spend.js";
+import { closeDb, getDb } from "../src/db/client.js";
+import { realtimeSessions } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
 import { LIVE_MODEL, LIVE_TRANSCRIBER } from "../src/live.js";
 import { responseReport, transcriptionReport } from "../src/web/live/meter.js";
 import { handleApi } from "../src/routes.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { realtimeSessionStore, STORE } from "../src/store/index.js";
+import type { RealtimeSession } from "../src/store/contracts.js";
+import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+loadEnvLocal();
 
 const SLUG = "test-live-session-routes";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
 
-let scratch: string;
-const realKey = process.env.OPENAI_API_KEY;
-const realLedger = process.env.SPIDERYARN_LEDGER;
-const realJournal = process.env.SPIDERYARN_REALTIME_JOURNAL;
-
-beforeAll(async () => {
-  await rm(DIR, { recursive: true, force: true });
-  const { cp } = await import("node:fs/promises");
-  await cp(EXAMPLE, DIR, { recursive: true });
-  scratch = await mkdtemp(path.join(tmpdir(), "spideryarn-live-"));
-  process.env.SPIDERYARN_LEDGER = path.join(scratch, "ai-calls.jsonl");
-  process.env.SPIDERYARN_REALTIME_JOURNAL = path.join(scratch, "sessions.json");
+const { reachable } = await pgReady({
+  suite: "tests/live-session-routes.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.realtime_sessions"],
 });
 
+const when = reachable ? describe : describe.skip;
+
+let scratch: string;
+let article: ScratchArticle | undefined;
+const realKey = process.env.OPENAI_API_KEY;
+const realLedger = process.env.SPIDERYARN_LEDGER;
+
+beforeAll(async () => {
+  if (!reachable) return;
+  scratch = await mkdtemp(path.join(tmpdir(), "spideryarn-live-"));
+  process.env.SPIDERYARN_LEDGER = path.join(scratch, "ai-calls.jsonl");
+  /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
+     Postgres journal resolves `article_slug` through `ownedSlug` — an article
+     seeded as anybody else would leave `article_id` null on every row, which is
+     a legitimate state (`articleIdFor` never throws) and so would go unnoticed.
+     Seeded **before** the `fetch` stub below is installed: `scratchArticleInPg`
+     puts the raw document in the Supabase bucket over HTTP, and a stub that
+     catches model calls catches that too. */
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+}, 120_000);
+
 afterAll(async () => {
-  await rm(DIR, { recursive: true, force: true });
-  await rm(scratch, { recursive: true, force: true });
+  await article?.remove();
+  await closeDb();
+  if (scratch) await rm(scratch, { recursive: true, force: true });
   if (realLedger === undefined) delete process.env.SPIDERYARN_LEDGER;
   else process.env.SPIDERYARN_LEDGER = realLedger;
-  if (realJournal === undefined) delete process.env.SPIDERYARN_REALTIME_JOURNAL;
-  else process.env.SPIDERYARN_REALTIME_JOURNAL = realJournal;
+}, 60_000);
+
+describe("the store this journal is actually written to", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on the database being up, deliberately: a control that vanishes
+       when Postgres is missing vanishes exactly when it matters. A flag that
+       failed to take looks precisely like this suite working — the filesystem
+       journal answers every read below with the same fields. */
+    expect(STORE).toBe("postgres");
+  });
 });
 
 /** Whether OpenAI answers at all, so a test can drive the failure path. */
@@ -141,13 +228,30 @@ async function ticket(threadId: string): Promise<string> {
   return out.body.sessionId as string;
 }
 
-/** Every session in the journal, by id. */
-async function sessions(): Promise<Record<string, Record<string, unknown>>> {
-  try {
-    return JSON.parse(await readFile(process.env.SPIDERYARN_REALTIME_JOURNAL ?? "", "utf8"));
-  } catch {
-    return {};
-  }
+/**
+ * One session out of the journal, **through the store**.
+ *
+ * Not a read of `realtime_sessions` with drizzle, and not the JSON file this
+ * used to parse: `find` is what the three routes below call, and it carries the
+ * owner in the `where` rather than checking it afterwards. Reading the table
+ * directly would assert about rows nobody can reach.
+ */
+const session = (id: string): Promise<RealtimeSession | null> =>
+  realtimeSessionStore.find(id, TEST_OWNER);
+
+/**
+ * How many rows this article has journalled.
+ *
+ * A count is the wrong shape for most assertions here — this plan has three
+ * separate records of a length standing in for a list — but it is the right one
+ * for *nothing was written*, which is the only thing it is used for.
+ */
+async function journalled(): Promise<number> {
+  const rows = await getDb()
+    .select({ n: count() })
+    .from(realtimeSessions)
+    .where(and(eq(realtimeSessions.ownerId, TEST_OWNER), eq(realtimeSessions.articleSlug, SLUG)));
+  return rows[0]?.n ?? 0;
 }
 
 /** Every ledger row this suite has written. */
@@ -187,13 +291,13 @@ function turn(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 /* ------------------------------------------------------- the ticket -- */
 
-describe("the ticket writes the journal row before it releases the token", () => {
+when("the ticket writes the journal row before it releases the token", () => {
   it("hands back a session id, and there is a row behind it", () => {
     return (async () => {
       const id = await ticket("spya-laaaaa");
       expect(id).toMatch(/^[0-9a-f-]{36}$/);
-      const row = (await sessions())[id];
-      expect(row).toBeDefined();
+      const row = await session(id);
+      expect(row).not.toBeNull();
       /* **The model OpenAI created, not the one we asked for.** They agree only
          when the request was honoured, and the price is looked up by this
          string — a row naming a model the session was not on would be priced
@@ -214,7 +318,7 @@ describe("the ticket writes the journal row before it releases the token", () =>
        own, and this is the assertion that the two clocks were not confused. */
     return (async () => {
       const id = await ticket("spya-laaaab");
-      const row = (await sessions())[id];
+      const row = await session(id);
       const window = Date.parse(String(row?.acceptsUntil)) - Date.parse(String(row?.issuedAt));
       expect(window).toBe(20 * 60_000);
     })();
@@ -224,20 +328,37 @@ describe("the ticket writes the journal row before it releases the token", () =>
     /* **The order is the rule.** A usable token with no row behind it is spend
        nothing can ever see, so a failure here has to reach the reader as "the
        session could not start" rather than as a working conversation nobody can
-       account for. Provoked by breaking the journal path — a directory where a
-       file has to go — rather than by mocking the store, so the failure travels
-       the real path.
+       account for.
+
+       **How the failure is provoked changed with the store, and the substitute
+       is narrower than what it replaces.** It used to point
+       `SPIDERYARN_REALTIME_JOURNAL` at a *directory*, so the real filesystem
+       write really did fail — no mock anywhere, the failure travelling the whole
+       path. Postgres has no such env var and no equivalent trick that is not
+       either destructive (drop the table, in a database other cases are using)
+       or a lie (a bad `DATABASE_URL`, which would take the seed down with it).
+       So the store's own `issue` is made to reject instead.
+
+       What that costs, said out loud: this is now a test of the *caller's* order
+       rather than of an end-to-end failure. It cannot catch an `issue` that
+       fails silently — one that swallows its own error and returns — which is
+       exactly what the old shape would have caught. `tests/store-realtime-sessions.test.ts`
+       is where that half lives now, and it asserts the row is really there.
 
        The token is genuinely wasted when this happens, and that is the cheaper
        of the two outcomes. */
-    const good = process.env.SPIDERYARN_REALTIME_JOURNAL;
-    process.env.SPIDERYARN_REALTIME_JOURNAL = scratch; // a directory, not a file
+    const issue = vi
+      .spyOn(realtimeSessionStore, "issue")
+      .mockRejectedValue(new Error("the journal refused this row"));
     try {
       const out = await post(`/api/chat/${SLUG}/spya-laaaac/live`, {});
       expect(out.status).toBeGreaterThanOrEqual(500);
       expect(out.body).not.toHaveProperty("token");
+      /* And the refusal really was the journal's, rather than the route failing
+         earlier for a reason of its own and never reaching it. */
+      expect(issue).toHaveBeenCalledTimes(1);
     } finally {
-      process.env.SPIDERYARN_REALTIME_JOURNAL = good;
+      issue.mockRestore();
     }
   });
 
@@ -245,27 +366,27 @@ describe("the ticket writes the journal row before it releases the token", () =>
     /* The other order check: the session row must not exist for a conversation
        that could never have started. */
     mintFails = true;
-    const before = Object.keys(await sessions()).length;
+    const before = await journalled();
     const out = await post(`/api/chat/${SLUG}/spya-laaaad/live`, {});
     expect(out.status).toBeGreaterThanOrEqual(400);
-    expect(Object.keys(await sessions())).toHaveLength(before);
+    expect(await journalled()).toBe(before);
   });
 });
 
 /* ------------------------------------------------------- the events -- */
 
-describe("the acceptance endpoints", () => {
+when("the acceptance endpoints", () => {
   it("records the data channel opening, and keeps the first time", async () => {
     const id = await ticket("spya-lbaaaa");
     expect((await post(`/api/live/${id}/connected`, {})).status).toBe(200);
-    const first = (await sessions())[id]?.connectedAt;
+    const first = (await session(id))?.connectedAt;
     expect(first).toBeTruthy();
     /* Idempotent, and earliest-wins: a usage report backfills this too, in case
        the connected event was lost, and it arrives later by definition. An
        unconditional overwrite would replace the moment the channel opened with
        the moment somebody stopped talking. */
     await post(`/api/live/${id}/connected`, {});
-    expect((await sessions())[id]?.connectedAt).toBe(first);
+    expect((await session(id))?.connectedAt).toBe(first);
   });
 
   it("turns a usage report into a priced ledger row", async () => {
@@ -283,7 +404,7 @@ describe("the acceptance endpoints", () => {
     expect(row?.articleSlug).toBe(SLUG);
     /* And it counts as a connection, because the `connected` event is the one
        thing here that nothing retries. */
-    expect((await sessions())[id]?.connectedAt).toBeTruthy();
+    expect((await session(id))?.connectedAt).toBeTruthy();
   });
 
   it("does not write a second row when the same turn is reported twice", async () => {
@@ -328,7 +449,7 @@ describe("the acceptance endpoints", () => {
   it("records the close, with the browser's own word for why", async () => {
     const id = await ticket("spya-lbaaae");
     expect((await post(`/api/live/${id}/close`, { reason: "session_cap" })).status).toBe(200);
-    const row = (await sessions())[id];
+    const row = await session(id);
     expect(row?.closedAt).toBeTruthy();
     expect(row?.closeReason).toBe("session_cap");
     /* Closing is also evidence the channel opened — a session that reached its
@@ -340,11 +461,11 @@ describe("the acceptance endpoints", () => {
     const id = await ticket("spya-lbaaaf");
     const out = await post(`/api/live/${id}/close`, { reason: "x".repeat(200) });
     expect(out.status).toBe(400);
-    expect((await sessions())[id]?.closedAt).toBeNull();
+    expect((await session(id))?.closedAt).toBeNull();
   });
 });
 
-describe("what the browser actually posts, end to end", () => {
+when("what the browser actually posts, end to end", () => {
   /**
    * **The closest thing to a real session this box can run.** A raw provider
    * event goes through the client's own projection (src/web/live/meter.ts),
@@ -435,7 +556,7 @@ describe("what the browser actually posts, end to end", () => {
   });
 });
 
-describe("the gate", () => {
+when("the gate", () => {
   it("refuses all three to a request with no session", async () => {
     /* **They are under `/api/live/`, not `/api/public/`**, so they are behind
        `requireUser` like everything else — and this is the assertion that says
@@ -452,7 +573,7 @@ describe("the gate", () => {
 
 /* ------------------------------------- what this stage looks like alone -- */
 
-describe("deployed on its own, before the browser posts anything", () => {
+when("deployed on its own, before the browser posts anything", () => {
   it("shows an issued session that reported nothing, rather than an absence", async () => {
     /* **The whole point of Stage 2A.** Until the browser half lands, every
        session will look exactly like this — and that is the honest state rather
@@ -460,7 +581,7 @@ describe("deployed on its own, before the browser posts anything", () => {
        ledger that looked healthy while missing the most expensive thing the app
        does. docs/reusable/silent-success.md. */
     const id = await ticket("spya-lcaaaa");
-    expect((await sessions())[id]).toBeDefined();
+    expect(await session(id)).not.toBeNull();
     expect((await ledger()).filter((r) => r.realtimeSessionId === id)).toHaveLength(0);
   });
 });

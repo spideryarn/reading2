@@ -51,7 +51,7 @@
  * a mailto because there was nothing else honest for it to be.
  *
  * **Stripe went live on 2026-09-03 and sign-up is open to anyone**, so Greg had
- * both deleted: `BetaLine` here and `OpensShortly` under the plans (Plans.tsx)
+ * both deleted: `BetaLine` here and `OpensShortly` under the plans (PlanCards.tsx)
  * are gone, and the primary button now goes to the sign-in panel at the foot of
  * this page. The copy above it did not have to change, which was the point of
  * writing it as if we were already here.
@@ -69,7 +69,7 @@
  */
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { Plans } from "./Plans.js";
+import { WebsitePlans } from "./PlanCards.js";
 import { FEATURES_HREF, PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -300,10 +300,10 @@ export function LandingPage() {
         </section>
 
         {/* [tissue]; "reading is never gated" is Greg, 2026-09-02, and the
-            rule Plans.tsx states in full. */}
+            rule PlanCards.tsx states in full. */}
         <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
         <div className="site-reveal">
-          <Plans />
+          <WebsitePlans />
           {/* [tissue] The same three rows are on `/pricing`, which exists to be
               an address you can send somebody rather than a page with more on
               it. Same shape as the features link above. */}

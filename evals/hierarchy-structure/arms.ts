@@ -293,11 +293,30 @@ export const ARMS: readonly ArmSpec[] = [
     call: { model: QUICK_MODEL_OPENROUTER, effort: "high" },
     seed: "none",
   },
+  /**
+   * **The isolated-effort arm, which points the other way now.**
+   *
+   * It was `smart-low` until 2026-09-04, when production moved to `low`
+   * (src/hierarchy.ts § `EFFORT`) on the strength of eight blind judgements and
+   * this harness's own cost and latency figures. At that moment `smart-low`
+   * became a second copy of `incumbent` — the same recipe under two names,
+   * which is the shape `incumbent-repeat` already occupies deliberately and
+   * which nothing else should.
+   *
+   * So the arm keeps its job and changes its value: **the one variable is still
+   * effort, and the direction is now up.** If the flip was wrong, this is the
+   * arm that says so, and it asks the question with production as the control
+   * rather than as the challenger.
+   *
+   * Results filed before 2026-09-04 name `smart-low` and measured `low` against
+   * a `medium` incumbent; they are not one series with anything this arm
+   * produces, because the control moved.
+   */
   {
-    name: "smart-low",
+    name: "smart-medium",
     kind: "one-call",
     comparison: "isolated", // one variable: effort
-    call: { model: CAPABLE_MODEL_OPENROUTER, effort: "low" },
+    call: { model: CAPABLE_MODEL_OPENROUTER, effort: "medium" },
     seed: "none",
   },
   {

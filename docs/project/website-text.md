@@ -128,11 +128,36 @@ asked for an address you can send somebody who asks what it costs. Linked from t
 twice — under the plans table and in the footer — and reachable signed out, more obviously than the
 other two: a price you have to sign up to read is the thing people complain about.
 
-**It holds no numbers of its own.** It renders the same `Plans` component as the other two pages,
-and adds only the four things a table cannot say: that the price shown is the price charged with
-tax already in it, that a *monthly* allowance counts articles *added* and resets on the day you
+**It holds no numbers of its own.** It renders the same `PlanCards` component as the other two
+pages, and adds only the four things a table cannot say: that the price shown is the price charged
+with tax already in it, that a *monthly* allowance counts articles *added* and resets on the day you
 subscribed, that the free allowance is a lifetime one and so resets never, and that cancelling
 leaves you the month you paid for.
+
+**And since 2026-09-04 it is the page you buy on.** Greg: *"Right now, the only way to pay is from
+the /profile page, which is a bit buried and confusing."* So the Upgrade buttons moved out of
+`BillingSection` into `PlanCards`, which both pages render — the flow **moved**, it was not copied,
+and there is still one implementation of checkout in `useBilling.ts`. Three things make that work
+for a stranger, and none of them is the obvious one:
+
+- **The page carries its own sign-in panel**, the same `SignInControls` the landing page has. That
+  *is* the continuation mechanism: `SignInControls` remembers the current address immediately before
+  OAuth, so a reader who signs in here is sent back here, with no second OAuth path.
+- **The tier they pressed rides in its own expiring `sessionStorage` marker**
+  ([`src/web/buy-intent.ts`](../../src/web/buy-intent.ts)), never in the URL. `/pricing?buy=reader`
+  would have been an address that makes an authenticated browser open a Stripe Checkout Session and
+  leave our origin, which is not a thing a link should be able to do.
+- **The marker is consumed before the POST**, not when the checkout succeeds. That is what makes a
+  double mount, a real remount and Back-from-Stripe all safe;
+  [`tests/pricing-buy-intent.test.tsx`](../../tests/pricing-buy-intent.test.tsx) drives
+  `<StrictMode>` rather than trusting it, and against the obvious spelling it does not merely
+  double-post — it loops.
+
+**Buying starts here and lands on `/profile`**: Stripe's `successUrl` and `cancelUrl` both point
+there, because confirming a session and managing a subscription live there. So the sentence that
+said *"cancel … from the same page you subscribed on"* stopped being true the moment this shipped,
+and was fixed in the same change: cancelling happens in Stripe's hosted billing page, which only
+`/profile` can open.
 
 **The free paragraph deliberately stops short of "every article you have ever added."** That would
 be false: the ingest ledger started empty when billing launched and pre-launch articles were
@@ -150,8 +175,14 @@ one is told nothing and — the part that matters — causes no request. Greg, 2
 The words are `describePlan`'s, from [`src/billing-plan.ts`](../../src/billing-plan.ts) — the same
 function `/profile` renders, rather than a second wording of the same state, so the rule that a
 lapsed reader is never shown *"40 of 3 used"* comes along rather than needing to be remembered
-twice. It carries a link to `/profile` and no Upgrade button: Checkout is two hosted round trips and
-a return to land back on, and that flow already exists in one place.
+twice. It still carries a link to `/profile` labelled *Change plan*, and that is deliberate now that
+the buying is on this page: an invoice, a card and a cancellation are all Stripe's hosted Portal,
+which `/profile` is the only page able to open. Buying is the buttons above it; managing is the link.
+
+**One `useBilling()` on the page, and that was decided before it was built.** The signed-in half owns
+the hook and passes what it holds to both the buttons and this line. Two instances would be two
+`/api/billing/usage` reads and two independent busy and error states, which is how one half of a page
+comes to disagree with the other about whether a button is pressed.
 
 **It prints the headline, and the `detail` sentence in three states only.** Those are the states
 where the headline alone does not answer the question Greg asked: `lapsed`, whose *"Your plan has
@@ -179,11 +210,13 @@ not merely that no *billing* URL was asked, which would pass if the plan moved b
 And it drives the account switch by changing only the prop, with no `key` of its own, so a test that
 would go on passing after somebody deleted the key is not what is standing there.
 
-**And the second copy of the numbers has a guard.** The trade in `Plans.tsx` — copy rather than
+**And the second copy of the numbers has a guard.** The trade in `PlanCards.tsx` — copy rather than
 configuration, so a signed-out page needs no fetch — is still the right one, and it still means a
 quota raised with one `UPDATE` leaves the website saying the old number.
 [`tests/plans-match-tiers.test.ts`](../../tests/plans-match-tiers.test.ts) reads `billing_tiers` and
-fails when the table disagrees, naming the tier and the file. It reads the source rather than
+fails when the table disagrees, naming the tier and the file. Since 2026-09-04 it also checks the
+**tier ids**, because those are what a checkout POST carries and a wrong one draws no button at all
+rather than a broken one — a silent failure with nothing to report. It reads the source rather than
 rendering it, so it can miss a stale row but never invent one — the right way round for a check
 nobody watches. A public tiers endpoint was the obvious alternative and was passed over: it would
 undo the no-fetch trade, and put a spinner in front of the first thing a stranger wants to know.

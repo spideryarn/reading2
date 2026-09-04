@@ -16,7 +16,7 @@
  */
 import { type StdioOptions, execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { constants, homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -61,6 +61,13 @@ import {
 } from "./gjd-remote-tmux.js";
 import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
+import {
+  UPLOADS_DIR,
+  WRITE_EXISTS_STATUS,
+  remoteWriteScript,
+  stagingPath,
+  uploadDestination,
+} from "./gjd-remote-upload.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
 import {
   LOG_SCHEMA,
@@ -429,7 +436,8 @@ function lastWords(stderr: string): string {
 }
 
 /**
- * Put text on the box, in one round trip, and prove it arrived whole.
+ * Put a file's worth of bytes on the box, in one round trip, and prove they
+ * arrived whole.
  *
  * `scp` was the obvious choice and is the slow one: measured over an ALREADY
  * SHARED connection on 2026-08-31, an scp of a 3-byte file took 3.87s against
@@ -440,33 +448,48 @@ function lastWords(stderr: string): string {
  * file, no second protocol, and no quoting — the bytes never touch a command
  * line. Everything the file needs doing to it rides the same connection.
  *
- * The byte count is the part not to drop. `cat > f` exits 0 on a stdin that
- * ended early, so a connection that dies mid-write leaves a TRUNCATED job
- * script that still starts a session — which is the wrong-tree failure the
- * cdGuard below exists to prevent, arriving by another route. Comparing the
- * size on the box against the size we sent costs nothing, because it happens
- * inside the same remote command, and it turns a silent half-write into a
- * refusal. Writing to `.part` and renaming only on success means a failed write
- * never leaves a plausible-looking file at the real path.
+ * The staging, the byte count and the atomic publish are all in the one `sh`
+ * command that `remoteWriteScript` builds — the reasoning for each step is on
+ * that function, in scripts/gjd-remote-upload.ts, where it can be tested by
+ * running the real script against real directories rather than by reading it.
+ *
+ * `clobber: false` is the one thing a caller can be told about rather than
+ * killed over: it comes back as `"exists"`, so `upload` can offer `--force`.
+ * Every other failure still dies here, because for every other caller a write
+ * that did not happen is the end of the run.
  */
-function writeRemote(content: string, remotePath: string, opts: { exec?: boolean } = {}): void {
-  const bytes = Buffer.byteLength(content, "utf8");
-  const part = `${remotePath}.part`;
-  const cmd = [
-    `mkdir -p ${shq(path.posix.dirname(remotePath))}`,
-    `cat > ${shq(part)}`,
-    `[ "$(wc -c < ${shq(part)})" -eq ${bytes} ]`,
-    ...(opts.exec ? [`chmod +x ${shq(part)}`] : []),
-    `mv -f ${shq(part)} ${shq(remotePath)}`,
-  ].join(" && ");
+function writeRemote(
+  content: string | Buffer,
+  remotePath: string,
+  opts: { exec?: boolean; clobber?: boolean } = {},
+): "written" | "exists" {
+  // A Buffer goes through untouched. `upload` sends arbitrary files — a PNG, a
+  // PDF — and re-encoding one as UTF-8 replaces every byte that is not valid
+  // UTF-8 with U+FFFD, which arrives as a file of the right sort of size that
+  // no viewer will open. The byte count then agrees with itself, because both
+  // ends are counting the mangled bytes.
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8");
+  const bytes = buf.byteLength;
+  // Unpredictable, and unique to this invocation. See stagingPath.
+  const partId = randomUUID();
+  const part = stagingPath(remotePath, partId);
+  const cmd = remoteWriteScript({
+    dest: remotePath,
+    partId,
+    bytes,
+    exec: opts.exec === true,
+    clobber: opts.clobber !== false,
+  });
   const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), cmd], {
-    input: Buffer.from(content, "utf8"),
+    input: buf,
     encoding: "utf8",
   });
+  if (r.status === WRITE_EXISTS_STATUS && opts.clobber === false) return "exists";
   if (r.status !== 0) {
     spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `rm -f ${shq(part)}`], { stdio: "ignore" });
     die(`writing ${remotePath} failed (${r.status}): ${(r.stderr || "").trim() || `${bytes} bytes did not arrive intact`}`);
   }
+  return "written";
 }
 
 /** Copy one file to the box. Dies on failure — a silent scp is how you get a
@@ -4870,6 +4893,96 @@ function runBrowserSmoke(): { ok: boolean; detail: string } {
   return { ok: true, detail: last.replace(/^ok\s+/, "") };
 }
 
+
+// -------------------------------------------------------------- upload
+
+/**
+ * Copy one file from this machine into `uploads/` under the repo's checkout on
+ * the box.
+ *
+ * The point is that you do not have to know the box path. `gjd-remote upload
+ * shot.png` from anywhere inside a repo puts it where the agent working in that
+ * repo on the box will find it, resolved the same way every other per-repo
+ * command resolves it — by origin, asking the box which directory carries it.
+ *
+ * The two decisions that belong to this command rather than to the writer:
+ *
+ *  IDENTITY REQUIRED  "the repo you are in" IS the address, so a command that
+ *                     cannot say which repo has nowhere to put the file. Like
+ *                     `push-env`, a `--dir` must be verified as this repo's
+ *                     checkout — a file meant for one repo's agent landing in
+ *                     another repo's tree is the failure to design out, and an
+ *                     upload is as likely to be a credential dump as
+ *                     `.env.local` is.
+ *  NEVER CLOBBERS     an existing file at the destination is a refusal naming
+ *                     `--force`, not a silent overwrite. Two uploads a week
+ *                     apart called `screenshot.png` are the ordinary case, and
+ *                     the second one quietly winning is how the first goes
+ *                     missing without anybody being told.
+ *
+ * How the bytes get there, and why there is no second hash round trip, is
+ * `remoteWriteScript` in scripts/gjd-remote-upload.ts.
+ */
+type UploadOptions = {
+  repo?: string | undefined;
+  dir?: string | undefined;
+  force: boolean;
+};
+
+function cmdUpload(file: string | undefined, opts: UploadOptions): void {
+  if (file === undefined) die(`gjd-remote upload <file>  — a path to a file on this machine`);
+
+  // The local file is checked BEFORE the box is asked anything: a mistyped path
+  // should cost a sentence, not a round trip. `statSync` follows a symlink,
+  // which is the right answer here — the thing being uploaded is the bytes at
+  // the end of it, not the link — but it is said out loud below, because which
+  // file you actually sent is not a thing to find out later.
+  const local = path.resolve(file);
+  const st = statSync(local, { throwIfNoEntry: false });
+  if (!st) die(`no such file: ${local}`);
+  if (st.isDirectory()) die(`${local} is a directory, and this sends one file. Make an archive of it first.`);
+  if (!st.isFile()) die(`${local} is not a regular file.`);
+
+  const target = resolveTarget({ repo: opts.repo, dir: opts.dir, requireIdentity: true });
+  const d = uploadDestination(target.dir, local);
+  if (!d.ok) die(d.why);
+
+  const real = realpathSync(local);
+  if (real !== local) console.log(dim(`file: ${local} → ${real}`));
+
+  // Read before asking about the destination, so a file that cannot be read is
+  // a refusal with nothing created on the box.
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(local);
+  } catch (err) {
+    die(`could not read ${local}: ${(err as Error).message}`);
+  }
+
+  // `uploads/` itself is made by writeRemote's own `mkdir -p`. The checkout
+  // above it is never created here: resolveTarget proved it exists, either by
+  // asking the box which directory carries this origin or by verifying the
+  // --dir, so a missing one is already a refusal by this point.
+  //
+  // "Is it already there?" is not asked as a question of its own. Two round
+  // trips leave a gap that this box in particular will land in — a dozen agents
+  // work on it at once — and `ln` closes it in the kernel: it refuses if ANY
+  // name is at the destination, a dangling symlink included, so the answer and
+  // the write cannot disagree. GPT Sol's finding 3.
+  const wrote = writeRemote(bytes, d.dest, { clobber: opts.force });
+  if (wrote === "exists") {
+    // Not "nothing was sent": the whole file HAS been sent and staged by the
+    // time `ln` discovers the name is taken, and saying otherwise would be
+    // wrong about the only thing that matters here — what is on the box now.
+    die(
+      `${d.dest} already exists on the box, and was left exactly as it was.\n` +
+        `  --force to replace it, or rename the file here first.`,
+    );
+  }
+  console.log(green(`✓ uploaded ${d.name} — ${bytes.byteLength.toLocaleString()} bytes`));
+  console.log(dim(`  ${d.dest}`));
+}
+
 // ---------------------------------------------------------------- main
 
 const HELP = `${bold("gjd-remote")} — Claude Code sessions on a server that never sleeps
@@ -4959,6 +5072,14 @@ ${bold("THE BOX")}
                             asks no model. An ordinary push saves what it sent, and
                             what you left unticked, without being asked
           --yes             skip the final confirmation. --all on its own still asks
+  upload <file>           copy a file into ${dim(`${UPLOADS_DIR}/`)} under this repo's checkout on the box
+                          so you never have to know the box path: run it from
+                          anywhere in the repo and the agent working on that repo
+                          finds it in the same place. Refuses rather than
+                          replacing a file already there.
+      -d, --dir DIR         a box path, which must be this repo's checkout
+          --repo OWNER/NAME which repo, when you are not standing in it
+          --force           replace a file of that name that is already there
   ssh [command]           a throwaway connection — no tmux, dies with the terminal
                           with a command, runs it and prints what it said
                           ${dim("gjd-remote ssh 'free -g; uptime'")}
@@ -5146,6 +5267,11 @@ ${bold("EXAMPLES")}
       told it is already on the box under another name, rather than given a second
       copy; with --name you are asked whether you really want the second copy, and
       off a terminal that question cannot be asked, so it refuses
+  gjd-remote upload ~/Desktop/failing-page.png
+      ${dim("repo: spideryarn/reading2  (/Users/greg/dev/spideryarn/reading2)")}
+      ${dim(`box:  ${REMOTE_CODE}/spideryarn2`)}
+      ${dim("✓ uploaded failing-page.png — 184,220 bytes")}
+      ${dim(`  ${REMOTE_CODE}/spideryarn2/${UPLOADS_DIR}/failing-page.png`)}
   gjd-remote push-env
       ${dim(`gjd-remote push-env → greg@1.2.3.4:${REMOTE_CODE}/spideryarn2/.env.local`)}
       ${dim("  + OPENROUTER_API_KEY  added")}
@@ -5415,6 +5541,29 @@ async function main(): Promise<void> {
       });
     }
 
+    case "upload": {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: {
+          repo: { type: "string" },
+          dir: { type: "string", short: "d" },
+          force: { type: "boolean", default: false },
+        },
+      });
+      // One file, said rather than assumed. `gjd-remote upload a b` used to
+      // send `a` and drop `b` on the floor, which is the silent success this
+      // repo keeps being bitten by wearing a green tick.
+      if (positionals.length > 1) {
+        die(`gjd-remote upload takes one file; you gave ${positionals.length}. Nothing was sent.`);
+      }
+      return cmdUpload(positionals[0], {
+        repo: values.repo,
+        dir: values.dir,
+        force: values.force,
+      });
+    }
+
     case "clone": {
       const { values, positionals } = parseArgs({
         args: rest,
@@ -5509,7 +5658,7 @@ async function main(): Promise<void> {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "resolve", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`

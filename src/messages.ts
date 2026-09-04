@@ -3036,6 +3036,21 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
  * because a sentence telling somebody to do a thing without saying where is a
  * sentence that makes them hunt.
  *
+ * **Each sentence names the page its own link goes to, and they are not all the
+ * same page.** Both said *"the Upgrade button on your profile page"* until
+ * 2026-09-04, when the buying moved to `/pricing`; both then said *"the pricing
+ * page"*, and for `pay-lapsed` that was **false** — GPT Sol, reviewing stage 1
+ * of docs/plans/260904b-pricing-page-and-public-showcase.md. `hasLapsed`
+ * (src/store/pg-billing.ts) includes `unpaid` and `incomplete`, which
+ * `canCheckout` refuses, and `/pricing` draws no plan button at all to an
+ * account that may not check out — so an `unpaid` or `incomplete` account, sent
+ * there by that sentence, arrived at a page with prices and nothing to press.
+ *
+ * `QuotaNotice` (src/web/QuotaNotice.tsx) draws the link, and it picks the
+ * destination from the same code that picked the sentence, so the prose and the
+ * button under it cannot disagree about where the way out is. Change a
+ * destination there and change the sentence here, in the same edit.
+ *
  * A factory rather than a constant because the numbers have to be in it —
  * "you've reached your limit" without the limit leaves the reader unable to tell
  * whether it is the plan or a fault. Registered in `FROM_FACTORIES` in
@@ -3062,7 +3077,7 @@ export function ingestQuotaReached(quota: {
       message:
         `Your subscription has ended, so this account is back to the free allowance of ` +
         `${quota.limit} articles — and those are already spent. Trying again will not help; ` +
-        `resubscribing from the Upgrade button on your profile page is what adds more. ${kept} ` +
+        `resubscribing is what adds more, and your profile page is where that starts. ${kept} ` +
         "[pay-lapsed]",
     };
   }
@@ -3072,8 +3087,8 @@ export function ingestQuotaReached(quota: {
       kind: "blocked",
       message:
         `You have added all ${quota.limit} articles a free account can add. Trying again will not ` +
-        "help — the count will be the same. Adding more needs a subscription, and the Upgrade " +
-        `button on your profile page sets one up. ${kept} [pay-free]`,
+        "help — the count will be the same. Adding more needs a subscription, and the pricing " +
+        `page sets one up. ${kept} [pay-free]`,
     };
   }
 
@@ -3109,13 +3124,20 @@ export function ingestQuotaReached(quota: {
  * and `tests/billing-plan.test.ts` asserts the two agree, by building all three
  * messages and comparing their codes against this array.
  */
-export const QUOTA_CODES: readonly string[] = ["pay-free", "pay-limit", "pay-lapsed"];
+export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed";
+
+/* A union rather than three loose strings, so that a fourth refusal added above
+   makes every `switch` over this go red at compile time — `QuotaNotice` chooses
+   a *destination* per code, and a code with no destination must not be able to
+   fall through to a default that sends somebody to the wrong page. */
+export const QUOTA_CODES: readonly QuotaCode[] = ["pay-free", "pay-limit", "pay-lapsed"];
 
 /**
  * **Is this failure the quota refusing an ingest?**
  *
  * The one question `QuotaNotice` (src/web/QuotaNotice.tsx) asks before putting a
- * link to `/profile` beside a sentence.
+ * link beside a sentence. **Which** page that link goes to is
+ * `quotaRefusalCode`'s answer, below, and it is not the same for all three.
  *
  * Asked of the **message**, because that is all a client has where these are
  * read: `readJson` throws the server's own sentence and the code is the last
@@ -3129,9 +3151,29 @@ export const QUOTA_CODES: readonly string[] = ["pay-free", "pay-limit", "pay-lap
  * question with two spellings is one place for them to disagree.
  */
 export function isQuotaRefusal(message: string | null | undefined): boolean {
-  if (!message) return false;
+  return quotaRefusalCode(message) !== null;
+}
+
+/**
+ * **Which** quota refusal this is, or `null` for anything else.
+ *
+ * The same question as `isQuotaRefusal` and one answer further on, because the
+ * three refusals do not share a remedy: a free account can buy, a subscriber at
+ * their monthly limit has nothing to buy and is waiting for a date, and a lapsed
+ * one may or may not be able to start again. `QuotaNotice` sends each of them
+ * somewhere different, and the finding that made this necessary is in the
+ * comment on `ingestQuotaReached` above (GPT Sol, 2026-09-04).
+ *
+ * **Still the bracketed code, never the prose.** `find` rather than `includes`
+ * so the answer comes back as the union and a caller can `switch` on it
+ * exhaustively; `includes` would have handed back a `boolean` and left the
+ * caller to re-parse the string it had just classified.
+ */
+export function quotaRefusalCode(message: string | null | undefined): QuotaCode | null {
+  if (!message) return null;
   const code = codeOfMessage(message);
-  return code !== null && QUOTA_CODES.includes(code);
+  if (code === null) return null;
+  return QUOTA_CODES.find((known) => known === code) ?? null;
 }
 
 /**

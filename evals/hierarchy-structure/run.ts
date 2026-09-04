@@ -53,7 +53,8 @@ interface Article {
   manifestSha256: string | null;
 }
 
-interface ArmResult {
+/** Exported only so tests can build a fixture of this exact shape — run.ts owns writing it. */
+export interface ArmResult {
   arm: string;
   /** What kind of claim this arm's numbers can support — from arms.ts. */
   comparison: Comparison;
@@ -61,6 +62,28 @@ interface ArmResult {
   /** Which repeat this is (1-based) and where in the whole run's call order it sat. */
   run: number;
   callOrder: number;
+  /**
+   * **Wall clock for this one cell, start to finish**: the complete execution
+   * of this arm on this article — every model call plus parsing the answer,
+   * `buildTree`, `appendSupplement` and `assertTreeSound`. Measured with
+   * `performance.now()`, not `Date.now()`: a cell can run for minutes, and
+   * unlike `Date.now()`, `performance.now()` cannot be stepped backwards or
+   * forwards by a system clock adjustment mid-measurement. Present on a
+   * `threw` row too — a failed arm still consumed wall clock, and that is
+   * exactly the number a reader wants when weighing reliability against
+   * latency.
+   *
+   * **This is not summed `calls[].ms`, and must never be reconstructed as
+   * one.** The summed figure only ever measured model-call time — it misses
+   * parsing, `buildTree`, the gap between wave barriers, and final assembly —
+   * and for calls that ran in parallel (a `waves` arm's later waves) it
+   * double-counts concurrent seconds on top of that. See evals/README.md §
+   * hierarchy-structure. Optional because a run.json written before
+   * 2026-09-04 has no such measurement at all — a results file that predates
+   * this field should stay silent about it, not be backfilled with the
+   * approximation this field replaced.
+   */
+  elapsedMs?: number;
   /**
    * `"threw"` means the recipe spent its money and produced nothing — a
    * legitimate outcome at a measured ~1-in-5 per structure call, recorded
@@ -280,6 +303,11 @@ function print(r: ArmResult): void {
         `  paid anyway   ${r.calls.length} call(s), $${spent.toFixed(4)} — the wasted call stays on this arm's bill`,
       );
     }
+    if (r.elapsedMs !== undefined) {
+      console.log(
+        `  elapsed       ${(r.elapsedMs / 1000).toFixed(1)}s wall clock — this cell end to end, not the summed call time above`,
+      );
+    }
     return;
   }
   const s = r.score;
@@ -380,6 +408,12 @@ function print(r: ArmResult): void {
         `${sum((c) => c.inputTokens).toLocaleString()} in, ` +
         `${sum((c) => c.outputTokens).toLocaleString()} out ` +
         `(${sum((c) => c.reasoningTokens).toLocaleString()} reasoning)`,
+    );
+  }
+  if (r.elapsedMs !== undefined) {
+    console.log(
+      `  elapsed       ${(r.elapsedMs / 1000).toFixed(1)}s wall clock — this cell end to end` +
+        (r.calls?.length ? `, NOT the summed call time above (see evals/README.md § hierarchy-structure)` : ""),
     );
   }
   if (r.vsDisk) {
@@ -520,13 +554,18 @@ async function main(): Promise<void> {
   for (let run = 1; run <= repeat; run++) {
     for (const article of articles) {
       for (const arm of arms) {
+        /* The complete cell, timed around `treeFor` — see ArmResult.elapsedMs
+           for why `performance.now()` rather than `Date.now()`. */
+        const cellStartedAt = performance.now();
         const { tree, threw, ...chose } = await treeFor(arm, article);
+        const elapsedMs = Math.round(performance.now() - cellStartedAt);
         const shared = {
           arm: arm.name,
           comparison: arm.comparison,
           slug: article.slug,
           run,
           callOrder: ++callOrder,
+          elapsedMs,
           blocksSha256: {
             measured: article.measuredSha256,
             manifest: article.manifestSha256,

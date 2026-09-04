@@ -121,9 +121,16 @@ export function SettingsSection() {
                 Both states at once is reachable: a failed load leaves
                 `loadError` set, and the switch is still pressable by keyboard
                 or label. docs/reusable/silent-success.md. */}
+            {/* **Not `className="linky"`, which styled nothing here** — that
+                class is scoped to `.controls` / `.cmt-dialog` / `.chat-dialog`
+                and this page is in none of them, so both buttons in this
+                component were plain text in the middle of a sentence. The two
+                utilities are all that is left to say: the reset in tailwind.css
+                already gives a button its border, background, cursor and font.
+                2026-09-04. */}
             <button
               type="button"
-              className="linky"
+              className="tw:p-0 tw:underline tw:underline-offset-2 tw:disabled:no-underline tw:disabled:opacity-60"
               disabled={experimental.saving}
               onClick={experimental.reload}
             >
@@ -152,7 +159,7 @@ export function SettingsSection() {
             {experimentalOffline(experimental.on)}{" "}
             <button
               type="button"
-              className="linky"
+              className="tw:p-0 tw:underline tw:underline-offset-2 tw:disabled:no-underline tw:disabled:opacity-60"
               disabled={experimental.saving}
               onClick={experimental.reload}
             >
