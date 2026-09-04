@@ -242,6 +242,45 @@
    - `cursor: pointer` — Tailwind v4's own preflight dropped this (v3 had it),
      and shadcn does not set it either, so nothing in this app had it. Not on
      `:disabled`, where a pointer promises something that will not happen.
+   - `font-family: inherit` and `font-size: inherit` — **added 2026-09-04, and
+     they widen a fix that was deliberately scoped the day before.** A UA styles
+     `<button>` with its own `400 13.333px Arial`,
+     which beats inheritance, and `tw:text-sm` sets a size while leaving the
+     family alone — so every button that set no font of its own, shadcn's
+     `Button` included, was Arial on a Geist page. "Sign in with Google" on the
+     live landing page was, measured 2026-09-04.
+
+     **Not every button**, and the difference matters: forty-odd rules in
+     styles.css set their own `font: inherit`, and those were always right.
+     Greg saw the symptom on the Metadata page on 2026-09-03 — *"clean up their
+     display (some of them seem larger than others somehow?)"* — and the fix
+     that day was **deliberately scoped to that page**, on the grounds that
+     those forty-odd components had been laid out looking at the UA face
+     beneath them and a global reset changes all of them at once, in a tree
+     several agents share.
+
+     It goes global here anyway, and `base` is why that is safe: it sits below
+     `app` and `utilities`, so every one of those forty-odd rules and every
+     utility still wins. styles.css § metadata keeps the diagnosis and points
+     here.
+
+     **Two longhands and NOT `font: inherit`, which is what preflight uses and
+     is the wrong tool here.** The shorthand also sets `line-height`, and `body`
+     is 1.55 against a UA button's `normal` (~1.15) — so it would have made
+     every button that sets a `font-size` and nothing else about 5px taller.
+     There are five such rules (`.cmt-followup button`, `.annotate-ask`,
+     `.annotate-actions button`, `.quotes-count`, `.site-cta`), four of them on
+     signed-in surfaces that could not be reached from the box this was written
+     on. The longhands fix the two symptoms that were actually observed — the
+     wrong face, and the wrong *size* on a button carrying no type of its own,
+     which is what made the Metadata page's shut section headings draw half
+     again the size of their neighbours — and change nothing else. `font-weight`
+     is left alone for the same reason. Fable found the shorthand's line-height,
+     2026-09-04.
+
+     Buttons and **not** `input`/`select`/`textarea`, which preflight also
+     covers: theirs have not been checked and no bug has been seen in them.
+     Widen it when one is.
 
    `box-sizing: border-box`, the one part of preflight worth having globally,
    styles.css already sets on `*`.
@@ -270,6 +309,8 @@
   button[data-slot] {
     background-color: transparent;
     cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
   }
   button:disabled {
     cursor: default;
