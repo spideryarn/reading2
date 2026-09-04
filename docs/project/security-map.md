@@ -210,6 +210,18 @@ discoverability, not authority.
 > not through the two POSTs named above, so an audit that checks only those two would clear it
 > wrongly — which is the same shape of mistake as `useSketchCaption` above.
 
+**That was built later the same day, and this is where the boundary now is.** A visitor's picture is
+the Sketch, out of the payload (`PublicSketch`), and `useSketch` is mounted in exactly one component
+— `OwnerSketch` — which the visitor arm of `SketchAccess` never reaches, because that arm **has no
+slug in it**. `SketchView` was split into that owner half and a presentational `SketchBody` for this
+reason and no other: a `readOnly` prop would have left the auto-runner mounted for a stranger.
+`profileHash` is the field to notice not crossing — it is who the drawing was made for.
+
+The check that would fail if this were undone is
+`tests/public-network-trace.test.tsx`: handing every reader `{ kind: "owner", slug }` turns eleven
+of its tests red, and the failure output shows a visitor being offered *$0.20* and *Draw the
+argument*. Verified by doing it, 2026-09-04.
+
 
 ### The owner is shown the inventory before they publish
 

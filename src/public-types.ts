@@ -55,6 +55,7 @@
  */
 
 import type { Assets } from "./assets.js";
+import type { SketchScene } from "./sketch-scene.js";
 import type {
   Arc,
   Citation,
@@ -258,6 +259,7 @@ export interface PublicArtefactSet {
   quotes?: PublicQuotes;
   tweets?: PublicTweets;
   timeline?: PublicTimeline;
+  sketch?: PublicSketch;
 }
 
 /**
@@ -368,6 +370,42 @@ export interface PublicTweets {
 export interface PublicTimeline {
   /** In the order they are to be shown. **Never re-sorted by a reader.** */
   events: TimelineEvent[];
+}
+
+/**
+ * **The model's drawing of the argument, as a visitor gets it.**
+ *
+ * Since 2026-09-04 a shared link carries the Sketch the owner already paid to
+ * have drawn — and only that. Greg's decision, and the second half of it
+ * matters more than the first: *an already-drawn Sketch*. Nothing in a
+ * visitor's client can start one.
+ *
+ * **The scenes cross whole**, like `Idea[]` and `TimelineEvent[]` and unlike
+ * the glossary. A `SketchScene` is geometry and the model's own labels — boxes,
+ * regions, edges, coordinates, tones — plus `SketchNode.block`, which is a
+ * block id of the article the visitor is already reading and is what makes
+ * pressing a box jump the prose. There is nothing in the shape that is about a
+ * person, so a hand-copy would be a hundred lines of transcription with a typo
+ * in it and no extra safety. If a field about a reader is ever added to a
+ * scene, this comment is wrong and `tests/public-dto.test.ts` is what says so.
+ *
+ * **What does not cross**, and one of these is not like the others:
+ *
+ * - `version`, `generator`, `slug`, `sourceHash` — pipeline facts, as
+ *   everywhere else in this file.
+ * - **`profileHash`**, which is the interesting one. It is *who the picture was
+ *   drawn for*: a hash of the owner's reader profile. It says nothing legible
+ *   on its own, and that is not the point — it is a fact about a person rather
+ *   than about the article, and the same rule already keeps `Summaries` and
+ *   `Sketch` provenance off the wire. A visitor is looking at a drawing made
+ *   for somebody else, and does not get to know anything about them.
+ */
+export interface PublicSketch {
+  /** A name for the shape, not for the article. */
+  title: string;
+  caption: string;
+  /** `scenes[0]` is the overview; the rest are what a node's `opens` reaches. */
+  scenes: SketchScene[];
 }
 
 /**

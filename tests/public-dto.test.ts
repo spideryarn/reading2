@@ -61,6 +61,7 @@ const NO_ARTEFACTS = {
      no "nobody built one" state for them to be in. src/public-types.ts
      § PublicArticle.comments. */
   comments: [],
+  sketch: null,
 } as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
@@ -949,6 +950,7 @@ describe("the artefacts a shared link carries", () => {
     tweets: THREAD,
     timeline: TIMELINE,
     comments: [],
+    sketch: null,
   });
 
   /** Everything under one key, deeply, against the allowlist for that artefact. */
@@ -1267,6 +1269,7 @@ describe("the artefacts a shared link carries", () => {
       tweets: null,
       timeline: null,
       comments: [],
+      sketch: null,
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);

@@ -91,6 +91,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   quotes: "a set of quotes",
   tweets: "a tweet thread",
   timeline: "a timeline",
+  sketch: "a sketch",
 };
 
 /**
