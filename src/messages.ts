@@ -27,7 +27,7 @@
  */
 import type { Mode } from "./modes.js";
 import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
-import { MAX_UPLOAD_BYTES } from "./uploads.js";
+import { MAX_PAGES, MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
  * Which kind of failure this is, which decides what the reader should do.
@@ -295,6 +295,13 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
+  /* **The two refusals "Check the web" can give**, and the only `gl-` pair.
+     Neither is a model call and neither is a fault: one says the article never
+     quotes the term, the other that the glossary no longer fits the article.
+     `blocked` because both refuse again unchanged — see
+     `GLOSSARY_TERM_NOT_QUOTED` for why they carry codes at all. */
+  "gl-not-quoted": "blocked",
+  "gl-stale": "blocked",
   /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
      that is why there are four rather than one. The kind is what decides
      whether a Retry appears, and a single sentence would have had to either
@@ -1023,7 +1030,10 @@ export function pdfTooManyPages(pages: number, limit: number): ReaderFacingFailu
   return {
     kind: "blocked",
     message:
-      `This PDF has ${pages} pages, and this app reads at most ${limit} of them in one go. That ` +
+      /* **Not "reads at most 250 of them"**, which the reader can hear as a
+         promise to read the first 250 and stop — this refuses the document
+         whole, and nothing of it is read. GPT Sol, 2026-09-04. */
+      `This PDF has ${pages} pages, and this app takes documents of at most ${limit}. That ` +
       `is a limit on what reading a document is allowed to cost rather than a technical one, so ` +
       `the same file will be refused the same way — a shorter document, or the part of this one ` +
       `you actually want, will go through. [pdf-pages]`,
@@ -1230,6 +1240,84 @@ export const QUIZ_NOTHING_ANCHORED: ReaderFacingFailure = {
     "None of the questions written for this article could be tied back to a passage in it, so " +
     "there was nothing to check your answers against. Writing the questions again usually " +
     "works. [quiz-unanchored]",
+};
+
+/* -------------------------------------------------------------------- glossary -- */
+
+/**
+ * **The two ways "Check the web" cannot run**, and they are not the same fact.
+ *
+ * A lookup is [`explain`](explain.ts) with a different selection: it needs a
+ * passage of the article to anchor the question to, and it finds one by walking
+ * `entry.blocks` — the occurrences the glossary stage recorded. There are two
+ * ways that walk can come back empty, and until 2026-09-04 they shared one
+ * sentence, which **named the term and said it "does not appear in this
+ * article"**. A reader met that under a row headed with the term, beside the
+ * entry's own definition, and reported it as the app denying that the entry
+ * existed — which is exactly what it reads like:
+ *
+ * > it said that the phrase in the glossary when I was checking didn't exist
+ * > even though it clearly did, because there was a glossary entry for it and I
+ * > can see it right there on the page
+ * >
+ * > — a reader, 2026-09-04
+ *
+ * So: two sentences, two codes, and **neither of them names the term**. The
+ * failure is rendered inside the selected entry's own row
+ * ([`GlossaryPanel.tsx`](web/GlossaryPanel.tsx) § `Looked`), so the name is
+ * already on screen a line above — repeating it bought nothing and cost the
+ * reader their confidence in the list.
+ *
+ * **`blocked`, both of them**, which is the kind for *refused, and refused
+ * again unchanged*: nothing is broken, nothing is misconfigured, and there is a
+ * way through that is not pressing the same button. It changes no behaviour
+ * here — the Check-the-web button deliberately does not consult
+ * `worthRetrying`, for the reason set out in that function's docstring — so the
+ * kind is doing its other job, which is telling `kindOfMessage` what a stored
+ * sentence meant.
+ *
+ * **They carry codes, which docs/project/copy.md's *a refusal that is an answer
+ * gets no code* rule would not have given them.** The rule is right about
+ * `ARTICLE_IS_BUSY`, where a code would have invited a bug report about the
+ * system working. It is wrong here, and this bug is the proof: a reader did
+ * report it, was right to, and had to paraphrase the sentence — which left
+ * three candidate branches to tell apart from prose. Four characters would have
+ * ended that in a minute. A refusal a reader may reasonably question gets a
+ * code.
+ */
+export const GLOSSARY_TERM_NOT_QUOTED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This entry is here, but the article never puts these exact words on the page — it names the " +
+    "idea rather than quoting it — and a check on the web is anchored to a passage of the piece. " +
+    "There is no passage to anchor this one to, so pressing the button again will not help. " +
+    "[gl-not-quoted]",
+};
+
+/**
+ * **The glossary outlived the article it was written against.**
+ *
+ * A reachable state rather than a defensive one: a glossary is *carried* into
+ * every new revision (`glossary: "carry"`, [pg-revisions.ts](store/pg-revisions.ts)),
+ * so a re-extraction leaves the old list attached to new blocks. It is
+ * `GlossaryResponse.stale`, and the panel is already showing the banner that
+ * says so when this fires — **which is why the sentence points at that banner's
+ * *Find them again* rather than at *Start again* in the foot.** They are
+ * different operations, and the foot draws progress instead of its buttons while
+ * a job is in flight; the banner is the one that is certainly on screen at the
+ * moment this sentence arrives. ⟨Sol⟩
+ *
+ * **It does not say the passage has gone**, which an earlier draft did. Two
+ * shapes reach here — the block is missing, or the block is there and the words
+ * are not — and only one of them is a missing passage. The honest common ground
+ * is that the article no longer uses the term where the list says it does.
+ */
+export const GLOSSARY_OUT_OF_DATE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This list of terms was written for an earlier version of the article, and the article no " +
+    "longer uses this one where the list says it does. Checking it will not help until the terms " +
+    "are found again — the banner at the top of the panel has the button. [gl-stale]",
 };
 
 /* ---------------------------------------------------------- placing passages -- */
@@ -1508,10 +1596,13 @@ export const UPLOAD_MISSING: ReaderFacingFailure = {
  * limit. Splitting them is what lets the state machine record *why* an upload
  * was refused without either half inventing a number it does not have.
  *
- * **The limit is not in this sentence, and that is the cost of it being
- * static.** `MAX_PAGES` lives in src/pdf-read.ts, which pulls in pdf.js and
- * p-queue; this module is imported by the browser. `pdfTooManyPages` takes the
- * limit as an argument for exactly that reason.
+ * **The limit is in this sentence and the count is not, which is the cost of it
+ * being static.** Until 2026-09-04 neither was: `MAX_PAGES` lived in
+ * src/pdf-read.ts, which pulls in pdf.js and p-queue, and this module is
+ * imported by the browser. It is in src/uploads.ts now — beside
+ * `MAX_UPLOAD_BYTES`, which this module has always named — so the limit can be
+ * stated here. The *count* still cannot, because a static value cannot know it;
+ * that is why `pdfTooManyPages` takes both as arguments.
  *
  * `blocked` for the same reason as the ones above it: the file has the same
  * number of pages every time it is counted.
@@ -1547,10 +1638,10 @@ export const UPLOAD_MISSING: ReaderFacingFailure = {
 export const UPLOAD_TOO_MANY_PAGES: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "That PDF has more pages than this app reads in one go. That is a limit on what reading a " +
-    "document is allowed to cost rather than a technical one, so the same file will come back " +
-    "the same way — a shorter document, or the part of this one you actually want, will go " +
-    "through. [up-pages]",
+    `That PDF has more than the ${MAX_PAGES} pages this app takes in one document. That is a ` +
+    "limit on what reading a document is allowed to cost rather than a technical one, so the " +
+    "same file will come back the same way — a shorter document, or the part of this one you " +
+    "actually want, will go through. [up-pages]",
 };
 
 /**

@@ -158,7 +158,7 @@ than by slug.
 
 **A PDF too long to read is refused here, not three stages later.** Since 2026-09-04 the
 acquisition step counts the pages between verifying the checksum and promoting the bytes, and refuses
-over [`src/pdf-read.ts`](../../src/pdf-read.ts) § `MAX_PAGES` — so the bytes are never promoted to
+over [`src/uploads.ts`](../../src/uploads.ts) § `MAX_PAGES` — so the bytes are never promoted to
 their canonical name, the upload record ends `rejected` rather than `verified`, and the job card names the page count and the limit
 within seconds. The position is load-bearing: `verified` is terminal
 ([`src/source.ts`](../../src/source.ts)), so a refusal after it cannot record its own reason.
@@ -357,6 +357,17 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
   padding for exactly that reason**, because a title that promises more target than exists sends a
   near-miss through to the browser, which opens the PDF over the page. Measured before and after in
   [260903g](../plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md#stage-3-the-two-layout-jobs).
+- **Both caps are stated before the file is chosen** — *PDF, up to 50 MB and 250 pages* — from
+  `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), which builds the sentence out of
+  `MAX_UPLOAD_BYTES` and `MAX_PAGES`, so it cannot promise a limit that is not the one enforced. It
+  sits in the slot the chosen-file row takes, so it costs no height once a reader has acted on it.
+  The **page** cap is the reason this exists: a file manager shows you a size and never a page
+  count, so until 2026-09-04 the only way to discover it was to upload a book and be refused at the
+  end — Sentry `SPIDERYARN-READING2-V`, *"couldn't upload PDF"*, and
+  [the postmortem](../postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md)
+  is the other half of the same report. `MAX_PAGES` moved out of
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) to make it sayable: that module pulls in pdf.js, and
+  the browser cannot import it.
 
 ## The add page
 

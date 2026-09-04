@@ -37,8 +37,9 @@
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { readerFailureOf } from "../src/job-failure.js";
-import { MAX_PAGES, planChunks, runPdfExtract } from "../src/pdf-read.js";
+import { planChunks, runPdfExtract } from "../src/pdf-read.js";
 import { pass0 } from "../src/pdf.js";
+import { MAX_PAGES } from "../src/uploads.js";
 import { memoryCheckpoints } from "./helpers/memory-checkpoints.js";
 
 /** A real, minimal, valid PDF with the given number of blank pages. */

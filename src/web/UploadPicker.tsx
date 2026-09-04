@@ -48,11 +48,27 @@
 import { useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { type ChosenFile, formatBytes, uploadProblem } from "../uploads.js";
+import { type ChosenFile, formatBytes, uploadLimits, uploadProblem } from "../uploads.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { addUploadHref, navigate } from "./router.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
+
+/**
+ * The id tying the caps caption to the PDF button that `aria-describedby`
+ * points at.
+ *
+ * A module constant rather than a literal in two places: the whole mechanism is
+ * that the two strings are the same one, and the failure mode of a typo here is
+ * silent — the reference dangles, browsers ignore it, and nothing renders any
+ * differently. `tests/upload-caps-are-stated-before-the-file-is-chosen.test.tsx`
+ * asserts the association rather than trusting it.
+ *
+ * Fixed rather than generated because there is one add box on the page. If a
+ * second `UploadPicker` is ever mounted alongside the first, this becomes a
+ * duplicate id and wants `useId()`.
+ */
+const LIMITS_ID = "upload-limits";
 
 /** The three pieces this component draws and the caller places. */
 export interface UploadSlots {
@@ -181,6 +197,26 @@ export function UploadPicker({
   }
 
   /**
+   * Whether the caps are on screen — and therefore whether the PDF button may
+   * point at them.
+   *
+   * One expression rather than the same condition written in two places, so the
+   * `aria-describedby` below cannot outlive the element it names. A dangling
+   * reference is ignored by browsers rather than announced wrongly, but a
+   * screen reader that says *"PDF, up to 50 MB and 250 pages"* about a control
+   * whose caption has been replaced by a transfer's progress row is worse than
+   * one that says nothing.
+   *
+   * **`transfer`, not `busy`**: this asks *is there a transfer record*, not *is
+   * one running*. A `failed`, `cancelled` or finished transfer stays in the
+   * snapshot until it is forgotten, and its row keeps this slot — so the caps
+   * stay down while it does. That is the one-slot layout working as intended,
+   * and it is stated here because the predicate does not say it. GPT Sol,
+   * 2026-09-04.
+   */
+  const limitsShown = !chosen && !transfer;
+
+  /**
    * Hand it to the engine, and go to the page that owns the ingest.
    *
    * **The navigation happens with zero bytes sent**, which is the point of the
@@ -243,6 +279,11 @@ export function UploadPicker({
            advertising that dropping works at all, so they move to the title of
            the control that replaced it rather than disappearing. */
         title="Choose a PDF — or drop one anywhere on this box"
+        /* **The caps, for somebody who cannot see the caption.** The line under
+           this row states them; this is what makes a screen reader read it out
+           as part of the control rather than as a stray paragraph after it.
+           Only while that line is actually on screen — see `limitsShown`. */
+        aria-describedby={limitsShown ? LIMITS_ID : undefined}
         onClick={() => input.current?.click()}
       >
         <Upload size={14} /> PDF
@@ -271,6 +312,39 @@ export function UploadPicker({
         message={problem ?? failureOf(transfer)}
         className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive"
       />
+
+      {/* **What we will take, before anybody has chosen anything.**
+          `uploadLimits()` (src/uploads.ts) names the size cap and the page cap
+          from the constants that enforce them, so this cannot promise a limit
+          that is not the real one.
+
+          It exists because of Sentry `SPIDERYARN-READING2-V`, *"couldn't upload
+          PDF"*: a 142-page paper against what was then a 100-page cap. The cap
+          has moved and the refusal now names both numbers
+          (docs/postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md),
+          but a **page** cap is not a thing anybody can check before uploading —
+          a file manager shows you a size and not a page count — so the only way
+          to discover it was to send a book and be turned away at the end of it.
+
+          **In the slot the chosen-file row will occupy**, not above it: the two
+          are mutually exclusive, so stating the limits costs no height once a
+          reader has acted on them, which is what makes it affordable in a box
+          Greg had just asked to be made shorter (AddArticle.tsx). Muted and
+          12px, because it is a caption on a control and not an instruction.
+
+          Not repeated on `/add/upload/<id>`: by then the file is chosen and the
+          refusals, which name the numbers themselves, are what is useful.
+
+          **It stays up under a refusal**, including the size refusal, which
+          names the same 50 MB one line above it. A caption on a control is not
+          an event and should not vanish when one happens — and the reader who
+          has just been told *that doesn't look like a PDF* is the one about to
+          choose again. The repetition is the price and it is small. */}
+      {limitsShown && (
+        <p id={LIMITS_ID} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+          {uploadLimits()}
+        </p>
+      )}
 
       {/* One row, whichever of the two it is describing. A chosen file and a
           transfer cannot both exist — committing clears the first — so this is

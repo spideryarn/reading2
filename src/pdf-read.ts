@@ -83,6 +83,7 @@ import {
 } from "./pdf.js";
 import { type Check, check, report } from "./pdf-score.js";
 import type { Meta } from "./types.js";
+import { MAX_PAGES } from "./uploads.js";
 import { ProviderRefused, openRouterJson } from "./ai-call.js";
 
 /**
@@ -99,29 +100,15 @@ import { ProviderRefused, openRouterJson } from "./ai-call.js";
  */
 export const PROMPT_VERSION = "pdf-v2";
 
-/**
- * A cost cap, not a capability one: roughly a dollar per hundred pages of
- * transcription.
- *
- * **250 since 2026-09-04, up from 100.** Greg's call, and the document that
- * prompted it is the argument: a 142-page journal paper is exactly what this
- * app is for, and it was refused. Two things had to be true before the number
- * could move, and both are:
- *
- * - **A retry keeps the article**, so the per-chunk checkpoints a first attempt
- *   paid for are reachable by a second (`slugForRetry` in src/jobs.ts). Without
- *   that, raising the cap makes a long PDF fail *for ever* rather than fail
- *   once — every attempt starting from zero and re-buying every chunk.
- * - **`CHUNK_CONCURRENCY` is wide enough that 250 pages of ordinary prose fit
- *   the deadline**; see the arithmetic there, which is now written against this
- *   number — and note that it does *not* claim the pathological case fits.
- *
- * **Where it is enforced is not where it is spent.** Stage 1 counts the pages
- * and refuses before the document is stored (src/pipeline.ts), so the reader
- * hears it in seconds. `pass0`'s guard stays as the backstop, for an article
- * ingested before that or re-extracted after this number moves again.
- */
-export const MAX_PAGES = 250;
+/* `MAX_PAGES` — the cost cap on how long a document may be — is imported from
+   src/uploads.ts, where it lives beside `MAX_UPLOAD_BYTES`, the other half of
+   the same policy. It was declared here until 2026-09-04, and this module pulls
+   in pdf.js and p-queue, so the browser could not import it: the add box could
+   not say *up to 250 pages* until a reader had uploaded a book and been turned
+   away. Why 250 is safe against the step deadline is the arithmetic under
+   `CHUNK_CONCURRENCY` below; why it is 250 at all is the docblock over the
+   declaration. `pass0`'s guard is the backstop — stage 1 refuses first, in
+   src/pipeline.ts § `refuseAnOverlongPdf`. */
 
 /** No chunk larger than this, however sparse its pages. Long calls drift into summarising. */
 const MAX_CHUNK_PAGES = 6;
