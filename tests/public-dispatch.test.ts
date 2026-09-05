@@ -117,7 +117,7 @@ describe("the authenticated dispatcher's one parameter", () => {
    */
   it("will not accept a hand-built user, and the typecheck says so", () => {
     const impostor: AuthedUser = {
-      id: "00000000-0000-4000-8000-0000000000ed" as AuthedUser["id"],
+      id: "d15a0001-0000-4000-8000-000000000001" as AuthedUser["id"],
       email: "someone@example.test",
     };
     // @ts-expect-error an AuthedUser is not a VerifiedUser — that is the brand
@@ -146,7 +146,7 @@ describe("the authenticated dispatcher's one parameter", () => {
   });
 
   it("refuses an object that merely looks like a user", async () => {
-    const impostor = { id: "00000000-0000-4000-8000-0000000000ed", email: "x@example.test" };
+    const impostor = { id: "d15a0001-0000-4000-8000-000000000001", email: "x@example.test" };
     await expect(
       runInRequest(() => serveAuthenticatedApi(impostor as never, envelope("/api/library"))),
     ).rejects.toThrow(/did not come from requireUser/);

@@ -71,6 +71,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SHARED_WITH_YOU } from "../src/messages.js";
 import type { Article } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
@@ -2229,10 +2230,15 @@ describe("when the reader's own session cannot be confirmed", () => {
        **The wording changed on 2026-09-04**: it was *"Somebody shared this
        article with you"*, which stopped being true the day a public article
        could be found through the public listing rather than through a link
-       somebody sent. What is asserted now is the clause that survives either
-       way — the article is public — rather than a phrase about how the reader
-       got here. src/messages.ts § SHARED_WITH_YOU. */
-    expect(host.textContent).toContain("This article was shared publicly");
+       somebody sent. src/messages.ts § SHARED_WITH_YOU.
+
+       **Asserted as the constant, not as a surviving phrase of it.** This held
+       the fragment "shared this article with you", which was a substring of the
+       old sentence and is a substring of nothing now — so it went red on `dev`,
+       and a grep for the whole old sentence could never have found it. A
+       fragment of a shared constant is an assertion that goes red for a
+       rewording and green for a rename, which is backwards. */
+    expect(host.textContent).toContain(SHARED_WITH_YOU);
     /* The two halves of C3: the fact, and the one action that gets the reader
        off this footing. Neither may depend on which view they wandered to. */
     expect(host.textContent).toContain("couldn't confirm that you're signed in");

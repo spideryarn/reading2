@@ -127,6 +127,38 @@ export interface Declaration {
 
 export const DECLARATIONS: readonly Declaration[] = [
   {
+    /* **The concurrency probe behind `CHUNK_CONCURRENCY` 100 and `WidthGate`**,
+       2026-09-04. Fires N transcription requests at once and reports the raw
+       status, timing and dispatch spread of every one.
+
+       **The seam is wrong for it in the strongest sense available: the seam is
+       the thing under test.** `openRouterJson` retries a 429, turns a status
+       into a `ProviderRefused`, and imposes one `provider` policy per job — so
+       routing this through it would measure our retry logic rather than the
+       upstream's tolerance, and the question was precisely *at what width does
+       the upstream start refusing*. The answer on the day was "not at 400", and
+       it is a fact about this account's tier at the provider rather than about
+       the model, so it can change without anyone telling us. That is why the
+       script is kept rather than thrown away, and why this entry exists rather
+       than the script being deleted after one use.
+
+       `metered: false` and it should stay that way: the run is manual,
+       occasional, and its cost is reported by the script itself from the
+       `usage` block ($0.35 for the width-100 run). Writing `ai_calls` rows for a
+       deliberate load test would put probe traffic in the same table as real
+       readers' articles, which is the one thing `npm run cost` must not have to
+       explain away. */
+    id: "pdf-width-spike",
+    kind: "bypass",
+    since: "2026-09-04",
+    account: "openrouter",
+    file: "scripts/spike-pdf-width.ts",
+    job: "pdf",
+    wire: "chat",
+    metered: false,
+    why: "The seam is what is being measured. `openRouterJson` retries a 429, converts a status into a `ProviderRefused` and imposes one `provider` policy, and this script exists to find the width at which the upstream starts refusing — so routing it through the seam would measure our own retry logic instead of the provider's tolerance.",
+  },
+  {
     /* **The only `account: "anthropic"` entry in the table, and the only reason
        `ANTHROPIC_API_KEY` exists in this project at all.** Since 2026-08-31 that
        is pinned rather than merely true — `tests/no-undeclared-spend.test.ts`

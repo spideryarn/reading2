@@ -502,6 +502,26 @@ export const PROFILE_HREF = "/profile";
  */
 export const PRIVACY_HREF = "/privacy";
 /**
+ * **The takedown route, which is a section on that page rather than a page.**
+ *
+ * Spideryarn republishes the extracted text of somebody else's article, and
+ * since `/read/public` those articles are findable rather than merely
+ * reachable. The owner's tick-box is a promise they make, not a check we run, so
+ * the other half of the protection is a way for the wronged party to complain —
+ * docs/project/privacy.md § If something here is yours, and the argument for a
+ * section over a route is beside the section in PrivacyPage.tsx.
+ *
+ * **The id and the address are one constant**, deliberately: two string
+ * literals in two files is a link that lands at the top of a long policy and
+ * tells nobody it missed. `PrivacyPage` puts this on the section and scrolls it
+ * into view when the fragment names it, because `navigate` below scrolls to the
+ * top on every navigation and a client-rendered page has nothing for a browser
+ * to find on a cold load either. tests/takedown-privacy-section.test.tsx.
+ */
+export const TAKEDOWN_SECTION_ID = "if-something-here-is-yours";
+/** Where the two visitor surfaces send somebody who needs it. */
+export const TAKEDOWN_HREF = `${PRIVACY_HREF}#${TAKEDOWN_SECTION_ID}`;
+/**
  * The features page. Linked from the landing page, where the short list ends
  * with "everything it does, with pictures".
  */

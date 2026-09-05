@@ -177,12 +177,88 @@ export type Purchase<Tier = TierOffer> =
    * a button that reads *Upgrade* and lands on somebody else's page, where the
    * plan must be chosen again and confirmed, has told the reader the wrong thing
    * about what pressing it does.
+   *
+   * **`from` is here because the sentence beside the button is not one
+   * sentence.** A switch out of a free trial does something else entirely —
+   * `switchingPlan` has the three claims and why each of them is false for a
+   * trialling reader — and a page holding only the tiers would have no way to
+   * tell. Carrying it on the arm rather than deriving it from `plan` is the same
+   * rule as the rest of this union: the server knows the subscription's status
+   * and the browser does not.
    */
-  | { readonly kind: "switch"; readonly tiers: readonly [Tier, ...Tier[]] };
+  | {
+      readonly kind: "switch";
+      readonly tiers: readonly [Tier, ...Tier[]];
+      readonly from: SwitchFrom;
+    };
+
+/**
+ * **What the subscription being switched *away from* is**, because a switch does
+ * two different things and describes itself in two different sentences.
+ *
+ * Not a boolean: `trialing: false` on a `past_due` subscription would be a true
+ * statement that says nothing about what the reader is actually on, and the day
+ * a third case turns up — a paused subscription, say — a boolean has to be
+ * replaced rather than extended. `switchingPlan` switches on it exhaustively, so
+ * adding an arm makes the compiler ask for the words.
+ */
+export type SwitchFrom =
+  /**
+   * An ordinary paid period — `active`, or `past_due` and still being dunned.
+   * The Portal's `always_invoice` / `billing_cycle_anchor: "unchanged"` pair
+   * does what `switchingPlan` says it does.
+   */
+  | "paid"
+  /**
+   * A free **trial**. `trialing` is an entitled status (`ENTITLED_STATUSES`,
+   * src/billing/tiers.ts) and the Portal is configured `trial_update_behavior:
+   * "end_trial"`, so a switch from here ends the trial rather than adjusting a
+   * paid month.
+   */
+  | "trial";
 
 /** The tiers a `Purchase` is offering, or none — the list, without the door. */
 export function purchasableTiers<Tier>(purchase: Purchase<Tier>): readonly Tier[] {
   return purchase.kind === "checkout" || purchase.kind === "switch" ? purchase.tiers : [];
+}
+
+/**
+ * **Is this really a `Purchase`?** — asked of the body, because the type is a
+ * claim about a value nothing has checked.
+ *
+ * `readJson<BillingSummary>` is `JSON.parse(text) as T` and no more
+ * (src/web/lib/api.ts), so every guarantee above — the discriminant, and the
+ * non-empty tuple in particular — holds only as far as the server is the version
+ * this bundle was built against. During a deploy it is not: a browser holding
+ * yesterday's client gets today's `/api/billing/usage`, and the other way round
+ * for the minutes a rollback takes. A body carrying the `canCheckout`/`offers`
+ * pair this union replaced on 2026-09-04 has no `purchase` at all, and
+ * `summary.purchase.kind` on `undefined` throws inside a render — which takes
+ * the whole billing area down rather than showing the plan it did receive.
+ * GPT Sol, 2026-09-04.
+ *
+ * **A guard, not a schema library.** It checks exactly what the type promises
+ * and the wire cannot keep: that the discriminant is one of the four, that the
+ * two arms carrying tiers carry at least one, and that a `switch` says which
+ * kind it is. The tiers themselves are not walked — a card missing its `amounts`
+ * renders badly, and rendering badly is not the failure this exists for.
+ *
+ * `from` is in the list rather than defaulted because defaulting it is the bug:
+ * a `switch` arriving without one from a server that predates it would be shown
+ * the paid sentence, which is the false-copy defect this same review found. A
+ * plan card with a line saying it may be out of date is the better failure.
+ *
+ * The caller throws on `false`, so an unrecognised body lands in the billing
+ * read's existing error path: the plan already on screen stays, with a line
+ * saying it may be out of date (src/web/useBilling.ts).
+ */
+export function isPurchase(value: unknown): value is Purchase {
+  if (typeof value !== "object" || value === null) return false;
+  const { kind, tiers, from } = value as { kind?: unknown; tiers?: unknown; from?: unknown };
+  if (kind === "none" || kind === "top") return true;
+  if (kind !== "checkout" && kind !== "switch") return false;
+  if (!Array.isArray(tiers) || tiers.length === 0) return false;
+  return kind === "checkout" || from === "paid" || from === "trial";
 }
 
 /** The whole of `GET /api/billing/usage`. */
@@ -384,13 +460,70 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
  * would have been false. Upgrading on day 27 of 30 takes a Reader to 33, not to
  * 150.
  *
- * One string, shared by `/pricing` and `/profile`, because two tellings of one
+ * One function, shared by `/pricing` and `/profile`, because two tellings of one
  * mechanism is how two pages come to describe it differently.
+ *
+ * ## Every one of those three clauses is false out of a trial
+ *
+ * GPT Sol, 2026-09-04, reviewing this file. `trialing` is an entitled status
+ * (`ENTITLED_STATUSES`, src/billing/tiers.ts), so a trialling reader reaches the
+ * `switch` arm — and the Portal is configured `trial_update_behavior:
+ * "end_trial"`, which means the press does not adjust a paid month at all:
+ *
+ * - **"invoices the difference"** — there is no difference to invoice. Nothing
+ *   has been paid, so the trial ends and the new plan is billed in full.
+ * - **"your renewal date does not move"** — the trial period ends at the moment
+ *   of the switch instead of at the trial's end, so the current period does
+ *   move. `billing_cycle_anchor: "unchanged"` governs the *price* change; it does
+ *   not keep a trial running.
+ * - **"added for the part of the month that is left"** — precisely backwards.
+ *   Because the incoming period start is no longer the stored one,
+ *   `nextQuotaAdjustment` (src/billing/quota-adjustment.ts) takes its
+ *   *"a different period is not a plan change"* branch and writes **no** delta,
+ *   so the reader gets the whole of the new allowance. Pinned by
+ *   tests/billing-quota-adjustment.test.ts so the sentence below cannot quietly
+ *   stop being true.
+ *
+ * **We do not sell trials** — nothing in scripts/stripe-setup.ts and nothing in
+ * the Checkout Session creates one — so this is a state that should not occur
+ * and is not prevented. Two ways to make it honest, and the one not taken:
+ *
+ * - *Refuse the `switch` arm to a trialling reader* and leave them the Portal.
+ *   It removes a capability from a state we did not intend to create, on the
+ *   strength of copy rather than of anything about the account: the switch
+ *   itself is fine, it is the sentence that was wrong. It would also leave the
+ *   reader with the Portal's own switch menu and no warning at all, which is
+ *   worse than the wrong warning it replaced.
+ * - **Say what actually happens**, which is this. The words below are only the
+ *   claims that hold whatever Stripe does with the anchor, and the trial arm
+ *   ends by pointing at the confirmation screen — where the amount and the dates
+ *   are shown by somebody who knows them exactly. Greg's call, 2026-09-04.
  */
-export const SWITCHING_PLAN =
-  "Changing plan happens on Stripe's own billing page: this opens it, and you choose the plan " +
-  "and confirm it there. Stripe invoices the difference straight away, your renewal date does " +
-  "not move, and the larger allowance is added for the part of the month that is left.";
+export function switchingPlan(from: SwitchFrom): string {
+  const opens =
+    "Changing plan happens on Stripe's own billing page: this opens it, and you choose the " +
+    "plan and confirm it there. ";
+  switch (from) {
+    case "paid":
+      return (
+        opens +
+        "Stripe invoices the difference straight away, your renewal date does not move, and " +
+        "the larger allowance is added for the part of the month that is left."
+      );
+    case "trial":
+      /* **Only claims that survive whatever Stripe does with the anchor.** The
+         trial ending, the full invoice and the un-prorated allowance all follow
+         from `end_trial` and from the period start moving; the exact new dates
+         do not, and are Stripe's to show rather than ours to promise. */
+      return (
+        opens +
+        "Switching ends your free trial: Stripe bills you for the new plan straight away " +
+        "rather than invoicing a difference, your billing period restarts from that moment, " +
+        "and you get the whole of the new allowance rather than a part-month share. Stripe " +
+        "shows the amount and the dates before you confirm."
+      );
+  }
+}
 
 /**
  * There is nothing above them to move to — the sentence that stops the top tier

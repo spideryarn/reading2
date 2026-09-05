@@ -4037,6 +4037,29 @@ export const billingAccounts = spideryarn.table(
       "billing_accounts_subscription_needs_customer",
       sql`${t.stripeSubscriptionId} is null or ${t.stripeCustomerId} is not null`,
     ),
+    /* **And the four columns a subscription writes belong to one.** They are
+       written in a single `UPDATE` by `syncSubscriptionFromStripe`
+       (../billing/sync.ts), all of them on every sync and all of them to null
+       together, so any of them set without an id is a row nothing in this
+       codebase can have produced.
+
+       It is here because that row was **schema-valid and it spent money**.
+       `status = 'active'` with a known price and a readable period made
+       `entitlementFromRow` answer *paying Reader* while every "do they already
+       have a subscription" test — which reads the id — said no, so `/profile`
+       offered a Reader the Reader plan and pressing it would have opened a
+       second, concurrently billed subscription. GPT Sol found it on 2026-09-04;
+       `subscriptionState` (../billing/tiers.ts) is the code half, which fails
+       closed for the same row, and this is the half that holds for every writer.
+
+       `num_nonnulls` rather than four disjunctions, the same idiom as
+       `billing_accounts_quota_delta_is_dated` below: it says the rule instead of
+       encoding it. `cancel_at_period_end` is not in the list — it is `not null`
+       with a default of false, so it has no "unset" to mean anything by. */
+    check(
+      "billing_accounts_subscription_fields_need_subscription",
+      sql`${t.stripeSubscriptionId} is not null or num_nonnulls(${t.status}, ${t.priceId}, ${t.currentPeriodStart}, ${t.currentPeriodEnd}) = 0`,
+    ),
     /* A delta without a period cannot be applied and a period without a delta
        says nothing, so one of the two alone is a bug rather than a state.
        `num_nonnulls` rather than a pair of disjunctions because it says the rule

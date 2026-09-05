@@ -79,13 +79,14 @@ import {
   PUBLIC_SHELF_TRUNCATED,
   publicShelfShared,
   publicShelfWords,
+  TAKEDOWN_LINK,
 } from "../messages.js";
 import type { PublicLibrary, PublicLibraryEntry } from "../public-library-types.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { loadPublicLibrary } from "./public-api.js";
 import { timeAgo } from "./relative-time.js";
-import { readHref } from "./router.js";
+import { readHref, TAKEDOWN_HREF } from "./router.js";
 import { SHELL, SiteNav } from "./SiteBits.js";
 import { useSlow } from "./useSlow.js";
 
@@ -200,6 +201,26 @@ export function PublicLibraryPage({
           {state.kind === "loaded" && state.shelf.truncated && (
             <p className="tw:mt-6 tw:text-sm tw:text-muted-foreground">{PUBLIC_SHELF_TRUNCATED}</p>
           )}
+
+          {/* **The way to complain about something on this page**, and it is
+              here rather than on a card.
+
+              This shelf is where a stranger *finds* a republished article, so it
+              is one of the two surfaces that has to carry it — the other is the
+              article's own details page (PublicPages.tsx). A link on every card
+              would read as a warning about each article, and almost every one of
+              them is shared perfectly legitimately.
+
+              **Outside the three state arms**, so it survives an empty shelf and
+              a failed read. It is about the page rather than about the list, and
+              the version that hangs off `entries.length > 0` is the one that
+              quietly loses it in exactly the case where somebody is still
+              looking at the address. src/messages.ts § TAKEDOWN_LINK. */}
+          <p className="tw:mt-10 tw:text-xs tw:text-ink-faint">
+            <Link href={TAKEDOWN_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
+              {TAKEDOWN_LINK}
+            </Link>
+          </p>
         </div>
       </main>
     </div>
@@ -224,11 +245,17 @@ export function PublicLibraryPage({
  * to be answerable from the card, and here the answer is when it was shared.
  */
 function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
-  /* Only the facts this article actually has — `gist`, `siteName` and `words`
-     are all nullable on the wire, and a filtered join beats a chain of `&&`s
+  /* Only the facts this article actually has — `byline`, `gist`, `siteName` and
+     `words` are all nullable on the wire, and a filtered join beats a chain of `&&`s
      that can leave a stranded separator. Same shape as `ShelfCard`'s. */
   const shared = entry.publicAt ? timeAgo(entry.publicAt, Date.now()) : undefined;
   const facts = [
+    /* **Who wrote it, before where it was published**, which is the order the
+       owner's own shelf card and the article's masthead both use — so a reader
+       who meets this page first and signs up later reads one convention rather
+       than two. It is the *article's* author: src/public-library-types.ts §
+       `byline`. */
+    entry.byline,
     entry.siteName,
     entry.words === null ? null : publicShelfWords(entry.words),
     shared ? publicShelfShared(shared) : null,

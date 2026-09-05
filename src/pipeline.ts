@@ -2101,6 +2101,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/hierarchy.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
           droppedHeadings: run.droppedHeadings,
+          /* **Rungs that restated their parent**, spliced away rather than
+             stored — two gist columns of identical extent is a duplicated cell
+             the reader sees, not a wasted column. Nothing about it moves a
+             block, so it is its own figure rather than a repair.
+             src/hierarchy.ts § `collapseRestatedRungs`. */
+          collapsedRungs: run.collapsedRungs,
           /* The third thing this stage forgives, and the only one with no trace
              in the product: a paragraph the model would not label twice running
              is a leaf with no row, which renders as nothing rather than as an

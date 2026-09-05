@@ -159,7 +159,7 @@ const PAID: BillingSummary = {
      the door to it is the hosted Portal. A fixture that said "nothing to buy"
      would be the state this page was stuck in before the gate became
      tier-aware. */
-  purchase: { kind: "switch", tiers: [RESEARCHER_OFFER] },
+  purchase: { kind: "switch", tiers: [RESEARCHER_OFFER], from: "paid" },
 };
 
 /**

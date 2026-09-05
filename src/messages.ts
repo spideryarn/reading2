@@ -2585,6 +2585,130 @@ export function publicShelfShared(when: string): string {
   return `Shared ${when}`;
 }
 
+/* ── The showcase, on the pages a stranger reads first ─────────────────────── */
+
+/**
+ * **The block on `/` and `/features` that sends a stranger to a real article** —
+ * src/web/PublicShowcase.tsx, and stage 4c of
+ * docs/plans/260904b-pricing-page-and-public-showcase.md.
+ *
+ * These three sentences are in this file rather than inline on the two pages,
+ * which is not what the marketing pages usually do (their copy carries a comment
+ * naming its source, docs/project/positioning.md § Whose words). The reason is
+ * that **two pages draw the same block**: a sentence written twice is two
+ * sentences that will differ by the second edit, and the drift both callers exist
+ * to avoid is exactly the drift `SHARING_ON` and its three dependants were pulled
+ * together to avoid. The provenance rule still applies and these are `[tissue]` —
+ * an agent's connecting words, approved as a class by Greg on 2026-09-04 for this
+ * plan, and the next dictation pass may replace them.
+ *
+ * **Every one of them has to be true when the block shows no articles at all**,
+ * which is the constraint that shaped them. The listing is fetched after the
+ * page draws and may fail, be empty, or be slow, and the heading and the sentence
+ * are already on screen by then. So neither says *here are three articles*, and
+ * neither claims anything about how many there are — the same rule the shelf's
+ * own copy follows above, for the same reason: say what the page holds, never
+ * how much of the world it holds.
+ *
+ * **All three lost a first draft to that rule**, which is why it is spelled out
+ * rather than assumed. GPT Sol's review of this stage, 2026-09-05:
+ *
+ * - The heading was *"See it on a real article."* — an invitation the block
+ *   cannot honour in exactly the states it is drawn in anyway, because a failed
+ *   read and an empty shelf both leave it standing over no article at all. A bare
+ *   plural naming what the shelf is made of is true in every state.
+ * - The link was *"All the shared articles →"*, and swapping *all* for *every*
+ *   is not a fix: both assert the shelf is the whole set, which the archived
+ *   filter, the readability bar and the row cap each falsify.
+ * - The lede opened by restating what sharing is, which was true but was also
+ *   the shelf's own first sentence written a second time.
+ */
+export const PUBLIC_SHOWCASE_HEADING = "Articles people have made public.";
+
+/**
+ * The sentence under it.
+ *
+ * **A fact about what a public article is, not about what is on the shelf right
+ * now.** It would be much better copy to say *"here are three people's
+ * articles"*, and it would be false for as long as the fetch is in the air and
+ * for ever if it fails.
+ *
+ * *"one"* is a category rather than a pointer into the list above it — *"one of
+ * these"* would be the pointer, and it is the version that stops being true the
+ * moment the list is empty.
+ *
+ * *"with no account"* rather than *"free"*, following `PUBLIC_SHELF_LEDE`: the
+ * fact worth stating is that there is nothing to press before reading, and *free*
+ * is a claim about price on a block that has nothing to do with the plans.
+ *
+ * It deliberately does **not** list what a public article carries — the outline,
+ * the glossary, the ideas, the quotes. Both pages already say that a few lines
+ * above (LandingPage.tsx's bento, FeaturesPage.tsx § the library), and a second
+ * copy here is a second inventory to keep in step with what a visitor actually
+ * gets, which is a list that has already grown once.
+ */
+export const PUBLIC_SHOWCASE_LEDE =
+  "Anybody can open one and read it, with no account and nothing to sign up for first.";
+
+/**
+ * The way to `/read/public` from the block — **and the only sentence that is
+ * drawn before the network is asked and survives it failing.**
+ *
+ * One constant rather than a line on each page, for the reason at the head of
+ * this section: the two callers must not come to call the same shelf two things.
+ * The arrow matches the two links already on those pages
+ * (*"Everything it does, with pictures →"*, *"Pricing, and what a month's
+ * allowance means →"*), so a third link in the same family does not read as a
+ * different kind of thing.
+ *
+ * **"Browse", because every quantifier is a claim this shelf cannot keep.** The
+ * first draft was *"All the shared articles →"*, and *all* and *every* are the
+ * same assertion: that what is behind the link is the whole set. It is not — the
+ * query drops an article that is archived, or whose revision has no readable
+ * blocks, or that falls past the row cap
+ * (src/store/public-library.ts § `publicLibraryQuery`) — so this is the claim
+ * `PUBLIC_SHELF_LEDE` above took two rewrites to stop making, arriving in a link
+ * label where nobody was looking for it. GPT Sol, 2026-09-05. A verb and a bare
+ * plural name the action and the page, which is all a link owes.
+ */
+export const PUBLIC_SHELF_BROWSE_LINK = "Browse shared articles →";
+
+/* ── If something here is yours ────────────────────────────────────────────── */
+
+/**
+ * **The link a person follows when a piece published here is theirs**, drawn on
+ * the two surfaces a stranger meets a republished article on: the foot of
+ * `/read/public`, and the visitor's own details page for one article
+ * (src/web/PublicLibraryPage.tsx, src/web/PublicPages.tsx). It goes to
+ * `TAKEDOWN_HREF` — a section on `/privacy` rather than a page of its own,
+ * argued in src/web/router.ts and again beside the section itself.
+ *
+ * **Written to somebody who does not have an account**, which is what makes it
+ * different from every other sentence in this file. "Yours" here means *you
+ * wrote it or you hold the rights to it* — not the owner's sense of "your
+ * articles", which is a reader's shelf. On the shelf page there is nothing else
+ * for the word to attach to; on the article page the sentence beside it settles
+ * it.
+ *
+ * **One sentence doing both jobs**, deliberately: it is the link text *and* the
+ * whole of the offer, so there is no lead-in prose to keep in step with it and
+ * no second wording to drift. Quiet rather than loud — a report link with a
+ * warning colour on every card would read as a warning about each article, and
+ * the piece it is next to is almost always shared perfectly legitimately.
+ */
+export const TAKEDOWN_LINK = "If something here is yours, ask us to take it down";
+
+/**
+ * The heading of the section at the other end of it, on `/privacy`.
+ *
+ * Here rather than inline in the page because two things need to agree on it —
+ * the page draws it, and tests/takedown-privacy-section.test.tsx checks that
+ * the anchor the link points at is the section that carries it. The rest of that
+ * page's prose is JSX, and stays JSX: it is a policy read top to bottom, not a
+ * set of strings other surfaces reuse (src/web/PrivacyPage.tsx § Prose in JSX).
+ */
+export const TAKEDOWN_HEADING = "If something here is yours";
+
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
 /** The switch, off. */

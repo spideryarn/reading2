@@ -59,7 +59,7 @@
 import { CalendarClock, CreditCard, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { SWITCHING_PLAN, describeAmounts, describePlan, noHigherPlan } from "../billing-plan.js";
+import { describeAmounts, describePlan, noHigherPlan, switchingPlan } from "../billing-plan.js";
 import type { TierOffer } from "../billing-plan.js";
 import { PlanCards, RECOMMENDED_TIER } from "./PlanCards.js";
 import type { PlanCard } from "./PlanCards.js";
@@ -226,7 +226,7 @@ export function BillingSection() {
               /* **The verb is the door.** A subscriber's press opens the hosted
                  Portal, where the plan is chosen again and confirmed, so
                  *Upgrade* would name something this button cannot do on its own
-                 — `SWITCHING_PLAN` under the cards says the rest of it. */
+                 — `switchingPlan` under the cards says the rest of it. */
               const verb = buying.kind === "switch" ? "Switch plan" : "Upgrade";
               return {
                 label: pressed ? "Opening Stripe…" : verb,
@@ -252,11 +252,13 @@ export function BillingSection() {
               none of the buying sentence is what happens to them: they are not
               being sold a subscription, no card is being taken, and the page
               they land on is the one this section already links to.
-              `SWITCHING_PLAN` (src/billing-plan.ts) is shared with `/pricing`,
-              so one mechanism is described once. */}
+              `switchingPlan` (src/billing-plan.ts) is shared with `/pricing`,
+              so one mechanism is described once — and it takes `buying.from`
+              because a switch out of a free trial does something else again,
+              and every clause of the paid sentence is false for it. */}
           <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
             {buying.kind === "switch" ? (
-              SWITCHING_PLAN
+              switchingPlan(buying.from)
             ) : (
               <>
                 {/* **No "the button above".** It said that, and a free account

@@ -311,12 +311,20 @@ describe("scoreTree", () => {
 
   it("validity: gist absences are counted apart from structural damage", () => {
     const blocks = [heading(2, "Only Part"), block(), block()];
+    /* **Two sections, not one over the root's whole range.** A sole child
+       covering the whole of its parent is itself a structural problem since
+       2026-09-05 (src/tree-invariants.ts), so the one-section version of this
+       fixture would have put an `otherProblem` in a test whose whole point is
+       that there are none. */
     const bare = treeFrom(blocks, {
       range: [0, 2],
-      children: [{ range: [0, 2], title: "Only Part" }],
+      children: [
+        { range: [0, 1], title: "Only Part" },
+        { range: [2, 2], title: "The rest" },
+      ],
     });
     const score = scoreTree(blocks, bare);
-    expect(score.validity.gistProblems).toBe(2); // root and the one section
+    expect(score.validity.gistProblems).toBe(3); // root and the two sections
     expect(score.validity.otherProblems).toBe(0);
   });
 

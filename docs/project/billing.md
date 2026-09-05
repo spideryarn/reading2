@@ -889,7 +889,7 @@ to pay" page for a second one, so the gap is real rather than theoretical.
 
 **Greg's call, 2026-09-03: not worth closing.** It takes two Checkout pages opened before either is
 paid, and then two card forms filled in on purpose — `useBilling`'s `if (busy) return` already eats
-the double-click, and `hasOpenSubscription` already turns the ordinary second attempt into the
+the double-click, and `subscriptionState` already turns the ordinary second attempt into the
 Portal.
 
 What was weighed and passed over, so nobody re-derives it:
@@ -1245,12 +1245,37 @@ Reader's state on the live account — unbuildable.
 - **Filtering never reorders.** `offerableTiers` sorts, `tiersToOffer` only filters, and `PlanCards`
   draws what it is handed — nothing downstream would put a jumbled ladder right.
 - **The button says what the press does**: *Switch to Researcher* on `/pricing`, *Switch plan* on
-  `/profile`, over `SWITCHING_PLAN` — the press opens the hosted Portal, where the plan is chosen
-  again and confirmed, Stripe invoices the difference at once, the renewal date does not move, and
-  the added allowance is prorated. A button reading *Upgrade* would have named something the press
-  does not do.
+  `/profile`, over `switchingPlan(purchase.from)` — the press opens the hosted Portal, where the plan
+  is chosen again and confirmed, Stripe invoices the difference at once, the renewal date does not
+  move, and the added allowance is prorated. A button reading *Upgrade* would have named something
+  the press does not do.
+- **…except out of a trial, where all three of those claims are false**, which is why the sentence
+  is a function of `purchase.from` rather than one string. `trialing` is an entitled status, so a
+  trialling reader reaches the same `switch` arm — and the Portal's `trial_update_behavior:
+  "end_trial"` means the press ends the trial rather than adjusting a paid month: there is no
+  difference to invoice, the period restarts, and because the period *start* moves
+  `nextQuotaAdjustment` writes no delta, so the whole new allowance arrives rather than a
+  part-month share. We do not sell trials, so this is a state that should not occur and is not
+  prevented; the answer was separate copy rather than refusing the switch, because the capability
+  was never the thing that was wrong. GPT Sol, 2026-09-04.
 - **A Researcher is told why there is no button** (`noHigherPlan`), on both pages. Prices with
   nothing to press and nothing said is the page this whole feature exists to stop existing.
+- **And *"do they already have a subscription?"* is now asked once**, by `subscriptionState`
+  ([`src/billing/tiers.ts`](../../src/billing/tiers.ts)), rather than written out separately in the
+  summary and in `startCheckout`. Those two spellings both read *a subscription id with a
+  non-terminal status*, while entitlement asks something else again and **never reads the id at
+  all** — so a row with `status = 'active'`, a known price and a readable period but no
+  `stripe_subscription_id` made them disagree: entitlement said *paying Reader*, the sale gate said
+  *sell them anything*, and pressing *Get Reader* would have opened a second, concurrently billed
+  subscription for the plan they were already on. GPT Sol found it on 2026-09-04. The row is now
+  refused by `billing_accounts_subscription_fields_need_subscription`, and the shared predicate
+  fails closed to the Portal if one ever appears anyway.
+- **Nothing is offered for sale when Stripe is not configured.** Priced rows in Postgres and no
+  `STRIPE_SECRET_KEY` used to draw a full set of buttons whose only possible outcome was *billing is
+  not available*; `readBillingSummary` now emits `purchase: none` before the ranking is reached.
+  `manageable` is deliberately untouched — it answers *is there billing history to look at*, and
+  hiding the Portal link from somebody whose subscription is real and whose deployment is merely
+  misconfigured helps nobody.
 
 Two lessons outlived the bug, and neither of them is about Stripe:
 

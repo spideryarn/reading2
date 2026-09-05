@@ -144,8 +144,12 @@ type Control = {
  * (`fsJobStore.get`, not merely `jobs-fs`), because a proxy that hooked modules
  * but lost methods would still look busy.
  *
- * Six run in the `unit` lane; `upload-records` is `private-postgres`, which
- * also proves the private lane mints its database under the instrument.
+ * **Four run in the `unit` lane and three in `private-postgres`**, which also
+ * proves the private lane mints its database under the instrument. This
+ * sentence used to say *"six in the unit lane; `upload-records` is
+ * `private-postgres`"*, and both halves were wrong: two of these were already in
+ * the database lane, and no control has ever been called `upload-records`.
+ * Counted against `TEST_LANES` on 2026-09-05 rather than re-copied.
  *
  * **They are a dated choice, not a fixture.** Stage B converts these files one
  * by one, and when it converts one this self-check goes red saying so. That is
@@ -156,7 +160,15 @@ const POSITIVE_CONTROLS: readonly Control[] = [
   { file: "tests/data-root.test.ts", expect: ["data-root:dataRoot", "data-root:chooseDataRoot", "artifacts-fs:fsLocations"] },
   { file: "tests/jobs-fs-load.test.ts", expect: ["jobs-fs:fsJobStore.get", "jobs-fs:fsJobStore.list", "jobs-fs:reloadForTests"] },
   { file: "tests/artefact-copy.test.ts", expect: ["copy-artefacts:copyArtefacts", "copy-artefacts:readParts", "artifacts-fs:createFsArtifactStore"] },
-  { file: "tests/cost-store-under-test.test.ts", expect: ["ai-calls-fs:fsCostStore.record", "ai-calls-fs:fsCostStore.describe"] },
+  /* **Was `tests/cost-store-under-test.test.ts` until stage C, 2026-09-05**, and
+     the paragraph above is what happened: that file was converted, this
+     self-check went red saying so, and the control moved to a file that still
+     reaches the module. It was the fourth stage-C finding and the only one
+     nobody here looked for — GPT Sol's F1, on a review of the stage.
+     `store-ai-calls.test.ts` leaves `SPIDERYARN_STORE` unset, so it takes the
+     `files` branch of `selected()` and records through the filesystem adapter,
+     while its own subject is the Postgres one. */
+  { file: "tests/store-ai-calls.test.ts", expect: ["ai-calls-fs:fsCostStore.record", "ai-calls-fs:fsCostStore.describe"] },
   {
     file: "tests/store-realtime-sessions.test.ts",
     expect: ["realtime-sessions-fs:fsRealtimeSessionStore.issue", "realtime-sessions-fs:fsRealtimeSessionStore.close", "realtime-sessions-fs:fsRealtimeSessionStore.markConnected"],
