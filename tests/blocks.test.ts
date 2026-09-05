@@ -104,17 +104,25 @@ describe("id stability", () => {
     expect(isSpideryarnId(idOf(second, "inserted by a later edit"))).toBe(true);
   });
 
-  it("re-mints blocks that carry neither text nor a src — currently just <hr>", () => {
-    // Not a bug so much as the honest limit of matching on content: a rule has
-    // no content. It is gistable:false and never gets a ToC row, so nothing
-    // points at it — but a leaf anchored to one does go stale across a
-    // re-extraction. Pinned here so a future fix is a deliberate one.
+  it("carries a block that has neither text nor a src, such as an <hr>", () => {
+    /* **This assertion used to be `.not.toBe`, and the comment above it called
+       the re-mint "the honest limit of matching on content".** It was not: such
+       a block keyed `null` in all three passes, so it was in no bucket on either
+       side and re-minted on every run over byte-identical input — 218 blocks
+       across 17 of the 35 corpus fixtures, flipping their `hashBlocks`
+       fingerprint and, under Postgres, stopping the `blocks` step from ever
+       reporting itself done. Nobody happened to have anchored anything to one,
+       which is why it read as a limitation for a fortnight — though a chat can
+       be anchored to any block by its id alone. Fixed 2026-09-05; the shape of
+       the mistake is in
+       docs/postmortems/260905a-empty-blocks-remint-their-ids-on-every-extraction.md
+       and the behaviour is pinned in tests/empty-blocks-keep-their-ids.test.ts. */
     const first = splitIntoBlocks(ARTICLE);
     const second = splitIntoBlocks(ARTICLE, first.blocks);
     const rule = (r: typeof first) => r.blocks.find((b) => b.tag === "hr")!.id;
-    expect(rule(second)).not.toBe(rule(first));
-    expect(second.stats.minted).toBe(1);
-    expect(second.stats.carried).toBe(second.stats.total - 1);
+    expect(rule(second)).toBe(rule(first));
+    expect(second.stats.minted).toBe(0);
+    expect(second.stats.carried).toBe(second.stats.total);
   });
 
   it("carries a figure's id on its src, since it has no text to match on", () => {

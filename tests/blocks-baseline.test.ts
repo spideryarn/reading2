@@ -62,6 +62,9 @@ import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
+import { STEPS } from "../src/pipeline.js";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { type MemoryArtifactStore, memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
@@ -555,61 +558,87 @@ describe("the stamped HTML stage 3 returns", () => {
   });
 });
 
-/* ------------------------------------------------------------ the command -- */
+/* --------------------------------------------------------------- the step -- */
 
 /**
- * `npm run blocks` still reads a file and writes two, and after today it is the
- * only thing in the repo that does. `runBlocks` cannot tell you whether `main()`
- * still opens and saves what it used to, because `main()` is now where all of
- * that lives — so this runs the real command, in a subprocess, the way
- * tests/validate-tree.test.ts runs its own.
+ * **This was `npm run blocks` in a subprocess until 2026-09-05, and it is the
+ * step now.**
+ *
+ * The command read an HTML file and wrote two — the stamped document back over
+ * its input, and a `blocks.json` beside it — and `runBlocks` could not tell you
+ * whether `main()` still opened and saved what it used to, because `main()` was
+ * where all of that lived. So this ran the real command in a child process.
+ *
+ * That `main()` went with the move onto the queue (`scripts/stage.ts`), and the
+ * two claims below moved down one layer to `STEPS.blocks.run`, which is now the
+ * only thing that turns `runBlocks`'s answer into artefacts a store is handed.
+ * Both are the same claims, and the second is the one worth keeping in front of
+ * a store rather than in front of `runBlocks`: **the baseline a re-run reads is
+ * what the previous run wrote**, which on the filesystem was a file it had just
+ * saved and in Postgres is the draft's own block rows.
+ *
+ * Proved end to end as well, on 2026-09-05: `npm run blocks -- <slug> --force`
+ * twice and then unforced against a corpus clone in the local database gave
+ * `19 blocks, 0 new ids (19 kept)`, `19 blocks, 0 new ids (19 kept)`,
+ * `skipped`, and **one distinct id set** across every revision of the article.
  */
-describe("the command line", () => {
+describe("the step", () => {
+  const stage3 = async (store: MemoryArtifactStore) => {
+    const dir = await mkdtemp(path.join(tmpdir(), "spya-baseline-step-"));
+    cleanUp.push(dir);
+    return await STEPS.blocks.run(
+      {
+        slug: "a",
+        dir,
+        htmlFile: path.join(dir, "a.html"),
+        report: () => {},
+        signal: new AbortController().signal,
+        cacheArticle: false,
+      },
+      store,
+      nullCheckpointStore(),
+    );
+  };
+
   const cleanUp: string[] = [];
   afterAll(async () => {
     for (const root of cleanUp) await rm(root, { recursive: true, force: true });
   });
 
-  const runCli = async (args: string[]) => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    return promisify(execFile)("npx", ["tsx", "src/blocks.ts", ...args]);
-  };
+  it("hands back the stamped HTML and the blocks, naming the same ids", async () => {
+    const store = memoryArtefacts();
+    store.plant("a", "extract", "extractedHtml", EXTRACTED);
 
-  it("writes the stamped HTML over its input and the blocks beside it", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-cli-"));
-    cleanUp.push(root);
-    const htmlFile = path.join(root, "a.html");
-    await writeFile(htmlFile, EXTRACTED, "utf-8");
+    const first = await stage3(store);
+    const blocks = (first.parts?.blocks as { blocks: Block[] }).blocks;
+    const html = first.parts?.stampedHtml as string;
+    expect(blocks).toHaveLength(3);
+    /* The pair, again, and through what the store is handed this time: the ids
+       in the artefact are the ids in the document beside it. */
+    for (const block of blocks) expect(html).toContain(`id="${block.id}"`);
 
-    await runCli([htmlFile]);
-
-    const written = JSON.parse(await readFile(`${root}/a.blocks.json`, "utf-8"));
-    const html = await readFile(htmlFile, "utf-8");
-    expect(written.blocks).toHaveLength(3);
-    /* The pair, again, and through the writer this time: the ids in the file are
-       the ids in the document beside it. */
-    for (const block of written.blocks as Block[]) expect(html).toContain(`id="${block.id}"`);
-    /* And the second run carries them, which is what makes `npm run blocks`
-       safe to type twice — the baseline it reads is the file it just wrote. */
-    await runCli([htmlFile]);
-    const second = JSON.parse(await readFile(`${root}/a.blocks.json`, "utf-8"));
-    expect(idsIn(second.blocks)).toEqual(idsIn(written.blocks));
-  }, 60_000);
+    /* **And a second run carries them**, which is what makes the command safe to
+       type twice. The baseline it reads is what the first run wrote, so this is
+       written back into the store the way the queue's commit would. */
+    store.plant("a", "blocks", "blocks", blocksArtefact(blocks));
+    const second = await stage3(store);
+    expect(idsIn((second.parts?.blocks as { blocks: Block[] }).blocks)).toEqual(idsIn(blocks));
+  });
 
   it("refuses a page with no prose in it, and writes nothing at all", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-cli-"));
-    cleanUp.push(root);
-    const htmlFile = path.join(root, "a.html");
-    await writeFile(htmlFile, SHELL, "utf-8");
+    const store = memoryArtefacts();
+    store.plant("a", "extract", "extractedHtml", SHELL);
 
-    await expect(runCli([htmlFile])).rejects.toThrow(/produced no blocks at all/);
+    await expect(stage3(store)).rejects.toThrow(/produced no blocks at all/);
 
-    /* No artefact, and stage 2's document untouched — the same property the
-       guards give the pipeline, observed through the caller that has files. */
-    await expect(readFile(`${root}/a.blocks.json`, "utf-8")).rejects.toThrow(/ENOENT/);
-    expect(await readFile(htmlFile, "utf-8")).toBe(SHELL);
-  }, 60_000);
+    /* Nothing stored, and stage 2's document untouched — the same property the
+       guards give the pipeline, observed at the seam where the store would have
+       been written. `runBlocks` throws before it returns, so there is no `parts`
+       for a caller to store; that is the mechanism, and this is the effect. */
+    expect(await store.read("a", "blocks", "blocks")).toBeNull();
+    expect(await store.read("a", "blocks", "stampedHtml")).toBeNull();
+    expect(await store.read("a", "extract", "extractedHtml")).toBe(SHELL);
+  });
 });
 
 /* --------------------------------------------------- which HTML stage 3 eats -- */

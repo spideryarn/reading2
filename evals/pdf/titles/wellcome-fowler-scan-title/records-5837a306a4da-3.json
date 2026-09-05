@@ -1,0 +1,177 @@
+{
+  "slug": "wellcome-fowler-scan-title",
+  "sample": 3,
+  "prompt": "5837a306a4da",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T08:56:54.598Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "Utility of phrenology : a lecture / by L.N. Fowler.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Contributors",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "Fowler, L. N. 1811-1896.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Publication/Creation",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "London : W. Tweedie, Between 1873 and 1879?]",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Persistent URL",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "https://wellcomecollection.org/works/a5aaj99u",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "License and attribution",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "This work has been identified as being free of known restrictions under copyright law, including all related and neighbouring rights and is being made available under the Creative Commons, Public Domain Mark.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "You can copy, modify, distribute and perform the work, even for commercial purposes, without asking permission.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "Wellcome Collection\n183 Euston Road\nLondon NW1 2BE UK\nT +44 (0)20 7611 8722\nE library@wellcomecollection.org\nhttps://wellcomecollection.org",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading1",
+      "text": "UTILITY OF PHRENOLOGY.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading2",
+      "text": "A Lecture,",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading3",
+      "text": "BY L. N. FOWLER, OF NEW YORK.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "It is not sufficient in this Utilitarian age to prove that Phrenology is true, but the query meets us at every hand—Suppose it be true, “cui bono,” of what practical use is it to the community?",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "I will endeavour to answer this legitimate query as clearly as possible. Physiology and Phrenology are so intimately connected that we cannot present the claims of the latter without first considering those of the former.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Physiology makes us acquainted with the laws of life and health. In order to obey these laws we must have a knowledge of them; in fact, if we live in obedience to the dictates of nature we must know how to live. The mechanic understands this principle as applied to machinery. The more delicate its construction the greater is the necessity to know how to manage it; for, if neglected, it soon gets out of order. The same rule applies to human machinery. Man is a physical, living machine, made in accordance with certain principles, and governed by distinct laws. In proportion as these are understood and obeyed will there be health and happiness. This is seldom the case, and the result is that children are very frequently deranged in their constitutions.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "They have not only feeble vitality when young, which prevents that harmony between one part of the system and the whole, sufficient to produce perfection of organization, but their growth has been stunted by bad food, and the child that otherwise might have been distinguished as a prominent individual in society will drag out a miserable existence, in pain and sickness. We should know how to feed and keep the body full of life and vitality, to give every function its due attention, to take sufficient exercise, so that the muscular system shall continue active while life lasts, should understand the nervous system",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "so that the brain will not wear out the body. A person has the full control of himself in proportion as all of his powers are brought into use.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Our systems of education are defective, and must be remedied before children can receive the training requisite to give them that complete power and influence that belong to their organizations. Many suggestions can be made with reference to the Utility derived from a knowledge of Physiology, but it is not my purpose to enter minutely into a presentation of this subject. I therefore leave it with these general hints that if parents and teachers understood physiology and taught it to their children, the latter would have stronger and better constitutions, greater perfection of organization, more control over their physical powers, and sufficient life and energy to enable them to go through the world more successfully.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "The advantages of a knowledge of Phrenology are many, viz., it teaches, firstly, self-knowledge; secondly, how to develop the organization as a whole harmoniously. Thirdly, it enables us to govern and educate each faculty, to control the propensities, to cultivate and direct the moral feelings. Fourthly, it indicates the particular calling or pursuits by which every one may succeed in life. Fifthly, it enables the parent to be more faithful in the discharge of his duties to his children. Sixthly, it assists in the choice of servants. Seventhly, it is an important aid in the practice of the different professions. Eighthly, it teaches charity for the frailties of others. Ninthly, it makes valuable suggestions for the treatment of criminals. Tenthly, it gives many important hints with regard to the cure and prevention of Insanity. Eleventhly, it enables a person to choose an agreeable, congenial companion for life. Twelfthly, it teaches that moral perfection is the most desirable end to be attained in this life.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "That Phrenology gives to us self-knowledge, the most important to be gained, ought to be a sufficient reason why the community should be interested in its doctrines. It helps us to understand mind in the abstract, and to comprehend our own individual natures. We see by the light of Physiology that we have a body, and that it is composed of parts and functions. The mind is not only a unit, an individual whole, but it is made up of parts or separate powers that were given to us to enable us to discharge certain duties, to sustain certain relations in life. These powers of the mind are distinct in their action, and require an individual organ, the brain, through which they can be manifested.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "We learn by Phrenology what our own peculiar powers are, our weak and strong tendencies of mind, the direction they take in the development of our excesses and deficiencies. We learn how to shield and guard ourselves against those circumstances that would lead to an excess in the one case and a failure in the other; for man is not fated to be always in a certain position, to develop in a prescribed course, to have the same quantum of mind or education. He may have more or less within the limits that belong to a human being.",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "Contributors",
+  "recall": null,
+  "quality": [],
+  "usage": {
+    "input": 8574,
+    "output": 1987
+  }
+}

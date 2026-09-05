@@ -3810,6 +3810,39 @@ back through the reference it read. A helper's own properties need a test of the
 [`tests/helpers-store-fakes.test.ts`](../../tests/helpers-store-fakes.test.ts) is that test, six cases,
 and each half was watched red before being watched green.
 
+##### D's review: two rounds, both refused, six findings, all six real
+
+| round | ID | sev | finding | disposition |
+| --- | --- | --- | --- | --- |
+| 1 | F1 | **P1** est. | the fixture reader lost the store's size ceilings, so it copies a 32 MiB artefact the old source refuses | fixed — **not with Sol's patch**, see below |
+| 1 | F2 | **P1** est. | the in-memory fake hands back the same object reference; neither real store can | fixed, and it had left two controls unable to fail |
+| 1 | F3 | P3 est. | `stage2c-raw-bytes`'s reclassification was in the prose and not in the executable value | applied |
+| 1 | F4 | P3 est. | the `LAYOUT` coverage claim was too broad — no `illustrated.json` in the corpus | corrected, 17 of 18 rows populated |
+| 2 | G1 | **P1** est. | three Illustrated negative controls accept the untouched store | fixed, each watched red by deletion |
+| 2 | G2 | **P1** est. | two Tweets cases return `false` before reaching the condition they claim to test | fixed; **both predate the conversion** |
+| 2 | G3 | P2 reasoned | the open handle closes the rename race, not an in-place rewrite | closed anyway, both checks kept |
+
+**F1's fix is deliberately not the one that was offered**, and the reasoning is worth keeping. Sol's
+patch copied the per-kind 4/16/32 MiB table into the helper. But that spread exists to keep a
+**two-sided** contract — `write` refuses what `read` could not read back, so a step cannot report done
+and then be permanently not-done. **A reader over a committed fixture has no write side**, so there is
+no contract to keep; all that survives is *this source must not accept what the old one refused*.
+
+So: **one bound at 4 MiB — the tightest value in the old table** — and a loud throw. At the table's
+*maximum* a 4–32 MiB window would remain in which the new reader silently accepts what the old
+refused, which is F1 again one size down. At the minimum that window is empty by construction, and
+the cost is the opposite error: a 4–32 MiB fixture of a higher-ceilinged kind is refused where the old
+store accepted it — **loudly, naming the file and both numbers**. Corpus headroom is ~27×.
+**Copying less of `artifacts-fs`'s knowledge is the point**, because § *`LAYOUT` is a copy that is
+about to become the original* is the argument the whole design rests on.
+
+**Settled after two rounds.** The cadence allows one narrowly scoped check on a P1 established at
+round two; G1–G3 did not get a third review round, and the reason is that each fix was verified by the
+strongest evidence available for the property in question — **delete the setup line, watch the case go
+red, restore** — with the failure text recorded in each file. A reasoned third opinion does not outrank
+a control watched failing. G2's provenance was additionally checked against the history by hand rather
+than taken on report.
+
 ##### The one thing E, F and G should take from stage D
 
 **Three times now, a case has been satisfied by its own setup not happening.** Round 1's arm A: with
@@ -4308,6 +4341,124 @@ sentence is in the log. The script prints the log's.
 **When the previous stage has not run**, the step fails with that sentence and the job ends `error`.
 **There is no auto-chaining**: naming one step runs one step. Chaining is what `POST /api/jobs` with
 several steps is for.
+
+#### Landed, 2026-09-05
+
+Five `main()`s deleted (`fetch`, `extract`, `blocks`, `hierarchy`, `labels`), one script written, and
+`npm run pdf` split in two. `npm run cycles` stayed clean. Every command below was run against the
+local Postgres and its result read back out of the database rather than off the command's own
+output.
+
+| Command | Ran | Printed |
+|---|---|---|
+| `npm run ingest -- <url>` | `paulgraham.com/vb.html`, an article not on the shelf | five steps `done`, `41 blocks, 41 new ids (0 kept)`, article `vb-spya-vu3xen` |
+| `npm run ingest -- <url>` again | the same address, now on the shelf | all five `skipped`, same article — an address already there is adopted |
+| `npm run ingest -- <url> --force` | the same address again | five steps `done` on **the same article**, `41 blocks, 0 new ids (41 kept)` — the refresh, and the ids through a whole re-ingest |
+| `npm run ingest -- <file.pdf>` | a hand-built 1-page PDF | five steps `done`; upload record read back as **`verified`**, slug `stage-e-one-page-spya-qt9ev9`, stored hash equal to the claimed one |
+| `npm run extract -- <slug>` | a corpus clone | `skipped   already done`; with `--force`, `done   Writes and Write-Nots` |
+| `npm run blocks -- <slug> --force` | twice, then unforced | `19 blocks, 0 new ids (19 kept)` twice, then `skipped   already done` |
+| `npm run hierarchy -- <slug> --force` | the same clone | `13 sections over 19 blocks` |
+| `npm run eval:pdf-read -- <file.pdf>` | the same 1-page PDF | the chunk plan and the per-chunk recall table, `mean recall 1 over 1 of 1 page(s)`, `Spent: $0.0005` |
+
+**The block-id contract survives, and the count is over every revision of the article rather than
+over the runs**: seven revisions of the scratch clone after the seed and six commands, **one distinct
+id set**, by `count(distinct array_agg(block_id order by block_id))` grouped by revision.
+
+**A skip still publishes a revision.** `skipped   already done` is what the step says and the job
+still settles, opens a draft and publishes it — an identical one. That is the queue's behaviour and
+not the CLI's, and it is now said out loud in `setup-dev.md`, because *"a re-run without `--force`
+does nothing"* is not quite what happens.
+
+**`withLedger("cli", …)` really was double-scoping.** Every model call from these runs landed as
+`scope_kind = 'job_step'` with a job id and a slug, and none as `cli` — read out of `ai_calls` after
+the fact. `tests/paid-cli-ledger.test.ts` is down to one file, `src/pdf-read.ts`, with the reason
+written into it rather than the entries quietly deleted.
+
+**The unknown-slug fix.** `npm run blocks -- typoo-no-such-article` exits 1 with a sentence, and
+`select count(*)` on `articles` and `jobs` for that slug is 0 in both. The check moved into `enqueue`
+and now asks only `articleExists`, which is owner-scoped — so it no longer consults `slugIsTaken`,
+the one deliberately unfiltered global lookup, and "nobody has it" and "somebody else's" became
+indistinguishable by construction rather than by treatment.
+`tests/enqueue-owns-the-article.test.ts`'s third case reversed; it was **watched red on the new code
+before being rewritten** (*"Error: No such article. ❯ Module.enqueue src/jobs.ts:2864"*).
+
+**`enqueue` took `pump: false`** and the `VERCEL=1` lie went from `evals/cost/`. Asserted
+behaviourally in a new `tests/enqueue-drives-what-it-queues.test.ts` — queue a `fetch` step on a
+seeded article, look two seconds later — with a positive control that pins *what* the pump did
+(`done`, step `skipped`) so a day when that stops being a free skip fails loudly.
+
+**Three mutations worth recording, because two of them were controls that lied.**
+
+1. *Drop `blocksArtefact` from the blocks step* → `tests/sanitize-stale-artefact.test.ts` red,
+   `expected undefined to be 5`. That file used to run `npx tsx src/blocks.ts` in a subprocess; with
+   that `main()` gone it runs `STEPS.blocks.run` instead, which is one layer closer to the claim.
+2. *Delete the tail from `src/pdf-read.ts`* → `paid-cli-ledger` red on both the list check and the
+   file's own mutation control.
+3. *Move `scripts/stage.ts`'s `loadEnvLocal()` below its dynamic imports* → **green**. *Below the
+   argument check* → **green**. Only removing it **and** `src/store/live.ts`'s top-level call turned
+   `stage2c-raw-bytes`'s env-order case red. So that case proves the *effect* — the file is applied
+   before the command prints anything — and not which line did it, and the note is now in the test so
+   nobody cites it as cover for the script's ordering.
+
+**Two things this did not do.** `npm run eval:pdf-read` still writes its ledger rows to
+`data/_ai-calls.jsonl`, because it sets no `SPIDERYARN_STORE` — pre-existing, unchanged deliberately
+(the decision above was that the quality tool keeps its behaviour), and stage F's hinge fixes it.
+And `AGENTS.md`/`CLAUDE.md` still says *"two stages of seven"* cache on a content hash; the count is
+now stated properly in `architecture.md` § Conventions (**ten of the fourteen in `STEP_ORDER`**, by
+the predicate *the step declares a `stamp()` that `stepIsDone` compares*), and the rules file is
+Greg's to edit.
+
+##### What Sol's review of the built code changed, and the one thing it overturned
+
+Five findings, four fixed in `scripts/stage.ts` and one that is a decision for Greg. Every one was
+re-measured rather than taken on the review's word.
+
+**The one that overturns a decision this plan made.** *"Re-labelling becomes `npm run hierarchy --
+<slug> --force`; the extra structure call is the honest price"* — the sentence that justified
+retiring `npm run labels` — **is false**, and going through the queue is what made it false. The old
+CLI passed `nullCheckpointStore()` and always paid; a queue run gets the article's own `checkpoints`
+rows, and `force` is a flag on the *step* (run rather than skip) and means nothing to a checkpoint.
+Measured: two consecutive `npm run hierarchy -- stage-e-scratch --force` on an unchanged article
+bought **two model calls and then none**, printing `13 sections over 19 blocks` both times, with the
+`hierarchy-structure` and `hierarchy-labels` rows sitting there in between.
+
+So: **the stage CLIs gained a resume they never had** (good, and the opposite of what this plan and
+the first draft of `scripts/stage.ts` said), and **changing a label prompt and re-running has no
+command** (a real loss, and not one the `labels` decision priced in). Making `force` clear a
+checkpoint would change what a reader's Refresh does too, so it is a queue-wide product call rather
+than something a CLI should work round — left for Greg, and written down in
+`docs/project/setup-dev.md`, `architecture.md` § Conventions, `src/store/checkpoints.ts` and
+`src/labels.ts` rather than left as a surprise.
+
+**Four fixed here.**
+
+1. **`scripts/stage.ts fetch <slug> --force` was still the fetch-only job.** Deleting `npm run fetch`
+   from `package.json` removed the *name*; `oneStage` took any `StepName`. It now refuses `fetch`
+   with the sentence, so the rule lives in the code rather than in an npm script. Verified.
+2. **`npm run ingest -- <url>` could not re-fetch.** An address already on the shelf is adopted, so
+   every step skipped and *"re-fetching cascades"* was a claim nothing could reach — the landed run
+   above had used an address that was **not** on the shelf, which is exactly how the gap survived.
+   `--force` now forces `fetch` and `cascadeForce` takes the rest. Measured, above. `--force` stays
+   refused for a *file*, where it really is meaningless.
+3. **A failing `noteSlug` stranded the job.** The route can throw there because its `enqueue` starts a
+   pump; this one carries `pump: false` and is the only driver, so a throw between `enqueue` and
+   `drive` left a queued job nothing would ever advance. It is a warning now — and the slug is
+   written again by `settleUpload(…, "verified")`.
+4. **The file path minted before it looked.** An empty file or a `.txt` got an upload record and bytes
+   in Storage before the pipeline refused it. `looksLikePdf` — the same function `acquireUpload` uses
+   — and a positive-size check now run first. Verified: three refusals, no new `uploads` rows.
+
+**And one hardening the review asked for:** `drive` no longer waits on `busy` for ever. An older
+abandoned job queued with `pump: false` holds the article's line and nothing drives it, so the loop
+gives up after ten minutes and says what to look at.
+
+**What the review agreed was right**, having checked it: the `enqueue` refusal breaks no production
+caller and its privacy claim now holds by construction; the `pump` closure reaches every exit
+including both `handBackToARetry` paths; `pump: false` is correct for the cost eval; the five seeded
+suites are not weakened, and seeding only two of `tests/jobs.test.ts`'s four slugs is right. Its one
+remaining reservation is that `tests/blocks-baseline.test.ts` § *the step* is narrower than the
+subprocess test it replaced — it plants the first run's blocks by hand rather than committing them —
+which is true, and the Postgres arm of that same file still covers the commit-and-read seam.
 
 ### F — the hinge, one commit, and narrower than the first draft
 

@@ -126,6 +126,7 @@ describe("a chunk the model could not finish or would not read", () => {
     const bytes = await pdfWithPages(2);
     const err = await threw(() =>
       runPdfExtract({
+        frontMatter: null,
         bytes,
         slug: "a-pdf",
         checkpoints: checkpoints(),
@@ -142,6 +143,7 @@ describe("a chunk the model could not finish or would not read", () => {
     const bytes = await pdfWithPages(2);
     const err = await threw(() =>
       runPdfExtract({
+        frontMatter: null,
         bytes,
         slug: "a-pdf",
         checkpoints: checkpoints(),
@@ -190,6 +192,7 @@ describe("the provider's word for a refusal, on its way to the log", () => {
     const logged = await logLinesWhile(async () => {
       await threw(() =>
         runPdfExtract({
+          frontMatter: null,
           bytes,
           slug: "a-pdf",
           checkpoints: checkpoints(),
@@ -216,6 +219,7 @@ describe("the provider's word for a refusal, on its way to the log", () => {
     const logged = await logLinesWhile(async () => {
       await threw(() =>
         runPdfExtract({
+          frontMatter: null,
           bytes,
           slug: "a-pdf",
           checkpoints: checkpoints(),
@@ -284,7 +288,7 @@ describe("a PDF that will not open", () => {
 
   const sentenceFor = async (bytes: Uint8Array) =>
     readerFailureOf(
-      await threw(() => runPdfExtract({ bytes, slug: "a-pdf", checkpoints: checkpoints() })),
+      await threw(() => runPdfExtract({ frontMatter: null, bytes, slug: "a-pdf", checkpoints: checkpoints() })),
       LABEL,
     );
 

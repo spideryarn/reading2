@@ -69,6 +69,7 @@ import { mintUpload } from "../src/upload-records.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { stagingKey } from "../src/source.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { bareArticles } from "./helpers/bare-article.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 const { handleApi } = await import("../src/routes.js");
@@ -158,6 +159,21 @@ beforeAll(async () => {
 
 afterEach(sweep);
 
+/**
+ * **The two articles the re-run cases name**, seeded per case rather than once —
+ * added 2026-09-05.
+ *
+ * `enqueue` refuses a bare-slug request for an article the reader does not have
+ * (src/jobs.ts), and *"a re-run on an article already on the shelf"* is the whole
+ * premise of those two cases: they were the only ones in the file asserting it
+ * against an article that was not on any shelf. Per case because `sweep` runs in
+ * `afterEach` and takes the row with it — see the `articles` line there.
+ *
+ * `OWNER`, because that is who the requests below authenticate as and
+ * `articleExists` is owner-scoped. ./helpers/bare-article.ts.
+ */
+const onTheShelf = (slug: string) => bareArticles([slug], OWNER);
+
 afterAll(async () => {
   if (vercel === undefined) delete process.env.VERCEL;
   else process.env.VERCEL = vercel;
@@ -183,6 +199,10 @@ async function sweep(): Promise<void> {
   if (!pool) return;
   await pool.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+  /* After the jobs, because a job row's `draft_revision_id` is a foreign key into
+     a revision the article delete would be cascading away. Added with
+     `onTheShelf` below. */
+  await pool.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
   await pool.query("delete from spideryarn.uploads where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.ingest_events where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.billing_accounts where owner_id::text like $1", [RUBBLE]);
@@ -379,6 +399,7 @@ describe("adding an article spends a slot", () => {
    * to pay for. docs/project/billing.md.
    */
   dbIt("never reserves for a step re-run, even at the ceiling", async () => {
+    await onTheShelf("test-admission-rerun");
     await alreadySpent(FREE_LIMIT);
     const reply = await post("/api/jobs", {
       slug: "test-admission-rerun",
@@ -518,6 +539,7 @@ describe("retry is the second front door", () => {
 
   /** A re-run that failed is still a re-run. `Job.url` could not have said so. */
   dbIt("reserves nothing when the attempt it repeats carried none", async () => {
+    await onTheShelf("test-admission-rerun-retry");
     const first = await post("/api/jobs", {
       slug: "test-admission-rerun-retry",
       steps: ["ideas"],

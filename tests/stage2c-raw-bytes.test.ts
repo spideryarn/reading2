@@ -4,8 +4,14 @@
  *
  * `writeRaw` stopped writing files on 2026-08-31 and now only puts the bytes in
  * the object store and returns the manifest; `readRawBytes` is how stage 2 gets
- * them back, and `writeRawFiles` is how the one caller that still wants files —
- * `npm run fetch` — puts them on a disk. Nothing had ever read one of those
+ * them back, and `writeRawFiles` is how a caller that wants files puts them on a
+ * disk. That caller was `npm run fetch`, and since 2026-09-05 it is **this file
+ * and nothing else** — the command went to `npm run ingest` (scripts/stage.ts),
+ * which drives the queue and stores nothing on a disk, and `writeRawFiles` dies
+ * in stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+ * Until then the property below is still worth asserting, because the
+ * filesystem artefact store still reads that file. Nothing had ever read one of those
  * objects back before, so **every failure mode of that read was unexercised**,
  * and one of them turned out to be
  * live in the corpus on the day this was written: nine of the eighteen
@@ -320,16 +326,20 @@ describe("a reference the object store cannot honour", () => {
   });
 });
 
-describe("what `npm run fetch` leaves behind", () => {
+describe("what `writeRawFiles` leaves behind", () => {
   /**
    * **The documented property, asserted rather than assumed.**
    *
-   * Running `npm run fetch -- <url>` by hand under `SPIDERYARN_STORE=files` is
-   * meant to satisfy the queue's `fetch` step, so the queue skips straight to
-   * extraction. That only holds if the file `writeRawFiles` writes is the file
+   * Running `npm run fetch -- <url>` by hand under `SPIDERYARN_STORE=files` was
+   * meant to satisfy the queue's `fetch` step, so the queue skipped straight to
+   * extraction. That only held if the file `writeRawFiles` writes is the file
    * `PATHS.fetch.raw` reads — two constants in two modules that nothing else
    * compares. This reads it back through the real artefact store rather than by
    * checking the filename, so a change to either end fails here.
+   *
+   * **The command is gone and the pairing is not**, 2026-09-05: `writeRawFiles`
+   * has no caller left but this case, and it is still the only thing comparing
+   * those two constants for as long as either exists.
    */
   it("writes a raw.json the filesystem artefact store reads back as the manifest", async () => {
     const doc = pdfDoc("what the command wrote");
@@ -572,10 +582,11 @@ describe("the product guard over stage 1 and stage 2", () => {
   });
 });
 
-describe("npm run pdf keeps the original where the reader can reach it", () => {
+describe("npm run eval:pdf-read keeps the original where the reader can reach it", () => {
   /**
    * **`keepTheOriginal` never called `storeRawSource`**, so every article made
-   * by `npm run pdf -- <file.pdf>` carried a manifest with no `storedSha256` —
+   * by that command — it was `npm run pdf` until 2026-09-05 — carried a manifest
+   * with no `storedSha256` —
    * which `src/store/artifacts-pg.ts` refuses outright (`NoStoredDocument`).
    * The command reported success and the article was un-ingestable into
    * Postgres, with nothing said until the write failed somewhere else.
@@ -705,6 +716,32 @@ describe("npm run pdf keeps the original where the reader can reach it", () => {
  * docs/postmortems/260831e-a-write-path-with-no-reader.md, made fresh by the command
  * meant to be safe.
  *
+ * **The subject moved on 2026-09-05 and the hazard did not.** `npm run fetch` is
+ * `npm run ingest` now — one script, `scripts/stage.ts`, behind four npm names —
+ * and it needs `.env.local` for *more* reasons than the old command did, not
+ * fewer.
+ *
+ * **Two things now satisfy this, and it took three mutations to find that out.**
+ * `scripts/stage.ts` calls `loadEnvLocal()` above its imports — which are
+ * dynamic for exactly that reason, since static ones are hoisted above every
+ * statement in a module. But `src/store/live.ts` **also** calls it, at module
+ * top level, and the script's graph reaches that file. Measured 2026-09-05, on
+ * the no-argument run:
+ *
+ * - move the script's call below its dynamic imports → **still green**;
+ * - move it below the argument check → **still green**;
+ * - remove it *and* `src/store/live.ts`'s → **red**, on this file's own
+ *   assertion: *"expected '\nUsage:…' to match /\[env\] \.env\.local
+ *   overrode …/"*.
+ *
+ * So what this case actually proves is the **effect** — by the time the command
+ * prints anything, the file has been applied — and not which line produced it.
+ * That is the right claim for it to make (docs/reusable/silent-success.md:
+ * measure the effect, not the cause), but the first two runs above are exactly
+ * the shape of a control that lies, and the note is here so nobody cites this
+ * test as cover for the script's own ordering. **Nothing checks that ordering
+ * today**; it is belt over braces, and the braces are in `live.ts`.
+ *
  * So this runs the **real entry point** in a real child process. It cannot
  * assert which adapter came back — that is `blobStore()`'s business and
  * restating the rule here would be the second copy the postmortem argues
@@ -717,13 +754,13 @@ describe("npm run pdf keeps the original where the reader can reach it", () => {
  * inherited. The child is given a deliberately wrong value for one variable the
  * file sets, so the disagreement is manufactured rather than hoped for — and
  * the run is the **no-argument** one, which prints usage and exits 1. That is
- * what makes this a test of the *order* as well: anything that moves the load
- * below the argument check never reaches it, and this goes red.
+ * what makes this a test of the *order* as well — with the caveat measured
+ * above: it is the order of *the process*, not of any one line in it.
  */
-describe("`npm run fetch` selects its blob store from the same environment the server does", () => {
+describe("`npm run ingest` selects its blob store from the same environment the server does", () => {
   const ROOT = new URL("../", import.meta.url);
   const TSX = fileURLToPath(new URL("node_modules/.bin/tsx", ROOT));
-  const CLI = fileURLToPath(new URL("src/fetch.ts", ROOT));
+  const CLI = fileURLToPath(new URL("scripts/stage.ts", ROOT));
 
   /**
    * A variable `.env.local` sets, and its value — `SUPABASE_URL` for
@@ -786,8 +823,9 @@ describe("`npm run fetch` selects its blob store from the same environment the s
        * it points here.
        *
        * Narrowed rather than deleted, so the child still cannot reach the shared
-       * **database** — `src/fetch.ts` with no arguments never opens one, and a
-       * pin left in place for free is worth more than the argument about it.
+       * **database** — `scripts/stage.ts` with no arguments prints usage before
+       * anything asks `getDb()` for a pool, and a pin left in place for free is
+       * worth more than the argument about it.
        */
       env[PINNED] = "DATABASE_URL";
 
@@ -795,7 +833,7 @@ describe("`npm run fetch` selects its blob store from the same environment the s
 
       /* It got as far as the argument check, which is the second half of the
          claim: the load happened *before* the first thing the command does. */
-      expect(child.stderr).toContain("Usage: tsx src/fetch.ts");
+      expect(child.stderr).toContain("npm run ingest");
       expect(child.status).toBe(1);
       expect(child.stderr).toMatch(
         new RegExp(String.raw`\[env\] \.env\.local overrode [^\n]*\b${target.name}\b`),

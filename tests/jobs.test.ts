@@ -129,6 +129,7 @@ import {
   getJob,
   orderSteps,
   sameWork,
+  unrunnableStepPlan,
   workKeyFor,
 } from "../src/jobs.js";
 import {
@@ -148,6 +149,7 @@ import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";
 import { currentOwnerId, DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
+import { bareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { FIXTURE_ROOT } from "./helpers/require-fixture.js";
 import { scratchArticleInPg, SCRATCH_SOURCE, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -259,6 +261,38 @@ describe("orderSteps", () => {
 
   it("leaves an already-ordered list alone", () => {
     expect(orderSteps([...STEP_ORDER])).toEqual(STEP_ORDER);
+  });
+});
+
+/**
+ * **The one step combination the queue refuses**, and it is refused at the door
+ * rather than after it has run. See `unrunnableStepPlan` in src/jobs.ts for the
+ * trap and for why the answer is a 400 and not a silently added model call.
+ *
+ * **No mutation involving the store: no store reaches this block.** Every case
+ * here hands the pure function a list of step names and reads the string or
+ * `undefined` it returns; nothing is claimed, queued or written.
+ */
+describe("unrunnableStepPlan", () => {
+  it("refuses blocks without hierarchy, which is the request that strands an article", () => {
+    expect(unrunnableStepPlan(["blocks"])).toMatch(/hierarchy/);
+    expect(unrunnableStepPlan(["fetch", "extract", "blocks"])).toMatch(/hierarchy/);
+    expect(unrunnableStepPlan(["blocks", "assets", "arc"])).toMatch(/hierarchy/);
+  });
+
+  it("allows the pair, in either order it may be written", () => {
+    expect(unrunnableStepPlan(["blocks", "hierarchy"])).toBeUndefined();
+    expect(unrunnableStepPlan(orderSteps(["hierarchy", "blocks"]))).toBeUndefined();
+    expect(unrunnableStepPlan(DEFAULT_INGEST_STEPS)).toBeUndefined();
+    expect(unrunnableStepPlan([...STEP_ORDER])).toBeUndefined();
+  });
+
+  it("says nothing about a job that does not touch the blocks at all", () => {
+    // `hierarchy` alone is fine and common: it is how somebody repairs exactly
+    // the article this rule exists to stop stranding.
+    expect(unrunnableStepPlan(["hierarchy"])).toBeUndefined();
+    expect(unrunnableStepPlan(["fetch", "extract"])).toBeUndefined();
+    expect(unrunnableStepPlan(["tweets"])).toBeUndefined();
   });
 });
 
@@ -619,6 +653,10 @@ const OWN_SLUGS = [
   "test-advance-token",
   "test-advance-sweeps",
   "test-enqueue-busy-article",
+  /* Nothing should ever be inserted under this one — the point of its test is
+     that `enqueue` throws first — so it is here for the day the guard is broken
+     and a row does land. */
+  "test-enqueue-blocks-only",
 ];
 
 /** Slugs minted at run time — the short-id case's two. */
@@ -640,6 +678,31 @@ async function removeRows(slugs: readonly string[]): Promise<void> {
   await getDb().delete(jobsTable).where(inArray(jobsTable.slug, [...slugs]));
   await getDb().delete(articles).where(inArray(articles.slug, [...slugs]));
 }
+
+/**
+ * **A bare `articles` row under each of this file's own slugs**, added
+ * 2026-09-05.
+ *
+ * `enqueue` refuses a bare-slug request for an article the reader does not have
+ * (src/jobs.ts), and the `running a job` block queues several. It seeded nothing
+ * on purpose — the comment above says so, and the reason still holds: what it
+ * wants is an article with **no address**, so `fetch` fails and the job's
+ * failure is what gets asserted. A row with no revision is exactly that;
+ * `articleExists` left-joins the published revision precisely so an article
+ * whose ingest never finished still counts. ./helpers/bare-article.ts.
+ *
+ * **Two of `OWN_SLUGS` are deliberately not seeded**, and getting that wrong is
+ * how this was first written: `test-advance-token` and `test-advance-sweeps`
+ * queue straight into the store through `queueJob` as `DEV_OWNER_ID`, never
+ * through `enqueue`, and then let `lockOrCreateArticle` create the article at
+ * claim time. A row seeded here under the *environment* owner is somebody else's
+ * as far as that function is concerned, and it refused with *"the slug … already
+ * belongs to another reader"*.
+ */
+beforeAll(async () => {
+  if (!reachable) return;
+  await bareArticles([SLUG, "test-enqueue-busy-article"]);
+}, 60_000);
 
 afterAll(async () => {
   if (!reachable) return;
@@ -1168,6 +1231,21 @@ when("running a job", () => {
       await settle(held.id);
       await forgetJob(held.id);
     }
+  });
+
+  /**
+   * **And the guard is wired**, which is a separate claim from
+   * `unrunnableStepPlan` returning the right string — a pure function nothing
+   * calls is the shape of half the bugs in this repo
+   * (docs/reusable/silent-success.md). It throws before anything is inserted or
+   * reserved, so there is nothing to clean up afterwards.
+   */
+  it("refuses a blocks-only job at the door rather than stranding the article", async () => {
+    const blocksOnly = enqueue({ slug: "test-enqueue-blocks-only", steps: ["blocks"] });
+    await expect(blocksOnly).rejects.toThrow(/hierarchy/);
+    // A 400 rather than a 500: this is a bad request, and the route maps the
+    // field straight onto the status code.
+    await expect(blocksOnly).rejects.toMatchObject({ status: 400 });
   });
 
   /**

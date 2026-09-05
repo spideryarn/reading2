@@ -1327,6 +1327,16 @@ Built after the review, both free:
 hand each repeat a different seed, which is exactly the confound the paragraph above exists to avoid.
 Stage 5b goes through the queue.
 
+> **True when written, and overtaken within the day.** Stage E of
+> [260903f](260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) put every stage CLI
+> through the queue on 2026-09-05, so `npm run hierarchy` resumes like any other claim and the
+> sentence above no longer describes it. Kept because the *reason* still holds and is the reason the
+> harness exists: a repeat that re-buys the structure call is a repeat with a different seed, and
+> question 1 cannot be asked of it. What that change also settles is that `--force` re-runs the
+> **step** and not the **purchase** — it replays the structure call out of its checkpoint — so
+> forcing alone would have made every repeat free and identical, and it is
+> `SPIDERYARN_DEEPEN_REASK` that makes the wave cost anything the second time.
+
 #### The harness, and the command to run it <a id="stage-5b-harness"></a>
 
 **Built 2026-09-05, reviewed, fixed, still unrun.** [`evals/deepen/`](../../evals/deepen/) is a

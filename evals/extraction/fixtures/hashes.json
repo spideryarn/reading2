@@ -124,5 +124,89 @@
     "bytes": 215807,
     "url": "https://www.astralcodexten.com/p/your-book-review-the-pale-king",
     "capturedAt": "2026-08-28"
+  },
+  "python-docs-itertools": {
+    "sha256": "9c236f99c185f940569eed954c7b0ab9adf9b9eaeeb006921d3f4e921a64871f",
+    "bytes": 173857,
+    "url": "https://docs.python.org/3/library/itertools.html",
+    "capturedAt": "2026-09-04"
+  },
+  "rfc8259-json": {
+    "sha256": "516e4b2ec97eb4534042d1c2c5b10203e08545464e4675863c2520682d5de237",
+    "bytes": 230942,
+    "url": "https://www.rfc-editor.org/rfc/rfc8259",
+    "capturedAt": "2026-09-04"
+  },
+  "wiki-gdp-table": {
+    "sha256": "d8390932b9ce1bc33056717366ccbddbbb1a9766c78a7ec49c6e275a457fdaad",
+    "bytes": 681764,
+    "url": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+    "capturedAt": "2026-09-04"
+  },
+  "plos-biology": {
+    "sha256": "aa18ac080942377b3ec743dbf80a2faea270ca7e3562454e0a3809f953b57101",
+    "bytes": 154792,
+    "url": "https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.1002165",
+    "capturedAt": "2026-09-04"
+  },
+  "medium-about": {
+    "sha256": "2eb6bcb952bf5cfefe8bf3d356f3cd1d936c68f29aac4c310ca203450d6fad7d",
+    "bytes": 79620,
+    "url": "https://blog.medium.com/medium-a-new-place-on-the-internet-for-sharing-ideas-and-their-connections-2e04efc80d1a",
+    "capturedAt": "2026-09-04"
+  },
+  "pmc-article": {
+    "sha256": "c9fa0b630e3f86a5debc5bea7297e79f1313b2207bb214199f361020d25a83ce",
+    "bytes": 20484,
+    "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7280519/",
+    "capturedAt": "2026-09-04"
+  },
+  "distill-momentum": {
+    "sha256": "288b5fb8b4daec4a1ed3e17111a8e86dd5ae7c13488fe6148f3cf84c24a0daea",
+    "bytes": 1091673,
+    "url": "https://distill.pub/2017/momentum/",
+    "capturedAt": "2026-09-04"
+  },
+  "wiki-ar-ai": {
+    "sha256": "b9e5b66f99b06ec0b6b228cde468985d926d3124a2a67e10251cff9de0195302",
+    "bytes": 1494572,
+    "url": "https://ar.wikipedia.org/wiki/%D8%B0%D9%83%D8%A7%D8%A1_%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A",
+    "capturedAt": "2026-09-04"
+  },
+  "eurlex-regulation": {
+    "sha256": "7a27c1537d2b2c0c18c066c16c86db39c69ab6764963497ddf737ee45f52f0dd",
+    "bytes": 238390,
+    "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52022XC0504(01)",
+    "capturedAt": "2026-09-04"
+  },
+  "blogger-bldgblog": {
+    "sha256": "9038791d3081421e9e32571de3c1016fda9b81e7deb3c4180628e73b1cea5966",
+    "bytes": 486316,
+    "url": "https://bldgblog.blogspot.com/",
+    "capturedAt": "2026-09-04"
+  },
+  "hn-dropbox": {
+    "sha256": "c3d4f69083d78c14f0f8b0100dffc1e7013e62ed03fe18c4f28dcee858b068af",
+    "bytes": 101192,
+    "url": "https://news.ycombinator.com/item?id=8863",
+    "capturedAt": "2026-09-04"
+  },
+  "quanta-year-physics": {
+    "sha256": "df4b28583b32961c468051b74a7dc958078e6d56c45539dc4f2f9c48b81370dc",
+    "bytes": 241077,
+    "url": "https://www.quantamagazine.org/the-year-in-physics-20241217/",
+    "capturedAt": "2026-09-04"
+  },
+  "npr-ozy-style-feature": {
+    "sha256": "cd05ed37aac58bb2adedca6d98b36972897ba7baaff70d1d6c86f5274fad1616",
+    "bytes": 311742,
+    "url": "https://www.npr.org/sections/goatsandsoda/",
+    "capturedAt": "2026-09-04"
+  },
+  "archwiki-install": {
+    "sha256": "772599011fe46419b3af3ccd270d5da8ffb9cd2fdb86a1a0db180396bf33684f",
+    "bytes": 99729,
+    "url": "https://wiki.archlinux.org/title/Installation_guide",
+    "capturedAt": "2026-09-04"
   }
 }

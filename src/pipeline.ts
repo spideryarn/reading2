@@ -89,6 +89,7 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
+import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { MAX_PAGES } from "./uploads.js";
 import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
@@ -1233,12 +1234,16 @@ function requireUrl(ctx: StepContext): string {
  * **The page cap, enforced in stage 1** — one policy, called from the two places
  * the queue's acquisition step has PDF bytes for the first time.
  *
- * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. The stage
- * CLIs do not come through here: `npm run fetch` hands a fetched PDF straight to
- * `writeRaw`, and `npm run pdf` keeps the original before `runPdfExtract` counts
- * anything. Both are deliberate — a CLI is somebody at a keyboard spending their
- * own attention, and neither can reach a reader's job — but "no PDF reaches
- * storage uncounted" is a statement about the queue and not about the repo.
+ * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. It used to
+ * be that the stage CLIs did not come through here at all. Half of that is now
+ * false and half is still true: `npm run ingest` — which replaced `npm run fetch`
+ * on 2026-09-05 and which drives this very queue — is counted like any other
+ * ingest, while `npm run eval:pdf-read` still keeps the original before
+ * `runPdfExtract` counts anything. That exemption is deliberate: it is the PDF
+ * extraction-quality tool, somebody at a keyboard spending their own attention,
+ * and it cannot reach a reader's job. So "no PDF reaches storage uncounted" is
+ * still a statement about the queue and not about the repo — with one fewer
+ * exception than it had.
  *
  * Greg asked for the refusal to arrive in seconds rather than after a job card
  * has been running (docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md
@@ -1618,8 +1623,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that
-         is the store. `npm run fetch` still writes the two files, through
-         `writeRawFiles` in the same module. */
+         is the store. `writeRawFiles` in the same module still writes the two
+         files, and since `npm run fetch` was replaced by `npm run ingest` on
+         2026-09-05 its only remaining caller is a test — it dies in stage G.
+         docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md. */
       const manifest = await writeRaw(doc);
       const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
@@ -1763,6 +1770,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
 
       const result = await runPdfExtract({
+        frontMatter: openRouterFrontMatterReader(),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
@@ -1810,6 +1818,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           recall: result.recall,
           inputTokens: result.usage.input,
           outputTokens: result.usage.output,
+          /* **The front-matter pass's own tokens, beside the transcription's
+             rather than added to them.** Two models on two jobs, and this line
+             names one of them in `model`; a sum across both would be a number
+             whose unit nobody can state (src/models.ts § `Wire`). The money is
+             recorded centrally under `pdf-frontmatter` either way — this is so
+             the *step's* line stops implying the transcription was the whole
+             bill. GPT Sol, 2026-09-05. */
+          frontMatterInputTokens: result.frontMatterUsage.input,
+          frontMatterOutputTokens: result.frontMatterUsage.output,
           model: result.meta.method,
         },
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
@@ -2146,6 +2163,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              recommendation 2. */
           labelBatches: run.labelBatches,
           labelsResumed: run.labelsResumed,
+          /* What the label pass actually paid for, beside what it resumed. */
+          labelCalls: run.labelCalls,
+          /* **Was the tree bought or replayed?** Until 2026-09-05 this was
+             printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
+             docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+             deleted that CLI — so taking the deletion whole would have dropped
+             the one signal that says which. It belongs here anyway: it is the
+             field that says why a forced re-run was cheap, and without it the
+             only way to tell is to infer it from a token count, which is what
+             evals/deepen/ was reduced to doing. */
+          structureResumed: run.structureResumed,
           /* **What the deepening wave did**, and `null` where nobody asked for
              one — which is every article until stage 8 moves the flag
              (src/hierarchy-deepen.ts § `DEEPEN_ENV`). Nested rather than eight
@@ -2204,6 +2232,32 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * (`scripts/checkpoints-sweep.ts`, `sweepPgCheckpoints`), which is where a
        * cache's lifetime belongs. src/store/checkpoints.ts § Retention.
        */
+      /**
+       * **The deepening clause is reader-scale, and the operator's numbers are
+       * deliberately not here.**
+       *
+       * `detail` is persisted with the step and rendered on the reader's
+       * progress card (`src/web/AddArticle.tsx`), so it takes the same shape as
+       * the `labelsDropped` clause above: a sentence for the one moment somebody
+       * is already watching. `withheld` and `uncheckpointed` are operator
+       * telemetry about checkpoint rows — "0 saved for retry, 0 not saved" is
+       * noise on a card — and they are in the log line above, which is where
+       * `src/jobs.ts` says a step's real numbers belong.
+       *
+       * **Silent when the flag is off**, because a clause about a feature nobody
+       * asked for reads, at zero, as "tried and found nothing" — the distinction
+       * `deepen: null` exists to keep. Silent at `targets === 0` for the same
+       * reason. A failure is *not* silent: the step succeeds and the reader gets
+       * a shallower tree than the article was going to get, and that should not
+       * be something only a log knows. ⟨Fable and GPT Sol, 2026-09-05, arbitrating
+       * where the counters went when the CLI that printed them was deleted.⟩
+       */
+      const deepened =
+        run.deepenFailed
+          ? ", deepening failed (tree kept)"
+          : run.deepen && run.deepen.targets > 0
+            ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
+            : "";
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
@@ -2211,7 +2265,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           `${run.internal} sections over ${run.blocks} blocks` +
           (run.labelsDropped > 0
             ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
-            : ""),
+            : "") +
+          deepened,
       };
     },
   },

@@ -902,7 +902,7 @@ function readVignettes(
     /* The same thing drawn twice is one row in the reader's list twice, and one
        instruction to the illustrator twice. Cheap to drop, and it is evidence
        the model lost its place. */
-    const key = `${v.block} ${v.quote} ${v.depicts}`;
+    const key = `${v.block}\u0000${v.quote}\u0000${v.depicts}`;
     if (already.has(key)) {
       faults.push({ where: at, what: "the same vignette again — dropped" });
       continue;

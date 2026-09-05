@@ -297,7 +297,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   const sketch = useSketchReadiness(
     slug,
     status === "none",
-    `${queue.failed ?? ""} ${queue.job?.id ?? ""}`,
+    `${queue.failed ?? ""}\u0000${queue.job?.id ?? ""}`,
   );
 
   /**

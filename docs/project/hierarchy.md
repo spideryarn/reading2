@@ -1,6 +1,6 @@
 # Hierarchy
 
-Pipeline stage 4 — `hierarchy`, `npm run hierarchy`. Builds the nested structure that the Hierarchy
+Pipeline stage 4 — `hierarchy`, `npm run hierarchy -- <slug> [--force]`. Builds the nested structure that the Hierarchy
 sidebar and the [granularity zoom](granularity-zoom.md) view both render. Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
@@ -782,8 +782,11 @@ the wiring, the last two so that a paid run can answer the questions it is being
   identical frozen outline and a verdict that moves is the scoped call changing its mind rather than
   a different tree being asked a different question. So: run the article once ordinarily, then repeat
   with the switch set — `POST /api/jobs { slug, steps: ["hierarchy"], force: ["hierarchy"] }` is the
-  re-run, and `npm run hierarchy` is not, because that command passes `nullCheckpointStore()` and
-  resumes nothing.
+  re-run. `npm run hierarchy` is now the same thing — stage E moved it through the queue on
+  2026-09-05 ([`scripts/stage.ts`](../../scripts/stage.ts)), so it resumes like any other claim. Note
+  what that means: `--force` re-runs the *step*, not the *purchase*, and replays the structure call
+  out of its checkpoint, so on its own it changes nothing. The re-ask switch is what makes the wave
+  cost anything the second time.
 - **What a wave cost is on the run**, since 2026-09-05. Every scoped call's four token counts —
   input, output, cache read, cache write, every draw of a redrawn call included — are summed onto
   `DeepenStats.usage`, added into `HierarchyRun`'s four totals beside the structure call and the
@@ -833,7 +836,8 @@ So the stage now does three things instead of dying, in rising order of risk:
   bound, not a second copy of it: the batching is invisible from `checkCoverage`, so small sections
   each spending their floor of one would stay inside budget and still cost the article a fifth of its
   rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
-  `generateLabels`, so `npm run labels` gets it too — it used to be enforced only by `generateHierarchy`,
+  `generateLabels`, so every caller gets it — it used to be enforced only by `generateHierarchy`,
+  while `npm run labels` (retired 2026-09-05) went round it,
   which made the backstop depend on which command you typed.
 
 **The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
@@ -857,8 +861,9 @@ It used to write the three files itself, in a fixed order with the tree last. Th
 about three *separate* writes: `writeFile` truncates before it has anything to put there, and
 *existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
 kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
-both halves of that, and the ordering survives only in `npm run hierarchy`'s own `main()`, which really
-does write three files into a directory.
+both halves of that. **The ordering survived in `npm run hierarchy`'s own `main()` until 2026-09-05,
+and now survives nowhere**: that command goes through the queue, so there are no three files and no
+order to get right. Nothing in this repo writes stage 4's artefacts separately any more.
 
 `labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
 whole-or-nothing write gives us "whole or not there" and not "still true". A complete set of labels

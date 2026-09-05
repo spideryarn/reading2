@@ -474,6 +474,12 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
      it **copies on the way in and out**, so a value it handed you is not the one it holds, like
      both real stores and unlike a `Map`; and it deliberately does **not** put
      `extractedHtml` and `stampedHtml` at one address the way the filesystem does;
+   - the test is about **a job**, and the article is only there so the job may name it:
+     [`bareArticles`](../../tests/helpers/bare-article.ts), which inserts an `articles` row and
+     nothing else. Five suites needed it the day `enqueue` started refusing a bare-slug request for
+     an article the reader does not have (2026-09-05), and a bare row is enough because
+     `articleExists` left-joins the published revision on purpose — an article whose ingest crashed
+     still counts as existing;
    - the test really is about **the adapter** — that is stage G's cohort, and the answer is in
      [`store-migration-registry.ts`](../../tests/store-migration-registry.ts).
 

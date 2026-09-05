@@ -13,10 +13,12 @@
  *
  * ## Why this is not one of the tools that already exist
  *
- * - `npm run hierarchy` passes `nullCheckpointStore()`, so it resumes nothing:
- *   every repeat would re-buy the ~$1.00 structure call **and hand each repeat a
- *   different seed**, which is precisely the confound that makes question 1
- *   unanswerable. It has to go through the queue.
+ * - `npm run hierarchy` used to pass `nullCheckpointStore()` and resume nothing,
+ *   so every repeat would re-buy the ~$1.00 structure call **and hand each
+ *   repeat a different seed** — precisely the confound that makes question 1
+ *   unanswerable. Stage E put that command through the queue on 2026-09-05
+ *   (`scripts/stage.ts`), so it resumes now; what it still has no notion of is
+ *   the four phases, the fixture ingress, the gates, or the pairing below.
  * - `npm run eval:cost --against` has no force, and its `no-spend` finding
  *   exists to *refuse* a repeat of an already-done step.
  * - Adding a book to `evals/cost/fixtures.ts` would point a checked-in fixture
@@ -112,7 +114,6 @@ import {
   evalRegistry,
   fixtureFetch,
   localTarget,
-  withoutTheInProcessPump,
 } from "../cost/harness.js";
 import {
   aggregateByAiJob,
@@ -447,20 +448,27 @@ async function withLevers<T>(
 }
 
 /**
- * **Queue one job — and never two at once.**
+ * **Queue one job, with the production pump switched off on the request.**
  *
  * `enqueue` ends with `pump()`, which drives the job with the **production**
- * registry and wins the claim synchronously; `withoutTheInProcessPump` silences
- * it by setting `VERCEL` across that one call. That silencer is a single global
- * variable, so two overlapping `enqueue`s race on it: the first to return
- * restores it while the second is still inside, the second's pump starts, and
- * the job runs production's `fetch` — which goes to the network, at
- * `https://deepen-eval.invalid/…`, with no fixture and no eval overlay.
+ * registry and wins the claim synchronously — so this eval's fixture ingress and
+ * spend overlay would be bypassed entirely, and production's `fetch` would go to
+ * the network at `https://deepen-eval.invalid/…`.
  *
- * **That is not hypothetical**: phase D's first `--dry-run` did exactly this,
- * and one of the three articles failed with a DNS error while its neighbours
- * were fine. So queueing is serial here even where driving is concurrent, and
- * `dryRunReport` asserts afterwards that no fetch reached the network.
+ * **That is not hypothetical**: phase D's first `--dry-run` did exactly this, and
+ * one of the three articles failed with a DNS error while its neighbours were
+ * fine. The cause was the old silencer — `VERCEL=1` set across the `enqueue`
+ * call, because `pump` returns immediately when it is set. A single global
+ * variable, so two overlapping `enqueue`s raced on it: the first to return
+ * restored it while the second was still inside.
+ *
+ * **`pump: false` is the fix, and it is not ours** — `src/jobs.ts` § `pump` added
+ * it for `scripts/stage.ts` and `evals/cost/run.ts`, calling the `VERCEL` trick
+ * "a lie … a process on a laptop claimed to be running on Vercel in order to get
+ * one `if` to go the other way". It is per-request rather than per-process, so
+ * there is no global left to race on and the hazard is gone rather than
+ * sequenced around. `dryRunReport` still asserts afterwards that no fetch reached
+ * the network, because the check outlived the bug that prompted it.
  */
 async function enqueueJob(ctx: RunContext, spec: JobSpec): Promise<QueuedJob> {
   const before = await listRecordsDir(ctx.recordsDir);
@@ -469,14 +477,13 @@ async function enqueueJob(ctx: RunContext, spec: JobSpec): Promise<QueuedJob> {
       ? { ...STEPS, fetch: fixtureFetch(spec.ingress.fixture, spec.ingress.bytes, spec.url ?? "") }
       : STEPS,
   );
-  const job: Job = await withoutTheInProcessPump(() =>
-    enqueue({
-      slug: spec.slug,
-      ...(spec.url !== null ? { url: spec.url } : {}),
-      steps: [...spec.steps],
-      ...(spec.force.length > 0 ? { force: [...spec.force] } : {}),
-    }),
-  );
+  const job: Job = await enqueue({
+    slug: spec.slug,
+    ...(spec.url !== null ? { url: spec.url } : {}),
+    steps: [...spec.steps],
+    ...(spec.force.length > 0 ? { force: [...spec.force] } : {}),
+    pump: false,
+  });
   const record: JobRecord = {
     phase: spec.phase,
     label: spec.label,
