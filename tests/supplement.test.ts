@@ -550,7 +550,7 @@ describe("a reader standing mid-Notes", () => {
   });
 
   it("is in the same item as far as keyboard navigation is concerned", () => {
-    const plan = navPlan(geometry, [1, depth], false, false);
+    const plan = navPlan(geometry, [1, depth], false);
     const starts = plan.starts[depth]!;
     expect(starts.filter((s) => s >= firstNoteRow)).toEqual([firstNoteRow]);
     // ↑ from inside the notes goes to the top of the notes, not back a note.

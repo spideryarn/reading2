@@ -25,7 +25,6 @@ window listeners. The reasoning, the sources and the two mechanisms we rejected 
 | Where the finger goes down | A vertical drag does |
 |---|---|
 | A gist column at depth *d* — the panel over it, or the cell beside it | steps one item at that level |
-| The arc column (L0) | steps one **part**, the same rung ← / → reach |
 | The prose column | nothing of ours: momentum, rubber-banding, stopping on a line |
 | A gist column at the last item | moves one screenful on — see below |
 | A gist column at the first item, swiping back | the same, upwards; this is how you get the masthead back by touch |
