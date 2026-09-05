@@ -3795,14 +3795,20 @@ td.text.has-hit[data-hues="8"] {
   line-height: 1.45;
   color: var(--ink-soft);
 }
-/* What that project learned the hard way — the part worth carrying. Set apart
-   so it doesn't read as more of the description.
+/* Two footers, one treatment, because they sit in the same place and mean the
+   same kind of thing — an aside under the description rather than more of it.
+
+   `learned` is what that project learned the hard way; `tap` is "tap again to
+   do it", which a card opened by a finger has to say and no other card does
+   (Tooltip.tsx § `ControlTip.tap`, docs/project/touch.md). One rule rather than
+   two identical ones: if they ever need to differ, split it then.
 
    Selector written as `.tip-soon p.tip-soon-learned` rather than the class on
    its own so it outranks `.tip-soon p` above without an `!important`. Same
    result, and the next person to add a rule here inherits a specificity ladder
    they can reason about rather than one they have to escalate past. */
-.tip-soon p.tip-soon-learned {
+.tip-soon p.tip-soon-learned,
+.tip-soon p.tip-soon-tap {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
   color: var(--ink-faint);
