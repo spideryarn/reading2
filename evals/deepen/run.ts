@@ -63,7 +63,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { inArray, sql } from "drizzle-orm";
@@ -86,12 +86,15 @@ import type { ExpansionRequest } from "../../src/hierarchy-expand.js";
 import { buildTree, type ModelNode, structureRequest } from "../../src/hierarchy.js";
 import { isMain } from "../../src/is-main.js";
 import {
+  type AdvanceParts,
   advanceJobWith,
   claimSession,
   DEADLINE_MARGIN_MS,
   DEFAULT_JOB_CONCURRENCY,
   enqueue,
+  jobConcurrency,
   LEASE_MS,
+  REQUEUE_BUDGET,
   STEP_BUDGET_MS,
   type StepRegistry,
 } from "../../src/jobs.js";
@@ -114,8 +117,11 @@ import {
 import {
   aggregateByAiJob,
   aggregateByStep,
+  checkLedgerComplete,
+  checkScope,
   type Money,
   moneyTotalNanos,
+  type StepObservation,
   type StepSpend,
   totalMoney,
   formatStepTable,
@@ -123,6 +129,7 @@ import {
 import {
   assertReaskNames,
   assertSeamProof,
+  checkpointWriter,
   type CostEstimate,
   estimate,
   fileFixture,
@@ -130,10 +137,12 @@ import {
   listRecordsDir,
   readRecordsDir,
   recordingCheckpoints,
+  requeueVerdict,
   type SeamProof,
   treeDigest,
 } from "./harness.js";
 import {
+  asDeepenFinding,
   boundTally,
   budgetReport,
   checkDriving,
@@ -149,8 +158,11 @@ import {
   formatQ4,
   formatDriving,
   formatQ5,
+  q1Gate,
   type RecordsPass,
   type StepClock,
+  usablePasses,
+  verdictGate,
   wave1Unchanged,
   yesRates,
 } from "./report.js";
@@ -181,7 +193,15 @@ interface RunMeta {
     pipelineEnvOverride: string | null;
     note: string;
   };
+  /** What phase D is planned at — `DEFAULT_JOB_CONCURRENCY`. */
   jobConcurrency: number;
+  /**
+   * **What the queue's cap really is in this process**, read from
+   * `jobConcurrency()` rather than the constant. `SPIDERYARN_JOB_CONCURRENCY` is
+   * read at call time, so a shell that set it to 1 serialises phase D while the
+   * metadata goes on saying 3. ⟨GPT Sol, DPN-04.⟩
+   */
+  jobConcurrencyRuntime: number;
   stepBudgetMs: number;
   effectiveDeadlineMs: number;
 }
@@ -204,14 +224,39 @@ interface JobRecord {
   finishedAt?: string;
   jobStatus?: Job["status"];
   jobError?: string;
-  stepOutcomes?: { name: string; status: string; detail?: string; error?: string; ms: number | null }[];
+  stepOutcomes?: {
+    name: string;
+    status: string;
+    detail?: string;
+    error?: string;
+    /** The step's own window, which is what phase D's concurrency is measured over. */
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    ms: number | null;
+  }[];
   elapsedMs?: number;
   /** `finishedAt - startedAt` on the hierarchy step alone — question 5. */
   hierarchyMs?: number | null;
-  money?: Money;
+  /**
+   * **How many times the claimant handed this job back at its own deadline**,
+   * and `null` where it never did. Non-null on a re-asking pass means this run
+   * stopped rather than buying the wave again — `driveToDone`.
+   */
+  requeuedAt?: number | null;
+  /**
+   * **`null` where the ledger read did not complete**, which is not the same
+   * fact as `$0` and must never be summed as one. ⟨GPT Sol, DPN-02.⟩
+   */
+  money?: Money | null;
   byStep?: StepSpend[];
   byAiJob?: StepSpend[];
   unreadable?: number;
+  /**
+   * **What each step's own spend collector saw**, from `AdvanceParts.onStepSpend`
+   * — the only evidence that can notice a ledger row that was never inserted.
+   * A Postgres `forJob` read reports `unreadable: 0` however many are missing.
+   */
+  observedSpend?: StepObservation[];
   /** The records files this job left behind, by name. */
   recordsFiles?: string[];
   stats?: DeepenStats | null;
@@ -220,6 +265,7 @@ interface JobRecord {
   waveFailureReason?: string | null;
   findings?: DeepenFinding[];
 }
+
 
 interface RunFile {
   meta: RunMeta;
@@ -260,23 +306,59 @@ const STANDING_NOTES = [
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * **Drive one job to done — unless it hands its claim back, and that is a
+ * refusal rather than a retry.**
+ *
+ * `advanceJobWith` returns `{done: false, busy: false}` in two quite different
+ * situations. The ordinary one is "there is more to do, ask again". The other is
+ * a **requeue**: the claimant reached its own 740 s deadline inside a step,
+ * unwound cleanly, and put the job back on the queue with `requeues`
+ * incremented (src/jobs.ts § `pauseForDeadline`). The loop cannot tell them
+ * apart from the flags alone — and the difference is $14.80.
+ *
+ * **Re-driving a requeued *re-asking* pass buys the whole wave again.** The
+ * slug is still named in `SPIDERYARN_DEEPEN_REASK`, so the next claim ignores
+ * the checkpoint rows the first one just wrote and pays for every scoped call a
+ * second time; `REQUEUE_BUDGET = 2` permits three windows, so one nominal pass
+ * of the book could buy its wave three times. That is absent from the printed
+ * estimate entirely, which is why the estimate was never a bound.
+ * ⟨GPT Sol reviewing the stage-5b harness, DPN-07.⟩
+ *
+ * So a re-asking pass stops on its first requeue: the job is left `queued` and
+ * resumable, the self-abort is recorded, and the pass becomes a fatal finding
+ * rather than a silent third purchase. An ordinary pass is re-driven as before,
+ * and must be — a book's `hierarchy` step needs 658–778 s against a 740 s
+ * deadline, so a requeue there is routine, and without the lever the re-drive
+ * resumes every answer it already paid for.
+ */
 async function driveToDone(
   start: Job,
   steps: StepRegistry,
-): Promise<{ job: Job; elapsedMs: number }> {
+  opts: {
+    onStepSpend: NonNullable<AdvanceParts["onStepSpend"]>;
+    /** Is this slug named in the re-ask lever right now? Then a requeue re-buys. */
+    reasking: boolean;
+  },
+): Promise<{ job: Job; elapsedMs: number; requeuedAt: number | null }> {
   let job = start;
   const startedAt = Date.now();
+  const requeuesBefore = job.requeues ?? 0;
   for (;;) {
     if (Date.now() - startedAt > JOB_TIMEOUT_MS) {
       throw new Error(`${job.slug}: still not done after ${JOB_TIMEOUT_MS / 60_000} minutes`);
     }
     const advanced = await withSpendAttribution(
       { jobId: job.id, articleSlug: job.slug, ownerId: EVAL_OWNER_ID },
-      () => advanceJobWith(job.id, { session: claimSession, steps }),
+      () => advanceJobWith(job.id, { session: claimSession, steps, onStepSpend: opts.onStepSpend }),
     );
     if (!advanced) throw new Error(`${job.slug}: job ${job.id} vanished mid-run`);
     job = advanced.job;
-    if (advanced.done) return { job, elapsedMs: Date.now() - startedAt };
+    if (advanced.done) return { job, elapsedMs: Date.now() - startedAt, requeuedAt: null };
+    const requeues = job.requeues ?? 0;
+    if (requeueVerdict({ reasking: opts.reasking, requeuesBefore, requeuesNow: requeues }) === "stop") {
+      return { job, elapsedMs: Date.now() - startedAt, requeuedAt: requeues };
+    }
     /* `busy` means somebody else holds a running slot — another agent's dev
        server, most likely, since this box is shared. Back off and ask again,
        exactly as `pump` does. */
@@ -418,33 +500,116 @@ async function enqueueJob(ctx: RunContext, spec: JobSpec): Promise<QueuedJob> {
   return { spec, job, record, registry, before };
 }
 
-/** Drive one queued job to done, read the ledger and the records, and print it. */
+/**
+ * Drive one queued job to done, read the ledger and the records, and print it.
+ *
+ * **It reports rather than throws**, for everything after the job has stopped.
+ * A ledger read or a records parse that rejected used to take the whole phase
+ * down with it: `Promise.all` rejects on the first, `withLevers` then restores
+ * `DEEPEN` and `REASK` out from under the two jobs still running, and reporting
+ * starts reading half-written ledgers and deleting articles underneath live
+ * tasks. ⟨GPT Sol, DPN-06.⟩ So the money that has already moved is recorded and
+ * the failure becomes a fatal finding.
+ */
 async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> {
   const { spec, job, record, registry, before } = queued;
+  const findings: DeepenFinding[] = [...(record.findings ?? [])];
   record.startedAt = new Date().toISOString();
-  const driven = await driveToDone(job, registry);
+
+  /* **What each step's collector saw**, so the ledger can be checked for being
+     short rather than merely read — `costStore.record` failures are counted and
+     swallowed, and a Postgres `forJob` read cannot report a row that was never
+     inserted. Copied from evals/cost/run.ts § `oneDraw`, accumulation and all:
+     a step executed twice reports twice, and taking the last would hide half
+     the calls from the reconciliation. */
+  const observedSpend: StepObservation[] = [];
+  const onStepSpend: NonNullable<AdvanceParts["onStepSpend"]> = (step, report) => {
+    const seen = observedSpend.find((o) => o.step === step);
+    const one = seen ?? { step, calls: 0, pending: 0, writeFailures: 0 };
+    if (!seen) observedSpend.push(one);
+    one.calls += report.calls.length;
+    one.pending += report.pending.length;
+    one.writeFailures += report.writeFailures;
+  };
+
+  const reasking = (process.env[REASK_ENV] ?? "").split(",").includes(job.slug);
+  const driven = await driveToDone(job, registry, { onStepSpend, reasking });
   record.finishedAt = new Date().toISOString();
   record.elapsedMs = driven.elapsedMs;
   record.jobStatus = driven.job.status;
+  record.requeuedAt = driven.requeuedAt;
   if (driven.job.error !== undefined) record.jobError = driven.job.error;
   record.stepOutcomes = driven.job.steps.map((s) => ({
     name: s.name,
     status: s.status,
     ...(s.detail !== undefined ? { detail: s.detail } : {}),
     ...(s.error !== undefined ? { error: s.error } : {}),
+    startedAt: s.startedAt ?? null,
+    finishedAt: s.finishedAt ?? null,
     ms: stepMs(s),
   }));
   record.hierarchyMs = record.stepOutcomes.find((s) => s.name === "hierarchy")?.ms ?? null;
   record.deepenFlag = process.env[DEEPEN_ENV] === "1";
   record.reaskEnv = process.env[REASK_ENV] ?? null;
+  record.observedSpend = observedSpend;
 
-  const ledger = await costStore.forJob(job.id);
-  record.unreadable = ledger.unreadable;
-  record.money = totalMoney(ledger.rows);
-  record.byStep = aggregateByStep(ledger.rows);
-  record.byAiJob = aggregateByAiJob(ledger.rows);
+  if (driven.requeuedAt !== null) {
+    findings.push({
+      kind: "requeued",
+      fatal: true,
+      message:
+        `${spec.label}: the claimant handed this job back at its own deadline (requeue window ` +
+        `${driven.requeuedAt} of ${REQUEUE_BUDGET + 1}) while ${REASK_ENV} still named ${job.slug}. ` +
+        "This run STOPPED rather than re-claiming it: the next claim would ignore the checkpoint " +
+        "rows this one just wrote and buy the whole wave again, and the budget permits three such " +
+        "windows. The job is left `queued` and resumable; this pass is partial and must not be " +
+        "quoted as a repeat.",
+    });
+  }
 
-  const fresh = await readRecordsDir(ctx.recordsDir, { slug: job.slug, since: before });
+  /* **The ledger, and both ways it can be short.** `forJob` is the money that
+     landed; `checkScope` asks whether it landed in the eval's bucket at all
+     (this eval drives jobs with no `fetch` step, so the fixture check cannot
+     stand in for it — DPN-01); `checkLedgerComplete` asks whether every call the
+     collectors saw has a row (DPN-02). Both are the cost eval's, imported. */
+  try {
+    const ledger = await costStore.forJob(job.id);
+    record.unreadable = ledger.unreadable;
+    record.money = totalMoney(ledger.rows);
+    record.byStep = aggregateByStep(ledger.rows);
+    record.byAiJob = aggregateByAiJob(ledger.rows);
+    findings.push(...checkScope(ledger.rows, "eval").map(asDeepenFinding));
+    findings.push(...checkLedgerComplete(ledger.rows, observedSpend).map(asDeepenFinding));
+    if (ledger.unreadable > 0) {
+      findings.push({
+        kind: "not-answerable",
+        fatal: true,
+        message: `${spec.label}: ${ledger.unreadable} ledger line(s) could not be read.`,
+      });
+    }
+  } catch (err) {
+    record.money = null;
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${spec.label}: the ledger read failed (${err instanceof Error ? err.message : String(err)}). ` +
+        "Its spend is UNKNOWN, not zero, and question 4 is short by whatever this job bought.",
+    });
+  }
+
+  const fresh = await readRecordsDir(ctx.recordsDir, { slug: job.slug, since: before }).catch(
+    (err: unknown) => {
+      findings.push({
+        kind: "no-records",
+        fatal: true,
+        message:
+          `${spec.label}: the records files could not be read ` +
+          `(${err instanceof Error ? err.message : String(err)}).`,
+      });
+      return [] as Awaited<ReturnType<typeof readRecordsDir>>;
+    },
+  );
   record.recordsFiles = fresh.map((f) => f.file);
   const last = fresh.at(-1)?.parsed;
   record.stats = last?.stats ?? null;
@@ -452,30 +617,28 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
      decisions and the bill and no expansion — `deepen-records/2` added `failed`
      for exactly this. Quoting its verdict rates beside a successful pass's
      would put a partial measurement in the same column as a whole one, so the
-     runner carries the flag and the report says so. */
+     flag travels with the pass (`RecordsPass.failed`) and the gates refuse it. */
   record.waveFailed = last?.failed ?? null;
   record.waveFailureReason = last?.reason ?? null;
   if (record.waveFailed === true) {
-    record.findings = [
-      ...(record.findings ?? []),
-      {
-        kind: "note",
-        fatal: false,
-        message:
-          `${spec.label}: the deepening wave threw (${last?.reason ?? "no reason recorded"}). The ` +
-          "article kept the tree wave 1 produced; the records are the governor's decisions and " +
-          "the bill, and this pass expanded nothing.",
-      },
-    ];
+    findings.push({
+      kind: "wave-failed",
+      fatal: true,
+      message:
+        `${spec.label}: the deepening wave threw (${last?.reason ?? "no reason recorded"}). The ` +
+        "article kept the tree wave 1 produced; the records are the governor's decisions and " +
+        "the bill, and this pass expanded nothing. It is excluded from questions 1-3.",
+    });
   }
+  record.findings = findings;
 
   console.log(
     `  job ${record.jobStatus}${record.jobError ? ` — ${record.jobError}` : ""}   ` +
       `${(record.stepOutcomes ?? []).map((s) => `${s.name}=${s.status}`).join(" ")}`,
   );
   console.log(
-    `  spend $${(moneyTotalNanos(record.money) / 1e9).toFixed(4)}` +
-      (record.money.unpriced > 0 ? `   (${record.money.unpriced} unpriced)` : "") +
+    `  spend ${record.money == null ? "NOT READ" : `$${(moneyTotalNanos(record.money) / 1e9).toFixed(4)}`}` +
+      (record.money != null && record.money.unpriced > 0 ? `   (${record.money.unpriced} unpriced)` : "") +
       `   hierarchy step ${record.hierarchyMs === null || record.hierarchyMs === undefined ? "—" : `${(record.hierarchyMs / 1000).toFixed(1)}s`}`,
   );
   if (record.byAiJob?.length) console.log(formatStepTable(record.byAiJob));
@@ -488,6 +651,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
           `yes ${record.stats.verdicts.rawYes}/${record.stats.verdicts.rawYes + record.stats.verdicts.rawNo}`
     }`,
   );
+  if (findings.length > 0) console.log(formatFindings(findings));
   await ctx.checkpoint();
   return record;
 }
@@ -512,33 +676,50 @@ function structureTokenFloor(blocks: number): number {
   return Math.max(50_000, blocks * 100);
 }
 
+/**
+ * **The five answers, each behind a gate that can refuse it.**
+ *
+ * Every one of Q1-Q5 could print a clean-looking number over evidence that was
+ * absent, partial or failed, which is the disease `budgetReport` was already
+ * caught with once and the review found in four more places:
+ *
+ * - **Q1** was computed over four book passes and calls them a controlled
+ *   population of three. The declared population is A+B — serial *because* a
+ *   contended repeat confounds question 1 — and phase D's book pass ran with
+ *   two other jobs against it. It is reported with Q5, where the contention is
+ *   the point. ⟨GPT Sol, DPN-12.⟩
+ * - **Q1, Q2 and Q3** aggregated the records of a pass whose wave *threw*.
+ *   ⟨DPN-05.⟩ And `0 of 0` prints as a flip rate of none. ⟨DPN-11.⟩
+ * - **Q4** dropped any job whose ledger read never completed, so a missing bill
+ *   read as a smaller one. ⟨DPN-02.⟩
+ * - **Q5** counted three failed steps as three measurements. ⟨DPN-03/04.⟩
+ */
 function answerTheQuestions(opts: {
+  /** Phase A and B's passes only — the declared controlled population for Q1. */
   bookPasses: RecordsPass[];
+  /** How many of those the run set out to make. */
+  expectedBookPasses: number;
+  /** Every pass of every slug, failed ones included; the gates do the filtering. */
   allRecords: RecordsPass[];
   jobs: readonly JobRecord[];
+  /** How many hierarchy steps phase D planned to run at once. */
+  expectedLoadSteps: number;
+  /** Which step phase D is measured on — `hierarchy`, or `blocks` under `--dry-run`. */
+  measuredStep: string;
 }): { answers: Record<string, unknown>; findings: DeepenFinding[]; printed: string } {
   const findings: DeepenFinding[] = [];
   const lines: string[] = [];
-  const { bookPasses, allRecords, jobs } = opts;
+  const { bookPasses, allRecords, jobs, measuredStep } = opts;
+  const book = usablePasses(bookPasses);
 
-  /* --- Q1 */
-  lines.push("\nQ1  Is the verdict stable across repeats?");
+  /* --- Q1: phase A and phase B, and nothing else. */
+  lines.push("\nQ1  Is the verdict stable across repeats?  (phases A and B only, serial)");
   lines.push("─".repeat(70));
   let q1: ReturnType<typeof compareRepeats> | null = null;
-  if (bookPasses.length < 2) {
-    lines.push(
-      `  Not answerable: ${bookPasses.length} pass(es) of the book's wave. Question 1 needs at ` +
-        "least two, and each has to have bought its own calls.",
-    );
-    findings.push({
-      kind: "no-records",
-      fatal: false,
-      message: `Question 1 needs at least two book passes and this run has ${bookPasses.length}.`,
-    });
-  } else {
-    findings.push(...wave1Unchanged(bookPasses));
+  if (book.usable.length >= 2) {
+    findings.push(...wave1Unchanged(book.usable));
     try {
-      q1 = compareRepeats(bookPasses);
+      q1 = compareRepeats(book.usable);
       lines.push(formatQ1(q1));
     } catch (err) {
       lines.push(`  REFUSED: ${err instanceof Error ? err.message : String(err)}`);
@@ -548,56 +729,89 @@ function answerTheQuestions(opts: {
         message: err instanceof Error ? err.message : String(err),
       });
     }
+  } else {
+    lines.push(
+      `  NOT ANSWERABLE: ${book.usable.length} usable pass(es) of the book's wave` +
+        `${book.failed.length > 0 ? ` and ${book.failed.length} failed` : ""}. Question 1 needs at ` +
+        "least two, and each has to have bought its own calls.",
+    );
   }
+  const q1Findings = q1Gate({
+    expectedPasses: opts.expectedBookPasses,
+    usable: book.usable,
+    failed: book.failed,
+    stability: q1,
+  });
+  findings.push(...q1Findings);
+  if (q1Findings.length > 0) lines.push(formatFindings(q1Findings));
 
-  /* --- Q2 */
-  const everyRecord = allRecords.flatMap((p) => [...p.records]);
+  /* --- Q2 and Q3, over the passes that did not fail. */
+  const all = usablePasses(allRecords);
+  const everyRecord = all.usable.flatMap((p) => [...p.records]);
   lines.push("\nQ2  Does the model always say yes?  (raw yes rate, by wave and by node size)");
   lines.push("─".repeat(70));
+  lines.push(
+    `  over ${all.usable.length} pass(es)` +
+      (all.failed.length > 0 ? `, ${all.failed.length} FAILED pass(es) excluded` : ""),
+  );
   const q2 = yesRates(everyRecord);
   lines.push(formatQ2(q2));
+  const q2Findings = verdictGate({ question: "Question 2", assessed: q2.overall.asked, failed: all.failed });
+  findings.push(...q2Findings);
+  if (q2Findings.length > 0) lines.push(formatFindings(q2Findings));
 
-  /* --- Q3 */
   lines.push("\nQ3  How often does a bound overrule the model?");
   lines.push("─".repeat(70));
   const q3 = boundTally(everyRecord);
   lines.push(formatQ3(q3));
+  const q3Findings = verdictGate({ question: "Question 3", assessed: q3.assessed, failed: all.failed });
+  findings.push(...q3Findings);
+  if (q3Findings.length > 0) lines.push(formatFindings(q3Findings));
 
-  /* --- Q4 */
+  /* --- Q4: every job, including the ones whose ledger could not be read. */
   lines.push("\nQ4  What does it actually cost?");
   lines.push("─".repeat(70));
   const q4 = costReport(
-    jobs
-      .filter((j) => j.money !== undefined)
-      .map((j) => ({
-        label: `${j.phase} ${j.label}`,
-        nanos: moneyTotalNanos(j.money!),
-        unpriced: j.money!.unpriced,
-        isBook: j.repeat !== null,
-      })),
+    jobs.map((j) => ({
+      label: `${j.phase} ${j.label}`,
+      nanos: j.money == null ? null : moneyTotalNanos(j.money),
+      unpriced: j.money?.unpriced ?? 0,
+      unreadable: j.unreadable ?? 0,
+      isBook: j.repeat !== null,
+    })),
   );
   lines.push(formatQ4(q4));
+  findings.push(...q4.findings);
 
-  /* --- Q5 */
+  /* --- Q5: phase D, on the step's own clocks and the step's own concurrency. */
   lines.push("\nQ5  Does it fit the budget under load?");
   lines.push("─".repeat(70));
   const clocks: StepClock[] = jobs
     .filter((j) => j.phase === "D")
-    .map((j) => ({
-      slug: j.slug,
-      label: `${j.phase} ${j.label}`,
-      ms: j.hierarchyMs ?? null,
-      outOfTime: j.stats?.outOfTime ?? null,
-      withheld: j.stats?.withheld ?? null,
-      resumed: j.stats?.resumed ?? null,
-      uncheckpointed: j.stats?.uncheckpointed ?? null,
-    }));
+    .map((j) => {
+      const step = j.stepOutcomes?.find((s) => s.name === measuredStep);
+      return {
+        slug: j.slug,
+        label: `${j.phase} ${j.label}`,
+        ms: step?.ms ?? null,
+        status: step?.status ?? null,
+        startedAt: step?.startedAt ?? null,
+        finishedAt: step?.finishedAt ?? null,
+        hasStats: j.stats != null,
+        outOfTime: j.stats?.outOfTime ?? null,
+        withheld: j.stats?.withheld ?? null,
+        resumed: j.stats?.resumed ?? null,
+        uncheckpointed: j.stats?.uncheckpointed ?? null,
+      };
+    });
   const q5 = budgetReport({
     clocks,
     budgetMs: STEP_BUDGET_MS.hierarchy,
     deadlineMs: EFFECTIVE_DEADLINE_MS,
+    expected: opts.expectedLoadSteps,
   });
   lines.push(formatQ5(q5));
+  findings.push(...q5.findings);
   for (const over of q5.overBudget) {
     findings.push({
       kind: "over-budget",
@@ -605,9 +819,25 @@ function answerTheQuestions(opts: {
       message: `${over.label} took ${((over.ms ?? 0) / 1000).toFixed(1)}s, past STEP_BUDGET_MS.hierarchy.`,
     });
   }
+  /* **Phase D's book pass belongs here, not in Q1.** It is a real repeat and a
+     real data point — that is why it is a repeat at all — but it ran under
+     contention, so its place is beside the load measurement. */
+  const dBook = allRecords.filter(
+    (p) => p.phase === "D" && jobs.some((j) => j.slug === p.slug && j.repeat !== null),
+  );
+  for (const p of dBook) {
+    lines.push(
+      `  ${p.label} (the book's wave under load): ${p.stats.expanded}/${p.stats.targets} section(s), ` +
+        `${p.stats.calls} call(s), yes ${p.stats.verdicts.rawYes}/` +
+        `${p.stats.verdicts.rawYes + p.stats.verdicts.rawNo}` +
+        `${p.failed ? "   FAILED — partial" : ""}. Deliberately NOT in question 1: it ran with two ` +
+        "other jobs against it, and contention is the confound question 1's serial repeats exist " +
+        "to keep out.",
+    );
+  }
 
   return {
-    answers: { q1, q2, q3, q4, q5 },
+    answers: { q1, q2, q3, q4, q5, phaseDBookPasses: dBook.map((p) => p.label) },
     findings,
     printed: lines.join("\n"),
   };
@@ -740,9 +970,27 @@ function currentMeta(databaseTarget: string): RunMeta {
         "Every CandidateRecord carries the model and effort it was decided under.",
     },
     jobConcurrency: DEFAULT_JOB_CONCURRENCY,
+    jobConcurrencyRuntime: jobConcurrency(),
     stepBudgetMs: STEP_BUDGET_MS.hierarchy,
     effectiveDeadlineMs: EFFECTIVE_DEADLINE_MS,
   };
+}
+
+/**
+ * **A queue cap that is not what phase D was planned at cannot measure phase D**
+ * — and the run would spend $40.90 first and print an unmeasurable Q5 second.
+ * Asked before anything is enqueued, on every path, so the refusal can be
+ * watched on the free ones. ⟨GPT Sol, DPN-04.⟩
+ */
+export function assertJobConcurrency(runtime: number, planned: number): void {
+  if (runtime === planned) return;
+  throw new Error(
+    `The queue's runtime cap is ${runtime} and phase D is planned at ${planned}: ` +
+      "SPIDERYARN_JOB_CONCURRENCY is set in this process. Question 5 asks whether the hierarchy " +
+      "step fits its budget with DEFAULT_JOB_CONCURRENCY jobs at once, and at any other cap the " +
+      "three phase-D jobs serialise while all three promises stay alive — which reads as a pass. " +
+      "Unset the variable and run again.",
+  );
 }
 
 async function assertEvalOwnerReady(): Promise<void> {
@@ -807,9 +1055,10 @@ async function main(): Promise<void> {
   console.log(
     `Budget: STEP_BUDGET_MS.hierarchy ${(meta.stepBudgetMs / 1000).toFixed(0)}s, ` +
       `self-abort at ${(meta.effectiveDeadlineMs / 1000).toFixed(0)}s, ` +
-      `job concurrency ${meta.jobConcurrency}`,
+      `job concurrency ${meta.jobConcurrencyRuntime} (planned ${meta.jobConcurrency})`,
   );
 
+  assertJobConcurrency(meta.jobConcurrencyRuntime, meta.jobConcurrency);
   await assertEvalOwnerReady();
   await assertLedgerUsable(() => costStore.forJob("spya-deepen-probe"));
 
@@ -863,12 +1112,9 @@ async function main(): Promise<void> {
     estimate: bill,
     jobs: [],
   };
-  const checkpoint = async (): Promise<void> => {
-    const final = path.join(runDir, "run.json");
-    const temp = `${final}.${process.pid}.tmp`;
-    await writeFile(temp, `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
-    await rename(temp, final);
-  };
+  /* Serialised and uniquely named — `checkpointWriter` says why, and phase D is
+     what made it necessary: three concurrent jobs all checkpointing. */
+  const checkpoint = checkpointWriter(path.join(runDir, "run.json"), () => runFile);
   await checkpoint();
 
   /* ------------------------------------------------------------ the plan -- */
@@ -897,10 +1143,15 @@ async function main(): Promise<void> {
     "an ordinary repeat resumes and buys nothing; a re-asking one buys every call again and reads none",
     "every repeat's wave-1 frontier is identical — if it moved, the seed moved and Q1 is void",
     "every repeat bought its own wave (stats.calls > 0 where stats.targets > 0)",
-    "no repeat's `hierarchy` ledger rows carry a whole structure call's worth of input tokens",
-    "phase C: the published tree is unchanged, deepen.targets is 0, and the flag-off pass wrote no records file",
-    "phase D: each hierarchy step's wall clock against STEP_BUDGET_MS.hierarchy and the 740s self-abort",
+    "no REPEAT's `hierarchy` ledger rows carry a whole structure call's worth of input tokens — and phase A's do, because the ingest is what buys the seed",
+    "every ledger row carries scopeKind \"eval\", so nothing here is billed to Product",
+    "every call each step's own collector saw has a ledger row, and the ledger is re-read at the end to say whether the numbers stood still",
+    "phase C: the published tree is unchanged, the flag-off pass wrote no records file, and deepen.targets is 0 — an eligible section makes it an invalid control, not a note",
+    "phase D: the hierarchy STEPS' own windows reach concurrency 3, and three of them completed with stats — a step that started and failed carries a clock and is not a measurement",
+    "a re-asking pass that hands its claim back at its own deadline is STOPPED, not re-driven: re-claiming it buys the whole wave again",
     "candidates paired across repeats on parent-plus-range, never on `where` — refused outright if the range is missing",
+    "question 1 over phases A and B only, over passes whose wave did not throw, and refused outright if it matched nothing",
+    "questions 2 and 3 refused where no node carried a verdict; question 4 refused where any job's bill is missing, unpriced or unreadable",
   ]) {
     console.log(`  - ${line}`);
   }
@@ -954,7 +1205,7 @@ async function main(): Promise<void> {
       steps: { ingest, rerun, force },
     });
   } finally {
-    await reportRun({ ctx, args, bookSlug, runDir });
+    await reportRun({ ctx, args, bookSlug, runDir, measuredStep: rerun[0] ?? "hierarchy" });
   }
 }
 
@@ -1267,13 +1518,95 @@ async function runPhases(opts: {
         }),
       );
     }
-    await withLevers({ deepen, reask: [liveBookSlug] }, async () => {
-      await Promise.all(queued.map((q) => driveJob(ctx, q)));
-    });
+    /* **`allSettled`, not `all`.** `Promise.all` rejects the moment one job
+       does, and the rejection travels straight out through `withLevers` —
+       which restores `SPIDERYARN_DEEPEN_HIERARCHY` and `SPIDERYARN_DEEPEN_REASK`
+       while the other two jobs are still running under them, and lets
+       `reportRun` start reading half-written ledgers and deleting articles
+       underneath live tasks. Draining first costs nothing and is the only way
+       the levers mean what they say for the whole phase.
+       ⟨GPT Sol, DPN-06.⟩ */
+    const settled = await withLevers({ deepen, reask: [liveBookSlug] }, async () =>
+      Promise.allSettled(queued.map((q) => driveJob(ctx, q))),
+    );
+    const broke = settled.flatMap((s) => (s.status === "rejected" ? [s.reason as unknown] : []));
+    if (broke.length > 0) {
+      throw new AggregateError(
+        broke.map((r) => (r instanceof Error ? r : new Error(String(r)))),
+        `${broke.length} of phase D's ${queued.length} jobs threw. Every one of them was drained ` +
+          "before the levers were restored; the report below covers what the run really did.",
+      );
+    }
 }
 
 
 /* -------------------------------------------------------------- the report -- */
+
+/**
+ * **Read every job's ledger a second time, once nothing is still writing.**
+ *
+ * `driveJob` reads the ledger the instant its job stops, and a row written by a
+ * call that finished a moment before can still be in flight — `collectSpend`
+ * calls `onDone` before it drains `box.writes`, so the per-job read is taken at
+ * the one moment a late write is neither in the ledger nor in the collector's
+ * failure count. This second read is free, is taken after every job in the run
+ * has stopped, and says whether anything moved. A difference is a finding
+ * rather than a correction: the question is not "what is the number" but
+ * "did the number the run reported stand still". ⟨GPT Sol, DPN-02.⟩
+ */
+async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenFinding[]> {
+  const findings: DeepenFinding[] = [];
+  for (const j of jobs) {
+    let now: Awaited<ReturnType<typeof costStore.forJob>>;
+    try {
+      now = await costStore.forJob(j.jobId);
+    } catch (err) {
+      findings.push({
+        kind: "not-answerable",
+        fatal: true,
+        message:
+          `${j.phase} ${j.label}: the ledger could not be re-read at the end of the run ` +
+          `(${err instanceof Error ? err.message : String(err)}), so nothing here confirms the ` +
+          "figure this job reported.",
+      });
+      continue;
+    }
+    const then = j.money;
+    const nowMoney = totalMoney(now.rows);
+    if (then == null) {
+      /* The first read failed, this one worked: record what is really there
+         rather than leaving the row `NOT READ` on evidence we now have. */
+      j.money = nowMoney;
+      j.unreadable = now.unreadable;
+      j.byStep = aggregateByStep(now.rows);
+      j.byAiJob = aggregateByAiJob(now.rows);
+      findings.push({
+        kind: "note",
+        fatal: false,
+        message:
+          `${j.phase} ${j.label}: the ledger read failed during the run and succeeded at the end. ` +
+          `The bill below is the second read: $${(moneyTotalNanos(nowMoney) / 1e9).toFixed(4)}.`,
+      });
+      continue;
+    }
+    if (moneyTotalNanos(nowMoney) !== moneyTotalNanos(then)) {
+      findings.push({
+        kind: "not-answerable",
+        fatal: true,
+        message:
+          `${j.phase} ${j.label}: the ledger said ` +
+          `$${(moneyTotalNanos(then) / 1e9).toFixed(4)} while the run was going and ` +
+          `$${(moneyTotalNanos(nowMoney) / 1e9).toFixed(4)} at the end. Rows landed after the ` +
+          "per-job read, so every figure taken at that moment is a floor rather than a total.",
+      });
+      j.money = nowMoney;
+      j.byStep = aggregateByStep(now.rows);
+      j.byAiJob = aggregateByAiJob(now.rows);
+    }
+    j.unreadable = now.unreadable;
+  }
+  return findings;
+}
 
 /**
  * **Everything the run has to say once the jobs have stopped**, in a `finally`
@@ -1290,11 +1623,14 @@ async function reportRun(opts: {
   args: Args;
   bookSlug: string;
   runDir: string;
+  measuredStep: string;
 }): Promise<void> {
-  const { ctx, args, bookSlug, runDir } = opts;
+  const { ctx, args, runDir, measuredStep } = opts;
   await ctx.checkpoint();
 
-  const findings: DeepenFinding[] = ctx.runFile.jobs.flatMap((j) => j.findings ?? []);
+  const findings: DeepenFinding[] = [];
+  findings.push(...(await reconcileLedgerAgain(ctx.runFile.jobs)));
+
   const bookRepeats = ctx.runFile.jobs.filter((j) => j.repeat !== null);
   for (const j of bookRepeats) {
     if (j.stats == null) continue;
@@ -1307,45 +1643,101 @@ async function reportRun(opts: {
       structureInputTokensFloor: structureTokenFloor(
         Number(j.stepOutcomes?.find((s) => s.name === "blocks")?.detail?.match(/^(\d+)/)?.[1] ?? 0),
       ),
+      /* **Phase A buys the structure call; that is what phase A is for.** The
+         guard was applied to it as well, and Moby-Dick's measured 453,832-token
+         structure call is over the 256,900-token floor — so a *successful* run
+         would have spent $40.90 and then reported `structure-rebought` fatally.
+         ⟨GPT Sol, DPN-08.⟩ */
+      structure: j.phase === "A" ? "bought" : "resumed",
     });
     j.findings = [...(j.findings ?? []), ...own];
-    findings.push(...own);
   }
 
-  const passesFor = async (slug: string, label: (i: number) => string): Promise<RecordsPass[]> =>
-    (await readRecordsDir(ctx.recordsDir, { slug })).map(({ parsed }, i) => ({
-      label: label(i),
-      slug: parsed.slug,
-      writtenAt: parsed.writtenAt,
-      stats: parsed.stats,
-      records: parsed.records,
-    }));
-
-  const bookSlugLive = bookRepeats[0]?.slug ?? bookSlug;
-  /* **The pass labels carry the phase**, because one of the book's repeats is
-     phase D's and ran with two other jobs against it. It is a data point rather
-     than pure overhead — that is why it is a repeat at all — but a drift row
-     that only says "pass 4" hides the one thing that makes pass 4 different
-     from the three before it. Records for one slug come back in the order they
-     were written, which is the order its jobs ran. */
-  const bookLabels = bookRepeats.map((j) => `${j.phase} r${j.repeat}`);
-  const bookPasses = await passesFor(
-    bookSlugLive,
-    (i) => bookLabels[i] ?? `book pass ${i + 1}`,
+  /* **Each records file bound to the job that wrote it**, rather than matched
+     to a job by its position in a directory listing. That is what carries the
+     phase (so Q1 can be A+B only) and the `failed` flag (so a partial pass is
+     not aggregated as a whole one) onto every pass. ⟨DPN-05, DPN-12.⟩ */
+  const onDisk = new Map(
+    (
+      await readRecordsDir(ctx.recordsDir).catch((err: unknown) => {
+        /* In a `finally`, so a throw here would replace whatever killed the
+           run with a message about a records file. */
+        findings.push({
+          kind: "no-records",
+          fatal: true,
+          message:
+            "The records directory could not be read at reporting time " +
+            `(${err instanceof Error ? err.message : String(err)}), so questions 1-3 have no ` +
+            "evidence at all. The files are still on disk.",
+        });
+        return [] as Awaited<ReturnType<typeof readRecordsDir>>;
+      })
+    ).map(({ file, parsed }) => [file, parsed]),
   );
-  const everySlug = [...new Set(ctx.runFile.jobs.map((j) => j.slug))];
-  const allRecords: RecordsPass[] = [];
-  for (const slug of everySlug) {
-    allRecords.push(...(await passesFor(slug, (i) => `${slug} pass ${i + 1}`)));
-  }
+  /**
+   * **One pass per job, and it is the LAST file the job wrote.**
+   *
+   * A job that handed its claim back and was re-driven runs `deepenTree` twice
+   * and writes twice; the second run resumes what the first bought and asks
+   * about the rest, so its file covers the whole wave and the first is a prefix
+   * of it. Counting both would put a partial pass beside a whole one — the same
+   * mistake DPN-05 is about, arriving by a different door — and would make the
+   * expected-pass count wrong for a phase A whose book requeued, which is
+   * routine at 658-778 s against a 740 s deadline. `driveJob` reads `stats` off
+   * the last file for the same reason.
+   */
+  const passesOf = (j: JobRecord): RecordsPass[] => {
+    const files = (j.recordsFiles ?? []).filter((f) => onDisk.has(f));
+    const file = files.at(-1);
+    if (file === undefined) return [];
+    if (files.length > 1) {
+      findings.push({
+        kind: "note",
+        fatal: false,
+        message:
+          `${j.phase} ${j.label} wrote ${files.length} records files (${files.join(", ")}), so its ` +
+          "wave ran more than once — the job was re-driven. The last one is the complete pass and " +
+          "is the only one questions 1-3 are computed over; the earlier ones are its prefixes.",
+      });
+    }
+    const parsed = onDisk.get(file)!;
+    return [
+      {
+        label: `${j.phase} ${j.repeat === null ? j.slug : `r${j.repeat}`}`,
+        slug: parsed.slug,
+        writtenAt: parsed.writtenAt,
+        stats: parsed.stats,
+        records: parsed.records,
+        failed: parsed.failed ?? false,
+        reason: parsed.reason ?? null,
+        file,
+        phase: j.phase,
+      },
+    ];
+  };
+
+  /* **Phase A and phase B, and nothing else.** The declared controlled
+     population is the serial passes; phase D's book pass ran with two other
+     jobs against it and is reported with question 5. */
+  const bookPasses = bookRepeats
+    .filter((j) => j.phase === "A" || j.phase === "B")
+    .flatMap(passesOf);
+  const allRecords: RecordsPass[] = ctx.runFile.jobs.flatMap(passesOf);
 
   /* **The driving is checked on every run, paid or free** — the network
      escape, the serial repeats, the concurrent load phase, the forces that
      were honoured. It was written for `--dry-run` and belongs on the paid
      path for the same reason: a fetch that reached the network is worse when
      money is moving, not better. */
-  const driving = checkDriving(ctx.runFile.jobs);
+  const driving = checkDriving(ctx.runFile.jobs, {
+    measuredStep,
+    jobConcurrency: jobConcurrency(),
+    plannedConcurrency: DEFAULT_JOB_CONCURRENCY,
+  });
   findings.push(...driving);
+  /* **The per-job findings last, after the structure check has been added to
+     them** — a job's own list is the record, and this is a view of it. */
+  findings.push(...ctx.runFile.jobs.flatMap((j) => j.findings ?? []));
   console.log("\nThe driving");
   console.log("─".repeat(70));
   console.log(formatDriving(ctx.runFile.jobs));
@@ -1359,13 +1751,22 @@ async function reportRun(opts: {
     await ctx.checkpoint();
     console.log(
       "\n--dry-run: no model call was made, so questions 1-5 were not asked. Their answers " +
-        "are deliberately absent rather than printed as zeroes.",
+        "are deliberately absent rather than printed as zeroes.\n" +
+        `  Expect the phase-D concurrency note here: the measured step is \`${measuredStep}\`, ` +
+        "which takes milliseconds, so three of them rarely overlap however concurrently the jobs " +
+        "were driven. On the paid path the step is `hierarchy` and runs for minutes, and the same " +
+        "note there is the real thing — it makes question 5 unanswerable.",
     );
   } else {
     const { answers, findings: qFindings, printed } = answerTheQuestions({
       bookPasses,
+      /* Phase A is repeat 1 and phases B are the rest, so the controlled
+         population is exactly `--repeats` passes — phase D's is not in it. */
+      expectedBookPasses: args.repeats,
       allRecords,
       jobs: ctx.runFile.jobs,
+      expectedLoadSteps: ctx.runFile.jobs.filter((j) => j.phase === "D").length,
+      measuredStep,
     });
     findings.push(...qFindings);
     ctx.runFile.answers = answers;

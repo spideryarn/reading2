@@ -24,6 +24,7 @@ import type {
   OverridingBound,
 } from "../../src/hierarchy-expand.js";
 import type { DeepenStats } from "../../src/hierarchy-deepen.js";
+import type { Finding as CostFinding } from "../cost/report.js";
 
 /* --------------------------------------------------------------- findings -- */
 
@@ -46,9 +47,46 @@ export interface DeepenFinding {
     | "structure-rebought"
     | "not-inert"
     | "over-budget"
+    /**
+     * **An answer that could not be computed over the evidence it needs**, said
+     * out loud instead of printed as a zero. Every one of Q1-Q5 has a gate that
+     * can raise this, because "measured zero" and "not measured" are different
+     * facts and the second one reads like the first.
+     * docs/reusable/silent-success.md.
+     */
+    | "not-answerable"
+    /** A pass whose wave threw. Its records are partial and are not evidence. */
+    | "wave-failed"
+    /** A row landed in the Product bucket. `evals/cost/report.ts § checkScope`. */
+    | "scope-leak"
+    /** Calls were made that the ledger has no row for. `checkLedgerComplete`. */
+    | "ledger-short"
+    /**
+     * **A pass handed its claim back at its own deadline and this run stopped it
+     * rather than re-driving it.** Re-driving a *re-asking* pass buys the whole
+     * wave again — see `driveToDone` in run.ts.
+     */
+    | "requeued"
     | "note";
   message: string;
   fatal: boolean;
+}
+
+/**
+ * **A cost-eval finding, in this eval's vocabulary.**
+ *
+ * The two evals reuse `checkScope` and `checkLedgerComplete` verbatim rather
+ * than growing a second opinion about what "eval spend landed in the Product
+ * bucket" and "the ledger is short" mean, so the messages come across
+ * unchanged and only the kind is translated. The fatality is the cost eval's:
+ * both of those are fatal there and mean the same thing here.
+ */
+export function asDeepenFinding(f: CostFinding): DeepenFinding {
+  return {
+    kind: f.kind === "scope-leak" ? "scope-leak" : f.kind === "ledger-short" ? "ledger-short" : "note",
+    fatal: f.fatal,
+    message: f.step === null ? f.message : `${f.step}: ${f.message}`,
+  };
 }
 
 /* ----------------------------------------------------------- one pass in -- */
@@ -61,6 +99,38 @@ export interface RecordsPass {
   writtenAt: string;
   stats: DeepenStats;
   records: readonly CandidateRecord[];
+  /**
+   * **Did the wave that wrote this file throw?** `deepen-records/2` carries the
+   * flag for exactly this: a failed wave still writes a file, with the
+   * governor's decisions and the bill and no expansion, and its records are a
+   * *partial* measurement. Until 2026-09-05 the runner dropped the flag on the
+   * floor between the file and the comparison, so a failed pass's half-finished
+   * verdicts were aggregated beside a whole pass's.
+   * ⟨GPT Sol reviewing the stage-5b harness, DPN-05.⟩
+   */
+  failed: boolean;
+  /** What it said went wrong, where it said anything. */
+  reason: string | null;
+  /** The file this came off, so a reader can go and look at it. */
+  file: string;
+  /** The phase whose job wrote it — `"A"`, `"B"`, `"C"` or `"D"`. */
+  phase: string;
+}
+
+/**
+ * **The passes an answer may be computed over, and the ones it may not.**
+ *
+ * One place, because Q1, Q2 and Q3 all need the same split and three copies of
+ * the filter is three chances for one of them to forget.
+ */
+export function usablePasses(passes: readonly RecordsPass[]): {
+  usable: RecordsPass[];
+  failed: RecordsPass[];
+} {
+  return {
+    usable: passes.filter((p) => !p.failed),
+    failed: passes.filter((p) => p.failed),
+  };
 }
 
 /* ------------------------------------------------- the range, and the gap -- */
@@ -180,12 +250,23 @@ export interface VerdictFlip {
 }
 
 /**
- * **Three outcomes, kept apart**, because two of them are structural and only
- * one is what "the verdict flipped" means.
+ * **Three outcomes, and only one of the three pairs is disjoint.**
  *
- * Folding a changed fan-out into a flip rate would report the model changing its
- * mind about a node when in fact it produced a different set of nodes, and stage
- * 6 leans on the first of those and not the second.
+ * `fanOutChanged` is disjoint from the other two by construction: a parent whose
+ * child count moved is counted there and nothing else is asked of it, because a
+ * parent that came back with a different number of children produced other
+ * nodes rather than changing its mind, and folding that into a flip rate is what
+ * the plan forbids.
+ *
+ * **`boundariesMoved` and `verdictFlips` overlap, deliberately**, and this file
+ * described them as disjoint until 2026-09-05. One parent can move a boundary
+ * *and* have a surviving child whose verdict flipped at an unchanged range, and
+ * both facts are true and independent. Making them disjoint — a `continue` after
+ * `boundariesMoved` — would *discard* valid same-range verdict evidence, which
+ * is the wrong trade: the flip rate is the number stage 6 leans on.
+ * `bothMovedAndFlipped` is the overlap, printed rather than left to be inferred.
+ * ⟨GPT Sol reviewing the stage-5b harness, DPN-13; Greg agreed the reviewer was
+ * right and the earlier instruction to make them disjoint was wrong.⟩
  * docs/plans/260904d-deepen-fat-sections.md § stage 5b.
  */
 export interface Q1Stability {
@@ -202,6 +283,11 @@ export interface Q1Stability {
   rangesMatched: number;
   /** Of those, the ones whose raw verdict was not identical in every pass. */
   verdictFlips: VerdictFlip[];
+  /**
+   * **Parents counted in `boundariesMoved` *and* carrying a flip** — the overlap
+   * between the two rows that are not disjoint. Never subtracted from either.
+   */
+  bothMovedAndFlipped: number;
   /** Records whose parent could not be resolved. Never folded into anything above. */
   unpairable: number;
 }
@@ -267,6 +353,7 @@ export function compareRepeats(passes: readonly RecordsPass[]): Q1Stability {
     boundariesMoved: [],
     rangesMatched: 0,
     verdictFlips: [],
+    bothMovedAndFlipped: 0,
     unpairable: 0,
   };
   if (passes.length < 2) return answer;
@@ -297,12 +384,16 @@ export function compareRepeats(passes: readonly RecordsPass[]): Q1Stability {
     }
     /* Equal fan-out. Did the boundaries land in the same places? */
     const shapes = new Set(rows.map((r) => r.ranges.join("|")));
-    if (shapes.size > 1) answer.boundariesMoved.push(drift);
+    const moved = shapes.size > 1;
+    if (moved) answer.boundariesMoved.push(drift);
 
     /* And the flip rate, over the ranges every pass produced — which is a
        subset of the children when the boundaries moved, and all of them when
-       they did not. A boundary that moved is counted above and its surviving
-       siblings are still compared here; the two facts are independent. */
+       they did not. **No `continue` above**, deliberately: a boundary that moved
+       is counted there and its surviving siblings are still compared here, and
+       the alternative discards valid same-range verdict evidence. The two facts
+       overlap, and `bothMovedAndFlipped` is the overlap said out loud. */
+    let flippedHere = false;
     const everywhere = rows[0]!.ranges.filter((r) => rows.every((row) => row.ranges.includes(r)));
     for (const range of new Set(everywhere)) {
       answer.rangesMatched++;
@@ -312,10 +403,103 @@ export function compareRepeats(passes: readonly RecordsPass[]): Q1Stability {
       }));
       if (new Set(verdicts.map((v) => v.verdict)).size > 1) {
         answer.verdictFlips.push({ parent, range, verdicts });
+        flippedHere = true;
       }
     }
+    if (moved && flippedHere) answer.bothMovedAndFlipped++;
   }
   return answer;
+}
+
+/* ------------------------------------------------------ Q1's own gate -- */
+
+/**
+ * **Can question 1 be quoted at all?**
+ *
+ * Three ways it cannot, and every one of them printed a clean-looking answer
+ * before 2026-09-05: fewer passes than the run set out to make, a pass whose
+ * wave threw (partial records aggregated as though whole), and a comparison
+ * that matched nothing anywhere — `0 of 0 —`, which reads as "perfectly stable"
+ * to anybody skimming. docs/reusable/silent-success.md.
+ *
+ * "Matched nothing" is only a refusal where the comparison also found **no
+ * structural instability**: a run whose every parent changed fan-out has
+ * measured something real and says so, and the flip rate being empty is that
+ * measurement's answer rather than its absence.
+ */
+export function q1Gate(opts: {
+  expectedPasses: number;
+  usable: readonly RecordsPass[];
+  failed: readonly RecordsPass[];
+  stability: Q1Stability | null;
+}): DeepenFinding[] {
+  const findings: DeepenFinding[] = [];
+  for (const pass of opts.failed) {
+    findings.push({
+      kind: "wave-failed",
+      fatal: true,
+      message:
+        `"${pass.label}" (${pass.file}) is a pass whose wave threw` +
+        `${pass.reason === null ? "" : ` — ${pass.reason}`}. Its records are the governor's ` +
+        "decisions up to the throw and nothing after it, so they are a partial measurement and " +
+        "are excluded from questions 1-3. A required book pass that failed makes those answers " +
+        "unquotable rather than smaller.",
+    });
+  }
+  if (opts.usable.length !== opts.expectedPasses) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `Question 1 needs ${opts.expectedPasses} usable pass(es) of the book's wave and this run ` +
+        `has ${opts.usable.length}` +
+        `${opts.failed.length > 0 ? ` (${opts.failed.length} more failed)` : ""}. A stability ` +
+        "figure over fewer passes than the run set out to make is measuring a different run.",
+    });
+  }
+  if (opts.stability !== null) {
+    const structural = opts.stability.fanOutChanged.length + opts.stability.boundariesMoved.length;
+    if (opts.stability.rangesMatched === 0 && structural === 0) {
+      findings.push({
+        kind: "not-answerable",
+        fatal: true,
+        message:
+          "Question 1 matched no child range across the passes and found no structural " +
+          "instability either, so it measured nothing at all — and `0 of 0` prints as a flip " +
+          "rate of none. Not measured is not the same fact as measured zero.",
+      });
+    }
+  }
+  return findings;
+}
+
+/* ------------------------------------------- the gate Q2 and Q3 share -- */
+
+/**
+ * **A verdict rate over no verdicts is not a rate.**
+ *
+ * Q2 divides by `asked` and Q3 by `assessed`, and both print `—` where the
+ * denominator is zero — honest on its own, and read as "nothing to worry about"
+ * beside four other rows that carry numbers. So the absence becomes a finding
+ * rather than a dash. ⟨GPT Sol, DPN-11.⟩
+ */
+export function verdictGate(opts: {
+  question: string;
+  assessed: number;
+  failed: readonly RecordsPass[];
+}): DeepenFinding[] {
+  const findings: DeepenFinding[] = [];
+  if (opts.assessed > 0) return findings;
+  findings.push({
+    kind: "not-answerable",
+    fatal: true,
+    message:
+      `${opts.question} was computed over 0 assessed verdict(s)` +
+      `${opts.failed.length > 0 ? `, with ${opts.failed.length} failed pass(es) excluded` : ""}. ` +
+      "No node carried a verdict, so there is nothing to take a rate of — this is an absence and " +
+      "must not be read as a measured zero.",
+  });
+  return findings;
 }
 
 /**
@@ -520,33 +704,99 @@ export const INCUMBENT_BOOK_NANOS = 1_000_000_000;
 
 export interface CostRow {
   label: string;
-  /** Real money out of the ledger, in nanodollars. Never a token count. */
-  nanos: number;
+  /**
+   * Real money out of the ledger, in nanodollars — or **`null` where the ledger
+   * was never read for this job**, which is not zero and must never be summed
+   * as one. Until 2026-09-05 the runner filtered these rows out entirely, so a
+   * job whose ledger read failed simply vanished from the bill.
+   * ⟨GPT Sol, DPN-02.⟩
+   */
+  nanos: number | null;
   /** Calls the ledger could not price. A total carrying them is short. */
   unpriced: number;
+  /** Ledger lines that could not be read at all. */
+  unreadable: number;
   /** `nanos / INCUMBENT_BOOK_NANOS`, for the book rows only. */
   vsIncumbent: number | null;
 }
 
 export interface Q4Cost {
   rows: CostRow[];
+  /** The rows that carried a number, summed. `null` where none did. */
+  totalNanos: number | null;
+  /** **Is this bill the whole bill?** False where anything above is missing or unpriced. */
+  answerable: boolean;
+  findings: DeepenFinding[];
   /** Where the money came from, so nobody reads a token count as a price. */
   source: string;
 }
 
 export function costReport(
-  rows: readonly { label: string; nanos: number; unpriced: number; isBook: boolean }[],
+  rows: readonly {
+    label: string;
+    nanos: number | null;
+    unpriced: number;
+    unreadable: number;
+    isBook: boolean;
+  }[],
 ): Q4Cost {
+  const out: CostRow[] = rows.map((r) => ({
+    label: r.label,
+    nanos: r.nanos,
+    unpriced: r.unpriced,
+    unreadable: r.unreadable,
+    vsIncumbent: r.isBook && r.nanos !== null ? r.nanos / INCUMBENT_BOOK_NANOS : null,
+  }));
+  const findings: DeepenFinding[] = [];
+  const unread = out.filter((r) => r.nanos === null);
+  const unpriced = out.filter((r) => r.unpriced > 0);
+  const unreadable = out.filter((r) => r.unreadable > 0);
+  if (rows.length === 0) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        "Question 4 has no rows at all: no job's ledger was read, so the bill below is an empty " +
+        "table rather than a measurement of zero.",
+    });
+  }
+  for (const r of unread) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${r.label}: the ledger was never read for this job, so its spend is UNKNOWN and is not ` +
+        "in the total. An unread row and a zero row look the same in a sum, which is why this " +
+        "one is a finding instead.",
+    });
+  }
+  for (const r of unpriced) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${r.label}: ${r.unpriced} call(s) reported no cost. Its bill is unknown rather than ` +
+        "zero, and a cost measurement cannot report unknown.",
+    });
+  }
+  for (const r of unreadable) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message: `${r.label}: ${r.unreadable} ledger line(s) could not be read, so this row is short.`,
+    });
+  }
+  const priced = out.filter((r): r is CostRow & { nanos: number } => r.nanos !== null);
   return {
-    rows: rows.map((r) => ({
-      label: r.label,
-      nanos: r.nanos,
-      unpriced: r.unpriced,
-      vsIncumbent: r.isBook ? r.nanos / INCUMBENT_BOOK_NANOS : null,
-    })),
+    rows: out,
+    totalNanos: priced.length === 0 ? null : priced.reduce((n, r) => n + r.nanos, 0),
+    answerable: findings.length === 0,
+    findings,
     source:
       "Money is read back from `spideryarn.ai_calls` by job id (`costStore.forJob`), which is " +
-      "what the gateway billed. The wave's own token counts are reported separately and are " +
+      "what the gateway billed — and reconciled against what each step's own collector saw " +
+      "(`AdvanceParts.onStepSpend`), because a row that was never inserted reads back as " +
+      "`unreadable: 0`. The wave's own token counts are reported separately and are " +
       "NOT converted into a price here — docs/plans/260904d-deepen-fat-sections.md § stage 5b " +
       "asks for one or the other, said plainly, and this is the ledger.",
   };
@@ -559,6 +809,21 @@ export interface StepClock {
   label: string;
   /** `finishedAt - startedAt` off the job's own step record, or `null` if it never ran. */
   ms: number | null;
+  /**
+   * **The measured step's own status** — `done`, `error`, `skipped`, or `null`
+   * where the job has no such step.
+   *
+   * A step that started and failed has both timestamps, so it carries a clock
+   * and read as a measurement: three phase-D steps that each failed in a second
+   * printed *"All 3 hierarchy steps finished inside the budget"*.
+   * ⟨GPT Sol, DPN-03.⟩
+   */
+  status: string | null;
+  /** The step's own window, which is what the concurrency arithmetic is over. */
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** Did this job leave a records file with a wave's stats on it? */
+  hasStats: boolean;
   /** What the wave could not do, from its stats — `null` where no wave ran. */
   outOfTime: number | null;
   withheld: number | null;
@@ -573,6 +838,42 @@ export interface StepClock {
   uncheckpointed: number | null;
 }
 
+/**
+ * **How many of these windows were open at once, at the busiest moment.**
+ *
+ * A sweep over the endpoints rather than a pairwise "did any two overlap",
+ * because question 5 is about `DEFAULT_JOB_CONCURRENCY` jobs at once and *one*
+ * overlapping pair out of three is what a serialised phase D looks like:
+ * `SPIDERYARN_JOB_CONCURRENCY=1` still leaves all three whole-job promises
+ * alive while two of them collect `busy`. ⟨GPT Sol, DPN-04.⟩
+ *
+ * Windows with a missing end are ignored rather than treated as open for ever:
+ * an unmeasured window is an absence, and the callers count those separately.
+ */
+export function peakConcurrency(
+  windows: readonly { startedAt?: string | null | undefined; finishedAt?: string | null | undefined }[],
+): number {
+  const events: { at: number; delta: number }[] = [];
+  for (const w of windows) {
+    if (!w.startedAt || !w.finishedAt) continue;
+    const from = Date.parse(w.startedAt);
+    const to = Date.parse(w.finishedAt);
+    if (Number.isNaN(from) || Number.isNaN(to) || to <= from) continue;
+    events.push({ at: from, delta: 1 }, { at: to, delta: -1 });
+  }
+  /* Ends before starts at the same instant: two windows that touch at a point
+     were never concurrent, and calling them so would let a serialised phase D
+     report the concurrency it was supposed to prove. */
+  events.sort((a, b) => a.at - b.at || a.delta - b.delta);
+  let open = 0;
+  let peak = 0;
+  for (const e of events) {
+    open += e.delta;
+    if (open > peak) peak = open;
+  }
+  return peak;
+}
+
 export interface Q5Budget {
   budgetMs: number;
   deadlineMs: number;
@@ -580,6 +881,15 @@ export interface Q5Budget {
   overBudget: StepClock[];
   /** How many clocks carried a time at all. **Zero is an absence, not a pass.** */
   measured: number;
+  /** How many steps this phase was supposed to run. */
+  expected: number;
+  /** Steps that ran to `done`, carried a clock, and left a wave's stats behind. */
+  completed: number;
+  /** The most of those steps that were ever in flight at once. */
+  peakConcurrency: number;
+  /** **May this answer be quoted?** Every clock present, and all of them at once. */
+  answerable: boolean;
+  findings: DeepenFinding[];
   /** A wave that stopped early. Whether that was survivable is `wasted`. */
   selfAborted: StepClock[];
   /**
@@ -591,15 +901,62 @@ export interface Q5Budget {
   reading: string;
 }
 
+/**
+ * **Question 5, and it has two halves that both have to hold.**
+ *
+ * *Did each step fit its budget* is the clock; *was it under load at all* is the
+ * concurrency. Neither is worth anything without the other, and both had a way
+ * of reporting a pass over evidence that was not there:
+ *
+ * - **A failed step carries a clock.** `startedAt` and `finishedAt` are both
+ *   set on a step that started and blew up a second later, so three failures
+ *   printed "All 3 hierarchy steps finished inside the budget". `status` and
+ *   `hasStats` are what tell a completed step from a fast failure. ⟨DPN-03.⟩
+ * - **Whole-job windows overlap even when the steps do not.** The three phase-D
+ *   promises are all alive while two of them are being told `busy`, so a
+ *   serialised run passed a pairwise overlap check. The concurrency is taken
+ *   over the *steps'* own windows and has to reach `expected`. ⟨DPN-04.⟩
+ */
 export function budgetReport(opts: {
   clocks: readonly StepClock[];
   budgetMs: number;
   deadlineMs: number;
+  /** How many steps this phase planned to run — three, for phase D. */
+  expected: number;
 }): Q5Budget {
   const measured = opts.clocks.filter((c) => c.ms !== null);
-  const overBudget = measured.filter((c) => c.ms! > opts.budgetMs);
+  const completed = opts.clocks.filter((c) => c.status === "done" && c.ms !== null && c.hasStats);
+  const overBudget = completed.filter((c) => c.ms! > opts.budgetMs);
   const selfAborted = opts.clocks.filter((c) => (c.outOfTime ?? 0) > 0 || (c.withheld ?? 0) > 0);
   const wasted = opts.clocks.filter((c) => (c.uncheckpointed ?? 0) > 0);
+  const peak = peakConcurrency(completed);
+  const findings: DeepenFinding[] = [];
+
+  if (opts.expected <= 0 || completed.length !== opts.expected) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `Question 5 needs ${opts.expected} completed step(s) with a clock and a wave's stats, and ` +
+        `this phase has ${completed.length} of ${opts.clocks.length} (` +
+        `${opts.clocks.map((c) => `${c.label}=${c.status ?? "no such step"}`).join(", ") || "no clocks at all"}` +
+        "). A step that started and failed carries both timestamps, so its clock is a duration " +
+        "and not a measurement — this is an absence, not a pass.",
+    });
+  } else if (peak !== opts.expected) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `Question 5 is "does it fit the budget UNDER LOAD", and the ${opts.expected} steps reached ` +
+        `a peak of ${peak} in flight at once. They ran ${peak <= 1 ? "serially" : "partly serially"}, ` +
+        "so the wall clocks below are single-job clocks: this box is shared, the queue's cap is " +
+        "global, and another agent's dev server holding a claim slot serialises them without " +
+        "anything else saying so.",
+    });
+  }
+
+  const answerable = findings.length === 0;
   return {
     budgetMs: opts.budgetMs,
     deadlineMs: opts.deadlineMs,
@@ -608,23 +965,29 @@ export function budgetReport(opts: {
     selfAborted,
     wasted,
     measured: measured.length,
+    expected: opts.expected,
+    completed: completed.length,
+    peakConcurrency: peak,
+    answerable,
+    findings,
     reading:
       /* **No clock is not a clean bill**, and it read as one until 2026-09-05:
          a step that never ran has `ms: null`, `overBudget` filters those out,
          and the empty answer printed "every hierarchy step finished inside the
          budget" over a phase where none of them ran at all.
          docs/reusable/silent-success.md. */
-      measured.length === 0
-        ? `No hierarchy step ran in this phase, so question 5 was not measured — this is an ` +
-          "absence, not a pass."
+      !answerable
+        ? `Question 5 was NOT measured: ${completed.length} of ${opts.expected} step(s) completed ` +
+          `and the peak concurrency was ${peak}. This is an absence, not a pass — read the ` +
+          "findings before quoting any number in this block."
         : overBudget.length === 0
-        ? `All ${measured.length} hierarchy step(s) finished inside STEP_BUDGET_MS.hierarchy ` +
-          `(${Math.round(opts.budgetMs / 1000)}s) and the ${Math.round(opts.deadlineMs / 1000)}s ` +
-          "self-abort deadline."
+        ? `All ${completed.length} hierarchy step(s) ran at once (peak ${peak}) and finished ` +
+          `inside STEP_BUDGET_MS.hierarchy (${Math.round(opts.budgetMs / 1000)}s) and the ` +
+          `${Math.round(opts.deadlineMs / 1000)}s self-abort deadline.`
         : `${overBudget.length} hierarchy step(s) ran past STEP_BUDGET_MS.hierarchy ` +
-          `(${Math.round(opts.budgetMs / 1000)}s). A step past ${Math.round(opts.deadlineMs / 1000)}s ` +
-          "is one the claimant puts down mid-article; what makes that survivable is the " +
-          "checkpoint rows, which `withheld` counts.",
+          `(${Math.round(opts.budgetMs / 1000)}s) with ${peak} in flight at once. A step past ` +
+          `${Math.round(opts.deadlineMs / 1000)}s is one the claimant puts down mid-article; what ` +
+          "makes that survivable is the checkpoint rows, which `withheld` counts.",
   };
 }
 
@@ -687,15 +1050,25 @@ export function checkInertness(c: InertnessCheck): DeepenFinding[] {
         "worker process.",
     });
   }
+  /**
+   * **A control corpus that is not inert is not a control**, and this was a
+   * note until 2026-09-05 — so a phase C whose "ordinary" article had eligible
+   * sections could clear entirely on the strength of an unchanged tree, which
+   * is a coincidence rather than the evidence phase C exists to produce.
+   * Fatal now, because the reading it licenses ("an ordinary article comes out
+   * byte-identical") is not what was measured. ⟨GPT Sol, DPN-10.⟩
+   */
   if (c.onWroteRecords && c.targetsWhenOn !== 0) {
     findings.push({
       kind: "not-inert",
-      fatal: false,
+      fatal: true,
       message:
-        `The flag-on pass found ${c.targetsWhenOn} eligible section(s) on the ordinary article, ` +
-        "so this article is not the inert case the plan wanted evidence for. That is a fact " +
-        "about the article rather than a fault; pick one where nothing is eligible, or read " +
-        "this row as a small-article deepening instead.",
+        `The flag-on pass found ${c.targetsWhenOn ?? "an unknown number of"} eligible section(s) ` +
+        "on the ordinary article, and phase C's declared control requires exactly zero. This " +
+        "article cannot answer \"an article where nothing is eligible comes out byte-identical\" " +
+        "— an unchanged tree here is a coincidence, not the control. Pick an article where " +
+        "nothing is eligible and run phase C again; read this row as a small-article deepening " +
+        "and nothing else.",
     });
   }
   if (c.onWroteRecords && c.targetsWhenOn === 0 && (c.callsWhenOn ?? 0) > 0) {
@@ -718,11 +1091,25 @@ export function checkInertness(c: InertnessCheck): DeepenFinding[] {
  * by construction** — which looks exactly like a perfectly stable signal.
  * src/hierarchy-deepen.ts § `REASK_ENV`.
  *
- * And the mirror of it: the structure call must **not** have been re-bought,
- * because a resumed wave 1 is what holds the seed constant. The ledger is what
- * says so — a re-bought structure call on a book is a `job: "hierarchy"` row
- * carrying the whole book's input tokens, which is an order of magnitude more
- * than the wave's own.
+ * And the mirror of it: on a **repeat**, the structure call must not have been
+ * re-bought, because a resumed wave 1 is what holds the seed constant. The
+ * ledger is what says so — a re-bought structure call on a book is a
+ * `job: "hierarchy"` row carrying the whole book's input tokens, which is an
+ * order of magnitude more than the wave's own.
+ *
+ * **`structure` is which of those two this pass is**, and getting it wrong
+ * would have burned the whole paid run. Phase A is the ingest: buying the
+ * structure call is the entire point of it, and the guard was applied there
+ * too — so a **successful** $40.90 run would have spent the money and then
+ * reported `structure-rebought` fatally over Moby-Dick's real 453,832-token
+ * structure call, against a floor of 256,900.
+ * ⟨GPT Sol, DPN-08; the measured call is
+ * evals/results/hierarchy-waves-2026-09-04/2701-h.tree.json § usage.⟩
+ *
+ * On a `"bought"` pass the same arithmetic is still worth doing, pointed the
+ * other way and non-fatally: an ingest whose `hierarchy` bill shows *no*
+ * whole-document call resumed a structure checkpoint from somewhere, which is
+ * worth knowing and is not a reason to distrust the numbers.
  */
 export function checkRepeatBoughtItsWave(opts: {
   label: string;
@@ -734,6 +1121,11 @@ export function checkRepeatBoughtItsWave(opts: {
    * input tokens. The runner takes it from the article's own estimate.
    */
   structureInputTokensFloor: number;
+  /**
+   * `"resumed"` for a forced repeat, which must not re-buy the seed;
+   * `"bought"` for the ingest, where buying it is the point.
+   */
+  structure: "resumed" | "bought";
 }): DeepenFinding[] {
   const findings: DeepenFinding[] = [];
   if (opts.stats.targets > 0 && opts.stats.calls === 0) {
@@ -748,7 +1140,9 @@ export function checkRepeatBoughtItsWave(opts: {
     });
   }
   const waveTokens = opts.stats.usage.inputTokens;
-  if (opts.ledgerHierarchyInputTokens - waveTokens >= opts.structureInputTokensFloor) {
+  const beyondTheWave = opts.ledgerHierarchyInputTokens - waveTokens;
+  const looksLikeAStructureCall = beyondTheWave >= opts.structureInputTokensFloor;
+  if (opts.structure === "resumed" && looksLikeAStructureCall) {
     findings.push({
       kind: "structure-rebought",
       fatal: true,
@@ -758,6 +1152,20 @@ export function checkRepeatBoughtItsWave(opts: {
         `The difference is at least one whole-document structure call (${opts.structureInputTokensFloor.toLocaleString()} ` +
         "tokens), so the seed was re-bought rather than resumed and this repeat was asked about a " +
         "different tree.",
+    });
+  }
+  if (opts.structure === "bought" && !looksLikeAStructureCall) {
+    findings.push({
+      kind: "note",
+      fatal: false,
+      message:
+        `"${opts.label}" is the ingest, which buys the whole-document structure call — and its ` +
+        `"hierarchy" bill is ${opts.ledgerHierarchyInputTokens.toLocaleString()} input tokens, ` +
+        `only ${beyondTheWave.toLocaleString()} of them beyond the wave's own ` +
+        `${waveTokens.toLocaleString()}, under the ${opts.structureInputTokensFloor.toLocaleString()}-token ` +
+        "floor a structure call on this document would carry. Something resumed a structure " +
+        "checkpoint this run did not write, so the seed came from an earlier run. The repeats are " +
+        "still comparable with each other; the numbers are not a cold ingest's.",
     });
   }
   return findings;
@@ -785,8 +1193,10 @@ export function formatQ1(q: Q1Stability): string {
   ];
   if (q.unpairable > 0) lines.push(`  unpairable records         ${q.unpairable}`);
   lines.push(
-    "  (2 and 3 are STRUCTURAL instability and are deliberately not folded into 1: a repeat that",
-    "   split a parent somewhere else did not change its mind about a node, it produced other nodes.)",
+    `  1 and 3 OVERLAP          ${String(q.bothMovedAndFlipped).padStart(4)} parent(s) both moved a boundary and flipped a`,
+    "                                surviving child's verdict. Both facts are true; do not add the rows up.",
+    "  (2 is STRUCTURAL and IS disjoint from the other two: a repeat that came back with a different",
+    "   number of children produced other nodes rather than changing its mind about one.)",
   );
   for (const flip of q.verdictFlips.slice(0, 10)) {
     lines.push(
@@ -823,9 +1233,18 @@ export function formatQ3(q: Q3Bounds): string {
 export function formatQ4(q: Q4Cost): string {
   const lines = q.rows.map(
     (r) =>
-      `  ${r.label.padEnd(34)} $${(r.nanos / 1e9).toFixed(4).padStart(9)}` +
+      `  ${r.label.padEnd(34)} ` +
+      (r.nanos === null ? "NOT READ ".padStart(10) : `$${(r.nanos / 1e9).toFixed(4).padStart(9)}`) +
       (r.vsIncumbent === null ? "" : `   ${r.vsIncumbent.toFixed(1)}x the incumbent $1.00`) +
-      (r.unpriced > 0 ? `   (${r.unpriced} unpriced call(s) — short by an unknown amount)` : ""),
+      (r.unpriced > 0 ? `   (${r.unpriced} unpriced call(s) — short by an unknown amount)` : "") +
+      (r.unreadable > 0 ? `   (${r.unreadable} unreadable ledger line(s))` : ""),
+  );
+  lines.push(
+    `  ${"TOTAL".padEnd(34)} ` +
+      (q.totalNanos === null ? "NOT READ ".padStart(10) : `$${(q.totalNanos / 1e9).toFixed(4).padStart(9)}`) +
+      (q.answerable
+        ? ""
+        : "   INCOMPLETE — rows above are missing, unpriced or unreadable, so this is a floor"),
   );
   lines.push(`  ${q.source}`);
   return lines.join("\n");
@@ -835,11 +1254,16 @@ export function formatQ5(q: Q5Budget): string {
   const lines = q.clocks.map(
     (c) =>
       `  ${c.label.padEnd(34)} ${(c.ms === null ? "—" : `${(c.ms / 1000).toFixed(1)}s`).padStart(8)}` +
+      `  ${(c.status ?? "no such step").padEnd(12)}${c.hasStats ? "" : " no stats"}` +
       `   budget ${(q.budgetMs / 1000).toFixed(0)}s  deadline ${(q.deadlineMs / 1000).toFixed(0)}s` +
       (c.outOfTime ? `   outOfTime ${c.outOfTime}` : "") +
       (c.withheld ? `   withheld ${c.withheld}` : "") +
       (c.resumed ? `   resumed ${c.resumed}` : "") +
       (c.uncheckpointed ? `   UNCHECKPOINTED ${c.uncheckpointed}` : ""),
+  );
+  lines.push(
+    `  completed ${q.completed} of ${q.expected} expected; peak ${q.peakConcurrency} step(s) in ` +
+      `flight at once (must be ${q.expected})`,
   );
   lines.push(`  ${q.reading}`);
   if (q.selfAborted.length > 0) {
@@ -922,6 +1346,9 @@ export interface DrivenJob {
         status: string;
         detail?: string | undefined;
         error?: string | undefined;
+        /** The step's own window — the one phase D's concurrency is measured over. */
+        startedAt?: string | null | undefined;
+        finishedAt?: string | null | undefined;
       }[]
     | undefined;
 }
@@ -937,8 +1364,39 @@ function overlaps(a: DrivenJob, b: DrivenJob): boolean {
   );
 }
 
-export function checkDriving(jobs: readonly DrivenJob[]): DeepenFinding[] {
+export function checkDriving(
+  jobs: readonly DrivenJob[],
+  opts: {
+    /**
+     * The step phase D is measured on — `"hierarchy"` on the paid path,
+     * `"blocks"` under `--dry-run`. Its windows are what the concurrency is
+     * taken over, because the *whole-job* windows overlap even when the steps
+     * run one after another: all three promises are alive while two of them
+     * collect `busy`. ⟨GPT Sol, DPN-04.⟩
+     */
+    measuredStep: string;
+    /** What `jobConcurrency()` really was while phase D ran. */
+    jobConcurrency: number;
+    /** What phase D was planned at — `DEFAULT_JOB_CONCURRENCY`. */
+    plannedConcurrency: number;
+  },
+): DeepenFinding[] {
   const findings: DeepenFinding[] = [];
+
+  /* **The runtime cap, not the constant the plan quotes.** `jobConcurrency()`
+     reads `SPIDERYARN_JOB_CONCURRENCY` at call time, so a shell that set it to
+     1 serialises phase D silently and the run's own metadata — which recorded
+     `DEFAULT_JOB_CONCURRENCY` — would still say 3. */
+  if (opts.jobConcurrency !== opts.plannedConcurrency) {
+    findings.push({
+      kind: "note",
+      fatal: true,
+      message:
+        `The queue's runtime cap is ${opts.jobConcurrency} and phase D is planned at ` +
+        `${opts.plannedConcurrency}. SPIDERYARN_JOB_CONCURRENCY is set to something else in this ` +
+        "process, so the load phase measured a different machine from the one the plan sized.",
+    });
+  }
 
   /* **Every ingest must have run the fixture step, and must say so itself.**
      Asked positively, off the step's own detail — see the note above on why
@@ -978,16 +1436,25 @@ export function checkDriving(jobs: readonly DrivenJob[]): DeepenFinding[] {
       }
     }
   }
+  /* **Phase D, over the measured step's windows and not the jobs'.** The
+     question is whether `d.length` of them were in flight *at once*, which is
+     what `DEFAULT_JOB_CONCURRENCY` jobs at once means — one overlapping pair
+     out of three is exactly what a serialised phase D looks like. */
   const d = jobs.filter((j) => j.phase === "D");
-  const overlapped = d.some((x, i) => d.slice(i + 1).some((y) => overlaps(x, y)));
-  if (d.length > 1 && !overlapped) {
+  const steps = d.map((j) => (j.stepOutcomes ?? []).find((s) => s.name === opts.measuredStep));
+  const withWindows = steps.filter((s) => s?.startedAt && s?.finishedAt);
+  const peak = peakConcurrency(withWindows.map((s) => ({ startedAt: s!.startedAt, finishedAt: s!.finishedAt })));
+  if (d.length > 1 && peak < d.length) {
     findings.push({
       kind: "note",
       fatal: false,
       message:
-        `Phase D's ${d.length} jobs did not overlap in time, so nothing was measured under load. ` +
-        "This box is shared and the queue's cap is global — another agent's dev server holding a " +
-        "claim slot will serialise them, and so will a job that failed before it began.",
+        `Phase D's ${d.length} jobs reached a peak of ${peak} \`${opts.measuredStep}\` step(s) in ` +
+        `flight at once (${withWindows.length} of ${d.length} left a window at all), so the wall ` +
+        "clocks are not clocks under load. This box is shared and the queue's cap is global — " +
+        "another agent's dev server holding a claim slot will serialise them, and so will a job " +
+        "that failed before it began. The whole-JOB windows overlap either way: all three " +
+        "promises stay alive while two of them are being told `busy`.",
     });
   }
 

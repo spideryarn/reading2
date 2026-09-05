@@ -1329,7 +1329,8 @@ Stage 5b goes through the queue.
 
 #### The harness, and the command to run it <a id="stage-5b-harness"></a>
 
-**Built 2026-09-05, unrun.** [`evals/deepen/`](../../evals/deepen/) is a self-contained eval that
+**Built 2026-09-05, reviewed, fixed, still unrun.** [`evals/deepen/`](../../evals/deepen/) is a
+self-contained eval that
 drives the four phases above through the **production** ingest queue and answers all five questions
 from one run's artefacts. `report.ts` is the arithmetic and has no IO, `harness.ts` owns the ingress
 and the levers, `run.ts` only drives and prints; the cost eval's three proved mechanisms — the
@@ -1360,12 +1361,71 @@ nobody else has and break that eval for everyone.
 Two things it refuses to do, both of them the difference between a measurement and a bill:
 
 - **Pair candidates on `where`.** A record with no `range` is refused outright rather than paired
-  approximately, and the three outcomes — a verdict flip at a matched range, a changed fan-out, an
-  unmatched range at equal fan-out — are separate rows that must not be added together.
+  approximately, and the three outcomes are separate rows that must not be added together — but only
+  **one** of the three pairs is disjoint, and saying otherwise was wrong. A changed fan-out is
+  counted alone, because a parent that came back with a different number of children produced other
+  nodes rather than changing its mind. A **moved boundary and a surviving child's verdict flip
+  overlap deliberately**: one parent can do both, both facts are true, and making them disjoint would
+  discard valid same-range verdict evidence — which is the number stage 6 leans on. The overlap is
+  counted and printed. ⟨Sol was right, and my earlier instruction to make them disjoint was wrong.⟩
 - **Report a repeat that bought nothing.** `stats.calls === 0` where `stats.targets > 0` is fatal,
-  and so is a repeat whose `hierarchy` ledger rows carry a whole structure call's input tokens — the
-  seed moved, and the flip rate would be measuring the tree and the verdict at once. So is a wave-1
-  frontier that differs between repeats, which is the same fact seen from the tree's side.
+  and so is a **repeat** whose `hierarchy` ledger rows carry a whole structure call's input tokens —
+  the seed moved, and the flip rate would be measuring the tree and the verdict at once. So is a
+  wave-1 frontier that differs between repeats, which is the same fact seen from the tree's side.
+  **Phase A is not a repeat**: buying the structure call is the whole point of the ingest, and see
+  below for what applying the guard there would have cost.
+
+#### What the pre-spend review refused, and why it was worth having <a id="stage-5b-review"></a>
+
+**GPT Sol reviewed the harness before it was allowed to spend, and refused it** — thirteen findings,
+seven P0. The refusal earned its keep twice over:
+
+- **The structure-rebought guard was applied to phase A.** The measured Moby-Dick structure call is
+  453,832 input tokens ([the artefact](../../evals/results/hierarchy-waves-2026-09-04/2701-h.tree.json)
+  § `usage`) against a floor of 256,900, so a **successful** $40.90 run would have spent the money
+  and then reported `structure-rebought` fatally over the phase whose job is to buy it. The real
+  token count is now pinned in a test.
+- **$40.90 was never a bound.** A re-asking pass that hands its claim back at its own 740 s deadline
+  is requeued, and the driver re-claimed it at once — with the slug still named in the re-ask lever,
+  so the next claim ignored the checkpoint rows just written and bought the wave again.
+  `REQUEUE_BUDGET = 2` permits three windows, so one nominal pass could buy the book's wave three
+  times, and none of it was in the printed estimate. **The run enforces the bound rather than only
+  naming it**: a re-asking pass stops on its first requeue, the job is left `queued` and resumable,
+  and the self-abort is a fatal finding. The estimate prints the $85.30 worst case it is enforcing
+  against, and says plainly that it is not a spending cap — nothing here refuses a call at $N.
+
+The other eleven were one disease in eleven places: **an answer computed over evidence that is
+absent, partial or failed, printed as though it were a result**
+([silent-success.md](../reusable/silent-success.md)). What changed:
+
+- **Every one of Q1–Q5 has an answerability gate**, and "not measured" is visibly different from
+  "measured zero". Q1 refuses fewer passes than the run set out to make, a pass whose wave threw, and
+  a comparison that matched nothing and found no structural instability either — `0 of 0` printed as
+  a flip rate of none. Q2 and Q3 refuse a rate over no verdicts. Q4 keeps a job whose ledger was
+  never read as `NOT READ` rather than filtering it out of the bill. Q5 needs three steps that
+  finished `done` with a wave's stats behind them.
+- **Q1 is computed from phases A and B only.** The repeats are serial *because* a contended repeat
+  confounds question 1, and the harness contradicted its own design by folding phase D's book pass
+  into the same population. D's pass is reported beside question 5, where the contention is the
+  point.
+- **Concurrency is measured over the steps' own windows, not the jobs'.** All three phase-D promises
+  stay alive while two of them are told `busy`, so a whole-job overlap check passes over a phase that
+  ran serially. `peakConcurrency` has to reach three, and the runtime `jobConcurrency()` is asserted
+  before anything is enqueued — it reads its environment variable at call time, so a shell that set
+  it to 1 would serialise phase D while the metadata went on saying 3.
+- **The money is watched from both ends.** Every ledger row must carry `scopeKind: "eval"` or it is
+  being billed to Product — this eval drives jobs with no `fetch` step, so the fixture check cannot
+  stand in for it — and every call each step's own collector saw must have a row, because a row that
+  was never inserted reads back as `unreadable: 0`. Both are `evals/cost/report.ts`'s, imported. The
+  ledger is re-read once every job has stopped, to say whether the numbers stood still.
+- **A failure no longer takes the phase down with it.** Phase D drains with `Promise.allSettled`
+  before the levers are restored, `driveJob` turns a failed ledger read or records parse into a fatal
+  finding rather than a rejection, and the run file's checkpoint writer is serialised with a unique
+  temporary name — three concurrent jobs racing on one `run.json.<pid>.tmp` left the loser's rename
+  with `ENOENT`.
+- **Phase C's control has to be a control.** An "ordinary" article with eligible sections is fatal
+  now rather than a note: an unchanged tree there is a coincidence, not the evidence phase C exists
+  to produce.
 
 **The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
 job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global

@@ -34,8 +34,8 @@
  * true — the bucket for this file's dependents should be `type-only`.
  */
 
-import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { type DeepenRecordsFile, reaskExpansions, REASK_ENV } from "../../src/hierarchy-deepen.js";
@@ -183,6 +183,70 @@ export function assertReaskNames(opts: {
     if (before === undefined) delete process.env[REASK_ENV];
     else process.env[REASK_ENV] = before;
   }
+}
+
+/* ------------------------------------------------- the requeue, refused -- */
+
+/**
+ * **Should the driver claim this job again, or stop?**
+ *
+ * `advanceJobWith` answers `{done: false, busy: false}` both when there is more
+ * to do and when the claimant has just **handed the job back at its own 740 s
+ * deadline** — `requeues` is the only thing that tells them apart
+ * (src/jobs.ts § `pauseForDeadline`).
+ *
+ * And the difference is money. On a pass whose slug is named in
+ * `SPIDERYARN_DEEPEN_REASK`, the next claim skips the expansion checkpoint read
+ * and **buys the whole wave again**; `REQUEUE_BUDGET = 2` permits three windows,
+ * so one nominal pass of the book could buy its wave three times, none of it in
+ * the printed estimate. ⟨GPT Sol reviewing the stage-5b harness, DPN-07.⟩
+ *
+ * An ordinary pass is re-driven and must be: a book's `hierarchy` step needs
+ * 658–778 s against a 740 s deadline, so a requeue there is routine, and without
+ * the lever the re-drive resumes every answer it has already paid for.
+ *
+ * Pure, so both answers can be exercised rather than only the one this machine
+ * happens to give.
+ */
+export function requeueVerdict(opts: {
+  reasking: boolean;
+  requeuesBefore: number;
+  requeuesNow: number;
+}): "stop" | "carry on" {
+  if (!opts.reasking) return "carry on";
+  return opts.requeuesNow > opts.requeuesBefore ? "stop" : "carry on";
+}
+
+/* ------------------------------------------------- the checkpoint file -- */
+
+/**
+ * **One writer at a time, and a temporary name nobody else can hold.**
+ *
+ * Phase D drives three jobs concurrently and every one of them checkpoints, so
+ * two calls could interleave on a single `run.json.<pid>.tmp`: both write it,
+ * both rename it, and one legal ordering leaves the second rename with
+ * `ENOENT`. That rejection travelled out of `driveJob`, through `Promise.all`,
+ * and took the whole phase down by the path DPN-06 is about.
+ * ⟨GPT Sol, DPN-09.⟩
+ *
+ * The unique name fixes the rename; the chain fixes the *contents*, which is
+ * the half a unique name alone would leave broken: the object being serialised
+ * is mutated by the jobs still running, so two concurrent `JSON.stringify`s of
+ * it are two different documents and the loser is written second.
+ */
+export function checkpointWriter(finalPath: string, snapshot: () => unknown): () => Promise<void> {
+  let writing: Promise<void> = Promise.resolve();
+  return () => {
+    const mine = writing.then(async () => {
+      const temp = `${finalPath}.${process.pid}.${randomUUID()}.tmp`;
+      await writeFile(temp, `${JSON.stringify(snapshot(), null, 2)}\n`, "utf-8");
+      await rename(temp, finalPath);
+    });
+    /* The chain must survive a rejection, or one failed write wedges every
+       later checkpoint — and the caller is still told about its own. */
+    writing = mine.catch(() => undefined);
+    return mine;
+  };
 }
 
 /* --------------------------------------------------------- the seam, proved -- */
@@ -420,22 +484,65 @@ export const ESTIMATE_BASIS: Readonly<Record<string, EstimateRow>> = {
 
 export interface CostEstimate {
   rows: EstimateRow[];
+  /** The nominal bill: one purchase of each row. */
   totalUsd: number;
+  /**
+   * **What this run could cost if every re-asking pass bought its wave twice**,
+   * and the sentence that says whether that can happen.
+   *
+   * The nominal total was printed as an "upper bound" and was not one. A
+   * claimant that reaches its own 740 s deadline inside the `hierarchy` step
+   * requeues the job (src/jobs.ts § `REQUEUE_BUDGET`, which permits three
+   * windows), and the driver used to re-claim it immediately — with the slug
+   * still named in `SPIDERYARN_DEEPEN_REASK`, so the next claim ignored the
+   * checkpoint rows just written and bought the wave again. One nominal pass
+   * could therefore buy the book's wave three times, and none of it appeared in
+   * the estimate. ⟨GPT Sol reviewing the stage-5b harness, DPN-07.⟩
+   *
+   * **The run enforces the bound now rather than only naming it**: `driveToDone`
+   * stops a re-asking pass on its first requeue and makes it a fatal finding
+   * instead of re-driving it. `worstCaseUsd` is what the same run would have
+   * cost without that refusal, kept and printed because a bound nobody can see
+   * is a bound nobody checks.
+   */
+  worstCaseUsd: number;
+  bound: string;
   caveat: string;
 }
 
+/** Rows whose wave is re-bought by the re-ask lever — the ones a requeue could multiply. */
+const REASKING_ROWS: readonly (keyof typeof ESTIMATE_BASIS)[] = ["bookHierarchyRepeat"];
+
 export function estimate(counts: Readonly<Record<keyof typeof ESTIMATE_BASIS, number>>): CostEstimate {
-  const rows = (Object.keys(ESTIMATE_BASIS) as (keyof typeof ESTIMATE_BASIS)[])
+  const keys = Object.keys(ESTIMATE_BASIS) as (keyof typeof ESTIMATE_BASIS)[];
+  const rows = keys
     .map((key) => ({ ...ESTIMATE_BASIS[key]!, jobs: counts[key] ?? 0 }))
     .filter((row) => row.jobs > 0);
+  const totalUsd = rows.reduce((sum, r) => sum + r.jobs * r.usdEach, 0);
+  /* Three windows per re-asking pass is what `REQUEUE_BUDGET = 2` permits, so
+     the unenforced worst case is three purchases of every re-asking row. */
+  const exposure = REASKING_ROWS.reduce(
+    (sum, key) => sum + (counts[key] ?? 0) * ESTIMATE_BASIS[key]!.usdEach * 2,
+    0,
+  );
   return {
     rows,
-    totalUsd: rows.reduce((sum, r) => sum + r.jobs * r.usdEach, 0),
+    totalUsd,
+    worstCaseUsd: totalUsd + exposure,
+    bound:
+      `The nominal total is $${totalUsd.toFixed(2)}. Without the requeue refusal it would be a ` +
+      `floor, not a bound: a re-asking pass that hands its claim back at its own 740s deadline ` +
+      `used to be re-claimed with the slug still named in the re-ask lever, buying the wave again ` +
+      `— three windows per pass, so up to $${(totalUsd + exposure).toFixed(2)}. This run STOPS a ` +
+      "re-asking pass on its first requeue and reports it fatally (evals/deepen/run.ts § " +
+      "driveToDone), so each pass buys its wave at most once and the nominal total is the bound. " +
+      "What it is not is a cap on the run: nothing here refuses a call at $N, and the per-row " +
+      "figures are the plan's arithmetic rather than a limit anything enforces.",
     caveat:
-      "Every figure is an UPPER BOUND derived from the plan's own arithmetic, not a measurement, " +
-      "and the run's own `run.json` carries what it really cost. If the real bill lands far " +
-      "under this, that is question 4 answering itself; if it lands over, stop and read why " +
-      "before repeating.",
+      "Every per-row figure is an UPPER BOUND derived from the plan's own arithmetic, not a " +
+      "measurement, and the run's own `run.json` carries what it really cost. If the real bill " +
+      "lands far under this, that is question 4 answering itself; if it lands over, stop and read " +
+      "why before repeating.",
   };
 }
 
@@ -446,8 +553,12 @@ export function formatEstimate(e: CostEstimate): string {
       `$${(r.jobs * r.usdEach).toFixed(2).padStart(7)}`,
   );
   lines.push(`  ${"".padEnd(61)}   TOTAL   $${e.totalUsd.toFixed(2).padStart(7)}`);
+  lines.push(
+    `  ${"".padEnd(61)}   worst case, were a requeue re-driven   $${e.worstCaseUsd.toFixed(2).padStart(7)}`,
+  );
   lines.push("");
   for (const r of e.rows) lines.push(`  - ${r.what}: ${r.basis}`);
+  lines.push(`  ${e.bound}`);
   lines.push(`  ${e.caveat}`);
   return lines.join("\n");
 }
