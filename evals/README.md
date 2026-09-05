@@ -471,6 +471,65 @@ the reader sends no breakpoint, so it reads nothing —
 Nothing was red, every artefact was correct and the whole suite passed. It was found by measuring
 money and by nothing else.
 
+## `deepen/` — is the deepening verdict worth obeying, and what does it cost?
+
+```
+npm run eval:deepen -- --book output/2701-h.html --article output/noema-mythology-of-conscious-ai.html
+npm run eval:deepen -- --book … --article … --dry-run           # the same shape, no model call
+npm run eval:deepen -- --book … --article … --repeats 3 --spend # the paid draw, ~$41
+```
+
+**No numbers yet — the harness is built and the paid draw is Greg's to run.** It exists to answer
+the five questions
+[260904d § What the live run must answer](../docs/plans/260904d-deepen-fat-sections.md#stage-5-questions)
+wrote down *before* the money moved, so that a paid run cannot quietly succeed at nothing: is the
+verdict stable across repeats, does the model always say yes, how often does a mechanical bound
+overrule it, what does it cost against the incumbent's $1.00 a book, and does the hierarchy step
+still fit its budget under load.
+
+**Preflight is the default posture**: with no flag it runs every gate, proves the seam for free and
+prints the bill, and buys nothing. `--spend` is the only way to spend.
+
+Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
+`{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
+the flag off and then on, which must come out byte-identical; and three jobs at once at
+`DEFAULT_JOB_CONCURRENCY` for the wall clocks.
+
+Three things in it are worth copying:
+
+- **The repeat has to buy something, and this is the one that would look fine.** The scoped calls
+  are content-addressed, so a second wave over one article reads its own rows back, makes no call,
+  and reports verdicts identical to the first **by construction** — a perfect stability figure worth
+  nothing. `SPIDERYARN_DEEPEN_REASK` names the slugs to re-buy, the run refuses to start unless it
+  names the book and neither article, and afterwards `checkRepeatBoughtItsWave` asks the ledger
+  whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
+- **Repeats are paired on parent-plus-range, never on `where`.** `where` is an ordinal path derived
+  from the answer's own fan-out, so two repeats that split a parent in different places both emit
+  `root > child 1` and a boundary that moved reads as a verdict that held — wrong in the direction
+  that makes the signal look *better* than it is. A record with no range is refused outright rather
+  than paired approximately. Verdict flips, changed fan-out and moved boundaries at equal fan-out
+  are three separate rows.
+- **The dry run found a real bug on its first pass, and the check written for it was wrong twice
+  over.** `enqueue` ends with `pump()`, which drives the job with the *production* registry;
+  `withoutTheInProcessPump` silences it with one global variable, so two overlapping `enqueue`s race
+  on it and one job goes to the real network with no eval overlay. Queueing is serial now. The
+  check that catches it reads the fixture step's own `detail` — `"1382 KB (fixture book)"` — because
+  the first version matched the DNS error text, and the queue replaces a failed step's message with
+  a reader-facing sentence: that version was watched printing "none" over a run where **every fetch
+  had gone to the network**.
+
+`report.ts` is the arithmetic and has no IO; `harness.ts` owns the ingress, the levers and the free
+seam probe; `run.ts` only drives and prints. Everything the cost eval already proved — the eval
+spend overlay, the fixture stage-1 step, the pump silencer, the local-database gate — is imported
+from `cost/harness.ts` rather than copied. The book and the article are named on the command line
+and hashed at run time, because `output/` is gitignored and a checked-in manifest pointing at a file
+nobody else has would break the cost eval for everybody.
+
+**What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
+a model call, so every dry-run job stops at its last free step and fails. It proves the driving —
+the fixture ingress, the force, the serial repeats, the concurrent load phase — and says so rather
+than printing a table of zeroes.
+
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 
 ```

@@ -1327,6 +1327,60 @@ Built after the review, both free:
 hand each repeat a different seed, which is exactly the confound the paragraph above exists to avoid.
 Stage 5b goes through the queue.
 
+#### The harness, and the command to run it <a id="stage-5b-harness"></a>
+
+**Built 2026-09-05, unrun.** [`evals/deepen/`](../../evals/deepen/) is a self-contained eval that
+drives the four phases above through the **production** ingest queue and answers all five questions
+from one run's artefacts. `report.ts` is the arithmetic and has no IO, `harness.ts` owns the ingress
+and the levers, `run.ts` only drives and prints; the cost eval's three proved mechanisms — the
+`scopeKind: "eval"` overlay, the fixture stage-1 step and the `pump()` silencer — are imported from
+[`evals/cost/harness.ts`](../../evals/cost/harness.ts) rather than copied.
+[`tests/deepen-eval.test.ts`](../../tests/deepen-eval.test.ts) holds it to a case per way it could
+report a clean result having measured nothing.
+
+```
+npm run eval:deepen -- --book output/2701-h.html \
+  --article output/noema-mythology-of-conscious-ai.html --repeats 3          # preflight, free
+npm run eval:deepen -- --book … --article … --repeats 3 --dry-run            # the shape, free
+npm run eval:deepen -- --book … --article … --repeats 3 --spend              # ~$41
+```
+
+**Preflight is the default and `--spend` is the only way to spend.** Preflight prints the plan, the
+bill and every check the run will make, and it *proves the seam rather than asserting it*: it
+exercises `SPIDERYARN_DEEPEN_REASK` against this run's own book and article slugs, and runs a
+`deepenTree` probe against a synthetic article under the book's slug — cold buys N calls, an ordinary
+repeat buys 0, a re-asking repeat buys N again with **zero** reads, and the only checkpoint namespace
+touched is `hierarchy-deepen`. That last one is how *"wave 1 stays resumed, so the seed is held"*
+becomes an observation.
+
+The book and the article are **named on the command line and hashed at run time**, because `output/`
+is gitignored: adding them to `evals/cost/fixtures.ts` would point a committed manifest at a file
+nobody else has and break that eval for everyone.
+
+Two things it refuses to do, both of them the difference between a measurement and a bill:
+
+- **Pair candidates on `where`.** A record with no `range` is refused outright rather than paired
+  approximately, and the three outcomes — a verdict flip at a matched range, a changed fan-out, an
+  unmatched range at equal fan-out — are separate rows that must not be added together.
+- **Report a repeat that bought nothing.** `stats.calls === 0` where `stats.targets > 0` is fatal,
+  and so is a repeat whose `hierarchy` ledger rows carry a whole structure call's input tokens — the
+  seed moved, and the flip rate would be measuring the tree and the verdict at once. So is a wave-1
+  frontier that differs between repeats, which is the same fact seen from the tree's side.
+
+**The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
+job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global
+variable across that call — so two overlapping `enqueue`s race on it and one job runs production's
+stage 1 with no eval overlay and goes to the real network. Phase D queued its three jobs
+concurrently; one of the three failed with a DNS error. Queueing is serial now and only the driving
+is concurrent. The check that catches it reads the fixture step's own `detail` —
+`"1382 KB (fixture book)"` — rather than the error text, because the queue replaces a failed step's
+message with a reader-facing sentence: the error-matching version was watched printing *"none"* over
+a run where **every fetch had gone to the network**.
+
+**What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
+a model call, so every dry-run job stops at its last free step and fails, and the run prints what the
+driving proved instead of a table of zeroes.
+
 ### Stage 6 — recursion, once the verdict has earned it
 
 Waves 3 and beyond, governed by the verdict, with the depth cap and the yes-rate gate. Only if stage
