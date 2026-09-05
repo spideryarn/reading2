@@ -4408,40 +4408,37 @@ now stated properly in `architecture.md` § Conventions (**ten of the fourteen i
 the predicate *the step declares a `stamp()` that `stepIsDone` compares*), and the rules file is
 Greg's to edit.
 
-##### The step-plan rule is enforced at a seam no test exercises <a id="stage-e-unrunnable-untested"></a>
+##### Retracted: the step-plan rule is not Stage E's, and it is not untested <a id="stage-e-unrunnable-untested"></a>
 
-**Found 2026-09-05 from outside this plan, and written here because this is where whoever owes the
-test will look.** ⟨A registry annotation in `tests/jobs.test.ts` is read by whoever next trips the
-guard, not by the rule's author, so the evidence belongs here as well — a peer agent's point,
-2026-09-05.⟩
+**This section claimed, on 2026-09-05, that `unrunnableStepPlan`'s refusal at `enqueue` had no test,
+and that a broken `evals/deepen/ --dry-run` was the measured cost of the hole. Every load-bearing
+part of that was wrong, and the anchor is kept so links to it still land.**
 
-`unrunnableStepPlan` refuses `blocks` without `hierarchy`, and `enqueue` throws a 400 on it. The rule
-is right and the trap it closes is real. **What is untested is the door.** `tests/jobs.test.ts`
-§ `describe("unrunnableStepPlan")` hands the pure predicate four lists and reads what comes back;
-nothing anywhere asserts that `enqueue` actually refuses, or that no job row is written when it does.
+- **It is not Stage E's rule.** A `-S` search of the history over `src/jobs.ts` returns `aa941484`
+  alone -- stage A of
+  [260904e](260904e-extraction-repair-evals-and-llm-post-processing.md), 03:00, which added the
+  predicate *and* its `enqueue` call. Stage E (`cbb903d0`, 06:14) is a same-morning sibling that also
+  tightened `enqueue`'s refusals, which is how the misattribution survived three agents.
+- **The door is tested.** `tests/jobs.test.ts` "refuses a blocks-only job at the door rather than
+  stranding the article" drives `enqueue` and expects a 400, about 980 lines below the pure-function
+  block. 260904e says so in its own text -- *"The pure rule and its wiring are asserted separately in
+  `tests/jobs.test.ts`, the second because a guard nothing calls is the shape of half the bugs in
+  this repo"* -- and it is true.
+- **The dry run was not evidence of anything but its own bug.** It asked for
+  `["fetch","extract","blocks"]`; the queue refuses that, correctly and by design. The fault was
+  entirely in the caller.
 
-**The cost is measured rather than hypothetical.** `evals/deepen/`'s free `--dry-run` — the rehearsal
-`evals/README.md` and [260904d](260904d-deepen-fat-sections.md) both say to run *before* a $40.90 paid
-run — asks for `["fetch","extract","blocks"]` and forces `["blocks"]`. After `dev` merged into that
-branch every phase threw at `enqueue`: exit 1, **zero jobs created, empty driving table** — and
-`npm test` stayed entirely green through it, because the predicate has a test and the seam does not.
-The dry run is being repaired on its own side (a free step that stands alone), which fixes the caller
-and leaves the hole.
+**How three agents got it wrong is the part worth keeping.** The search that "established" the gap
+was a grep across `tests/` that *excluded `tests/jobs.test.ts`* -- the file being annotated, on the
+assumption that the block already read was all it had to say. The wiring test does not name
+`unrunnableStepPlan` in its title, so nothing else surfaced it. A grep that excludes the file you are
+writing about cannot return the thing that would change your mind, and the confidence that follows
+from a clean result is unearned. Retracted by the agent that wrote it, 2026-09-05.
 
-A test wants an article, an owner, and an assertion that no `jobs` row appears — the shape
-`tests/enqueue-owns-the-article.test.ts` already uses for the ownership refusal, whose comment makes
-exactly this point about a job that fails at claim still sitting at the head of the line.
-
-**The class**: *a rule enforced at a seam, with a test only for the predicate behind it.* The
-predicate test passes forever while the seam is free to stop calling it, be called with the wrong
-argument, or be bypassed — and every caller downstream fails somewhere that looks unrelated.
-[silent-success.md](../reusable/silent-success.md).
-
-This is also why the store-migration registry went red on `dev` and stayed red: the block arrived
-without its judgement. That was diagnosed and deliberately left in `58bda210`, on the correct
-grounds that annotating on the author's behalf buys a green gate and a worse test. The judgement is
-now written — truthfully, as a fact about that block — and it names this gap rather than closing it.
-The allowance was not raised, and the test above is still the author's to write.
+What survives is the *other* class, which is real and is written up in
+[260905b](../postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md): a report
+computed over the collection the failure emptied, printing `Findings: none` and a clean bill over a
+run in which nothing happened.
 
 ##### What Sol's review of the built code changed, and the one thing it overturned
 
