@@ -526,14 +526,32 @@ lint-shaped fix in the list from being silently disabled. Then (a), (c), (e), (f
 **Stage 3 — T2.2 and the T1.6 residue.** A schedule for `sweepAbandonedDrafts` is a decision, not a
 line, so it wants Greg. The three residue items are twenty minutes together.
 
-**One thing about landing this, for whoever does.** `npm run worktree:setup` could not finish here:
-merging `origin/dev` into a worktree based on the primary's `f1ee632f` conflicts in
-`tests/public-dispatch.test.ts` and `tests/shared-notice-hides-with-the-masthead.test.tsx` — the two
-files [260905a](260905a-three-reds-on-dev-after-the-deploy-sweep.md) fixed this morning, which
-somebody else has since fixed differently on `origin/dev`. That is two people's work meeting, not
-mine, and [a merge conflict is a proposal before it is an edit](../reusable/git-resolve-merge-conflicts.md),
-so I aborted the merge and worked from the base instead. Nothing here touches either file. The
-conflict is still waiting for whoever owns those two fixes.
+## Landing it: two agents had fixed the same two bugs differently
+
+`npm run worktree:setup` could not finish here, and the push needed the same merge. `origin/dev` had
+moved 30 commits ahead of the primary's unpushed `f1ee632f`, and both had fixed the three reds that
+[260905a](260905a-three-reds-on-dev-after-the-deploy-sweep.md) reported this morning — separately,
+without meeting. Neither side was mine. Put to Greg as a proposal before an edit, per
+[git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md), and settled on
+judgment:
+
+- **`tests/shared-notice-hides-with-the-masthead.test.tsx` — kept this side's assertions, both
+  sides' reasoning.** `origin/dev` asserts `toContain(SHARED_WITH_YOU)`; the primary asserts the same
+  thing *through the renderer* and adds a non-empty guard, both of which came out of a GPT Sol
+  review. Those are strictly stronger — `toContain("")` is vacuously true, and a raw comparison
+  breaks on the first `&` in the copy. But `origin/dev`'s comment carried history the other lacked:
+  *why* the sentence had to stop saying somebody sent this reader a link. That paragraph is now
+  folded in.
+- **`tests/public-dispatch.test.ts` — took `origin/dev`'s uuid.** Both sides replaced the colliding
+  `…0000ed` with something unique, and neither replacement collides with anything (checked). The
+  choice is arbitrary, so the tiebreak is that `origin/dev`'s is already what every other worktree
+  runs against.
+
+**And the merge's own silent success is worth a line.** Both sides had added the *same* import of
+`SHARED_WITH_YOU`, on different lines. Git merged them without a conflict — into a file with the
+identifier declared twice, which no longer parses. The merge reported success; only running the
+suite found it. That is the shape this whole plan is about, arriving unprompted during the landing
+of it.
 
 ## Not doing, and why
 
