@@ -209,15 +209,31 @@ Written 2026-09-01, and the counts above are as-found. Since then:
 
 - **`classifyEnd` and `StreamOutcome` exist**, in [`src/ai-call.ts`](../../src/ai-call.ts) rather
   than `openrouter-stream.ts` — see the plan for why a parser should keep only framing facts.
-- **Three callers are on it**: `quiz-mark`, `explain`, `search`. Each kept its own policy, and in
-  each the migration went in with **no existing test rewritten**.
+- **The first three callers went over**: `quiz-mark`, `explain`, `search`. Each kept its own policy,
+  and in each the migration went in with **no existing test rewritten**.
 - **The unfireable guard fired once on its way out.** `finish_reason: "error"` reached that
   conjunction in both `explain` and `search`, where each already threw `providerFailedMidAnswer()`
   for the same event arriving as `chunk.error` data — so a provider that said it had errored had its
   half-answer stored as a whole one. Both now throw. That is the bug this postmortem predicted
   rather than found.
-- **Four copies remain**: `converse` (which needs its per-round fold designed) and the three referee
-  files, which are somebody else's open work.
+- **No copies remain, as of 2026-09-05.** The last four — `converse` and the three referee runners —
+  went over in [260901g](../plans/260901g-one-stream-end-classification-shared-by-five-callers.md)
+  §§ Stages D and E, along with `evals/referee-claims.ts`. **The unfireable guard fired three more
+  times on its way out**, in exactly the way it did in `explain` and `search`: each referee runner
+  had its `finish_reason: "error"` half-answer handed to `parseHits` and reported as a finished run
+  if it happened to parse.
+- **`converse` needed a fold, and the fold found a second bug.** A turn is up to four provider
+  requests, and `truncated` read only the last one's reason — so an answer cut off mid-sentence on
+  round two was delivered as whole. That is a *different* mistake from the one this document is
+  about, and it turned out to be the third instance of its own class in that one file:
+  [260905i-the-round-variable-read-as-the-turns-answer.md](260905i-the-round-variable-read-as-the-turns-answer.md).
+- **And the review of the finished migration found a bug older than all of it.** `classifyEnd` asked
+  the signals before the terminator, so a deadline firing after `[DONE]` classified a **complete
+  answer** as a timeout and threw it away. Every caller's pre-classifier sequence did the same, so it
+  was true of all seven and nobody had noticed; one fix in the shared function covered them all.
+  260901g § Stage H. **Which is the argument for this whole exercise, arriving late and from an
+  unexpected direction**: the bug was invisible while it was written seven times and obvious once it
+  was written once.
 - **`explain`'s truncation policy is unchanged and that is deliberate.** A truncated explanation is
   still stored as a whole comment, now as a written `case "truncated"` with a comment and a test
   saying it is a decision — which is exactly the distinction this postmortem argued the union would
