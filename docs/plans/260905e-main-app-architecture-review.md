@@ -494,6 +494,14 @@ local classification in `referee-claims-run.ts`, `referee-criteria-run.ts`, `ref
 new stream. Classify each provider round and fold all rounds of a conversation; the last round's
 finish reason must not erase an earlier truncation. Preserve feature-specific stop/persist policy.
 
+**Done, 2026-09-05.** All four migrated, in
+[260901g](260901g-one-stream-end-classification-shared-by-five-callers.md) § Stages D, E and F.
+Both requirements above are met and tested: `converse` classifies once per round and folds, so a
+`length` on round two no longer vanishes when round three ends cleanly; every caller kept its own
+stop/persist policy, each now a written `case` with a comment rather than an absence. The one
+behaviour change is that `finish_reason: "error"` throws in all four, as it already did for the same
+event arriving as `chunk.error` data.
+
 ### A10. Organise styles and extension checks around ownership
 
 **Proved shared stylesheet and edit surface; maintainability judgement.** The semantic CSS model

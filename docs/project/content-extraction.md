@@ -392,8 +392,10 @@ is markup, however it was obtained.
 checked against real Readability output first.
 
 Stage 3 is unaffected by this — it sanitises whatever it is handed, so a body arriving clean is a
-no-op and `blocks.json` comes out identical. That is asserted rather than assumed, because the two
-stages share this file and stage 3 writes block ids back into it.
+no-op and the stored blocks come out identical. That is asserted rather than assumed: until
+2026-08-31 the two stages shared this file and stage 3 wrote block ids back into it directly (see
+[block-ids.md § The freshness guard](block-ids.md#the-freshness-guard-and-the-two-ways-it-was-wrong)
+for the split into separate `extractedHtml`/`stampedHtml` columns since).
 Ids are preserved by matching on the `spya-` attribute already in the document, so extraction must
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 

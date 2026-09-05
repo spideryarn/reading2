@@ -12,8 +12,9 @@ document carries the reasoning.
 ## What logging is for here
 
 **Logging is what the server says to whoever is running it.** Nothing else in this project can do
-that job. A job's outcome is written to `data/_jobs/<id>.json`, which survives a restart and is
-genuinely good; an error is sent to the reader as JSON, which is what the reading view needs. But
+that job. A job's outcome is written to a row in the `jobs` table (`data/_jobs/<id>.json` until
+2026-09-05), which survives a restart and is genuinely good; an error is sent to the reader as JSON,
+which is what the reading view needs. But
 neither reaches the person operating the thing, and once this is on Vercel there is no terminal to
 look at.
 
@@ -219,8 +220,8 @@ two can be added up together:
 A line with none of these made no model call at all, which is most of them.
 
 **`aiRunId` is the join, and it exists because the fields above are a summary.** Since 2026-08-28
-each call is also a row — in `ai_calls` or in `data/_ai-calls.jsonl`
-([ai-gateway.md](ai-gateway.md)) — and the question a surprising `aiCost` provokes is *which calls*.
+each call is also a row in `ai_calls` (`data/_ai-calls.jsonl` until 2026-09-05 —
+[ai-gateway.md](ai-gateway.md)) — and the question a surprising `aiCost` provokes is *which calls*.
 Without an id on both sides, answering it means guessing at a timestamp range.
 
 **`aiWriteFailures` is the one anomaly the ledger itself cannot report**, because the evidence is
@@ -756,7 +757,8 @@ keeping, write it beside the artefact on purpose.
 
 **Where it was left alone, and why.** A dozen other `JSON.parse` calls discard the error entirely —
 `catch { return null }` in the stage files' `readJson`, `catch { previous = undefined }` in
-[`src/blocks.ts`](../../src/blocks.ts), the per-record `catch` in `loadFromDisk`, the per-chunk one in
+[`src/blocks.ts`](../../src/blocks.ts), the per-record `catch` in `loadFromDisk` (in `src/jobs.ts`'s
+filesystem half, deleted 2026-09-05 with the rest of it), the per-chunk one in
 [`src/converse.ts`](../../src/converse.ts), and `readBody` in [`src/routes.ts`](../../src/routes.ts),
 which throws a fixed 400 string. None of them can reach a log line, so none of them changed.
 [`src/search.ts`](../../src/search.ts) already had it right before any of this, throwing

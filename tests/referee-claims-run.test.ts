@@ -254,3 +254,70 @@ describe("reading the answer back", () => {
     await expect(runClaims({ meta, blocks: BLOCKS })).rejects.toThrow();
   });
 });
+
+/**
+ * What `classifyEnd` in src/ai-call.ts is allowed to decide here, and what it
+ * is not.
+ *
+ * A claims run reads the same shared classification every other streaming
+ * caller does and then makes its own decisions from it — which is why the
+ * classifier reports rather than decides. Two of those decisions are worth
+ * pinning, because both look like omissions to somebody reading the switch
+ * cold. Modelled on tests/search-stream.test.ts § "what the provider says about
+ * how it stopped", and see
+ * docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md.
+ */
+describe("what the provider says about how it stopped", () => {
+  it("refuses a run the provider itself said it errored out of, even though it parses", async () => {
+    /* **The one behaviour the shared classifier changed here.** The object is
+       complete and `[DONE]` arrives, so every other witness says this is a good
+       run; only `finish_reason` disagrees, and the guard it used to reach was a
+       conjunction that a non-null reason could only make *less* likely to fire.
+       It is the same event as an `error` inside a 200, arriving in a field
+       rather than as data, so it gets the same sentence. */
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: JSON.stringify({ claims: [CLAIM] }) } }] }) +
+          frame({ choices: [{ finish_reason: "error", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    /* Collected rather than drained, so the assertion can be the expensive half:
+       a claim really did stream, so the referee really was shown a result, and
+       it is still refused. Without this the test would pass on a stream that
+       produced nothing — a much easier thing to refuse. */
+    const shown: Claim[] = [];
+    let sawDone = false;
+    let thrown: Error | undefined;
+    try {
+      for await (const e of runClaimsStream({ meta, blocks: BLOCKS })) {
+        if (e.type === "claim") shown.push(e.claim);
+        else sawDone = true;
+      }
+    } catch (err) {
+      thrown = err as Error;
+    }
+    expect(shown).toHaveLength(1);
+    expect(sawDone).toBe(false);
+    expect(thrown?.message).toMatch(/\[ai-interrupted\]/);
+  });
+
+  it("accepts a `length` that landed after the object closed, rather than refusing a short answer", async () => {
+    /* The control for `case "truncated"` being a `break`. Quiz refuses every
+       `length`; a claims run must not, because a model that fills its budget
+       with a few good claims and stops has produced a legitimately short
+       answer — and a `length` that lands mid-object is already caught by the
+       strict parse, which tests/overflow-message-reaches-its-caller.test.ts
+       pins. Without this, "refuse every truncation" would pass the whole file. */
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: JSON.stringify({ claims: [CLAIM] }) } }] }) +
+          frame({ choices: [{ finish_reason: "length", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+    const { claims } = await runClaims({ meta, blocks: BLOCKS });
+    expect(claims).toHaveLength(1);
+  });
+});

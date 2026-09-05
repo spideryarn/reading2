@@ -137,7 +137,7 @@ Two consequences worth knowing:
 
 ## What is generated, and when
 
-Stage 5d writes `data/<slug>/glossary.json`. It is in `STEP_ORDER` and **not** in
+Stage 5d produces the `glossary` artefact (`data/<slug>/glossary.json` until 2026-09-05). It is in `STEP_ORDER` and **not** in
 `DEFAULT_INGEST_STEPS` — the same split `tweets` introduced, and the pair of them is what turned that
 from an exception into the shape of the list: everything up to `arc` makes the article readable, and
 everything after it is a thing somebody asks for.

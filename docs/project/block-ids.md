@@ -79,11 +79,11 @@ several identical short paragraphs cannot hand the same id to two blocks.
 #### Where the previous run comes from, and the three answers it can give
 
 **From the `ArtifactStore`, not from a path** — `previousBlocksFrom` in
-[`src/blocks.ts`](../../src/blocks.ts). On the filesystem that is still
-`output/<slug>.blocks.json`; in Postgres it is the block rows `beginDraftIn` copies into a new draft
-from the published revision before any stage runs, so the baseline is already sitting there when
-stage 3 starts. Reading the draft's own carried rows is not matching against itself: before stage
-3's first write those rows *are* the previous published blocks.
+[`src/blocks.ts`](../../src/blocks.ts). In Postgres — the only store since 2026-09-05 — it is the
+block rows `beginDraftIn` copies into a new draft from the published revision before any stage runs,
+so the baseline is already sitting there when stage 3 starts. Reading the draft's own carried rows is
+not matching against itself: before stage 3's first write those rows *are* the previous published
+blocks. (On the filesystem, until then, that was `output/<slug>.blocks.json`.)
 
 Until 2026-08-28 the read was a `readFile` inside a `try/catch` whose `catch` said *"first run for
 this article"*. That is one branch doing two jobs, and the moment the pipeline's artefacts leave the
@@ -98,13 +98,14 @@ only one of them mints:
 | earlier blocks exist, no readable baseline | the carry-forward did not happen | **the stage fails** |
 | the store read throws | an infrastructure fault | **propagates; the stage fails** |
 
-`ArtifactStore.hasEarlierBlocks` is the second question, and each store answers it with the thing it
-actually knows: Postgres asks whether `articles.current_revision_id` points at a published revision
-(one cannot exist without blocks), the filesystem asks whether stage 4's `data/<slug>/blocks.json`
-is there — **there, not readable**. A half-written or over-sized copy of that file answers *yes*, so
-it lands in the middle row of the table and stops the stage. That distinction was missing until
-2026-08-28: the store read the file the way every other caller does, where absent and corrupt are
-one answer, so a truncated stage-4 copy said *first ingest* and every paragraph got a new id.
+`ArtifactStore.hasEarlierBlocks` is the second question, and Postgres answers it with the thing it
+actually knows: whether `articles.current_revision_id` points at a published revision (one cannot
+exist without blocks). Until 2026-09-05 the filesystem store answered the same question by asking
+whether stage 4's `data/<slug>/blocks.json` was there — **there, not readable**. A half-written or
+over-sized copy of that file answered *yes*, so it landed in the middle row of the table and stopped
+the stage. That distinction was missing until 2026-08-28: the store read the file the way every other
+caller does, where absent and corrupt are one answer, so a truncated stage-4 copy said *first ingest*
+and every paragraph got a new id.
 Whether those ids are still recoverable is a different question from whether to proceed — somebody
 with a backup can put the file back, and minting takes that away without saying so.
 

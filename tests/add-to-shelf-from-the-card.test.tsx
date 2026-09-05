@@ -185,6 +185,13 @@ function Harness({ url, canAdd }: { url: string; canAdd: boolean }) {
       <p id="elsewhere">not a link</p>
       <ProseHoverCard
         entries={[]}
+        /* **No slug, so the third lookup never fires**, and that is about
+           keeping this suite about one thing. `GET /api/link-preview` is
+           article-scoped and needs a slug for permission; handing one over here
+           would put a second request through the `apiFetch` mock above — which
+           answers every URL with the shelf payload — for no assertion's
+           benefit. The preview lookup has its own suite. */
+        slug={null}
         sourceUrl={READING}
         blockText={new Map()}
         notes={{ byNote: new Map(), noteOf: new Map(), first: null, titled: false }}

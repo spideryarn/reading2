@@ -151,7 +151,7 @@ it does not change when something happened.
 | [`src/web/useTimeline.ts`](../../src/web/useTimeline.ts) | the read, the staleness, and the one verb |
 | `TimelineBand` in [`src/web/App.tsx`](../../src/web/App.tsx) | `?event=`, and the resolved passages it pushes up to the prose |
 | `STEPS.timeline` in [`src/pipeline.ts`](../../src/pipeline.ts) | the stage as the pipeline runs it — its `stamp`, and the counters it logs |
-| `loadTimeline` in `src/api.ts` and [`src/store/pg.ts`](../../src/store/pg.ts) | `GET /api/timeline/:slug`, once per store |
+| `loadTimeline` in [`src/store/pg.ts`](../../src/store/pg.ts) | `GET /api/timeline/:slug` |
 
 Ids are inherited on **the cited block set plus the date**, never on the label. That is measured
 rather than argued: a regeneration kept 26 of 27 ids and only 7 of 26 labels, so label-keyed

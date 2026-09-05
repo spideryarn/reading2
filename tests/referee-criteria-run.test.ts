@@ -428,3 +428,72 @@ describe("reading the answer back", () => {
     expect(done?.results[0]?.quote).toBe("no negative control");
   });
 });
+
+/**
+ * What `classifyEnd` in src/ai-call.ts is allowed to decide here, and what it
+ * is not.
+ *
+ * A criterion run reads the same shared classification every other streaming
+ * caller does and then makes its own decisions from it — which is why the
+ * classifier reports rather than decides. Two of those decisions are worth
+ * pinning, because both look like omissions to somebody reading the switch
+ * cold. Modelled on tests/search-stream.test.ts § "what the provider says about
+ * how it stopped", and see
+ * docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md.
+ */
+describe("what the provider says about how it stopped", () => {
+  it("refuses a run the provider itself said it errored out of, even though it parses", async () => {
+    /* **The one behaviour the shared classifier changed here.** The object is
+       complete and `[DONE]` arrives, so every other witness says this is a good
+       run; only `finish_reason` disagrees, and the guard it used to reach was a
+       conjunction that a non-null reason could only make *less* likely to fire.
+       It is the same event as an `error` inside a 200, arriving in a field
+       rather than as data, so it gets the same sentence. */
+    const one = { blockId: "spya-k3m9qt", quote: "no negative control", confidence: 90, reasoning: "a" };
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: JSON.stringify({ results: [one] }) } }] }) +
+          frame({ choices: [{ finish_reason: "error", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+
+    /* Collected rather than drained, so the assertion can be the expensive half:
+       a result really did stream, so the referee really was shown one, and it is
+       still refused. Without this the test would pass on a stream that produced
+       nothing — a much easier thing to refuse. */
+    const shown: RefereeResult[] = [];
+    let sawDone = false;
+    let thrown: Error | undefined;
+    try {
+      for await (const e of runCriterionStream(req(SINGLE))) {
+        if (e.type === "result") shown.push(e.result);
+        else sawDone = true;
+      }
+    } catch (err) {
+      thrown = err as Error;
+    }
+    expect(shown).toHaveLength(1);
+    expect(sawDone).toBe(false);
+    expect(thrown?.message).toMatch(/\[ai-interrupted\]/);
+  });
+
+  it("accepts a `length` that landed after the object closed, rather than refusing a short answer", async () => {
+    /* The control for `case "truncated"` being a `break`. Quiz refuses every
+       `length`; a criterion run must not, because a model that fills its budget
+       with a few good passages and stops has produced a legitimately short
+       answer — and a `length` that lands mid-object is already caught by the
+       strict parse, which tests/overflow-message-reaches-its-caller.test.ts
+       pins. Without this, "refuse every truncation" would pass the whole file. */
+    const one = { blockId: "spya-k3m9qt", quote: "no negative control", confidence: 90, reasoning: "a" };
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({ choices: [{ delta: { content: JSON.stringify({ results: [one] }) } }] }) +
+          frame({ choices: [{ finish_reason: "length", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+    const { done } = await drain(runCriterionStream(req(SINGLE)));
+    expect(done?.results).toHaveLength(1);
+  });
+});
