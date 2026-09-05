@@ -1078,37 +1078,43 @@ function TableViewInner({
                    `kind-callout` is still emitted for revisions extracted in the
                    few hours that kind existed, and the stylesheet answers to
                    both. */
-                /* `gutter-pad` says this row's gutter is the full 2 × 2 pad
-                   rather than a single 24px slot, and the stylesheet floors the
-                   row's height to match so nothing can hang below it and take a
-                   click meant for the next row. § the gutter in styles.css has
-                   the reasoning.
+                /* `gutter-pad` says this row's gutter is the full three-slot
+                   column rather than a single 24px slot, and the stylesheet
+                   floors the row's height to match so nothing can hang below it
+                   and take a click meant for the next row. § the gutter in
+                   styles.css has the reasoning.
 
                    **The condition is the reader's capability, not what is on
                    the row.** `onChatAbout` is what BlockGutter renders the chat
                    button from, and `onHelp` the "?" beneath it, so a reader who
-                   has them is a reader whose gutter is the whole pad — floored
-                   on every row, so their comment-free paragraphs do not jump
-                   when they add a note to one. A visitor has neither, so their
-                   gutter stays one slot tall and the article keeps its old
-                   rhythm.
+                   has them is a reader whose gutter is the whole column —
+                   floored on every row, so their paragraphs do not jump when
+                   they mark one. A visitor has neither, so their gutter stays
+                   one slot tall and the article keeps its old rhythm.
 
-                   **Every one of the three is asked about, and the first draft
-                   of stage 2 asked about one.** It read `onChatAbout ||
-                   comments` on the reasoning that App gates both callbacks on
-                   `owner`, so the chat button and the "?" can only ever agree.
-                   That is true of today's single caller and **false at this
-                   component's boundary**, which is where a condition has to
-                   hold: an `onHelp`-only caller drew a permalink in row 1 and a
-                   "?" in row 2 with no two-row floor — the exact overhang class
-                   stage 1 existed to remove, reintroduced through the props.
-                   GPT Sol's stage 2 review; `tests/gutter-pad-floor.test.tsx`
-                   is the invariant written down, watched red first. So the rule
-                   is **anything that can be drawn in the pad's second row
-                   floors the row**, read from the same three facts BlockGutter
-                   renders from. Since 2026-09-04 that row is also *occupied* on
-                   every owner row rather than reserved and empty, which retires
-                   the caveat GPT Sol wrote against stage 1.
+                   **Both callbacks are asked about, and an earlier draft asked
+                   about one.** It read `onChatAbout || comments` on the
+                   reasoning that App gates both callbacks on `owner`, so the
+                   chat button and the "?" can only ever agree. That is true of
+                   today's single caller and **false at this component's
+                   boundary**, which is where a condition has to hold: an
+                   `onHelp`-only caller drew a permalink in the first slot and a
+                   "?" below it with no floor — the exact overhang class that
+                   work existed to remove, reintroduced through the props. GPT
+                   Sol's stage 2 review, 2026-09-04;
+                   `tests/gutter-pad-floor.test.tsx` is the invariant written
+                   down, watched red first.
+
+                   **`comments` left this condition on 2026-09-05, and it is not
+                   a relaxation of that rule.** The rule is still *anything that
+                   can be drawn below the first slot floors the row*; what moved
+                   is the bookmark, which is now `grid-area: 1 / 1` and so draws
+                   nothing below the first slot. A comment therefore costs the
+                   row no height at all, where it used to cost 24px. **If the
+                   bookmark is ever moved down the column, this condition has to
+                   get `comments` back** — the coupling is asserted from both
+                   ends, in `tests/gutter-pad-floor.test.tsx` and in
+                   `tests/gutter-target-size.test.ts`.
 
                    It was `has-marks`, meaning "this block has a comment", until
                    2026-09-04; the name went with the meaning. */
@@ -1122,7 +1128,7 @@ function TableViewInner({
                   block.context ? ` ctx-${block.context.type}` : ""
                 } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }${onChatAbout || onHelp || cmtsByBlock.has(block.id) ? " gutter-pad" : ""}${
+                }${onChatAbout || onHelp ? " gutter-pad" : ""}${
                   notes?.noteOf.has(block.id) ? " note" : ""
                 }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,
