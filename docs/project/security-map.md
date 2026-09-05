@@ -286,6 +286,22 @@ says what a sixth would have to prove. `tests/shared-inventory.test.ts` holds
 them to `PublicArticle`'s key set with a total record, so a new field on the wire fails to compile
 until somebody decides which line covers it.
 
+**`search_runs` is that sixth, hours later** ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)
+§ Stage 4), and it proves the same three things: `publicSearchesQuery` names its columns, repeats
+`publicSlug` in its own `where`, and refuses unfinished and failed runs in SQL
+(`PUBLIC_SEARCHES_WHERE`). Greg's line was at *making* one — *"Only owner can create new searches.
+Everyone else can see the ones they have already created"* — so what stops a visitor spending is a
+`SearchAccess` union whose visitor arm carries none of the four verbs, plus `useSearch` being mounted
+in `SearchBand` alone.
+
+**It has a fourth thing of its own, and it is the one to know: `source_hash` is selected and must not
+cross.** `isStale` turns it into a derived `stale` boolean before the DTO sees it, which makes this
+the only column in the whole public surface whose presence in a `select` is *not* a promise about the
+payload. Getting its inputs wrong has no symptom but a warning on every row that reads as a fact
+about the article, so `tests/public-visibility-pg.test.ts` asserts a run whose fingerprint matches
+comes back **not** stale — the positive control, without which a derivation hardwired to `true`
+passes.
+
 **A row that is not swept is a row that can be forgotten, and one was.** `available.arc` was
 computed, sent and read by nothing for the first day, so an article with no arc listed nothing under
 *not built yet* — and the comment beside the tweets line said tweets were "the one artefact with no
