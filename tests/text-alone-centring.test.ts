@@ -110,7 +110,9 @@ describe("the article on its own is centred", () => {
        prose column's line length — and nothing renders differently enough to
        notice. It happened on 2026-09-04, when the gutter became a 2 × 2 pad and
        `--text-pad-l` went 2.1rem → 3.7rem; GPT Sol found it by reading, which is
-       the only way it could have been found.
+       the only way it could have been found. It went the other way on 2026-09-05
+       — 3.7rem → 2.2rem, when the pad became one column that truncates — and
+       this test caught *that* one by going red, which is what it is for.
 
        **The inequality itself is checked at five root font sizes in
        `tests/gutter-target-size.test.ts`**, which is where it belongs now that
@@ -120,7 +122,7 @@ describe("the article on its own is centred", () => {
        file's own story stays readable. */
     const MEASURE_REM = 46;
     const padR = Number(/--text-pad-r:\s*([\d.]+)rem/.exec(css)?.[1]);
-    const padL = 3.7; // 2 × max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
+    const padL = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
     expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeGreaterThanOrEqual(
       (MEASURE_REM + padL + padR) * DEFAULT_ROOT_PX,
     );

@@ -334,13 +334,16 @@ export const askAboutTerm = makeAskAboutTerm({
  * The glossary panel's **Start again**, and one method: null the list on the
  * article's current revision and say whether there was one to null. It answered
  * 501 under `postgres` until 2026-09-03, which meant the button worked for
- * nobody but a developer on a laptop.
+ * nobody but a developer on a laptop — and the button itself went on 2026-09-05
+ * (`Foot` in src/web/GlossaryPanel.tsx), so this has no client caller now. Kept
+ * deliberately: docs/project/glossary.md § Finding more.
  *
  * **It can now answer 409**, and that is the one thing a reader can be told here
  * that they could not before: while a live job holds a draft of this article,
  * the delete is refused, because every draft carries the glossary forward and
- * publishing one after the delete would put the old list back. The panel shows
- * the message and does not fall through to a run.
+ * publishing one after the delete would put the old list back. The panel used to
+ * show that message; with the button gone the caller is whatever reaches the
+ * route, so the sentence names no button.
  * src/store/pg-glossary.ts; docs/plans/260903e-glossary-delete-in-postgres.md.
  */
 const glossary: Pick<GlossaryStore, "deleteGlossary"> = guarded("glossary", pgGlossaryStore);

@@ -6394,9 +6394,11 @@ export async function serveAuthenticatedApi(
      `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
   const askTerm = /^\/api\/glossary\/([\w.%-]+)\/ask$/.exec(path);
   /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
-     so re-running the step already *is* "start again". The glossary needs a
-     delete precisely because running it again would add to the list it is
-     trying to throw away. Asking for these is
+     so re-running the step already *is* "start again". The glossary has a delete
+     precisely because running it again would add to the list it is trying to
+     throw away — though since 2026-09-05 nothing in the client calls it, and
+     this route's shape is the one the glossary's button was measured against
+     when it went (docs/project/glossary.md § Finding more). Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(path);
   /* Read only, and no DELETE, for exactly the reason `ideas` above has none:

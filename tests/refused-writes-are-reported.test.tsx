@@ -2,7 +2,7 @@
 /**
  * **A write the server refused must not look like one that worked.**
  *
- * Six call sites across four surfaces send a DELETE, a POST or a PATCH whose
+ * Five call sites across three surfaces send a DELETE, a POST or a PATCH whose
  * body nobody reads, and every one of them once shipped — or nearly shipped —
  * the same defect: the response was never looked at, so a 500 took the row off
  * the reader's screen and said nothing, and they found it back after a reload.
@@ -34,7 +34,6 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Comment, LibraryEntry } from "../src/types.js";
-import type { GlossaryRead } from "../src/web/useGlossary.js";
 import type { Shelf } from "../src/web/ShelfEntry.js";
 
 /**
@@ -56,35 +55,22 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   },
 }));
 
-/* The job poller and the reader profile, posed rather than run. `useGlossary`
-   needs both to mount, and neither has anything to do with a refused DELETE —
-   except `run`, which is the thing a refused reset must NOT reach. */
-const ran: boolean[] = [];
-vi.mock("../src/web/useJobs.js", () => ({
-  useJobs: () => ({
-    jobs: [],
-    loaded: true,
-    error: null,
-    /* The durable half of `error` — src/web/useJobs.ts § `lastFailure`. Reached
-       only if a run fails, which is what a refused reset must never get to. */
-    /* Per-job `/advance` failures. Empty, because nothing here has a driver at
-       all — but a whole-module mock that omits a field leaves `undefined` where
-       `useStepJob` reads it (src/job-state.ts § `driverStalled`), which is the
-       landmine this file's siblings already note about `lastFailure`. */
-    driverFailures: {},
-    lastFailure: () => null,
-    run: async (_slug: string, _steps: string[], force?: boolean) => {
-      ran.push(force ?? false);
-      return null;
-    },
-    cancel: async () => {},
-  }),
-}));
-vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
+/* **`useJobs` and `useProfile` were mocked here and are not any more.**
+
+   Both were `useGlossary`'s, which this file mounted until 2026-09-05 for the
+   refused-reset case (see the note where that case used to be). Neither of the
+   three surfaces left needs them: the shelf's `Actions` sends its POST straight
+   through `fetchOk` (src/web/ShelfEntry.tsx) and never mounts the poller, and
+   `useComments` and `useSearch` never did. A mock nobody needs is a trap — the
+   next reader has to work out which surface depends on it before touching
+   anything. ⟨Sol⟩
+
+   Gone with them: a `ran` array that recorded every `run` the mock was asked
+   for. It was the load-bearing assertion of the deleted case — *a refused
+   DELETE must not fall through to a run* — and nothing left asserts on it. */
 
 const { useComments } = await import("../src/web/useComments.js");
 const { useSearch } = await import("../src/web/useSearch.js");
-const { useGlossary } = await import("../src/web/useGlossary.js");
 const { Actions } = await import("../src/web/ShelfEntry.js");
 
 /* ------------------------------------------------------------- the server --- */
@@ -145,7 +131,6 @@ beforeEach(() => {
   refusing = new Set();
   torn = false;
   sent = [];
-  ran.length = 0;
   reads = {
     "/api/comments/": { comments: [] },
     "/api/search/": { runs: [] },
@@ -363,52 +348,34 @@ describe("useSearch, when the server refuses the write", () => {
   });
 });
 
-/* ---------------------------------------------------------------- glossary --- */
+/* ---------------------------------------------------------------- glossary ---
 
-describe("useGlossary, when the reset DELETE is refused", () => {
-  let api: ReturnType<typeof useGlossary> | undefined;
-  /* What `Reader` hands the band. Posed rather than run: `useGlossaryRead` is
-     the *read* half and none of it is what a refused DELETE is about. */
-  const read: GlossaryRead = {
-    status: "none",
-    glossary: null,
-    stale: false,
-    outdated: false,
-    profiled: false,
-    profileChanged: false,
-    error: null,
-    reload: async () => {},
-    refresh: async () => {},
-    clear: () => {},
-    patchEntry: () => {},
-  };
+   **There was a case here and it went with its button on 2026-09-05.**
 
-  function Harness() {
-    api = useGlossary("a-slug", read);
-    return null;
-  }
+   `useGlossary` had a `reset()` — the panel's *Start again* — which sent
+   `DELETE /api/glossary/:slug` and then ran the step. The case tested the
+   load-bearing half: a refused DELETE must **not** fall through to the run.
+   The consequence, precisely: `reset` called `run(false)`, unforced, so with
+   the list still in place the step would find itself current and **skip** —
+   the identical list straight back over a screen the reader had been shown as
+   cleared. Force it instead and you get the append, which is worse. Either way
+   it is not Start again. (An earlier draft of this note said the fall-through
+   appended; that was the forced path, not the one `reset` took. ⟨Sol⟩)
 
-  it("tells the reader, and does not go on to run the step", async () => {
-    await act(async () => root.render(createElement(Harness)));
-    await settle();
-    refusing.add("DELETE");
+   The button, `reset()` and the client's only DELETE all went together —
+   `Foot` in src/web/GlossaryPanel.tsx carries the reasoning. There is no
+   client call left to refuse, so the case had nothing to drive.
 
-    await act(async () => {
-      await api?.reset();
-    });
-    await settle();
-
-    expect(sent.map((s) => s.method)).toContain("DELETE");
-    /* `error` is `resetFailed ?? error` — the band has one line for both, and
-       the refused DELETE is the one the reader needs. */
-    expect(api?.error).toBe(SAID);
-    /* **The load-bearing half.** Forcing the step *appends* to the list the
-       reader just asked to be rid of, so a refused DELETE that fell through to
-       `run` would leave them with more terms than they started with — the exact
-       opposite of what they pressed. useGlossary.ts § `reset`. */
-    expect(ran).toEqual([]);
-  });
-});
+   **The store's own refusals are still covered** —
+   tests/store-glossary-delete-pg.test.ts for the 409 against an in-flight
+   draft, and tests/glossary-delete-then-rebuild.test.ts for the
+   delete-then-rebuild sequence end to end. Both exercise the store and the
+   coordinator rather than `DELETE /api/glossary/:slug` *routing*, so the
+   transport itself is uncovered now that no client drives it. Named rather
+   than fixed: the route is API-only until something calls it again, and the
+   honest record of that gap is worth more than a test written to close it.
+   ⟨Sol⟩ If the capability comes back — the Metadata page is the suggested
+   home — this case comes back with it, unchanged.                          */
 
 /* ------------------------------------------------------- the shelf's rerun --- */
 
