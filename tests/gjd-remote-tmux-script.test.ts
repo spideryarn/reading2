@@ -217,7 +217,11 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
     stubPs(["1000 1 3600 bash -l", "2000 1000 60 sleep 900"]);
     stubClaude("[]");
     const { sessions, agents } = parseSessions(run());
-    expect(sessions[0]?.proc).toEqual({ kind: "none" });
+    // `busy` rather than `none` since 2026-09-05: something IS running in this
+    // pane, and that is now a thing the probe reports. What this test is about
+    // is unchanged and is the line below — the sleep is not OUR wait, so the
+    // STATE is `no-claude` and never a countdown.
+    expect(sessions[0]?.proc).toEqual({ kind: "busy" });
     expect(sessions[0] && sessionState(sessions[0], agents).kind).toBe("no-claude");
   });
 
@@ -248,12 +252,133 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
     expect(st?.kind).toBe("unknown");
   });
 
-  /** A neighbour's Claude must not answer for this session. */
+  /**
+   * A neighbour's Claude must not answer for this session.
+   *
+   * `busy` rather than `none` since 2026-09-05 — a process IS under this pane.
+   * The claim under test is that it is not reported as `claude`, which would
+   * make a neighbour's session answer for this one.
+   */
   it("will not take another session's Claude for this one's", () => {
     stubTmux(1);
     stubPs(["1000 1 3600 bash -l", `2000 1000 60 claude --session-id ${UUIDS[2]}`]);
     stubClaude("[]");
-    expect(parseSessions(run()).sessions[0]?.proc).toEqual({ kind: "none" });
+    expect(parseSessions(run()).sessions[0]?.proc).toEqual({ kind: "busy" });
+  });
+
+  /**
+   * **The eight ghost sessions, told apart.** On 2026-09-05 `gjd-remote ls`
+   * showed eight rows reading `shell`; seven were running `npm test` for other
+   * agents and one had been an abandoned prompt for fifteen hours, and nothing
+   * on screen distinguished them. This is the probe that does.
+   */
+  it("calls a shell with nothing under it idle", () => {
+    stubTmux(1);
+    stubPsIdle();
+    stubClaude("[]");
+    const { sessions, agents } = parseSessions(run());
+    expect(sessions[0]?.proc).toEqual({ kind: "none" });
+    expect(sessions[0] && sessionState({ ...sessions[0], claudeId: null }, agents)).toEqual({
+      kind: "shell",
+      busy: false,
+    });
+  });
+
+  /**
+   * The real shape on the box: `bash -l` → `npm test` → `node …`.
+   *
+   * The probe walks the ancestry rather than testing for a direct child. With a
+   * complete process table the two agree — the direct ancestor is always in it
+   * — so this test does not distinguish them and is not claiming to. The walk
+   * is there for the table that is not complete: `ps` is one snapshot, and a
+   * middle process that exits between the pane's line and its grandchild's is
+   * the ordinary way a chain arrives with a hole in it.
+   */
+  it("calls a shell with a grandchild busy, not idle", () => {
+    stubTmux(1);
+    stubPs([
+      "1000 1 3600 bash -l",
+      "2000 1000 600 npm test",
+      "3000 2000 590 node /home/greg/code/spideryarn2/node_modules/.bin/vitest run",
+    ]);
+    stubClaude("[]");
+    const { sessions, agents } = parseSessions(run());
+    expect(sessions[0]?.proc).toEqual({ kind: "busy" });
+    expect(sessions[0] && sessionState({ ...sessions[0], claudeId: null }, agents)).toEqual({
+      kind: "shell",
+      busy: true,
+    });
+  });
+
+  /**
+   * A process table is read a line at a time and can contain a cycle — a pid
+   * reused between the parent's line and the child's is enough. The walk is
+   * bounded so the script cannot hang the whole of `ls` on one, which is a
+   * failure that would look exactly like a slow box.
+   */
+  it("does not hang on a parent cycle in the process table", () => {
+    stubTmux(1);
+    stubPs(["1000 1 3600 bash -l", "2000 3000 60 a", "3000 2000 60 b"]);
+    stubClaude("[]");
+    const { sessions, failure } = parseSessions(run());
+    expect(failure).toBeNull();
+    // Nothing in the cycle reaches the pane, so the pane really is idle.
+    expect(sessions[0]?.proc).toEqual({ kind: "none" });
+  });
+
+  /**
+   * **THE ONE SOL FOUND IN REVIEW.** The walk skips pane processes, so a session
+   * whose work IS the pane — `tmux new-session -d -s x 'npm test'`, which is
+   * what the old testing.md recipe produced — had nothing left to look at and
+   * reported `none`. `ls` called a session running the suite `shell idle`,
+   * which is the one direction that gets live work killed.
+   */
+  it("calls a session busy when the work is the pane process itself", () => {
+    stubTmux(1);
+    stubPs(["1000 1 600 npm test"]);
+    stubClaude("[]");
+    expect(parseSessions(run()).sessions[0]?.proc).toEqual({ kind: "busy" });
+  });
+
+  /** A pane that really is only a login shell still reads idle, in every spelling. */
+  it("still calls a bare login shell idle", () => {
+    for (const shell of ["bash -l", "-bash", "/bin/bash", "sh", "-sh", "/usr/bin/zsh", "zsh"]) {
+      stubTmux(1);
+      stubPs([`1000 1 3600 ${shell}`]);
+      stubClaude("[]");
+      expect(parseSessions(run()).sessions[0]?.proc, shell).toEqual({ kind: "none" });
+    }
+  });
+
+  /**
+   * An unrecognised pane command is called BUSY, not idle. The check errs
+   * towards "something is happening here" because the other direction is the
+   * one somebody kills a running test suite over.
+   */
+  it("errs towards busy for a pane command it does not recognise", () => {
+    stubTmux(1);
+    stubPs(["1000 1 3600 /opt/weird/oil-shell"]);
+    stubClaude("[]");
+    expect(parseSessions(run()).sessions[0]?.proc).toEqual({ kind: "busy" });
+  });
+
+  /**
+   * A pane in a SECOND window counts. `busy` walks to any pane of the session,
+   * which is the same reason the probe asks `list-panes -a` rather than reading
+   * `#{pane_pid}` — see the test above about the pane that happens to be on
+   * screen.
+   */
+  it("sees work running in a pane that is not the visible one", () => {
+    stub(
+      "tmux",
+      `case "$1 $2" in
+         "ls -F") printf '$0|1788190330|0|2|0|two-windows\n' ;;
+         "list-panes -a") printf '$0 1000\n$0 1001\n' ;;
+       esac`,
+    );
+    stubPs(["1000 1 3600 bash -l", "1001 1 3600 bash -l", "2000 1001 600 npm test"]);
+    stubClaude("[]");
+    expect(parseSessions(run()).sessions[0]?.proc).toEqual({ kind: "busy" });
   });
 
   /**

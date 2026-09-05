@@ -263,4 +263,36 @@ export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
       "lines written against a module docs/plans/260831b-finish-the-database-move.md " +
       "deletes. A Feedback button that accepts a report and drops it is worse than none.",
   },
+  /* **The two below are a different kind of entry from the three above**, and
+     the difference is worth reading before adding a fourth like them.
+
+     The first three say *a filesystem adapter cannot sensibly exist*. These two
+     say *it existed, worked, and was deleted* — stage G of
+     docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+     2026-09-05. There is one store now, so "two implementations" is no longer
+     the property this guard should be asserting, and every remaining seam will
+     arrive here in turn as the later groups delete `fs.ts` and its siblings.
+     **When that happens the answer is to retire the guard, not to finish the
+     list** — a record of exceptions that has grown to cover every case is a
+     second list of the seams, which its own header says it must never become. */
+  CostStore: {
+    missing: "files",
+    why:
+      "There was a JSONL ledger at data/_ai-calls.jsonl until 2026-09-05, and it was a " +
+      "genuine second implementation — it is what let `npm run cost` work on a laptop " +
+      "with no database. It went with the rest of the filesystem store. Spend is metered " +
+      "in the `ai_calls` table and nowhere else. **Unqualified on purpose**: this is a string " +
+      "literal rather than a comment, and tests/public-imports.test.ts scans this file for the " +
+      "schema-qualified spelling after stripping comments but not strings, so writing it out in " +
+      "full here fails that guard. docs/project/ai-gateway.md.",
+  },
+  RealtimeSessionStore: {
+    missing: "files",
+    why:
+      "The live-conversation journal had a JSON file beside the table until 2026-09-05 " +
+      "and the two were held in step by tests/store-realtime-sessions.test.ts. It went " +
+      "with the rest of the filesystem store; a session is a billing parent and belongs " +
+      "in the database that carries the usage rows pointing at it. " +
+      "docs/project/live-conversation.md.",
+  },
 };

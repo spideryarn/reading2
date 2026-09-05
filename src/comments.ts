@@ -706,8 +706,8 @@ export async function deleteComment(slug: string, id: string): Promise<Comment[]
  *
  * The words are the ones `sweepOrphaned` in src/routes.ts wrote before the rule
  * moved into the stores, unchanged: the reader has seen this sentence and there
- * is nothing wrong with it. `CHAT_SWEPT` and `SEARCH_SWEPT` in src/store/fs.ts
- * are its siblings.
+ * is nothing wrong with it. `CHAT_SWEPT` in src/chat.ts and `SEARCH_SWEPT` in
+ * src/store/fs.ts are its siblings.
  */
 export const COMMENT_SWEPT = "The server stopped before this was answered.";
 

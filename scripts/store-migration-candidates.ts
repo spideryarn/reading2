@@ -58,9 +58,6 @@ const TARGETS = [
   "src/store/fs.ts",
   "src/store/artifacts-fs.ts",
   "src/store/jobs-fs.ts",
-  "src/store/uploads-fs.ts",
-  "src/store/ai-calls-fs.ts",
-  "src/store/realtime-sessions-fs.ts",
   "src/store/copy-artefacts.ts",
   "src/store/data-root.ts",
 ];
