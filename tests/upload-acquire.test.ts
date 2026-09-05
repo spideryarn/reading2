@@ -22,7 +22,12 @@
 import { createHash } from "node:crypto";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { rm } from "node:fs/promises";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 import { readRawBytes } from "../src/fetch.js";
 import { contextPaths, STEPS, stepLabel } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
@@ -32,9 +37,36 @@ import { claimUpload, forgetUpload, mintUpload, readUpload } from "../src/upload
 
 const blobs = blobStore();
 
+/**
+ * **`uploads.owner_id` is a foreign key into `auth.users`, since 2026-09-05.**
+ *
+ * `mintUpload` wrote to the filesystem store until the hinge, because
+ * `SPIDERYARN_STORE` was unset — a directory has no foreign keys, so this
+ * file's own uuid needed no row behind it. It writes to `pgUploadStore` now, and
+ * eight of nine cases failed on `23503` before this existed. Its own uuid rather
+ * than a seeded account, because tests/fixture-ids.test.ts refuses two files
+ * sharing one, and the row is removed again below.
+ */
+const OWNER = "33333333-3333-4333-8333-333333333333";
+
+await pgReady({ suite: "tests/upload-acquire.test.ts", tables: ["spideryarn.uploads", "auth.users"] });
+
+beforeAll(async () => {
+  await seedAuthUser(getDb(), {
+    id: OWNER,
+    email: "upload-acquire@example.invalid",
+    onConflictDoNothing: true,
+  });
+});
+
 const rubbish: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const undo of rubbish.splice(0)) await undo();
+});
+
+afterAll(async () => {
+  await getDb().execute(sql`delete from auth.users where id = ${OWNER}::uuid`);
+  await closeDb();
 });
 
 /** A minimal but real PDF header plus filler, so only the checks under test can refuse it. */
@@ -56,7 +88,7 @@ async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
       sha256: claimedSha ?? shaOf(bytes),
       /* Its own id, not the one upload-records.test.ts uses — tests/fixture-ids.test.ts
          enforces that, because vitest runs files in parallel against one database. */
-      owner: "33333333-3333-4333-8333-333333333333",
+      owner: OWNER,
     },
     async (key) => ({
       url: `https://x.test/${key}`,

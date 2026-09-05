@@ -1,8 +1,8 @@
 /**
  * **Make a few local articles public, the way the app would.**
  *
- *     SPIDERYARN_STORE=postgres npx tsx scripts/share-local-articles.ts <slug>…
- *     SPIDERYARN_STORE=postgres npx tsx scripts/share-local-articles.ts --private <slug>…
+ *     npx tsx scripts/share-local-articles.ts <slug>…
+ *     npx tsx scripts/share-local-articles.ts --private <slug>…
  *
  * There is nothing to develop `/read/public` against otherwise: a fresh local
  * database has **zero** public articles, and a listing with nothing in it looks
@@ -70,15 +70,6 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  if (process.env.SPIDERYARN_STORE !== "postgres") {
-    console.error(
-      "Refusing to run: set SPIDERYARN_STORE=postgres. The filesystem store has no visibility " +
-        "column, so there is nothing here for this to change.",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
   /* Inside a request scope, because `pgVisibilityStore` writes the actor's owner
      id into the audit row and `currentOwnerId()` throws inside a scope nobody
      has filled. Read outside, where it still answers from the environment. */

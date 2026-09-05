@@ -60,14 +60,12 @@ const B = {
   text: "the message that belongs to article B",
 } as const;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-export-isolation.test.ts",
   tables: ["spideryarn.chat_messages"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the exporter's article isolation", () => {
+describe("the exporter's article isolation", () => {
   let out: string;
 
   beforeAll(async () => {

@@ -55,14 +55,12 @@ const CRITERION_ID = "spya-rfc234";
 const COMMENT_ID = "spya-rfd234";
 const NOTE_ID = "spya-rfe234";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-export-referee.test.ts",
   tables: ["spideryarn.referee_criteria"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("db:export and the referee's own work", () => {
+describe("db:export and the referee's own work", () => {
   let out: string;
 
   beforeAll(async () => {

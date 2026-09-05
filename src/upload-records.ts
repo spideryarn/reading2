@@ -27,9 +27,7 @@
  * `tests/store-uploads-parity.test.ts` runs the same race against each.
  */
 import type { RejectReason, UploadStatus } from "./source.js";
-import { STORE } from "./store/live.js";
 import { cleanFilename } from "./source.js";
-import { fsUploadStore } from "./store/uploads-fs.js";
 import { pgUploadStore } from "./store/pg-uploads.js";
 import {
   type ClaimResult,
@@ -43,16 +41,18 @@ export type { ClaimFailure, UploadRecord } from "./store/uploads.js";
 export { isUploadId } from "./store/uploads.js";
 
 /**
- * Which store is live.
+ * The upload store, bound here rather than in `src/store/index.ts`.
  *
- * Selected here rather than in `src/store/index.ts` for the reason that file's
- * neighbour [`live.ts`](store/live.ts) gives about itself: `index.ts` imports
- * `fs.ts`, which imports half the app, and `src/pipeline.ts` — which calls this
- * module from inside a step — is in that half. `npm run check` gates on cycles,
- * so that is a red build rather than a note. This module imports two leaf
- * adapters and the flag, and closes nothing.
+ * For the reason that file's neighbour [`live.ts`](store/live.ts) gives about
+ * itself: `index.ts` imports `fs.ts`, which imports half the app, and
+ * `src/pipeline.ts` — which calls this module from inside a step — is in that
+ * half. `npm run check` gates on cycles, so that is a red build rather than a
+ * note. This module imports one leaf adapter and closes nothing.
+ *
+ * It was `STORE === "postgres" ? pgUploadStore : fsUploadStore` until
+ * 2026-09-05, when the flag and the filesystem store went.
  */
-const store: UploadStore = STORE === "postgres" ? pgUploadStore : fsUploadStore;
+const store: UploadStore = pgUploadStore;
 
 export interface MintedUpload {
   record: UploadRecord;
@@ -206,11 +206,14 @@ export function forgetUpload(id: string): Promise<void> {
  * door rather than three minutes into an 11 MB upload, which is the difference
  * between a limitation and [a silent success](../docs/reusable/silent-success.md).
  *
- * **This staying true is not the same as uploading working.** The pipeline's
- * stages still write `data/<slug>/*.json`, so an upload that got past this on a
- * serverless host would still fail at the first step boundary — the artefacts
- * have to move too. docs/plans/260827h-durable-queue-and-uploads.md § The dependency.
+ * **True unconditionally since 2026-09-05**, and kept rather than deleted along
+ * with the branch. It read `STORE === "postgres" || !process.env.VERCEL`, and
+ * with one store the first half is always true. What it names is a real
+ * precondition of `POST /api/uploads` — src/routes.ts answers 503 on it — and a
+ * question the answer to which is *"yes, because the store is durable"* is worth
+ * a function rather than a deleted line: the day something makes it false again,
+ * there is one place to say so. Tightening it out of existence is stage H.
  */
 export function recordsSurviveTheRequest(): boolean {
-  return STORE === "postgres" || !process.env.VERCEL;
+  return true;
 }

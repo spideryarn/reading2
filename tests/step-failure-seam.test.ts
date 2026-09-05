@@ -89,18 +89,6 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs. `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement, and
- * `src/jobs.ts` picks both its job store and its `claimSession` branch off it at
- * module load.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { eq, inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
@@ -121,7 +109,6 @@ import { STEPS } from "../src/pipeline.js";
 import { jobWorthRetrying, stageFailure } from "../src/job-failure.js";
 import { ANSWER_OVERFLOWED_FIXED_ASK, MODEL_REFUSED, worthRetrying } from "../src/messages.js";
 import { currentOwnerId } from "../src/owner.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { PublishRefused } from "../src/store/pg-revisions.js";
 import type { StoreSession } from "../src/store/session.js";
@@ -129,19 +116,12 @@ import type { Job } from "../src/types.js";
 import { bareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/step-failure-seam.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * One slug per case, and every row under them is removed afterwards.
@@ -174,22 +154,11 @@ const SLUGS = [
  * ./helpers/bare-article.ts.
  */
 beforeAll(async () => {
-  if (reachable) await bareArticles(SLUGS);
+  await bareArticles(SLUGS);
 }, 60_000);
 
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe("the store this queue is actually running on", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on `reachable`, deliberately: a flag that failed to take would
-       run every case below against the filesystem queue — a different store, a
-       different `claimSession` branch, and a `persisted` that would then be
-       reading a column nothing had written. A control that vanishes when
-       Postgres is missing vanishes exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /** Poll until the job stops moving, or give up. */
@@ -254,14 +223,12 @@ async function persisted(id: string): Promise<{ error: string | null; steps: Job
  * the article delete would be trying to cascade away.
  */
 afterAll(async () => {
-  if (reachable) {
-    await getDb().delete(jobsTable).where(inArray(jobsTable.slug, SLUGS));
-    await getDb().delete(articles).where(inArray(articles.slug, SLUGS));
-  }
+  await getDb().delete(jobsTable).where(inArray(jobsTable.slug, SLUGS));
+  await getDb().delete(articles).where(inArray(articles.slug, SLUGS));
   await closeDb();
 }, 60_000);
 
-when("an error nobody wrote a reader sentence for", () => {
+describe("an error nobody wrote a reader sentence for", () => {
   /**
    * The text below is every genre this seam has actually leaked, in one string:
    * a source-file reference, a section name, band arithmetic addressed to
@@ -326,7 +293,7 @@ when("an error nobody wrote a reader sentence for", () => {
   });
 });
 
-when("an error that declared its reader sentence", () => {
+describe("an error that declared its reader sentence", () => {
   it("arrives word for word, and its diagnostic does not", async () => {
     const detail = "stop_reason=refusal after 41.2s — src/quiz.ts:530";
     const finished = await failingJob(
@@ -389,7 +356,7 @@ when("an error that declared its reader sentence", () => {
  * not the query that produces it. `tests/all-skipped-publication-refusal.test.ts`
  * is the one that makes a real row refuse.
  */
-when("a publication that was refused", () => {
+describe("a publication that was refused", () => {
   it("tells the reader the publication failed, not why the tree was rejected", async () => {
     const slug = "test-seam-publish-refused";
     const refusal = new PublishRefused(slug, [
@@ -503,7 +470,7 @@ when("a publication that was refused", () => {
  * that combination is what produced the contradiction, and a test using a plain
  * `new Error` would have missed it.
  */
-when("a run the reader stopped", () => {
+describe("a run the reader stopped", () => {
   it("says they stopped it, rather than reporting a failure they chose", async () => {
     const slug = "test-seam-cancelled";
     const queued: Job = {
@@ -574,7 +541,7 @@ when("a run the reader stopped", () => {
  * and what the ending says once the windows are gone, which is what this case
  * always asserted.
  */
-when("a run its own deadline stopped", () => {
+describe("a run its own deadline stopped", () => {
   /**
    * One overrunning job, driven until it either pauses or ends.
    *

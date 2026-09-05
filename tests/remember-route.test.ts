@@ -20,18 +20,7 @@
  * first model call.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. See the
- * same block in tests/chat-route.test.ts for what an ordinary assignment costs.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -43,26 +32,14 @@ loadEnvLocal();
 
 const SLUG = "test-remember-route-fixture";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/remember-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
+const { chatStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* A flag that failed to take looks exactly like the suite working: the
-       filesystem store answers happily, against an article nothing creates. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * A throwaway copy of the committed corpus, in Postgres, so the turn has an
@@ -79,7 +56,6 @@ let article: ScratchArticle | undefined;
 let ANCHOR = "";
 
 beforeAll(async () => {
-  if (!reachable) return;
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
   expect(article.copied).toContain("blocks");
   ANCHOR = article.blocks[0]?.id ?? "";
@@ -152,7 +128,7 @@ async function seedRemember(threadId: string) {
   await post({ threadId, question: "what I took from it", kind: "remember", stance: "socratic" });
 }
 
-when("a stance the server does not know is refused, not ignored", () => {
+describe("a stance the server does not know is refused, not ignored", () => {
   it("400s an unknown stance", async () => {
     const { status } = await post({
       threadId: "spya-r4v3wz",
@@ -192,7 +168,7 @@ when("a stance the server does not know is refused, not ignored", () => {
   });
 });
 
-when("a Remember turn cannot be anchored to a passage", () => {
+describe("a Remember turn cannot be anchored to a passage", () => {
   /* There is no gesture that starts one from a selection — both the
      paragraph button and the selection open a chat — so an anchor arriving with
      `kind: "remember"` is a confused client. It is refused rather than dropped
@@ -224,7 +200,7 @@ when("a Remember turn cannot be anchored to a passage", () => {
   });
 });
 
-when("a thread's kind belongs to the thread", () => {
+describe("a thread's kind belongs to the thread", () => {
   it("409s a send whose kind contradicts the stored thread", async () => {
     /* Two layers answer this, and the test passes on either — which is the
        design rather than a weakness. The route's check is there for the status
@@ -285,7 +261,7 @@ when("a thread's kind belongs to the thread", () => {
   });
 });
 
-when("what actually gets stored", () => {
+describe("what actually gets stored", () => {
   it("writes the kind and the stance on the very first turn", async () => {
     const id = "spya-r8m2wz";
     await post({ threadId: id, question: "what I took from it", kind: "remember", stance: "signposts" });

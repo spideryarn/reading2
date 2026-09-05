@@ -169,51 +169,13 @@ export function unopenable(expected: readonly string[], readable: readonly strin
   return expected.filter((slug) => !there.has(slug));
 }
 
-/**
- * What to say about `SPIDERYARN_STORE` on the last line, and whether it is good
- * news.
- *
- * **This is the trap the whole command falls into if nobody says anything.**
- * `SPIDERYARN_STORE` defaults to `files` for this script itself
- * ([src/store/live.ts](../src/store/live.ts)) — unlike `npm run dev`, which since
- * 2026-09-02 defaults to `postgres` on its own. A dev server that reads `files`
- * anyway (set explicitly, or started some other way) serves article reads off
- * `data/` — and every row this seed writes to Postgres is invisible in the
- * browser while the seed reports three articles loaded. A check that agrees
- * with the bug, one level up.
- *
- * **The caller exits non-zero on a `false` here**, and that was a change of mind:
- * the plan said warn-only, because several agents share this checkout and a
- * failing `npm run setup` is disruptive. GPT Sol's argument won, 2026-09-02 — the
- * command's promise is *"ready to use"*, and with the filesystem store selected
- * neither the articles nor the switch reaches the application at all, so
- * reporting completion over that is the failure this file exists to prevent. The
- * caller fails **after** the durable work, so a re-run costs a second.
- *
- * It cannot be fixed from in here either. **And it must not be fixed in
- * `.env.local`**, which is what this advised until 2026-09-02: that file is
- * applied *over* `process.env` ([src/env.ts](../src/env.ts)), so a value there
- * beats the ~30 tests that set `SPIDERYARN_STORE` themselves to test the other
- * store. Following the old wording turned 40 test files and 146 tests red, and
- * `src/env.ts` suppresses its own "shadowed" warning under `NODE_ENV=test`, so
- * it did it in silence. The remedy is `npm run dev`, which sets the variable
- * itself; `.env.local` now carries a comment saying why the line is absent.
- */
-export function storeVerdict(store: string | undefined): { ok: boolean; lines: string[] } {
-  if (store === "postgres") {
-    return { ok: true, lines: ["SPIDERYARN_STORE is postgres, so the dev server reads what this wrote."] };
-  }
-  return {
-    ok: false,
-    lines: [
-      `SPIDERYARN_STORE is ${store ? `"${store}"` : "unset in this script's own environment"}.`,
-      "  A dev server started as a bare `vite`, or with SPIDERYARN_STORE=files, serves articles",
-      "  off data/ instead — the seed will have worked and the shelf will look empty.",
-      "  Start it with `npm run dev`, which sets SPIDERYARN_STORE=postgres itself.",
-      "  DO NOT put SPIDERYARN_STORE=postgres in .env.local. That file is applied over",
-      "  process.env (src/env.ts), so it overrides every test that sets the store itself:",
-      "  it turned 40 test files and 146 tests red on 2026-09-02, silently, because",
-      "  src/env.ts suppresses its shadowing warning under NODE_ENV=test.",
-    ],
-  };
-}
+/* `storeVerdict` stood here until 2026-09-05, and it was the last line the seed
+   printed: `SPIDERYARN_STORE` defaulted to `files` for a CLI script, so a dev
+   server on the default served article reads off `data/` while every row this
+   seed wrote to Postgres sat invisible — the seed reporting three articles
+   loaded over a shelf that looks empty. Its verdict was the caller's exit code.
+
+   There is one store since 2026-09-05, so the state it warned about cannot
+   arise: whatever starts the dev server, it reads what the seed wrote.
+   docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   § F. */

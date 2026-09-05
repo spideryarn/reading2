@@ -295,9 +295,9 @@ export function blobStore(): RawSourceStore {
  * docs/plans/260827aa-delete-the-importer.md § `db:export` must fail closed.
  *
  * @param who what is asking, as the first clause of the sentence — e.g.
- *   `'SPIDERYARN_STORE is "postgres"'`. The two callers fail for the same
- *   reason and arrive by different doors, and the door is the part that tells
- *   the reader which knob to turn.
+ *   `"the store is Postgres"`. The two callers fail for the same reason and
+ *   arrive by different doors, and the door is the part that tells the reader
+ *   which knob to turn.
  */
 export function postgresBlobStore(who: string): RawSourceStore {
   /* `.trim()` on both: a `.env.local` line left as `SUPABASE_SERVICE_ROLE_KEY=`

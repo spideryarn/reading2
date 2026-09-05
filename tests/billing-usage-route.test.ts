@@ -34,17 +34,6 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-/* `SPIDERYARN_STORE=postgres` before a single import is evaluated — src/store/live.ts
-   reads the flag once, at first import, and imports are hoisted above ordinary
-   statements. Without it every answer here is `{ kind: "off" }`, which is the
-   correct answer for a filesystem store and tells this suite nothing. The
-   reasoning in full is in tests/store-pg-session.test.ts. */
-const HOISTED = vi.hoisted(() => {
-  const store = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { store };
-});
-
 import { ADMIN_USER_ID_LOCAL, isAdmin } from "../src/admin.js";
 import type { Verifier } from "../src/auth.js";
 import { FREE_LIFETIME_INGESTS } from "../src/billing/tiers.js";
@@ -60,17 +49,13 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 loadEnvLocal();
 
 /* Put the flag back for whatever runs next in this process. */
-if (HOISTED.store === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.store;
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-usage-route.test.ts",
   tables: ["spideryarn.billing_accounts", "spideryarn.ingest_events", "spideryarn.billing_tiers"],
   keepPool: true,
   max: 3,
 });
-
-const dbIt = reachable ? it : it.skip;
 
 /**
  * One reader of this file's own, minted per run.
@@ -242,7 +227,7 @@ function livePeriod(): { start: Date; end: Date } {
 /* ------------------------------------------------------------- the cases -- */
 
 describe("GET /api/billing/usage", () => {
-  dbIt("puts a reader with no billing row on the free tier, with nothing used", async () => {
+  it("puts a reader with no billing row on the free tier, with nothing used", async () => {
     const reply = await get("/api/billing/usage", OWNER);
     expect(reply.status).toBe(200);
     expect(reply.body.plan).toEqual({
@@ -260,7 +245,7 @@ describe("GET /api/billing/usage", () => {
     expect(purchaseOf(reply.body).kind).toBe("checkout");
   });
 
-  dbIt("counts a free reader's successes for ever, and their reservations too", async () => {
+  it("counts a free reader's successes for ever, and their reservations too", async () => {
     const lastYear = new Date(Date.now() - 300 * 86_400_000);
     await givenIngests([
       { succeededAt: lastYear },
@@ -281,7 +266,7 @@ describe("GET /api/billing/usage", () => {
     });
   });
 
-  dbIt("offers the tiers that have a Stripe price, with their real numbers", async () => {
+  it("offers the tiers that have a Stripe price, with their real numbers", async () => {
     const tier = await readerTier();
     const reply = await get("/api/billing/usage", OWNER);
     const offers = (
@@ -305,7 +290,7 @@ describe("GET /api/billing/usage", () => {
     expect(offers.length).toBeGreaterThan(0);
   });
 
-  dbIt("counts a paid reader inside their period and not before it", async () => {
+  it("counts a paid reader inside their period and not before it", async () => {
     const tier = await readerTier();
     const period = livePeriod();
     await givenAccount({
@@ -338,7 +323,7 @@ describe("GET /api/billing/usage", () => {
     expect(reply.body.manageable).toBe(true);
   });
 
-  dbIt("will not offer to sell beside a subscription that is not over", async () => {
+  it("will not offer to sell beside a subscription that is not over", async () => {
     /* **The list this is decided by is shorter than "unentitled".** `unpaid`
        entitles nothing — so this account is `lapsed`
        and would be refused an ingest — and it is a subscription Stripe still
@@ -361,7 +346,7 @@ describe("GET /api/billing/usage", () => {
     expect(reply.body.manageable).toBe(true);
   });
 
-  dbIt("offers to sell to a reader whose subscription really is over", async () => {
+  it("offers to sell to a reader whose subscription really is over", async () => {
     /* The mirror, so the case above cannot pass by refusing everybody.
        `canceled` is terminal, so resubscribing is exactly the right offer. */
     await givenAccount({
@@ -386,7 +371,7 @@ describe("GET /api/billing/usage", () => {
    * came back `switch` over both tiers, which is a button offering a Reader the
    * plan they are already on.
    */
-  dbIt("offers a paying Reader the tier above, through the Portal", async () => {
+  it("offers a paying Reader the tier above, through the Portal", async () => {
     const tier = await readerTier();
     const period = livePeriod();
     await givenAccount({
@@ -424,7 +409,7 @@ describe("GET /api/billing/usage", () => {
    * fixture rows in tests/billing-tiers.test.ts, because the state this asserts
    * is unreachable cannot also be handed to the route.
    */
-  dbIt("cannot even hold a row that claims a plan with no subscription behind it", async () => {
+  it("cannot even hold a row that claims a plan with no subscription behind it", async () => {
     if (!pool) return;
     const tier = await readerTier();
     const period = livePeriod();
@@ -462,7 +447,7 @@ describe("GET /api/billing/usage", () => {
    * `purchase` alone: a quota is a fact about the ledger and does not stop being
    * true because a key is missing.
    */
-  dbIt("offers nothing at all when this deployment has no Stripe key", async () => {
+  it("offers nothing at all when this deployment has no Stripe key", async () => {
     vi.stubEnv("STRIPE_SECRET_KEY", "");
     try {
       const reply = await get("/api/billing/usage", OWNER);
@@ -488,7 +473,7 @@ describe("GET /api/billing/usage", () => {
    * difference to invoice, the period does not stay put, and the allowance is not
    * prorated. `from` is what carries that as far as the page. GPT Sol, finding 2.
    */
-  dbIt("says a trialling reader's switch is out of a trial, not out of a paid month", async () => {
+  it("says a trialling reader's switch is out of a trial, not out of a paid month", async () => {
     const tier = await readerTier();
     const period = livePeriod();
     await givenAccount({
@@ -510,7 +495,7 @@ describe("GET /api/billing/usage", () => {
    * The top of the ladder, which is the case that has to say something rather
    * than draw an empty gap.
    */
-  dbIt("offers a Researcher nothing, and says that is because they are at the top", async () => {
+  it("offers a Researcher nothing, and says that is because they are at the top", async () => {
     const tier = await tierRow("researcher");
     const period = livePeriod();
     await givenAccount({
@@ -536,7 +521,7 @@ describe("GET /api/billing/usage", () => {
    * rather than a ladder. Asked of the allowance rather than of a hardcoded pair
    * of ids, so a third tier joins the assertion by existing.
    */
-  dbIt("hands the tiers over cheapest first", async () => {
+  it("hands the tiers over cheapest first", async () => {
     const reply = await get("/api/billing/usage", OWNER);
     const { ids } = purchaseOf(reply.body);
     const rows = await Promise.all(ids.map((id) => tierRow(id)));
@@ -547,7 +532,7 @@ describe("GET /api/billing/usage", () => {
     expect(ids.length).toBeGreaterThan(1);
   });
 
-  dbIt("says when a cancelled subscription ends, so the page cannot say it renews", async () => {
+  it("says when a cancelled subscription ends, so the page cannot say it renews", async () => {
     /* The old boolean, which is what an API cancellation writes. */
     const tier = await readerTier();
     const period = livePeriod();
@@ -576,7 +561,7 @@ describe("GET /api/billing/usage", () => {
    * is the shape of the *other* kind of cancellation, and it was the only one
    * anybody had tested. docs/project/billing.md § *The first live sale*.
    */
-  dbIt("tells a reader who cancelled through the Portal, where the boolean is false", async () => {
+  it("tells a reader who cancelled through the Portal, where the boolean is false", async () => {
     const tier = await readerTier();
     const period = livePeriod();
     /* Not the period end, so the assertion cannot pass by reading the wrong
@@ -608,7 +593,7 @@ describe("GET /api/billing/usage", () => {
     expect(reply.body.plan).toMatchObject({ tierId: "reader", limit: tier.limit });
   });
 
-  dbIt("gives a lapsed subscriber no `used` field at all", async () => {
+  it("gives a lapsed subscriber no `used` field at all", async () => {
     /* The shape the policy makes real: forty articles taken on a paid plan, then
        cancelled, against a lifetime free allowance of three. */
     await givenAccount({
@@ -630,7 +615,7 @@ describe("GET /api/billing/usage", () => {
     expect(reply.body.manageable).toBe(true);
   });
 
-  dbIt("leaves a lapsed subscriber their remaining free slots when they have any", async () => {
+  it("leaves a lapsed subscriber their remaining free slots when they have any", async () => {
     await givenAccount({
       customer: "cus_usage_lapsed_room",
       subscription: "sub_usage_lapsed_room",
@@ -641,7 +626,7 @@ describe("GET /api/billing/usage", () => {
     expect(reply.body.plan).toEqual({ kind: "lapsed", limit: FREE_LIFETIME_INGESTS, remaining: 2 });
   });
 
-  dbIt("says it does not know, rather than asking Stripe, when the period has run out", async () => {
+  it("says it does not know, rather than asking Stripe, when the period has run out", async () => {
     const tier = await readerTier();
     const long = 400 * 86_400_000;
     await givenAccount({
@@ -660,7 +645,7 @@ describe("GET /api/billing/usage", () => {
     expect(reply.body.plan).toEqual({ kind: "unknown" });
   });
 
-  dbIt("exempts an administrator instead of showing them a misleading count", async () => {
+  it("exempts an administrator instead of showing them a misleading count", async () => {
     /* The seeded local administrator, and `isAdmin` is asserted rather than
        assumed: if that constant ever stops being an admin this case would
        quietly become a test of the free tier. */
@@ -672,12 +657,12 @@ describe("GET /api/billing/usage", () => {
     expect(JSON.stringify(reply.body.plan)).not.toMatch(/\d/);
   });
 
-  dbIt("refuses a caller with no session", async () => {
+  it("refuses a caller with no session", async () => {
     const reply = await drive("GET", "/api/billing/usage", "", undefined, {});
     expect(reply.status).toBe(401);
   });
 
-  dbIt("is not a namespace — a sibling path is a 404", async () => {
+  it("is not a namespace — a sibling path is a 404", async () => {
     const reply = await get("/api/billing/usages", OWNER);
     expect(reply.status).toBe(404);
   });
@@ -689,7 +674,7 @@ describe("what the Upgrade button may ask for", () => {
      *not* could get nowhere — the same request an altered bundle, a console, or
      a `curl` would send. */
   for (const forbidden of ["price", "priceId", "price_id"]) {
-    dbIt(`refuses a browser-supplied ${forbidden} rather than ignoring it`, async () => {
+    it(`refuses a browser-supplied ${forbidden} rather than ignoring it`, async () => {
       const reply = await post(
         "/api/billing/checkout",
         { tierId: "reader", [forbidden]: "price_1AnAttackersOwn" },
@@ -707,14 +692,14 @@ describe("what the Upgrade button may ask for", () => {
     });
   }
 
-  dbIt("refuses a browser-supplied owner id", async () => {
+  it("refuses a browser-supplied owner id", async () => {
     const reply = await post("/api/billing/checkout", { tierId: "reader", ownerId: OWNER }, OWNER);
     expect(reply.status).toBe(400);
   });
 });
 
 describe("the admin page's ingest aggregate", () => {
-  dbIt("splits the lifetime count from the one inside the row's own period", async () => {
+  it("splits the lifetime count from the one inside the row's own period", async () => {
     const tier = await readerTier();
     const period = livePeriod();
     await givenAccount({
@@ -754,7 +739,7 @@ describe("the admin page's ingest aggregate", () => {
     });
   });
 
-  dbIt("counts an owner with no billing row at all, rather than dropping them", async () => {
+  it("counts an owner with no billing row at all, rather than dropping them", async () => {
     /* The left join is what makes this true. An inner one would report every
        free reader — which is most of them — as having ingested nothing. */
     await givenIngests([{ succeededAt: new Date() }, { succeededAt: new Date() }]);

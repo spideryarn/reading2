@@ -88,17 +88,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Copied
- * from tests/candidates-route.test.ts, which explains the shape.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { ChatMessage } from "../src/types.js";
@@ -116,28 +105,14 @@ loadEnvLocal();
    cases rather than the directory being thrown away. */
 const SLUG = "test-chat-live-fixture";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/chat-live-turn.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.chat_messages", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
+const { chatStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this suite working — the filesystem
-       store finishes an answer with no attempt token and says nothing. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 const frame = (text: string) =>
   `data: ${JSON.stringify({ model: "test/model", choices: [{ delta: { content: text } }] })}\n\n`;
@@ -161,7 +136,6 @@ function hangingBody(): ReadableStream<Uint8Array> {
 let article: ScratchArticle | undefined;
 
 beforeAll(async () => {
-  if (!reachable) return;
   /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
      Postgres reader filters every article by owner. An article seeded as
      anybody else is invisible and every route below answers 404, which looks
@@ -302,7 +276,7 @@ async function release(threadId: string): Promise<void> {
   }
 }
 
-when("a request that will be refused touches nothing", () => {
+describe("a request that will be refused touches nothing", () => {
   it("does not stop the live answer on its way to a 409", async () => {
     const live = call("POST", `/api/chat/${SLUG}`, {
       threadId: "spya-t7r4wz",
@@ -343,7 +317,7 @@ when("a request that will be refused touches nothing", () => {
   });
 });
 
-when("a stop names the answer it was pressed on", () => {
+describe("a stop names the answer it was pressed on", () => {
   it("refuses one aimed at an attempt that has been replaced", async () => {
     const live = call("POST", `/api/chat/${SLUG}`, {
       threadId: "spya-t7r4wz",
