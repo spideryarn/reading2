@@ -105,7 +105,6 @@ import { environmentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../../src/owner.j
 import { DEFAULT_INGEST_STEPS, STEPS } from "../../src/pipeline.js";
 import { costStore } from "../../src/store/ai-calls.js";
 import { loadArticle } from "../../src/store/index.js";
-import { STORE } from "../../src/store/live.js";
 import type { Block, Job, StepName, Tree } from "../../src/types.js";
 import type { CostFixture } from "../cost/fixtures.js";
 import {
@@ -183,7 +182,6 @@ interface RunMeta {
   gitDirty: boolean;
   /** sha256 of `git diff HEAD -- src evals`, so a dirty tree is identifiable rather than flagged. */
   srcPatchSha256: string | null;
-  store: string;
   databaseTarget: string;
   evalOwnerId: string;
   environmentOwnerId: string;
@@ -962,7 +960,6 @@ function currentMeta(databaseTarget: string): RunMeta {
     commit: git(["rev-parse", "HEAD"]),
     gitDirty: git(["status", "--porcelain"]).length > 0,
     srcPatchSha256: patch,
-    store: STORE,
     databaseTarget,
     evalOwnerId: EVAL_OWNER_ID,
     environmentOwnerId: environmentOwnerId(),
@@ -1047,13 +1044,13 @@ function stepsFor(dryRun: boolean): {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const databaseTarget = localTarget(STORE, process.env.DATABASE_URL);
+  const databaseTarget = localTarget(process.env.DATABASE_URL);
   const meta = currentMeta(databaseTarget);
   const paid = args.spend;
 
   console.log(`Target: ${databaseTarget}`);
   console.log(
-    `Store:  ${meta.store}   commit ${meta.commit.slice(0, 8)}` +
+    `Commit: ${meta.commit.slice(0, 8)}` +
       (meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""),
   );
   console.log(`Ledger: ${costStore.describe()}`);
