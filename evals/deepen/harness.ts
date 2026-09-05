@@ -236,13 +236,27 @@ export function assertStepPlansRunnable(
 
 /* ------------------------------------------------ the measured step, lined up -- */
 
+/**
+ * **What the gate tells a step it has just let go of.**
+ *
+ * `"go"` — everybody was at the entry, run. `"abandoned"` — the gate gave up and
+ * this phase can no longer be measured, so do not run: see `abandonStep`.
+ */
+export type GateVerdict = "go" | "abandoned";
+
 /** What the run learned from lining the load jobs up with the book. */
 export interface RendezvousOutcome {
   /** The slugs whose measured step reached the entry, in the order they did. */
   arrived: string[];
-  /** How many the run was waiting for. */
+  /** How many parties the rendezvous has in total — three, in phase D. */
   expected: number;
-  /** Why the wait ended. Only `"all"` means the phase is lined up. */
+  /**
+   * **How many *this* wait needed**, which is not always all of them: the
+   * readiness wait needs the two load steps and deliberately leaves the book out,
+   * because the book is not driven until the readiness wait has ended.
+   */
+  needed: number;
+  /** Why the wait ended. Only `"all"` means everyone this wait needed is there. */
   why: "all" | "timed out" | "jobs finished first";
   ms: number;
   /**
@@ -269,98 +283,242 @@ export interface RendezvousOutcome {
  * below three makes question 5 unanswerable *after* the money has gone.
  * ⟨GPT Sol, DPN-15.⟩
  *
- * **The first fix was a latch and this one is a rendezvous, which is the whole
- * of DPN-20.** Announcing an arrival is not the same as being *at* the entry
- * when the others get there: load1 could announce, run its whole measured step
- * and finish before load2 announced, and the wait would still end `"all"` and
- * release the book into a window load1 had already left. So `arrive` **holds its
- * caller** until everyone is at the entry, and `wait` releases all of them at
- * once. ⟨GPT Sol, DPN-20.⟩
+ * **The first fix was a latch and the second was two-party; this one holds all
+ * three.** Announcing an arrival is not the same as being *at* the entry when
+ * the others get there, so `arrive` **holds its caller** (DPN-20). But holding
+ * only the two load steps and then releasing them before driving the book left
+ * the same hole one party over: with another job holding the third queue slot,
+ * both released loads could finish their measured step before the book ever
+ * reached `hierarchy`, and the outcome still said `"all"`. ⟨GPT Sol, DPN-20-R.⟩
  *
- * **The book waits outside a claim; the load steps wait inside theirs.** That
- * asymmetry is deliberate and it is not free. The book's `hierarchy` needs
- * 658-778 s against a 740 s deadline and has no seconds to spare, so it is
- * driven last and never holds. The two load steps have headroom, and what they
- * pay is in `held` — see `RendezvousOutcome.held` and pick the timeout with it
- * in mind.
+ * **So there are two waits, and only the second one opens the gate.**
+ *
+ * 1. `waitFor(2, …)` — **readiness**. Both load steps are at the entry and still
+ *    held; nothing has been bought for the book, which has not been driven or
+ *    even queued. A readiness wait that does not end `"all"` is where the run
+ *    stops: `loadReadiness`.
+ * 2. `wait(…)` — **the gate**. The book is driven, reaches the same entry through
+ *    the same hook, and all three are released together.
+ *
+ * **The book does arrive inside its own claim, and that is sound rather than a
+ * concession.** Its `hierarchy` needs 658-778 s against a 740 s deadline and can
+ * give up none of it — but by the time it is driven, everybody else is already
+ * waiting *for it*, so its own wait is one microtask. The two load steps are the
+ * ones that really hold, inside their claims, and what they pay is in `held`.
  *
  * **It gives up rather than hanging, and lets go when it does.** A load job that
- * fails before its measured step never arrives, so the wait ends on the jobs
- * settling or on a deadline; either way the gate opens, because a rendezvous
- * that only opened on success would wedge the survivor inside its own claim
- * until the lease ran out. `release()` is the same door for a phase that throws
- * before it reaches `wait` at all. Pure but for the clock, so every ending can
- * be exercised.
+ * fails before its measured step never arrives, so a wait ends on the jobs
+ * settling or on a deadline. `wait` opens the gate on every ending it has,
+ * because by then the phase is inside it and there is nobody else to let the
+ * held steps go; `waitFor` deliberately does not, so the caller's `finally` —
+ * `release()` — is the one door out of the readiness phase. Pure but for the
+ * clock, so every ending can be exercised.
+ *
+ * **One deadline for the whole rendezvous, not one per wait.** Two waits with a
+ * timeout each would let a held load step spend twice the number on standing
+ * still, which is twice as much of a 740 s lease as anyone intended.
+ *
+ * **And the gate says which of the two happened.** A step let go by a gate that
+ * *gave up* must not simply carry on: the phase is already lost, and a measured
+ * step that runs into a lost phase is bought for an answer the report will
+ * refuse. So `arrive` resolves to a verdict rather than to nothing, and
+ * `abandonStep` is what the caller does with it. The verdict is **latched at the
+ * first opening**, because `runPhaseD`'s `finally` calls `release()` on every
+ * path including the successful one — a second call must not turn a gate that
+ * opened on all three into an abandonment under three running steps.
  */
 export function startRendezvous(opts: {
   expected: number;
   timeoutMs: number;
   now?: () => number;
 }): {
-  /** Called by a held step. Resolves when everyone is at the entry, or gave up. */
-  arrive: (slug: string) => Promise<void>;
-  /** Called by the book. Ends the wait, releases everyone, and says what it saw. */
+  /**
+   * Called by a held step. Resolves when the gate opens, to `"go"` if it opened
+   * on everybody and `"abandoned"` if it gave up — `abandonStep`.
+   */
+  arrive: (slug: string) => Promise<GateVerdict>;
+  /** Wait for the first `n` parties WITHOUT opening the gate. The readiness wait. */
+  waitFor: (n: number, abandonIf: Promise<unknown>) => Promise<RendezvousOutcome>;
+  /** Wait for all of them, then open the gate and say what it saw. */
   wait: (abandonIf: Promise<unknown>) => Promise<RendezvousOutcome>;
-  /** The failure door: release whoever is held, for a phase that will never wait. */
+  /** The failure door: release whoever is held, abandoned, for a phase that will never wait. */
   release: () => void;
 } {
   const now = opts.now ?? (() => Date.now());
   const startedAt = now();
+  const deadlineAt = startedAt + opts.timeoutMs;
   const arrived: string[] = [];
   const waiting: { slug: string; at: number }[] = [];
-  let everyone: () => void = () => undefined;
-  const all = new Promise<"all">((resolve) => {
-    everyone = () => resolve("all");
-  });
-  /* Zero to wait for is already lined up — otherwise the caller would wait out
-     the whole deadline to be told nothing was expected. */
-  if (opts.expected <= 0) everyone();
+
+  /* **A resolver per threshold**, because two waits want two different counts:
+     the readiness wait wants the load steps and the gate wants everybody. */
+  const thresholds: { n: number; hit: () => void }[] = [];
+  const reached = (n: number): Promise<"all"> => {
+    if (arrived.length >= n) return Promise.resolve("all");
+    return new Promise<"all">((resolve) => {
+      thresholds.push({ n, hit: () => resolve("all") });
+    });
+  };
 
   let openedAt: number | null = null;
-  let openGate: () => void = () => undefined;
-  const gate = new Promise<void>((resolve) => {
+  let openGate: (verdict: GateVerdict) => void = () => undefined;
+  const gate = new Promise<GateVerdict>((resolve) => {
     openGate = resolve;
   });
-  /* Idempotent: `wait` opens the gate and the caller's `finally` opens it again,
-     and the second one must not move the clock the first one stamped. */
-  const open = (): void => {
-    if (openedAt === null) openedAt = now();
-    openGate();
+  /* **Latched, not merely idempotent.** `wait` opens the gate and the caller's
+     `finally` opens it again with `"abandoned"`, and the second one must move
+     neither the clock the first one stamped nor the verdict it gave — three
+     steps released to run must not be told afterwards that they were
+     abandoned. */
+  const open = (verdict: GateVerdict): void => {
+    if (openedAt !== null) return;
+    openedAt = now();
+    openGate(verdict);
+  };
+
+  const outcome = (needed: number, why: RendezvousOutcome["why"]): RendezvousOutcome => ({
+    arrived: [...arrived],
+    expected: opts.expected,
+    needed,
+    /* `arrived.length` rather than `why`: a job that reached the entry in the
+       same tick as the last one settled must not be reported as missing. */
+    why: arrived.length >= needed ? "all" : why,
+    ms: now() - startedAt,
+    /* Computed here rather than in the released continuations, which do not run
+       until after this object has been built. A step that arrives after the gate
+       opened waited for nothing, and must not report a negative. */
+    held: waiting.map((w) => ({ slug: w.slug, ms: Math.max(0, (openedAt ?? now()) - w.at) })),
+  });
+
+  const until = async (n: number, abandonIf: Promise<unknown>): Promise<RendezvousOutcome["why"]> => {
+    let timer: NodeJS.Timeout | undefined;
+    const alarm = new Promise<"timed out">((resolve) => {
+      timer = setTimeout(() => resolve("timed out"), Math.max(0, deadlineAt - now()));
+    });
+    const why = await Promise.race([
+      reached(n),
+      alarm,
+      abandonIf.then(() => "jobs finished first" as const),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
+    return why;
   };
 
   return {
-    arrive(slug: string): Promise<void> {
+    arrive(slug: string): Promise<GateVerdict> {
       if (!arrived.includes(slug)) arrived.push(slug);
       waiting.push({ slug, at: now() });
-      if (arrived.length >= opts.expected) everyone();
+      for (const t of thresholds) if (arrived.length >= t.n) t.hit();
       return gate;
     },
-    async wait(abandonIf: Promise<unknown>): Promise<RendezvousOutcome> {
-      let timer: NodeJS.Timeout | undefined;
-      const alarm = new Promise<"timed out">((resolve) => {
-        timer = setTimeout(() => resolve("timed out"), opts.timeoutMs);
-      });
-      const why = await Promise.race([
-        all,
-        alarm,
-        abandonIf.then(() => "jobs finished first" as const),
-      ]);
-      if (timer !== undefined) clearTimeout(timer);
-      open();
-      /* `arrived.length` rather than `why`: a job that reached the entry in the
-         same tick as the last one settled must not be reported as missing. */
-      return {
-        arrived: [...arrived],
-        expected: opts.expected,
-        why: arrived.length >= opts.expected ? "all" : why,
-        ms: now() - startedAt,
-        /* Computed here rather than in the released continuations, which do not
-           run until after this object has been built. A step that arrives after
-           the gate opened waited for nothing, and must not report a negative. */
-        held: waiting.map((w) => ({ slug: w.slug, ms: Math.max(0, (openedAt ?? now()) - w.at) })),
-      };
+    async waitFor(n: number, abandonIf: Promise<unknown>): Promise<RendezvousOutcome> {
+      return outcome(n, await until(n, abandonIf));
     },
-    release: open,
+    async wait(abandonIf: Promise<unknown>): Promise<RendezvousOutcome> {
+      const why = await until(opts.expected, abandonIf);
+      const out = outcome(opts.expected, why);
+      /* **The verdict is the outcome's own `why`**, computed before the gate
+         opens so that a party arriving in the last tick still counts. Only a
+         gate that really opened on everybody says `"go"`. */
+      open(out.why === "all" ? "go" : "abandoned");
+      return out;
+    },
+    release: () => open("abandoned"),
+  };
+}
+
+/**
+ * **The phrase that marks a step this eval stopped on purpose**, so it can be
+ * told at a glance from one that failed on its own merits.
+ *
+ * **It does not survive in the step's `error`, and that is measured rather than
+ * feared.** The thrown error carries it, but the queue replaces a failed step's
+ * message with a reader-facing sentence before it is stored — a `--dry-run` on
+ * 2026-09-05 forced this path and found `"Extracting the article did not
+ * finish…"` in `stepOutcomes[].error`, with no marker anywhere in it. That is
+ * the same trap `checkDriving` was written around, met a second time.
+ *
+ * So the marker's real home is the **finding `runPhaseD` puts on the job's own
+ * record**, which nothing rewrites and which reaches `run.json` and the closing
+ * findings block. The constant is shared so the two say the same words.
+ */
+export const ABANDONED_MARKER = "ABANDONED AT THE START RENDEZVOUS";
+
+/**
+ * **Should this released step run, or stop before it spends?**
+ *
+ * The gate can open without everybody at the entry — the book failing to get a
+ * claim slot inside the deadline is the likeliest way, and on a shared box that
+ * is closer to the expected case than to the tail. Every measured step that runs
+ * after that is bought for an answer question 5 will refuse: three windows are
+ * what it needs, and this phase no longer has them. On the book that is $7.40 of
+ * a $40.90 run. So the step throws **before** `step.run`, having bought nothing.
+ * ⟨Greg, 2026-09-05, after round 5 left this as the last known money-waster.⟩
+ *
+ * **Two guards, and neither is negotiable.**
+ *
+ * - `"go"` never throws. A gate that opened on everybody is the phase working.
+ * - `--dry-run` never throws. Its jobs already stop at their last free step and
+ *   fail (`stepsFor`); a second way to fail them proves nothing and would make
+ *   the rehearsal's output a worse guide to the paid run's, which is the only
+ *   thing the rehearsal is for.
+ *
+ * Returns the error rather than throwing it, so both answers can be watched
+ * without a step, a job or a database.
+ */
+export function abandonStep(opts: {
+  verdict: GateVerdict;
+  dryRun: boolean;
+  slug: string;
+  step: string;
+}): Error | null {
+  if (opts.verdict === "go") return null;
+  if (opts.dryRun) return null;
+  return new Error(
+    `${ABANDONED_MARKER}: \`${opts.step}\` on ${opts.slug} was released by a start rendezvous that ` +
+      "GAVE UP rather than opening on all three, so this eval stopped it before it ran and it " +
+      "bought nothing. The three measured windows cannot now overlap, so question 5 is " +
+      "unanswerable whatever this step did — running it would have spent money on an answer the " +
+      "report would then refuse to quote. This job's `error` is this eval's doing, not the " +
+      "pipeline's.",
+  );
+}
+
+/**
+ * **May the book be driven at all?** — asked of the readiness wait, before the
+ * book is queued and before a penny of it is spent.
+ *
+ * Phase D used to drive it unconditionally. So both load jobs could fail before
+ * `hierarchy`, the readiness wait end `"jobs finished first"` with their DPN-18
+ * findings already on the record, and the run then buy the book's whole wave
+ * into a phase that could not answer the only question that pass exists for.
+ * Question 1 is phases A and B only; **the phase-D book pass is for question 5
+ * and nothing else**, and question 5 needs three windows open at one instant. No
+ * load steps at the entry, no question 5, so no reason to buy it.
+ * ⟨GPT Sol, DPN-23.⟩
+ *
+ * Pure, so the refusal can be watched without a database.
+ */
+export function loadReadiness(ready: RendezvousOutcome): {
+  go: boolean;
+  findings: DeepenFinding[];
+} {
+  if (ready.why === "all") return { go: true, findings: [] };
+  return {
+    go: false,
+    findings: [
+      {
+        kind: "not-answerable",
+        fatal: true,
+        message:
+          `Phase D: only ${ready.arrived.length} of ${ready.needed} load step(s) reached the entry ` +
+          `to the measured step (the wait ended "${ready.why}" after ${(ready.ms / 1000).toFixed(1)}s). ` +
+          "The book's pass under load was NOT DRIVEN and NOT BOUGHT: it exists to answer question 5, " +
+          "question 5 needs all three measured windows open at one instant, and with the load steps " +
+          "gone that is no longer possible. Question 5 is absent, not zero, and the phase-D book " +
+          "repeat is missing from the driving.",
+      },
+    ],
   };
 }
 

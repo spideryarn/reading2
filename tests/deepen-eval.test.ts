@@ -30,6 +30,8 @@ import { describe, expect, it } from "vitest";
 import type { CandidateRecord } from "../src/hierarchy-expand.js";
 import type { DeepenStats } from "../src/hierarchy-deepen.js";
 import {
+  abandonStep,
+  ABANDONED_MARKER,
   assertReaskNames,
   assertSeamProof,
   assertStepPlansRunnable,
@@ -38,11 +40,13 @@ import {
   estimate,
   formatEstimate,
   jobIntegrityFindings,
+  loadReadiness,
   parseRecordsFile,
   readRecordsDir,
   RECORDS_VERSION,
   recordingCheckpoints,
   recordsFilePrefix,
+  type RendezvousOutcome,
   requeueVerdict,
   type SeamProof,
   startRendezvous,
@@ -1785,14 +1789,22 @@ describe("what a stopped job has to have left behind", () => {
  * **DPN-20 — and the first fix was a latch, not a rendezvous.** `announce` only
  * *recorded* an arrival: load1 could announce, run its whole measured step and
  * finish before load2 announced at all, and `wait` would then report `"all"` and
- * release the book into a window load1 had already left. Q5 refuses that
- * afterwards — correctly — but only once phase D has spent. So `arrive` **holds
- * the caller** until every load step and the book are at the same entry, and all
- * three are released together.
+ * release the book into a window load1 had already left.
  *
- * The book still waits **outside** a claim: its step needs 658-778 s against a
- * 740 s deadline. The two load steps wait *inside* theirs, which is what the
- * bounded timeout is for.
+ * **DPN-20-R — and the second fix was still two-party.** The loads were held for
+ * each other and *nothing was held for the book*: the gate opened on the two of
+ * them and only then was the book driven at all, so with another job holding the
+ * third queue slot both released load steps could finish before the book reached
+ * `hierarchy` — and the outcome still read `"all"`. Q5 refuses that afterwards,
+ * correctly, but only once phase D has spent.
+ *
+ * So it is three-party. `waitFor(2)` is the **readiness** wait — both loads at
+ * the entry, gate still shut, nothing bought — and only then is the book driven,
+ * arriving through the same hook. `wait()` opens the gate when all three are
+ * there. The book therefore *does* arrive inside its own claim, and that is
+ * sound rather than a concession: everybody else is already waiting for it, so
+ * its wait is one microtask, and the step that needs 658-778 s against a 740 s
+ * deadline gives up none of it.
  */
 describe("the phase-D start rendezvous", () => {
   const never = new Promise<void>(() => undefined);
@@ -1804,94 +1816,202 @@ describe("the phase-D start rendezvous", () => {
   };
 
   /**
-   * **The DPN-20 case itself.** With a latch this passes vacuously — nothing
-   * holds load1 — and the phase measures two windows that never overlapped.
+   * **The DPN-20-R case itself**, and the assertion that is the finding is the
+   * one in the middle: the two loads are at the entry, the readiness wait has
+   * ended `"all"`, and *they are still held*. A two-party gate releases them
+   * there — which is exactly the window the book was then driven into.
    */
+  it("holds both loads at the entry until the book arrives too", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const ran: string[] = [];
+    void r.arrive("load1").then(() => ran.push("load1"));
+    void r.arrive("load2").then(() => ran.push("load2"));
+
+    const ready = await r.waitFor(2, never);
+    expect(ready.why).toBe("all");
+    expect(ready.needed).toBe(2);
+    expect(ready.arrived).toEqual(["load1", "load2"]);
+    await settle();
+    expect(ran, "the loads were released before the book was anywhere near the entry").toEqual([]);
+
+    /* Only now is the book driven, and it arrives through the same hook. */
+    void r.arrive("book").then(() => ran.push("book"));
+    const lined = await r.wait(never);
+    expect(lined.why).toBe("all");
+    expect(lined.needed).toBe(3);
+    expect(lined.arrived).toEqual(["load1", "load2", "book"]);
+    await settle();
+    expect([...ran].sort()).toEqual(["book", "load1", "load2"]);
+  });
+
+  /* The original DPN-20 property, unchanged: one load may not run ahead of the
+     other either. */
   it("holds the first load step at its entry until the second one gets there", async () => {
-    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
     let released1 = false;
-    let released2 = false;
     void r.arrive("load1").then(() => {
       released1 = true;
     });
     await settle();
     expect(released1, "load1 ran its measured step before load2 was anywhere near it").toBe(false);
-    void r.arrive("load2").then(() => {
-      released2 = true;
-    });
-    const out = await r.wait(never);
-    expect(out.why).toBe("all");
-    expect(out.arrived).toEqual(["load1", "load2"]);
+    void r.arrive("load2");
+    await r.waitFor(2, never);
     await settle();
-    expect([released1, released2], "the release did not reach both held steps").toEqual([true, true]);
+    expect(released1, "load1 ran its measured step before the book arrived").toBe(false);
   });
 
   it("releases nobody until the wait ends, and then everybody", async () => {
-    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
     const ran: string[] = [];
-    void r.arrive("load1").then(() => ran.push("load1"));
-    void r.arrive("load2").then(() => ran.push("load2"));
+    for (const slug of ["load1", "load2", "book"]) void r.arrive(slug).then(() => ran.push(slug));
     await settle();
-    expect(ran, "a load step ran its measured step before the book was released").toEqual([]);
+    expect(ran, "a measured step started before the gate opened").toEqual([]);
     await r.wait(never);
     await settle();
-    expect([...ran].sort()).toEqual(["load1", "load2"]);
+    expect([...ran].sort()).toEqual(["book", "load1", "load2"]);
   });
 
   it("says how long each held step waited at the entry", async () => {
     let clock = 0;
-    const r = startRendezvous({ expected: 2, timeoutMs: 60_000, now: () => clock });
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000, now: () => clock });
     void r.arrive("load1");
     clock = 5_000;
     void r.arrive("load2");
     clock = 8_000;
+    void r.arrive("book");
+    clock = 8_010;
     const out = await r.wait(never);
     expect(out.held).toEqual([
-      { slug: "load1", ms: 8_000 },
-      { slug: "load2", ms: 3_000 },
+      { slug: "load1", ms: 8_010 },
+      { slug: "load2", ms: 3_010 },
+      { slug: "book", ms: 10 },
     ]);
   });
 
   /* A step that ran twice — a re-driven job — must not count as two jobs. */
   it("counts jobs, not arrivals", async () => {
-    const r = startRendezvous({ expected: 2, timeoutMs: 20 });
+    const r = startRendezvous({ expected: 3, timeoutMs: 20 });
     void r.arrive("load1");
     void r.arrive("load1");
-    const out = await r.wait(never);
+    const out = await r.waitFor(2, never);
     expect(out.why).toBe("timed out");
     expect(out.arrived).toEqual(["load1"]);
   });
 
   /**
    * **A load job that fails before its measured step never arrives**, and the
-   * book must still be driven — the run reports an unlined-up phase rather than
-   * hanging on one that can no longer line up. **And the survivor must be let
-   * go**: a rendezvous that only ever opens on success wedges the other load job
-   * inside its own claim until the lease expires.
+   * survivor must be let go: a rendezvous that only ever opens on success wedges
+   * the other load job inside its own claim until the lease expires. What
+   * happens to the *book* on this path is `loadReadiness`'s to say, and the
+   * answer is that it is not driven at all (DPN-23).
    */
   it("lets the survivor go when the other load job has died", async () => {
-    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
     let released = false;
     void r.arrive("load1").then(() => {
       released = true;
     });
-    const out = await r.wait(Promise.resolve("the other load job failed"));
+    const out = await r.waitFor(2, Promise.resolve("the other load job failed"));
     expect(out.why).toBe("jobs finished first");
     expect(out.arrived).toEqual(["load1"]);
+    /* The readiness wait does NOT open the gate — that is the whole of DPN-20-R
+       — so the survivor is let go by the phase's `finally` instead. */
+    r.release();
     await settle();
     expect(released, "a held load step was left waiting for a job that will never arrive").toBe(true);
   });
 
-  it("gives up on its own deadline, and lets go when it does", async () => {
-    const r = startRendezvous({ expected: 2, timeoutMs: 5 });
+  it("gives up on its own deadline, and the release lets go when it does", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
     let released = false;
     void r.arrive("load1").then(() => {
       released = true;
     });
+    const out = await r.waitFor(2, never);
+    expect(out.why).toBe("timed out");
+    r.release();
+    await settle();
+    expect(released).toBe(true);
+  });
+
+  /**
+   * **The full wait gives up and lets go by itself**, because by then there is
+   * nobody left to do it for the held steps — the book is being driven and the
+   * phase is inside `wait`.
+   */
+  it("opens the gate itself when the book never arrives", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    void r.arrive("load2");
     const out = await r.wait(never);
     expect(out.why).toBe("timed out");
     await settle();
     expect(released).toBe(true);
+  });
+
+  /* ------------------------------------------ what the gate tells them -- */
+
+  /**
+   * **The gate says which of two things happened**, because a released step has
+   * to know whether to run or to stop.
+   *
+   * A gate that opened on everybody is the phase working, and the step runs. A
+   * gate that opened because it gave up is the phase already lost — no three
+   * windows, so no question 5 — and the measured step that runs anyway is bought
+   * for nothing. On the book that is $7.40 of a $40.90 run, spent to buy an
+   * answer the report will then refuse.
+   */
+  it("tells the held steps to go when the gate opened on everybody", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const verdicts = ["load1", "load2", "book"].map((s) => r.arrive(s));
+    const out = await r.wait(never);
+    expect(out.why).toBe("all");
+    expect(await Promise.all(verdicts)).toEqual(["go", "go", "go"]);
+  });
+
+  it("tells them they were abandoned when it gave up instead", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    const held = r.arrive("load1");
+    void r.arrive("load2");
+    const out = await r.wait(never);
+    expect(out.why).toBe("timed out");
+    expect(await held, "a step released by a gate that never opened was told to carry on").toBe(
+      "abandoned",
+    );
+  });
+
+  it("says abandoned to a step let go by the failure door", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const held = r.arrive("load1");
+    r.release();
+    expect(await held).toBe("abandoned");
+  });
+
+  /**
+   * **The verdict is latched at the first opening**, and this is the hazard the
+   * whole design turns on: `runPhaseD`'s `finally` calls `release()` on *every*
+   * path, including the one where `wait` has already opened the gate on all
+   * three. If the second call could downgrade the first, a perfectly lined-up
+   * phase would tell three running steps they had been abandoned.
+   */
+  it("latches the first verdict, so the finally cannot downgrade a gate that opened", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const held = r.arrive("load1");
+    void r.arrive("load2");
+    void r.arrive("book");
+    await r.wait(never);
+    r.release();
+    expect(await held, "the finally turned a successful gate into an abandonment").toBe("go");
+  });
+
+  /* A step that arrives after a gate that gave up is just as abandoned. */
+  it("gives the latched verdict to a step that arrives late", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    await r.wait(never);
+    expect(await r.arrive("load1")).toBe("abandoned");
   });
 
   /**
@@ -1901,7 +2021,7 @@ describe("the phase-D start rendezvous", () => {
    * leases ran out. `release()` is what the `finally` calls.
    */
   it("can be released by a phase that never reaches the wait", async () => {
-    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
     let released = false;
     void r.arrive("load1").then(() => {
       released = true;
@@ -1912,9 +2032,10 @@ describe("the phase-D start rendezvous", () => {
   });
 
   it("is idempotent, so the finally after a wait changes nothing", async () => {
-    const r = startRendezvous({ expected: 2, timeoutMs: 60_000, now: () => 0 });
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000, now: () => 0 });
     void r.arrive("load1");
     void r.arrive("load2");
+    void r.arrive("book");
     const out = await r.wait(never);
     r.release();
     expect(out.why).toBe("all");
@@ -1951,5 +2072,98 @@ describe("the phase-D start rendezvous", () => {
   it("does not wait at all for nobody", async () => {
     const r = startRendezvous({ expected: 0, timeoutMs: 60_000 });
     expect((await r.wait(never)).why).toBe("all");
+  });
+});
+
+/**
+ * **The last place the run spent knowing the answer could not come back.**
+ *
+ * The gate can open without everybody being there — the book cannot get a claim
+ * slot inside the deadline, most likely, which on a shared box is close to the
+ * expected case rather than the tail. Round 5 left that spending anyway: the
+ * three steps ran, `peakConcurrency` refused question 5 afterwards, and $7.40 of
+ * a $40.90 run had bought an answer the report would not quote. Every other
+ * protection here stops when the evidence is already lost; this was the one that
+ * did not. ⟨Greg, 2026-09-05.⟩
+ *
+ * So a step released by a gate that gave up **throws before it runs**, and
+ * `abandonStep` is the whole of the decision. Two guards, and neither is
+ * negotiable: it cannot fire on `--dry-run`, whose jobs are expected to fail at
+ * their last free step and must not be given a second way to; and it cannot fire
+ * on a gate that opened `"go"`, which is the phase working.
+ */
+describe("a measured step the gate gave up on", () => {
+  const base = { dryRun: false, slug: "load1", step: "hierarchy" };
+
+  it("throws before the step runs, so the wave is never bought", () => {
+    const err = abandonStep({ ...base, verdict: "abandoned" });
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain(ABANDONED_MARKER);
+    expect(err?.message, "the message must name the step and the slug").toMatch(/hierarchy/);
+    expect(err?.message).toMatch(/load1/);
+    expect(err?.message, "and must say it bought nothing").toMatch(/bought nothing|not bought/i);
+  });
+
+  it("never fires where the gate opened on everybody", () => {
+    expect(abandonStep({ ...base, verdict: "go" })).toBeNull();
+  });
+
+  /* A dry run's jobs already fail at their last free step. A second way to fail
+     them proves nothing and would make the rehearsal's output a worse guide to
+     the paid run's, which is the only thing the rehearsal is for. */
+  it("never fires under --dry-run, however the gate ended", () => {
+    expect(abandonStep({ ...base, dryRun: true, verdict: "abandoned" })).toBeNull();
+    expect(abandonStep({ ...base, dryRun: true, verdict: "go" })).toBeNull();
+  });
+});
+
+/**
+ * **DPN-23 — the run still bought after it knew the answer was gone**, in the one
+ * place round 4's fix could not reach.
+ *
+ * Both load jobs fail before `hierarchy`. The readiness wait ends `"jobs finished
+ * first"`, their DPN-18 findings are on the record — and phase D then drove the
+ * paid book anyway, because "drive the book" was unconditional. The book's
+ * phase-D pass exists **only** to answer question 5 (question 1 is phases A and B
+ * only), and question 5 needs three overlapping windows, so a book bought into a
+ * phase that cannot line up buys nothing at all. ⟨GPT Sol, DPN-23.⟩
+ *
+ * Pure, and separate from `runPhaseD`, so the refusal can be watched without a
+ * database.
+ */
+describe("whether the book may be driven at all", () => {
+  const outcome = (
+    why: RendezvousOutcome["why"],
+    arrived: string[],
+  ): RendezvousOutcome => ({ why, arrived, expected: 3, needed: 2, ms: 1_234, held: [] });
+
+  it("lets the book go when both load steps are held at the entry", () => {
+    const v = loadReadiness(outcome("all", ["load1", "load2"]));
+    expect(v.go).toBe(true);
+    expect(v.findings).toEqual([]);
+  });
+
+  it("refuses when both load jobs died before reaching the measured step", () => {
+    const v = loadReadiness(outcome("jobs finished first", []));
+    expect(v.go, "the paid book was driven into a phase that cannot answer Q5").toBe(false);
+    expect(v.findings).toHaveLength(1);
+    expect(v.findings[0]?.fatal).toBe(true);
+    expect(v.findings[0]?.kind).toBe("not-answerable");
+    expect(v.findings[0]?.message, "the finding must say the book was NOT bought").toMatch(
+      /not driven|not bought/i,
+    );
+  });
+
+  it("refuses when only one of the two got there", () => {
+    const v = loadReadiness(outcome("jobs finished first", ["load1"]));
+    expect(v.go).toBe(false);
+    expect(v.findings[0]?.message).toMatch(/1 of 2/);
+  });
+
+  it("refuses when the readiness wait timed out", () => {
+    const v = loadReadiness(outcome("timed out", ["load1"]));
+    expect(v.go).toBe(false);
+    expect(v.findings[0]?.fatal).toBe(true);
+    expect(v.findings[0]?.message).toMatch(/timed out/);
   });
 });

@@ -570,14 +570,23 @@ Four things in it are worth copying:
   was right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
   measured step at once, while the two load articles start at `fetch` and get there only after
   stages 1-3. The two load jobs are driven first and are **held at the entry** to their measured
-  step; the book is driven once both are there, and all three are released together
-  (`startRendezvous`). Merely *announcing* an arrival was not enough and was the first fix: load1
-  could announce, run its whole step and finish before load2 announced at all. The book waits
-  **outside** a claim, because its own step needs 658-778 s against a 740 s deadline; the two load
-  steps wait inside theirs, so the wait is bounded and what it cost is reported. A rendezvous that
-  does not open is reported, not waited on for ever. **What this guarantees is a shared start, not a
-  shared window** — the queue's cap is global and shared, so whether the three overlap for long
-  enough is still `peakConcurrency`'s to decide. All three phase-D promises
+  step; a **readiness wait** ends when both are there, with the gate still shut and nothing of the
+  book driven or bought; then the book is driven, reaches the same entry through the same hook, and
+  **all three are released together** (`startRendezvous`). Two earlier versions of this were wrong in
+  instructive ways. Merely *announcing* an arrival held nobody, so load1 could announce, run its
+  whole step and finish before load2 announced. Holding only the loads and releasing them before
+  driving the book moved the same hole one party over: with the third queue slot taken, both released
+  loads could finish before the book reached `hierarchy` — and the outcome still said "all". The book
+  therefore *does* wait inside its own claim, and it costs nothing, because by then everybody else is
+  waiting for it; the two load steps are the ones that really hold, bounded, and what it cost them is
+  reported. **A phase that cannot line up buys nothing trying to.** A readiness wait that does not end
+  `"all"` stops the run rather than driving the book at all; and if the *gate* gives up with all three
+  already driven, every step it releases is released "abandoned" and throws before it runs. Those jobs
+  end `error` by this eval's doing and each carries a finding saying so. **What a successful gate
+  guarantees is a shared start, not a shared window** — the queue's cap is global and shared, so
+  whether the three overlap for long enough is still `peakConcurrency`'s to decide. Or, in one line:
+  **it can no longer buy an unanswerable question 5, and it still cannot promise an answerable one.**
+  All three phase-D promises
   stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
   agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the
@@ -614,7 +623,7 @@ nobody else has would break the cost eval for everybody.
 **What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
 a model call, so every dry-run job stops at its last free step and fails — and because a failed job's
 draft revision is rolled back, every job *after* the first on the same slug fails at once too. It
-proves the driving — the fixture ingress, the force, the serial repeats, the start barrier, the
+proves the driving — the fixture ingress, the force, the serial repeats, the start rendezvous, the
 concurrent load phase, the cleanup — and says so rather than printing a table of zeroes.
 
 **Run it before you run anything that spends**, and read the last line as well as the first. On

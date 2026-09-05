@@ -1442,11 +1442,11 @@ absent, partial or failed, printed as though it were a result**
   now rather than a note: an unchanged tree there is a coincidence, not the evidence phase C exists
   to produce.
 
-**A second review refused it again, and a third, and a fourth.** ⟨GPT Sol, 2026-09-05.⟩ The second
-pass found seven more, two of them reopening findings the first round had been recorded as closing —
-which is the argument for reviewing the *code* as well as the plan. The fourth pass is
-[below](#stage-5b-round-4), and it is the one that found the fix for the third's finding was not the
-fix it looked like.
+**It was refused five times.** ⟨GPT Sol, 2026-09-05.⟩ The second pass found seven more, two of them
+reopening findings the first round had been recorded as closing — which is the argument for reviewing
+the *code* as well as the plan. The fourth and fifth are [below](#stage-5b-round-4), and each of them
+found that the previous round's fix was not the fix it looked like: **twice running, a fix removed
+the version of the hole it had been shown and left the version it had not.**
 
 - **Phase C assigned over the findings array instead of appending to it**, so a fatal scope or
   ledger-completeness finding recorded moments earlier was dropped, and nothing downstream recomputes
@@ -1492,14 +1492,21 @@ fix it looked like.
   arithmetic was right and the phase did not arrange the thing it measures: the book's job is a
   forced `hierarchy` and starts its measured step at once, while the two load articles start at
   `fetch` and get there only after stages 1–3. The two load jobs are driven first and are **held at
-  the entry** to their measured step; the book is driven once both are there, and all three are
-  released together. **The first fix was a latch and did not do this** — announcing an arrival let
-  load1 run its whole step and finish before load2 announced, and the wait still ended `"all"`,
-  releasing the book into a window that had already closed (DPN-20). The book waits **outside** a
-  claim, because its own step needs 658–778 s against a 740 s deadline and has no seconds to give
-  away; the two load steps wait inside theirs, so the wait is bounded at three minutes and what it
-  cost each of them is reported as a note. **What this guarantees is a shared start, not a shared
-  window**: the queue's concurrency cap is global and shared, so whether the three overlap for long
+  the entry** to their measured step; a **readiness wait** ends when both are there, with the gate
+  still shut and nothing of the book driven or bought; then the book is driven, reaches the same
+  entry through the same hook, and **all three are released together**. **It took three goes.** The
+  first was a latch: announcing an arrival held nobody, so load1 could run its whole step and finish
+  before load2 announced, and the wait still ended `"all"` (DPN-20). The second held the loads and
+  then released them *before* driving the book, which moved the same hole one party over — with the
+  third queue slot taken, both released loads could finish before the book reached `hierarchy`, and
+  the outcome still said `"all"` (DPN-20-R). So the book holds too, inside its own claim, and that
+  costs it nothing: its step needs 658–778 s against a 740 s deadline and can give up none of it, but
+  by the time it is driven everybody else is already waiting *for it*, so its wait is one microtask.
+  The two load steps are the ones that really hold, bounded at three minutes, and what it cost each
+  of them is reported as a note. **A readiness wait that does not end `"all"` stops the run rather
+  than buying the book** (DPN-23). **What a successful gate guarantees is a shared start, not a
+  shared window**: the queue's concurrency cap is global and shared, so whether the three overlap for
+  long
   enough is still `peakConcurrency`'s to measure and refuse. Sol's other
   suggestion — pre-ingest the load articles as far as `blocks`, then force three hierarchy-only jobs
   together — cannot work, and a free `--dry-run` is what showed it: a job that stops short of a
@@ -1528,6 +1535,19 @@ exactly like a clean job.
 - **The phase-D barrier was a latch, not a rendezvous** (DPN-20) — the fix the *third* round asked
   for, which looked done and was not. See the phase-D bullet above for what it does now and what it
   does not.
+
+  > **And the fix for that was not the fix either.** ⟨GPT Sol, round 5, 2026-09-05.⟩ Holding the two
+  > load steps and releasing them before the book was driven is a **two-party** gate: they waited for
+  > each other and nothing waited for the book. With another job holding the third queue slot, both
+  > released loads could finish their measured step before the book reached `hierarchy`, and the
+  > outcome still read `"all"` — the same defect, one party over (DPN-20-R). Worth recording as a
+  > *pattern*: each round's fix removed the version of the hole it was shown and left the version it
+  > was not, because "the parties I am holding" kept being a smaller set than "the parties whose
+  > windows have to overlap". **Three attempts at one hole, and rounds 4 and 5 each found that the
+  > previous round's fix was not the fix it looked like** — which is the argument for reviewing the
+  > code after every round rather than declaring the finding closed when its example stops
+  > reproducing. The third go names the invariant instead of patching the example: **no measured
+  > step may start until every measured step is at the entry.**
 - **The immediate ledger read was unbounded** (DPN-21). The end-of-run re-read got a deadline in
   round 3; the read `driveJob` makes the instant a job stops did not, and that one sits inside phase
   D's `allSettled` — so one read that never answers is a phase that never reaches reporting. Same
@@ -1536,6 +1556,48 @@ exactly like a clean job.
   failure of this document rather than of the code: the estimate had stopped calling itself a bound
   and the plan still said the run "enforces the bound" and called $85.30 a "worst case". A claim that
   has been retracted must not survive in the doc that describes it.
+
+**And a fifth review found the round-4 fix had left one more of each.** ⟨GPT Sol, 2026-09-05.⟩ Both
+in `runPhaseD`, and both are the two diseases of this stage meeting in one function:
+
+- **DPN-20-R — the rendezvous was still two-party.** Recorded with the DPN-20 bullet above, because
+  the pattern is only visible with all three attempts side by side.
+- **DPN-23 — the run still bought after known failure**, in the one place round 4's own fix could not
+  reach. If both load jobs fail before `hierarchy`, the readiness wait ends `"jobs finished first"`,
+  their DPN-18 findings are already on the record — and phase D then drove the paid book anyway,
+  because "drive the book" was an unconditional statement. **The book's phase-D pass exists to answer
+  question 5 and nothing else** (question 1 is phases A and B only), and question 5 needs three
+  windows open at one instant, so a book bought into a phase whose load steps are gone buys nothing
+  at all. `loadReadiness` is the refusal, and it is pure so it can be watched refusing without a
+  database. The book's job is still *queued*, deliberately: `budgetReport`'s `expected` counts
+  phase-D jobs, so a queued-and-refused book still demands a third clock and question 5 still
+  refuses — where a book that was never queued would have quietly lowered the bar to two.
+
+Two smaller things fell out of DPN-23's shape. The readiness wait abandons on **the first load job to
+stop**, not on all of them: `allSettled` cannot resolve while a sibling is held at the entry waiting
+for a gate that wait has not opened yet, so the old form sat out the whole three-minute timeout to
+learn something that was true in the first second. And the gate's own abandon signal is the *book*
+alone, for the same reason.
+
+**And then the last known money-waster, closed on purpose rather than on a review.** ⟨Greg,
+2026-09-05.⟩ Round 5 left one path that still spent knowing the answer could not come back: the
+readiness wait succeeds, the book is driven, and *the gate* then gives up — the book failing to get a
+claim slot inside the deadline being the likeliest way. All three steps ran, `peakConcurrency`
+refused question 5 afterwards, and $7.40 of a $40.90 run had bought an answer the report would not
+quote. **18% of the run, spent on a question already lost, on a shared box where "another agent holds
+the third claim slot" is nearer the expected case than the tail.** So the gate tells a released step
+which of two things happened — `arrive` resolves to `"go"` or `"abandoned"` — and an abandoned step
+throws before `step.run`, having bought nothing. Two guards: never on `"go"`, and never under
+`--dry-run`, whose jobs already stop at their last free step and must not be given a second way to
+fail. The verdict is **latched at the first opening**, because `runPhaseD`'s `finally` releases on
+every path including the successful one, and a second call must not tell three running steps they
+were abandoned. It is the one place this eval fails a step deliberately, so it says so twice: the
+thrown error carries `ABANDONED_MARKER`, and — because the queue rewrites a failed step's message
+into a reader-facing sentence, the trap `checkDriving` already exists for — a fatal finding goes on
+the job's own record, where `run.json` and the closing findings block will both carry it. What phase D
+now guarantees end to end is written out in three numbered statements in `runPhaseD`'s docblock; the
+short version is **it can no longer buy an unanswerable question 5, and it still cannot promise an
+answerable one.**
 
 **The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
 job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global
