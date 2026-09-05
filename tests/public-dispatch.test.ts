@@ -116,12 +116,6 @@ describe("the authenticated dispatcher's one parameter", () => {
    * error was unused.
    */
   it("will not accept a hand-built user, and the typecheck says so", () => {
-    /* `…face` is this file's alone, and nothing here ever reaches Postgres — it
-       is a user built in memory to be refused. It was `…ed` until 2026-09-05,
-       when `public-visibility-pg.test.ts` took the same id for an article it
-       really does insert and `fixture-ids.test.ts` caught the pair. Not a
-       `NOT_A_ROW` exemption: that key is the uuid, so exempting it would have
-       blinded the guard to the neighbour row as well. */
     const impostor: AuthedUser = {
       id: "d15a0001-0000-4000-8000-000000000001" as AuthedUser["id"],
       email: "someone@example.test",

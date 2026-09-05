@@ -66,31 +66,26 @@ describe("a visitor's notice, in the strip the band takes over", () => {
        what stops that from becoming true later. */
     expect(html).toMatch(/class="[^"]*\bshared-notice\b/);
     /* And it really is the notice, so a component that rendered nothing but the
-       right class could not pass.
+       right class could not pass. */
+    /* The constant rather than a literal. This asserted the fragment
+       "shared this article with you", which was a substring of
+       `SHARED_WITH_YOU` until 2026-09-04 and is a substring of nothing
+       now: the sentence had to stop saying somebody sent this reader a
+       link, because the public shelf brings readers nobody sent
+       anything. A grep for the whole old sentence does not find a
+       fragment of it, which is how this went red on `dev`.
 
-       Against the constant rather than a copy of its words. This line held the
-       sentence longhand until 2026-09-05, when the wording changed under it and
-       this was one of three files red on `dev` — a test that fails for a
-       reworded sentence is reporting on the copywriter, not on the component.
-       What it is really asserting is that `SharedNotice` rendered its text at
-       all, and `SHARED_WITH_YOU` says that without going stale.
+       Two guards on top, from GPT Sol, so that asserting a constant is
+       not weaker than asserting the sentence was:
 
-       **Why the wording moved**, since the reason outlives this test: the old
-       assertion was the fragment "shared this article with you", and the
-       sentence had to stop saying somebody sent this reader a link, because the
-       public shelf brings readers nobody sent anything. A grep for the whole
-       old sentence does not find a fragment of it, which is how it went red.
-
-       Two things keep the constant from being weaker than the sentence it
-       replaced, both from GPT Sol, 2026-09-05:
-
-       - **The non-empty guard.** `toContain("")` is vacuously true, so an
-         emptied constant would have passed an assertion whose whole job is to
-         prove something was rendered.
-       - **Through the renderer, not raw.** Today's copy has no `&` or `<`, so
-         a raw comparison happens to work; the first time somebody writes
-         "read, interrogate & remember" it would fail on the escaping and look
-         exactly like the staleness this change is removing. */
+       - **Non-empty.** `toContain("")` is vacuously true, so an emptied
+         constant would satisfy an assertion whose whole job is proving
+         something was rendered.
+       - **Through the renderer, not raw.** Today's copy has no `&` or
+         `<`, so a raw compare happens to work; measured on 2026-09-05,
+         copy reading "read, interrogate & remember" makes a raw
+         `toContain` fail on the escaping — which would look exactly like
+         the staleness this change removes. */
     expect(SHARED_WITH_YOU.trim(), "the shared notice copy is empty").not.toBe("");
     expect(html).toContain(renderToStaticMarkup(<>{SHARED_WITH_YOU}</>));
   });

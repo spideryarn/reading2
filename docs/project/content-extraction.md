@@ -3,18 +3,22 @@
 Strips a rich HTML page (article/blog post) down to the main content — drops nav, ads, sidebars, comments — using [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View algorithm).
 
 - Script: `src/extract.ts`
-- Run: `npm run extract -- <url> [outFile]` (the output defaults to `output/<slug>.html`, with
-  the slug derived from the URL — it used to be a fixed `output/article.html`), **or paste the URL
-  into the homepage's add box** and the ingest queue runs it, along with the four stages after it —
-  [ingest-queue.md](ingest-queue.md). The CLI and the queue call the same function, so there is one
-  code path and no way for them to disagree.
+- Run: `npm run extract -- <slug> [--force]`, which re-runs this stage on an article you already
+  have, **or paste the URL into the homepage's add box** and the ingest queue runs it along with the
+  four stages after it — [ingest-queue.md](ingest-queue.md). Both are the same code path now rather
+  than two that agree: the command enqueues a job and advances it
+  ([setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue)).
+  Until 2026-09-05 it took a **URL**, fetched the page itself and wrote `output/<slug>.html` and
+  `data/<slug>/meta.json` by hand; making an article from an address is `npm run ingest` now.
 - The fetch itself is no longer here. Stage 1 is [`src/fetch.ts`](../../src/fetch.ts), which keeps
   what it got as a content-addressed object in the `sources` bucket, with a manifest naming it, so
   re-extracting costs nothing and does not ask the publisher again. Since 2026-08-31 it writes no
   files — [fetching.md § What stage 1 leaves behind](fetching.md#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk).
 - Output: a standalone, styled HTML page and the metadata, **both returned rather than written**. The
-  page is HTML and not Markdown, to avoid losing structure, links and images; the command line is the
-  only caller that puts either on a disk.
+  page is HTML and not Markdown, to avoid losing structure, links and images. Since 2026-09-05
+  nothing puts either on a disk from this stage; `npm run eval:pdf-read`, which is the *other*
+  extractor and a quality tool rather than a stage runner, still writes its two files for a person to
+  look at.
 - Dependencies: `@mozilla/readability` + `jsdom` (parses HTML into a DOM, since Node has none natively)
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
 
@@ -56,7 +60,8 @@ The differences that matter to a reader:
   ([`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)), so a second attempt at a document
   the first one ran out of time on buys only the chunks it has not got — and re-running after a
   *renderer* fix is free. A **prompt** change is deliberately not free: the key carries
-  `promptFingerprint()`. And `npm run pdf` remembers nothing between runs at all, because a command
+  `promptFingerprint()`. And `npm run eval:pdf-read` (`npm run pdf` until 2026-09-05) remembers
+  nothing between runs at all, because a command
   line has no article to key on and takes `nullCheckpointStore()`.
 - **It is checked, and since 2026-08-30 it no longer fails.** The transcription is scored per page
   against the PDF's own text layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)). This used to
@@ -83,7 +88,7 @@ The differences that matter to a reader:
   the reader hears it in seconds instead of after a job card has been running. `pass0`'s own guard
   stays as the backstop for anything ingested before that, or re-extracted after the cap moves
   again — and it is the *only* guard for the stage CLIs, which do not go through the queue's stage 1
-  at all: `npm run fetch` stores whatever it fetched, and `npm run pdf` keeps the original before
+  at all: the queue stores whatever it fetched, and `npm run eval:pdf-read` keeps the original before
   `runPdfExtract` counts anything. Neither can reach a reader's job.
 - **A PDF that will not open at all is refused here, and says which way.** Locked with a password, or
   damaged past parsing — two sentences and two codes, `PDF_LOCKED` and `PDF_DAMAGED` in

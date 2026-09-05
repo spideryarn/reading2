@@ -721,16 +721,18 @@ describe("normaliseExpansion", () => {
    * that nothing in the starts-only path lets a gap or an overlap back in.
    */
   it("tiles the parent exactly, with no gap and no overlap, whatever the starts say", () => {
-    /* Every start here is inside the parent except the first child's, which is
-       pinned rather than clamped. A *later* start outside the parent is no
-       longer planned around at all — it is refused, two tests below — so a
-       case that used to claim block 19 of a parent ending at 15 now claims 15
-       itself, and still exercises the collision and the drop it was written
-       for. */
+    /* **Every start here is inside the parent, including the first**, because a
+       start outside it is no longer planned around at all — it is refused,
+       below, at whatever position it appears. Two cases were written against
+       the older rule and moved rather than deleted, since what they exercise is
+       the collision and the drop rather than the clamp: one claimed block 19 of
+       a parent ending at 15 and now claims 15 itself, and one opened on block 0
+       of a parent starting at 4 and now opens on block 5, which is still pinned
+       back to 4. */
     const cases: string[][] = [
       [blockId(4), blockId(5), blockId(6)],
       [blockId(15), blockId(15), blockId(15)],
-      [blockId(0), blockId(15), blockId(7)],
+      [blockId(5), blockId(15), blockId(7)],
       [blockId(4), blockId(9), blockId(10), blockId(11), blockId(15)],
     ];
     for (const starts of cases) {
@@ -988,16 +990,59 @@ describe("normaliseExpansion", () => {
   });
 
   /**
-   * **The first kept child keeps its pin, which is not a clamp of a claim.**
-   * Children must cover their parent and nothing else can supply that block, so
-   * an opening claim from outside is absorbed and *measured* — the head repair
-   * is the number a re-ask would be triggered by — rather than refused.
+   * **The first child's start is range-checked before it is pinned**, and this
+   * is the gate that was open.
+   *
+   * The pin itself is right — children must cover their parent and nothing else
+   * can supply that block — but exempting the *claim* from the check let a
+   * first `start` naming a block in a **sibling** section pass all four gates,
+   * and the sibling's title, gist and verdict were attached to this parent's
+   * prose. There is nothing to distinguish that from the answer the refusal
+   * exists for: a block this call was never shown.
+   *
+   * So the pin survives and the exemption does not. Only an in-parent first
+   * start is pinned; how far *inside* the parent it was still absorbed and
+   * measured as the head repair.
    */
-  it("still pins the first child to the parent's start when its claim is outside", () => {
+  for (const [claim, side] of [
+    [0, "before"],
+    [17, "after"],
+  ] as const) {
+    it(`refuses a first start ${side} the parent, rather than pinning it`, () => {
+      const report = emptyReport();
+      const refuse = () =>
+        normaliseExpansion({
+          children: [
+            { start: blockId(claim), title: "Written About Sibling" },
+            { start: blockId(9), title: "Two" },
+          ],
+          parent,
+          blocks,
+          where: "root",
+          report,
+        });
+      expect(refuse).toThrow(ExpansionRefused);
+      try {
+        refuse();
+      } catch (err) {
+        const refusal = err as ExpansionRefused;
+        expect(refusal.reason).toBe("outside-parent");
+        expect(refusal.message).toContain(blockId(claim));
+        expect(refusal.planned).toEqual(emptyReport());
+      }
+      expect(report).toEqual(emptyReport());
+    });
+  }
+
+  /**
+   * **The pin is not a clamp of a claim**, and it still fires — for a claim
+   * that was inside the parent all along.
+   */
+  it("pins an in-parent first start back to the parent's own start, and measures it", () => {
     const report = emptyReport();
     const children = normaliseExpansion({
       children: [
-        { start: blockId(0), title: "One" },
+        { start: blockId(8), title: "One" },
         { start: blockId(9), title: "Two" },
       ],
       parent,
@@ -1007,7 +1052,7 @@ describe("normaliseExpansion", () => {
     });
     expect(children[0]!.range).toEqual([blockId(4), blockId(8)]);
     expect(report.repairs).toEqual([
-      { where: "root > child 1", kind: "overlap", at: 4, size: 4 },
+      { where: "root > child 1", kind: "gap", at: 4, size: 4 },
     ]);
   });
 

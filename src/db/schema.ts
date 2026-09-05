@@ -3734,9 +3734,17 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
+    /**
+     * **The other copy of `CheckpointNamespace`** (src/store/checkpoints.ts),
+     * and the two are checked against each other by *"the checkpoints namespace
+     * CHECK lists exactly the namespaces the type has"* in
+     * tests/db-schema.test.ts. Adding a name to the union without adding it here
+     * is a write Postgres refuses — and the callers deliberately treat a failed
+     * checkpoint write as a `warn`, so the only symptom would be the bill.
+     */
     check(
       "checkpoints_namespace",
-      sql`${t.namespace} in ('hierarchy-labels','hierarchy-structure','pdf-chunk')`,
+      sql`${t.namespace} in ('hierarchy-deepen','hierarchy-labels','hierarchy-structure','pdf-chunk')`,
     ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the

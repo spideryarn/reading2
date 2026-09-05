@@ -34,10 +34,18 @@ Elapsed:   71.3s
 Wrote:     /Users/greg/…/data/noema-…/tree.json
 ```
 
-That is a **user interface** — a person at a terminal watching `npm run hierarchy` — and turning it into
+That is a **user interface** — a person at a terminal watching a command — and turning it into
 JSON would make it worse for the only purpose it has. The rule is the destination, not the function
 name: if a human is watching it scroll past, it is output; if you would want it a week later with a
 timestamp and a slug attached, it is a log.
+
+**That example is `npm run hierarchy` before 2026-09-05, and it is worth keeping as the shape rather
+than as a screenshot.** That command drives the queue now, so what a person sees is the step's
+one-line `detail` and the job's status, with the stage's own progress line while it runs — and the
+JSON log goes past underneath it, from the server code the queue is. Two destinations in one
+terminal, which is the rule working rather than failing:
+[setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue). The tool
+that still prints a report like the one above is `npm run eval:pdf-read`.
 
 `src/web/` has zero `console` calls and is gaining none. See [§ The browser](#the-browser-nothing-yet).
 

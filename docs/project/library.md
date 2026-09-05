@@ -243,7 +243,7 @@ people to click through modals.
 
 Stage 2 rewrites `meta.json` on every run (see [below](#metajson-and-the-articles-identity)). A
 renamed title stored there would work perfectly and be silently undone by the next
-`npm run extract` — a bug that reports success, waits weeks, and then looks like the rename never
+a re-run of stage 2 — a bug that reports success, waits weeks, and then looks like the rename never
 happened. So the reader's title lives in shelf state and `describeArticle` prefers it, which is why
 a renamed article is called the same thing on the card, in the masthead and in the search results.
 `tests/shelf.test.ts` re-runs the rewrite and asserts the override survives.
@@ -758,17 +758,19 @@ which is where it was always meant to be
 
 Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
 
-- **The slug comes from the output filename, not from the URL.** Stage 3 names its blocks file after
-  the HTML file and stage 4 names the data directory after *that* ([`src/hierarchy.ts`](../../src/hierarchy.ts)),
-  so the basename is what the rest of the pipeline will call this article. Deriving it from the URL a
-  second time would be right for `npm run extract <url>` and wrong the moment anyone passed an
-  explicit filename — and the only symptom would be an article with no byline.
+- **The slug is passed in, and used to be read off the output filename.** Stage 3 named its blocks
+  file after the HTML file and stage 4 named the data directory after *that*, so the basename was
+  what the rest of the pipeline would call this article — and deriving it from the URL a second time
+  would have been right for `npm run extract <url>` and wrong the moment anyone passed an explicit
+  filename, with an article that had no byline as the only symptom. There is no filename to read one
+  off any more: `runExtract` takes the slug, and the command line that could pass one went on
+  2026-09-05.
 - **It is rewritten every run**, because re-extracting is how you refresh a page and the fetch date
   should follow.
 
 An article whose `meta.json` predates this still lists: the title falls back to the first `<h1>` and
-the date to the mtime of `blocks.json`. It just has no byline and no source link. Re-run
-`npm run extract` to fix that.
+the date to the mtime of `blocks.json`. It just has no byline and no source link.
+`npm run extract -- <slug> --force` fixes it.
 
 ## When this becomes Postgres
 

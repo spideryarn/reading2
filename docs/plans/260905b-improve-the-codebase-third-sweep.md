@@ -165,7 +165,8 @@ Then twice more: a memory file *about this trap* was written with one in its own
 and two `Bash` calls were refused outright with *"command contains control characters that would be
 hidden in the approval dialog"*. Five accidental NULs by one author inside one hour, every one of
 them while concentrating on this exact subject, is the measurement that settles how much a written
-warning was ever going to be worth.
+warning was ever going to be worth — and a sixth, below, was written by somebody else entirely while
+this plan was being reviewed.
 
 **And the review found the guard still under-covering, which is the same mistake one level up.** Its
 first version listed the globs it wanted, and an allowlist of text has exactly the shape of the bug:
@@ -179,7 +180,15 @@ included deliberately — both files that acquired a NUL here were brand new, an
 would have seen neither until after the commit it exists to prevent. Verified against the whole
 tree: of 3,162 tracked files, 78 contain a NUL and every one is a real image, video or PDF.
 
-**And the sixth one is the best evidence in this plan.** The first attempt to send this work for its
+**Then a sixth arrived from somebody else, and the guard caught it.** Merging `origin/dev` to land
+this work brought `tests/helpers/memory-artefacts.ts` — a new file, written by another agent today,
+carrying **three** raw NUL bytes in exactly the same idiom (`` `${slug}` `` + separator + `` `${step}` ``).
+Nobody involved had read the 2026-09-03 write-up; there is no reason they should have. The test went
+red on the merge, named the file, and the fix took a minute. **That is the whole argument for
+preferring a check to a paragraph, and it arrived unprompted within an hour of the check existing.**
+All nine suites that use the helper — 158 tests — pass with the escapes.
+
+**And the seventh is the best evidence in this plan.** The first attempt to send this work for its
 cross-family review failed before it started:
 
 ```

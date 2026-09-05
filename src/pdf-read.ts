@@ -2,7 +2,26 @@
  * Pipeline stage 2, for a PDF — **pass 1: a model reads the pages**, and the
  * only part of PDF ingestion that costs money.
  *
- *   npx tsx src/pdf-read.ts evals/pdf/easy/source.pdf
+ *   npm run eval:pdf-read -- evals/pdf/easy/source.pdf
+ *
+ * **The command was `npm run pdf` until 2026-09-05, and the rename is the whole
+ * decision.** Stage E of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * moved the stage CLIs onto the queue, and this one looked like the fifth of
+ * them. It is not: it is the **PDF extraction-quality tool**. It prints the
+ * pages, the chunk plan and `report(checked)` — the per-chunk recall table from
+ * src/pdf-score.ts — then the title, the records, mean recall over N pages, the
+ * token counts and the retries. That is where the numbers in
+ * evals/pdf/README.md came from, and the queue path surfaces none of it: a
+ * job's entire `detail` for the extract step is the title. Converting this
+ * command would have retired the PDF quality tooling by omission.
+ *
+ * So the name split in two. **Ingesting a PDF is `npm run ingest --
+ * <file.pdf>`** (scripts/stage.ts), which mints an upload record, puts the
+ * bytes, claims, enqueues and notes the slug — the same five moves the browser
+ * makes. **Measuring how well we read one is this**, and it keeps writing
+ * `output/<slug>.html` and `data/<slug>/meta.json` for a person to look at,
+ * because those are a human artefact rather than store artefacts.
  *
  * See docs/plans/260826c-pdf-ingestion.md. Pass 0 (src/pdf.ts) has already said how many
  * pages there are, what the text layer holds, which lines are furniture and
@@ -220,7 +239,7 @@ const ATTEMPTS = 2;
  * this file keeps making.** 69 s is what the *wire* can do; the step around it
  * has a `pass0`, a page measure, the cutting, a scoring pass per chunk and — the
  * expensive one — `ATTEMPTS`, which asks a failing chunk again *after* its first
- * answer rather than beside it. End to end, `npm run pdf` on the same document:
+ * answer rather than beside it. End to end, this command on the same document:
  *
  *     width │ fan-out │ calls │ asked twice │ spend   │ notes │ recall
  *     ──────┼─────────┼───────┼─────────────┼─────────┼───────┼────────
@@ -2319,8 +2338,9 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 }
 
 /**
- * **Make sure the PDF itself is beside the article** — for `npm run pdf --
- * <file.pdf>`, which is the only route that gets here without a stage 1.
+ * **Make sure the PDF itself is beside the article** — for
+ * `npm run eval:pdf-read -- <file.pdf>`, which is the only route that gets here
+ * without a stage 1.
  *
  * Without it the article that command produces claims `source: "pdf"` while
  * `GET /api/source/:slug` returns 404 and the reader's "view the scanned pages"
@@ -2695,7 +2715,7 @@ const looksLikeAFilename = (s: string) =>
 async function main() {
   const input = process.argv[2];
   if (!input) {
-    console.error("Usage: tsx src/pdf-read.ts <file.pdf> [slug]");
+    console.error("Usage: npm run eval:pdf-read -- <file.pdf> [slug]");
     process.exit(1);
   }
   /* **In `main`, and before the first `await`** — the same position as the seven
@@ -2703,7 +2723,7 @@ async function main() {
      call that happens after the spending passes every check that only asks
      whether it happens at all (GPT Sol, 2026-08-28). See the note in
      src/ideas.ts for why it does not go deeper than `main`. Without it
-     `npm run pdf x.pdf` from a shell that has not exported the key stopped at
+     this command from a shell that has not exported the key stopped at
      "OPENROUTER_API_KEY is not set" with the key sitting unread in
      `.env.local`, which reads as a missing credential rather than an unread
      file. */
@@ -2781,6 +2801,19 @@ async function main() {
    src/ai-spend.ts. `npm run pdf` and `npm run labels` were the two stage CLIs
    missing this, both because the tail was copied without it — which is the whole
    argument for the tail being one call. tests/paid-cli-ledger.test.ts is what
-   stops a third appearing. Awaited rather than `void`ed, so flushing the ledger
+   stops a third appearing, and since 2026-09-05 this is the only file it has
+   left to watch: `npm run labels` was retired and `npm run hierarchy` went
+   through the queue, where the job's own `job_step` scope does this job.
+
+   **The ledger it opens is the *filesystem* one on a default shell**, and that
+   is worth knowing rather than fixing here. This npm script sets no
+   `SPIDERYARN_STORE`, so `costStore` is `data/_ai-calls.jsonl` — which stopped
+   being authoritative on 2026-09-02, so this command's spend does not reach
+   `npm run cost`. Pre-existing, unchanged by the rename deliberately (the
+   decision was that the quality tool keeps its behaviour), and it goes away with
+   the flag in stage F of
+   docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+   Until then, `SPIDERYARN_STORE=postgres npm run eval:pdf-read -- …` is the
+   spelling that lands in the real ledger. Awaited rather than `void`ed, so flushing the ledger
    and any failure in it stay part of the command finishing. */
 await stageCli(import.meta.url, main);
