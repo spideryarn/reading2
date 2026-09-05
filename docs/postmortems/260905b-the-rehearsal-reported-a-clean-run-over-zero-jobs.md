@@ -64,6 +64,27 @@ The transferable rule: **a search that excludes the file you are writing about c
 thing that would change your mind**, and "I grepped and found nothing" is only evidence if the grep
 could have found it.
 
+**Two of the three agents were wrong by different routes, and the second route is the more
+dangerous.** The provenance -- that the rule came from Stage E -- entered this branch as a stated
+finding from `spideryarn2-ba`, a peer session with no stake in the outcome, which had genuinely
+checked the *count* (nine `describe`s at the merge base, ten on `dev`) and then attributed the
+difference to the recent commit whose subject sounded like it fitted, without running the one command
+that would have refuted it. `cbb903d0` adds 26 lines to that file and no `describe` at all. Named
+specifically rather than folded into "a shared confusion", at that session's own request: a
+disinterested peer reporting something as checked is exactly the input a reader does not re-derive,
+so it propagates further and faster than a guess made in one's own voice. ⟨`spideryarn2-ba`,
+2026-09-05, correcting itself unprompted after verifying the retraction from the primary checkout.⟩
+
+The two mistakes are siblings: **a check whose scope quietly excludes the case that would fail it.**
+One excluded a file, the other excluded a command. That is the same shape as layer 2 below, reached
+from a third direction, which is the argument for treating it as this postmortem's real subject.
+
+**And the retraction is better evidence for that subject than the original claim would have been.**
+An absent test is at least legible -- a gap somebody can see. What actually happened is worse and
+commoner: a test that exists, passes, sits in the same file as the thing it guards, and is still not
+found by a competent search. ⟨The point is `spideryarn2-ba`'s.⟩ The check and the thing it checks do
+not have to drift far apart to stop being connected in anybody's head.
+
 ## Layer 2 — the report that could not tell *nothing happened* from *nothing was wrong*
 
 This is the half worth the write-up. Layer 1 is a merge accident; layer 2 is a design that will keep
