@@ -155,21 +155,177 @@ function ownContent(el: Element): Element {
   return clone;
 }
 
+/** The separator insertion, shared by both branches of `extractText`. */
+const BOUNDARY_TAGS = "p,div,br,li,h1,h2,h3,h4,h5,h6,blockquote,figcaption,td,th,tr";
+
+/**
+ * The mark `codeText` puts where a line break belongs, before deciding whether
+ * one is already there.
+ *
+ * A NUL, because the HTML parser rewrites any literal U+0000 in a document to
+ * U+FFFD before we ever see it — so this cannot collide with the page's own
+ * text, which a sentinel of any printable character could. It never survives:
+ * every one of them is consumed by the collapse below.
+ */
+const INSERTED_BREAK = "\u0000";
+
+/**
+ * A run of break signals — inserted marks, the source's own newlines, and the
+ * trailing spaces between them — taken together, because how many line breaks
+ * they add up to cannot be decided one at a time.
+ *
+ * Leading indentation is deliberately outside the run: `[ \t]*` appears only
+ * *before* a newline or a mark, never after one, so `<pre>if x:<br>    return`
+ * keeps its four spaces.
+ */
+const BREAK_RUN = new RegExp(
+  `(?:[ \\t]*[\\n${INSERTED_BREAK}])*[ \\t]*${INSERTED_BREAK}(?:[ \\t]*[\\n${INSERTED_BREAK}])*`,
+  "gu",
+);
+
+/**
+ * **In a `<pre>`, whitespace is the content**, so this branch exists.
+ *
+ * `extractText` below ends `.replace(/\s+/g, " ")`, which is right for prose —
+ * a newline in the markup is not a newline in the sentence — and destroys the
+ * only structure code has. It had no `<pre>` branch until 2026-09-05, though
+ * `classify` has known since it was written that `PRE` is `kind: "code"`.
+ *
+ * **545 blocks changed** when this branch was added, over the 21 fixtures that
+ * had a pre-change baseline to diff against (11,656 blocks along the shipping
+ * route; evals/extraction/block-census.mts --cut pre-0904): RFC 9110's
+ * request/response examples and its ABNF as one unbroken line each, man(2)'s
+ * column layout, and all 400 of Whitman's poems, which Project Gutenberg sets in
+ * `<pre>`. `html` was intact throughout, so the reading view was fine
+ * (src/web/TableView.tsx renders `block.html`) and the damage was to everything
+ * that reads `text`: word counts, search, every AI prompt.
+ *
+ * **Blank lines are kept, and this paragraph is here because they briefly were
+ * not.** The first version of this function filtered them out, arguing that
+ * `articleWithIds` and `articleText` (src/article-prompt.ts) join blocks with
+ * `"\n\n"`, so a block carrying a blank line would split itself in two inside a
+ * prompt and the second half would arrive with no `[i] spya-…:` prefix for a
+ * citing stage to hang it on. **That argument was wrong and is retracted** (GPT
+ * Sol, 2026-09-05): nothing in production parses those prompts by splitting on
+ * `"\n\n"`, and Ideas and Quiz — the two stages that cite a block id as evidence
+ * — validate that the text they quote occurs in the block they cite, so the
+ * misattribution cannot land there. What the deletion cost was real and
+ * measured: 223 of 674 corpus code blocks have an internal blank line, and 153
+ * of Whitman's 400 poem blocks lost their stanza breaks. A stanza break is
+ * meaning.
+ *
+ * **The residual risk, recorded rather than designed around:** Sketch validates
+ * the cited id alone, so a model could in principle attribute the second half of
+ * a blank-line-bearing block to the id that follows it. If that ever shows up in
+ * a Sketch, the fix is one change to the framing in `articleWithIds` — indent or
+ * fence the continuation lines — and not a second mutilation of the canonical
+ * text, which four other consumers read.
+ *
+ * **Rooted at the `<pre>` itself, and no wider — which leaves two shapes still
+ * broken, named here so they are a limitation rather than a surprise.**
+ *
+ *  - **A `<pre>` inside a `<blockquote>`** never reaches this function. The
+ *    blockquote is terminal (`collectElements` below does not descend into one),
+ *    so quoted code takes the prose branch and loses its indentation and its
+ *    line breaks together. Pinned in tests/block-text-fidelity.test.ts so that
+ *    whoever fixes it changes an expectation rather than nothing.
+ *  - **A `<pre>` containing a `<table>`** gets a break before every `td`, `th`
+ *    and `tr` — so cells land on their own lines, the row structure is gone, and
+ *    text following the table is glued to the last cell, because nothing inserts
+ *    a break *after* an element.
+ *
+ * Fixing either properly means giving `extractText` a real recursive
+ * layout-aware walk instead of a flat separator insertion. Not today.
+ *
+ * The narrow fix is the one that can be shown inert: over the same corpus,
+ * **0 non-code blocks changed** and nothing's tag, kind or `gistable` moved —
+ * diffed before and after rather than argued.
+ *
+ * **Ids do not churn, and that had to be checked rather than assumed**, because
+ * `text` is what a block is matched on across a re-extraction. `exactKey`
+ * normalises whitespace itself before hashing (`/\s+/gu` → `" "`), so the key is
+ * computed from the collapsed form either way and every id carries. Pinned in
+ * tests/block-text-fidelity.test.ts. **`hashBlocks` is a different matter** and
+ * does change for every code-bearing article — see the plan doc, § A.
+ */
+function codeText(el: Element): string {
+  const clone = el.cloneNode(true) as Element;
+  /* A line break inside a `<pre>` can be spelled three ways: a real newline in
+     the text (which needs nothing), a `<br>`, or one element per line, which is
+     what every syntax highlighter emits. The last two carry no newline at all,
+     so `textContent` alone would glue `alpha` to `beta`. */
+  for (const n of Array.from(clone.querySelectorAll(BOUNDARY_TAGS))) {
+    n.insertAdjacentText("beforebegin", INSERTED_BREAK);
+  }
+  return (
+    (clone.textContent ?? "")
+      .replace(/\r\n?/gu, "\n")
+      /* **An inserted break where the source already had one is the same
+         break**, and two of them at the same position are still one.
+
+         Markup indented as `<div>a</div>\n<div>b</div>` carries a real newline
+         between the divs, and a highlighter that nests a per-line `<div>` inside
+         a wrapper `<div>` opens two elements at one spot. Inserting
+         unconditionally would put a blank line into the reader's prompt that the
+         page does not show and the author did not write — which, now that blank
+         lines are kept, is no longer harmlessly filtered out downstream.
+
+         So a run counts as **as many breaks as it has real newlines, and at
+         least one**. The cost is a `<br>` written next to a literal newline,
+         which reads as one break rather than two: rare, and the safer of the two
+         directions to be wrong in. */
+      .replace(BREAK_RUN, (run) => "\n".repeat(Math.max(1, (run.match(/\n/gu) ?? []).length)))
+      /* **Blank lines at the ends are markup; blank lines in the middle are
+         content.** `</code>\n</pre>` is how a page is indented, not something
+         the author wrote. Trimmed line-wise rather than with `.trim()`, which
+         would take the first line's indentation off — the thing this function
+         exists to keep. */
+      .replace(/^(?:[ \t]*\n)+/u, "")
+      .replace(/(?:\n[ \t]*)+$/u, "")
+  );
+}
+
 /**
  * Text with block boundaries preserved as spaces. Bare `textContent` runs
  * adjacent blocks together — a blockquote of two paragraphs comes out as
  * "…sentence one.Sentence two…" — which corrupts word counts and any gist
  * written from it.
+ *
+ * `<pre>` takes the other branch; `codeText` above says why.
  */
 function extractText(el: Element): string {
+  if (el.tagName === "PRE") return codeText(el);
   const clone = el.cloneNode(true) as Element;
-  for (const n of Array.from(
-    clone.querySelectorAll("p,div,br,li,h1,h2,h3,h4,h5,h6,blockquote,figcaption,td,th,tr"),
-  )) {
+  for (const n of Array.from(clone.querySelectorAll(BOUNDARY_TAGS))) {
     n.insertAdjacentText("beforebegin", " ");
   }
   return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
 }
+
+/**
+ * **Characters that take up no room and say nothing** — and a `<p>` holding
+ * only these is an empty paragraph however many of them there are.
+ *
+ * `describeBlock` asked `text.length === 0`, which is true of `<p>   </p>` —
+ * `extractText` collapses and trims — and **false of `<p>&#8203;</p>`, because
+ * a zero-width space is not `\s`. One block of one invisible character then went
+ * to the ToC, the summaries and the granularity-zoom tree as content. One French
+ * Wikipedia page in the trawl carries 181 empty paragraphs.
+ *
+ * Deliberately only the invisible family, not "has no letter or number": a
+ * block whose text is `€`, `→` or `1–0` is a block a reader can see, and
+ * 260830at's ≤6-character rule is exactly the shape this repo has already been
+ * wrong with twice. Soft hyphen is included because it renders as nothing unless
+ * the line happens to break there; the bidi marks are included because a run of
+ * them alone is a formatting artefact, never a passage.
+ *
+ * `gistable` is not in `hashBlocks` (src/source-hash.ts), so changing this
+ * invalidates no cached artefact — but for the same reason it will not
+ * *re*-classify an article until something else re-runs stage 3.
+ */
+const INVISIBLE = /[\u00AD\u200B-\u200F\u2060-\u2064\uFEFF]/gu;
+
+const isBlank = (text: string): boolean => text.replace(INVISIBLE, "").trim().length === 0;
 
 function classify(el: Element): { kind: BlockKind; level?: number } {
   const tag = el.tagName;
@@ -206,7 +362,7 @@ function describeBlock(
     kind = "media";
     gistable = false;
     note = "image-only paragraph";
-  } else if (text.length === 0) {
+  } else if (isBlank(text)) {
     gistable = false;
     note = "empty";
   } else if (CAPTION_MARKER.test(text)) {
@@ -390,6 +546,52 @@ function collectElements(root: Element): Element[] {
   };
   walk(root);
   return out;
+}
+
+/**
+ * **How many ids survived** between two runs of stage 3 over the same article.
+ *
+ * The one number that says what a change to extraction, to `extractText` or to
+ * a repair pass actually costs, because a re-minted id is not a cosmetic
+ * difference: every comment, highlight, saved reading position, ToC row and
+ * search hit addresses text by block id (docs/project/block-ids.md), and a
+ * block that comes back with a fresh one has quietly taken all of them with it.
+ * Nothing raises. So this is instrumentation, deliberately separate from
+ * `SplitResult.stats` — those are one run's own counters and cannot compare two.
+ *
+ * `IdsNotCarried` further down is the *guard* on the same quantity, and it asks
+ * a different question: it refuses a run that kept none. This one only counts,
+ * so an eval can report a number without a threshold in it — which is what
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md needs
+ * before it can argue about whether a repair is worth its churn.
+ *
+ * `Pick<Block, "id">`, not `Block`, so a bare `{ id }` row out of Postgres and a
+ * full block list both satisfy it and neither caller has to widen a query.
+ *
+ * - `carried` — in both runs.
+ * - `reminted` — in the second run only: a block whose text or tag changed
+ *   enough that `exactKey` and `foldedKey` both refused to match it.
+ * - `lost` — in the first run only: the passage is gone from the article, or it
+ *   merged into another block.
+ *
+ * `reminted + lost` is the churn; `carried` alone means nothing without
+ * `before`, which is why all five fields are returned rather than a ratio.
+ */
+export function idChurn(
+  before: readonly Pick<Block, "id">[],
+  after: readonly Pick<Block, "id">[],
+): { before: number; after: number; carried: number; reminted: number; lost: number } {
+  const was = new Set(before.map((b) => b.id));
+  const now = new Set(after.map((b) => b.id));
+  let carried = 0;
+  for (const id of now) if (was.has(id)) carried += 1;
+  return {
+    before: was.size,
+    after: now.size,
+    carried,
+    reminted: now.size - carried,
+    lost: was.size - carried,
+  };
 }
 
 export interface SplitResult {
@@ -583,6 +785,129 @@ function withoutNoteControls(text: string, html: string): NoteKeyParts {
 const keyOf = (tag: string, parts: NoteKeyParts, written: string): string =>
   `x:${tag}:${parts.stamped ? 1 : 0}:${parts.ids.length}:${parts.ids.join(",")}:${written}`;
 
+/**
+ * The prefix that says "this key is a position, not a description" — named
+ * rather than spelled twice, because `carryOverIds` treats such a bucket
+ * differently and a typo there would silently turn the rule off.
+ */
+const EMPTY_KEY = "e:";
+
+/**
+ * **Nothing inside it at all** — no text, no `src`, and no child element either.
+ *
+ * The third clause is the one with a bug behind it. `<hr>`, `<p></p>` and
+ * `<figure>\n \n</figure>` are interchangeable with any other block of their tag:
+ * there is nothing in them to tell two apart, so matching them by position is
+ * matching them on the only thing they have. **`<figure><svg>…</svg></figure>`
+ * is not**, and it reaches this function looking identical, because a bare
+ * `<svg>` has no text and no `src` — so keying it by tag alone put the circle's
+ * id on the rectangle when a page reordered two diagrams, with `minted: 0` and
+ * an unchanged fingerprint to say everything was fine. GPT Sol found it and
+ * reproduced it, 2026-09-05, and block-ids.md § *A bare `<svg>` gets no id* is
+ * explicit that a figure-wrapped diagram is a thing Hierarchy points at.
+ *
+ * So a text-less block **with markup in it** goes on minting, exactly as it did
+ * before any of this: a lost anchor is safer than a moved one, and keying it
+ * properly means a structural digest of the html with our own ids normalised out
+ * of it — a bigger change, weighed and deferred in
+ * docs/postmortems/260905a-empty-blocks-remint-their-ids-on-every-extraction.md.
+ *
+ * **The attributes and the inner text are part of the answer, not stripped from
+ * it** — `class` and `data-*` survive the sanitiser, so `<hr
+ * class="section-break">` is not a plain `<hr>`, and `<p>&#160;</p>` draws a
+ * blank line where `<p></p>` draws nothing. The encoding, and why `id` is the
+ * one attribute left out, are in the body.
+ *
+ * Parsed rather than pattern-matched: an attribute value can carry a `<`
+ * in it and this is the file that has been wrong about "counts as text" twice.
+ * Only reached for a block that has already been found to have no text and no
+ * `src`, so it costs nothing on ordinary prose.
+ */
+function emptyKey(tag: string, html: string): string | null {
+  const root = jsdom().JSDOM.fragment(html).firstElementChild;
+  if (root === null || root.children.length > 0) return null;
+  /* **`id` is left out, and that is a decision with a measured price on both
+     sides.** It is the one attribute the two sides are guaranteed to disagree
+     about: by the time a block is stored, `splitIntoBlocks` has overwritten the
+     author's `id` with ours, so a stored `<hr>` no longer knows it was
+     `#section-break-2` while the candidate still does. Leaving it out is the
+     only way the two can agree at all.
+
+     What that concedes is narrow, and is stated rather than left to be found:
+     **two empty blocks of the same tag differing only in an id the author wrote
+     will trade ids if a page reorders them.** GPT Sol argued the other branch —
+     refuse such a block, let it mint (2026-09-05) — and it was measured rather
+     than argued: refusing leaves **33 blocks re-minting on 3 of the 35 corpus
+     fixtures** (rfc9110's named empty `<li>`s, distill's figures), and those
+     three go on flipping their fingerprint and go on never reporting the
+     `blocks` step done. That is this whole bug, left in place for a tenth of the
+     corpus, to buy safety in a case that needs an author to reorder two *empty*
+     named blocks of one tag. The author's own anchors are unaffected either way:
+     `#section-break-2` is re-resolved from the current document on every run
+     (`stampAuthorAnchors`, `retargetAnchors`), never from a stored id. */
+  /* `JSON.stringify` of sorted pairs and the inner text together, not
+     `name=value` joined by a space, for the reason `keyOf` gives above: a
+     delimiter a page can write into an attribute value is not a delimiter.
+     `aria-label="x title=y"` and `aria-label="x" title="y"` spell the same
+     joined string and are two different rules. JSON escapes, so the encoding is
+     injective.
+
+     **`innerHTML` is in it, and is safe to put in it precisely because the
+     element has no children.** `<p></p>` and `<p>&#160;</p>` are two different
+     paragraphs — the second draws a blank line — and `\s` folds the second to
+     nothing, so `written` cannot tell them apart. What is left inside a
+     childless element is text, which means none of the things that make the two
+     sides of a match disagree about markup: no id of ours, no href
+     `retargetAnchors` repointed. That is the whole reason the general
+     structural digest is deferred and this narrow one is not. */
+  const attrs = Array.from(root.attributes)
+    .filter((a) => a.name !== "id")
+    .map((a) => [a.name, a.value] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `${EMPTY_KEY}${tag}:${JSON.stringify([attrs, root.innerHTML])}`;
+}
+
+/**
+ * **A key, not `null`, for a block with nothing in it** — and until 2026-09-05
+ * this returned `null`.
+ *
+ * A block with no written text and no `src` anywhere in its html — an `<hr>`, an
+ * empty `<p>`, an empty `<li>`, a `<figure>` the sanitiser emptied — returned
+ * `null` here, and `null` in `foldedKey` and `legacyKey` too. `bucketBy` drops a
+ * `null` key, so such a block was in no bucket on **either** side of the match
+ * and **re-minted on every run over byte-identical input**: 218 blocks across 17
+ * of the 35 corpus fixtures. Pre-existing since `84ce16bf`, and half of what it
+ * cost was invisible on the filesystem store, where `extracted === stamped` and
+ * the ids are simply reused off the document.
+ * docs/postmortems/260905a-empty-blocks-remint-their-ids-on-every-extraction.md.
+ *
+ * `e:${tag}:${attributes and inner text}` is deliberately the whole key, for
+ * exactly the blocks `emptyKey` admits. Position among the identical empty
+ * blocks of its own tag is the only signal such a block has, and pass one
+ * already hands a shared bucket out in document order, consuming each id once —
+ * the same rule that keeps every
+ * repeated `<li>Yes</li>`'s id today, and blessed for the same reason:
+ * **two blocks that really are alike may trade ids, because they are alike.**
+ * Two blocks sharing this key are not merely alike: they are the same element
+ * with the same attributes and nothing inside either of them.
+ *
+ * **Position is only trusted where nothing was inserted or removed.**
+ * `carryOverIds` refuses an `e:` bucket outright when the two sides hold
+ * different numbers of it, so adding one rule to an article cannot slide every
+ * id after it onto the rule below. The reasoning, and the measurement that says
+ * the refusal is free, are at that guard.
+ *
+ * **And "nothing can be anchored to these anyway" is not the argument**, though
+ * it was until Sol checked: a chat is anchored by `{ blockId }` alone when it is
+ * started from a block's chat button, and `BlockGutter` gives every block one.
+ * A comment cannot land here (it needs a quote) and the reading position is a
+ * section, not a block — but the reason this stayed machine-side is that nobody
+ * had started a chat about a horizontal rule, not that they could not.
+ *
+ * **Not an ordinal in the key**, which is the obvious other answer: that is the
+ * sequential-id failure block-ids.md § *Why random and not sequential* exists to
+ * refuse, and it buys nothing this does not.
+ */
 function exactKey(tag: string, text: string, html: string): string | null {
   const parts = withoutNoteControls(text, html);
   const written = parts.text.replace(/\s+/gu, " ").trim();
@@ -591,7 +916,8 @@ function exactKey(tag: string, text: string, html: string): string | null {
   // otherwise every figure is re-minted on each re-extraction and any ToC row
   // aimed at a diagram goes stale.
   const src = /\bsrc="([^"]+)"/.exec(html)?.[1];
-  return src ? `s:${tag}:${src}` : null;
+  if (src) return `s:${tag}:${src}`;
+  return emptyKey(tag, html);
 }
 
 /**
@@ -705,10 +1031,61 @@ function carryOverIds(
   // Pass one. Each previous id is consumed once, so a page with several
   // identical short paragraphs cannot hand the same id to two blocks.
   const byExact = bucketBy(previous, (b) => exactKey(b.tag, b.text, b.html));
+  /* Still a `null` branch, and a narrower one than it was: a text-less block
+     gets a key when there is nothing in it to tell it from its neighbours, and
+     goes on minting when there is. `exactKey` says why. */
+  const keys = candidates.map((c) => exactKey(c.tag, c.text, c.html));
+
+  /**
+   * **An empty block is matched on its position, so the two sides must agree
+   * about how many positions there are.**
+   *
+   * A block keyed `e:` has nothing in it: the *only* thing distinguishing the
+   * second `<hr>` from the third is which paragraphs it sits between. Consume
+   * such a bucket greedily and adding one rule to an article slides every id
+   * after it onto the wrong rule — and a chat can be anchored to a block by its
+   * id alone, so that is a reader's question re-attached to a different place in
+   * the argument, which is exactly what block-ids.md refuses to do.
+   *
+   * **And refusing costs no fingerprint**, which is what made this decision
+   * easy: `hashBlocks` runs over every block, so an article that gained or lost
+   * one has a different fingerprint whatever these ids do. The only thing given
+   * up is the anchors on the *other* rules, and block-ids.md is explicit that a
+   * lost anchor is the safer failure. I argued the other way first — "churn on a
+   * real edit" — and GPT Sol was right, 2026-09-05:
+   * docs/postmortems/260905a-empty-blocks-remint-their-ids-on-every-extraction.md.
+   *
+   * **It catches a net change in the count, and no more than that**, which is
+   * worth saying plainly because the first version of this comment claimed it
+   * meant "nothing was inserted or removed". Delete one rule and add another and
+   * the count is unchanged, so the ids slide by one after all. That residual is
+   * the same irreducible ambiguity the contract already accepts for two
+   * paragraphs that read alike, and it is pinned in
+   * tests/empty-blocks-keep-their-ids.test.ts rather than argued away.
+   *
+   * **Count the ids still going spare, not the whole bucket.** This function is
+   * handed only the *pending* candidates — anything already carrying one of our
+   * ids in the document was settled before we were called — while the bucket
+   * holds every previous block. A part-stamped document (one rule with its id, one
+   * without) therefore looked like an article that had lost a rule, and the
+   * survivor re-minted for nothing. `taken` is seeded from every id in the
+   * document, so "untaken" is exactly "not already spoken for". Sol's finding.
+   */
+  const wanted = new Map<string, number>();
+  for (const key of keys) {
+    if (key?.startsWith(EMPTY_KEY)) wanted.set(key, (wanted.get(key) ?? 0) + 1);
+  }
+  const refused = new Set<string>();
+  for (const [key, bucket] of byExact) {
+    if (!key.startsWith(EMPTY_KEY)) continue;
+    const spare = bucket.filter((b) => !taken.has(b.id)).length;
+    if (spare !== (wanted.get(key) ?? 0)) refused.add(key);
+  }
+
   const missed: number[] = [];
-  candidates.forEach((c, i) => {
-    const key = exactKey(c.tag, c.text, c.html);
-    const id = key === null ? undefined : takeFrom(byExact.get(key));
+  candidates.forEach((_c, i) => {
+    const key = keys[i]!;
+    const id = key === null || refused.has(key) ? undefined : takeFrom(byExact.get(key));
     if (id === undefined) missed.push(i);
     else out[i] = id;
   });

@@ -237,6 +237,17 @@ pass buys, what a four-line regex buys for free, and the two fixtures whose whol
 one 67,890-character block are in
 **[../plans/260830at-readability-tidy-pass.md](../plans/260830at-readability-tidy-pass.md)**.
 
+**And a third instrument answers by identity rather than by matching text.**
+[`evals/extraction/provenance.mts`](../../evals/extraction/provenance.mts) stamps every source
+element before Readability and takes the DOM back through Readability's `serializer` option
+(`readArticleWithProvenance` in [`src/extract.ts`](../../src/extract.ts)), so an output node says
+which source node it came from — which is the only way to see a *duplicated* passage, invisible to
+any substring test. Over 35 fixtures and 83,091 output elements: 98.7% carry a stamp directly, and
+the stamping is inert on every one of them — the extracted HTML is byte-identical once the stamps are
+removed, checked rather than assumed because Readability weights `class` and `id`. Read the
+`distinct` and `fanout` columns before trusting the fallback, and read `mapped` as "located within"
+rather than "came from": on Paul Graham's page 217 output nodes resolve to one source element.
+
 ## Where this sits
 
 This is **stage 2** of the pipeline — see [architecture.md § Pipeline](architecture.md#pipeline).

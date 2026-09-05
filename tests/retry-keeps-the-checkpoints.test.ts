@@ -530,7 +530,14 @@ when("Retry, and the checkpoints the failed attempt paid for", () => {
        holds the address — the shelf has no revision and the failed row is not
        active — so this mints its own name and reserves it. */
     const holder = await runAsOwner(OWNER, () =>
-      enqueue({ slug: `${STEM}-handback-live`, url, steps: ["fetch", "extract", "blocks"] }),
+      /* `hierarchy` alongside `blocks` because `enqueue` refuses the pair apart
+         (`unrunnableStepPlan`); the steps are incidental here — this job is
+         never run — and only have to differ from attempt 1's. */
+      enqueue({
+        slug: `${STEM}-handback-live`,
+        url,
+        steps: ["fetch", "extract", "blocks", "hierarchy"],
+      }),
     );
     expect(holder.slug, "the paste should have minted a name of its own").not.toBe(first.slug);
 

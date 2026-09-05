@@ -378,8 +378,10 @@ describe('the "?"', () => {
   });
 
   it("comes last in the tab order, after the address, the mark and the chat", () => {
-    // Source order is tab order; the pad places by grid-area, so the two can
-    // disagree silently. Reading order down the article's own logic.
+    // Source order is tab order; the stylesheet places by grid-area, so the two
+    // can disagree silently — and since 2026-09-05 they genuinely do, because
+    // the bookmark is drawn above and left of the three it follows in the
+    // markup. Reading order down the article's own logic.
     paint([comment("c1", 5)]);
     const classes = [...host.querySelectorAll(".blk-gutter > *")].map(
       (el) => el.className.split(" ")[0],
