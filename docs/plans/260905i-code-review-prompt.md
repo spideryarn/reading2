@@ -12,6 +12,10 @@ Live pre-commit; base `6eecb377f24d92446086a006d5b3103daae40aef`.
 *(Not durable — another agent editing one of these paths changes what "the candidate" means. I will
 write the resulting commit SHA into this file once it lands.)*
 
+**Closed.** What this review saw landed as **`7116e5d7`**, "Admin and Design load when somebody asks
+for the address". The fixes for its own findings — F4's two false greens, F9, F10 and the rest of
+F8 — are in **`afae0fa9`**, "The guard now earns the sentence written about it". Both are on `dev`.
+
 Modified:
 
     src/web/App.tsx
