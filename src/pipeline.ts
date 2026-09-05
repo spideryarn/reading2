@@ -89,6 +89,7 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
+import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { MAX_PAGES } from "./uploads.js";
 import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
@@ -1753,6 +1754,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
 
       const result = await runPdfExtract({
+        frontMatter: openRouterFrontMatterReader(),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload

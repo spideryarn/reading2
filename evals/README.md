@@ -21,6 +21,35 @@ next change gets compared against.
 Read [`pdf/README.md`](pdf/README.md) for what each fixture is for and the three ways choosing them
 nearly went quietly wrong.
 
+## `pdf/titles.mts` — whose title does a PDF get, and what does the fix eat?
+
+```
+npx tsx evals/pdf/titles.mts transcribe --samples=3     # buys the records, once
+npx tsx evals/pdf/titles.mts score                      # four arms over those records
+```
+
+Written after a 142-page Elsevier paper reached a reader's shelf called *"Progress in Biophysics and
+Molecular Biology"* — the journal, not the paper
+([260905b](../docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md)). Ten fixtures under
+[`pdf/titles/`](pdf/titles/README.md), each the **first three pages** of a real document (one is
+synthetic), each with a gold title, the strings a naive extractor is likely to steal instead, and
+short verbatim snippets that must survive.
+
+Three things about it are worth copying elsewhere:
+
+- **The transcription is bought once and the arms run over it.** Paying per arm would compare arms
+  that read different records, and the fault being measured is model variance on a genuinely
+  ambiguous line.
+- **It scores in two directions.** *Right title, fewer publisher lines shown* is maximised by an arm
+  that hides the whole first page — and `src/pdf-score.ts` would not notice, because recall counts
+  every record whether it renders or not. So `mustKeep` sits beside `furniture`, and there is an
+  **`overdelete` arm that the report must fail**. It says so out loud rather than printing a bad
+  number and hoping somebody looks.
+- **Three pages is enough to reach `FURNITURE_PAGES` and not enough to be the document.** Of the
+  eight real multi-page fixtures only two reproduce their own document's furniture from the cut, so
+  every fixture keeps `pass0-full.json` — the whole document's `metaTitle` and furniture, measured
+  before it was cut — and the arms reason with that while the model sees three pages.
+
 ## `extraction/` — what Mozilla Readability does to fifteen hard pages
 
 ```
