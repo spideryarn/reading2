@@ -46,13 +46,22 @@ export type HostAnswer = { ok: true; host: string; source: HostSource } | { ok: 
 export type BoxHostRead = { kind: "absent" } | { kind: "found"; host: string } | { kind: "bad"; why: string };
 
 /**
- * A bare address: a hostname or an IP, and nothing else on the line.
+ * A bare address: a hostname or an IPv4, and nothing else on the line.
  *
  * Deliberately narrow. This string is interpolated into `user@host` and handed
  * to ssh, so a value that begins `-` or carries a space, a quote or a semicolon
  * is refused rather than passed on and hoped about.
+ *
+ * NO COLON, which rules out IPv6 and `host:2222` alike. `scp` and `ssh` do not
+ * agree about a colon: measured 2026-09-05 against a fake ssh, `scp` handed
+ * `greg@2001:db8::1:/tmp/x` on to ssh as **host `2001`**, while
+ * `ssh -G greg@2001:db8::1` reads the whole address. One accepted line in this
+ * file would then send `ssh` and `scp` to different machines — with the tool
+ * reporting the address that only one of them used. IPv6 here needs
+ * `isIP(value) === 6` and a bracketed `[addr]:path` form for scp, which is
+ * worth writing the day something needs it and not before.
  */
-const HOST_TOKEN = /^[A-Za-z0-9][A-Za-z0-9.:_-]*$/;
+const HOST_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /** Longer than any real hostname; a guard against a file that is not one. */
 const MAX_HOST_LENGTH = 255;

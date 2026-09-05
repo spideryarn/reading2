@@ -157,6 +157,23 @@ implementation. All seven accepted; none overruled.
 Kept against no objection: the env → file → Terraform ordering, and the judgment that reading a
 root-owned `/etc` file widens no authority a caller who can set the variable did not already have.
 
+## Review ledger — GPT Sol, round 2 (Stage 1 code)
+
+[260905d-review-sol-stage1.md](260905d-review-sol-stage1.md), prompt in
+[260905d-review-prompt-stage1.md](260905d-review-prompt-stage1.md). Verdict: **do-not-land**. All
+three accepted and fixed; none overruled.
+
+| | | |
+|---|---|---|
+| **F8** | P1 | `HOST_TOKEN` allowed `:`, and `ssh` and `scp` do not read a colon alike — established against a fake ssh: `scp` took `greg@2001:db8::1:/tmp/x` as host **`2001`** while `ssh -G` took the whole address, so one accepted line could send the upload to a different machine than the session. **The colon is out**, and four colon forms are tested as refused. |
+| **F9** | P2 | The "never a fall-through to Terraform" test never counted the Terraform calls, so an implementation that ran it eagerly and then returned the file's error would have passed → it counts now. |
+| **F10** | P2 | `cachedHost`/`cachedSource` as two `let`s could be half-assigned by a later branch and print a plausible-but-false provenance → one `cachedAddress` object, `host()` and `hostSource()` are projections of it, and the unreachable `?? "terraform"` is gone. |
+
+Sol's own note that the IPv6 concession was incomplete anyway (`::1` was rejected by the
+leading-alphanumeric rule) is why F8's fix is removal rather than repair: IPv6 here needs
+`isIP(value) === 6` **and** a bracketed `[addr]:path` for scp, and that is worth writing the day
+something needs it.
+
 ## What done looks like
 
 - On the box, in a shell with no `GJD_REMOTE_HOST`: `ls`, `resolve`, `new-claude --no-attach -p -`

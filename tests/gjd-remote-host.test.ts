@@ -103,13 +103,21 @@ describe("resolveHost — the order of the three sources", () => {
     // The whole point. If a malformed /etc/gjd-remote-host quietly became
     // "absent", the machine whose /etc is wrong would report a Terraform
     // problem — the exact wrong-diagnosis this change exists to end.
+    let terraformRun = 0;
     const answer = resolveHost({
       env: {},
       boxFile: bad("/etc/gjd-remote-host: holds 2 lines, wanted one address"),
-      terraform: terraformSays("1.2.3.4"),
+      terraform: () => {
+        terraformRun += 1;
+        return terraformSays("1.2.3.4")();
+      },
     });
     expect(answer.ok).toBe(false);
     expect(answer.ok === false && answer.why).toContain("/etc/gjd-remote-host");
+    // Counted, not inferred from the return value: an implementation that ran
+    // Terraform first and returned the file's error afterwards would satisfy
+    // every other assertion here.
+    expect(terraformRun).toBe(0);
   });
 
   it("an empty string in the variable is not an answer", () => {
@@ -167,6 +175,18 @@ describe("readBoxHostFile — what counts as absent, and what counts as broken",
     // The file says which address to use on THIS machine; nothing about it is
     // specific to a loopback IP, and a box behind a name is not a bug.
     expect(readBoxHostFile(fileWith("name", "spideryarn-box\n"))).toEqual({ kind: "found", host: "spideryarn-box" });
+  });
+
+  it("refuses anything with a colon in it — ssh and scp do not read those alike", () => {
+    // Measured 2026-09-05 against a fake ssh: scp handed `greg@2001:db8::1:/tmp/x`
+    // on as host `2001`, while `ssh -G greg@2001:db8::1` used the whole address.
+    // A file that both tools accept and disagree about is a file that sends the
+    // upload to a different machine than the session — with the tool printing
+    // the address only one of them used. So: no IPv6, and no host:port either.
+    for (const value of ["2001:db8::1", "::1", "host:2222", "a:b"]) {
+      const r = readBoxHostFile(fileWith(`colon-${value.replaceAll(":", "-")}`, `${value}\n`));
+      expect(r.kind, `${value} should be refused`).toBe("bad");
+    }
   });
 
   it("refuses a directory rather than reporting it absent", () => {

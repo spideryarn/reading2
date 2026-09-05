@@ -266,8 +266,7 @@ function shq(s: string): string {
  * Never a constant: on the laptop it changes on every rebuild, and a hardcoded
  * IP would be wrong exactly when you most need it.
  */
-let cachedHost: string | undefined;
-let cachedSource: HostSource | undefined;
+let cachedAddress: { host: string; source: HostSource } | undefined;
 
 /** Terraform state's answer, or why it has none. Not run unless it is asked. */
 function terraformHost(): { ok: true; host: string } | { ok: false; why: string } {
@@ -291,27 +290,31 @@ function terraformHost(): { ok: true; host: string } | { ok: false; why: string 
   }
 }
 
-function host(): string {
-  // Memoised for the process. HOST() is called on every ssh, scp and mosh, and
-  // `new-claude` makes six of those — six `tofu output` subprocesses to answer a
-  // question whose answer cannot change while we run. It also means an address
-  // that stays consistent across one command even if somebody rebuilds the box
-  // underneath us, which is the behaviour you want when half the work is done.
-  if (cachedHost) return cachedHost;
+/**
+ * The address and its source, resolved once.
+ *
+ * Memoised for the process. HOST() is called on every ssh, scp and mosh, and
+ * `new-claude` makes six of those — six `tofu output` subprocesses to answer a
+ * question whose answer cannot change while we run. It also means an address
+ * that stays consistent across one command even if somebody rebuilds the box
+ * underneath us, which is the behaviour you want when half the work is done.
+ *
+ * ONE object rather than two `let`s. Two could be half-assigned by a later
+ * branch — the host set, the source not — and the thing that then printed would
+ * be a plausible provenance for an address that did not come from there.
+ */
+function address(): { host: string; source: HostSource } {
+  if (cachedAddress) return cachedAddress;
   const answer = resolveHost({ env: process.env, boxFile: () => readBoxHostFile(), terraform: terraformHost });
   if (!answer.ok) die(answer.why);
-  cachedHost = answer.host;
-  cachedSource = answer.source;
-  return cachedHost;
+  cachedAddress = { host: answer.host, source: answer.source };
+  return cachedAddress;
 }
 
-/** Where the address came from, for the two commands that say so. Resolves first. */
-function hostSource(): HostSource {
-  host();
-  // host() either set it or died, so the `??` is not a real fallback — it is
-  // what a module-level `let` costs under noUncheckedIndexedAccess.
-  return cachedSource ?? "terraform";
-}
+const host = (): string => address().host;
+
+/** Where the address came from, for the two commands that say so. */
+const hostSource = (): HostSource => address().source;
 
 const HOST = () => `${USER}@${host()}`;
 
