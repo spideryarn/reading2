@@ -1362,30 +1362,72 @@ export async function recordStepRun(
  * wrong should say three things. `PublishRefused` takes the list.
  */
 /**
- * **Is this draft's tree the one it was handed, untouched?**
+ * **Is the whole input to `checkTree` the one this draft was handed, untouched?**
  *
- * One boolean over the wire, computed by Postgres: `jsonb` equality is over the
- * normalised value, so key order and whitespace cannot make an untouched tree
- * look edited — which a deep-equal in TypeScript over two parsed trees would
- * have to be careful about, and a `JSON.stringify` comparison would get wrong.
- * Neither tree is loaded to answer it.
+ * `checkTree` is a deterministic function of the **pair** `(blocks, tree)`, so
+ * an exemption that compared only the tree would be a laundering path, and GPT
+ * Sol found it before it shipped: copy a valid revision, leave the tree alone,
+ * change one block's `kind` from `heading` to `text`, and you have caused a
+ * fresh `checkTree` failure that a tree-only comparison would wave through —
+ * `hashBlocks` fingerprints `id`, `text`, `role` and `treatment` and **not**
+ * `kind`, so the hierarchy hash check does not catch it either
+ * (`checkTree` reads `b.kind` at src/tree-invariants.ts:167 and :300).
  *
- * `is not distinct from` rather than `=` so that *both* null reads as unchanged:
- * a draft carrying no tree from a base that had none is not an edit. It is
- * refused a line earlier anyway, by `it has no tree`.
+ * So both halves are compared, and both are compared **in the database**: two
+ * booleans' worth of work, and neither the trees nor the block rows cross the
+ * wire.
+ *
+ * - **The tree**, with `is not distinct from` over `jsonb`. That is *normalised
+ *   semantic* equality, not byte equality — key order and whitespace cannot make
+ *   an untouched tree look edited, which a `JSON.stringify` comparison would get
+ *   wrong. Both null reads as unchanged; a draft with no tree is refused a line
+ *   earlier anyway.
+ * - **The blocks**, as a symmetric `EXCEPT ALL` over `CARRIED_BLOCK_COLUMNS` —
+ *   the same exhaustive inventory `beginDraftIn` copies with, so a new block
+ *   column joins this comparison by existing rather than by being remembered.
+ *   `EXCEPT ALL` rather than `EXCEPT` keeps multiplicity, so the set operator
+ *   cannot dedupe a difference away.
  *
  * Returns **false** when there is no base — the article's first publication —
  * which is the fail-closed answer: nothing was carried, so everything is new,
  * so everything is checked.
+ *
+ * **This is state-based, and deliberately says nothing about who wrote what.**
+ * A `hierarchy` run that rebuilds a byte-identical tree over identical blocks
+ * counts as unchanged, because by this definition it *is* unchanged. Proving
+ * "built here" rather than "differs from the base" would need a provenance
+ * marker maintained by the tree-writing seam, and the case is hypothetical: the
+ * producer splices the bad shape away (`collapseRestatedRungs`), so a rebuild
+ * cannot reproduce an invalid tree. GPT Sol raised it; recorded rather than
+ * built.
  */
-async function treeCarriedUnchanged(
+async function publicationInputUnchanged(
   tx: Tx,
   revisionId: string,
   basedOnRevisionId: string | null,
 ): Promise<boolean> {
   if (!basedOnRevisionId) return false;
+
+  const blockColumns = sql.join(
+    CARRIED_BLOCK_COLUMNS.map((name) => sql.identifier(name)),
+    sql`, `,
+  );
   const rows = await tx.execute<{ same: boolean }>(sql`
-    select (d.${sql.identifier("tree")} is not distinct from b.${sql.identifier("tree")}) as same
+    select
+      (d.${sql.identifier("tree")} is not distinct from b.${sql.identifier("tree")})
+      and not exists (
+        (select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${revisionId}::uuid
+         except all
+         select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${basedOnRevisionId}::uuid)
+        union all
+        (select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${basedOnRevisionId}::uuid
+         except all
+         select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${revisionId}::uuid)
+      ) as same
     from ${articleRevisions} d, ${articleRevisions} b
     where d.${sql.identifier("id")} = ${revisionId}::uuid
       and b.${sql.identifier("id")} = ${basedOnRevisionId}::uuid
@@ -1399,17 +1441,18 @@ async function reasonsNotToPublish(
   blocks: Block[],
   tree: Tree | null,
   /**
-   * True when this draft's tree is byte-for-byte the one the article is already
-   * serving — see the branch that reads it below.
+   * True when this draft's blocks *and* tree are exactly the ones the article is
+   * already serving — see the branch that reads it below.
    */
-  treeIsCarriedForward: boolean,
-): Promise<string[]> {
+  inputIsCarriedForward: boolean,
+): Promise<PublicationVerdict> {
   const reasons: string[] = [];
+  const carriedTreeProblems: string[] = [];
 
   if (!blocks.length) reasons.push("it has no blocks");
   if (!tree) reasons.push("it has no tree");
   // Nothing below can say anything useful without both.
-  if (!blocks.length || !tree) return reasons;
+  if (!blocks.length || !tree) return { reasons, carriedTreeProblems };
 
   /**
    * **A publication is judged on the tree it changes, not the tree it carries.**
@@ -1442,14 +1485,14 @@ async function reasonsNotToPublish(
    * tightens over stored trees will report rather than wedge.
    */
   const { problems } = checkTree(blocks, tree);
-  if (problems.length && treeIsCarriedForward) {
-    /* Not silence. The tree is bad and somebody has to be able to find out,
-       so it goes to the log the way a refusal would — ids and the problems
-       themselves, which is what `sanitise` withholds from Sentry. */
-    logger.warn(
-      { revisionId, problems: problems.slice(0, 10), problemCount: problems.length },
-      "publishing over a carried-forward tree that checkTree rejects — re-run hierarchy to repair it",
-    );
+  if (problems.length && inputIsCarriedForward) {
+    /* Not silence: they come back as `carriedTreeProblems` and are logged by
+       `logPublication`, **after** the caller's commit. Logging here would
+       announce a publication that a later rollback — a lost fence, a failed job
+       settlement — never made, in exactly the way the note above
+       `logPublication` was written about. GPT Sol, this file's second review. */
+    carriedTreeProblems.push(...problems.slice(0, 10));
+    if (problems.length > 10) carriedTreeProblems.push(`… and ${problems.length - 10} more tree problems`);
   } else {
     // Capped, because a tree whose root range is wrong reports once per block and
     // the message would otherwise be a megabyte of prose in a log line.
@@ -1496,7 +1539,7 @@ async function reasonsNotToPublish(
     );
   }
 
-  return reasons;
+  return { reasons, carriedTreeProblems };
 }
 
 /**
@@ -1539,6 +1582,19 @@ export interface PublishRevisionResult {
   readonly revisionId: string;
   readonly previousRevisionId: string | null;
   readonly scalars: ReturnType<typeof deriveLibraryScalars>;
+  /**
+   * `checkTree` problems this publication was **not** refused for, because it
+   * carried the blocks and tree forward unchanged — see the branch in
+   * `reasonsNotToPublish`. Empty on almost every publication. `logPublication`
+   * says them out loud after the commit; nothing else reads them.
+   */
+  readonly carriedTreeProblems: readonly string[];
+}
+
+/** What `reasonsNotToPublish` decided: what refuses, and what merely worries. */
+interface PublicationVerdict {
+  readonly reasons: string[];
+  readonly carriedTreeProblems: string[];
 }
 
 /**
@@ -1702,11 +1758,11 @@ export async function publishRevisionIn(
   const blocks = await storedBlocks(tx, revisionId);
   const tree = draft.tree as Tree | null;
   /* Safe to ask against `basedOnRevisionId`: the branch above has just proved,
-     under the article lock, that it is `article.currentRevisionId`. So "the tree
-     it was copied from" and "the tree readers are being served" are the same
-     row, and no second lock or read is needed to say so. */
-  const carried = await treeCarriedUnchanged(tx, revisionId, draft.basedOnRevisionId);
-  const reasons = await reasonsNotToPublish(tx, revisionId, blocks, tree, carried);
+     under the article lock, that it is `article.currentRevisionId`. So "what this
+     draft was copied from" and "what readers are being served" are the same row,
+     and no second lock or read is needed to say so. */
+  const carried = await publicationInputUnchanged(tx, revisionId, draft.basedOnRevisionId);
+  const { reasons, carriedTreeProblems } = await reasonsNotToPublish(tx, revisionId, blocks, tree, carried);
 
   if (reasons.length) throw new PublishRefused(slug, reasons);
 
@@ -1727,7 +1783,7 @@ export async function publishRevisionIn(
     .set({ currentRevisionId: revisionId })
     .where(eq(articles.id, article.id));
 
-  return { revisionId, previousRevisionId: article.currentRevisionId, scalars };
+  return { revisionId, previousRevisionId: article.currentRevisionId, scalars, carriedTreeProblems };
 }
 
 /**
@@ -1751,6 +1807,20 @@ export function logPublication(
     },
     "revision published",
   );
+  /* After the commit, and only here. The article is now serving a tree that
+     `checkTree` rejects — carried forward, not caused by this publication, and
+     already in front of readers before it. Re-running `hierarchy` repairs it.
+     docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md. */
+  if (published.carriedTreeProblems.length) {
+    logger.warn(
+      {
+        slug: opts.slug,
+        revisionId: published.revisionId,
+        problems: published.carriedTreeProblems,
+      },
+      "published over a carried-forward tree that checkTree rejects — re-run hierarchy to repair it",
+    );
+  }
 }
 
 /* ----------------------------------------------------------- failRevision -- */

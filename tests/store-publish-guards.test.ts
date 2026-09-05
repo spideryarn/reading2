@@ -32,7 +32,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import {
@@ -334,6 +334,43 @@ describe("the publication guard", () => {
 
       const published = await publishRevision({ slug: SLUG, revisionId });
       expect(published.revisionId).toBe(revisionId);
+    } finally {
+      await putBack();
+    }
+  });
+
+  /**
+   * **The laundering path GPT Sol found before it shipped.**
+   *
+   * `checkTree` is a function of the *pair* `(blocks, tree)`, so an exemption
+   * that compared only the tree would let a draft change its blocks — causing a
+   * fresh tree problem — and be waved through because the tree JSON matched.
+   * `hashBlocks` would not catch it either: it fingerprints `id`, `text`, `role`
+   * and `treatment`, and `checkTree` reads `kind`.
+   *
+   * This asserts the mechanism rather than one synthesised failure: change a
+   * block and the exemption must not apply, so the carried tree's problem is
+   * reported exactly as it was before the fix.
+   *
+   * Watched red by comparing only the tree — which is what the first draft of
+   * the fix did.
+   */
+  it("withholds the exemption from a draft that changed its blocks", async () => {
+    const putBack = await poisonThePublishedTree();
+    try {
+      const { revisionId } = await beginRevision({ slug: SLUG });
+      /* One column, on one block, that `hashBlocks` does not fingerprint. The
+         tree is untouched and still equal to the base's. */
+      await getDb()
+        .update(revisionBlocks)
+        .set({ kind: "heading" })
+        .where(
+          and(eq(revisionBlocks.revisionId, revisionId), eq(revisionBlocks.blockId, BLOCKS[0]!.id)),
+        );
+
+      const refusal = await publishRevision({ slug: SLUG, revisionId }).catch((err) => err);
+      expect(refusal).toBeInstanceOf(PublishRefused);
+      expect((refusal as PublishRefused).message).toContain("covers its parent's whole range");
     } finally {
       await putBack();
     }

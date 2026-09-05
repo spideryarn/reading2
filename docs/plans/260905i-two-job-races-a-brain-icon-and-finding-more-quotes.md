@@ -221,3 +221,58 @@ because the refusal text reached neither the reader nor Sentry.
   without the prose. Eleven hours of this were invisibility, not breakage.
 - **A convention: tightening an invariant over stored data is a migration.** Sweep the rows in the
   same commit, or say in the commit why not.
+
+### The review, and the hole it found before this shipped
+
+[260905i-publish-gate-review-sol.md](260905i-publish-gate-review-sol.md). Sol's opening line is the
+finding, and it is a real one:
+
+> The serious flaw is that the proposal compares only the tree, while `checkTree` validates the
+> `(blocks, tree)` pair. As currently drafted, it can publish a newly invalid revision.
+
+**Verified rather than accepted.** `checkTree` reads `b.kind` (`src/tree-invariants.ts:167`, `:300`),
+and `hashBlocks` fingerprints `id`, `text`, `role` and `treatment` — **not** `kind`. So a draft could
+leave the tree byte-identical, change one block's `kind`, cause a fresh `checkTree` failure, and be
+waved through by both the exemption *and* the hierarchy hash check. That is a laundering path, and
+the first draft of this fix had it. (Sol's own example used `gistable`; `checkTree` does not read
+that one. The class was right, the field was not.)
+
+**Fixed:** `publicationInputUnchanged` now compares the blocks too, as a symmetric `EXCEPT ALL` over
+`CARRIED_BLOCK_COLUMNS` — the same exhaustive inventory `beginDraftIn` copies with, so a new block
+column joins the comparison by existing rather than by being remembered. Still one boolean over the
+wire. `EXCEPT ALL` rather than `EXCEPT` so the set operator cannot dedupe a difference away.
+
+**Pinned, and the pin was perturbed.** A new case — *"withholds the exemption from a draft that
+changed its blocks"* — asserts the mechanism rather than one synthesised failure. Deleting the block
+comparison turns exactly that one test red and leaves the other six green.
+
+**The second finding, also taken:** the `warn` was inside the transaction, so a later rollback — a
+lost fence, a failed settlement — would have left the log announcing a publication that never
+happened. That is the precise mistake the note above `logPublication` was written about. The problems
+now come back on `PublishRevisionResult.carriedTreeProblems` and are logged after the caller's commit.
+
+**Where the review was taken but narrowed:**
+
+- Sol asked for **all** `checkTree` problems to be grandfathered rather than the restated-rung rule
+  alone. That is what was built — the exemption is over `checkTree`'s output as a whole, conditional
+  on exact equality of the pair. Sol's list of what must **stay** unconditional matches what was
+  left alone: no blocks, no tree, a missing `hierarchy` run, a `running`/`error` `hierarchy` run, and
+  the `input_hash` check. The dangerous one it names is the third: *"a hierarchy attempt can fail
+  while leaving the copied tree byte-for-byte unchanged"*, and exempting that would publish the
+  residue of a failed tree-owning operation.
+- **"Builds versus alters"** — Sol is right that exact equality cannot distinguish a `hierarchy` run
+  that rebuilds an identical tree from a step that never touched it. Proving *built here* needs a
+  provenance marker on the tree-writing seam. **Not built**, and the wording changed instead: the
+  policy is now stated as state-based, and the case is hypothetical, because `collapseRestatedRungs`
+  means a rebuild cannot reproduce an invalid tree.
+
+**Where the review was not taken:** it asks for a preflight over inherited publication prerequisites
+before the paid call. That is the right shape and it is a design job, not a tweak — it has to know the
+step's planned write set, or an invalid inherited tree would block the very `hierarchy` step whose
+purpose is to repair it. Recorded above, not built. Sol agrees on the ordering: *"Neither follow-up is
+more important than restoring publication availability."*
+
+Its answer to *what would have caught this* is one sentence, and it is now the first case in the file:
+
+> Publish an unrelated draft copied from a currently served revision whose tree violates the newly
+> added invariant.
