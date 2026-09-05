@@ -23,11 +23,12 @@
  *
  * ## Where it goes, and where it does not
  *
- * Every page a reader *lands on and reads*, and there are seven:
- * `LandingPage`, `FeaturesPage`, `PricingPage`, `PrivacyPage` and `SignInPage`
- * signed out, and the signed-in pages of the same shape — the shelf,
- * `/profile`, and those same policy and marketing pages when a signed-in reader
- * opens them. `/pricing` is the seventh, since 2026-09-03.
+ * Every page a reader *lands on and reads*, and there are eight:
+ * `LandingPage`, `FeaturesPage`, `PricingPage`, `PrivacyPage`, `ContactPage`
+ * and `SignInPage` signed out, and the signed-in pages of the same shape — the
+ * shelf, `/profile`, and those same policy and marketing pages when a signed-in
+ * reader opens them. `/pricing` is the seventh, since 2026-09-03, and
+ * `/contact` the eighth, since 2026-09-05.
  * `tests/site-footer.test.tsx` pins the list, so this paragraph and the code
  * cannot drift apart quietly — and it was the test, not this paragraph, that
  * was right for a day (GPT Sol, stage 2 code review, finding 6).
@@ -55,10 +56,12 @@
  *
  * ## The link for the page you are already on is dropped
  *
- * Rather than drawn dead. `useRoute()` answers it by default, so five of the
- * seven callers pass nothing and cannot get it wrong — the failure the two
+ * Rather than drawn dead. `useRoute()` answers it by default, so all but two of
+ * the callers pass nothing and cannot get it wrong — the failure the two
  * hand-written footers had already found, one of them linking to Features from
- * Features.
+ * Features. (Written without a count on purpose: the two previous versions of
+ * this sentence both said a number, and both were wrong by the time somebody
+ * read them. `tests/site-footer.test.tsx` holds the inventory instead.)
  *
  * **`here` is the escape hatch, and the two pages that need it are the two
  * `App.tsx` uses as its fallbacks.** The default asks *what address is this*,
@@ -83,9 +86,9 @@
  *
  * So: **a page `App.tsx` can draw at somebody else's address declares itself;
  * every other page must not**, because a hand-written `here` is the copy-paste
- * failure above waiting to happen again. `FooterPage` is deliberately the three
- * link kinds and not `Route["kind"]`, so the only values that can be passed are
- * ones that mean something here.
+ * failure above waiting to happen again. `FooterPage` is deliberately the link
+ * kinds `LINKS` carries and not `Route["kind"]`, so the only values that can be
+ * passed are ones that mean something here.
  *
  * Styled with Tailwind utilities, the rule for chrome — docs/project/web-client.md
  * § Tailwind and shadcn. Note the `tw:` prefix on every class.
@@ -95,6 +98,7 @@ import type { ReactNode } from "react";
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import {
+  CONTACT_HREF,
   FEATURES_HREF,
   LIBRARY_HREF,
   PRICING_HREF,
@@ -104,10 +108,12 @@ import {
 } from "./router.js";
 
 /**
- * **The four pages this row can link to**, and therefore the only four answers
- * to "which page am I" that change anything. It said three until 2026-09-04, and
- * had done since `/pricing` was added to `LINKS` below without this sentence
- * following it.
+ * **The pages this row can link to**, and therefore the only answers to "which
+ * page am I" that change anything — one member per entry in `LINKS` below.
+ *
+ * Deliberately not counted here. It said "four" while `LINKS` held five, having
+ * been written when it held three, and a count beside the list it counts is a
+ * fact with two homes.
  *
  * A subset of `Route["kind"]` rather than the whole union, and the subtraction
  * is the point: `here="profile"` is meaningless — no link would drop — and
@@ -119,7 +125,10 @@ import {
  * that member, which `LINKS` below then refuses to satisfy. A hand-written
  * union would go on compiling and stop matching anything at run time.
  */
-type FooterPage = Extract<Route["kind"], "library" | "features" | "privacy" | "pricing">;
+type FooterPage = Extract<
+  Route["kind"],
+  "library" | "features" | "privacy" | "pricing" | "contact"
+>;
 
 /**
  * The row, in order, each tagged with the route it *is* so it can drop itself.
@@ -135,6 +144,15 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
      is the claim the header makes, now tested by something other than itself. */
   { href: PRICING_HREF, label: "Pricing", here: "pricing" },
   { href: PRIVACY_HREF, label: "Privacy", here: "privacy" },
+  /* Added 2026-09-05 with `/contact`, and — like `/pricing` before it — this
+     array is the whole edit, which is the claim this file's header makes.
+
+     **It does not replace the address below**, and that is a decision rather
+     than an oversight. The `mailto:` is the only thing in this row a reader who
+     is stuck can act on in one press; the page is where somebody who went
+     looking for "contact us" lands, and it says the Feedback button is better
+     than either. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
+  { href: CONTACT_HREF, label: "Contact", here: "contact" },
 ];
 
 const LINK_CLASS = "tw:text-ink-faint tw:hover:text-highlight";
@@ -143,11 +161,12 @@ const LINK_CLASS = "tw:text-ink-faint tw:hover:text-highlight";
  * **How much air the row sits in**, and it is two values because the pages come
  * in two shapes rather than because anybody wanted a knob.
  *
- * `page` is the app's own measure, on the four pages that are chrome around
- * something a reader came for. `marketing` is the taller, roomier one the
- * 2026-09-03 redesign chose for `/` and `/features`, kept exactly as that
- * redesign had it (`mt-24 pt-6 pb-16`) when its footer was absorbed into this
- * file — those two pages end in a lot of vertical space on purpose, and the
+ * `page` is the app's own measure and the default, so it is what every page gets
+ * that is chrome around something a reader came for. `marketing` is the taller,
+ * roomier one the 2026-09-03 redesign chose, and the three pages that pass it —
+ * `/`, `/features` and `/pricing` — are the whole of its use. Kept exactly as
+ * that redesign had it (`mt-24 pt-6 pb-16`) when its footer was absorbed into
+ * this file — those two pages end in a lot of vertical space on purpose, and the
  * app's tighter measure read as the page having been cut off.
  * docs/project/marketing-pages.md.
  */

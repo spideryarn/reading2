@@ -10,11 +10,34 @@
  * in wave 2 costs one call again or all of them.
  *
  * It talks to a model only through `ExpansionExecutor`, a seam the caller
- * supplies, so the whole protocol runs end to end with no network.
- * docs/plans/260904d-deepen-fat-sections.md § stage 4.
+ * supplies, so the whole protocol still runs end to end with no network — which
+ * is how every test in `tests/hierarchy-deepen.test.ts` runs.
+ * docs/plans/260904d-deepen-fat-sections.md § stages 4 and 5.
  *
- * **Nothing calls this yet.** `generateHierarchy` does not know the cascade
- * exists; wiring it in, and deciding the wave's concurrency, is stage 5.
+ * **`generateHierarchy` calls `deepenTree` since 2026-09-05, and the flag is
+ * off.** `DEEPEN_ENV` is what turns it on; stage 8 is the decision to move it,
+ * and until then this file is inert for every reader. What stage 5 added, past
+ * the wiring: the width (`EXPANSION_CONCURRENCY`, derived rather than borrowed),
+ * counted 429s that honour `Retry-After`, a wave that stops cleanly on the step's
+ * deadline with its checkpoints written, and the live executor.
+ *
+ * **And what a cross-family review of that wiring changed, on 2026-09-05**, each
+ * of which is a way a wave could look like it worked while quietly being wrong:
+ * publication is all or nothing (`deepenTree` § "All of the wave, or none of
+ * it"), an answer stopped by `max_tokens` is refused rather than parsed
+ * (`ExpansionTruncated`), the redraw count and the fan-out are recorded on the
+ * node that was expanded rather than on its children, and the per-candidate
+ * records now reach a file somebody can divide one number by another in
+ * (`DEEPEN_RECORDS_ENV`).
+ *
+ * **And two things a survey of what a live run would produce found missing**,
+ * the same day: two of the five questions the paid wave exists to answer were
+ * not answerable from what it wrote down. `REASK_ENV` is the first — a repeat
+ * over one article was free, so verdict stability came out perfect by
+ * construction — and `ExpansionAnswer` is the second: the executor handed back a
+ * bare string, so the wave's tokens reached the ledger and nothing on the run.
+ * Neither was a bug in what was built; both would have made the run worth less
+ * than it cost.
  *
  * ## The one trap this file exists to avoid
  *
@@ -48,36 +71,58 @@
  * `ExpansionRefused`, whose whole point is that every refusal is worth another
  * draw — and because this file imports that one, so the constant could not live
  * here without the arithmetic importing the protocol. `checkpointKey` is in
- * [`source-hash.ts`](source-hash.ts), hoisted out of `hierarchy.ts` on
- * 2026-09-05 for the same shape of reason: `hierarchy.ts` will import *this*
- * file at stage 5, and a key minter reachable only through it would close a
- * cycle `npm run cycles` refuses.
+ * [`source-hash.ts`](source-hash.ts), and `renderBlocks`, `PROMPT_VERSION` and
+ * `PRODUCTION_EFFORT` are in [`hierarchy-prompt.ts`](hierarchy-prompt.ts), all
+ * hoisted out of `hierarchy.ts` for one reason: `hierarchy.ts` imports *this*
+ * file, so anything reachable from here as a **value** and defined there closes
+ * a cycle `npm run cycles` refuses. Types are erased and are exempt, which is why
+ * `ModelNode` and `BuildReport` may still come from there.
  */
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import Anthropic from "@anthropic-ai/sdk";
+import { retryAfterMs } from "./ai-call.js";
+import { anthropicCallFailed } from "./anthropic-call.js";
+import { WidthGate, allOrStop, sleepUnlessAborted, type GateWindow } from "./concurrency.js";
 import { log } from "./log.js";
 import {
+  CASCADE_RECIPE,
   ExpansionRefused,
   MAX_EXPANSION_REDRAWS,
   indexBlocks,
   normaliseExpansion,
+  planExpansionBatches,
   proposalFromTree,
   type BlockIndex,
+  type CascadeNode,
   type CascadeRecipe,
+  type DerivedChild,
   type ExpansionBatch,
   type ExpansionTarget,
 } from "./hierarchy-cascade.js";
 import {
   EXPANSION_PROMPT_STAMP,
+  expansionOverhead,
   expansionRequest,
   parseExpansionAnswer,
+  recordCandidate,
   renderFrozenOutline,
+  tallyVerdicts,
+  type CandidateRecord,
   type ExpansionAnswerChild,
   type ExpansionRequest,
   type OutlineEntry,
+  type VerdictTally,
 } from "./hierarchy-expand.js";
-/* Types only. `src/hierarchy.ts` is the module this one will be imported *by*
-   at stage 5, so a value import here would be the wrong way round. */
+/* Types only. `src/hierarchy.ts` is the module this one is imported *by*, so a
+   value import here would be the wrong way round and would close a cycle. */
 import type { BuildReport, ModelNode } from "./hierarchy.js";
-import { messagesWireBody, type MessagesBody } from "./messages-stream.js";
+import {
+  messagesWireBody,
+  streamMessage,
+  wasRefused,
+  type MessagesBody,
+} from "./messages-stream.js";
 import { checkpointKey, hashBlocks, structureHash } from "./source-hash.js";
 import type { CheckpointNamespace, CheckpointStore } from "./store/checkpoints.js";
 import type { Block, Tree } from "./types.js";
@@ -343,24 +388,28 @@ export function usableExpansion(value: unknown, fingerprint: string): string | n
 
 /* -------------------------------------------------------------- the reading */
 
+/** One child of one parent: the node, and what the call said about it. */
+export type ExpandedChild = DerivedChild<ExpansionAnswerChild>;
+
 /** One parent's answer, read and derived. */
 export interface ExpandedTarget {
   target: ExpansionTarget;
   /**
-   * The children exactly as the model proposed them, **verdicts included**, in
-   * its own order and before any drop.
+   * What survived, with derived ranges — **each beside the proposal it came
+   * from, verdict included.** At least two, or the answer was refused.
    *
-   * Carried beside `children` rather than merged into it because the two are
-   * different lengths: `normaliseExpansion` drops a start that marks no split
-   * point, and it does not say which. Pairing a kept child with the verdict of
-   * the proposal it came from needs `KeptChild.childIndex`, which that function
-   * discards — **stage 5's job, and named here so it is a known gap rather than
-   * a silent one.** Nothing obeys a child's verdict before wave 3 (stage 6), so
-   * nothing is wrong today.
+   * This was two arrays until 2026-09-05: `proposed`, every child the answer
+   * named, and `children`, the ones that survived the drops — different lengths,
+   * with nothing to say which verdict belonged to which node. Stage 6 is
+   * governed by exactly that pairing and could not have been built on it. The
+   * fix is in `normaliseExpansion`, which now makes the pair where the drop is
+   * decided; see `DerivedChild` for why not a `childIndex` and a lookup.
+   *
+   * **A dropped child's verdict is gone, on purpose.** It was never about a node
+   * — the start marked no split point, so nothing was built — and
+   * `report.droppedChildren` counts it. Nothing has ever read one.
    */
-  proposed: readonly ExpansionAnswerChild[];
-  /** What survived, with derived ranges. At least two, or the answer was refused. */
-  children: ModelNode[];
+  children: ExpandedChild[];
 }
 
 /** One call's answer, read whole. */
@@ -429,29 +478,370 @@ export function readExpansion(opts: {
       report,
       index,
     });
-    return { target, proposed: section.children, children };
+    return { target, children };
   });
   return { targets: read, report };
+}
+
+/* ---------------------------------------------------------------- the width */
+
+/**
+ * **How many scoped calls of one wave may be in flight, and it is derived here
+ * rather than borrowed from the stage next door.**
+ *
+ * The plan's own arithmetic for this was wrong twice, both times by copying
+ * `src/pdf-read.ts` § `CHUNK_CONCURRENCY` — a number that answers a different
+ * question (how wide may **one** step of **one** kind of document go) and that
+ * moved from 16 to 100 while the plan was being written. So: derived, from what
+ * actually bounds a wave, with every measurement it rests on named and dated.
+ * `tests/hierarchy-deepen-wave.test.ts` § "how wide a wave may be" is the
+ * arithmetic below as an assertion, so that a number moving in `jobs.ts` takes
+ * this one with it instead of leaving a stale paragraph.
+ *
+ * ## What has to fit inside what
+ *
+ * A claim's deadline is `LEASE_MS - DEADLINE_MARGIN_MS` = **740 s**, and the walk
+ * only starts this step with `STEP_BUDGET_MS.hierarchy` = **700 s** left
+ * (src/jobs.ts). Wave 1, the label pass and the wave share that one window:
+ *
+ * | | measured | where |
+ * |---|---|---|
+ * | wave 1, on a book | 102 s (Moby-Dick), 126 s (Origin) | plan § stage 1, 2026-09-04 |
+ * | the label pass, on the largest article we have | 150–270 s | `STEP_BUDGET_MS.hierarchy`'s own note: a 658–778 s step of which the structure call was 508 s |
+ * | one scoped call | 22 s (382 blocks, 76,558 in), 16 s (30 blocks) | plan § stage 2, three real calls |
+ *
+ * So the wave's share of a book's step is about `700 - 126 - 270 ≈ 300 s`.
+ *
+ * ## How many calls a wave is
+ *
+ * Moby-Dick's wave-1 tree has **54 sections**, and `CASCADE_RECIPE` packs at most
+ * four parents into a call (`maxParentsPerBatch`, and `maxPredictedChildrenPerBatch`
+ * of 36 is the same four at the nine-child clamp), so the frontier is **≥ 14
+ * calls** and more wherever an evidence cap closes a batch early. Take **20** as
+ * the working worst case, and **45 s** for a packed call — twice the worst single
+ * call ever measured, because a batch carries four parents and answers up to
+ * thirty-six children.
+ *
+ * `ceil(20 / W) × 45 s ≤ 300 s` wants `W ≥ 4`. Four is five rounds at 225 s and
+ * leaves 79 s of the share, which one redrawn call eats; **eight** is three
+ * rounds at 135 s and leaves 169 s, which is a whole further round for the
+ * redraws `MAX_EXPANSION_REDRAWS` allows. Past eight there is little left to buy
+ * — twenty calls is three rounds either way until sixteen, where it becomes two
+ * — and every slot added is another call the rate limiter sees.
+ *
+ * ## And what stops it going higher
+ *
+ * `DEFAULT_JOB_CONCURRENCY` is **3** (src/jobs.ts), and nothing stops three jobs
+ * being in this step at once, so what the account sees is `3 × 8 = 24` scoped
+ * calls in flight. That is a quarter of the 100 `CHUNK_CONCURRENCY` already
+ * points at the same account, which is the only evidence anyone has about what
+ * this account will take — so 24 is inside demonstrated headroom rather than
+ * inside a guess. It is also the reason the number is not simply *"as wide as the
+ * wave"*: the width that matters to a rate limiter is the one summed across jobs,
+ * and this file cannot see the other two.
+ *
+ * **This is an ambition, and `WidthGate` is what happens when it is wrong** — it
+ * halves on a 429 and earns a slot back per width successes, exactly as it does
+ * for the PDF stage. The number to revisit it with is stage 5's live run under
+ * three concurrent jobs.
+ */
+export const EXPANSION_CONCURRENCY = 8;
+
+/**
+ * **One gate for the process**, for the reason src/pdf-read.ts § `sharedGate`
+ * gives: what is being rationed is calls in flight to one upstream, which is a
+ * property of the account rather than of a job. Two ingests in one dev server
+ * would otherwise each believe they had the whole width.
+ *
+ * **It is a second gate, not a second copy of the mechanism**, and the
+ * distinction is the one `WidthGate`'s own docblock draws — *"if a second wide
+ * caller arrives, move this rather than copying it"*. The class is imported; only
+ * the instance is new, because the two stages have different widths and there is
+ * no place today that owns "how busy is the account" across stages. What that
+ * costs is real and worth writing down: **neither gate learns from the other's
+ * 429s**, so a PDF extract at width 100 and a deepening wave at width 8 can walk
+ * into the same wall separately. Fixing it properly is the token bucket in
+ * src/ai-call.ts that `WidthGate` names and nobody has needed enough to build.
+ */
+const sharedGate = new WidthGate(EXPANSION_CONCURRENCY);
+
+/**
+ * **A 429, and only a 429** — the one status whose whole meaning is *ask again
+ * later*.
+ *
+ * Its own class rather than the SDK's error, for two reasons. The SDK builds
+ * `Error.message` out of the upstream body, which is the one place a failure can
+ * echo back part of what we sent — and what we sent is the article
+ * (src/anthropic-call.ts, docs/project/logging.md). And a class is what lets the
+ * fake executor in the tests produce a rate limit with no network at all, which
+ * is how the retry path below is exercised.
+ *
+ * `retryAfterMs` is what the provider asked for, in milliseconds, or `null` where
+ * it said nothing.
+ */
+export class ExpansionRateLimited extends Error {
+  constructor(readonly retryAfterMs: number | null) {
+    super("the expansion call was refused with 429; the provider asked us to wait");
+    this.name = "ExpansionRateLimited";
+  }
+}
+
+/**
+ * **The model ran out of room mid-answer, and the answer is worthless however
+ * well-formed it looks.**
+ *
+ * The executor used to ignore `stop_reason` entirely, on the argument that a
+ * truncated answer necessarily fails to parse and is caught downstream as a
+ * `malformed-answer`. That holds for almost every truncation and fails for the
+ * one that matters: **an answer cut immediately after a closing brace is valid
+ * JSON describing half of what was asked for.** It parses, it normalises, its
+ * starts are inside the parent, it covers the targets it does mention, it gets
+ * written to the checkpoint, and a section that should have had eight children
+ * gets three — published as a finished tree with nothing anywhere to say a level
+ * went missing. ⟨GPT Sol's review of stage 5a, finding 6.⟩ Exactly the shape of
+ * failure docs/reusable/silent-success.md is about.
+ *
+ * ## Why this fails the wave rather than being drawn again
+ *
+ * **Not an `ExpansionRefused`**, deliberately, because in this file the class is
+ * the retry policy and a redraw here would be three calls failing the same way.
+ * `max_tokens` is a property of the *request*: the budget is computed from the
+ * target's own size (src/hierarchy-expand.ts § `expectedChildren`) and the redraw
+ * is sized identically, so a call that truncates deterministically truncates
+ * every time. That is the waste this stage's own docblock already named, and
+ * accepting the truncated answer was the only reason it had not been paid yet.
+ *
+ * The alternative — redraw with a larger budget — was weighed and refused for
+ * stage 5. It cannot be a redraw of the same call: `max_tokens` is inside
+ * `request.params`, which is inside the checkpoint key
+ * (`canonicalExpansionRequest`), so a bigger draw is a **different question**
+ * stored under a **different key**, and a wave that silently escalates its own
+ * budget is one whose cost per article nobody can predict — on the first stage
+ * whose whole purpose is to find out what a wave costs. Since publication is
+ * all-or-nothing anyway (`deepenTree` § "All of the wave, or none of it"),
+ * "skip this one and publish the rest" is not on the table either.
+ *
+ * So the wave dies, the article keeps the tree wave 1 gave it, `deepenFailed`
+ * goes on the run, and the number that has to move is `expectedChildren`. A
+ * truncation is a sizing bug we should be told about, not a cost to absorb three
+ * times per call.
+ */
+export class ExpansionTruncated extends Error {
+  constructor() {
+    super("the model hit max_tokens on a scoped expansion, so its answer is only part of one");
+    this.name = "ExpansionTruncated";
+  }
+}
+
+/**
+ * How many times one call is *sent*, counting the first — a rate limit is not a
+ * verdict about the answer, so it is not a redraw and does not spend
+ * `MAX_EXPANSION_REDRAWS`.
+ *
+ * Three, matching src/pdf-read.ts § `TRANSPORT_ATTEMPTS`, which is the only other
+ * loop in this repo that asks the same upstream the same question again.
+ */
+const EXPANSION_ATTEMPTS = 3;
+
+/**
+ * **The longest `Retry-After` this wave can obey**, past which the call gives up
+ * now rather than pretending to wait.
+ *
+ * Sixty seconds, matching src/pdf-read.ts § `MAX_RETRY_AFTER_MS` and
+ * `MAX_COOLOFF_MS` in src/concurrency.ts — the three have to agree or the gate
+ * reopens inside a window the provider named, which is the accident that walked
+ * a gate to its floor on one piece of news. A provider asking for longer than a
+ * minute is describing a queue that the reader's next Retry will clear better
+ * than this claim can, and the deepening is the one thing in this step that can
+ * be dropped without costing the reader their article.
+ */
+const MAX_RETRY_AFTER_MS = 60_000;
+
+/**
+ * The floor under a retry, so that a lapsed pause cannot become a hot loop.
+ *
+ * **The waiting itself is the gate's**, and that is why this is one second
+ * rather than a backoff curve: a refusal parks *every* new admission until the
+ * window the provider named, jittered on the way out
+ * (src/concurrency.ts § `MAX_COOLOFF_MS`), so a call that comes back round here
+ * has already waited. What it cannot rely on is that the pause is still in force
+ * — a refusal from a superseded epoch is counted and ignored — and a re-entry
+ * into an open gate would otherwise be immediate. Drawn rather than fixed, for
+ * the reason every other wait in this repo is drawn: two calls that give up
+ * together should not come back together.
+ */
+const RETRY_FLOOR_MS = 1_000;
+
+/** What `WidthGate.run` needs to know, without this module telling it about our classes. */
+function rateLimitedForExpansion(error: unknown): number | null | false {
+  return error instanceof ExpansionRateLimited ? error.retryAfterMs : false;
 }
 
 /* ----------------------------------------------------------------- the wave */
 
 /**
- * **The seam where the model would be.**
+ * **The seam where the model is.**
  *
- * Takes an assembled request and returns the answer's raw text. Everything about
- * retries, checkpoints, coverage and derivation is on this side of it, so the
- * whole protocol is exercisable with a function that returns a string — which is
- * stage 4's entire done-condition, and is why there is no `streamMessage` call
- * anywhere in this file.
+ * Takes an assembled request and returns the answer's raw text. The checkpoint,
+ * the coverage checks, the derivation, the redraws, the width and the rate-limit
+ * retries are all on *this* side of it, so the whole protocol runs end to end
+ * against a function that returns a string — which is what stage 4 was finished
+ * against and what stage 5's own tests still use.
  *
- * The real one, in stage 5, is `streamMessage("hierarchy", request.params)`
- * joined to text. It may throw: an executor's own failure (a 429, an abort) is
- * **not** an `ExpansionRefused` and is not redrawn here — the queue owns that,
- * and a wave that quietly re-bought a rate-limited call three times would be
- * spending money to make the rate limit worse.
+ * `liveExpansionExecutor` is the real one. It may throw, and the wave tells two
+ * cases apart: an `ExpansionRateLimited` is asked again inside the width gate,
+ * and **anything else is fatal to the wave** — a request this code got wrong or
+ * an account with no credit does not come out differently for being asked twice.
+ * A refusal of the *answer* is neither: that is an `ExpansionRefused` and it is
+ * redrawn, up to `MAX_EXPANSION_REDRAWS`.
  */
-export type ExpansionExecutor = (request: ExpansionRequest) => Promise<string>;
+/**
+ * **What one scoped call cost, in the four numbers a bill is made of.**
+ *
+ * The same four `HierarchyRun` already reports for the structure call and the
+ * label batches (src/hierarchy.ts), named the same way, so that summing them is
+ * addition rather than translation.
+ *
+ * **Zero here means "this call was free", and that is only ever true of a
+ * resumed one.** A field the provider did not send reads as 0 through
+ * `usageOf`, which is an understatement rather than a lie — `CallMeter` in
+ * src/messages-stream.ts keeps the nullable version, and the ledger under task
+ * `hierarchy` is the authority on money. This is the artefact's copy, and its
+ * job is to make one run's records say what that run paid without a join.
+ */
+export interface ExpansionUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
+/**
+ * A call that cost nothing: a resumed one, or a wave that made none.
+ *
+ * **Frozen**, because it is handed out by reference — every resumed call's
+ * outcome carries this very object — and a single `+=` anywhere would silently
+ * move every past and future zero at once.
+ */
+export const NO_EXPANSION_USAGE: ExpansionUsage = Object.freeze({
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+});
+
+/** Field by field, so a new field cannot be forgotten by a spread. */
+export function addUsage(a: ExpansionUsage, b: ExpansionUsage): ExpansionUsage {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
+    cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
+  };
+}
+
+/** The SDK's usage, in this file's four numbers. Absent fields read as 0. */
+export function usageOf(usage: Anthropic.Message["usage"]): ExpansionUsage {
+  return {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+  };
+}
+
+/**
+ * **One call's answer and what it cost, together** — because the cost is a fact
+ * only the executor can know and the seam used to throw it away.
+ *
+ * It returned a bare `string` until 2026-09-05, and the consequence was that the
+ * expansion calls' tokens reached nothing on `HierarchyRun`: they were metered
+ * (`streamMessage` calls `beginSpend` for every one) and so recoverable from the
+ * AI-spend ledger, but a run's own artefact could not say what the run cost, and
+ * question 4 of the live wave — *what does it actually cost, per book and per
+ * ordinary article* — is answered by comparing artefacts.
+ * docs/plans/260904d-deepen-fat-sections.md § "What the live run must answer".
+ *
+ * **A fake executor answers `NO_EXPANSION_USAGE`** and every test does; the
+ * numbers are only ever real on the live path. That is why the field is required
+ * rather than optional: an optional one would let the live executor forget it and
+ * report a free book, which is the same silent success this file's header is
+ * about.
+ */
+export interface ExpansionAnswer {
+  /** The model's text, exactly as `readExpansion` will be handed it. */
+  text: string;
+  usage: ExpansionUsage;
+}
+
+export type ExpansionExecutor = (request: ExpansionRequest) => Promise<ExpansionAnswer>;
+
+/**
+ * **An answer that cost nothing.**
+ *
+ * The shape a fake executor returns, and a constructor rather than a literal in
+ * twenty places because four zeros written out twenty times is four zeros
+ * somebody eventually gets wrong. Nothing on the live path calls it:
+ * `liveExpansionExecutor` reports what the provider said.
+ */
+export function freeAnswer(text: string): ExpansionAnswer {
+  return { text, usage: NO_EXPANSION_USAGE };
+}
+
+/**
+ * **The live executor: one scoped call, streamed, with nothing of the provider's
+ * words allowed out of it.**
+ *
+ * Three things happen here and nowhere else:
+ *
+ * - **A 429 becomes an `ExpansionRateLimited`** carrying the parsed
+ *   `Retry-After`, so the wave's retry and the width gate can both act on it
+ *   without either of them knowing what an SDK error is.
+ * - **Every other failure goes through `anthropicCallFailed`**, because the
+ *   installed SDK builds its message from the upstream error body — the one place
+ *   a failure can echo back part of the request, and the request carries the
+ *   article's prose.
+ * - **A truncated answer is refused here**, on `stop_reason` rather than on
+ *   whether it happens to parse. See `ExpansionTruncated`.
+ *
+ * There is no `onProgress`. A scoped call is 16–22 s measured and there are
+ * several of them in flight; per-call text deltas would be a progress bar racing
+ * itself. The wave reports whole calls instead.
+ */
+export function liveExpansionExecutor(signal?: AbortSignal): ExpansionExecutor {
+  return async (request) => {
+    let message: Anthropic.Message;
+    try {
+      const call = streamMessage("hierarchy", request.params, {
+        ...(signal ? { signal } : {}),
+      });
+      message = await call.finalMessage();
+    } catch (err) {
+      if (err instanceof Anthropic.APIError && err.status === 429) {
+        throw new ExpansionRateLimited(err.headers ? retryAfterMs(err.headers) : null);
+      }
+      throw anthropicCallFailed(err);
+    }
+    if (wasRefused(message)) {
+      /* `stop_details` is the provider's own words about a request that carried a
+         section of the article, and this error reaches a log line. src/messages.ts. */
+      throw new Error("the model answered a scoped expansion with stop_reason: refusal");
+    }
+    if (message.stop_reason === "max_tokens") throw new ExpansionTruncated();
+    return {
+      text: message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join(""),
+      /* Off `finalMessage()` rather than off the raw `message_delta`, which is
+         what `CallMeter` reads. The four fields here are the ones the SDK's own
+         `Usage` type names, so they survive the merge; the TTL split and the
+         tier do not, and are not wanted — see src/messages-stream.ts § `CallMeter`
+         for the fields that need the raw event, and the ledger for the money. */
+      usage: usageOf(message.usage),
+    };
+  };
+}
 
 /** What one call in a wave came to. */
 export interface ExpansionCallOutcome {
@@ -468,10 +858,35 @@ export interface ExpansionCallOutcome {
    * nothing. `CandidateRecord.retries` is what this feeds.
    */
   redraws: number;
+  /**
+   * **What this call cost, every draw of it included** — so a call refused twice
+   * and answered on the third reports all three drawings, which is what was
+   * actually paid for. `NO_EXPANSION_USAGE` on a resumed call, because a resumed
+   * call bought nothing.
+   */
+  usage: ExpansionUsage;
+  /**
+   * **Is this answer durable — is there a checkpoint row a later attempt will
+   * find?**
+   *
+   * True on a resumed call by construction: it came off a row that is still
+   * there. False where the write threw, which is deliberately **not** fatal to
+   * the article and was therefore invisible to everything downstream —
+   * `DeepenStats.withheld` counted an answer as banked whose row did not exist,
+   * and its docblock's promise ("every one of these has a checkpoint row waiting
+   * for it") was simply untrue. ⟨GPT Sol's second review of stage 5a,
+   * finding 2.⟩ The write stays best-effort; the *count* stops lying.
+   */
+  checkpointed: boolean;
 }
 
 /** What a whole wave came to, including how much of it was already paid for. */
 export interface ExpansionWaveResult {
+  /**
+   * One per call that produced an answer, **in the order the batches were
+   * planned in** — never the order they finished in. See § "Concurrent, and the
+   * order is still the planner's".
+   */
   calls: ExpansionCallOutcome[];
   /** Keys the wave looked up: one per call. */
   asked: number;
@@ -479,6 +894,164 @@ export interface ExpansionWaveResult {
   found: number;
   /** Rows that were for this question **and still normalise** — the real hit count. */
   usable: number;
+  /**
+   * **Calls the wave chose not to start because the step was running out of
+   * time** — 0 on an ordinary wave, and the number that says a book needs a
+   * second attempt.
+   *
+   * Not an error and not a failure: the calls that *did* land are checkpointed,
+   * so the next attempt buys only these. Reported rather than inferred, because
+   * a wave that stopped early and a wave that had nothing to do produce the same
+   * tree in every other respect. docs/reusable/silent-success.md.
+   */
+  outOfTime: number;
+  /**
+   * 429s met across the wave, whether or not the call that met one went on to
+   * succeed. 0 is the ordinary reading; a number that climbs is
+   * `EXPANSION_CONCURRENCY` being wrong, and it is the figure stage 5's live run
+   * under three concurrent jobs is meant to produce.
+   */
+  rateLimited: number;
+  /**
+   * **What the gate did while *this wave* ran**, rather than the singleton's
+   * cumulative life — see `GateWindow`. A slow wave that cannot say its own
+   * initial, final and narrowest width cannot explain itself, and one that
+   * quotes another job's numbers explains itself wrongly.
+   */
+  gate: GateWindow;
+  /**
+   * **The four token counts of every call in `calls`, added up** — and nothing
+   * else, which is what stops it double-counting. A resumed call contributes
+   * zeros, a redrawn one contributes all of its draws, and a call the wave never
+   * started contributes nothing because it has no outcome.
+   *
+   * A call that failed fatally is *not* in here, and cannot be: the wave throws
+   * rather than returning. Its draws are on the ledger under task `hierarchy`,
+   * which is the authority; this figure is what a successful wave's artefact can
+   * say about itself.
+   */
+  usage: ExpansionUsage;
+}
+
+/**
+ * **The step is nearly out of time, so this call is not started.**
+ *
+ * Thrown *inside* the width gate, at the instant the call would have gone out,
+ * and caught by the wave — which is the only place the question can be asked
+ * honestly. Asking it before the gate would ask it of every call at once, at the
+ * beginning, when there was still time for all of them.
+ *
+ * Its own class so that "we ran out of time" cannot be mistaken for a provider
+ * failure by the `catch` that decides whether the wave dies.
+ */
+class WaveOutOfTime extends Error {
+  constructor() {
+    super("the hierarchy step had too little of its deadline left to start another expansion call");
+    this.name = "WaveOutOfTime";
+  }
+}
+
+/**
+ * **What one more call needs of the deadline before the wave will start it.**
+ *
+ * Sixty seconds: 45 s for a packed call (`EXPANSION_CONCURRENCY`'s arithmetic)
+ * with a third of that again for the answer to be read and the row written.
+ *
+ * **It is a reserve, not a guarantee**, and there are two gaps worth stating
+ * rather than discovering.
+ *
+ * A call admitted with 61 s left and then held by a rate-limit cooloff can still
+ * finish after the reserve is gone; what bounds *that* is the claim's own 740 s
+ * deadline against this step's 700 s budget, and past it the job's abort signal.
+ *
+ * And **the question is asked at admission**, so it stops the *next* call rather
+ * than the current ones: a wave narrower than the gate is admitted all at once
+ * and every one of those calls runs. That is the intended reading — the unit
+ * this can stop on is a round, and a round is what a checkpointed wave can afford
+ * to lose. What the reserve buys is the ordinary case, which is the one that
+ * matters on a book: a wave of twenty calls at width eight stops **between**
+ * rounds, with everything it has bought already written, rather than being killed
+ * in the middle of a call that has already been paid for.
+ */
+export const CALL_RESERVE_MS = 60_000;
+
+/**
+ * **How long a failed wave waits for its paid peers before it gives up on
+ * them**, and the arithmetic is below rather than a round number.
+ *
+ * `allOrStop` drains before it rethrows, so that a peer already on the wire gets
+ * to write the checkpoint row its answer was bought for. The drain was
+ * unbounded, on a docblock's claim that every caller either aborts in flight or
+ * is bounded by a claimant's deadline signal. **Neither is true here**: this
+ * wave is reachable from the CLI and from an exported `deepenTree` with no
+ * signal at all, and `ExpansionExecutor` is a seam with no abort contract even
+ * when there is one. One wedged call hung the wave for ever. ⟨GPT Sol's second
+ * review of stage 5a, finding 3.⟩
+ *
+ * **Bounding the drain rather than aborting the calls**, which is the other fix
+ * and the wrong one: aborting them would undo the change that put the drain
+ * there, whose whole point is that a call already paid for gets to bank its row.
+ *
+ * ## What is in the sum, and what is deliberately not
+ *
+ * `fatal.abort()` reaches every *wait* — `WidthGate.enter`'s pause and its
+ * queue, and the `RETRY_FLOOR_MS` sleep, all take `waiting` — so a straggler
+ * cannot be **sent again** after the wave has failed. `EXPANSION_ATTEMPTS` and
+ * `MAX_RETRY_AFTER_MS` are therefore *not* terms here, which is the part of this
+ * worth writing down: the only thing left running is one call already inside the
+ * executor, plus what `runOne` still does with its answer.
+ *
+ * | | | where |
+ * |---|---|---|
+ * | one packed model call | 45 s | `EXPANSION_CONCURRENCY`, itself twice the worst single call ever measured |
+ * | reading the answer and writing its row | 15 s | `CALL_RESERVE_MS`, a third of the call again |
+ *
+ * Sixty seconds, and it is the same sum as `CALL_RESERVE_MS` rather than a
+ * coincidence of value — but a different question, so a different constant: that
+ * one decides whether to *start* a call, this one decides how long to wait for
+ * one that has already started. A straggler still running a minute after every
+ * wait it could have been in was cancelled is not making progress, and the wave
+ * has already failed.
+ */
+export const EXPANSION_DRAIN_MS = 60_000;
+
+/**
+ * **A wave that failed, with everything it had already measured attached.**
+ *
+ * `runExpansionWave` used to rethrow the executor's own error, and everything
+ * the wave's *peers* had bought went with it: their checkpoint rows' existence,
+ * their children's verdicts, the tokens spent and what the gate had done. Stage
+ * 5b is a paid run whose purpose is to answer five questions, so a failure
+ * nobody can read is nearly as bad as no run. ⟨GPT Sol's second review of stage
+ * 5a, finding 5.⟩
+ *
+ * The original error is on `cause`, not swallowed — `tests/hierarchy-deepen.test.ts`
+ * asserts an `ExpansionRefused` and its `reason` are still reachable through it
+ * — and the message quotes it, so a `toThrow(/…/)` and a log line still say what
+ * happened.
+ */
+export class ExpansionWaveFailed extends Error {
+  constructor(
+    override readonly cause: unknown,
+    /** The wave as far as it got: the calls that landed, the tokens, the gate. */
+    readonly partial: ExpansionWaveResult,
+  ) {
+    super(`the expansion wave failed: ${describeFailure(cause)}`);
+    this.name = "ExpansionWaveFailed";
+  }
+}
+
+/**
+ * One line about a failure, safe to put in a message and in a records file.
+ *
+ * The class and its message — and the message is safe because every failure that
+ * can carry the provider's words about our request goes through
+ * `anthropicCallFailed` first (src/anthropic-call.ts), which exists for exactly
+ * that. docs/project/logging.md.
+ */
+export function describeFailure(err: unknown): string {
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  return String(err);
 }
 
 /**
@@ -518,13 +1091,60 @@ export interface ExpansionWaveResult {
  * question and held an answer). It is the number a bill can be reasoned about
  * from: `found - usable` is rows that existed and were re-bought anyway.
  *
- * ## Sequential, for now
+ * ## Concurrent, and the order is still the planner's
  *
- * The calls are made one after another. Concurrency is stage 5's — it wants a
- * budget derived from the worker's own job concurrency and 429s counted, and
- * neither can be decided against a fake executor. Nothing here assumes the
- * order: the keys are independent by construction, which is the property the
- * frozen seed buys.
+ * Every call goes out at once and `WidthGate` decides how many are actually in
+ * flight (`EXPANSION_CONCURRENCY` has the arithmetic). **Nothing about the result
+ * depends on which of them comes back first**, and that is a property rather than
+ * a hope: the batches were cut before any call went out, each key is a digest of
+ * its own request and the *frozen* seed, and the outcomes are placed back into
+ * the planner's own order by index. Two runs over one article make the same
+ * calls, store them under the same keys, and build the same tree, whatever the
+ * network does. `tests/hierarchy-deepen-wave.test.ts` runs a wave whose executor
+ * answers the first call last, and asserts both halves: the order of `calls`,
+ * which only this indexing gets right, and the tree, which comes out right
+ * either way because an answer is attached to the target it names rather than to
+ * a position.
+ *
+ * ## Two failures that are not the same failure
+ *
+ * A **refused answer** (`ExpansionRefused`) is the model's fault and is redrawn,
+ * up to `MAX_EXPANSION_REDRAWS`. A **429** is not about the answer at all: it is
+ * asked again, up to `EXPANSION_ATTEMPTS`, inside the gate — which has meanwhile
+ * halved the width and parked every other admission for as long as the provider
+ * asked. Anything else is fatal to the wave, and `allOrStop` stops the calls that
+ * have not gone yet rather than going on buying answers for a wave that has
+ * already failed.
+ *
+ * **A fatal call does not lose the paid ones.** Each call writes its own row the
+ * moment its answer stands up, before anything else can fail — the same trade
+ * `generateLabels` § `keepBatch` takes.
+ *
+ * ## No warm-up, and that is a decision rather than an omission
+ *
+ * Every call of a wave shares a prefix — `EXPAND_SYSTEM` plus the frozen outline
+ * — and carries a `cache_control` marker on it, so on a cold cache all of them
+ * pay the 1.25× write premium and none of them reads. src/labels.ts answers that
+ * by running its first batch alone and widening afterwards, and this deliberately
+ * does not. The arithmetic is why: that prefix is 1,150–1,400 tokens against
+ * per-call evidence measured at 14,889 and 76,558, so serialising the first call
+ * of a book's wave buys about 1% of the wave's input tokens and costs a whole
+ * call's latency — 45 s out of a share of roughly 300. The trade goes the other
+ * way for labels, whose batches are small and whose prefix is most of the
+ * request. docs/project/prompt-caching.md § The floor.
+ *
+ * ## Stopping on time, cleanly
+ *
+ * `deadlineAt` is the wall clock the *step* must be finished by. A call that
+ * cannot start with `CALL_RESERVE_MS` to spare is not started; the wave returns
+ * what it has, with every answer it bought written down, and the next attempt
+ * finds them. Nothing is aborted mid-call — an aborted call is money spent for
+ * nothing, and it is the one thing a checkpointed wave never has to do.
+ *
+ * **What this hands back is therefore a partial wave, and `outOfTime` above zero
+ * is what says so.** Whether a partial wave may be published is not decided
+ * here: `deepenTree` § "All of the wave, or none of it" is where that lives, and
+ * the answer is no.
  */
 export async function runExpansionWave(opts: {
   slug: string;
@@ -551,8 +1171,36 @@ export async function runExpansionWave(opts: {
   seed: FrozenSeed;
   recipe: CascadeRecipe;
   index?: BlockIndex;
+  /**
+   * The wall clock this step has to be finished by — `Date.now()` plus whatever
+   * is left of the claim. Omitted, the wave runs to completion, which is what a
+   * test and a command line want and what a queued job must not have.
+   */
+  deadlineAt?: number;
+  /** The job's own signal. Cuts short a wait, never a call in flight. */
+  signal?: AbortSignal;
+  /** Injectable so a test can watch one it owns. Production shares the module's. */
+  gate?: WidthGate;
+  /**
+   * How long to wait for the calls still in the air after one has failed.
+   * Defaults to `EXPANSION_DRAIN_MS`, which is where the arithmetic is;
+   * injectable for the same reason `gate` is, since the only shape that poses
+   * this is a wedged executor and waiting a minute for one is not a test.
+   */
+  drainMs?: number;
+  /**
+   * **Ignore whatever the store already has and buy every call again.**
+   *
+   * A boolean the caller has already decided; the wave resolves
+   * `opts.reask ?? reaskExpansions(slug)`, which is off unless `REASK_ENV`
+   * names this very article. See that function for what it is for and why it
+   * does not delete anything.
+   */
+  reask?: boolean;
 }): Promise<ExpansionWaveResult> {
   const { slug, checkpoints, execute, batches, blocks, seed, recipe } = opts;
+  const gate = opts.gate ?? sharedGate;
+  const reask = opts.reask ?? reaskExpansions(slug);
   const index = opts.index ?? indexBlocks(blocks);
   const bodyHash = expansionBodyHash(blocks);
 
@@ -582,13 +1230,25 @@ export async function runExpansionWave(opts: {
 
   const keys = prepared.map((p) => p.key);
   let stored = new Map<string, unknown>();
-  try {
-    stored = await checkpoints.read<unknown>(slug, DEEPEN_NAMESPACE, keys);
-  } catch (err) {
+  if (reask) {
+    /* **Not read at all**, rather than read and discarded. The row the store
+       holds is about to be replaced by a fresh answer to the identical question,
+       so what it says now is of no interest, and a `found` in the line below
+       that counted rows nothing would use is a number somebody would later
+       divide by. `REASK_ENV` has the whole argument. */
     log("pipeline").warn(
-      { slug, namespace: DEEPEN_NAMESPACE, asked: keys.length, err },
-      "could not read the expansion checkpoints; every scoped call will be asked for again",
+      { slug, namespace: DEEPEN_NAMESPACE, asked: keys.length, env: REASK_ENV },
+      "re-asking every scoped expansion call: the stored answers are being ignored and re-bought",
     );
+  } else {
+    try {
+      stored = await checkpoints.read<unknown>(slug, DEEPEN_NAMESPACE, keys);
+    } catch (err) {
+      log("pipeline").warn(
+        { slug, namespace: DEEPEN_NAMESPACE, asked: keys.length, err },
+        "could not read the expansion checkpoints; every scoped call will be asked for again",
+      );
+    }
   }
 
   /**
@@ -623,23 +1283,119 @@ export async function runExpansionWave(opts: {
       asked: keys.length,
       found: stored.size,
       usable: resumed.size,
+      /* **On the same line as the zeros it explains.** A re-asking wave and a
+         checkpoint layer that has quietly stopped hitting produce the identical
+         `found: 0, usable: 0`, and the difference between them is a switch
+         somebody set on purpose and a bug nobody has noticed —
+         docs/reusable/silent-success.md. */
+      reask,
     },
     "read the expansion checkpoints",
   );
 
-  const calls: ExpansionCallOutcome[] = [];
-  for (const p of prepared) {
+  /* **One slot per call, filled by index rather than by arrival**, which is what
+     makes the returned order the planner's whatever the network does. A slot
+     stays `null` where the wave ran out of time before starting that call. */
+  const outcomes: (ExpansionCallOutcome | null)[] = prepared.map(() => null);
+  let outOfTime = 0;
+  let rateLimited = 0;
+  /**
+   * **What the calls that have not gone yet are waiting on.**
+   *
+   * Composed with the caller's, the way src/labels.ts § `fatal` composes its own:
+   * either the reader cancelled the ingest or one call of this wave failed, and
+   * both mean the same thing to a call still queued in the gate. It reaches
+   * `WidthGate.enter` and the retry floor, both of which are *waits* — a call
+   * already in flight is deliberately out of its reach.
+   */
+  const fatal = new AbortController();
+  const waiting = opts.signal
+    ? AbortSignal.any([opts.signal, fatal.signal])
+    : fatal.signal;
+
+  /** Is there enough of the step left to start another call? See `CALL_RESERVE_MS`. */
+  const timeLeft = (): boolean =>
+    opts.deadlineAt === undefined || Date.now() + CALL_RESERVE_MS <= opts.deadlineAt;
+
+  /**
+   * **One send, through the width gate, with a 429 asked again.**
+   *
+   * Its own function so that the two loops here are two functions: this one asks
+   * the *same* question again because the provider said "later", and the loop in
+   * `runOne` asks a *new* question because the answer was refused. They count
+   * different budgets and mean different things, and reading them nested was
+   * where the complexity check pointed.
+   *
+   * The deadline is checked **inside** the gate, at the moment the call would go
+   * out — the only place the answer is worth anything. Outside it, every call of
+   * the wave would ask at once, at the start, when there was still time for all
+   * of them.
+   */
+  const send = async (p: (typeof prepared)[number]): Promise<ExpansionAnswer> => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await gate.run(
+          async () => {
+            if (!timeLeft()) throw new WaveOutOfTime();
+            return execute(p.request);
+          },
+          rateLimitedForExpansion,
+          waiting,
+        );
+      } catch (err) {
+        if (!(err instanceof ExpansionRateLimited)) throw err;
+        rateLimited++;
+        const asked = err.retryAfterMs;
+        /* **A wait we cannot afford is a refusal, not a shorter wait** —
+           src/pdf-read.ts § `MAX_RETRY_AFTER_MS` for the argument. */
+        if (attempt >= EXPANSION_ATTEMPTS || (asked !== null && asked > MAX_RETRY_AFTER_MS)) {
+          log("pipeline").warn(
+            { slug, key: p.key, attempts: attempt, retryAfterMs: asked },
+            "a scoped expansion call was rate limited and the wave stopped asking",
+          );
+          throw err;
+        }
+        log("pipeline").warn(
+          { slug, key: p.key, attempt, retryAfterMs: asked },
+          "a scoped expansion call was rate limited; it will ask again once the gate reopens",
+        );
+        /* The waiting itself belongs to the gate, which parked every new
+           admission for the window the provider named. This is only the floor
+           that stops a lapsed pause becoming a hot loop. `RETRY_FLOOR_MS`. */
+        await sleepUnlessAborted(Math.random() * RETRY_FLOOR_MS + RETRY_FLOOR_MS, waiting);
+      }
+    }
+  };
+
+  const runOne = async (p: (typeof prepared)[number], at: number): Promise<void> => {
     const already = resumed.get(p.key);
     if (already !== undefined) {
-      calls.push({ ...p, reading: already, resumed: true, redraws: 0 });
-      continue;
+      outcomes[at] = {
+        ...p,
+        reading: already,
+        resumed: true,
+        redraws: 0,
+        usage: NO_EXPANSION_USAGE,
+        /* It came off a row, so there is one. */
+        checkpointed: true,
+      };
+      return;
     }
 
     let redraws = 0;
     let answer = "";
+    /* **Added to on every draw, before anything decides whether the draw was any
+       good.** A refused answer was still generated and still billed, so leaving
+       it out would understate the wave by exactly the calls the redraw budget
+       exists to pay for. `normaliseExpansion` deliberately keeps a refused
+       answer's *report* off the run's books; its tokens are a different fact and
+       belong on them. */
+    let usage = NO_EXPANSION_USAGE;
     let reading: ExpansionReading;
     for (;;) {
-      answer = await execute(p.request);
+      const drawn = await send(p);
+      answer = drawn.text;
+      usage = addUsage(usage, drawn.usage);
       try {
         reading = readExpansion({ raw: answer, targets: p.batch.targets, blocks, index });
         break;
@@ -653,11 +1409,12 @@ export async function runExpansionWave(opts: {
             { slug, key: p.key, reason: err.reason, draws: redraws + 1 },
             "an expansion call was refused on every draw its budget allowed",
           );
-          /* **Rethrown as itself**, so whatever handles a refusal upstream still
-             sees the class and the reason rather than a wrapper it has to
-             unwrap. The draw count is in the line above, which is where it
-             belongs: it is telemetry about this wave, not a property of the
-             model's answer. */
+          /* **Rethrown as itself.** The wave wraps it once, at the top, in an
+             `ExpansionWaveFailed` that carries the partial telemetry — so a
+             caller reads the class and the reason off `cause`, and there is
+             exactly one wrapper rather than one per layer. The draw count is in
+             the line above, which is where it belongs: it is telemetry about
+             this wave, not a property of the model's answer. */
           throw err;
         }
         redraws++;
@@ -683,17 +1440,1009 @@ export async function runExpansionWave(opts: {
      * checkpoint on the refusal path would be the same double-count made
      * durable — with the row poisoning every future attempt as a bonus.
      */
+    let checkpointed = false;
     try {
       const entry: ExpansionCheckpointEntry = { fingerprint: p.key, answer };
       await checkpoints.write(slug, DEEPEN_NAMESPACE, p.key, entry);
+      checkpointed = true;
     } catch (err) {
       log("pipeline").warn(
         { slug, key: p.key, err },
         "could not save the expansion checkpoint; a later attempt will ask for this call again",
       );
     }
-    calls.push({ ...p, reading, resumed: false, redraws });
+    outcomes[at] = { ...p, reading, resumed: false, redraws, usage, checkpointed };
+  };
+
+  /* Opened before the first call and closed on both roads out, so the figure on
+     the artefact is this wave's rather than the shared gate's whole life.
+     `GateWindow` says why that distinction is load-bearing. */
+  const window = gate.watch();
+
+  const summarise = (closed: GateWindow): ExpansionWaveResult => {
+    const calls = outcomes.filter((o): o is ExpansionCallOutcome => o !== null);
+    return {
+      calls,
+      asked: keys.length,
+      found: stored.size,
+      usable: resumed.size,
+      outOfTime,
+      rateLimited,
+      gate: closed,
+      /* **Derived from `calls` rather than accumulated beside them**, so there
+         is one place a call's tokens are recorded and this cannot drift from
+         it. */
+      usage: calls.reduce((total, call) => addUsage(total, call.usage), NO_EXPANSION_USAGE),
+    };
+  };
+
+  try {
+    await allOrStop(
+      prepared.map(async (p, at) => {
+        try {
+          await runOne(p, at);
+        } catch (err) {
+          /* **Running out of time is not a failure**, so it does not travel as one:
+             the slot stays empty, the calls that landed keep their rows, and the
+             next attempt reads them back. Every other error is the wave's end. */
+          if (!(err instanceof WaveOutOfTime)) throw err;
+          outOfTime++;
+        }
+      }),
+      () => {
+        /* One fatal call ends the wave, so nothing else should go out and pay for
+           an answer nobody will read. This releases the calls still queued in the
+           gate; the ones in flight are left alone on purpose, because a cancelled
+           call is money spent for nothing and its row is what makes the next
+           attempt cheap. */
+        fatal.abort();
+      },
+      opts.drainMs ?? EXPANSION_DRAIN_MS,
+    );
+  } catch (err) {
+    /* **The failure carries what the wave already measured.** Everything the
+       peers bought — their rows, their children's verdicts, the tokens and the
+       gate — used to leave with the throw, and a measurement run's unreadable
+       failure is nearly as bad as no run. `ExpansionWaveFailed`. */
+    throw new ExpansionWaveFailed(err, summarise(window.close()));
+  }
+  return summarise(window.close());
+}
+
+/* --------------------------------------------------------- the wave, wired */
+
+/**
+ * **The switch, and it is off.**
+ *
+ * Read at call time rather than frozen at import, so a deployment can turn one
+ * ingest deep without a rebuild and a test can move it — the rule
+ * `jobConcurrency` (src/jobs.ts) and `dataRoot` (src/store/data-root.ts) already
+ * state. Anything but `"1"` or `"true"` is off, a misspelling included: this is
+ * the switch on a change that multiplies a book's bill several times over, and a
+ * typo must fail closed.
+ *
+ * Whether it ever moves is **stage 8's decision**, with the evidence stage 5
+ * measures — the same book read both ways, side by side, against the cost.
+ * docs/plans/260904d-deepen-fat-sections.md § stage 8.
+ */
+export const DEEPEN_ENV = "SPIDERYARN_DEEPEN_HIERARCHY";
+
+export function deepeningEnabled(): boolean {
+  const asked = process.env[DEEPEN_ENV];
+  return asked === "1" || asked === "true";
+}
+
+/**
+ * **Buy every scoped call again for the articles named here, even the ones a
+ * previous run already paid for.**
+ *
+ * **A comma-separated list of slugs, and it was a boolean until 2026-09-05.**
+ * That was the second review's P0 and it is worth stating rather than
+ * discovering: the value is read from `process.env` on **every wave**, so a
+ * worker started with a boolean set re-asked for every eligible article it later
+ * picked up — and stage 5b runs through the queue, so the worker doing the
+ * repeats is the same worker serving everyone else. The switch was
+ * process-wide and persistent when what it describes is *one article being
+ * measured*. ⟨GPT Sol's second review of stage 5a, finding 1.⟩
+ *
+ * So it names articles. `SPIDERYARN_DEEPEN_REASK=moby-dick,origin-of-species`
+ * re-asks those two and nothing else, whatever else the worker picks up.
+ * Entries are trimmed, empty ones ignored, and the match is **case-sensitive**,
+ * because a slug is.
+ *
+ * **`1`, `true` and `yes` do not mean "all articles"**, and there is
+ * deliberately no spelling that does. They are read as slugs, they match
+ * nothing, and `reaskExpansions` says so in a warning. The failure mode of the
+ * old spelling was spending money on strangers' articles, so there must be no
+ * way to ask for that by accident — not even a deliberate one, since nothing
+ * this is for wants it.
+ *
+ * ## What it is for
+ *
+ * Question 1 of the live wave — *is the verdict stable across repeats?* — is the
+ * one stage 6 leans on, and it **cannot be measured without this**. The scoped
+ * calls are content-addressed, so a second run over the same article reads its
+ * own `hierarchy-deepen` rows back and makes no call at all: the repeat is free
+ * and the verdicts come out identical **by construction**, which looks exactly
+ * like a perfectly stable signal and is worth nothing.
+ * docs/plans/260904d-deepen-fat-sections.md § "What the live run must answer".
+ *
+ * ## It bypasses the read, and it is not a delete
+ *
+ * `CheckpointStore` has `read` and `write` and no `delete`, deliberately —
+ * src/store/checkpoints.ts § "And there is no `delete`" — and this does not add
+ * one. Nothing is removed, and nothing has to be: skipping the read is the whole
+ * mechanism.
+ *
+ * **A re-asking wave still writes.** Last-write-wins (that file, § "Concurrency,
+ * and why the last write wins") means the freshest answer replaces the stale one
+ * under the same key, which is what you want across repeats — and it means a
+ * genuine resumption *after* a re-asking run is still cheap, because the rows
+ * are all there and are the newest ones. A wave that read nothing and wrote
+ * nothing would leave the next ordinary attempt paying for a wave it had watched
+ * being bought.
+ *
+ * ## The deepening wave only, and wave 1 is left resumed on purpose
+ *
+ * This does not touch the `hierarchy-structure` checkpoint, and that is the
+ * point rather than an omission. **A resumed wave 1 is what holds the seed
+ * constant**: every repeat expands the identical tree, from the identical frozen
+ * outline, with the identical ranges, so a verdict that moves between repeats is
+ * the scoped call changing its mind rather than a different tree being asked a
+ * different question. Re-asking the structure call too would measure both at
+ * once and could not separate them — and would add roughly two dollars and eight
+ * minutes to every repeat for the privilege.
+ *
+ * A repeat therefore wants the article's structure row to already exist, which
+ * is to say: run it once ordinarily, then repeat with this set.
+ */
+export const REASK_ENV = "SPIDERYARN_DEEPEN_REASK";
+
+/** The spellings that used to mean "every article", and now mean no article. */
+const BOOLEAN_SPELLINGS = new Set(["1", "true", "yes", "on", "0", "false", "no", "off"]);
+
+/** The slugs the variable names, trimmed, with the empty entries dropped. */
+export function parseReaskSlugs(value: string | undefined): string[] {
+  if (value === undefined) return [];
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * **The configuration the warning below has already been said about**, so that a
+ * worker chewing through a queue says it once rather than once an article — and
+ * says it again if somebody changes the variable, which is a new mistake.
+ */
+let warnedAboutReask: string | null = null;
+
+/**
+ * **Is *this* article one of the ones being re-asked?**
+ *
+ * `false` for every article the variable does not name, which is the whole
+ * point — see `REASK_ENV`.
+ *
+ * ## The misconfiguration is loud
+ *
+ * A variable that is set and names nothing this run ever sees produces exactly
+ * the output of a variable nobody set: no call, no warning, a free repeat and a
+ * stability measurement that is perfect by construction. That is
+ * docs/reusable/silent-success.md with money attached, so a set variable whose
+ * list does not contain this slug is a `warn` naming the slugs it *did* parse —
+ * once per configuration. A boolean spelling gets its own sentence, because
+ * "I set it to 1 and nothing happened" is the mistake most likely to be made.
+ */
+export function reaskExpansions(slug: string): boolean {
+  const raw = process.env[REASK_ENV];
+  const slugs = parseReaskSlugs(raw);
+  if (slugs.includes(slug)) return true;
+  if (slugs.length > 0 && warnedAboutReask !== raw) {
+    warnedAboutReask = raw ?? null;
+    const boolean = slugs.filter((s) => BOOLEAN_SPELLINGS.has(s.toLowerCase()));
+    log("pipeline").warn(
+      {
+        slug,
+        env: REASK_ENV,
+        namesSlugs: slugs,
+        booleanSpellings: boolean,
+      },
+      boolean.length > 0
+        ? `${REASK_ENV} is a comma-separated list of slugs and a boolean spelling names no article; ` +
+            "this wave is resuming its checkpoints as usual"
+        : `${REASK_ENV} is set and does not name this article; this wave is resuming its checkpoints as usual`,
+    );
+  }
+  return false;
+}
+
+/**
+ * **Where the per-candidate records are written, and unset means nowhere.**
+ *
+ * A directory. Every deepening pass drops one JSON file into it, named for the
+ * slug and stamped to the second, so **repeats accumulate rather than overwrite**
+ * — which is the whole point, because two of the five questions stage 5b exists
+ * to answer can only be answered by comparing one run's records with another's
+ * (docs/plans/260904d-deepen-fat-sections.md § "What the live run must answer").
+ *
+ * **A file rather than the log line, and the shape is the eval harness's**
+ * (evals/hierarchy-structure/run.ts writes one directory per run and rewrites
+ * `run.json` as it goes): a per-node fact that only exists as a log line is a
+ * fact somebody has to scrape out of a journal before they can divide one number
+ * by another, and the questions here are rates and stabilities rather than
+ * events. `DeepenStats` stays on the run and in the log line, because that is
+ * the operator's view; this is the analyst's.
+ *
+ * **Not on `HierarchyRun`**, which is read on every ingest by code that wants
+ * eight numbers, not several hundred rows.
+ */
+export const DEEPEN_RECORDS_ENV = "SPIDERYARN_DEEPEN_RECORDS";
+
+/** One deepening pass's instrumentation, as it lands on disk. */
+export interface DeepenRecordsFile {
+  /**
+   * Bump it when a field's meaning changes, so an old file cannot be read as a
+   * new one.
+   *
+   * `deepen-records/2` since 2026-09-05: `failed` and `reason` are new, every
+   * record carries its derived `range` (src/hierarchy-expand.ts §
+   * `CandidateRecord`), and `stats` gained `uncheckpointed` and `gate`. A `/1`
+   * file read as a `/2` would pair repeats on `where` alone, which is the
+   * pairing finding 6 was about.
+   */
+  version: "deepen-records/2";
+  slug: string;
+  /** ISO 8601, so files from several runs sort and can be told apart. */
+  writtenAt: string;
+  /**
+   * **The pass threw, and this is what it had measured when it did.** The tree
+   * is wave 1's and `stats.expanded` is 0; what is here is the governor's
+   * decisions, whatever peers landed, and the bill.
+   */
+  failed: boolean;
+  /** Why, where `failed` — the class and the message. `null` otherwise. */
+  reason: string | null;
+  /** The same object the run and the log line carry. */
+  stats: DeepenStats;
+  /**
+   * One per node the governor decided about. Safe to write down: `where` is an
+   * ordinal path, `range` is a pair of block ids, and every other field is a
+   * number, an enum or a model id — src/hierarchy-expand.ts § `CandidateRecord`
+   * states that rule.
+   */
+  records: CandidateRecord[];
+}
+
+/**
+ * **Keep one pass's records, if anybody asked for them.**
+ *
+ * `DEEPEN_RECORDS_ENV` unset is the ordinary case and writes nothing at all.
+ *
+ * **It never throws.** Instrumentation that can fail the article it is measuring
+ * is worse than no instrumentation, which is the same trade the checkpoint
+ * read and write take a few hundred lines above.
+ *
+ * ## Why the name carries a counter, and why the write is exclusive
+ *
+ * The stamp carried the second and the process id, for the collision
+ * evals/hierarchy-labels.ts records losing two runs to — and **that is not
+ * enough for the thing this is for**. `--repeat` is two passes over one slug
+ * inside one process inside one second, so the pid separates nothing and the
+ * second pass landed on top of the first: the repeat overwrote the run it was
+ * bought to be compared against, and said nothing. ⟨GPT Sol's second review of
+ * stage 5a, finding 4.⟩
+ *
+ * So the name also carries a **process-local monotonic counter**, and the file
+ * is created with `wx` — exclusive — so that a collision is an `EEXIST` this
+ * function can see rather than an overwrite it cannot. On one, it takes the
+ * next number and tries again, a bounded number of times. Two processes writing
+ * into one directory in one second are the case `wx` is actually for; the
+ * counter is what makes the retry terminate.
+ */
+export async function saveDeepenRecords(
+  slug: string,
+  result: DeepenResult,
+  /**
+   * Present where the pass **threw** — see `DeepenFailed`. The file is written
+   * from whatever telemetry the failure carried, with `failed: true` and this
+   * reason, because a measurement run's failure I cannot read is nearly as bad
+   * as no run.
+   */
+  failure?: { reason: string },
+): Promise<void> {
+  const dir = process.env[DEEPEN_RECORDS_ENV];
+  if (dir === undefined || dir.trim() === "") return;
+  const file: DeepenRecordsFile = {
+    version: "deepen-records/2",
+    slug,
+    writtenAt: new Date().toISOString(),
+    failed: failure !== undefined,
+    reason: failure?.reason ?? null,
+    stats: result.stats,
+    records: result.records,
+  };
+  /* The slug reaches a path, so it is spelled out rather than trusted: a store
+     key is not a filename and nothing else here checks it. */
+  const safe = slug.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "article";
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const body = `${JSON.stringify(file, null, 2)}\n`;
+  try {
+    await mkdir(dir, { recursive: true });
+    for (let tries = 0; tries < RECORD_NAME_ATTEMPTS; tries++) {
+      const at = join(dir, `${safe}-${stamp}-${process.pid}-${++recordsWritten}.json`);
+      try {
+        /* **`wx`, so a name already taken is an error rather than an
+           overwrite.** This is the whole point: the failure being guarded
+           against is one file where there should be two. */
+        await writeFile(at, body, { encoding: "utf-8", flag: "wx" });
+        return;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      }
+    }
+    throw new Error(
+      `${RECORD_NAME_ATTEMPTS} record filenames in a row were already taken under ${dir}`,
+    );
+  } catch (err) {
+    log("pipeline").warn(
+      { slug, dir, err },
+      "could not write the deepening records; the wave itself is unaffected",
+    );
+  }
+}
+
+/**
+ * **How many passes this process has written records for**, and therefore the
+ * number in the next filename. Process-local and monotonic, which is exactly as
+ * much uniqueness as `--repeat` needs; `wx` covers the rest.
+ */
+let recordsWritten = 0;
+
+/** How many taken names to walk past before giving up and warning. */
+const RECORD_NAME_ATTEMPTS = 20;
+
+/** What one deepening pass came to. Every field is reported, including at zero. */
+export interface DeepenStats {
+  /** Frontier nodes the governor chose — sections a mechanical bound calls unfinished. */
+  targets: number;
+  /** Of those, the ones a call actually came back about. */
+  expanded: number;
+  /** Nodes the wave added to the tree. */
+  added: number;
+  /**
+   * **Sections whose answer was in hand — bought or resumed — and not
+   * published**, because the deadline had split the wave (`deepenTree` § "All of
+   * the wave, or none of it") or because the wave then failed. Normally 0.
+   *
+   * Its own number rather than an inference from `outOfTime`, because it is the
+   * one that says what the next attempt gets for free: **every one of these has
+   * a checkpoint row that actually landed**, and until 2026-09-05 that sentence
+   * was false. The write is deliberately best-effort — instrumentation and
+   * caching must not fail the article — and its failure was swallowed while the
+   * outcome was counted anyway, so this claimed rows that did not exist and the
+   * next attempt bought them again. ⟨GPT Sol's second review of stage 5a,
+   * finding 2.⟩ The trade stands for the *article*; the count stops lying.
+   * `ExpansionCallOutcome.checkpointed` is what it is now read off.
+   */
+  withheld: number;
+  /**
+   * **Answers that were paid for, not published, and whose row never landed** —
+   * money that buys the next attempt nothing, and the sibling `withheld` needed
+   * in order to stop claiming them.
+   *
+   * Above zero is a `warn` and a thing to go and look at: the checkpoint store
+   * is refusing writes, and every deepening this process does is being bought
+   * twice.
+   */
+  uncheckpointed: number;
+  /** Calls paid for. */
+  calls: number;
+  /** Calls an earlier attempt had already paid for. */
+  resumed: number;
+  /**
+   * Targets whose own request would not fit, and were therefore not asked about.
+   * They keep the shape wave 1 gave them. Normally 0.
+   */
+  oversized: number;
+  /** Calls the wave would not start because the step was running out of time. */
+  outOfTime: number;
+  /** 429s met. */
+  rateLimited: number;
+  /**
+   * **What the width gate did while this pass ran** — its width at the start and
+   * the end, the narrowest it went, and the refusals it saw — or `null` where
+   * the pass made no call at all.
+   *
+   * `rateLimited` alone could not explain a slow wave: a count with no width
+   * beside it cannot say whether the gate narrowed to one and stayed there.
+   * ⟨GPT Sol's second review of stage 5a, finding 7.⟩
+   *
+   * **Per pass, not the singleton's cumulative `report()`**, which is shared
+   * with every other concurrent job and would put another book's rate limit on
+   * this one's artefact. `null` rather than a window of zeros, because a width
+   * of zero is a different and much more alarming fact than "nothing happened
+   * here".
+   */
+  gate: GateWindow | null;
+  /** The verdicts the wave collected — **recorded, not obeyed.** See `deepenTree`. */
+  verdicts: VerdictTally;
+  /**
+   * **What this pass paid for**, summed over every draw of every call it made —
+   * `NO_EXPANSION_USAGE` where every call was resumed, and where none was made.
+   *
+   * **It is not conditioned on publication.** A wave the deadline split
+   * (`withheld` above zero) publishes nothing and still spent the money, and a
+   * cost figure that quietly dropped those calls would be the one number a
+   * budget must not get wrong. `expanded` says what the reader got; this says
+   * what it cost.
+   *
+   * It reaches `HierarchyRun`'s four totals (src/hierarchy.ts) and the records
+   * file, which is the artefact a repeat comparison actually reads.
+   */
+  usage: ExpansionUsage;
+}
+
+/**
+ * **A deepening pass that threw, carrying everything it had already measured.**
+ *
+ * `generateHierarchy` catches this and writes a records file with `failed: true`
+ * before it falls back to wave 1, so a paid run's failure is still readable.
+ * `partial` is a `DeepenResult` in every respect — `root` is `null`, `expanded`
+ * is 0 — so nothing downstream has a second shape to learn.
+ *
+ * `cause` is the original error, **not** the `ExpansionWaveFailed` wrapper: what
+ * a log line and a records file want is what actually went wrong, and the
+ * wrapper's only job was to get the telemetry this far.
+ */
+export class DeepenFailed extends Error {
+  constructor(
+    override readonly cause: unknown,
+    readonly partial: DeepenResult,
+  ) {
+    super(`the deepening wave failed: ${describeFailure(cause)}`);
+    this.name = "DeepenFailed";
+  }
+}
+
+/** A deepened proposal, and what it cost to get. */
+export interface DeepenResult {
+  /**
+   * The proposal to build, or `null` where nothing may be built — no eligible
+   * section, every eligible one refused for size, or a wave the deadline split
+   * and whose answers are therefore **withheld** (§ "All of the wave, or none of
+   * it"). `null` means *keep the tree you already have*, which is exactly
+   * today's article.
+   */
+  root: ModelNode | null;
+  stats: DeepenStats;
+  /**
+   * What deriving the answers repaired and dropped. Merged into the run's own —
+   * but only where `root` is non-null, since a repair to a subtree nobody
+   * published is not something the run made.
+   */
+  report: BuildReport;
+  /**
+   * One per node the governor decided about — wave 1's frontier and wave 2's
+   * children alike. The instrumentation the plan asks for **before** the live
+   * pilot rather than after it, because a model that always says "deeper" turns a
+   * bounded cascade into a bill.
+   */
+  records: CandidateRecord[];
+}
+
+/**
+ * **Money that buys the next attempt nothing**, said out loud whenever there is
+ * any — the answers this pass paid for, did not publish, and could not write a
+ * row for. Silent at zero, which is every ordinary pass.
+ */
+function warnUncheckpointed(slug: string, uncheckpointed: number): void {
+  if (uncheckpointed <= 0) return;
+  log("pipeline").warn(
+    { slug, uncheckpointed, namespace: DEEPEN_NAMESPACE },
+    "expansion answers were paid for, withheld, and could not be checkpointed; " +
+      "the next attempt will buy them again",
+  );
+}
+
+/** A frontier node, and everything needed to ask about it and to attach the answer. */
+interface Candidate {
+  target: ExpansionTarget;
+  /** The proposal node itself — the object the children are attached to. */
+  node: ModelNode;
+  /** Root first, own parent last. `TargetBriefing.ancestors`. */
+  ancestors: OutlineEntry[];
+  /** Its own depth in the proposal; the root is 0. */
+  depth: number;
+  /**
+   * **This node's own row in `records`, by reference**, so that the two facts a
+   * call produces — how often it was redrawn, and how many children it came back
+   * with — can be written onto the node they are about once the call has landed.
+   *
+   * The record has to exist *before* the call, because it is what decides
+   * whether there is a call at all (`record.effective.decision`). Carrying the
+   * reference is what stops those two fields being recorded against the
+   * children instead, which is where they went until 2026-09-05.
+   */
+  record: CandidateRecord;
+}
+
+/** A child set that stood up, and the proposal node it belongs under. */
+interface Attachment {
+  candidate: Candidate;
+  children: ModelNode[];
+  /**
+   * Whether the call this came from has a checkpoint row a later attempt will
+   * find — `ExpansionCallOutcome.checkpointed`, carried down to the target so
+   * that `withheld` can count only the durable ones.
+   */
+  checkpointed: boolean;
+}
+
+/** What a wave's answers came to, **before** anything decides to publish them. */
+interface WaveReading {
+  attachments: Attachment[];
+  /** One per child the wave produced. Wave-1's records are the caller's. */
+  records: CandidateRecord[];
+  /** What deriving those answers repaired and dropped. */
+  report: BuildReport;
+}
+
+function emptyReport(): BuildReport {
+  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+}
+
+/**
+ * **Read a finished wave into the three things it produced** — the child sets,
+ * the records, and the derivation's report — **and attach none of them.**
+ *
+ * Separate from `deepenTree` because the two questions are separate and reading
+ * them nested was where the complexity check pointed: *what did the wave come
+ * back with* is per call, and *may any of it be published* is a fact about the
+ * whole wave (`deepenTree` § "All of the wave, or none of it"). Keeping the
+ * mutation of the proposal out of this function is what makes the second
+ * question answerable at all.
+ *
+ * The one thing it does mutate is each expanded candidate's **own** record, with
+ * the two numbers that could not be known before its call. See below.
+ */
+function readWaveAnswers(opts: {
+  wave: ExpansionWaveResult;
+  byTarget: Map<ExpansionTarget, Candidate>;
+  blocks: readonly Block[];
+  recipe: CascadeRecipe;
+  index: BlockIndex;
+}): WaveReading {
+  const { wave, byTarget, blocks, recipe, index } = opts;
+  const attachments: Attachment[] = [];
+  const records: CandidateRecord[] = [];
+  const report = emptyReport();
+  for (const call of wave.calls) {
+    report.repairs.push(...call.reading.report.repairs);
+    report.droppedChildren.push(...call.reading.report.droppedChildren);
+    report.droppedHeadings.push(...call.reading.report.droppedHeadings);
+    report.collapsedRungs.push(...call.reading.report.collapsedRungs);
+    for (const answered of call.reading.targets) {
+      const candidate = byTarget.get(answered.target);
+      if (candidate === undefined) {
+        /* The targets came out of `frontier` and travelled through the planner by
+           identity, so this cannot happen on the ordinary path. If it ever did,
+           the children would be attached to nothing and the run would report a
+           deepening that is not in the tree. */
+        throw new Error(
+          `An expansion came back for ${answered.target.where}, which is not a section this wave ` +
+            `asked about, so there is nothing to attach it to.`,
+        );
+      }
+      attachments.push({
+        candidate,
+        children: answered.children.map((c) => c.node),
+        checkpointed: call.checkpointed,
+      });
+      /**
+       * **The call's own two numbers, on the node the call was about.**
+       *
+       * Recorded here rather than at `recordCandidate` because neither is known
+       * until the answer lands, and recorded on the *parent* because that is
+       * whose call was redrawn and whose children were counted. Both were on the
+       * children until 2026-09-05, so a node nothing was ever drawn for carried
+       * its parent's redraws and `fanOut` was `null` across the whole run.
+       * ⟨GPT Sol's review of stage 5a, finding 4.⟩
+       *
+       * A withheld wave still records them: they describe the answer that was
+       * bought, not the tree that was published.
+       */
+      candidate.record.retries = call.redraws;
+      candidate.record.fanOut = answered.children.length;
+      for (const [i, child] of answered.children.entries()) {
+        records.push(
+          recordCandidate({
+            node: child.node,
+            where: `${candidate.target.where} > child ${i + 1}`,
+            wave: 2,
+            depth: candidate.depth + 1,
+            blocks,
+            recipe,
+            /* **The verdict of the proposal this very node was built from.** */
+            verdict: child.proposed.verdict,
+            /* No `retries` and no `fanOut`: this node was never itself expanded,
+               so nothing about it was drawn twice and nothing fanned out from
+               it. They belong to its parent, above. */
+            index,
+          }),
+        );
+      }
+    }
+  }
+  return { attachments, records, report };
+}
+
+/**
+ * **One additional wave over the sections a mechanical bound says are
+ * unfinished** — the whole of stage 5, and deliberately not one call more.
+ *
+ * ## Seeded from the built tree, never from the raw answer
+ *
+ * `buildTree` does not accept the model's ranges, it **derives** them: it pins
+ * the first child to its parent's start, clamps later starts back inside, snaps a
+ * section onto its own heading, and computes every end. So a scoped call handed
+ * the raw wave-1 proposal could be shown section `[20…40]` while the finished
+ * tree gives that node `[18…47]`, and the titles and gists it wrote would
+ * describe **prose the call never saw** — a tree that tiles, covers every block
+ * and passes every invariant while being about the wrong paragraphs. Moby-Dick's
+ * structure answer needed 55 boundary repairs, so this is not theoretical.
+ *
+ * Hence `proposalFromTree`, over the tree `buildTree` has already made. Four
+ * things follow, and they are why the ordering is not negotiable: every scoped
+ * call is shown the range the finished tree will give the node; every check
+ * `buildTree` makes still runs **once** over the finished proposal, with no
+ * second validation path to keep in step; the leaf layer is grown once, under
+ * whatever the deepest node on each branch turns out to be; and a unary rung can
+ * never reach a scoped call, because `buildTree` has already spliced it away
+ * (src/hierarchy.ts § `collapseRestatedRungs`).
+ *
+ * **Give it the body tree**, before `appendSupplement`. A supplement is a
+ * depth-one node of leaves, `ModelNode` has nowhere to put its `treatment`, and
+ * `proposalFromTree` would hand it back as an ordinary childless node — which
+ * this function would then take for a section and try to divide.
+ *
+ * ## What the frontier is
+ *
+ * The **childless** nodes of the proposal: a node whose tree children are all
+ * leaves is a section, and a section is what this plan is about. Each is put to
+ * `decideExpansion` with **no verdict**, because nobody has been asked about
+ * wave 1's nodes — so what selects a target is a mechanical bound and nothing
+ * else: an authored heading no boundary starts on, or more body words than
+ * `forcedOpenWords` under a node above the divisibility floor. That is exactly
+ * *"one additional scoped wave over mechanically selected targets"*.
+ *
+ * The frontier arrives in document order because a depth-first walk of a tiling
+ * tree does, which is what `planExpansionBatches` requires and asserts.
+ *
+ * ## All of the wave, or none of it
+ *
+ * A wave the step's deadline cuts in half is **not published at all**: which
+ * calls got out and which were declined at the gate is settled by the dispatch
+ * jitter, so half a wave is a tree two identical runs disagree about. The rows
+ * of the calls that landed are kept, so the next attempt is cheap — but nothing
+ * schedules that attempt. The code and the full argument are at `partial`,
+ * below.
+ *
+ * ## The verdicts are recorded and not obeyed
+ *
+ * Every child comes back saying whether it is finished or wants a level of its
+ * own, and **stage 5 counts those and stops**. Obeying them is the recursion, it
+ * is stage 6, and it is conditional on these numbers saying the verdict is stable
+ * — the spike ran one section twice and got 6 "needs-deeper" of 10 children one
+ * time and 1 of 20 the next. `DeepenStats.verdicts` is that measurement, and it
+ * is only sayable per child because `normaliseExpansion` hands back each node
+ * beside the proposal it was built from.
+ *
+ * ## Why `finaliseCascade` is not the road here
+ *
+ * `assertCascadeComplete` asks *"was every node the cascade created ever actually
+ * asked about?"*, and faults a terminal node that `shouldExpand` would split
+ * unless a `capReached` record explains it. That is the right question for a
+ * cascade run to completion and the wrong one for a single mechanical wave: a
+ * wave-1 section of twenty blocks with no heading and 1,500 words is above the
+ * floor and was stopped at `no-verdict` **by the governor, on purpose**, so
+ * satisfying the assertion would mean writing `capReached` records for nodes
+ * nothing capped — bookkeeping that lies. The guards here are the ones that fit:
+ * `buildTree` and `assertTreeSound` over the whole result, which the caller runs
+ * anyway, plus this function's own rule that a target either gains a complete
+ * child set or is left exactly as wave 1 made it. `finaliseCascade` becomes the
+ * road at stage 6, where a `CascadeState` is the representation and its question
+ * is the right one.
+ */
+export async function deepenTree(opts: {
+  /** The body tree wave 1 produced — **before** `appendSupplement`. */
+  tree: Tree;
+  /** The body, after `splitBlocks`: the same array wave 1 was called with. */
+  blocks: readonly Block[];
+  slug: string;
+  checkpoints: CheckpointStore;
+  execute: ExpansionExecutor;
+  recipe?: CascadeRecipe;
+  /** Wall clock the step must be finished by. See `runExpansionWave`. */
+  deadlineAt?: number;
+  signal?: AbortSignal;
+  /**
+   * Injectable for the same reason `runExpansionWave` takes one: the only shape
+   * the deadline reserve can actually stop is a wave with more calls in it than
+   * the gate has room for, and posing that in a test needs a gate the test owns.
+   * Production shares the module's.
+   */
+  gate?: WidthGate;
+  /** Forwarded to the wave. Defaults there to `reaskExpansions(slug)`, which is off. */
+  reask?: boolean;
+  onProgress?: (detail: string) => void;
+}): Promise<DeepenResult> {
+  const { tree, blocks, slug } = opts;
+  const recipe = opts.recipe ?? CASCADE_RECIPE;
+  const index = indexBlocks(blocks);
+  const root = proposalFromTree(tree);
+  const records: CandidateRecord[] = [];
+  const frontier: Candidate[] = [];
+
+  const rung = (node: ModelNode): OutlineEntry => ({
+    title: node.title,
+    ...(node.gist !== undefined ? { gist: node.gist } : {}),
+  });
+
+  const walk = (node: ModelNode, where: string, depth: number, above: OutlineEntry[]): void => {
+    const children = node.children ?? [];
+    if (children.length > 0) {
+      const ancestors = [...above, rung(node)];
+      for (const [i, child] of children.entries()) {
+        walk(child, `${where} > child ${i + 1}`, depth + 1, ancestors);
+      }
+      return;
+    }
+    /* No `verdict`, because nobody has been asked about a wave-1 node — a third
+       state rather than "finished", which `decideExpansion` reports under its own
+       names (`no-verdict`, `unassessed-ceiling`) so that the bounds cannot read
+       high on the one wave where no verdict exists. */
+    const record = recordCandidate({ node, where, wave: 1, depth, blocks, recipe, index });
+    records.push(record);
+    if (record.effective.decision !== "expand") return;
+    /* A `CascadeNode` view of the proposal node, because that is what an
+       `ExpansionTarget` carries. Field by field rather than a spread: a
+       `PendingNode` is `children?: never`, and saying so here is what makes
+       *"only a childless node is ever a target"* a compile-time fact rather than
+       a habit. It is a copy, so `candidate.node` — the object actually in the
+       proposal — stays the one thing an answer can be attached to. */
+    const pending: CascadeNode = {
+      status: "pending",
+      title: node.title,
+      range: node.range,
+      ...(node.gist !== undefined ? { gist: node.gist } : {}),
+      ...(node.sourceHeading !== undefined ? { sourceHeading: node.sourceHeading } : {}),
+    };
+    frontier.push({ target: { node: pending, where }, node, ancestors: above, depth, record });
+  };
+  walk(root, "root", 0, []);
+
+  const nothing = (over: Partial<DeepenStats> = {}): DeepenResult => ({
+    root: null,
+    report: emptyReport(),
+    records,
+    stats: {
+      targets: frontier.length,
+      expanded: 0,
+      added: 0,
+      withheld: 0,
+      uncheckpointed: 0,
+      calls: 0,
+      resumed: 0,
+      oversized: 0,
+      outOfTime: 0,
+      rateLimited: 0,
+      /* No call was made, so the gate was never asked anything. */
+      gate: null,
+      verdicts: tallyVerdicts(records),
+      usage: NO_EXPANSION_USAGE,
+      ...over,
+    },
+  });
+
+  /* **The ordinary article, and it must cost nothing.** Most pieces have no
+     section a bound calls unfinished, and for those this is a walk of a small
+     tree and no call at all. */
+  if (frontier.length === 0) return nothing();
+
+  const seed = frozenSeed(tree);
+  const byTarget = new Map(frontier.map((c) => [c.target, c]));
+  const briefings = frontier.map((c) => ({ target: c.target, ancestors: c.ancestors }));
+  /* Measured off the real strings rather than left at `UNMEASURED_OVERHEAD`,
+     whose zeros make the hard request bound degenerate to the evidence total —
+     fine for a test about packing, and not fine in a wave, whose feasibility cap
+     would then be measuring the wrong thing. */
+  const overhead = expansionOverhead({ briefings, blocks, outline: seed.outline, index });
+  const planned = planExpansionBatches(
+    frontier.map((c) => c.target),
+    blocks,
+    recipe,
+    overhead,
+  );
+
+  const batches = planned.filter((call): call is ExpansionBatch => call.kind === "batch");
+  const oversized = planned.length - batches.length;
+  for (const call of planned) {
+    if (call.kind !== "oversized") continue;
+    /**
+     * **A section too big to ask about is left exactly as wave 1 made it**, and
+     * the run says so.
+     *
+     * Both alternatives are worse. Failing the article would cost a reader their
+     * piece over an enhancement; cutting the section across two calls is the one
+     * thing `planExpansionBatches` refuses on purpose, because two calls given the
+     * same parent each decide where its children start and neither can see the
+     * other's boundaries. So it is skipped, and skipped *loudly*: the node keeps
+     * the shape every reader has today, which is the honest fallback.
+     *
+     * With `maxRequestTokensPerBatch` at 120,000 and the largest section ever
+     * measured at 76,558 input tokens, this should never fire. A number here means
+     * the recipe wants a smaller `terminalBlocks`, or that some document is unlike
+     * anything in the corpus.
+     */
+    log("pipeline").warn(
+      {
+        slug,
+        where: call.target.where,
+        estimatedRequestTokens: call.estimatedRequestTokens,
+        limit: call.limit,
+      },
+      "a section is too large for one expansion call; leaving it at the depth wave 1 gave it",
+    );
   }
 
-  return { calls, asked: keys.length, found: stored.size, usable: resumed.size };
+  if (batches.length === 0) return nothing({ oversized });
+  opts.onProgress?.(`deepening ${frontier.length} sections in ${batches.length} calls`);
+
+  /**
+   * **Every road out of the wave, including the one that throws.**
+   *
+   * A fatal wave used to return nothing at all, so wave 1's governor decisions,
+   * whatever the paid peers bought, the gate's report and the token accounting
+   * all left with the throw — and three of the five questions stage 5b exists to
+   * answer are exactly those numbers. ⟨GPT Sol's second review of stage 5a,
+   * finding 5.⟩
+   *
+   * The wave hands its partial back on `ExpansionWaveFailed`; this reads it the
+   * same way it reads a successful one, and rethrows a `DeepenFailed` carrying a
+   * whole `DeepenResult`. **The only thing that differs from the success path is
+   * that nothing is attached.**
+   */
+  const wave = await runExpansionWave({
+    slug,
+    checkpoints: opts.checkpoints,
+    execute: opts.execute,
+    batches,
+    /* By identity, out of the map built above: `planExpansionBatches` carries the
+       very target objects it was given, in order. Asked per target rather than
+       passed as a parallel array, for the reason that signature gives.
+
+       **A miss throws rather than answering `[]`.** An empty chain is a legal
+       answer — the root has one — so a default here would send a call with no
+       ancestors above its section, which is precisely the blind subtree call
+       260826h names as where four sections all end up meaning "Background". It
+       would cost money and produce a plausible tree. */
+    ancestorsOf: (target) => {
+      const candidate = byTarget.get(target);
+      if (candidate === undefined) {
+        throw new Error(
+          `The wave asked for the chain above ${target.where}, which is not a section this ` +
+            `deepening chose. A call with no ancestors above it is a blind subtree call.`,
+        );
+      }
+      return candidate.ancestors;
+    },
+    blocks,
+    seed,
+    recipe,
+    index,
+    ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.gate ? { gate: opts.gate } : {}),
+    ...(opts.reask !== undefined ? { reask: opts.reask } : {}),
+  }).catch((err: unknown) => {
+    if (!(err instanceof ExpansionWaveFailed)) throw err;
+    const partial = readWaveAnswers({ wave: err.partial, byTarget, blocks, recipe, index });
+    records.push(...partial.records);
+    const banked = partial.attachments.filter((a) => a.checkpointed).length;
+    warnUncheckpointed(slug, partial.attachments.length - banked);
+    throw new DeepenFailed(err.cause, {
+      root: null,
+      report: partial.report,
+      records,
+      stats: {
+        targets: frontier.length,
+        expanded: 0,
+        added: 0,
+        withheld: banked,
+        uncheckpointed: partial.attachments.length - banked,
+        calls: err.partial.calls.filter((c) => !c.resumed).length,
+        resumed: err.partial.calls.filter((c) => c.resumed).length,
+        oversized,
+        outOfTime: err.partial.outOfTime,
+        rateLimited: err.partial.rateLimited,
+        gate: err.partial.gate,
+        verdicts: tallyVerdicts(records),
+        usage: err.partial.usage,
+      },
+    });
+  });
+
+  const read = readWaveAnswers({ wave, byTarget, blocks, recipe, index });
+  const { attachments, report } = read;
+  records.push(...read.records);
+
+  /**
+   * **All of the wave, or none of it.**
+   *
+   * `outOfTime` above zero means the deadline split this wave: some calls went
+   * out and some were declined at the gate, and *which* is decided by the
+   * dispatch jitter — so attaching whatever came back would publish a tree that
+   * two identical runs disagree about. The reader would get one fat section
+   * deepened and its neighbour not, for no reason anybody could name.
+   *
+   * So a partial wave publishes nothing and the article keeps today's tree,
+   * which is correct and simply not deeper. **What was paid for is not lost**:
+   * every call that landed wrote its own row before this point, and the next
+   * attempt reads them back and buys only the rest.
+   *
+   * **Nothing schedules that next attempt**, and this is the honest limit rather
+   * than a plan. `WaveOutOfTime` returns normally, the labels are written, and
+   * the job is committed done — so the retry is the reader pressing it, or a
+   * later re-ingest, exactly as a PDF that needs two lease windows works
+   * (docs/project/content-extraction.md). Automatic requeueing is a design
+   * change and is deliberately not made here.
+   *
+   * **An oversized section is not this case.** It was never asked about, the
+   * decision is deterministic, and the rest of the wave is complete over the
+   * batches that *were* planned — so it does not withhold anything.
+   */
+  const partial = wave.outOfTime > 0;
+  /* **Only the answers whose row actually landed.** A best-effort write that
+     threw leaves an answer that was paid for and buys the next attempt nothing;
+     counting it under `withheld` was the claim `DeepenStats.withheld` could not
+     support. */
+  const banked = attachments.filter((a) => a.checkpointed).length;
+  const uncheckpointed = partial ? attachments.length - banked : 0;
+  if (partial) {
+    log("pipeline").warn(
+      { slug, bought: attachments.length, banked, outOfTime: wave.outOfTime },
+      "the deadline cut this deepening wave in half; publishing none of it and keeping the rows",
+    );
+  } else {
+    for (const { candidate, children } of attachments) candidate.node.children = children;
+  }
+  warnUncheckpointed(slug, uncheckpointed);
+  const expanded = partial ? 0 : attachments.length;
+  const added = partial ? 0 : attachments.reduce((n, a) => n + a.children.length, 0);
+
+  return {
+    /* `null` where nothing was attached, so the caller builds nothing a second
+       time and the article is byte-identical to today's. */
+    root: expanded > 0 ? root : null,
+    report,
+    records,
+    stats: {
+      targets: frontier.length,
+      expanded,
+      added,
+      withheld: partial ? banked : 0,
+      uncheckpointed,
+      calls: wave.calls.filter((c) => !c.resumed).length,
+      resumed: wave.calls.filter((c) => c.resumed).length,
+      oversized,
+      outOfTime: wave.outOfTime,
+      rateLimited: wave.rateLimited,
+      gate: wave.gate,
+      verdicts: tallyVerdicts(records),
+      /* **The wave's own figure, whether or not any of it was published.** See
+         `DeepenStats.usage`: `partial` zeroes `expanded` and `added` above, and
+         must not zero this. */
+      usage: wave.usage,
+    },
+  };
 }

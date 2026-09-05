@@ -642,6 +642,36 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "to reach `generateHierarchy`. Nothing here changes when the filesystem store goes.",
   },
   /**
+   * **Stage 5's two files, landed 2026-09-05**, and the same verdict as the
+   * three above for the same reason — they reach a condemned module only through
+   * `src/hierarchy.ts`, which imports the app to reach `generateHierarchy`.
+   * `static-only` is the state of the evidence rather than a preference: both
+   * arrived long after witness 2 ran, and re-running it is what upgrades them.
+   */
+  "tests/hierarchy-prompt-hoist.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Three constants and a renderer, pinned where they landed after being hoisted out of " +
+      "`src/hierarchy.ts` into a leaf so that the deepening wave could be imported without " +
+      "closing a cycle. It builds one request in memory and hashes it; there is no store, no " +
+      "network and no filesystem. Nothing here changes when the filesystem store goes.",
+  },
+  "tests/hierarchy-deepen-wave.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The deepening wave end to end against a fake executor: which sections a mechanical bound " +
+      "selects, that the result does not depend on the order the calls come back in, that a wave " +
+      "declines to start a call it cannot finish, and that the whole thing is off by default. The " +
+      "two model calls `generateHierarchy` would make are mocked at the module boundary and the " +
+      "only stores it constructs are `nullCheckpointStore` and `memoryCheckpoints`, so there is " +
+      "no database, no blobs and no filesystem. Nothing here changes when the filesystem store " +
+      "goes.",
+  },
+  /**
    * **Arrived from `dev` after the registry was written, and the hole check
    * caught it** — which is the whole reason that check re-derives the import
    * graph live rather than reading a stored answer. Named, classified, kept.
@@ -753,8 +783,10 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**, and it was the largest of them — though less by " +
-      "depth than by breadth, because eight of its ten blocks are pure functions with no store " +
-      "under them at all. **It was split first**: `sweepStopped`, `writeOnce`'s temp file, the " +
+      "depth than by breadth, because most of its blocks are pure functions with no store " +
+      "under them at all: eight of the ten it had **on 2026-09-04**, which is a dated count and " +
+      "not a live inventory — `describe(\"unrunnableStepPlan\")` arrived later, with Stage E. " +
+      "**It was split first**: `sweepStopped`, `writeOnce`'s temp file, the " +
       "interrupted marker and `STEPS[name].outputs` went to " +
       "`tests/jobs-fs-adapter.test.ts`, because their subject is the adapter rather than the " +
       "queue and this map cannot give one file two verdicts. What is left — the queue's " +

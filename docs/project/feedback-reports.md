@@ -67,11 +67,44 @@ It is [engineering-manager.md](../reusable/engineering-manager.md), with the rep
 
 1. **Read the queue, in full, before starting anything.** Two reports that turn out to be one bug
    become one agent's brief; the rest are independent and the fan-out below assumes it.
-2. **One background Opus agent per report**, each in **its own worktree** (`EnterWorktree`, then
-   `npm run worktree:setup` — [worktrees.md](worktrees.md)), each running
-   [engineering-manager.md](../reusable/engineering-manager.md) with its own subagents beneath it.
-   **Three at a time at most**: they share one local Supabase, one dev server and one box, and past
-   three the tests start going red for reasons that are nobody's bug.
+2. **One `gjd-remote` session per report**, not a background subagent — so that each report is a
+   real Claude session on the box, which Greg can open a tab on with `gjd-remote resume-all` or
+   steer through Claude Code remote control while it runs
+   ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)):
+
+   ```
+   gjd-remote new-claude --no-attach -p - <<'EOF'
+   User feedback: <the reader's words, verbatim> — <Sentry short id and link, and the url, slug
+   and kind tags>. Proceed autonomously, following docs/reusable/engineering-manager.md and
+   docs/project/feedback-reports.md: your own worktree, land it on dev, and finish with the
+   bookkeeping in the three-ways-a-report-ends section.
+   EOF
+   ```
+
+   `-p -` takes the prompt from stdin, so the reader's own words need no escaping; `--no-attach` so
+   the launcher can start the next one instead of being handed the terminal. Each session runs
+   [engineering-manager.md](../reusable/engineering-manager.md) in **its own worktree**
+   (`EnterWorktree`, then `npm run worktree:setup` — [worktrees.md](worktrees.md)), with its own
+   subagents beneath it. **Three at a time at most**: they share one local Supabase, one dev server
+   and one box, and past three the tests start going red for reasons that are nobody's bug.
+
+   **The loop can run this from the box itself** — it has a keypair that reaches only itself, so it
+   ssh's to `127.0.0.1` and the sessions it starts are the same tmux sessions the laptop's
+   `resume-all` opens
+   ([hetzner-remote-server-box.md § Running `gjd-remote` from the box](hetzner-remote-server-box.md#running-gjd-remote-from-the-box)).
+   Two things a box-side launcher must do that a laptop one does not: run it as
+   `npx tsx scripts/gjd-remote.ts`, which is the only name it has there, and **set
+   `GJD_REMOTE_HOST=127.0.0.1` on the command itself** — provisioning exports it from
+   `/etc/profile.d/`, which only a *login* shell reads, and an agent's tool shell is not one. Without
+   it the command goes looking for `tofu` and dies. So, on the box:
+
+   ```
+   GJD_REMOTE_HOST=127.0.0.1 npx tsx scripts/gjd-remote.ts new-claude --no-attach -p - <<'EOF'
+   …
+   EOF
+   ```
+
+   Verified end to end from the box on 2026-09-05: session created, Claude started, prompt answered.
 3. **Each agent decides for itself** what to build, using § Who sent it above — Fable and GPT Sol are
    its calls to make, not this loop's.
 4. **It lands on `dev` and stops there**: green tests, a GPT Sol review of the code,

@@ -540,6 +540,7 @@ describe("the stage as it actually runs", () => {
     expect(cut[1]).toEqual([4, 5, 6]);
 
     const result = await runPdfExtract({
+      frontMatter: null,
       bytes,
       checkpoints: memoryCheckpoints({ slug: "seam", articleId: "article-seam" }),
       slug: "seam",

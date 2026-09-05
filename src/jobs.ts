@@ -838,6 +838,8 @@ async function runStep(
   job: Job,
   step: JobStep,
   controller: AbortController,
+  /** When this claimant stops, on `Date.now()`'s clock. `StepContext.deadlineAt`. */
+  deadlineAt: number,
   jlog: Log,
   /* The caller's progress write. It answers with the job row as it now stands —
      which is how the walk notices a Stop pressed on another instance — but that
@@ -864,6 +866,10 @@ async function runStep(
       step.detail = detail;
     },
     signal: controller.signal,
+    /* The same instant the abort timer above is set for, passed rather than
+       recomputed: a step that can decline to start work it cannot finish needs
+       to know *when*, not only *that*. See `StepContext.deadlineAt`. */
+    deadlineAt,
     /* Mark the article when any *other* step of this job is in the same cache
        group — in either direction. The list used to be `slice(i + 1)`, later
        steps only, which marked the stage that writes the entry and never the one
@@ -2376,6 +2382,7 @@ async function walkClaim(
         job,
         step,
         controller,
+        deadlineAt,
         jlog,
         note,
         session,
