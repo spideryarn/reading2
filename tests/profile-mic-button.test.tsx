@@ -55,6 +55,8 @@ vi.mock("../src/web/useDictation.js", () => ({
     chooseDevice: () => {},
     recording: null,
     clearRecording: () => {},
+    canRetry: false,
+    retry: () => {},
   }),
 }));
 
@@ -83,9 +85,23 @@ function render(): HTMLButtonElement {
   return button;
 }
 
+/**
+ * Pose the browser as offline or on, the way it actually reaches the page: a
+ * `navigator.onLine` that answers, and the event that says it changed.
+ * `useOnline` subscribes to the events, so setting the property alone would
+ * leave a rendered component showing the old answer for ever.
+ */
+function setOnline(online: boolean) {
+  Object.defineProperty(window.navigator, "onLine", { value: online, configurable: true });
+  act(() => {
+    window.dispatchEvent(new Event(online ? "online" : "offline"));
+  });
+}
+
 beforeEach(() => {
   state.armed = false;
   state.transcribing = false;
+  setOnline(true);
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -129,6 +145,70 @@ describe("the microphone button", () => {
     const button = render();
     expect(button.disabled).toBe(true);
     expect(button.getAttribute("aria-label")).toBe("Turning your words into text");
+  });
+
+  /**
+   * **Recording into nothing is the failure this prevents.** Greg, 2026-09-05:
+   * *"If it's offline before, we should disable the mic input button."* The
+   * words that get saved come from a `POST /api/transcribe`, so with no network
+   * a dictation is a minute of talking followed by a failure — and the button
+   * looked exactly as it always does right up until then.
+   *
+   * `navigator.onLine` is only trusted in this direction; see `useOnline.ts`.
+   */
+  describe("when the browser says there is no network", () => {
+    it("is disabled before the reader can press it", () => {
+      setOnline(false);
+      expect(render().disabled).toBe(true);
+    });
+
+    it("says why, rather than being mysteriously dead", () => {
+      setOnline(false);
+      const button = render();
+      /* Both, because they reach different people: the name is what a screen
+         reader announces for a disabled control, and the tooltip is the only
+         thing a mouse gets. A disabled button with no reason on it is the
+         thing copy.md exists to stop. */
+      expect(button.getAttribute("aria-label")).toMatch(/internet connection/i);
+      expect(button.getAttribute("title")).toMatch(/internet connection/i);
+    });
+
+    it("comes back on its own when the connection does", () => {
+      setOnline(false);
+      expect(render().disabled).toBe(true);
+      setOnline(true);
+      expect(render().disabled).toBe(false);
+      expect(render().getAttribute("aria-label")).toBe("Dictate");
+    });
+
+    /**
+     * **It is also the Stop button, and that nearly cost a trapped recording.**
+     *
+     * Found by GPT Sol reviewing the plan, as a P0: this one control both
+     * starts and stops, so disabling it on `offline` would mean a reader whose
+     * wifi drops mid-sentence cannot stop the microphone at all — and since
+     * 2026-09-05 a recogniser losing its connection no longer ends the
+     * dictation either, so nothing else would have ended it. The offline guard
+     * is about *starting* something that cannot work; stopping always works,
+     * and the transcription is attempted afterwards regardless.
+     */
+    it("still stops a dictation that is already running", () => {
+      state.armed = true;
+      setOnline(false);
+      const button = render();
+      expect(button.disabled).toBe(false);
+      expect(button.getAttribute("aria-label")).toBe("Stop dictating");
+    });
+
+    /* The promise slot is finite and the offline reason is more urgent than a
+       fact about storage the reader cannot act on until the button works. */
+    it("spends its description on the reason it cannot be used", () => {
+      setOnline(false);
+      const button = render();
+      const describedBy = button.getAttribute("aria-describedby");
+      const described = host.querySelector(`#${describedBy}`);
+      expect(described?.textContent).toMatch(/internet connection/i);
+    });
   });
 });
 

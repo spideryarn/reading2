@@ -338,6 +338,7 @@ import {
   MAX_AUDIO_BASE64,
   isAudioFormat,
   parseWhere,
+  tooLongMessage,
   transcribe,
 } from "./transcribe.js";
 import type {
@@ -5309,17 +5310,11 @@ async function transcribeDictation(
     /* The number is in the message because the fix depends on it, and the fix
        is "record less" — which a reader can only act on if they know what the
        limit is. docs/project/copy.md. */
-    throw httpError(
-      413,
-      /* **Raw audio, not the encoded figure.** The limit is on base64, which is
-         a third larger than the file it encodes — so quoting it as "MB of
-         audio" overstated what a reader may record by exactly that third, and
-         the number in an error message is the one thing in it somebody acts on.
-         GPT Sol's code review, item 9. */
-      `That recording is too long. The limit is about ${
-        Math.round(((MAX_AUDIO_BASE64 * 3) / 4 / 1024 / 1024) * 10) / 10
-      } MB of audio. [mic-too-long]`,
-    );
+    /* **The same sentence the browser would have shown**, and the arithmetic
+       that turns base64 into "MB of audio" now lives once, beside the constant,
+       rather than here and again in `dictation-upload.ts`. The two used to be
+       different sentences under one code — `tests/dictation-codes.test.ts`. */
+    throw httpError(413, tooLongMessage());
   }
   if (!isAudioFormat(sent.format)) throw httpError(400, "format is not one we can transcribe");
   const where = parseWhere(sent.context);

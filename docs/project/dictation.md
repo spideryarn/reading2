@@ -97,6 +97,33 @@ spends reasoning tokens before transcribing and that endpoint refuses to turn th
 `DICTATION_MODEL` in [`src/models.ts`](../../src/models.ts) carries the short version beside the
 line it would change; the plan owns the numbers.
 
+## The ums come out, and nothing else does
+
+Greg, 2026-09-05: *"The microphone input (eg for Feedback dialog box) sometimes includes superfluous
+ums and ahs. Can we tweak the prompt or otherwise to ignore/remove these?"*
+
+The answer turned out to be **or otherwise**.
+[`src/dictation-fillers.ts`](../../src/dictation-fillers.ts) deletes a closed list of hesitation
+sounds from the transcript after `tidy()`, and the whole of its design is that **it can only
+delete** — never add a word, never reorder one, never choose a different one — which is a property a
+test asserts rather than an intention a comment claims.
+
+The prompt was the obvious lever and is not the one taken. Read `SYSTEM` in
+[`transcribe.ts`](../../src/transcribe.ts): it is one long argument that the model is a transcriber
+and must not be helpful, and *"remove the filler words"* is an editing instruction in a prompt whose
+one job is to refuse to edit. The failure it would invite — a fluent paraphrase — is
+indistinguishable from a good transcript by any check that can be written. Meanwhile the industry
+does not use prompts for this either: Deepgram, AssemblyAI, Speechmatics and Gemini's own
+transcription API all expose it as a *parameter*, and none of those is reachable through
+OpenRouter's chat route.
+
+**GPT Sol disagrees**, thinks the prompt is worth trying, and is probably right that it should be
+measured. What that needs is an audio corpus with real hesitation in it — plus controls for `err`,
+`ER`, `uh-huh` and a deliberate *"Ah"* — and that corpus does not exist yet. It is the named next
+step in [260905c](../plans/260905c-dictation-filler-words-and-mic-offline.md), which also carries
+what is deferred: stutters, `like` and `you know`, and the fact that nothing here knows whether the
+reader was speaking English at all.
+
 ## What is in the vocabulary
 
 Five sources, in the order the 2,000-character cap spends on them — what it drops should be what
@@ -189,6 +216,17 @@ recogniser gets nothing**, where the old code did the opposite:
 Safari trades the live words it used to have for a recording, a measured meter and a transcript
 that gets the words right. Firefox, which had no button at all, gains all three — `supported` now
 means *"can open a microphone"* rather than *"has Web Speech"*.
+
+**And the recogniser dying puts a browser into that row**, rather than ending the dictation. Added
+2026-09-05 after Greg reported `[mic-offline]` from the Feedback dialog: Chrome's Web Speech API
+ships its audio to a server, so a captive portal or a VPN blip makes it fail — and that used to stop
+the recording **mid-sentence** and tell the reader to check their internet connection, about a path
+that had usually worked perfectly. It now takes the live words with it and nothing else: `s.live`
+goes false, `onend` does not restart it, late results are ignored, and if it died before
+`audiostart` ever fired the hook takes over the timer and arms the tape itself — which is the
+Firefox path verbatim, because it is now Firefox's situation. The gate is *"is our track still
+live"* rather than a list of error codes to trust, since a track that has really gone fires its own
+`ended` listener. [260905c](../plans/260905c-dictation-filler-words-and-mic-offline.md).
 
 Two things guard the invariant, and they are in different places because they are different
 problems:
@@ -335,7 +373,20 @@ was said.
    `provider: { order: ["anthropic"] }` so repeat calls land on the cache. Copied onto a Gemini
    model that is wrong *quietly* — OpenRouter finds no Anthropic upstream, falls through, and
    answers. This call does not send it, and a test says so.
-5. **`http://localhost` and Chrome's permission.** `localhost` is a secure context by exception, so
+5. **The reader is offline before they start.** The words that get saved come from a `POST`, so
+   with no network a dictation is a minute of talking and then a failure. The button is disabled on
+   a `navigator.onLine` of `false` and says why — [`useOnline.ts`](../../src/web/useOnline.ts), which
+   exists mostly to write down that `false` is the only direction that value may be trusted.
+   **Not while armed**, because the same button is Stop: disabling it mid-dictation would trap the
+   recording, which GPT Sol caught as a P0 before it shipped.
+6. **The transcription fails after the reader has stopped.** The audio is kept — on *every* failed
+   upload since 2026-09-05, not only when the box is empty — and **Try again** sends the same bytes
+   up again. Offered only when the failure could plausibly go the other way: a container we cannot
+   read, or a recording over the cap, will be refused identically for ever, and
+   [copy.md](copy.md) is explicit that inviting a futile retry is the expensive mistake.
+   `TranscriptionResult.retryable` in [`dictation-upload.ts`](../../src/web/dictation-upload.ts)
+   carries it, read off the HTTP status rather than out of the sentence.
+7. **`http://localhost` and Chrome's permission.** `localhost` is a secure context by exception, so
    `getUserMedia` and `SpeechRecognition` both work there — but the grant is keyed to the full
    origin *including the port*, and Vite's port moves. A plausible share of why the microphone
    seemed to behave better on `spideryarn.com` than on a laptop.
@@ -352,12 +403,27 @@ a recorder that hit its cap. They live beside the code that raises them.
 
 | | |
 |---|---|
-| `[mic-blocked]` `[mic-no-service]` `[mic-offline]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) |
+| `[mic-blocked]` `[mic-no-service]` `[mic-no-connection]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) — and **the reader rarely sees any of them now**, because a recogniser that dies while the tape is running is a decoration failing, not a dictation failing |
 | `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
-| `[mic-format]` `[mic-too-long]` `[mic-slow]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
-| `[mic-not-set-up]` `[mic-upstream]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) |
+| `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
+| `[mic-not-set-up]` `[mic-upstream]` `[mic-no-upstream]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) — the second is a service that did not answer, the first one that answered "no" |
 | `[ai-busy]` `[ai-no-credit]` | the exception: a 429 or a 402 from the provider borrows `providerHttpFailure` from `src/messages.ts`, because *"could not transcribe that"* reads as a verdict on the recording when the fix is to wait ten seconds |
+
+**One code, one sentence — and for a year it was not.**
+[`tests/dictation-codes.test.ts`](../../tests/dictation-codes.test.ts) reads every `[mic-…]`
+sentence out of `src/` and fails if a code carries two. It was written on 2026-09-05 because a
+feedback report said, in full, *"I got a [mic-offline] error"* — and `[mic-offline]` was both the
+recogniser losing its connection **while the reader was still talking** and the upload failing
+**after they had stopped**, which are different problems with different fixes. It found two more
+the same way: `[mic-upstream]` (a service that refused, and a service that never answered) and
+`[mic-too-long]` (the browser's sentence and the server's, for one branch).
+
+`src/messages.ts` had this check from the start and this family did not, because the family was
+defined by being *outside* that file. The rule was never file-specific;
+[copy.md](copy.md#the-bracketed-code) says a code names a branch. Renaming a shipped code orphans
+the conversations that quoted it, which is why `[mic-offline]` stayed on the upload — the path a
+reader actually loses a dictation to — and the recogniser's became `[mic-no-connection]`.
 
 ## Where the pieces are
 
@@ -373,7 +439,9 @@ a recorder that hit its cap. They live beside the code that raises them.
 | [`useAudioLevel.ts`](../../src/web/useAudioLevel.ts) · [`audio-level.ts`](../../src/web/audio-level.ts) · [`MicLevel.tsx`](../../src/web/MicLevel.tsx) | the meter |
 | [`dictation-errors.ts`](../../src/web/dictation-errors.ts) | every recogniser error code to a sentence, totally |
 | [`src/transcribe.ts`](../../src/transcribe.ts) | the server half: the vocabulary, the model call, the schema |
-| [`src/dictation-limits.ts`](../../src/dictation-limits.ts) | the sizes and the containers, shared by both ends |
+| [`src/dictation-limits.ts`](../../src/dictation-limits.ts) | the sizes and the containers, shared by both ends — and the one sentence for a recording that is too long |
+| [`src/dictation-fillers.ts`](../../src/dictation-fillers.ts) | the ums, deleted — and why it is not a line in the prompt |
+| [`useOnline.ts`](../../src/web/useOnline.ts) | whether the browser has a network, and which way round that may be believed |
 | [`evals/dictation/`](../../evals/dictation/README.md) | the benchmarks that chose the model, and what they cannot tell you |
 
 ## What a browser pass could and could not check
