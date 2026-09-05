@@ -1985,6 +1985,52 @@ export interface Citation {
 }
 
 /**
+ * **The same source, plus the words the search engine actually returned with
+ * it** — for the one caller that has to check a claim against them.
+ *
+ * ## Why this is not just a wider `Citation`
+ *
+ * It was, in the first draft of docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md,
+ * and that draft claimed existing callers would be unaffected. They would not:
+ * `collectCitations` (src/openrouter-stream.ts) is shared by **chat**, whose
+ * citations are written wholesale into `chat_messages` (src/store/pg-chat.ts),
+ * by **explain**, whose citations persist on a comment, and by **Referee
+ * Criteria**. Adding an `excerpt` to `Citation` adds no line to any of those
+ * three and changes what all three store: a few kilobytes of somebody else's
+ * web page, per citation, per answer, for ever, for three features that never
+ * asked for it and show nothing from it. A field nobody reads is not free when
+ * the thing it grows is a stored row. Found by a GPT Sol plan review (F5),
+ * 2026-09-05.
+ *
+ * So the extract is **opt-in at the collector**, not at the type: a caller that
+ * wants it asks `collectSearchEvidence` for it, and a caller that does not
+ * cannot acquire it by accident. `Citation` stays two fields.
+ *
+ * ## What the excerpt is for, and what it is not
+ *
+ * It is *evidence about the relationship*, which a URL alone cannot give. The
+ * Stage 0 probe asked for responses to an invented blog post and got nine real,
+ * correctly-cited pages, none of them a response to anything
+ * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § 4) — so a URL from a live
+ * search proves the link and says nothing about whether the page answers the
+ * article. Checking a quote against these characters is what closes that.
+ *
+ * It is **not** a summary and must never be shown as one: it is a slice of a
+ * third party's page, chosen by a search engine, and it goes on screen as text
+ * and never as markup.
+ *
+ * `excerpt` is optional because the wire's `content` is: it is absent under
+ * some engines and on some rows, and a caller that requires it must say so
+ * itself rather than reading `""` as "the page said nothing".
+ */
+export interface SearchEvidence {
+  url: string;
+  title?: string;
+  /** The search result's own extract of the page, capped — see `MAX_EVIDENCE_EXCERPT`. */
+  excerpt?: string;
+}
+
+/**
  * One tool call, as the reader sees it and as it is stored on the message.
  *
  * **This is a stored type**, which is why it is this small. It goes into
