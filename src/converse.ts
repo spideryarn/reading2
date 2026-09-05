@@ -77,8 +77,9 @@ import {
   explainAbort,
   providerFailedMidAnswer,
   readerAborted,
-  searchCount,
   stoppedByReader,
+  type SearchUsagePath,
+  whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
 import { type ChatJob, ProviderRefused, openRouterStream } from "./ai-call.js";
 import {
@@ -455,9 +456,18 @@ worth reaching for.
   would be worth more than a fact from the web. That connection is something
   nobody else can offer them. Never invent one: if the search finds nothing,
   they have not read about it.
-- DO NOT reach for a tool to do something the article in front of you already
-  answers. It is all here. A tool call the reader waits ten seconds for, to
-  learn what paragraph four says, is worse than no tool at all.
+- ASKING WHETHER A CLAIM HOLDS UP IS A QUESTION ABOUT THE WORLD, not a question
+  about the article. "What is the evidence for this?", "is that true?", "has
+  anyone replicated it?", "who says so?" — reach for the web BY DEFAULT. The
+  article can tell you that the claim was made; it cannot tell you whether the
+  claim survived. Use the article to aim the search: the author, the date, the
+  subject and the other names around the passage are what turn a common phrase
+  into a findable one.
+- DO NOT reach for a tool to look up what a paragraph plainly says. A tool call
+  the reader waits ten seconds for, to learn what paragraph four says, is worse
+  than no tool at all. That is the whole of this rule — a question the article
+  merely touches on is not one it answers, and "the piece asserts it" is not
+  evidence for it.
 - Say where something came from — the article, the web, or their own library —
   and name the other article by its title when you use one.
 
@@ -839,6 +849,55 @@ function stanceLine(
   return `Stance for this turn: ${(stance ?? "balanced").toUpperCase()}.`;
 }
 
+/**
+ * **The reader pressed "?" instead of typing, so they could not say what they
+ * were missing.** Report 1S, 2026-09-05:
+ *
+ * > When I click the question-mark-comment in vertical gutter, it should explain
+ * > in easy-to-understand language, starting with brief summary, and drawing on
+ * > pedagogical techniques, e.g. worked example, analogy, etc
+ *
+ * **In the final user message, below the `cache_control` breakpoint**, for the
+ * reason the stance line above it gives and one more besides. `help` is a fact
+ * about a *turn*, not about a conversation: the "?" sends one question and every
+ * follow-up after it is an ordinary one, so putting this in the system prompt
+ * would answer the whole thread pedagogically *and* mint another cached prefix
+ * per article for the privilege. tests/help-prompt.test.ts pins the byte
+ * identity — GPT Sol's phrasing, `cachedText(help) === cachedText(ordinary)`.
+ *
+ * ## Where the wording comes from
+ *
+ * Not written from scratch. src/explain.ts already holds a pedagogical prompt
+ * built for this reader, and four of its principles are kept: what the reader
+ * has to *bring* to a passage is usually the real question; do not describe the
+ * page they are looking at; keep the author's distinctive words and use ordinary
+ * ones for everything else; do not summarise the article. Greg's 1S adds the
+ * plain opening and the one analogy. docs/project/vision.md constrains both: the
+ * answer sends the reader back into the passage rather than standing in for it.
+ *
+ * ## What it deliberately does NOT say
+ *
+ * **Anything about where the answer comes from.** Report 1X — a comment asking
+ * for evidence that did not search the web — landed while this was being built,
+ * and `SYSTEM` was strengthened in the same commit. Every line below pulls
+ * towards answering from the article alone, which is the opposite pull; a
+ * reader who presses "?" on a claim they doubt wants both. So the encouragement
+ * to search stays where it already is, in `SYSTEM`, owned once. A second,
+ * weaker copy of it here would fire only on help turns and would drift from the
+ * first, and the drift would be invisible. tests/help-prompt.test.ts asserts the
+ * absence.
+ */
+function helpSection(help: boolean): string {
+  if (!help) return "";
+  return `The reader pressed the "?" beside this passage rather than typing a question, so they could not follow it and could not say why. Answer accordingly:
+
+- Open with one or two plain sentences on what this passage is doing. Not a summary of the article — they are reading it.
+- Then supply what they were missing: the term of art, the named person, the study, or the earlier move this passage is answering.
+- Use one analogy or one small worked example where it would do more than another restatement, and leave it out where it would not.
+- Keep the author's distinctive words and use ordinary ones for everything else.
+- Send them back into the paragraph better equipped to read it. Do not stand in for it.`;
+}
+
 export interface ConverseRequest {
   meta: Meta;
   blocks: Block[];
@@ -901,6 +960,16 @@ export interface ConverseRequest {
    * Absent means `balanced`, which is the default the picker starts on.
    */
   stance?: RememberStance | undefined;
+  /**
+   * **The reader pressed "?" rather than typing this question.**
+   *
+   * Per turn, and the caller reads it off the **stored user row** rather than
+   * off the request body — `streamChat` in src/routes.ts, the same rule `kind`
+   * and `stance` already follow. That is what makes a retry or an edit of a
+   * help question still an explanation: `withRetry` hands back the question it
+   * is re-asking, and the flag is on it. See `helpSection`.
+   */
+  help?: boolean;
 }
 
 export type ConverseEvent =
@@ -1060,11 +1129,21 @@ export function buildConverseMessages(opts: {
    * — which is the expected use — costs nothing above the breakpoint.
    */
   stance?: RememberStance | undefined;
+  /**
+   * The reader pressed "?" rather than typing — see `helpSection`. **In the
+   * final user message**, below the breakpoint, so a help turn and an ordinary
+   * one share one cached article prefix.
+   */
+  help?: boolean;
 }): OpenRouterMessage[] {
   const kind = opts.kind ?? "chat";
   const position = readerPositionLine(opts.at);
   const who = profileSection(opts.profile ?? null);
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
+  /* After the anchor and before the stance: the reader is told *which* passage
+     first, then how to explain it. Both are below the breakpoint, so the order
+     is about how the model reads it rather than about what it costs. */
+  const teach = helpSection(opts.help ?? false);
   const how = stanceLine(kind, opts.stance);
   return [
     { role: "system", content: systemFor(kind) },
@@ -1090,7 +1169,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, about, how, opts.question]
+      content: [position, who, about, teach, how, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
@@ -1258,6 +1337,7 @@ export async function* converse({
   useTools = true,
   kind = "chat",
   stance,
+  help = false,
   /* **`kind` above is what this reads**, and the order of these two lines is
      therefore load-bearing: a destructuring default may use a binding declared
      earlier in the same pattern, and `model` is below `kind` for exactly that.
@@ -1308,6 +1388,12 @@ export async function* converse({
        same value as an absent key — the same rule the `anchor` spread follows
        in `withTurn`. */
     ...(stance ? { stance } : {}),
+    /* Unconditional, unlike `stance` above: it is a plain boolean rather than an
+       optional value, so `false` is a real answer and not an absent key. It adds
+       nothing to the message when false — `helpSection` returns "" and the join
+       filters it out — so an ordinary turn is byte-identical to one built before
+       this existed. */
+    help,
   });
 
   /* Logged rather than thrown: a short article simply cannot be cached, and the
@@ -1349,6 +1435,22 @@ export async function* converse({
   let text = "";
   const citations = new Map<string, Citation>();
   let searches = 0;
+  /**
+   * **Which usage field the search count was read out of** — the operator's
+   * half of `searches`, and the reason it is here at all.
+   *
+   * This line used to log a bare `0`, and a bare `0` is a number a reader
+   * believes and an operator cannot check: "the model chose not to search" and
+   * "OpenRouter renamed the field again, so every count is now permanently
+   * zero" print identically. src/explain.ts has carried `searchesFrom` for
+   * exactly that reason since 2026-08-25 and chat — which is where report 1X
+   * arrived, *"hoping that it would automatically know to … search the web"* —
+   * had no such thing. `neither` on a run of turns is the alarm.
+   *
+   * Held across rounds like `usage`, and written only when a round actually
+   * reported accounting, so a tool round that carries no usage cannot reset it.
+   */
+  let searchesFrom: SearchUsagePath = "no-usage";
   let used = model;
   let usage: Usage | undefined;
   /* Token counts summed across rounds, for the same reason `searches` is. Kept
@@ -1682,8 +1784,13 @@ export async function* converse({
            meant a round two that ran no searches overwrote round one's with
            zero, and the stored answer then said the model had not searched
            while showing its citations. Found by a GPT-5.6 review, 2026-08-26. */
-        const counted = searchCount(chunk.usage);
-        if (counted !== null) roundSearches = counted;
+        const counted = whereSearchCountCameFrom(chunk.usage);
+        if (counted.searches !== null) roundSearches = counted.searches;
+        /* Guarded on `chunk.usage`, not on `counted.searches` — the trap
+           src/explain.ts fell into, where `neither` was assigned only on the
+           branch that could never produce it and the alarm could not fire.
+           docs/reusable/silent-success.md. */
+        if (chunk.usage) searchesFrom = counted.from;
         // Held for the totals after the loop: the usage chunk is normally the
         // last one of all and carries no choices, so it would otherwise be seen
         // and dropped.
@@ -2110,6 +2217,11 @@ export async function* converse({
         ms: since(started),
         tooShortToCache,
         searches,
+        /* Says *why* `searches` is what it is. `neither` means usage arrived
+           carrying neither spelling of the field, which is what a third rename
+           by OpenRouter looks like from here and is indistinguishable, in the
+           number alone, from a model that was sure. */
+        searchesFrom,
         citations: citations.size,
         /* **The number that says the feature is still the feature.**
            `unknownIds` was meant to expose prompt drift and does not expose the

@@ -295,18 +295,6 @@ export async function* sseChunks(
 }
 
 /**
- * How many web searches the model ran, or `null` if this chunk did not say.
- *
- * Both spellings, exactly as explain.ts reads both — OpenRouter's docs say
- * `server_tool_use` and OpenRouter's responses have been observed to say
- * `server_tool_use_details`. `null` rather than `0` for "not stated" so a chunk
- * without usage cannot reset a count a previous chunk gave us.
- */
-export function searchCount(usage: Usage | undefined): number | null {
-  return whereSearchCountCameFrom(usage).searches;
-}
-
-/**
  * Where a search count came from — and it is worth knowing which.
  *
  * `neither` is the interesting one: `usage` arrived and neither field was in

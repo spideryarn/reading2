@@ -140,7 +140,7 @@ describe("a stop pressed before the begin frame", () => {
 
     let threadId = "";
     act(() => {
-      threadId = api().send(null, "why?", null, false);
+      threadId = api().send(null, "why?", null, { useProfile: false });
     });
     const provisional = threadIn(threadId)?.messages.find((m) => m.role === "assistant")?.id;
     expect(provisional).toBeTruthy();
@@ -203,7 +203,7 @@ describe("a stop pressed before the begin frame", () => {
 
     let threadId = "";
     act(() => {
-      threadId = api().send(null, "why?", null, false);
+      threadId = api().send(null, "why?", null, { useProfile: false });
     });
     act(() => {
       turn.frame("begin", {
@@ -246,7 +246,7 @@ describe("a cancel pressed before the begin frame", () => {
 
     let threadId = "";
     act(() => {
-      threadId = api().send(null, "why?", null, false);
+      threadId = api().send(null, "why?", null, { useProfile: false });
     });
     const provisional = threadIn(threadId)?.messages.find((m) => m.role === "assistant")?.id;
     expect(provisional).toBeTruthy();
@@ -559,7 +559,7 @@ describe("onThreadId", () => {
     const overruled: string[] = [];
     let sent = "";
     act(() => {
-      sent = api().send(null, "why?", null, false, (id) => overruled.push(id));
+      sent = api().send(null, "why?", null, { useProfile: false, onThreadId: (id: string) => overruled.push(id) });
     });
     expect(overruled).toEqual([]);
 

@@ -350,20 +350,21 @@ export function ChatDialog({
         ...(quote ? { quote } : {}),
         question,
       });
-      const id = send(
-        null,
-        text,
-        at,
-        true,
-        (real) => onThread(real),
-        target.anchor,
-        undefined,
-        undefined,
+      const id = send(null, text, at, {
+        onThreadId: (real) => onThread(real),
+        anchor: target.anchor,
+        /* **The "?" says so on the wire.** The draft has known which button
+           opened it since 2026-09-04 and used it, three lines up, to decide what
+           the opening quotes — but never told the server, so nothing was stored
+           about the press and the answer was written with the ordinary prompt.
+           Reports 1R and 1S, both of them, are this one field arriving.
+           `true` or absent: the route refuses a `false`. */
+        ...(target.help ? { help: true as const } : {}),
         /* Only ever set when the reader came here by ticking "Also ask the AI"
            on a comment they just saved. The server links the two once it has a
            real thread id; nothing here does, on purpose. */
-        target.sourceCommentId,
-      );
+        ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
+      });
       onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
          different one, `onThread` above corrects the URL and the summary is
@@ -550,7 +551,7 @@ export function ChatDialog({
             onJump={onJump}
             recovering={recovering}
             blocks={blocks}
-            onSend={(question, useProfile) => send(thread.id, question, at, useProfile)}
+            onSend={(question, useProfile) => send(thread.id, question, at, { useProfile })}
             onRetry={(messageId) => retry(thread.id, messageId)}
             onEdit={(messageId, question) => edit(thread.id, messageId, question, at)}
             onStop={(messageId) => stop(thread.id, messageId)}

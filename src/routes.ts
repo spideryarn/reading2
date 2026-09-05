@@ -2162,6 +2162,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     anchor,
     kind,
     stance,
+    help,
     sourceCommentId,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
@@ -2188,6 +2189,18 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
   if (kind !== undefined && !isThreadKind(kind)) {
     throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
+  }
+  /* **Absent or literally `true`, and nothing else.** Same rule as `stance` and
+     `kind` above, and the same reason: a client that sends `help: "yes"` and
+     gets a 200 has no way to learn that the answer it received was written with
+     the ordinary prompt, and neither has the reader. `false` is refused too
+     rather than treated as absent — a client sending it has a bug, and accepting
+     it quietly is how the bug survives to the next release.
+
+     Checked before anything is read or written, so a bad body is an ordinary
+     JSON 400 rather than an `error` frame inside a 200 stream. */
+  if (help !== undefined && help !== true) {
+    throw httpError(400, "help must be true, or left out entirely");
   }
   const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
@@ -2222,6 +2235,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      finding 4. */
   if ((wantsRetry || wantsEdit) && (kind !== undefined || stance !== undefined)) {
     throw httpError(400, "A retry or an edit takes its kind and stance from the conversation");
+  }
+  /* **And neither may claim to be a help press**, for a sharper version of the
+     same reason — sharper because here the client would be *right* and still
+     must not be believed. A retry re-asks a stored question, and whether that
+     question was a "?" press is recorded on the row itself. Taking the body's
+     word for it would let a stale tab retry an ordinary question as an
+     explanation, or an explanation as an ordinary question, with the stored
+     metadata and the prompt that was actually used disagreeing and nothing on
+     screen saying so. The row is authoritative; see `converse({ help })` below.
+
+     A separate check from the one above so the sentence can say which field. */
+  if ((wantsRetry || wantsEdit) && help !== undefined) {
+    throw httpError(400, "A retry or an edit takes its help flag from the stored question");
   }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
@@ -2398,6 +2424,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
                `withTurn` writes whatever it is given and the check constraint
                refuses one on a user row. */
             ...(stance ? { stance: stance as RememberStance } : {}),
+            /* Onto the **user** row, not the reply — the mirror of `stance` just
+               above. `withTurn` writes it and a CHECK constraint refuses one on
+               an assistant row. */
+            ...(help === true ? { help: true as const } : {}),
           });
   });
   const { thread, reply, user } = begun;
@@ -2573,6 +2603,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          "what does this pending answer say it is?" — instead of the route
          re-deriving it three ways. */
       ...(reply.stance ? { stance: reply.stance } : {}),
+      /* **From the stored QUESTION row, never from the request body** — the rule
+         `kind` and `stance` above already follow, applied to the one field the
+         client could have got right and still must not be asked.
+
+         All three ways in agree here without arranging it: `withTurn` wrote it
+         onto the row it just created, `withRetry` hands back the very same
+         stored question, and `withEdit` spreads it onto the rewritten one. So
+         pressing "Try again" on an explanation is answered as an explanation,
+         which is exactly what a thread-level flag could not have done — it would
+         have had to be refused on a turn that creates no thread, and the reader
+         would have got a different kind of answer with nothing saying so. GPT
+         Sol's review of docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md,
+         finding 1. */
+      help: user.help === true,
       signal: stop.signal,
     })) {
       if (event.type === "delta") {

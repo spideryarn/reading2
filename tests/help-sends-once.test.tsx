@@ -48,7 +48,7 @@ vi.mock("../src/web/Tooltip.js", () => ({
 }));
 
 /** Every `send` the dialog made, in order, with the text it sent. */
-let sends: { text: string; anchor: ChatAnchor | undefined }[] = [];
+let sends: { text: string; anchor: ChatAnchor | undefined; help: true | undefined }[] = [];
 /** Every other operation it invoked, in order, by name. */
 let calls: string[] = [];
 /** What `useChat` reports as stored. Set per test; empty for a fresh draft. */
@@ -72,15 +72,21 @@ vi.mock("../src/web/useChat.js", () => ({
     },
     /* A Set of message ids, not a boolean — `Conversation` calls `.has` on it. */
     recovering: new Set<string>(),
+    /* **Three positional arguments and then an options object** — the shape
+       `ChatApi.send` took on 2026-09-05, when the nine-positional tail became
+       `SendOptions`. This fake is inside a `vi.mock` factory, so nothing
+       type-checks it against the real signature: it went on destructuring the
+       old positions and read `anchor` out of what is now the options object,
+       which is exactly the *"a field lands in the wrong slot"* failure the
+       refactor was for. Kept in this shape deliberately, with `help` recorded
+       beside `anchor`, so the file has an assertion about the flag as well. */
     send: (
       _threadId: string | null,
       text: string,
       _at: string | null,
-      _first: boolean,
-      _onReal: (id: string) => void,
-      anchor?: ChatAnchor,
+      opts: { anchor?: ChatAnchor; help?: true } = {},
     ) => {
-      sends.push({ text, anchor });
+      sends.push({ text, anchor: opts.anchor, help: opts.help });
       return "spya-newthr";
     },
     speak: () => "",
@@ -264,6 +270,18 @@ describe("the '?' sends once, and says what the reader was looking at", () => {
       root.render(dialog({ target: { kind: "draft", anchor: { blockId: BLOCK }, opening: OPENING, help: true } })),
     );
     expect(sends[0]?.anchor).toEqual({ blockId: BLOCK });
+  });
+
+  /* Report 1R. The draft has known which button opened it since 2026-09-04 and
+     never told the server, so nothing was stored about the press and the answer
+     was written with the ordinary chat prompt.
+     tests/chat-help-reaches-the-server.test.tsx is the same claim one layer
+     down, at the request body. */
+  it("says on the wire that the reader pressed '?' rather than typing", () => {
+    act(() =>
+      root.render(dialog({ target: { kind: "draft", anchor: { blockId: BLOCK }, help: true, opening: OPENING } })),
+    );
+    expect(sends[0]?.help).toBe(true);
   });
 });
 

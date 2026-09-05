@@ -4553,16 +4553,12 @@ export function ConversationBand({
            that contradicts an existing thread rather than taking our word for
            it, so this being wrong is a 409 rather than a corrupted transcript. */
         const sendKind = open?.kind ?? kind;
-        const id = send(
-          thread,
-          question,
-          at,
+        const id = send(thread, question, at, {
           useProfile,
-          (corrected) => void setThread(corrected),
-          undefined,
-          sendKind,
-          sendKind === "remember" ? stance : undefined,
-        );
+          onThreadId: (corrected) => void setThread(corrected),
+          kind: sendKind,
+          ...(sendKind === "remember" ? { stance } : {}),
+        });
         if (id !== thread) void setThread(id);
       }}
       /* The box under the list. `null` rather than `thread` is the whole
@@ -4575,16 +4571,12 @@ export function ConversationBand({
       onSendNew={(question, useProfile) => {
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
-        const id = send(
-          null,
-          question,
-          at,
+        const id = send(null, question, at, {
           useProfile,
-          (corrected) => void setThread(corrected),
-          undefined,
+          onThreadId: (corrected) => void setThread(corrected),
           kind,
-          kind === "remember" ? stance : undefined,
-        );
+          ...(kind === "remember" ? { stance } : {}),
+        });
         void setThread(id);
         setFocusNonce((n) => n + 1);
       }}

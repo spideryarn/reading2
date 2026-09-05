@@ -167,7 +167,7 @@ describe("a cancel pressed before the begin frame, with the dialog then closed",
 
     let threadId = "";
     act(() => {
-      threadId = api().send(null, "why?", null, false);
+      threadId = api().send(null, "why?", null, { useProfile: false });
     });
     const provisional = api()
       .threads.find((t) => t.id === threadId)
@@ -222,7 +222,7 @@ describe("a cancel pressed before the begin frame, with the dialog then closed",
     const overruled: string[] = [];
     let threadId = "";
     act(() => {
-      threadId = api().send(null, "why?", null, false, (id) => overruled.push(id));
+      threadId = api().send(null, "why?", null, { useProfile: false, onThreadId: (id: string) => overruled.push(id) });
     });
     const provisional = api()
       .threads.find((t) => t.id === threadId)
@@ -268,7 +268,7 @@ describe("a cancel pressed before the begin frame, with the dialog then closed",
 
     let threadId = "";
     act(() => {
-      threadId = api().send(null, "why?", null, false);
+      threadId = api().send(null, "why?", null, { useProfile: false });
     });
     const provisional = api()
       .threads.find((t) => t.id === threadId)
@@ -310,7 +310,7 @@ describe("a cancel pressed before the begin frame, with the dialog then closed",
 
     let threadId = "";
     act(() => {
-      threadId = api().send(null, "why?", null, false);
+      threadId = api().send(null, "why?", null, { useProfile: false });
     });
     await unmount();
 

@@ -307,6 +307,9 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
            says nothing — the failure src/store/export.ts records beside its own
            copy of this field. */
         stance: message.stance ?? null,
+        /* Without this a restore drops the "?" metadata from every help question
+           and says nothing — the same failure the line above it records. */
+        help: message.help ?? false,
         createdAt: new Date(message.createdAt),
       });
       messages += 1;

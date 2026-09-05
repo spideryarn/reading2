@@ -2504,6 +2504,32 @@ export interface ChatMessage {
    * See docs/plans/260827ah-review-mode.md § Where the stance picker's value lives.
    */
   stance?: RememberStance;
+  /**
+   * **The reader pressed the "?" beside a paragraph rather than typing this.**
+   * User turns only.
+   *
+   * Report 1R asked for *"simple type-metadata … to indicate it was a
+   * request-for-explanation"*, and this is it: the answer is written with an
+   * extra pedagogical instruction (`helpSection` in src/converse.ts), and
+   * "how many explanations were asked for" becomes a query over message rows.
+   *
+   * **On the message, not on the thread**, and that is the whole design.
+   * `docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md`
+   * refused a fourth `ThreadKind` — a help conversation is an anchored chat, and
+   * keeping it one is what lets the reading view go on treating every mark it
+   * draws as a chat. The first draft of 1R put a `from_help` on `chat_threads`
+   * instead; GPT Sol's review moved it here, because a thread-level flag has to
+   * be *refused* on retry and edit (neither creates a thread) and a refused flag
+   * means pressing "Try again" on an explanation is silently answered with the
+   * ordinary prompt. Here `withRetry` hands the stored question back and
+   * `withEdit` spreads it, so all three paths agree without anyone arranging it.
+   *
+   * `true` or absent, never `false` — the same rule `stopped` and `interrupted`
+   * follow above, and what tests/store-roundtrip.test.ts compares. It is the
+   * mirror of `stance`, which lives on the assistant row: one says how the
+   * answer was asked for, the other how it was written.
+   */
+  help?: true;
 }
 
 /**
