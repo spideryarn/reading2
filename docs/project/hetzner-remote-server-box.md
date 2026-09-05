@@ -402,6 +402,13 @@ sessions was the one tool a session could not use.
 Provisioning now gives the box a keypair that reaches **only itself**, and sets `GJD_REMOTE_HOST`
 in `/etc/profile.d/`. So from any session on the box, `gjd-remote ls` and the rest just work.
 
+**Except from an agent's tool shell, which is not a login shell** and so never reads
+`/etc/profile.d/`. `GJD_REMOTE_HOST` is unset there, the address falls back to Terraform state, and
+the command dies looking for a `tofu` the box does not have — which reads as "gjd-remote cannot run
+here" rather than as one missing variable. Until the fallback lives in the tool itself, put it on
+the command: `GJD_REMOTE_HOST=127.0.0.1 npx tsx scripts/gjd-remote.ts …`. There is no `gjd-remote`
+on the box's PATH either, so the `npx tsx` form is the only one that runs.
+
 It grants nothing. Anyone who can read `~/.ssh/id_ed25519_loopback` already has a shell here, which
 is all the key can get them; the box still has no key to GitHub, to the laptop, or anywhere else.
 To undo it, delete the key, its line in `authorized_keys`, and the `gjd-remote-loopback` block in

@@ -88,9 +88,23 @@ It is [engineering-manager.md](../reusable/engineering-manager.md), with the rep
    subagents beneath it. **Three at a time at most**: they share one local Supabase, one dev server
    and one box, and past three the tests start going red for reasons that are nobody's bug.
 
-   **This step runs from the laptop**, because `gjd-remote` ssh's *into* the box and cannot be run
-   from it. A loop already on the box does the reading and the triage, then hands Greg the launch
-   commands rather than fanning out itself.
+   **The loop can run this from the box itself** — it has a keypair that reaches only itself, so it
+   ssh's to `127.0.0.1` and the sessions it starts are the same tmux sessions the laptop's
+   `resume-all` opens
+   ([hetzner-remote-server-box.md § Running `gjd-remote` from the box](hetzner-remote-server-box.md#running-gjd-remote-from-the-box)).
+   Two things a box-side launcher must do that a laptop one does not: run it as
+   `npx tsx scripts/gjd-remote.ts`, which is the only name it has there, and **set
+   `GJD_REMOTE_HOST=127.0.0.1` on the command itself** — provisioning exports it from
+   `/etc/profile.d/`, which only a *login* shell reads, and an agent's tool shell is not one. Without
+   it the command goes looking for `tofu` and dies. So, on the box:
+
+   ```
+   GJD_REMOTE_HOST=127.0.0.1 npx tsx scripts/gjd-remote.ts new-claude --no-attach -p - <<'EOF'
+   …
+   EOF
+   ```
+
+   Verified end to end from the box on 2026-09-05: session created, Claude started, prompt answered.
 3. **Each agent decides for itself** what to build, using § Who sent it above — Fable and GPT Sol are
    its calls to make, not this loop's.
 4. **It lands on `dev` and stops there**: green tests, a GPT Sol review of the code,
