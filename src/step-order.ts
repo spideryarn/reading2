@@ -99,6 +99,20 @@ export const STEP_ORDER = [
      buys is that a run naming both draws before it paints.
      docs/project/diagram.md § Illustrated. */
   "illustrated",
+  /* **Last, and it depends on nothing in this list.** Every other name here
+     reads an artefact something before it wrote; this one goes to the open web
+     and comes back with pages that answer the piece. It is last because it has
+     no place it must be — putting it between `quiz` and `sketch` would break the
+     `ideas`/`timeline`/`quiz`/`sketch` cache group's contiguity for nothing, and
+     putting it before `illustrated` would separate that step from the `sketch`
+     it paints.
+
+     Off `DEFAULT_INGEST_STEPS`, like the seven before it, and in
+     `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts) — this is the second dearest
+     thing in the app at up to ~$0.27 a run, and a positional cascade that swept
+     it in would spend that on somebody who pressed a button one band along.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
+  "debate",
 ] as const satisfies readonly StepName[];
 
 /**

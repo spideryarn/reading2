@@ -803,6 +803,14 @@ const CACHEABLE = [
      the offline store. So the prefix is one line and covers both.
      tests/cacheable-covers-artefact-routes.test.ts derives this list. */
   "/api/illustrated/",
+  /* **The one artefact whose offline copy is worth more than its neighbours',
+     and the one that costs most to lose.** It is up to $0.27 a run, the rows
+     link out to pages a reader will want to open, and it is the only artefact
+     here that will not simply be the same next time — the web moves. This line
+     is the second and last thing the debate step touches in `src/web/`, and it
+     is here rather than with the panel because the derived test asks for it the
+     moment the route exists. */
+  "/api/debate/",
   "/api/metadata/",
   "/api/tweets/",
   "/api/chat/",

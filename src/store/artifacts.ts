@@ -45,6 +45,7 @@
 import type {
   Arc,
   Block,
+  Debate,
   Glossary,
   Ideas,
   Meta,
@@ -92,7 +93,8 @@ export type ArtifactKind =
   | "timeline"
   | "quiz"
   | "sketch"
-  | "illustrated";
+  | "illustrated"
+  | "debate";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -168,6 +170,17 @@ export interface ArtifactMap {
    * and for the same reason.
    */
   illustrated: Illustrated;
+  /**
+   * What the rest of the web says about this piece — `Debate`, src/types.ts,
+   * written by the `debate` step.
+   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+   *
+   * **The only artefact here whose content is not in the article**, and the
+   * only one built from two model calls that are one atomic step: two groups,
+   * each with its own rows and its own counts, and a failure of either pass
+   * writes none of it.
+   */
+  debate: Debate;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -312,6 +325,21 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      collapsing that into "no artefact" would make the reader press the button
      again and pay for the brief a second time. */
   illustrated: { field: "plates", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
+  /* **`direct`, the group-one container — and an empty `rows` inside it is not
+     merely usable, it is the commonest CORRECT answer.** Most articles have no
+     critical reception at all, and Greg asked for that state by name: *"If no
+     one (or few people) have written about this piece, let's just say so."* So
+     this is `timeline`'s call rather than `quotes`' or `quiz`'s, and for a
+     stronger reason than timeline has — refusing an empty group one would make
+     the expected outcome unstorable, so the step would re-run and pay up to
+     $0.27 for the same honest answer on every open.
+
+     What it checks is that the document has the two-group shape at all, which
+     is what tells a half-written or hand-edited file from an artefact. The
+     `claims` group is not checked here because `whyUnusable` reads one field;
+     `direct` is the one whose absence would be read as "the search found
+     nothing" rather than as "this is not a debate document". */
+  debate: { field: "direct", ok: isObject },
 };
 
 /**
@@ -732,6 +760,11 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   quiz: "quiz",
   sketch: "sketch",
   illustrated: "illustrated",
+  /* **And deliberately NO `BASELINE` row**, like `quiz` above and for the same
+     reason: there is no id inheritance across runs, marks in the prose are not
+     in v1, and `readBaseline` throws for a kind with no row precisely so that
+     nothing can half-inherit. */
+  debate: "debate",
 };
 
 /**

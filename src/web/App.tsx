@@ -135,7 +135,7 @@ import {
   buildOutline,
   buildSummaryTree,
   columnHint,
-  columnPill,
+  columnLabel,
 } from "./tree.js";
 import {
   atParam,
@@ -2792,6 +2792,16 @@ function Reader({
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
       }`}
+      /* **Which column ← / → are pointed at** — styles.css § the aimed column,
+         keyboard.md. It is here rather than on the table for two reasons, and
+         the first is the one that forced it: the fisheye panels are `position:
+         fixed` elements *beside* the table, they are opaque, and in Hierarchy
+         they cover every gist column — so the surface that has to carry the tint
+         is not inside the table at all. `.reader` is the nearest thing that
+         holds both. The second is that `TableView` is `memo`ised over ~2,200
+         cells and no longer takes `navDepth` as a prop, so moving the pointer
+         re-renders nothing below this element. */
+      data-aim={navDepth}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never
@@ -2882,7 +2892,14 @@ function Reader({
             columns that are not there — a control that looks live, does
             nothing, and gives the reader no way to tell which. Nothing takes
             their place: the mode's name is on the Dock, and saying it twice is
-            what this bar was full of. */}
+            what this bar was full of.
+
+            **They wear the column's full name now** — `Parts`, `Sections`,
+            `Paragraphs` rather than `L1`, `L2`, `Para`. The numbers were
+            defensible while the table's own header row said the words above
+            each column; that row lost its height on 2026-09-05
+            (TableView.tsx § the head), so this is the only place a column is
+            named at all. tree.ts § `columnLabel`. */}
         {!inMode && (
           <>
             {offerableGistDepths.map((d) => (
@@ -2893,7 +2910,7 @@ function Reader({
                 onPressedChange={() => toggle(d)}
                 title={columnHint(d, geometry.leafDepth)}
               >
-                {columnPill(d, geometry.leafDepth)}
+                {columnLabel(d, geometry.leafDepth)}
               </Toggle>
             ))}
             {/* The paragraph outline, beside the prose rather than instead of
@@ -2906,7 +2923,7 @@ function Reader({
                 onPressedChange={() => toggle(geometry.leafDepth)}
                 title={columnHint(geometry.leafDepth, geometry.leafDepth)}
               >
-                {columnPill(geometry.leafDepth, geometry.leafDepth)}
+                {columnLabel(geometry.leafDepth, geometry.leafDepth)}
               </Toggle>
             )}
           </>
@@ -2956,14 +2973,11 @@ function Reader({
         columns={fit.columns}
         layout={fit}
         showText={proseOn}
-        /* **The only thing left that says what ← / → are aiming at.** The bar
-           used to carry an `↑↓ Sections` readout beside it, on the argument
-           that the arrows are useless if you cannot tell what they point at
-           before you press one. That went on 2026-09-05 with the rest of the
-           bar; the lit column header is what remains, and it goes too in stage
-           3 of docs/plans/260905d-declutter-the-reading-view-top-bars.md, which
-           owes the aim a quieter indicator of its own. */
-        navDepth={navDepth}
+        /* **`navDepth` is not passed here any more**, and that is a small win
+           rather than an omission. It used to light a `<th>`, so every pointer
+           move re-rendered a memoised table of ~2,200 cells to change one
+           underline. The aim is now `data-aim` on `.reader` above and a rule in
+           styles.css § the aimed column, so it costs one attribute write. */
         onJump={jumpTo}
         notes={notes}
         noteReturn={noteReturn}
@@ -3205,6 +3219,14 @@ function Reader({
            test is that a signed-out browser leaves `/api/public/` never.
            ProseHoverCard.tsx § lookUpLinks. */
         lookUpLinks={owner !== null}
+        /* And the same answer to a different question. A visitor has no shelf
+           to add to, so the button is not drawn and `useJobs` is not called —
+           which matters as much as the button does, since a mounted subscriber
+           sets the job engine's polling cadence. Derived from `owner !== null`
+           beside the line above rather than from it: the two mean different
+           things (ProseHoverCard.tsx § canAddToShelf) and today's shared
+           condition is a coincidence worth keeping visible. */
+        canAddToShelf={owner !== null}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}

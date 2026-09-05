@@ -739,6 +739,15 @@ None of `TableView`'s 29 props depends on `at`. Both are now `memo`ised — the 
 `src/web` — and four inline arrows at the call site in `App.tsx` became `useCallback`s so the memo
 could hold. [260904a](../plans/260904a-more-scroll-cpu-wins.md).
 
+**And one prop left on 2026-09-05, which is the same lesson from the other end.** `navDepth` — the
+column ← / → are aimed at — changed on every movement of the pointer, so moving the mouse across the
+table reconciled all of it to change one underline in the header row. The header row has no height
+now, the aim is drawn by tinting the column, and that is `data-aim` on `.reader` plus a rule in
+`styles.css` — one attribute write, no render.
+[keyboard.md § The aim is visible before you press anything](keyboard.md#the-aim-is-visible-before-you-press-anything).
+**A `memo` is only as good as the props that reach it**, and a prop that changes with the pointer is
+the cheapest kind to notice and the easiest to leave in place.
+
 **Both sides measured with the same harness and the same input** — 417 wheel events, 50,040px of
 travel, every run. "Before" is a detached worktree at `HEAD`, built and served on its own port.
 

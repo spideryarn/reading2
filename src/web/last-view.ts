@@ -66,7 +66,6 @@ import { onAddressChange, parseRoute } from "./router.js";
 export const REMEMBERED = [
   "at", // the section you were reading
   "cols", // which gist columns are on
-  "text", // reading or outline
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "deep", // how far down summary mode goes
@@ -94,6 +93,17 @@ export const REMEMBERED = [
  * these two lists against `params.ts`.
  */
 export const NEVER_REMEMBERED = [
+  /* **`text=0` is the one state a restore could put the reader in and not get
+     them out of**, so it moved down here on 2026-09-05, the day the `Text` pill
+     that wrote it went with the rest of the controls bar. `settleAddress`
+     rewrites an incoming `?mode=hierarchy&text=0` to `?mode=outline` for exactly
+     that reason (src/web/router.ts § `liftStrandedText`) — and a restore runs
+     *after* that rewrite, from a React effect, so a stored one would walk
+     straight past it and hand the reader the address the rewrite exists to
+     prevent. There is no writer for this parameter any more either, so what is
+     left in a browser's memory of it is a state nobody can re-create on
+     purpose. A *link* carrying `?text=0` is still honoured, on arrival, once. */
+  "text",
   /* Opens the explanation dialog and jumps the page to the passage it is
      anchored to. A dialog is something the reader did; reopening one they
      closed a week ago is a surprise, not a restoration. */
@@ -246,8 +256,25 @@ export function restoredHref(
 ): string | null {
   if (remembered === null || remembered === "") return null;
   if (hasArticleState(search)) return null;
+  /* **Filtered on the way out as well as on the way in**, because `REMEMBERED`
+     governs what gets *written* and a browser's storage outlives any version of
+     that list. When `text` moved to `NEVER_REMEMBERED` on 2026-09-05, every
+     browser already holding `?mode=hierarchy&text=0` would have restored it —
+     from a layout effect, *after* `settleAddress` had run — and walked straight
+     past the boot-time rewrite that exists to get a reader out of exactly that
+     state (router.ts § `liftStrandedText`). The passive save that cleans the
+     storage up happens too late to help the address they are already looking at.
+
+     Here rather than in `readLastView` because this is the pure function, which
+     is where this file puts its decisions so each one can be watched failing;
+     and general rather than a special case for `text`, so the *next* parameter
+     to leave the list is safe without anybody remembering this happened.
+     GPT Sol, reviewing stage 3 of
+     docs/plans/260905d-declutter-the-reading-view-top-bars.md. */
+  const keep = rememberableSearch(remembered);
+  if (keep === "") return null;
   const existing = pairs(search);
-  const restored = pairs(remembered);
+  const restored = pairs(keep);
   return `${pathname}?${[...existing, ...restored].join("&")}`;
 }
 
