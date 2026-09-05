@@ -30,6 +30,7 @@ import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
+import { ContactPage } from "./ContactPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
@@ -200,6 +201,7 @@ import {
 } from "./position.js";
 import { DEFAULT_ROOT_PX, fitView, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
+import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
@@ -240,6 +242,7 @@ import {
 } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
+import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
   REFEREE_TEXT_ALREADY_SENT,
@@ -406,6 +409,16 @@ export function App() {
        this is — a 401 on the one page a stranger is most likely to be sent, for
        a line that is not about them. PricingPage.tsx § which plan. */
     if (route.kind === "pricing") return <PricingPage readerId={null} />;
+    /* Since 2026-09-05, and the least arguable exception of all of them: a page
+       whose whole subject is how to reach us is no use to somebody who cannot
+       reach it. Bare, like `PrivacyPage` above — signed out there is no shelf
+       for a corner logo to link at. ContactPage.tsx.
+
+       Deliberately not numbered: the two comments below say "sixth" and
+       "seventh", and they mean the order those branches were *written* rather
+       than their order in this list. Renumbering them for an insertion would
+       make three comments say something none of them was claiming. */
+    if (route.kind === "contact") return <ContactPage />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -530,6 +543,13 @@ function SignedIn({
             docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
             this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
         <FeaturesPage signedIn />
+      </>
+    );
+  if (route.kind === "contact")
+    return (
+      <>
+        <HomeLogo />
+        <ContactPage />
       </>
     );
   if (route.kind === "pricing")
@@ -961,6 +981,17 @@ function ArticlePage({
   readerId: string | null;
 }) {
   useRenderCount("ArticlePage");
+  /* **Reopen this article where the reader left it.** Above the fetch, and
+     first, because its restore is a layout effect that settles the address
+     before anything paints — `useReadingPosition` then reads the `?at=` it put
+     back exactly as it reads a pasted one, and needs to know nothing about it.
+
+     Here rather than in main.tsx, which is where every other address rewrite
+     lives, because those run once per page load and the commonest way to reopen
+     an article is a click on the shelf — a client-side navigation that never
+     re-runs that file. src/web/last-view.ts has the whole of it, including why
+     a shared link always beats the memory. */
+  useLastView(slug);
   const access = useArticleAccess(slug, readerId);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
@@ -1461,9 +1492,11 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
 
   // Page → URL, once the reader stops moving.
   useEffect(() => {
-    const rows = sections.map((s) =>
-      document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(s.blockId)}"]`),
-    );
+    /* One pass over the table, not one document scan per section — see
+       rows.ts. This loop was 38.1% of all script time on a 2,046-block
+       article, and the largest single reason a mode switch there cost 4.7
+       seconds (Sentry SPIDERYARN-READING2-1M). */
+    const rows = rowsForBlockIds(sections.map((s) => s.blockId));
     let frame = 0;
     const measure = () => {
       frame = 0;
@@ -2954,9 +2987,16 @@ function Reader({
             comments: {commentError}
           </span>
         )}
-        <span className="provenance" title={article.tree.generator}>
-          {article.tree.version}
-        </span>
+        {/* **The tree's version sat here, in a dashed monospace chip, on every
+            article.** It went on 2026-09-05 with the glossary's and the
+            quotes' provenance lines, which are the same fact in the same voice
+            — Greg: *"those are all confusing and unnecessary"*, then *"and any
+            other modes as needed"*. This one is the controls bar rather than a
+            mode, and it is the most-seen of the three, which is the argument
+            for rather than against. `hierarchy/4` tells a reader nothing they
+            can act on; `Metadata` is where an owner sees it
+            (Metadata.tsx § `StageRow`). The narrow breakpoint already hid it,
+            which was the first sign it was not carrying its space. */}
       </div>
       <TableView
         article={article}

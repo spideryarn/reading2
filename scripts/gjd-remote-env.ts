@@ -152,17 +152,6 @@ export const ALLOWLIST: readonly string[] = [
      would be destroyed by the next push, because this file REBUILDS .env.local
      rather than merging into it. src/owner.ts, and Greg's call 2026-08-31. */
   "SPIDERYARN_OWNER_ID",
-  /* Which store serves article reads (src/store/live.ts). It defaults to
-     `files` for a CLI script or a test — but `npm run dev` itself defaults to
-     `postgres` since 2026-09-02, so a box that has never been told still gets a
-     working dev server. Setting it explicitly still matters for the box's other
-     processes: everything written by the pipeline and by `npm run db:seed-dev`
-     sits in Postgres, and a CLI script left on `files` would not see it. Here so
-     that setting it once on the laptop fixes every box, since this file
-     REBUILDS .env.local rather than merging into it, and a line typed on the box
-     is destroyed by the next push. A name on this list sends nothing on its own;
-     only a value that is actually set travels. */
-  "SPIDERYARN_STORE",
   /* The TEST-MODE Stripe secret, for the payments work
      (docs/plans/260902i-stripe-payments-and-subscription-tiers.md). Only ever
      `sk_test_…`: buildEnvPayload refuses any live-mode Stripe secret by its

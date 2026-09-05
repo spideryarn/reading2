@@ -93,12 +93,10 @@ const DEV_OWNER_ID = ADMIN_USER_ID_LOCAL;
 
 /* ---------------------------------------------------- is there a database -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-step-fence.test.ts",
   tables: ["spideryarn.revision_step_runs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts a job, so it takes the shared run lock.**
@@ -109,7 +107,7 @@ const when = reachable ? describe : describe.skip;
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
-const runLock = reachable ? await takeRunLock("tests/store-step-fence.test.ts") : undefined;
+const runLock = await takeRunLock("tests/store-step-fence.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
@@ -173,7 +171,7 @@ async function cleanUp(): Promise<void> {
   await closeDb();
 }
 
-when("who may finish a step", () => {
+describe("who may finish a step", () => {
   beforeAll(async () => {
     const begun = await beginRevision({ slug: SLUG });
     revisionId = begun.revisionId;
@@ -342,7 +340,7 @@ async function withClaimedJob(
   }
 }
 
-when("who may begin a step", () => {
+describe("who may begin a step", () => {
   beforeAll(async () => {
     const begun = await beginRevision({ slug: SLUG });
     revisionId = begun.revisionId;

@@ -29,14 +29,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/** `SPIDERYARN_STORE=postgres` before any import — see tests/chat-route.test.ts. */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -51,18 +44,13 @@ loadEnvLocal();
 const OPEN = "test-chat-lib-open";
 const OTHER = "test-chat-lib-other";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/chat-library-exclusion.test.ts",
   tables: ["spideryarn.revision_blocks"],
 });
 
 const { MAX_LIBRARY_HITS, runTool } = await import("../src/chat-tools.js");
-const { STORE } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
 
 /** A word no real article contains, so a hit cannot be a coincidence. */
 const RARE = "zibbleflux";
@@ -145,7 +133,6 @@ let open: ScratchArticle | undefined;
  * version got this for free by rebuilding both directories per test.
  */
 beforeAll(async () => {
-  if (!reachable) return;
   /* The open article shouts: every paragraph is nothing but the word, so every
      one of them outranks the thin paragraph in the other. */
   open = await scratchArticleInPg(OPEN, {
@@ -180,13 +167,7 @@ async function withQuiet<T>(texts: string[], body: (slug: string) => Promise<T>)
   }
 }
 
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("search_library, when the open article floods the index", () => {
+describe("search_library, when the open article floods the index", () => {
   it("still finds the passage in another article", async () => {
     /* The other article whispers: one mention in a long paragraph, which the
        length damping puts at the very bottom of the list. It is the hit the

@@ -532,7 +532,24 @@ describe("the audio it keeps", () => {
 
   /* One predicate, decided at the end. A dictation that produced words and then
      failed keeps no audio: the reader already has what they said. */
-  it("keeps nothing when words came back, even if it then ended badly", async () => {
+  /**
+   * **This test used to say something else, and it was right at the time.**
+   *
+   * It was *"keeps nothing when words came back, even if it then ended badly"*,
+   * and it pinned the rule that the audio was kept only when the recogniser had
+   * confirmed nothing — because on Chromium a reader with rough words in the box
+   * has the worse version rather than nothing.
+   *
+   * Two things happened on 2026-09-05, and the second is why the old test had to
+   * go rather than merely be renamed. A recogniser error stopped ending the
+   * dictation, so *"it then ended badly"* was no longer true of it at all — the
+   * old assertion still passed, and passed **while checking nothing**, which is
+   * exactly the shape docs/reusable/silent-success.md is about. And the rule it
+   * pinned became unsafe: with the tape running on past a dead recogniser, the
+   * rough words cover the first half of a dictation and the recording covers all
+   * of it. GPT Sol's plan review, F2.
+   */
+  it("does not end, and keeps nothing yet, when the recogniser fails mid-dictation", async () => {
     const h = drive();
     await pressAndOpen(h);
     recorders[0]?.emit(4096);
@@ -545,7 +562,37 @@ describe("the audio it keeps", () => {
       await vi.advanceTimersByTimeAsync(20);
     });
     expect(h.text).toEqual(["the evidence"]);
+    /* Nothing to offer: the microphone is still open and the dictation is still
+       going. The *reason* matters — this is not the old "we threw it away". */
     expect(h.get().recording).toBeNull();
+    expect(h.get().armed).toBe(true);
+    h.unmount();
+  });
+
+  it("keeps the audio when the recogniser failed and the transcription then failed too", async () => {
+    /* **The converse, and the one that was losing speech.** The recogniser dies
+       part-way, the reader keeps talking, and the upload then fails — very
+       likely for the same reason, since one common cause of both is having no
+       network. The rough words in the box are the first half of what was said;
+       the tape is all of it, and it is the only copy. */
+    transcribeFails = true;
+    const h = drive();
+    await pressAndOpen(h);
+    recorders[0]?.emit(4096);
+    act(() => {
+      saidFinal(latest(), "the first half");
+    });
+    await act(async () => {
+      latest().onerror?.({ error: "network" });
+      await vi.advanceTimersByTimeAsync(20);
+    });
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    act(() => h.get().toggle());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(h.get().error).not.toBeNull();
+    expect(h.get().recording).not.toBeNull();
     h.unmount();
   });
 

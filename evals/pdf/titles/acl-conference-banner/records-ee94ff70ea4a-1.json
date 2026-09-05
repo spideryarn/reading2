@@ -1,0 +1,317 @@
+{
+  "slug": "acl-conference-banner",
+  "sample": 1,
+  "prompt": "ee94ff70ea4a",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T08:06:32.360Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "publisher",
+      "text": "Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "publisher",
+      "text": "Volume 1: Long Papers, pages 6664–6679",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "publisher",
+      "text": "July 9-14, 2023 ©2023 Association for Computational Linguistics",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Trillion Dollar Words: A New Financial Dataset, Task & Market Analysis",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Agam Shah , Suvan Paturi , Sudheer Chava\nGeorgia Institute of Technology",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "Abstract",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Monetary policy pronouncements by Federal Open Market Committee (FOMC) are a major driver of financial market returns. We construct the largest tokenized and annotated dataset of FOMC speeches, meeting minutes, and press conference transcripts in order to understand how monetary policy influences financial markets. In this study, we develop a novel task of hawkish-dovish classification and benchmark various pre-trained language models on the proposed dataset. Using the best-performing model (RoBERTa-large), we construct a measure of monetary policy stance for the FOMC document release days. To evaluate the constructed measure, we study its impact on the treasury market, stock market, and macroeconomic indicators. Our dataset, models, and code are publicly available on Huggingface and GitHub under CC BY-NC 4.0 license1.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "1 Introduction",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "On August 26th, 2022, FOMC Chair Jerome H. Powell gave an 8-minute long speech at Jackson Hole which immediately resulted in an almost $3 Trillion USD decline in U.S. equity market value that day. The speech was followed by more than $6 Trillion USD loss in equity valuation over the next 3 days. Drastic market shifts to the Fed’s pronouncements indicate just how important the FOMC communications have become and highlight the need for a model which can capture the policy stance from Fed-related text.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "The Federal Open Market Committee (FOMC) is a federal organization responsible for controlling U.S.’s open market operations and setting interest rates. It tries to achieve its two main objectives of price stability and maximum employment by controlling the money supply in the market. Given the market condition (employment rate and inflation), the Fed either increases (dovish), decreases (hawkish), or maintains the money supply2 (neutral). To understand the influence the FOMC has on the different financial markets, we need to extract its monetary policy stance and the corresponding magnitude from official communications.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Utilizing the traditional sentiment analysis model, which classifies text into positive vs negative, one can’t extract policy stance. A sentence that has the word \"increase\" could either be dovish or hawkish without a clear negative connotation. For example, the word \"increase\" with the word \"employment\" means the economy is doing well, but the word \"increase\" with the word \"inflation\" is negative for the economy. Current SOTA finance domain-specific language models (Araci, 2019; Shah et al., 2022) trained for sentiment analysis find both cases to be positive, which is inaccurate. The performance analysis for FinBERT (Araci, 2019) model is provided in Appendix A. This problem creates a need to develop a new task for hawkish vs dovish classification accompanied by high-quality annotated data.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Given the lack of annotated data, computational linguistic work related to FOMC text in the literature (Rozkrut et al., 2007; Zirn et al., 2015; Hansen and McMahon, 2016; Rohlfs et al., 2016; Hansen et al., 2018; Nakamura and Steinsson, 2018; Cieslak et al., 2019; Schmeling and Wagner, 2019; Tsukioka and Yamasaki, 2020; Ehrmann and Talmi, 2020; Frunza, 2020; Gorodnichenko et al., 2021; Matsui et al., 2021; Mathur et al., 2022) so far has been limited to unsupervised and rule-based models. These rule-based models don’t perform well on the hawkish-dovish classification task, which we will use as a baseline in performance analysis.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Correspondence to Agam Shah {ashah482@gatech.edu}",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "1The fine-tuned model and data are available on the Huggingface. The code is available on FinTech Lab GitHub.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "the market condition (employment rate and inflation), the Fed either increases (dovish), decreases (hawkish), or maintains the money supply2 (neutral). To understand the influence the FOMC has on the different financial markets, we need to extract its monetary policy stance and the corresponding magnitude from official communications.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "2 Fed increases the money supply by lowering interest rates and decreases the money supply by increasing interest rates or by other means necessary. More detail on this can be found in the annotation guide.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Additionally, we conduct a benchmark of the zero-shot ChatGPT model using the annotated dataset to gain insights into the significance of fine-tuning on such data. In this work, we collect text data (speech transcripts, press conference transcripts, and meeting minutes) from the FOMC over the period 1996-2022 and annotate a sample of each data type.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "We not only create new datasets and tackle the task of building a hawkish-dovish classifier, but also test the performance of various models starting from rule-based to fine-tuned large PLMs. As sentences presented in FOMC text sometimes have two sub-sentences that have counterfactual information to tone down the stance, we employ a simple sentence-splitting scheme as well. We also construct the aggregate monetary policy stance and show its validity by looking at its performance in predicting various financial market variables.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Through our work, we contribute to the literature in the following way:",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "We show that the traditional (rule-based) approach practiced in finance and economic literature is a rudimentary way to measure monetary policy stance from the text document.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "We introduce a new task to classify sentences into hawkish vs dovish as opposed to positive vs negative sentence classification for monetary policy text.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "We build comprehensive, clean, tokenized, and annotated open-source datasets for FOMC meeting minutes, press conferences, and speeches with detailed meta information.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "We develop an aggregate monetary policy stance measure and validate its performance in predicting various economic and financial indicators.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading2",
+      "text": "2 Related Work",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading3",
+      "text": "NLP in Finance",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Over the last decade behind the evolution of NLP, there has been a growing literature on the applications of NLP techniques in Finance (Loughran and McDonald, 2011; Sohangir et al., 2018; Xing et al., 2018; Chava et al., 2022). The majority of the research takes advantage of news articles (Vargas et al., 2017; Caldara and Iacoviello, 2022), SEC filings (Loughran and McDonald, 2011; Chava and Paradkar, 2016; Alanis et al., 2022), or earnings conference calls (Bowen et al., 2002; Bushee et al., 2003; Chava et al., 2019; Li et al., 2020). Development of finance domain-specific language models (Araci, 2019; Yang et al., 2020; Liu et al., 2020) have pushed the current benchmarks further. Recent work of Shah et al. (2022) proposes a set of heterogeneous benchmarks for the financial domain and shows SOTA performance using their proposed language model, but it doesn’t include macroeconomics-based tasks.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading3",
+      "text": "FOMC and Text Analysis",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "A study on communications from the central banks of the Czech Republic, Hungary, and Poland by Rozkrut et al. (2007) suggests that words from central banks affect the market but the effect varies based on communication style. Other various studies (Tobback et al., 2017; Hansen et al., 2018; Nakamura and Steinsson, 2018; Cieslak et al., 2019; Schmeling and Wagner, 2019; Tsukioka and Yamasaki, 2020; Ehrmann and Talmi, 2020; Bennani et al., 2020; Gorodnichenko et al., 2021) also point to a similar conclusion that the communication from the central banks moves the market, but they don’t leverage the power of the transformer-based model available at their disposal.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Many articles in the literature use LDA to analyze various texts released by Fed. Rohlfs et al. (2016) uses LDA on the FOMC meeting statements to predict the fed fund rate and long-term treasury rate. Hansen and McMahon (2016) use an LDA-based topic modeling on FOMC-released text to understand how forward guidance affects the market and economic variables. In their study, they only used statements released post-meeting and suggest that the use of meeting minutes and speeches may offer greater insight. Jegadeesh and Wu (2017) also uses LDA to analyze meeting minutes. They suggest that even though meeting minutes are released a few weeks after the actual meeting, the minutes still carry pertinent market-moving information.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "In recent work by Mathur et al. (2022), they created a multimodal dataset (MONOPOLY) from video press conferences for multimodal financial forecasting. The MONOPOLY dataset is comprehensive and not only covers text but also utilizes audio and video features. Yet, it misses two critical economic downturn periods of the last two decades: The DotCom Bubble Burst of 2000-2002 and the Global Financial Crises of 2007-2008. Matsui et al. (2021) used word embedding to extract semantic changes in the monetary policy documents. Zirn et al. (2015) used the graph clustering method to",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "generate the hawkish-dovish stance of monetary policy due to the dearth of annotated data. Frunza (2020) developed an unsupervised methodology to extract various information from FOMC post-meeting statements.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "3 Dataset",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading3",
+      "text": "3.1 FOMC Data",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "The datasets we build are composed of three different types of data: meeting minutes, press conference transcripts, and speeches from the FOMC. Meeting minutes are defined as reports derived from the eight annually scheduled meetings of the FOMC. Press conference transcripts, meanwhile, are transcripts of the prepared remarks, followed by the Q&A session between the Federal Reserve chair and press reporters. Lastly, speeches were defined as any talk given by a Federal Reserve official. We limit our datasets to an end release date of October 15th, 2022, and attempt to collect as far back as possible for each category prior to this date.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "The meeting minutes and speeches spanned from a release period of January 1st, 1996 to October 15th, 2022. Press conferences are a more recent phenomenon and the data aggregated stretched from April 27th, 2011 to October 15th, 2022. We obtained the data by leveraging BeautifulSoup, Selenium, and manual downloading from http://www.federalreserve.gov/. Regex tools were used to clean the data, which was stored in CSV or Excel format for processing. Sentence tokenization, using the library NLTK (Bird et al., 2009) was done and datasets for each data category were initialized.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading3",
+      "text": "FOMC Raw Text Data",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "The overview of our initial raw text dataset is presented in Panel A of Table 3. Initial observations show that meeting minutes and speeches composed the bulk of our data, due to the recency of press conference transcripts. In addition, we also isolated only sentences where the speaker is designated as the Federal Reserve chair and the sentence was not a question in press conference transcripts, so this also served to reduce the data size. Across all forms of data, we had higher average words per sentence than the typical English language sentence, which averages 15 to 20 words (Cutts, 2020).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Our initial raw text data encompassed decades worth of crucial FOMC statements, however, a plethora of noise persisted in the data. Unrelated sentences riddled the datasets and a filter was needed to isolate key sentences relevant to changes in the federal reserve’s monetary policy stance. In addition, the number of sentences in the raw dataset was too vast to manually label, so a sampling procedure was needed.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading3",
+      "text": "Data & Title Filtration",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "As a result of data noise, a dictionary filter was developed to isolate sentences that would prove to be meaningful and allow us to determine monetary policy stance. The criteria for the filter was based on the dictionary developed by Gorodnichenko et al. (2021). Any sentence that contained an instance of the words outlined in panel A1 or B1 in Table 1 would be kept, while anything else would be filtered out. The sentences kept were considered \"target\" sentences or textual data that we consider pertinent and later used to sample from and annotate.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "table",
+      "text": "Table 1: Rule-based dictionary used by Gorodnichenko et al.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "tabledata",
+      "text": "Panel A1 | Panel B1\ninflation expectation, interest rate, bank rate, fund rate, price, economic activity, inflation, employment | unemployment, growth, exchange rate, productivity, deficit, demand, job market, monetary policy\nPanel A2 | Panel B2\nanchor, cut, subdue, decline, decrease, reduce, low, drop, fall, fell, decelerate, slow, pause, pausing, stable, non-accelerating, downward, tighten | ease, easing, rise, rising, increase, expand, improve, strong, upward, raise, high, rapid\nPanel C\nweren’t, were not, wasn’t, was not, did not, didn’t, do not, don’t, will not, won’t",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Our dictionary filter was also applied to speech data. Speech data was the largest dataset derived from web scraping, however, speeches contained the most noise, owing to many non-monetary policy speeches. Unlike the meeting minutes and press conference transcripts, speech data was accompanied with a title, so to isolate only relevant FOMC speeches to sample from, we applied the dictionary filter discussed in Table 1 onto the title of each speech. We justify this procedure in Table 2 as this methodology results in the greatest \"target\" sentence per file. Overall, the filtration process isolated relevant files and \"target\" sentences in our raw data and set the stage for later sampling. The filter’s impact on the raw data is presented in Panel B of Table 3.",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "Trillion Dollar Words: A New Financial Dataset, Task & Market Analysis",
+  "recall": 0.996,
+  "quality": [],
+  "usage": {
+    "input": 4143,
+    "output": 4302
+  }
+}

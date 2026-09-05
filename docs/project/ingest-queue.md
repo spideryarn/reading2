@@ -43,7 +43,7 @@ stages ticking over while you watch. Since 2026-08-26 the watching happens on a 
 > reader asks for one. That is the hydration problem, and it is the next piece.
 >
 > **Fixed on 2026-09-01, and this paragraph is kept because the diagnosis was right.** `claimSession`
-> ([`src/jobs.ts`](../../src/jobs.ts)) is two lines now: under `SPIDERYARN_STORE=postgres` a claim
+> ([`src/jobs.ts`](../../src/jobs.ts)) is two lines now: under Postgres a claim
 > gets `openPgStoreSession`, whose reads are the article's own draft revision rather than a
 > job-scoped directory, and every late step's `run` takes the article through `readArticle(ctx.slug,
 > store)` instead of opening a path. `tests/claim-session-postgres.test.ts` § *"runs a late single
@@ -925,7 +925,7 @@ been the wrong companion fix, is
 
 **Two OS processes over one `data/` are still not fenced**, and that is unchanged rather than fixed —
 `claimIn`'s single `update … where status = 'queued'` is what makes Postgres immune, and running with
-`SPIDERYARN_STORE=postgres` is what CLAUDE.md already asks for.
+Postgres is the only store there is, since 2026-09-05.
 ### The browser is the worker
 
 So a wedged job in production is not a queue that needs draining. It is a job whose only engine has
@@ -1740,7 +1740,7 @@ job hidden by mistake is a failure the reader never learns about and nothing on 
 ingest whose every step was green. Publication was a human running `npm run db:import`.
 
 What closes it is the **session a claim runs on**: [`claimSession`](../../src/jobs.ts) picks
-[`pgStoreSession`](../../src/store/pg-session.ts) under `SPIDERYARN_STORE=postgres`, every step
+[`pgStoreSession`](../../src/store/pg-session.ts), every step
 writes its product into that claim's own draft revision, and a `done` ending publishes the draft and
 finishes the job in **one transaction**.
 
@@ -1760,11 +1760,12 @@ Five things about it are worth knowing before touching it.
   lets a claim adopt what an earlier request of the same job left behind — a two-step job whose first
   request ran `fetch` and handed the claim back holds that work in the draft, so the second request
   can skip the step and still publish it.
-- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop where the flag is `files` — set
-  explicitly, since `npm run dev` itself now defaults to `postgres` — the session is the filesystem
-  one and behaves exactly as it always has: no draft, no publication, no database.
-  [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
-  claim, and it proves it by taking `DATABASE_URL` away.
+- **It happens on every run, since 2026-09-05.** There was a filesystem session beside it, chosen by
+  the store flag, that did none of this — no draft, no publication, no database — and a suite
+  that proved it by taking `DATABASE_URL` away. Both went with the flag
+  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F);
+  [`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) is what says
+  this line opens what it says it opens.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Three doors reach
   the same recovery in [`src/jobs.ts`](../../src/jobs.ts) (`endAsStorageFailure`): the publication
   that goes wrong when every step skipped, the session that would not open at all, and the draft that

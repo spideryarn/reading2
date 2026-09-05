@@ -101,22 +101,6 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/jobs.ts` picks its store **once, at module load** — `const store:
- * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
- * hoisted above every statement in a module, so a plain assignment here would
- * leave `enqueue` talking to the filesystem queue while the spies below sat on
- * the Postgres one, and every case would fail for a reason that is not the one
- * it is about.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
-
 import { inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
@@ -124,35 +108,17 @@ import { jobs as jobsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { enqueue } from "../src/jobs.js";
 import { currentOwnerId, DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { mintId } from "../src/ids.js";
 import { urlKey } from "../src/ingest.js";
 import type { Job } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/one-article-for-one-address.test.ts",
   tables: ["spideryarn.jobs"],
-});
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on `reachable`: a control that vanishes when the database is
-       missing vanishes exactly when it matters. The filesystem queue answers
-       every call below happily, and `jobs_active_source` — the index whose
-       refusal the repair exists to handle — would never be consulted. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /**
@@ -187,13 +153,13 @@ afterEach(async () => {
      Nothing seeds an article, so no row carries a `draft_revision_id` and there
      is no ordering to get right. */
   const ids = made.splice(0);
-  if (reachable && ids.length > 0) {
+  if (ids.length > 0) {
     await getDb().delete(jobsTable).where(inArray(jobsTable.id, ids));
   }
 });
 
 afterAll(async () => {
-  if (reachable) await closeDb();
+  await closeDb();
 });
 
 /** An address nobody else's test could also be adding. */
@@ -204,7 +170,7 @@ function anAddress(): string {
 /* One `describe`, and the helpers below live in it because nothing else
    uses them. It is `when` so that a machine with no database skips loudly
    rather than failing four times over. */
-when("one address, one article", () => {
+describe("one address, one article", () => {
   it("makes one article out of two simultaneous pastes of one address", async () => {
     const url = anAddress();
     const [a, b] = await runAsOwner(DEV_OWNER_ID, () =>

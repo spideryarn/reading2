@@ -23,18 +23,22 @@
  * zero — not before. Promoting one with a known backlog just re-teaches
  * everyone to ignore the exit code. See docs/project/static-analysis.md.
  *
- * ## The test gate runs under `REQUIRE_POSTGRES=1`
+ * ## The test gate needs a database, and there is no way round it
  *
- * Seventy-odd test files turn themselves into `describe.skip` when Postgres is
- * unreachable, so `npm test` is green having run none of them. This is the
- * command whose green result gets quoted as evidence, which is exactly the run
- * that flag exists for: a suite that cannot reach the database registers one
- * failing test instead of skipping. See docs/project/testing.md § When a skip
- * is not acceptable.
+ * A hundred-odd test files used to turn themselves into `describe.skip` when
+ * Postgres was unreachable, so `npm test` was green having run none of them.
+ * `REQUIRE_POSTGRES=1` was this command's answer to that, and it is no longer
+ * needed: since 2026-09-05 there is one store, and `npm test` fails **once**, in
+ * the private lane's globalSetup, on a machine with no database
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F; docs/project/testing.md § When a skip is not acceptable).
  *
- * `--offline` drops the flag, so the rest is still usable on a machine with no
- * Docker. It says so in the summary — a run that let the database suites skip
- * must not read like a run that proved them.
+ * The flag is still set below and nothing reads it. It stays for the length of
+ * one deployment beside the tombstone in src/store/live.ts, and goes with it.
+ *
+ * **`--offline` no longer buys a usable run of the test gate** — there is
+ * nothing left for it to switch off — and it says so in the summary rather than
+ * pretending. The other gates still work without Docker.
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -98,10 +102,8 @@ const STEPS: Step[] = [
     argv: ["run", "--silent", "build"],
   },
   {
-    // Under REQUIRE_POSTGRES=1 unless --offline — see the header. Without it a
-    // green tick here covers a quarter of the suite not having run.
-    //
-    // Below `build`, for the reason written on it.
+    // Needs a database, whatever the flags say — see the header. Below `build`,
+    // for the reason written on it.
     name: "test",
     gate: true,
     argv: ["run", "--silent", "test"],
@@ -296,9 +298,10 @@ const noisy = results.filter((r) => verdict(r) !== "clean");
    the whole reason the flag exists. */
 if (OFFLINE) {
   console.log(
-    "\n--offline: the test gate ran WITHOUT REQUIRE_POSTGRES=1, so every suite that\n" +
-      "needs Postgres was free to skip. This is NOT the real gate. Run `npm run check`\n" +
-      "with a database up before quoting this result as evidence.",
+    "\n--offline no longer switches anything off in the test gate: there is one store,\n" +
+      "and `npm test` fails at the first hurdle without a database rather than skipping\n" +
+      "the suites that need one. Start the stack (`npm run db:start`) and run the real\n" +
+      "`npm run check` before quoting any of this as evidence.",
   );
 }
 

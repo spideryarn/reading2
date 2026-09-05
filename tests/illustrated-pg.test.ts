@@ -63,14 +63,12 @@ requireFixture(FROM, [
   "output.blocks.json",
 ]);
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/illustrated-pg.test.ts",
   tables: ["spideryarn.article_revisions"],
 });
-const when = reachable ? describe : describe.skip;
-
 /** This file starts a job, so it takes the shared run lock. */
-const runLock = reachable ? await takeRunLock("tests/illustrated-pg.test.ts") : undefined;
+const runLock = await takeRunLock("tests/illustrated-pg.test.ts");
 
 /**
  * **Remove the rows as well as the files, before every case.**
@@ -85,7 +83,6 @@ async function forget(): Promise<void> {
   await rm(path.join(ROOT, "data", SLUG), { recursive: true, force: true });
   await rm(path.join(ROOT, "output", `${SLUG}.html`), { force: true });
   await rm(path.join(ROOT, "output", `${SLUG}.blocks.json`), { force: true });
-  if (!reachable) return;
   const db = getDb();
   await db.delete(jobs).where(eq(jobs.slug, SLUG));
   await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.slug, SLUG));
@@ -226,7 +223,7 @@ async function makeFixture(
 
 /* ---------------------------------------------------------------- the trip -- */
 
-when("the illustrated artefact through Postgres", () => {
+describe("the illustrated artefact through Postgres", () => {
   it("survives the write path and comes back current", async () => {
     await makeFixture((fp) => {
       const sketch = sketchFixture(fp);

@@ -43,7 +43,7 @@ import {
 import { pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
 import { expectClaimed } from "./helpers/expect-claimed.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
 import type { HeldRunLock } from "./helpers/run-lock.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -144,85 +144,69 @@ const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
  * needs the slot, and the reasoning lives there.
  */
 
-/** Probed at MODULE LOAD so the skip is a real vitest skip rather than a green tick. */
-let reachable = false;
-/** What was missing, and which fix it needs, for `REQUIRE_POSTGRES=1`. */
-let why = "DATABASE_URL is not set — run npm run db:start";
-let kind: MissingKind = "no-url";
+/**
+ * Probed at MODULE LOAD so the failure arrives before a single case is
+ * registered — and it **is** a failure now rather than a skip: there is one
+ * store, and a database this file cannot use is not a configuration.
+ * tests/helpers/pg-ready.ts.
+ */
+await pgReady({ suite: "tests/store-jobs-parity.test.ts", tables: ["spideryarn.jobs"] });
+
 /** Holds `RUN_LOCK` for the length of the run; released in `afterAll`. */
 let runLock: HeldRunLock | undefined;
 
-if (process.env.DATABASE_URL) {
+{
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
-  kind = "migration";
-  why = "spideryarn.jobs is not there — run npm run db:migrate";
   try {
-    const probe = await pool.query("select to_regclass('spideryarn.jobs') is not null as ready");
-    reachable = probe.rows[0]?.ready === true;
     /* Locked, swept and seeded in the same breath as the probe, because a
-       `beforeAll` runs after the describes have been collected and one of them
-       would already have been skipped.
+       `beforeAll` runs after the describes have been collected.
 
-       Not a `catch` that shrugs: if the row cannot be created then every
-       Postgres case here is about to fail on a foreign key, and a probe that
-       swallowed the reason would send the reader to the store. The dozen
-       not-null columns and the zero `instance_id` are `auth.users` being
-       Supabase's table rather than ours — see scripts/db-seed-owner.ts. */
-    if (reachable) {
-      /* Through `takeRunLockAndSetUp`, so the sweep below cannot walk away with
-         the key. The `catch` under here rethrows when `reachable`, and used to
-         do it past both the release and the `pool.end()` — module scope, so no
-         `afterAll` existed yet to catch either. tests/helpers/lock-lifecycle.ts. */
-      runLock = await takeRunLockAndSetUp("tests/store-jobs-parity.test.ts", async () => {
-        /* **Every owner this file has ever minted, jobs first.**
-           Not the same thing as the teardown, and not covered by it: teardown
-           does not run when the process is killed, so a run that was interrupted
-           leaves its jobs behind for ever. With a fresh owner each run those rows
-           are invisible to this one's own queries — but not to the database's,
-           and both of the rules this file leans on are global. A leftover
-           `running` row makes every claim here answer `busy` through
-           `jobs_only_one_running`, and a leftover expired one is counted by
-           `settleExpired`, which two cases below assert exactly.
+       Not a `catch` that shrugs: if the row cannot be created then every case
+       here is about to fail on a foreign key, and a probe that swallowed the
+       reason would send the reader to the store. The dozen not-null columns and
+       the zero `instance_id` are `auth.users` being Supabase's table rather than
+       ours — see scripts/db-seed-owner.ts.
 
-           Safe to take the lot because the lock is already held, so no sibling
-           copy can be using any of them; and scoped by the stem, so it can only
-           ever reach rows this file made.
+       Through `takeRunLockAndSetUp`, so a failure inside the sweep cannot walk
+       away with the key. tests/helpers/lock-lifecycle.ts. */
+    runLock = await takeRunLockAndSetUp("tests/store-jobs-parity.test.ts", async () => {
+      /* **Every owner this file has ever minted, jobs first.**
+         Not the same thing as the teardown, and not covered by it: teardown
+         does not run when the process is killed, so a run that was interrupted
+         leaves its jobs behind for ever. With a fresh owner each run those rows
+         are invisible to this one's own queries — but not to the database's,
+         and both of the rules this file leans on are global. A leftover
+         `running` row makes every claim here answer `busy` through
+         `jobs_only_one_running`, and a leftover expired one is counted by
+         `settleExpired`, which two cases below assert exactly.
 
-           On this file's own `pool` rather than on the lock's connection: the
-           lock excludes the other suites whichever connection does the work, and
-           `pool` is what seeds through `seedAuthUser` below. */
-        await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [RUBBLE]);
-        await pool.query(`delete from auth.users where id::text like $1`, [RUBBLE]);
+         Safe to take the lot because the lock is already held, so no sibling
+         copy can be using any of them; and scoped by the stem, so it can only
+         ever reach rows this file made.
 
-        /* No `on conflict`: the id is fresh and the rubble is gone, so a conflict
-           here would mean something we have not thought of, and the point of the
-           rethrow above is that this file says so rather than failing later on a
-           foreign key. The email is per-run too — `users_email_partial_key` is
-           unique, so a fixed one is its own way for two runs to collide. */
-        for (const who of [OWNER, OWNER_B]) {
-          await seedAuthUser(pool, { id: who, email: `store-jobs-parity-${who}@example.invalid` });
-        }
-      });
-    }
-  } catch (err) {
-    if (reachable) throw err;
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
+         On this file's own `pool` rather than on the lock's connection: the
+         lock excludes the other suites whichever connection does the work, and
+         `pool` is what seeds through `seedAuthUser` below. */
+      await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [RUBBLE]);
+      await pool.query(`delete from auth.users where id::text like $1`, [RUBBLE]);
+
+      /* No `on conflict`: the id is fresh and the rubble is gone, so a conflict
+         here would mean something we have not thought of. The email is per-run
+         too — `users_email_partial_key` is unique, so a fixed one is its own way
+         for two runs to collide. */
+      for (const who of [OWNER, OWNER_B]) {
+        await seedAuthUser(pool, { id: who, email: `store-jobs-parity-${who}@example.invalid` });
+      }
+    });
   } finally {
-    /* In a `finally` because the `catch` above rethrows on the reachable path,
-       and a leaked pool at module scope is a connection nothing ever closes. */
+    /* A leaked pool at module scope is a connection nothing ever closes. */
     await pool.end();
   }
 }
-
-/* This file has never said anything when it skips, so `REQUIRE_POSTGRES=1` is
-   the only way its absence is visible. tests/helpers/pg-ready.ts. */
-if (!reachable) failIfPostgresRequired("tests/store-jobs-parity.test.ts", why, kind);
 
 const LEASE = 60_000;
 /**
@@ -274,7 +258,6 @@ function settledIds(settled: ExpirySettlement[]): string[] {
 interface Adapter {
   name: string;
   store: JobStore;
-  available: boolean;
   expire(id: string): Promise<void>;
   reattach(id: string, attempt: string): Promise<void>;
   /** Rewrite an already-terminal job's `finishedAt`. The job must have ended. */
@@ -286,7 +269,6 @@ const ADAPTERS: Adapter[] = [
   {
     name: "the filesystem store",
     store: fsJobStore,
-    available: true,
     async expire(id) {
       expireLeaseForTests(id);
     },
@@ -306,7 +288,6 @@ const ADAPTERS: Adapter[] = [
   {
     name: "Postgres",
     store: pgJobStore,
-    available: reachable,
     /* Written straight to the column rather than by claiming with a tiny lease,
        because a lease short enough to expire during a test is short enough to
        expire between two of the assertions that follow.
@@ -343,7 +324,7 @@ const ADAPTERS: Adapter[] = [
 for (const adapter of ADAPTERS) {
   const store = adapter.store;
 
-  describe.skipIf(!adapter.available)(adapter.name, () => {
+  describe(adapter.name, () => {
     const made: string[] = [];
     afterEach(async () => {
       const ids = made.splice(0);
@@ -2180,7 +2161,7 @@ for (const adapter of ADAPTERS) {
  * database's alone. Only `Date` is faked — timers stay real, or the pool's own
  * work would never resolve.
  */
-describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
+describe("Postgres, on the database's clock", () => {
   const made: string[] = [];
   afterEach(async () => {
     const ids = made.splice(0);
@@ -2666,7 +2647,6 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
  * statements, in the order the foreign key requires.
  */
 afterAll(async () => {
-  if (!reachable) return;
   /* And let the next suite in, last and unconditionally. Not left to the process
      exiting: vitest keeps its worker alive for the next file, so a sibling would
      go on waiting long after this file had finished. If we crash instead,

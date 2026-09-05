@@ -98,7 +98,7 @@ if (!auth.ready && process.env.SUPABASE_URL) {
 }
 
 /* The route half needs the database too, because /api/admin/users counts rows. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/seed-admin-signin.test.ts",
   tables: ["spideryarn.articles"],
 });
@@ -120,9 +120,11 @@ const liveIt = it.skipIf(!auth.ready);
  * check said yes — so it is the right assertion to make there. What the store
  * changes is only which success looks like success.
  */
-const onPostgres = process.env.SPIDERYARN_STORE === "postgres";
-const expectedForAdmin = onPostgres ? 200 : 501;
-const routeIt = it.skipIf(!auth.ready || !reachable);
+/* 200, unconditionally, since 2026-09-05: this used to be `501` whenever the
+   flag was not `postgres`, because the admin page's filesystem side was a
+   refusal rather than a store. There is one store and it answers. */
+const expectedForAdmin = 200;
+const routeIt = it.skipIf(!auth.ready);
 
 /* Three network round trips against a stack the whole suite is hammering. Same
    reasoning as tests/admin-store.test.ts: five seconds here is a load test. */
@@ -204,7 +206,7 @@ describe("the seeded administrator", () => {
   );
 
   routeIt(
-    `is let through /api/admin/users by the real gate (${onPostgres ? "200" : "501, on the filesystem store"})`,
+    "is let through /api/admin/users by the real gate (200)",
     async () => {
       const { token } = await signIn();
       const { status, text } = await adminUsers(token);

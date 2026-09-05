@@ -1087,22 +1087,10 @@ function previousMonthOf(label: string): string {
  * `pocket()` above makes for the ordinary report.
  */
 async function ownersReport(args: Args): Promise<void> {
-  const { STORE } = await import("../src/store/live.js");
-  if (STORE !== "postgres") {
-    /* Refused rather than answered from the filesystem ledger. GPT Sol settled
-       the cutoff: **Postgres is authoritative and the JSONL history is not
-       imported**, so a per-owner figure computed from files would be a second,
-       plausible, wrong answer to the question a price gets set from. */
-    console.error(
-      "\n--owners reads Postgres, and this process is on the filesystem store.\n" +
-        "  Postgres is the authoritative ledger (docs/plans/260902g-… § the cutoff);\n" +
-        "  the JSONL file is development evidence and was deliberately never imported.\n" +
-        "  Re-run as:  SPIDERYARN_STORE=postgres npm run cost -- --owners",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
+  /* There was a refusal here until 2026-09-05, for a process on the filesystem
+     ledger. GPT Sol settled the cutoff behind it — **Postgres is authoritative
+     and the JSONL history was never imported** — and that is still true; what
+     went is the other store it was refusing on behalf of. */
   const [groups, credentials, realtime] = await Promise.all([
     spendGroupedByOwner(args.since, args.until),
     credentialsInWindow(args.since, args.until),

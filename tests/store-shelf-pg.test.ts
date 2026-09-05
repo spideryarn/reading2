@@ -100,14 +100,12 @@ const B = {
    Migration 0004 is the thing under test, and a database that is one migration
    behind would otherwise fail these with a confusing column error rather than
    saying "run npm run db:migrate". */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-shelf-pg.test.ts",
   columns: [{ table: "spideryarn.revision_blocks", column: "fts" }],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the Postgres shelf and library search", () => {
+describe("the Postgres shelf and library search", () => {
   beforeAll(async () => {
     const db = getDb();
     await cleanUp();

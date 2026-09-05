@@ -343,14 +343,13 @@ and which two are courtesies.
 - **The ingest queue is not in Postgres.** `data/_jobs/` is on disk. It carries an owner now and is
   filtered by it, but `jobs.owner_id` in the schema is still unused and the queue does not work on
   Vercel at all — there is no writable disk.
-- **`SPIDERYARN_STORE=files` has no isolation at all**, and unset still means `files` for a CLI
-  script, a test, or anything that does not go through `npm run dev` — which itself now defaults to
-  `postgres`, since 2026-09-02. So reaching `files` on a laptop today needs it said explicitly,
-  in `.env.local` or the shell. The production boot refusal in
-  [`src/store/index.ts`](../../src/store/index.ts) is the whole of the mitigation on that path, so
-  two signed-in readers who both land on `files` share the complete library, profile, comments,
-  chat and searches. Authentication does not make that configuration multi-user-safe, and nothing
-  short of moving the filesystem store to per-owner directories would.
+- ~~**`SPIDERYARN_STORE=files` has no isolation at all**~~ — **the configuration this warned about
+  cannot be reached since 2026-09-05**, when the flag and the filesystem store went
+  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
+  What it said was true and is the reason we are here: that store had no owner column, so two
+  signed-in readers on it shared the complete library, profile, comments, chat and searches, and
+  authentication did not make it multi-user-safe. A boot refusal in `src/store/index.ts` was the
+  whole of the mitigation. There is one store and it has `owner_id`.
 - **Child rows are trusted to match their article.** Comments, chat threads, searches and lookups are
   filtered by `articleId` alone — the owner column on them is written, never read — so the isolation
   rests on the invariant that a child's owner equals its article's owner. Nothing in the database

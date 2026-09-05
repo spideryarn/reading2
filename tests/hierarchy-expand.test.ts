@@ -217,7 +217,7 @@ describe("the scoped prompt", () => {
       where: "root > child 1",
       report,
     });
-    expect(built.map((n) => n.title)).toEqual([
+    expect(built.map((c) => c.node.title)).toEqual([
       "Starting at 0",
       "Starting at 8",
       "Starting at 12",
@@ -455,10 +455,19 @@ describe("reading a scoped answer strictly", () => {
       where: "root > child 1",
       report,
     });
-    expect(built.map((n) => n.range)).toEqual([
+    expect(built.map((c) => c.node.range)).toEqual([
       [blockId(0), blockId(4)],
       [blockId(5), blockId(9)],
     ]);
+
+    /* **And each node arrives holding the answer it was built from**, which is
+       what makes the verdict a property of a child rather than of a position in
+       a second array. `toBe`, not `toEqual`: the proposal is carried by identity,
+       so a field this derivation has never heard of cannot be lost on the way
+       through. */
+    expect(built.map((c) => c.proposed.verdict)).toEqual(["finished", "needs-deeper"]);
+    expect(built[0]!.proposed).toBe(sections[0]!.children[0]);
+    expect(built[1]!.proposed).toBe(sections[0]!.children[1]);
   });
 
   /**
@@ -844,5 +853,71 @@ describe("what was decided about a candidate", () => {
         "forced-open": 0,
       },
     });
+  });
+});
+
+/* ============================================ one repeat against another == */
+
+/**
+ * **`where` is not a repeat-stable identity, and question 1 is built on
+ * pairing.**
+ *
+ * `where` is an ordinal path derived from the answer's own fan-out, so two
+ * repeats that split the same parent at *different points* both emit
+ * `root > child 1` — and a boundary that moved is silently paired as "the same
+ * node" and read as a stable verdict. That corrupts the one question most
+ * likely to retire the feature. ⟨GPT Sol's second review of stage 5a,
+ * finding 6.⟩
+ *
+ * The fix a record can carry is its **derived range**; the pairing and the
+ * classification of what will not pair are `evals/deepen/report.ts` §
+ * `compareRepeats`, which refuses to compare a record without one
+ * (`requireRanges`). This is the half that has to exist for that to work.
+ */
+describe("what makes one repeat's records pairable with another's", () => {
+  const plain = article(60);
+
+  it("carries the derived range, which is block ids and therefore safe to write down", () => {
+    const record = recordCandidate({
+      node: pending(10, 17),
+      where: "root > child 1 > child 1",
+      wave: 2,
+      depth: 2,
+      blocks: plain,
+      recipe: CASCADE_RECIPE,
+      verdict: "finished",
+    });
+    expect(record.range).toEqual([blockId(10), blockId(17)]);
+  });
+
+  /* Two runs that split one parent at different points produce the identical
+     ordinal paths, so the range is the only thing that tells them apart. */
+  it("gives two different splits of one parent different identities", () => {
+    const at = (from: number, to: number): CandidateRecord =>
+      recordCandidate({
+        node: pending(from, to),
+        where: "root > child 1 > child 2",
+        wave: 2,
+        depth: 2,
+        blocks: plain,
+        recipe: CASCADE_RECIPE,
+        verdict: "finished",
+      });
+    const a = at(20, 39);
+    const b = at(30, 39);
+    expect(a.where).toBe(b.where);
+    expect(a.range).not.toEqual(b.range);
+  });
+
+  it("carries one for a node nobody was asked about too", () => {
+    const record = recordCandidate({
+      node: pending(0, 19),
+      where: "root > child 1",
+      wave: 1,
+      depth: 1,
+      blocks: plain,
+      recipe: CASCADE_RECIPE,
+    });
+    expect(record.range).toEqual([blockId(0), blockId(19)]);
   });
 });

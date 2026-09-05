@@ -9,16 +9,21 @@
  * hook because the glossary lives in a band beside the prose rather than on a
  * page of its own.
  *
- * **Three verbs, and the difference between two of them is the whole feature:**
+ * **Two verbs, and the difference between them is the whole feature:**
  *
  *  - `find()` — no glossary yet, or the one there has gone stale. The step's
  *    own freshness check agrees, so an ordinary run does the work.
  *  - `more()` — there is a perfectly good glossary and the reader wants more
  *    terms. `force` is what gets past the freshness check, and forcing this
  *    step *appends* rather than replacing (src/glossary.ts).
- *  - `reset()` — the list is wrong and should be started over. A DELETE, then a
- *    `find()`. Two acts, because "run it again" already means "add more" and a
- *    verb cannot mean both.
+ *
+ * **There was a third, `reset()`** — a DELETE and then a `find()`, for a list
+ * the reader wanted rid of, because "run it again" already means "add more" and
+ * a verb cannot mean both. Its button went on 2026-09-05 and it went with it;
+ * `Foot` in src/web/GlossaryPanel.tsx carries the reasoning.
+ * `DELETE /api/glossary/:slug` is still there and still tested, with no caller
+ * in the client — kept deliberately, so this is one edit away if the capability
+ * is ever wanted back on the Metadata page.
  *
  * See docs/project/glossary.md.
  */
@@ -35,7 +40,7 @@ import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
-import { apiFetch, fetchOk, readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
@@ -86,14 +91,20 @@ type GlossaryStatus = "loading" | "none" | "ready" | "error";
  * and a reply from an older one is dropped — `current()` in `load` below. This
  * replaces the `pushed` ref, which was the same idea aimed at a narrower case.
  *
- * **`clear` discards the generation and `patchEntry` does not**, which is not an
- * oversight. The list `clear` discards has been deleted, so a reply describing
- * it is news about nothing. But discarding in `patchEntry` would cancel an
- * in-flight reload, and the commonest reason one is in flight is that a job has
- * just finished — so a reader who checked a term at the wrong moment would
- * silently never see the new terms. The opposite risk, a read that started
- * before the lookup was stored landing after it, is repaired by the trailing
- * fetch (`armRefresh`) instead.
+ * **`patchEntry` deliberately does not discard the generation**, and that is
+ * the half of this worth keeping. Discarding would cancel an in-flight reload,
+ * and the commonest reason one is in flight is that a job has just finished —
+ * so a reader who checked a term at the wrong moment would silently never see
+ * the new terms. The opposite risk, a read that started before the lookup was
+ * stored landing after it, is repaired by the trailing fetch (`armRefresh`)
+ * instead.
+ *
+ * There was a `clear()` beside it that *did* discard, for the one operation
+ * that made a reply news about nothing: `reset()` deleted the list, so a GET
+ * issued before the DELETE must not put it back. Both went with the *Start
+ * again* button on 2026-09-05 — `Foot` in src/web/GlossaryPanel.tsx. Nothing
+ * removes a glossary from the client any more, so `discard` has no caller here;
+ * the generation still does its `live`-guarding work on a slug change.
  */
 export interface GlossaryRead {
   status: GlossaryStatus;
@@ -133,8 +144,6 @@ export interface GlossaryRead {
    * dedupe without the trailing read is precisely the bug above rebuilt.
    */
   refresh(): Promise<void>;
-  /** Empty the list now. `reset()` deletes the artefact and must not go on showing it. */
-  clear(): void;
   /**
    * Merge one term's **lookup** into the list — `look()`, without refetching.
    *
@@ -168,8 +177,9 @@ export function useGlossaryRead(slug: string): GlossaryRead {
    * fetch, and which reply is allowed to commit — is `useOrderedRead` below.
    *
    * `current()` after every `await`: false means this reply is about a list the
-   * hook has since thrown away (a `clear()`, or another article), and committing
-   * it would put the discarded one back on screen.
+   * hook has since moved on from — another article — and committing it would put
+   * that one back on screen. It also covered a local `clear()` until 2026-09-05;
+   * see the note on `patchEntry` below.
    */
   const load = useCallback(
     async (current: () => boolean): Promise<void> => {
@@ -223,7 +233,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     [slug],
   );
 
-  const { reload, refresh, armRefresh, discard } = useOrderedRead(load);
+  const { reload, refresh, armRefresh } = useOrderedRead(load);
 
   /**
    * A new article clears the old one's list — **during render, not in an
@@ -258,24 +268,9 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     void reload();
   }, [reload]);
 
-  const clear = useCallback(() => {
-    discard();
-    setGlossary(null);
-    setStale(false);
-    setOutdated(false);
-    setProfiled(false);
-    setProfileChanged(false);
-    /* **Including the error.** It was the one read field left behind, so a
-       failed background revalidation followed by a successful reset went on
-       showing the old failure above the cleared list — and if the regeneration
-       then failed too, indefinitely. GPT Sol, reviewing the built code. */
-    setError(null);
-    setStatus("none");
-  }, [discard]);
-
   /**
-   * **Does not bump the generation**, unlike `clear`, and the asymmetry is the
-   * point.
+   * **Does not bump the generation**, and until 2026-09-05 the asymmetry with
+   * `clear` was the point. `clear` has gone; the reasoning is what survives.
    *
    * A lookup is *stored on the server* (`glossary_lookups`, attached at the
    * read seam in src/store/pg.ts), so a reload landing after this one carries
@@ -318,7 +313,6 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     error,
     reload,
     refresh,
-    clear,
     patchEntry,
   };
 }
@@ -384,7 +378,6 @@ export interface UseGlossary {
    */
   find(useProfile?: boolean): Promise<void>;
   more(useProfile?: boolean): Promise<void>;
-  reset(): Promise<void>;
   cancel(id: string): void;
   /** Check one term on the web. Resolves when the answer is in `glossary`. */
   look(id: string): Promise<void>;
@@ -447,14 +440,10 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * `Reader`'s opening GET is outstanding costs nothing, and it never returns
    * `status` to `loading` — which is the whole point of the change.
    */
-  const { reload, refresh, clear, patchEntry } = read;
+  const { reload, refresh, patchEntry } = read;
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  /* A failed DELETE is the band's own error, not the read's — `read.error` is
-     about the GET and would be overwritten by the next reload. */
-  const [resetFailed, setResetFailed] = useState<string | null>(null);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the ideas and
@@ -489,48 +478,6 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
      again, and `reload` joins a request already in flight rather than making a
      second one. useAutoRun.ts § A failed read is not an answer. */
   const auto = useAutoRun(slug, "glossary", status, find, reload);
-
-  /**
-   * Throw the list away and find a new one.
-   *
-   * The DELETE first, and the local state cleared before the job is asked for,
-   * so the panel does not go on showing the old list while the new one is being
-   * written — which would read as the reset having been ignored.
-   *
-   * A failed DELETE stops here rather than running anyway. Carrying on would
-   * *append* to the list the reader just asked to be rid of, which is the exact
-   * opposite of what they pressed.
-   */
-  const reset = useCallback(async () => {
-    try {
-      await fetchOk(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
-    } catch (err) {
-      /* **The DELETE failing must not fall through to `run`**, and that is the
-         whole of this branch. The glossary step *appends* rather than replaces
-         (src/glossary.ts), so with the old list still in the column there are
-         two ways to carry on and both are wrong: the step runs and the reader
-         gets a **longer** version of the list they asked to be rid of, or it
-         skips as current and the identical list comes straight back over the
-         `clear()` below. Neither is Start again.
-
-         Until 2026-09-03 the failure this caught was a **501**: there was no
-         Postgres implementation, so every reader who was not a developer on a
-         laptop pressed the button and was told no. There is one now
-         (src/store/pg-glossary.ts), and what lands here instead is a **409** —
-         *a job is running on this article* — plus the ordinary failures any
-         request has. The 409 is real rather than theoretical: the delete nulls
-         the column on the published revision without moving
-         `articles.current_revision_id`, so a draft opened before it would
-         publish the copied glossary back over the top, and the store refuses
-         rather than races. Its message is written for a reader and says to wait
-         and press Start again, which is why it is shown verbatim. */
-      setResetFailed((err as Error).message);
-      return;
-    }
-    setResetFailed(null);
-    clear();
-    await run(false);
-  }, [slug, run, clear]);
 
   /**
    * Check one term on the web — the panel's "check this" button.
@@ -670,7 +617,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     profileChanged,
     hasProfile,
     slug,
-    error: resetFailed ?? error,
+    error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
@@ -678,7 +625,6 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     automatic: auto && (queue.job !== null || queue.starting),
     find,
     more,
-    reset,
     cancel: queue.cancel,
     look,
     looking,

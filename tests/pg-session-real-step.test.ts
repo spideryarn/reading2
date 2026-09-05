@@ -85,15 +85,6 @@ import path from "node:path";
 import { and, eq, inArray, asc } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-/* `SPIDERYARN_STORE=postgres` before a single import is evaluated — src/store/live.ts
-   reads the flag once, at first import, and imports are hoisted above ordinary
-   statements. The reasoning in full is in tests/store-pg-session.test.ts. */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
-
 import { closeDb, getDb } from "../src/db/client.js";
 import {
   articleRevisions,
@@ -113,7 +104,6 @@ import { hashBlocks } from "../src/source-hash.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
-import { STORE } from "../src/store/live.js";
 import type { Block, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
@@ -123,8 +113,6 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put the flag back straight away — vitest reuses a worker across files, and the
    modules above have already captured it. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
@@ -150,7 +138,7 @@ const STALE_WORDS = 999;
 
 let runLock: HeldRunLock | undefined;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/pg-session-real-step.test.ts",
   tables: [
     "spideryarn.jobs",
@@ -161,28 +149,24 @@ const { reachable } = await pgReady({
   ],
 });
 
-if (reachable) {
-  /* The sweep runs on the lock's own connection, so it is covered by the key —
-     and through `takeRunLockAndSetUp`, so a statement that throws gives the key
-     back. This is module scope: no `afterAll` has been registered yet, so
-     nothing else would. tests/helpers/lock-lifecycle.ts. */
-  runLock = await takeRunLockAndSetUp("tests/pg-session-real-step.test.ts", async (lockClient) => {
-    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query(
-      "update spideryarn.articles set current_revision_id = null where slug like $1",
-      [SLUG_RUBBLE],
-    );
-    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-    await seedAuthUser(lockClient, {
-      id: OWNER,
-      email: `pg-session-real-step-${OWNER}@example.invalid`,
-    });
+/* The sweep runs on the lock's own connection, so it is covered by the key —
+   and through `takeRunLockAndSetUp`, so a statement that throws gives the key
+   back. This is module scope: no `afterAll` has been registered yet, so
+   nothing else would. tests/helpers/lock-lifecycle.ts. */
+runLock = await takeRunLockAndSetUp("tests/pg-session-real-step.test.ts", async (lockClient) => {
+  await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+  await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query(
+    "update spideryarn.articles set current_revision_id = null where slug like $1",
+    [SLUG_RUBBLE],
+  );
+  await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+  await seedAuthUser(lockClient, {
+    id: OWNER,
+    email: `pg-session-real-step-${OWNER}@example.invalid`,
   });
-}
-
-const when = reachable ? describe : describe.skip;
+});
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -416,16 +400,14 @@ const mine = (name: string, body: () => Promise<void>) => it(name, () => runAsOw
 
 /* ------------------------------------------------------------------ tests -- */
 
-when("a real pipeline stage committing through pgStoreSession", () => {
+describe("a real pipeline stage committing through pgStoreSession", () => {
   afterEach(async () => {
-    if (!reachable) return;
     await db()
       .delete(jobsTable)
       .where(and(eq(jobsTable.ownerId, OWNER), inArray(jobsTable.status, ["queued", "running"])));
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     /* Release last, and whatever the cleanup did: one failed statement used to
        skip it, leaving the key held until the worker exited and every peer
        suite waiting on it. tests/helpers/lock-lifecycle.ts. */
@@ -465,8 +447,6 @@ when("a real pipeline stage committing through pgStoreSession", () => {
    * Postgres afterwards, on a different connection from the one that wrote it.
    */
   mine("writes both its artefacts, finishes the step and publishes", async () => {
-    expect(STORE, "the vi.hoisted flag did not reach src/store/live.ts").toBe("postgres");
-
     const slug = `${SLUG_PREFIX}commit`;
     const fixture = await publishStaleArticle(slug);
     /* The fixture has to be a real article, or the rest of this proves nothing

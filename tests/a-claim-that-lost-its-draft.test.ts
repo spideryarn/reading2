@@ -52,12 +52,10 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-/** `SPIDERYARN_STORE=postgres` before any import — see tests/claim-session-postgres.test.ts. */
+/** The scratch data root, before any import — see tests/claim-session-postgres.test.ts. */
 const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
   const previousRoot = process.env.SPIDERYARN_DATA_ROOT;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore, previousRoot };
+  return { previousRoot };
 });
 
 import { getDb } from "../src/db/client.js";
@@ -72,25 +70,20 @@ import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { ArtifactKind } from "../src/store/artifacts.js";
 import { DATA_ROOT_ENV } from "../src/store/data-root.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Block, Job, JobStep, Quotes, StepName, Timeline, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/a-claim-that-lost-its-draft.test.ts",
   tables: ["spideryarn.jobs", "spideryarn.article_revisions"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-const runLock = reachable ? await takeRunLock("tests/a-claim-that-lost-its-draft.test.ts") : undefined;
+const runLock = await takeRunLock("tests/a-claim-that-lost-its-draft.test.ts");
 
 const SLUGS = {
   wedge: "lost-draft-wedge",
@@ -98,8 +91,8 @@ const SLUGS = {
 } as const;
 
 /** One scratch root for the file: no step here writes to a disk, and this proves it. */
-const ROOT = reachable ? await mkdtemp(path.join(tmpdir(), "spya-lost-draft-")) : undefined;
-if (ROOT) process.env[DATA_ROOT_ENV] = ROOT;
+const ROOT = await mkdtemp(path.join(tmpdir(), "spya-lost-draft-"));
+process.env[DATA_ROOT_ENV] = ROOT;
 
 const db = () => getDb();
 
@@ -269,13 +262,7 @@ async function revisionRow(id: string) {
 
 /* ------------------------------------------------------------------ cases -- */
 
-describe("the store this file is talking to", () => {
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("a claim whose draft is taken away mid-step", () => {
+describe("a claim whose draft is taken away mid-step", () => {
   afterAll(async () => {
     const database = getDb();
     for (const slug of Object.values(SLUGS)) {

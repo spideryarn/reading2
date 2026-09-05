@@ -48,15 +48,18 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { handleApi } from "../src/routes.js";
 import { UPLOAD_STILL_ARRIVING } from "../src/messages.js";
 import { stagingKey } from "../src/source.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
-import { forgetForTests } from "../src/store/jobs-fs.js";
+import { inArray } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { jobs as jobsTable } from "../src/db/schema.js";
 import { forgetUpload } from "../src/upload-records.js";
-import { fsUploadStore } from "../src/store/uploads-fs.js";
+import { pgUploadStore } from "../src/store/pg-uploads.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
 
 /** The reader `AUTHED_HEADERS` is. Records written straight to the store need it. */
@@ -71,9 +74,22 @@ const wrote: string[] = [];
 const queued: string[] = [];
 
 afterEach(async () => {
-  await forgetForTests(queued.splice(0));
+  /* **Jobs first, and by SQL rather than through `forgetJob`.**
+     `jobs.upload_id` is a foreign key into `uploads`, so an upload cannot go
+     while a job names it — and `pgJobStore.forget` only deletes a **terminal**
+     job. Every job here is left `queued`, on purpose (`VERCEL=1` stops the
+     pump), so the polite route cannot clean up after these. Only ids this
+     file's own responses named. It went through the filesystem queue until
+     2026-09-05, where nothing had a foreign key. */
+  if (queued.length > 0) {
+    await getDb().delete(jobsTable).where(inArray(jobsTable.id, queued.splice(0)));
+  }
   for (const id of minted.splice(0)) await forgetUpload(id);
   for (const key of wrote.splice(0)) await blobStore().remove(key);
+});
+
+afterAll(async () => {
+  await closeDb();
 });
 
 async function call(
@@ -125,15 +141,17 @@ async function call(
 /**
  * Mint a grant the way the shelf does, and hand back the id.
  *
- * **It takes `VERCEL` off for its own duration**, and that is not a detail to
- * tidy away: the flag the tests below set to stop the worker *also* stops
- * minting, because `recordsSurviveTheRequest` refuses a grant on a host whose
- * filesystem cannot carry the record to the next request. Asked for with the
- * flag on, this answers 503 *"Uploading isn't switched on here"*, which reads
- * like a broken environment rather than like a flag — it cost the plan's
- * reviewer a whole run of `tests/uploads-api.test.ts`. That file avoids it by
- * minting before setting the flag; this one puts the knowledge in the helper,
- * so no case below has to remember.
+ * **It takes `VERCEL` off for its own duration**, which was load-bearing until
+ * 2026-09-05 and is now belt and braces. The flag the tests below set to stop
+ * the worker *also* stopped minting: `recordsSurviveTheRequest` refused a grant
+ * on a host whose **filesystem** could not carry the record to the next
+ * request, and asked for with the flag on this answered 503 *"Uploading isn't
+ * switched on here"* — a whole run of `tests/uploads-api.test.ts` lost to what
+ * read like a broken environment. There is one store and it is durable
+ * everywhere, so that answer is now `true` unconditionally
+ * ([`src/upload-records.ts`](../src/upload-records.ts)). Left in place: the
+ * cases below are about the readiness gate, not about which host they are on,
+ * and taking the flag off keeps them saying so.
  */
 async function mint(filename: string): Promise<string> {
   const was = process.env.VERCEL;
@@ -299,7 +317,7 @@ describe("a grant that has run out, over bytes we are holding", () => {
     await withoutTheWorker(async () => {
       const id = randomUUID();
       const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
-      await fsUploadStore.create({
+      await pgUploadStore.create({
         id,
         owner: OWNER,
         filename: "held-past-its-grant.pdf",
@@ -325,7 +343,7 @@ describe("a grant that has run out, over bytes we are holding", () => {
     await withoutTheWorker(async () => {
       const id = randomUUID();
       const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
-      await fsUploadStore.create({
+      await pgUploadStore.create({
         id,
         owner: OWNER,
         filename: "never-came.pdf",

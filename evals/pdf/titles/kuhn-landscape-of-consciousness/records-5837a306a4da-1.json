@@ -1,0 +1,481 @@
+{
+  "slug": "kuhn-landscape-of-consciousness",
+  "sample": 1,
+  "prompt": "5837a306a4da",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T08:51:21.517Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Contents lists available at ScienceDirect",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Progress in Biophysics and Molecular Biology",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "journal homepage: www.elsevier.com/locate/pbiomolbio",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "A landscape of consciousness: Toward a taxonomy of explanations and implications",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Robert Lawrence Kuhn",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Closer To Truth (TV & Web), United States",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "ARTICLE INFO",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Keywords:",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "listitem",
+      "text": "Consciousness",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "listitem",
+      "text": "Mind-body problem",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "listitem",
+      "text": "Materialism",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "listitem",
+      "text": "Monism",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "listitem",
+      "text": "Dualism",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "listitem",
+      "text": "Idealism",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "ABSTRACT",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Diverse explanations or theories of consciousness are arrayed on a roughly physicalist-to-nonphysicalist landscape of essences and mechanisms. Categories: Materialism Theories (philosophical, neurobiological, electromagnetic field, computational and informational, homeostatic and affective, embodied and enactive, relational, representational, language, phylogenetic evolution); Non-Reductive Physicalism; Quantum Theories; Integrated Information Theory; Panpsychisms; Monisms; Dualisms; Idealisms; Anomalous and Altered States Theories; Challenge Theories. There are many subcategories, especially for Materialism Theories. Each explanation is self-described by its adherents, critique is minimal and only for clarification, and there is no attempt to adjudicate among theories. The implications of consciousness explanations or theories are assessed with respect to four questions: meaning/purpose/value (if any); AI consciousness; virtual immortality; and survival beyond death. A Landscape of Consciousness, I suggest, offers perspective.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Explanations of consciousness abound and the radical diversity of theories is telling. Explanations, or theories, are said to work at astonishingly divergent orders of magnitude and putative realms of reality. My purpose here must be humble: collect and categorize, not assess and adjudicate.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Unrealistically, I’d like to get them all, at least all contemporary theories that are sufficiently distinct with explanations that can surmount an arbitrary hurdle of rationality or conceivability. Falsification or verification is not on the agenda. I’m less concerned about the ontological truth of explanations/theories than in identifying them and then locating them on a “Landscape” to enable categorization and assess relationships. Next, I assesss implications of categories for “big questions.” Thus, this Landscape is not about how consciousness is measured or evolved or even works, but about what consciousness is and what difference it makes.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "It’s the classic “mind-body problem:” How do the felt experiences in our minds relate to the neural processes in our brains? How do mental states, whether sensory, cognitive, emotional, or even noumenal (selfless) awareness, correlate with brain states? The Landscape of Consciousness explanations or theories I want to draw is as broad as possible, including those that cannot be subsumed by, and possibly not even accessed by, the scientific method. This freedom from constraint, as it were, is no excuse for wooly thinking. Standards of rationality and clarity of argument must be maintained even more tenaciously, and bases of beliefs must be specified even more clearly.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "I have two main aims: (i) gather and describe the various theories",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "1 Feedback is appreciated, especially explanations or theories of consciousness not included, or not described accurately, or not classified properly; also, modifications of the classification typology. “A Landscape of Consciousness” is a work-in-progress, permanently.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "2 I make no attempt to be exhaustive historically: while Bohm, Jung, Aquinas, Aurobindo, and Dao De Jing are included; Plato, the Psalmist, Nagarjuna, Confucius, and the Apostle Paul are not.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "3 I use “explanation” and “theory” interchangeably, though I chose “explanations,” not “theories,” for the subtitle. “Theories” range from the “Theory of Relativity” with high precision, to theories in the life and social sciences with confidence levels that vary wildly, to “I have a theory” (meaning “I have an idea,” about anything, say, why my favorite sports team keeps losing). Other terms are “hypothesis,” an initial idea to guide research, and “model,” a simplification of the real world to isolate and test insights. All these terms have precise definitions in the literature (see Daniel Stoljar, Kind and Stoljar, 2023, pp. 112–113). But on this Landscape everyone picks their own term. Most pick “theory,” in part because they really believe their baby is beautiful. No matter the term, we are all after the same goal: the foundation(s) of consciousness.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "4 Deliberately, “A Landscape ….” not “The Landscape ….” I acknowledge, with pleasure, precedent to Leonard Susskind’s pioneering The Cosmic Landscape (string theory structures and the anthropic principle).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "https://doi.org/10.1016/j.pbiomolbio.2023.12.003",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Received 4 June 2023; Received in revised form 12 September 2023; Accepted 25 December 2023",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Available online 26 January 2024",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "0079-6107/© 2024 The Author(s). Published by Elsevier Ltd. This is an open access article under the CC BY-NC-ND license (http://creativecommons.org/licenses/by-nc-nd/4.0/).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "and array them in some kind of meaningful structure of high-level or first-order categories (and under Materialism, subcategories); and (ii) assess their implications, with respect to four big questions: meaning/purpose/value (if any); artificial intelligence (AI) consciousness; virtual immortality; and survival beyond death.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Theories overlap; some work together. Moreover, while a real-world landscape of consciousness, even simplified, would be drawn with three dimensions (at least), with multiple kinds and levels of nestings—a combinatorial explosion (and likely no closer to truth)—I satisfice with a one-dimensional toy-model. I array all the theories on a linear spectrum, simplistically and roughly, from the “most physical” on the left (at the beginning) to the “least physical” on the right (near the end). (I have two final categories after this spectrum.) The physicalism assumed in Materialism Theories of consciousness is characterized by naturalistic, science-based perspectives, while non-materialism theories have various degrees of nonphysicalist perspectives outside the ambit of current science and in some cases not subject to the scientific method of experimentation and replicability.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Please do not ascribe the relative importance of a theory to the relative size of its description. The shortest can be the strongest. It sometimes takes more words to describe lesser-known theories. For each description I feel the tension between conciseness and completeness. Moreover, several are not complete theories in themselves but ways to think about consciousness that strike me as original and perhaps insightful.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "I have followed consciousness studies in its various forms for my entire life. My PhD is in neurophysiology (thalamocortical evoked potentials). I am creator and host of Closer To Truth, the long-running public television series and web resource on science and philosophy, roughly one-third of which focuses on consciousness and brain/mind topics. I have discussed consciousness with over 200 scientists and philosophers who work on or think about consciousness and related fields (Closer To Truth YouTube; Closer To Truth website).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "I use these Closer To Truth discussions as resources. I want to give feel and flavor, as well as propositions and arguments, for the astonishingly diverse attitudes and approaches to consciousness coming from radically diverse perspectives and worldviews. That’s why I use spontaneous quotes from verbal conversations along with meticulous quotes from academic papers.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "In one early Closer To Truth episode, “What are the Big Questions of Science,” philosopher Patricia Churchland gave the bluntest answer: “Out of meat, how do you get thought? That’s the grandest question.” She distinguishes two major questions. One is whether psychological states—our mental life of remembering, thinking, creating—are really a subset of brain activity? The other is how do high-level psychological processes come about from basic neurophysiological actions? “How do brain cells, organized in their complex ways, give rise to my watching something move, or seeing color, or smelling a rose”(Churchland, 2000; Kuhn, 2000a, 2000b).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Philosopher David Papineau distinguishes three questions related to consciousness: How?, Where?, and What? “First, how does consciousness relate to other features of reality? Second, where are conscious phenomena located in reality? And, third, what is the nature of consciousness?” (Papineau, 2020a). Because this Landscape is structured by theories of consciousness, not by philosophical questions, each theory sets its own agenda for dealing with the three questions, mostly, of course, focusing on the How?",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Philosopher Thomas Nagel sees more a fundamental conundrum and he frames it crisply. “We have at present no conception of how a single event or thing could have both physical or phenomenological aspects, or how if it did they could be related” (Nagel, 1986). In his influential paper, “What Is It Like to Be a Bat?,” Nagel offers, “Without consciousness the mind-body problem would be much less interesting. With consciousness it seems hopeless” (Nagel, 1974).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "“Hopeless,” to me, is invigorating; I’m up for the “hopeless challenge.” Take all that follows as my personal journey of consciousness; idiosyncratic, to be sure; not all for everyone, not set in cement.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading1",
+      "text": "1. Chalmers’s “hard problem” of consciousness",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Philosopher David Chalmers famously characterized the core conundrum of explaining consciousness—accounting for “qualia,” our qualitatively rendered interior experience of motion-picture-like perception and cognitive awareness—by memorializing the pithy, potent phrase, “the hard problem.” This is where most contemporary theories commence and well they should (Section: Chalmers, 1995b, 1996, 2007; 2014a; 2014b; 2016b).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "It is no exaggeration to say that Chalmer’s 1995 paper, “Facing up to the problem of consciousness” (Chalmers, 1995b) and his 1996 book, The Conscious Mind: In Search of a Fundamental Theory (Chalmers, 1996), were watershed moments in consciousness studies, challenging the conventional wisdom of the prevailing materialist-reductionist worldview and altering the dynamics of the field. His core argument against materialism, in its original form, is deceptively (and delightfully) simple:",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "1. In our world, there are conscious experiences.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "2. There is a logically possible world physically identical to ours, in which the positive facts about consciousness in our world do not hold.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "3. Therefore, facts about consciousness are further facts about our world, over and above the physical facts.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "listitem",
+      "text": "4. So, materialism is false.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "This is the famous “Zombie Argument” (infamous to some): whether creatures absolutely identical to us in every external measure, but with no internal light, no inner subjective experience, are “conceivable”—the argument turning on the meaning and implications of “conceivable” and the difference between conceivable and possible. (It can be claimed that the Zombie Argument for consciousness being nonphysical, like the Ontological Argument for God actually existing, sneaks the conclusion into one of the premises.)",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Chalmers asks, “Why does it feel like something inside? Why is our brain processing—vast neural circuits and computational mechanisms—accompanied by conscious experience? Why do we have this amazing, entertaining inner movie going on in our minds?” (All quotes not referenced are from Closer To Truth videos on www.closertotruth.com, including 2007, 2014a, 2014b, 2016b.)",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Key indeed are qualia, our internal, phenomenological, felt experience—the sight of your newborn daughter, bundled up; the sound of Mahler’s Second Symphony, fifth movement, choral finale; the smell of garlic, cooking in olive oil. Qualia—the felt qualities of inner experience—are the crux of the mind-body problem.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Chalmers describes qualia as “the raw sensations of experience.” He says, “I see colors—reds, greens, blues—and they feel a certain way to me. I see a red rose; I hear a clarinet; I smell mothballs. All of these feel a",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "footnote",
+      "text": "5 My typology is arbitrary, and any association with political connotations of “left” and “right” is coincidental and comical.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "footnote",
+      "text": "6 UCLA Department of Anatomy and Brain Research Institute, 1964–1968.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "footnote",
+      "text": "7 Closer To Truth is co-created, produced and directed by Peter Getzels.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "footnote",
+      "text": "8 Closer To Truth features over 100 TV episodes and over 1500 video interviews on consciousness and related topics, issues and questions in brain and mind, such as free will, personal identity, and alien intelligences. Closer To Truth website, www.closertotruth.com and Closer To Truth YouTube channel, www.youtube.com/@CloserToTruthTV.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "footnote",
+      "text": "9 In addition, viewers globally send me their theories on consciousness: some are coherent, a few are original, all are passionate. I consider them all—most, admittedly, I skim—and I learn some, enriching the Landscape. There seems a sharp division: those striving to develop purely physicalist explanations (however complex), and those taking consciousness as in some sense fundamental (whether motivated by religion, parapsychology or philosophy).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "quote",
+      "text": "certain way to me. You must experience them to know what they’re like. You could provide a perfect, complete map of my brain [down to elementary particles]—what’s going on when I see, hear, smell—but if I haven’t seen, heard, smelled for myself, that brain map is not going to tell me about the quality of seeing red, hearing a clarinet, smelling mothballs. You must experience it.”",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Since qualia constitutes the core of the “hard problem,” and since the hard problem has come to so dominate consciousness studies such that almost every theorist must confront it, seeking either to explain it or refute it—and since the hard problem is a leitmotiv of this Landscape—I asked Dave about its backstory.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "quote",
+      "text": "“I first remember presenting the hard problem in a talk at the first Tucson ‘Toward a Science of Consciousness’ consciousness in 1994. When did I first use it? Did I use it in writing before then? I’ve looked in my writing and have not found it [i.e., not prior to the 1994 talk]. The hard problem was part of the talk. I remember speaking with some students beforehand, saying I’m going to talk about ‘hard problems, easy problems.’ I had been already talking this way in my seminar the previous year, so maybe it was already becoming part of my thinking. But I didn’t think about it as an ‘insight.’ I just thought it a way of stating the obvious. ‘Yeah, there’s a really hard problem here.’ So, as part of the first couple of minutes of my talk, I said something like ‘everyone knows there is a hard problem’ …. And people took it and said ‘it’s this great insight’ … Well, it did become a catchy meme; it became a way of encapsulating the problem of consciousness in a way that made it difficult to ignore, and I’m grateful for that role. I had no idea at the time that it would catch on, but it’s good because the problem of consciousness is really easy to ignore or to sidestep, and having this phrase, ‘the hard problem,’ has made it difficult to do that. There’s now just a very natural response whenever that happens. You say, ‘Well, that’s addressing the easy problem, but it’s not addressing the hard problem.’ I think this helps in getting both scientists and philosophers to take consciousness seriously. But I can’t take credit for the idea. Everyone knew that consciousness was a hard problem way before me—my colleagues, Tom Nagel and Ned Block; philosophers like C.D. Broad almost 100 years ago; Thomas Huxley back in the 19th century; even Leibniz and Descartes—they all knew that consciousness was a hard problem” (Chalmers, 2016b).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Over the years, while Chalmers has played a leading role in expanding and enriching the field of consciousness studies (Chalmers, 2018), his overarching views have not changed: “I don’t think the hard problem of consciousness can be solved purely in terms of neuroscience.” As science journalist George Musser puts it, “By ‘hard,’ Chalmers meant impossible. Science as we now practice it, he argued, ‘is inherently unable to explain consciousness’” (Musser, 2023a,b).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "This does not mean, of course, that Chalmers is making a case for “substance dualism,” some nonphysical stuff (like the immortal souls of many religions). Chalmers is postulating a “naturalistic dualism,” where perhaps “information” is the connective, because while information is not material, it is embedded in the physical world. He notes, “We can also find information realized in our phenomenology.” This is a “naturalistic dualism,” a kind of property dualism (15.1).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "To Chalmers, “It is natural to hope that there will be a materialist solution to the hard problem and a reductive explanation of consciousness, just as there have been reductive explanations of many other phenomena in many other domains. But consciousness seems to resist materialist explanation in a way that other phenomena do not.” He encapsulates this resistance in three related arguments against materialism: (i) The Explanatory Argument (“explaining structure and function does not suffice to explain consciousness”); (ii) The Conceivability Argument (“it is conceivable that there be a system that is physically identical to a conscious being, but that lacks at least some of that being’s conscious states”); (iii) The Knowledge Argument (“someone could know all the physical facts … and still be unable to know all the facts about consciousness”) (Chalmers, 2003).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "“Physicalists, of course, resist these arguments,” says Philosopher Frank Jackson. “Some deny the modal and epistemic claims the arguments use as premises. They may grant (as they should) the intuitive appeal of the claim that a zombie physical duplicate of me is possible, but insist that, when one looks at the matter more closely, one can see that a zombie physical duplicate of me is not in fact possible. Any physical duplicate of me must feel pain when they stub their toe, have things look green to them on occasion, and so on” (Jackson, 2023).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Philosopher Daniel Stoljar targets the conceivability argument (“CA”). Strictly speaking, he says, “CA is an argument against the truth of physicalism. However, since it presupposes the existence of consciousness, it may be regarded also as an argument for the incompatibility of physicalism and the existence of consciousness.” Stoljar’s epistemic view offers a two-part response. “The first part supposes that there is a type of physical fact or property that is relevant to consciousness but of which we are ignorant.” He calls this the ignorance hypothesis. The second part “argues that, if the ignorance hypothesis is true, CA is unpersuasive” for reasons of logic (Kind and Stoljar, 2023, pp. 92, 95).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Philosopher Yujin Nagasawa calls “The Knowledge Argument” (Jackson, 1982, 1986, 1995, 1998) “among the strongest arguments (or possibly the strongest argument) for the claim that there is [in consciousness] something beyond the physical” (Nagasawa, 2012a). Based on a thought experiment by Frank Jackson, it imagines “Mary, a brilliant scientist,” who lives entirely in a black-and-white room, who acquires all physical, scientific knowledge about color—wavelengths of light in all detail—“but it seems obvious that when she comes outside her room, she learns something completely new, namely, what is like to see color.” Prior to seeing the color, “she doesn’t have phenomenal knowledge of conscious experience.” While Jackson himself no longer endorses the argument, it is still regarded as one of the most important arguments against physicalism, though of course it has its critics (Garfield, 1996). Nagasawa, who did his PhD under Jackson, responds to critics of the argument (Nagasawa, 2010), but also offers his own objections and novel proposals (Nagasawa, 2008).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Frank Jackson himself has much of the contemporary literature on consciousness revolving around three questions. “Does the nature of conscious experience pose special problems for physicalism? Is the nature of conscious experience exhausted by functional role? Is the nature of conscious experience exhausted by the intentional contents or representational nature of the relevant kinds of mental states?” (Jackson, 1997).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "To philosopher Philip Goff, there are two aspects of consciousness that give rise to the hard problem, qualitivity and subjectivity: qualitivity meaning that experiences involve sensory qualities, whether in real-time or via memory recall; subjectivity meaning that there is a subject who has those experiences, that “these experiences are for someone: there is something that it’s like for me to experience that deep red.” Goff argues that these two aspects of consciousness give rise to two “hard problems.” While either problem would be sufficient to refute materialism, he says, the hard problem of qualitivity is more pronounced—or at least easier to argue for—because the vocabulary of the physical sciences, which tell a purely quantitative story of causal structures, cannot articulate the qualities of experience; the language of physics entails an explanatory limitation (Goff, 2021).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Philosopher Colin McGinn provides a culinary perspective: “Matter is just the wrong kind of thing to give birth to consciousness … You might as well assert, without further explanation, that numbers emerge from biscuits, or ethics from rhubarb” (McGinn, 1993).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Philosopher Jerry Fodor put the problem into what he thought would be perpetual perspective. “[We don’t know], even to a first glimmer, how a brain (or anything else that is physical) could manage to be a locus of conscious experience. This … is, surely, among the ultimate metaphysical mysteries; don’t bet on anybody ever solving it” (Fodor, 1998).",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "A landscape of consciousness: Toward a taxonomy of explanations and implications",
+  "recall": 0.986,
+  "quality": [
+    "Pages 1, 2: 2 run(s) are missing from the transcription, the longest 11 words — “a r t i c l e i n f o”.",
+    "Pages 1, 2: 1 number(s) or address(es) in the output are on none of these pages — http://creativecommons.org/licenses/by-nc-nd/4.0."
+  ],
+  "usage": {
+    "input": 17512,
+    "output": 11442
+  }
+}

@@ -201,6 +201,16 @@ export type Route =
    */
   | { kind: "pricing" }
   /**
+   * How to reach us, and which way is best — `/contact`. See ContactPage.tsx
+   * and docs/project/website-text.md.
+   *
+   * Greg, 2026-09-05: *"Add a /contact page and link to it appropriately. For
+   * now it can be really brief."* Signed out for the same reason as `privacy`:
+   * the person most likely to want an address is somebody who has not signed up
+   * and has a question about whether to.
+   */
+  | { kind: "contact" }
+  /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
    * **The one route that must be exempt from every rewrite in main.tsx**, and
@@ -335,6 +345,7 @@ export function parseRoute(pathname: string): Route {
   if (new RegExp(`^${PRIVACY_HREF}/?$`).test(pathname)) return { kind: "privacy" };
   if (new RegExp(`^${FEATURES_HREF}/?$`).test(pathname)) return { kind: "features" };
   if (new RegExp(`^${PRICING_HREF}/?$`).test(pathname)) return { kind: "pricing" };
+  if (new RegExp(`^${CONTACT_HREF}/?$`).test(pathname)) return { kind: "contact" };
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to `not-found`, which is what every
@@ -532,6 +543,16 @@ export const FEATURES_HREF = "/features";
  * an address to send somebody, not because the numbers live anywhere new.
  */
 export const PRICING_HREF = "/pricing";
+/**
+ * How to reach us — linked from the footer row, which every page a reader lands
+ * on and reads carries (SiteFooter.tsx).
+ *
+ * The page is four sentences and one of them is the address, which is already a
+ * `mailto:` in that same row. It exists anyway because *"contact us"* is a thing
+ * people look for by name, and because the address is not the answer we want
+ * first: the Feedback button is. ContactPage.tsx.
+ */
+export const CONTACT_HREF = "/contact";
 /**
  * The shelf of public articles.
  *
@@ -934,6 +955,24 @@ function subscribe(onChange: () => void): () => void {
     window.removeEventListener("popstate", onChange);
     window.removeEventListener(NAVIGATED, onChange);
   };
+}
+
+/**
+ * The same subscription `useAddress` uses, for a caller that wants to **hear**
+ * the address change without **re-rendering** when it does.
+ *
+ * There is exactly one such caller — `useLastView` in last-view.ts, which
+ * copies the query string into `localStorage` — and the distinction is the
+ * whole reason this is exported. `?at=` is rewritten about once a second while
+ * anybody scrolls, so a `useAddress()` high in the reading view would re-render
+ * the entire article on every one of those; the staleness work of 2026-09-04
+ * (§ `watchHistoryWrites` above) exists precisely to keep that subscription
+ * narrow. A listener that writes to storage and touches no state costs nothing.
+ *
+ * Returns its own unsubscriber, so it drops straight out of a `useEffect`.
+ */
+export function onAddressChange(listener: () => void): () => void {
+  return subscribe(listener);
 }
 
 /**

@@ -113,10 +113,12 @@ function staticUniverse(): { reaching: ReadonlySet<string>; reports: StaticRepor
  * form comes from; this enforces their convention rather than inventing one.
  *
  * **A syntactic scan, and it says so.** The opener is *a name, then `(`, then a
- * string literal, at column zero*, which is `describe(` and also `when(` — the
- * `reachable ? describe : describe.skip` alias that most of these files use, so
- * a rule written against the word `describe` would see one block in
- * `routes.test.ts` and miss the other seventeen. It closes on the first `})` at
+ * string literal, at column zero*, which catches `describe(` and any alias
+ * beside it. It was written when most of these files opened their blocks with a
+ * `when` bound to `reachable ? describe : describe.skip`, so a rule written
+ * against the word `describe` would have seen one block in `routes.test.ts` and
+ * missed the other seventeen. That alias is gone (2026-09-05) and the breadth is
+ * kept: the next alias will not announce itself either. It closes on the first `})` at
  * column zero. Both of those are true of every file in `STORE_CONVERSIONS`
  * today and neither is true by construction; a file that indents its blocks
  * would be read as having none, which shows up as the arrears count falling to
@@ -177,7 +179,18 @@ describe("the store-migration registry", () => {
        witness is expected to be re-run. */
     expect(Object.keys(witness.touched).length).toBeGreaterThan(50);
 
-    const missing = Object.keys(witness.touched).filter((f) => !(f in STORE_MIGRATION));
+    /* **A file that has been deleted needs no entry**, and asking for one is how
+       this guard would fire on the very commits it is meant to encourage. The
+       witness is a dated measurement (its own header says so) and the tree moves
+       under it: the hinge deleted `claim-session-files` and
+       `pipeline-slug-claim-files` on 2026-09-05, in the same commit as the
+       `STORE !== "postgres"` lines that were their subject, which is exactly what
+       stage G's pairing rule asks for. Existence is checked separately, below —
+       an entry naming a file that is gone is still a failure, so this direction
+       cannot hide a stale registry. */
+    const missing = Object.keys(witness.touched).filter(
+      (f) => !(f in STORE_MIGRATION) && existsSync(path.join(REPO, f)),
+    );
     expect(missing, `witnessed as touching the filesystem store, with no registry entry`).toEqual(
       [],
     );

@@ -29,17 +29,7 @@
  * request body `converse` builds rather than what happens before it.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -51,30 +41,24 @@ loadEnvLocal();
 
 const SLUG = "test-chat-help-route";
 
-const { reachable } = await pgReady({
+/* **`pgReady` refuses rather than reports**, since the filesystem store and the
+   `SPIDERYARN_STORE` flag were deleted on 2026-09-05 (260903f) and Postgres is
+   the only store there is. This file was written against the older shape — a
+   `reachable` flag, a `describe.skip`, and a hoisted flag set before the first
+   import — and the merge that removed them is what caught it. There is nothing
+   left to skip for: a database this cannot reach is a failure, not a pass. */
+await pgReady({
   suite: "tests/chat-help-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
-
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
+const { chatStore } = await import("../src/store/index.js");
 
 let article: ScratchArticle | undefined;
 let BLOCK = "";
 
 beforeAll(async () => {
-  if (!reachable) return;
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
   const first = article.blocks.find((b) => b.text.trim().length > 30);
   if (!first) throw new Error("the fixture article has no block worth anchoring to");
@@ -191,7 +175,7 @@ const finalUser = (i: number) =>
 
 const HELP_LINE = 'The reader pressed the "?" beside this passage';
 
-when("what the wire may carry", () => {
+describe("what the wire may carry", () => {
   it("refuses a help that is not literally true", async () => {
     const r = await post(`/api/chat/${SLUG}`, {
       threadId: "spya-aaaaaa",
@@ -233,7 +217,7 @@ when("what the wire may carry", () => {
   });
 });
 
-when("a help press, end to end", () => {
+describe("a help press, end to end", () => {
   it("stores the flag on the reader's row and on nothing else", async () => {
     const r = await post(`/api/chat/${SLUG}`, {
       threadId: "spya-aaaaaa",
@@ -341,7 +325,7 @@ when("a help press, end to end", () => {
  *
  * GPT Sol's review of the built code, finding 1.
  */
-when("what help: true is allowed to claim", () => {
+describe("what help: true is allowed to claim", () => {
   /** What the "?" actually sends, bar the anchor, which needs `BLOCK`. */
   const helpPress = {
     threadId: "spya-aaaaaa",
@@ -445,7 +429,7 @@ when("what help: true is allowed to claim", () => {
  * builder-level test in tests/help-prompt.test.ts hands `buildConverseMessages`
  * an anchor itself, so it cannot see whether anybody passes one.
  */
-when("the passage a conversation is anchored to", () => {
+describe("the passage a conversation is anchored to", () => {
   const anchorLine = () => `This conversation is about block ${BLOCK}`;
 
   it("is in the turn that creates the thread", async () => {

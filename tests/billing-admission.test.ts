@@ -46,18 +46,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-
-/* `SPIDERYARN_STORE=postgres` before a single import is evaluated: src/store/live.ts
-   reads the flag once, at first import, and imports are hoisted above ordinary
-   statements. Under the filesystem store every assertion below would pass for
-   the wrong reason, because admission is deliberately inert there — which is
-   what tests/billing-admission-files.test.ts is about. */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import type { Verifier } from "../src/auth.js";
@@ -74,12 +63,10 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 const { handleApi } = await import("../src/routes.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-admission.test.ts",
   tables: [
     "spideryarn.jobs",
@@ -90,8 +77,6 @@ const { reachable, pool } = await pgReady({
   keepPool: true,
   max: 4,
 });
-
-const dbIt = reachable ? it : it.skip;
 
 /**
  * This file's own reader, minted per run.
@@ -376,7 +361,7 @@ async function forgetSpend(ids: string[]): Promise<void> {
 /* ------------------------------------------------- what spends, and what not -- */
 
 describe("adding an article spends a slot", () => {
-  dbIt("admits a free account three times and refuses the fourth", async () => {
+  it("admits a free account three times and refuses the fourth", async () => {
     for (let i = 1; i <= FREE_LIMIT; i++) {
       const reply = await add(`one-${i}`);
       expect(reply.status, JSON.stringify(reply.body)).toBe(202);
@@ -398,7 +383,7 @@ describe("adding an article spends a slot", () => {
    * free even when the account has nothing left — because there is nothing new
    * to pay for. docs/project/billing.md.
    */
-  dbIt("never reserves for a step re-run, even at the ceiling", async () => {
+  it("never reserves for a step re-run, even at the ceiling", async () => {
     await onTheShelf("test-admission-rerun");
     await alreadySpent(FREE_LIMIT);
     const reply = await post("/api/jobs", {
@@ -416,7 +401,7 @@ describe("adding an article spends a slot", () => {
    * `sameWork` and hands back the job the first one made, and the slot the
    * second took has to come back — otherwise two clicks cost two of three.
    */
-  dbIt("gives the slot back when a second paste deduplicates onto the first job", async () => {
+  it("gives the slot back when a second paste deduplicates onto the first job", async () => {
     const first = await add("dedup");
     const second = await add("dedup");
     expect(first.status).toBe(202);
@@ -426,7 +411,7 @@ describe("adding an article spends a slot", () => {
     expect(await slotOf(first.body.id as string)).not.toBeNull();
   });
 
-  dbIt("reserves for an upload, which is the other kind of new ingest", async () => {
+  it("reserves for an upload, which is the other kind of new ingest", async () => {
     const uploadId = await anUploadReadyToQueue("test-admission-paper.pdf");
 
     const reply = await post("/api/jobs", { uploadId });
@@ -463,7 +448,7 @@ describe("adding an article spends a slot", () => {
    * makes the leak invisible to every count but the lifetime one, which is the
    * count a free reader has three of.
    */
-  dbIt("resolves a repeat claim without taking a second slot", async () => {
+  it("resolves a repeat claim without taking a second slot", async () => {
     const uploadId = await anUploadReadyToQueue("test-admission-reloaded.pdf");
 
     const first = await post("/api/jobs", { uploadId });
@@ -522,7 +507,7 @@ describe("retry is the second front door", () => {
    * attempt is failed by hand *without* settling, so both are in flight; what
    * matters is that the retry took **a** slot and a different one.
    */
-  dbIt("reserves again when the attempt it repeats carried a slot", async () => {
+  it("reserves again when the attempt it repeats carried a slot", async () => {
     const first = await add("retry-paid");
     const before = await slotOf(first.body.id as string);
     await fail(first.body.id as string);
@@ -538,7 +523,7 @@ describe("retry is the second front door", () => {
   });
 
   /** A re-run that failed is still a re-run. `Job.url` could not have said so. */
-  dbIt("reserves nothing when the attempt it repeats carried none", async () => {
+  it("reserves nothing when the attempt it repeats carried none", async () => {
     await onTheShelf("test-admission-rerun-retry");
     const first = await post("/api/jobs", {
       slug: "test-admission-rerun-retry",
@@ -553,7 +538,7 @@ describe("retry is the second front door", () => {
     expect(await ledger()).toEqual({ taken: 0, inFlight: 0 });
   });
 
-  dbIt("refuses a retry the account has no room for", async () => {
+  it("refuses a retry the account has no room for", async () => {
     const first = await add("retry-blocked");
     await fail(first.body.id as string);
     /* Two more successes, and the failed attempt's own reservation, is three. */
@@ -606,7 +591,7 @@ describe("a cancellation that has not happened yet takes nothing away", () => {
     return end;
   }
 
-  dbIt("still admits a reader who cancelled through the Portal", async () => {
+  it("still admits a reader who cancelled through the Portal", async () => {
     /* The live shape exactly: a `cancel_at` timestamp with the boolean false. */
     const end = await cancelledButPaidUp({ cancelAt: new Date(Date.now() + 25 * 86_400_000) });
     expect(end.getTime()).toBeGreaterThan(Date.now());
@@ -621,7 +606,7 @@ describe("a cancellation that has not happened yet takes nothing away", () => {
     }
   });
 
-  dbIt("still admits a reader who cancelled through the API", async () => {
+  it("still admits a reader who cancelled through the API", async () => {
     /* The other shape, so neither field can be the one that ends somebody
        early. */
     await cancelledButPaidUp({ cancelAtPeriodEnd: true });
@@ -640,7 +625,7 @@ describe("a cancellation that has not happened yet takes nothing away", () => {
    * That is the boundary the pin is protecting — it moves at the period end and
    * not a day before.
    */
-  dbIt("refuses once the period it was paid for is actually over", async () => {
+  it("refuses once the period it was paid for is actually over", async () => {
     await sellATier();
     await subscribed({
       status: "canceled",
@@ -668,7 +653,7 @@ describe("what a refused reader is told", () => {
    * but the copy has to name the ended plan rather than a number that reads as
    * arithmetic going wrong.
    */
-  dbIt("says the plan has ended, rather than counting past a limit", async () => {
+  it("says the plan has ended, rather than counting past a limit", async () => {
     await subscribed({
       status: "canceled",
       periodStart: new Date(Date.now() - 60 * 24 * 3600 * 1000),
@@ -709,7 +694,7 @@ describe("a stored period that has run out", () => {
     );
   }
 
-  dbIt("resyncs from Stripe once and then admits", async () => {
+  it("resyncs from Stripe once and then admits", async () => {
     await makeStale();
     const asked: string[] = [];
     const slot = await withIngestSlot(
@@ -729,7 +714,7 @@ describe("a stored period that has run out", () => {
     expect(await ledger()).toEqual({ taken: 1, inFlight: 0 });
   });
 
-  dbIt("fails closed with 503 when Stripe cannot be reached", async () => {
+  it("fails closed with 503 when Stripe cannot be reached", async () => {
     await makeStale();
     await expect(
       withIngestSlot({ ownerId: OWNER }, async (s) => s, {
@@ -747,7 +732,7 @@ describe("a stored period that has run out", () => {
    * somebody who has paid, and the paid limit against a closed window is an
    * uncapped month.
    */
-  dbIt("fails closed with 503 when the resync changed nothing", async () => {
+  it("fails closed with 503 when the resync changed nothing", async () => {
     await makeStale();
     let calls = 0;
     await expect(
@@ -774,7 +759,7 @@ describe("the administrator is exempt", () => {
    * is what makes an exemption safe to write here at all — there is no variable
    * and no claim that puts anybody else in the list.
    */
-  dbIt("admits an admin owner past the free limit, and writes no ledger row", async () => {
+  it("admits an admin owner past the free limit, and writes no ledger row", async () => {
     /* **Cleaned up by id, not by owner.** This is the shared local dev-admin
        identity — every route suite in the repo authenticates as it — so a sweep
        keyed on the owner would delete rows this file did not write. */
@@ -801,7 +786,7 @@ describe("the administrator is exempt", () => {
 });
 
 describe("the door tells an upload there is no point", () => {
-  dbIt("refuses an upload from an account with nothing left, without reserving", async () => {
+  it("refuses an upload from an account with nothing left, without reserving", async () => {
     await alreadySpent(FREE_LIMIT);
     await expect(refuseUploadWithoutQuota(OWNER)).rejects.toMatchObject({
       status: 402,
@@ -811,7 +796,7 @@ describe("the door tells an upload there is no point", () => {
     expect(await ledger()).toEqual({ taken: FREE_LIMIT, inFlight: 0 });
   });
 
-  dbIt("says nothing at all when there is room", async () => {
+  it("says nothing at all when there is room", async () => {
     await expect(refuseUploadWithoutQuota(OWNER)).resolves.toBeUndefined();
     expect(await ledger()).toEqual({ taken: 0, inFlight: 0 });
   });

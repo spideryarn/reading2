@@ -69,33 +69,27 @@ requireFixture(FROM, [
   "output.blocks.json",
 ]);
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/load-article-serialisation.test.ts",
   tables: ["spideryarn.raw_sources"],
 });
-const when = reachable ? describe : describe.skip;
-
 /** A connection that takes the key on purpose, to see who waits for it. */
-const observer = reachable
-  ? new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })
-  : undefined;
+const observer = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 
 /** Slugs and raw-source hashes this file made, so teardown removes those and nothing else. */
 const mine = { slugs: [] as string[], shas: [] as string[] };
 
 afterAll(async () => {
-  if (reachable) {
-    const db = getDb();
-    if (mine.slugs.length) {
-      await db.delete(jobs).where(inArray(jobs.slug, mine.slugs));
-      await db.update(articles).set({ currentRevisionId: null }).where(inArray(articles.slug, mine.slugs));
-      await db.delete(articles).where(inArray(articles.slug, mine.slugs));
-    }
-    for (const sha of mine.shas) {
-      await db.delete(rawSources).where(and(eq(rawSources.sha256, sha), eq(rawSources.kind, "html")));
-    }
-    await closeDb();
+  const db = getDb();
+  if (mine.slugs.length) {
+    await db.delete(jobs).where(inArray(jobs.slug, mine.slugs));
+    await db.update(articles).set({ currentRevisionId: null }).where(inArray(articles.slug, mine.slugs));
+    await db.delete(articles).where(inArray(articles.slug, mine.slugs));
   }
+  for (const sha of mine.shas) {
+    await db.delete(rawSources).where(and(eq(rawSources.sha256, sha), eq(rawSources.kind, "html")));
+  }
+  await closeDb();
   await observer?.end();
 });
 
@@ -214,7 +208,7 @@ async function settledWithin(promise: Promise<unknown>, ms: number): Promise<boo
   return result !== pending;
 }
 
-when("loadArticleIntoPg's serialise option", () => {
+describe("loadArticleIntoPg's serialise option", () => {
   it("waits for the run lock when set, and does not when it is not", async () => {
     /* Holding the key is the precondition *and* the instrument: if something
        else held it, the "waits" arm would pass on a loader that never asked

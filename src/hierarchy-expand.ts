@@ -65,13 +65,14 @@ import {
   type RangedNode,
   structuralBlocksIn,
 } from "./hierarchy-cascade.js";
-import {
-  type BuildReport,
-  type ModelNode,
-  PRODUCTION_EFFORT,
-  PROMPT_VERSION,
-  renderBlocks,
-} from "./hierarchy.js";
+/* **Types only from `hierarchy.ts`, values only from `hierarchy-prompt.ts`.**
+   This file is imported (through `hierarchy-deepen.ts`) *by* `hierarchy.ts`, so
+   a value import from there is a cycle `npm run cycles` refuses; a type import
+   is erased and is not. The three values this needs — the stamp, the effort and
+   the renderer — were hoisted into the leaf on 2026-09-05 for exactly that
+   reason, unchanged. See `hierarchy-prompt.ts`. */
+import type { BuildReport, ModelNode } from "./hierarchy.js";
+import { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
 import type { MessagesBody } from "./messages-stream.js";
 import { type Effort, modelFor } from "./models.js";
 import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
@@ -918,8 +919,33 @@ export function overrodeVerdict(
  * the article, and this travels into a log line. src/ids.ts § `nameValue`.
  */
 export interface CandidateRecord {
-  /** "root > child 2 > child 4". Derived from the tree's shape, so safe to log. */
+  /**
+   * "root > child 2 > child 4". Derived from the tree's shape, so safe to log.
+   *
+   * **It is not a repeat-stable identity**, which is why `range` sits beside it.
+   * The ordinal comes from the answer's own fan-out, so two repeats that split
+   * one parent at different points both emit `root > child 1` — and pairing on
+   * that reads a boundary that moved as a node whose verdict held.
+   */
   where: string;
+  /**
+   * **The first and last block id of this node's derived span**, which is what
+   * makes two runs' records pairable: the same parent plus the same range is the
+   * same prose, whatever ordinal the fan-out gave it.
+   *
+   * Safe to write down for the same reason `where` is, and it is worth saying
+   * plainly because the rule above it is "nothing here is prose from the
+   * article": a block id is `spya-k3m9qt`, minted by src/ids.ts from nothing the
+   * article contains ([block-ids.md](../docs/project/block-ids.md)). It is an
+   * address, not a quotation.
+   *
+   * `evals/deepen/report.ts` § `compareRepeats` is what reads it, and the
+   * classification lives there rather than here: a changed fan-out, and an
+   * unmatched range at equal fan-out, are **structural instability** — a
+   * different finding from a verdict that flipped, and one stage 6 must not
+   * confuse with it.
+   */
+  range: [string, string];
   /**
    * 1 for the whole-document call's own nodes; 2 for the first scoped wave, and
    * so on. Not the node's depth — a wave-2 call can produce a node at depth 3
@@ -990,6 +1016,9 @@ export function recordCandidate(opts: {
   const rawVerdict = opts.verdict ?? null;
   return {
     where: opts.where,
+    /* Copied rather than shared, so a later mutation of the node cannot rewrite
+       what was recorded about it. */
+    range: [node.range[0], node.range[1]],
     wave: opts.wave,
     depth: opts.depth,
     rawVerdict,

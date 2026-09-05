@@ -1,11 +1,20 @@
 /**
  * **Start again.** Throwing the glossary away so the article can find a new one.
  *
- * One method, and it is the reader's, not the pipeline's: the glossary panel's
- * *"throw the list away and find a new one"* button, arriving as
+ * One method, and it was the reader's rather than the pipeline's: the glossary
+ * panel's *"throw the list away and find a new one"* button, arriving as
  * `DELETE /api/glossary/:slug`. It answered **501 on the deployed app** until
  * 2026-09-03, so every reader who was not a developer on a laptop pressed it and
  * was told no. docs/plans/260903e-glossary-delete-in-postgres.md.
+ *
+ * **The button went on 2026-09-05 and this did not** — `Foot` in
+ * src/web/GlossaryPanel.tsx says why it went, and docs/project/glossary.md
+ * § Finding more why the route and both its suites were kept. So this is an
+ * **API-only capability** now: no client calls it, but the route is still there
+ * and still owner-authenticated, so a `curl` reaches it and so would any future
+ * caller. That is why `jobRunning` below says *try again* rather than naming a
+ * button — a first draft left it pointing at *Start again*, on the reasoning
+ * that nothing could reach it, and that reasoning was wrong. ⟨Sol⟩
  *
  * ## It mutates a published revision, which nothing else here does
  *
@@ -95,7 +104,7 @@ function jobRunning(): Error {
     new Error(
       "This article is being worked on right now, so the glossary cannot be thrown away " +
         "yet — otherwise the job in progress would put the old list back. Wait for it to " +
-        "finish, then press Start again.",
+        "finish, then try again.",
     ),
     { status: 409 },
   );

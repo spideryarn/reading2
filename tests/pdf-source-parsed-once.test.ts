@@ -99,6 +99,7 @@ describe("the source PDF is parsed once for the whole stage", () => {
     loads.length = 0;
 
     await runPdfExtract({
+      frontMatter: null,
       bytes,
       url: "https://example.test/paper.pdf",
       checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),

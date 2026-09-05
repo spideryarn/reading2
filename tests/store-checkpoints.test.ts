@@ -90,7 +90,7 @@ import {
   type CheckpointStore,
   checkpointCutoff,
 } from "../src/store/checkpoints.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 /* ------------------------------------------------------------ the fixture -- */
 
@@ -164,44 +164,16 @@ loadEnvLocal();
  * would let every assertion below fail for a reason that has nothing to do with
  * the store.
  */
-let reachable = false;
-let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
-/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
-let kind: MissingKind = "no-url";
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  kind = "migration";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.checkpoints') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) {
-      why =
-        "there is no spideryarn.checkpoints table — migration 0028 has not been applied. " +
-        "Run `npm run db:migrate` (read its Target: line first) and these will run.";
-    }
-  } catch (err) {
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-}
-if (!reachable) {
-  process.stderr.write(
-    `\n  ⚠ the Postgres half of tests/store-checkpoints.test.ts is NOT RUNNING.\n` +
-      `    These assertions have not executed: ${why}\n\n`,
-  );
-  /* …and under REQUIRE_POSTGRES=1 that warning is not enough: fail. */
-  failIfPostgresRequired("tests/store-checkpoints.test.ts", why, kind);
-}
-const when = reachable ? describe : describe.skip;
+/**
+ * The `checkpoints` table by name: *the database is up* and *this table exists*
+ * are different questions, and a probe that asked only the first would let every
+ * assertion below fail for a reason that has nothing to do with the store.
+ * Hand-rolled until 2026-09-05. tests/helpers/pg-ready.ts.
+ */
+await pgReady({
+  suite: "tests/store-checkpoints.test.ts",
+  tables: ["spideryarn.checkpoints"],
+});
 
 /**
  * **The mutations the Postgres half was watched failing against.**
@@ -229,7 +201,7 @@ const when = reachable ? describe : describe.skip;
  * only way to express that bug against a store that has no `tx` parameter to
  * misuse.
  */
-when("the checkpoint store, in Postgres", () => {
+describe("the checkpoint store, in Postgres", () => {
   const SLUG = "test-checkpoint-store";
   const OTHER_SLUG = "test-checkpoint-store-other";
 

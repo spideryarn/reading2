@@ -236,13 +236,11 @@ describe("withTurn and the anchor", () => {
 
 /* ------------------------------------------------------------- postgres -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/chat-anchor.test.ts",
   tables: ["spideryarn.chat_threads"],
   max: 4,
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts a job, so it takes the shared run lock.**
@@ -253,12 +251,12 @@ const when = reachable ? describe : describe.skip;
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
-const runLock = reachable ? await takeRunLock("tests/chat-anchor.test.ts") : undefined;
+const runLock = await takeRunLock("tests/chat-anchor.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
 
-when("the anchor, stored", () => {
+describe("the anchor, stored", () => {
   beforeAll(async () => {
     const db = getDb();
     await db

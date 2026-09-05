@@ -23,21 +23,45 @@
  *    grace window and would not have been swept anyway. That is the shape of
  *    bad-reason-green the review of this step kept finding.
  *
- * Neither needs a database. What is asserted is the **call**, so the store is
- * wrapped and the arguments recorded: the real filesystem store still does the
- * work, and the spy only watches it go past.
+ * What is asserted is the **call**, so the store is wrapped and the arguments
+ * recorded: the real store still does the work, and the spy only watches it go
+ * past. `importActual` rather than a hand-written fake, on purpose — a fake
+ * would let this file agree with a `routes.ts` that has stopped agreeing with
+ * the store.
+ *
+ * ## It needed no database until 2026-09-05, and now it needs one
+ *
+ * The "real store" it wraps was the **filesystem** one, chosen by
+ * `SPIDERYARN_STORE` being unset. That flag went with the hinge
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F), so what it wraps is `pgChatStore` and `pgSearchStore` and five of its
+ * seven cases went red on a poisoned `DATABASE_URL`. Both halves of the
+ * substitution survive the move — the substrate really was interchangeable, as
+ * the registry entry claimed — but the article is now a row rather than a copied
+ * `example/` directory, and the file is in the `private-postgres` lane.
+ *
+ * **The attempt substitution now matters more, not less.** The point of it was
+ * that the filesystem store answers `attempt: undefined`, so the token had to be
+ * bolted on for "did the route carry it" to be answerable. Postgres answers a
+ * real one — but this file substitutes its own anyway, because an assertion that
+ * the route carried *some* token is weaker than one that it carried *the token
+ * `begin` handed back*, and only a value this file chose can tell those apart.
  *
  * See docs/plans/260826e-postgres-storage-implementation.md § Step 10 and
  * `SweepOptions` in src/store/contracts.ts.
  */
 
-import { cp, rm } from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
 import type { SweepOptions } from "../src/store/contracts.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
 
 /**
  * The recorder, hoisted because `vi.mock` is.
@@ -112,6 +136,11 @@ vi.mock("../src/store/index.js", async () => {
   };
 });
 
+await pgReady({
+  suite: "tests/store-wiring.test.ts",
+  tables: ["spideryarn.chat_threads", "spideryarn.search_runs"],
+});
+
 const { handleApi, CHAT_ORPHAN_GRACE_MS, SEARCH_ORPHAN_GRACE_MS } = await import(
   "../src/routes.js"
 );
@@ -119,12 +148,20 @@ const { CHAT_TIMEOUT_MS } = await import("../src/converse.js");
 const { SEARCH_TIMEOUT_MS } = await import("../src/search.js");
 
 const SLUG = "test-store-wiring-fixture";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-/* An article to answer about. This slug used to get one for nothing — an
-   unknown slug fell through to the committed `example/` fixture — and that
-   fallback is gone (src/api.ts § `candidateDirs`), because it also answered a
-   reader's own half-built article with the fixture's prose. */
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
+
+/* An article to answer about — a row and its blocks, seeded once for the file.
+   It was a copy of the committed `example/` directory into `data/<slug>/` until
+   2026-09-05, which is what the filesystem store read. */
+let article: ScratchArticle | undefined;
+
+beforeAll(async () => {
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+}, 60_000);
+
+afterAll(async () => {
+  await article?.remove();
+  await closeDb();
+});
 
 /* The same hanging body tests/chat-live-turn.test.ts uses: one word, then
    silence for ever. It is the only way to have a `pending` row that this
@@ -148,8 +185,6 @@ function hangingBody(): ReadableStream<Uint8Array> {
 }
 
 beforeEach(async () => {
-  await rm(DIR, { recursive: true, force: true });
-  await cp(EXAMPLE, DIR, { recursive: true });
   process.env.OPENROUTER_API_KEY = "test-key";
   for (const list of [
     seen.chatBegin,
@@ -174,9 +209,8 @@ beforeEach(async () => {
   );
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.unstubAllGlobals();
-  await rm(DIR, { recursive: true, force: true });
 });
 
 interface Call {

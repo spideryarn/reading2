@@ -269,6 +269,27 @@ export interface UseDictation {
   recording: MicRecording | null;
   /** Throw the kept recording away. */
   clearRecording(): void;
+  /**
+   * Whether {@link retry} would do anything: a recording is held **and** what
+   * went wrong was a failure rather than an answer.
+   *
+   * False after `[mic-silent]`, which is a *success* with an empty transcript —
+   * the model heard no speech. The audio is offered back there so the reader
+   * can hear what we heard, but sending the same silence again spends a model
+   * call to produce the same nothing.
+   */
+  canRetry: boolean;
+  /**
+   * Send the kept recording up again.
+   *
+   * Greg, 2026-09-05: *"If the error appears afterwards, we should add a Retry
+   * button."* It is cheap because the audio is already in memory for the
+   * download offer, so this is a second **request**, not a second recording
+   * path — no microphone, no claim, no permission.
+   *
+   * Does nothing when {@link canRetry} is false.
+   */
+  retry(): void;
 }
 
 /**
@@ -329,6 +350,19 @@ interface Session {
   tape: MicTape | null;
   /** True where the recogniser is running on our track and words will arrive. */
   live: boolean;
+  /**
+   * **We have stopped listening to the recogniser**, and the tape is carrying
+   * the dictation on alone.
+   *
+   * Its own flag rather than `!live`, which was the first attempt and was
+   * wrong: `live` is *also* false for the measured ~1.1 seconds between the
+   * press and the microphone opening, so guarding the recogniser's events on
+   * `!live` silenced `soundstart` during the one window where those events are
+   * the only thing the meter has. A test that had nothing to do with this
+   * change caught it. The two states are "not yet" and "not any more", and only
+   * the second one means stop listening.
+   */
+  liveGaveUp: boolean;
   /**
    * Where this dictation was going, **read when it started rather than when it
    * finishes.**
@@ -422,6 +456,22 @@ export function useDictation(options: DictationOptions): UseDictation {
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(() => rememberedDevice());
   const [recording, setRecording] = useState<MicRecording | null>(null);
+  /**
+   * The recording behind `recording` **and where it was going**, held for a
+   * retry.
+   *
+   * The context travels with it for the same reason it travels on a `Session`:
+   * a reader who dictated into one article's chat box and then navigated would
+   * otherwise have their words transcribed against a different article's
+   * glossary. A ref, because nothing renders from it — `canRetry` is the piece
+   * the interface shows.
+   */
+  const retryable = useRef<{ recorded: MicRecording; where: DictationContext } | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
+  /** Which retry is allowed to publish its answer. See `retry`. */
+  const retryGeneration = useRef(0);
+  /** The retry request in flight, so an unmount can cancel it. */
+  const retryUpload = useRef<AbortController | null>(null);
   const [deviceUnavailable, setDeviceUnavailable] = useState(false);
   /* Whether *this* dictation will produce live words. Not a constant: it is a
      property of the capture that actually opened, and a `start()` that refused
@@ -636,7 +686,32 @@ export function useDictation(options: DictationOptions): UseDictation {
          version; elsewhere the box is empty and the whole dictation is gone. So
          the audio comes back exactly when nothing else did. */
       setError(result.message);
-      if (s.confirmed === 0) setRecording(recorded);
+      /* **Kept on every failure now, not only when the box is empty.**
+         It used to be `if (s.confirmed === 0)`, on the reasoning that a reader
+         with the recogniser's rough words has the worse version rather than
+         nothing. That stopped being true on 2026-09-05, when a recogniser that
+         dies mid-sentence began leaving the recording running: the rough words
+         then cover the first half of a dictation and the tape covers all of it,
+         so throwing the tape away throws away everything said after the
+         recogniser gave up. GPT Sol's plan review, F2 — a P0. */
+      setRecording(recorded);
+      /* **Offered here and not in the `ok` branch above**, which is the whole
+         of the distinction: this is a failure, and the same bytes may well
+         succeed on a second try. An empty transcript is an answer, and will be
+         the same answer.
+
+         Two further gates. `result.retryable` is the upload saying whether the
+         same bytes could ever work — a recording in an unsupported container or
+         over the size cap will be refused identically for ever, and copy.md is
+         explicit that inviting a futile retry is the expensive mistake.
+         `s.confirmed === 0` is the *field*: a retry arrives after `onEnd`, so
+         it lands beside the recogniser's rough words rather than replacing
+         them, which would duplicate half the dictation. That second gate is a
+         limit rather than a decision, and it is named in the plan. */
+      if (s.confirmed === 0 && result.retryable) {
+        retryable.current = { recorded, where: s.where };
+        setCanRetry(true);
+      }
     };
 
     void tape.stop().then(async (recorded) => {
@@ -750,6 +825,7 @@ export function useDictation(options: DictationOptions): UseDictation {
       confirmed: 0,
       tape: null,
       live: false,
+      liveGaveUp: false,
       where: whereRef.current,
       upload: null,
       /* Filled in on the next two lines — a `Session` is built in one literal so
@@ -814,11 +890,15 @@ export function useDictation(options: DictationOptions): UseDictation {
           armTape(s, capped);
         }
       };
+      /* Both of these are the recogniser reporting, so both stop counting when
+         we have stopped listening to it — otherwise a queued `soundstart` puts
+         the fallback meter back to "hearing" on behalf of a recogniser that is
+         no longer part of this dictation. GPT Sol's code review, E2. */
       r.onsoundstart = () => {
-        if (session.current === s && !s.finished) setHearing(true);
+        if (session.current === s && !s.finished && !s.liveGaveUp) setHearing(true);
       };
       r.onsoundend = () => {
-        if (session.current === s && !s.finished) setHearing(false);
+        if (session.current === s && !s.finished && !s.liveGaveUp) setHearing(false);
       };
 
       r.onresult = (e) => {
@@ -828,6 +908,11 @@ export function useDictation(options: DictationOptions): UseDictation {
            waiting for `onend` — and those words belong in the same box whether or
            not somebody has since pressed the button again. */
         if (s.finished) return;
+        /* **We have given up on this recogniser**, so anything else it emits is
+           a guess we have already stopped showing. Letting a late phrase in
+           would put words in the box under a strip that says they are not
+           coming. GPT Sol's plan review, F6. */
+        if (s.liveGaveUp) return;
         let confirmed = "";
         let pending = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -856,6 +941,66 @@ export function useDictation(options: DictationOptions): UseDictation {
         }
         const verdict = verdictFor(e.error, s.stopRequested);
         if (verdict.keepGoing) return;
+        /* **The recogniser is decoration, and decoration failing is not the
+           dictation failing.** The words that get saved come from the tape and
+           `POST /api/transcribe`; Safari and Firefox have run this whole
+           feature with no recogniser at all since the day it shipped. So while
+           the tape is running, a recogniser that dies takes the live words with
+           it and nothing else: no message, no ending, and the strip's own
+           sentence changes to the one Safari always shows.
+
+           Until 2026-09-05 this ended the recording **mid-sentence** and told
+           the reader to check their internet connection — which is what a
+           `network` error means to *Chrome's* speech service, not to us. Greg
+           reported it as `[mic-offline]` in the Feedback dialog;
+           docs/plans/260905c-dictation-filler-words-and-mic-offline.md.
+
+           The gate is the tape and the track, not a list of error codes to
+           trust: `not-allowed` and `audio-capture` read like microphone
+           failures and are not, because the track is ours and a track that has
+           really gone fires its own `ended` listener. */
+        /* **A dead track is a microphone problem, whatever the recogniser
+           thought.** Both events fire on an unplugged headset and they race; if
+           this one won, the reader was told to check their internet connection
+           about a device that had left the room. The track is the authority on
+           the track. GPT Sol's code review, E1. */
+        if (s.track && s.track.readyState !== "live") {
+          setError("The microphone was disconnected. Press it again to start over. [mic-unplugged]");
+          finish(s);
+          return;
+        }
+        if (s.track?.readyState === "live") {
+          s.liveGaveUp = true;
+          s.live = false;
+          setLiveText(false);
+          setInterim("");
+          setHearing(false);
+          /* **The recogniser can die before `audiostart` ever fires**, and
+             `audiostart` is the zero for the timer, the word "listening" and
+             the tape. Without this the session would sit armed in `opening`
+             recording nothing at all — which is worse than the ending it
+             replaced. These four lines are the Firefox path verbatim (see
+             `!outcome.live` in `start`), because this is now the same
+             situation: our track is open and there is no recogniser.
+             GPT Sol's plan review, F6. */
+          if (s.audioAt === null) {
+            s.audioAt = Date.now();
+            setStartedAt(s.audioAt);
+            setPhase("listening");
+          }
+          armTape(s, capped);
+          /* **`recordTrack` can return null**, when every container this browser
+             claims to support refuses to start. Carrying on then would leave the
+             microphone armed with *no* transcription source at all — no live
+             words, no tape, and no five-minute cap to end it — under a strip
+             promising words when the reader stops. `finish` says
+             `[mic-no-tape]` for exactly this. GPT Sol's code review, D2. */
+          if (!s.tape) {
+            finish(s);
+            return;
+          }
+          return;
+        }
         setError(verdict.message);
         finish(s);
       };
@@ -871,6 +1016,13 @@ export function useDictation(options: DictationOptions): UseDictation {
           finish(s);
           return;
         }
+        /* **We have given up on the recogniser and the tape is carrying on.**
+           A recogniser fires `end` after it errors, and restarting it here
+           would walk straight back into the failure that made us give up —
+           a loop, on a page where the reader can see neither end of it.
+           `stop()` reads `s.live` and goes straight to draining the tape, so
+           there is nothing waiting for an `onend` that will never come. */
+        if (s.liveGaveUp) return;
         /* The recogniser ends the session on a pause. Restart while the reader
            still wants it. Back to `opening`, because until the next
            `audiostart` the microphone genuinely is not listening. */
@@ -917,6 +1069,17 @@ export function useDictation(options: DictationOptions): UseDictation {
     /* A new press is the reader moving on. Whatever we kept from the last one
        goes now rather than lingering under a strip that is about this one. */
     setRecording(null);
+    /* **The offer goes with it, and this is the whole of D1.** Without these
+       three lines the previous dictation's audio stays in `retryable`, so a
+       *second* dictation that fails shows a Retry button which re-transcribes
+       the *first* one's recording — and an older retry still in flight can
+       publish its transcript into this session. `session.current` alone was not
+       enough to stop that: `finish()` clears it while the new upload is still
+       running, opening a window where the stale retry passes the guard.
+       GPT Sol's code review, D1. */
+    retryable.current = null;
+    setCanRetry(false);
+    retryGeneration.current++;
 
     const preferred = rememberedDevice();
     void (async () => {
@@ -1037,7 +1200,90 @@ export function useDictation(options: DictationOptions): UseDictation {
     [finish, start],
   );
 
-  const clearRecording = useCallback(() => setRecording(null), []);
+  const clearRecording = useCallback(() => {
+    setRecording(null);
+    /* The offer goes with the audio. A Retry button over a `Blob` the reader
+       has just discarded is a button that cannot work. */
+    retryable.current = null;
+    setCanRetry(false);
+  }, []);
+
+  /**
+   * Send the kept recording up again.
+   *
+   * **Deliberately not a second copy of `landed`.** The two look similar and
+   * are not the same problem: `landed` is arbitrating between a live recogniser,
+   * a session that may have been superseded, and a tape that has just finished
+   * draining. None of that exists here — there is no session, no microphone and
+   * no claim, and `canRetry` is only ever true where the recogniser confirmed
+   * nothing, so there is nothing in the box for a late transcript to collide
+   * with. What is left is: close the box, send the bytes, put the words in.
+   *
+   * `phase` goes to `transcribing` for the round trip, which is what makes the
+   * text box `readOnly` and the microphone button dead — the same protection the
+   * first attempt gets, for the same two seconds and the same reason.
+   */
+  const retry = useCallback(() => {
+    const held = retryable.current;
+    if (!held) return;
+    setCanRetry(false);
+    setError(null);
+    setPhase("transcribing");
+    /* **Which retry this is.** `canRetry` going false unmounts the button, so
+       two presses should be impossible — but "should be impossible" is not a
+       guard, and the thing on the other side of this promise is `setPhase`,
+       which would drop a *live* dictation back to `idle` from underneath a
+       reader who had started one. Same reason `newest` exists for sessions. */
+    const mine = ++retryGeneration.current;
+    /* Aborted by the unmount effect below. The `mounted` guard already stops a
+       gone component writing state; this stops the *request* — and the paid
+       model call behind it — outliving the page. GPT Sol's code review, R3. */
+    const cancel = new AbortController();
+    retryUpload.current = cancel;
+    void (async () => {
+      const result = await sendForTranscription(
+        held.recorded.blob,
+        held.recorded.mimeType,
+        held.where,
+        cancel.signal,
+      );
+      /* **Three ways this is no longer ours**, and every one of them ends in
+         touching nothing at all: the component has gone; a newer retry is in
+         flight; or the reader has pressed the microphone again and a real
+         session now owns the phase, the box and the caret. That last is the
+         one that matters — `setPhase("idle")` here would turn off a microphone
+         that is genuinely open, and `transcribed.current?.()` would splice a
+         stale transcript into the middle of a live dictation's span. */
+      if (!mounted.current || retryGeneration.current !== mine || session.current) return;
+      setPhase("idle");
+      if (result.ok && result.text) {
+        retryable.current = null;
+        setRecording(null);
+        transcribed.current?.(result.text);
+        /* **`onEnd` again**, because this is a second ending of the same
+           dictation and it is the caller's cue to persist what is in the box.
+           The first one fired with the box unchanged, so nothing was saved
+           then; without this the transcript would sit in a box nobody had been
+           told to commit. */
+        ended.current?.();
+        return;
+      }
+      if ("abandoned" in result) return;
+      /* A success with an empty transcript, or a second failure. Either way the
+         audio stays and the reader is told; the offer comes back only for the
+         failure, on the same rule as the first attempt. */
+      if (result.ok) {
+        setError("We didn't catch any words in that. The audio is below if you want it. [mic-silent]");
+        return;
+      }
+      setError(result.message);
+      /* **From the new result, not unconditionally.** A retry that comes back
+         `[mic-too-long]` or a dead API key must not offer a third go — the
+         first attempt's answer to that question has been superseded by this
+         one's. GPT Sol's code review, R2. */
+      setCanRetry(result.retryable);
+    })();
+  }, []);
 
   /* Leaving the page with the microphone on. `abort` rather than `stop`,
      because `stop` delivers one last result and this component will not be
@@ -1060,6 +1306,9 @@ export function useDictation(options: DictationOptions): UseDictation {
          `newest` is the one that still points at it. GPT Sol's code review,
          item 8. */
       newest.current?.upload?.abort();
+      /* And a *retry* belongs to no session at all, so it is held separately or
+         it would be the same bug again. GPT Sol's code review, R3. */
+      retryUpload.current?.abort();
       const s = session.current;
       if (!s) return;
       s.stopRequested = true;
@@ -1100,6 +1349,8 @@ export function useDictation(options: DictationOptions): UseDictation {
     chooseDevice,
     recording,
     clearRecording,
+    canRetry,
+    retry,
   };
 }
 

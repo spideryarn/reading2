@@ -43,19 +43,12 @@
  * does not have to rediscover the shape.
  */
 
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
-
 import { and, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles } from "../db/schema.js";
-import { shortIdInSlug, urlKey } from "../ingest.js";
-import type { Meta } from "../types.js";
-import { fsLocations } from "./artifacts-fs.js";
-import { dataRoot } from "./data-root.js";
+import { urlKey } from "../ingest.js";
 import { guardDbStore } from "./db-errors.js";
-import { STORE } from "./live.js";
 import { ownedByReader } from "./pg.js";
 
 /**
@@ -102,7 +95,7 @@ const db = guardDbStore("find-article", {
  */
 export async function slugForUrlKey(key: string): Promise<string | undefined> {
   if (key === "") return undefined;
-  const rows = STORE === "postgres" ? await db.articleUrls() : await articleUrlsOnDisk();
+  const rows = await db.articleUrls();
   return rows.find((row) => row.url !== null && urlKey(row.url) === key)?.slug;
 }
 
@@ -116,55 +109,16 @@ export async function slugForUrlKey(key: string): Promise<string | undefined> {
  * fixture there now carries a slug with no id in it, so a parse cannot answer
  * it. docs/reusable/silent-success.md.
  *
- * The filesystem store has no `articles` table, so it has nowhere to keep a
- * handle that outlives a name and can only answer from the slug. That is an
- * honest limit of that store rather than a gap here — and one more thing the
- * store move ends.
+ * The filesystem store had no `articles` table and so nowhere to keep a handle
+ * that outlives a name; it answered from the slug, and could not survive a
+ * rename. That branch went with the store on 2026-09-05.
  */
 export async function slugForShortId(shortId: string): Promise<string | undefined> {
   if (shortId === "") return undefined;
-  if (STORE !== "postgres") {
-    return (await fsSlugs()).find((slug) => shortIdInSlug(slug) === shortId);
-  }
   return (await db.slugForId(shortId))[0]?.slug;
 }
 
-/**
- * The same list off the filesystem: one `meta.json` per directory under
- * `data/`.
- *
- * `dataRoot()` rather than a module-scope constant, which is the bug
- * src/store/data-root.ts exists to end — see the header on `articleExists`
- * (src/pipeline.ts) for the two trees that disagreed about where `data/` is.
- *
- * A directory with no readable `meta.json` contributes nothing rather than
- * throwing: a half-built article is exactly the state this is asked about, and
- * an add that 500s because some other ingest crashed would be the wrong
- * failure.
- */
-async function articleUrlsOnDisk(): Promise<{ slug: string; url: string | null }[]> {
-  const out: { slug: string; url: string | null }[] = [];
-  for (const slug of await fsSlugs()) {
-    try {
-      const meta = JSON.parse(
-        await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8"),
-      ) as Meta;
-      out.push({ slug, url: meta.url ?? null });
-    } catch {
-      /* No manifest, or an unreadable one: nothing to match on. */
-    }
-  }
-  return out;
-}
-
-/** Directory names under `data/`, minus the queue's own `_jobs`. */
-async function fsSlugs(): Promise<string[]> {
-  try {
-    const entries = await readdir(path.join(dataRoot(), "data"), { withFileTypes: true });
-    return entries
-      .filter((e) => e.isDirectory() && !e.name.startsWith("_") && !e.name.startsWith("."))
-      .map((e) => e.name);
-  } catch {
-    return [];
-  }
-}
+/* `articleUrlsOnDisk` and `fsSlugs` stood here until 2026-09-05 — the same two
+   questions asked of one `meta.json` per directory under `data/`. They were the
+   only callers of `fsLocations` and `dataRoot()` in this file, and they went
+   with the flag that chose them. */

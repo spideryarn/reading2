@@ -56,14 +56,12 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 /** Before `pgReady`: vitest does not load `.env.local` on its own. */
 loadEnvLocal();
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-quota-adjustment.test.ts",
   tables: ["spideryarn.billing_accounts", "spideryarn.ingest_events", "spideryarn.billing_tiers"],
   keepPool: true,
   max: 4,
 });
-
-const dbIt = reachable ? it : it.skip;
 
 /** This file's own reader. Fixed, so a run killed halfway is swept by the next. */
 const OWNER = "0b1113b0-0000-4000-8000-00000000e3b0";
@@ -351,7 +349,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
    * 33.0, where a few milliseconds of clock drift between the fixture and the
    * sync would decide the floor. Off the boundary, drift moves it by 1e-7.
    */
-  dbIt("hands over three days' worth of Researcher, not a month's", async () => {
+  it("hands over three days' worth of Researcher, not a month's", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -362,7 +360,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
   });
 
   /** An upgrade on the day of renewal is worth very nearly the whole difference. */
-  dbIt("hands over the whole difference when the period has barely started", async () => {
+  it("hands over the whole difference when the period has barely started", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 2 * HOUR);
     const periodEnd = new Date(now.getTime() + (30 * DAY - 2 * HOUR));
@@ -378,7 +376,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
   });
 
   /** The step the whole exploit rests on: an hour left is worth almost nothing. */
-  dbIt("hands over nearly nothing when there is an hour of the period left", async () => {
+  it("hands over nearly nothing when there is an hour of the period left", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - (30 * DAY - HOUR));
     const periodEnd = new Date(now.getTime() + HOUR);
@@ -391,7 +389,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
   });
 
   /** And the same arithmetic downwards, because the money credits the same way. */
-  dbIt("takes the allowance back down on a downgrade", async () => {
+  it("takes the allowance back down on a downgrade", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - (3 * DAY + HOUR));
     const periodEnd = new Date(now.getTime() + (27 * DAY - HOUR));
@@ -409,7 +407,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
    * where a single change at the last instant would have put them, not
    * 130 ingests higher.
    */
-  dbIt("does not let up-down-up cycling accumulate allowance", async () => {
+  it("does not let up-down-up cycling accumulate allowance", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - (15 * DAY + HOUR));
     const periodEnd = new Date(now.getTime() + (15 * DAY - HOUR));
@@ -443,7 +441,7 @@ describe("which period an override belongs to", () => {
    * override — otherwise the second delivery reads the *old* price beside the
    * new one and pays the difference out all over again.
    */
-  dbIt("does not hand the difference over twice when the webhook is delivered twice", async () => {
+  it("does not hand the difference over twice when the webhook is delivered twice", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -465,7 +463,7 @@ describe("which period an override belongs to", () => {
    * period is not this one, so a sync that forgot to clear it would still meter
    * at 150. Both guards are wanted; this is the pin for the one in sync.
    */
-  dbIt("clears the override when the period rolls over", async () => {
+  it("clears the override when the period rolls over", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -490,7 +488,7 @@ describe("which period an override belongs to", () => {
    * thing under test, and this file is the only one that drives sync end to end,
    * so the pin belongs here.
    */
-  dbIt("records the period Stripe reported, not the one already in the row", async () => {
+  it("records the period Stripe reported, not the one already in the row", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -508,7 +506,7 @@ describe("which period an override belongs to", () => {
    * read side's half of the same rule — and the half that holds even if a future
    * change to sync forgets to clear one.
    */
-  dbIt("meters on the tier when the stored override belongs to another period", async () => {
+  it("meters on the tier when the stored override belongs to another period", async () => {
     if (!pool) return;
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 3 * DAY);
@@ -539,7 +537,7 @@ describe("which period an override belongs to", () => {
    * way, which is better than being wrong in whichever direction a stale
    * timestamp happens to point. GPT Sol, 2026-09-04, reproduced.
    */
-  dbIt("does not let an older event scale a change it did not cause", async () => {
+  it("does not let an older event scale a change it did not cause", async () => {
     const now = wholeSecond();
     /* Day 20 of 30. The stale event would claim day 17. */
     const periodStart = new Date(now.getTime() - 20 * DAY);
@@ -564,7 +562,7 @@ describe("which period an override belongs to", () => {
    * same Stripe second share a period start, so the period test alone cannot
    * tell them apart. GPT Sol, 2026-09-04, reproduced.
    */
-  dbIt("does not prorate when a different subscription starts the same second", async () => {
+  it("does not prorate when a different subscription starts the same second", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 15 * DAY);
     const periodEnd = new Date(now.getTime() + 15 * DAY);
@@ -593,7 +591,7 @@ describe("which period an override belongs to", () => {
    * what it left keeps the tier table in charge of the base.
    * GPT Sol, 2026-09-04, reproduced.
    */
-  dbIt("follows a tier raise for an account carrying an override", async () => {
+  it("follows a tier raise for an account carrying an override", async () => {
     if (!pool) return;
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
@@ -625,7 +623,7 @@ describe("which period an override belongs to", () => {
    * at full price with no proration credit, so the reader is buying more rather
    * than taking it, and the period test alone is what notices.
    */
-  dbIt("gives a freshly-bought subscription its whole allowance", async () => {
+  it("gives a freshly-bought subscription its whole allowance", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -678,7 +676,7 @@ describe("what one sync writes", () => {
     return row as Record<string, unknown>;
   }
 
-  dbIt("writes every field from what Stripe said, not from what the row said", async () => {
+  it("writes every field from what Stripe said, not from what the row said", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 5 * DAY);
     const periodEnd = new Date(now.getTime() + 25 * DAY);
@@ -729,7 +727,7 @@ describe("what one sync writes", () => {
    * partial update would break: a cancelled subscription keeping a period that
    * makes it look current is exactly how somebody stays entitled for free.
    */
-  dbIt("clears every field when the customer has no subscription we can meter", async () => {
+  it("clears every field when the customer has no subscription we can meter", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -772,7 +770,7 @@ describe("what one sync writes", () => {
    * tests/billing-quota-race.test.ts § *a held transaction beats a race* is the
    * same shape: assert the blocking rather than hoping for an interleaving.
    */
-  dbIt("reads and moves the price inside one critical section", async () => {
+  it("reads and moves the price inside one critical section", async () => {
     if (!pool) return;
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
@@ -842,7 +840,7 @@ describe("the columns the database will not accept", () => {
    * An adjustment without a period cannot be applied and a period without an
    * adjustment says nothing, so either alone is a bug rather than a state.
    */
-  dbIt("refuses an adjustment with no period, and a period with no adjustment", async () => {
+  it("refuses an adjustment with no period, and a period with no adjustment", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -854,7 +852,7 @@ describe("the columns the database will not accept", () => {
   });
 
   /** And accepts both halves of the rule, so the test above is not vacuous. */
-  dbIt("accepts both null and both set", async () => {
+  it("accepts both null and both set", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -871,7 +869,7 @@ describe("the columns the database will not accept", () => {
    * function of `billing_tiers`, which a row constraint cannot see, so it is
    * enforced at the read by `limitForPeriod` and pinned from both ends there.
    */
-  dbIt("accepts the negative delta an upgrade stores", async () => {
+  it("accepts the negative delta an upgrade stores", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: RESEARCHER.price, periodStart, periodEnd });

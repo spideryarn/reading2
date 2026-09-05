@@ -244,9 +244,6 @@ function assertControlsCoverEveryModule(): void {
  *  non-zero: this tree has failures of its own and a red suite still records. */
 function runVitest(files: readonly string[], out: string): number {
   const env: NodeJS.ProcessEnv = { ...process.env, FSW_OUT: out };
-  /* The whole point is the *default* store. An inherited SPIDERYARN_STORE would
-     silently measure the Postgres path and report it as the filesystem one. */
-  delete env.SPIDERYARN_STORE;
   const result = spawnSync(VITEST, ["run", "--config", CONFIG, ...files], {
     cwd: REPO,
     env,
@@ -423,7 +420,7 @@ function full(outJson: string): number {
   const payload = {
     what: `Witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact — see the plan's 'Counts are perishable'. Regenerate with: ${REGENERATE}`,
     measured: new Date().toISOString(),
-    store: "default (SPIDERYARN_STORE unset => files)",
+    store: "whatever the tree selects (there is one store since 2026-09-05)",
     instrumentedModules: [...INSTRUMENTED],
     notInstrumented: NOT_INSTRUMENTED,
     unresolved,

@@ -92,7 +92,7 @@ import { releaseCorpusLock, takeCorpusLock } from "../tests/helpers/corpus-lock.
 import { loadArticleIntoPg } from "../tests/helpers/load-article.js";
 import { refuseUnlessOurDatabase } from "./db-reown-rules.js";
 import { parseStatusEnv } from "./seed-accounts.js";
-import { DEV_SHELF_SLUGS, planSlug, storeVerdict, unopenable } from "./seed-dev-rules.js";
+import { DEV_SHELF_SLUGS, planSlug, unopenable } from "./seed-dev-rules.js";
 
 loadEnvLocal();
 
@@ -384,18 +384,10 @@ try {
     await releaseCorpusLock();
   }
 
-  /* **After the durable work, never before it.** Everything above is committed
-     by the time this can fail the run, so a re-run after fixing the variable is
-     three skips and a second of work. Sol's ordering, 2026-09-02. */
-  const store = storeVerdict(process.env.SPIDERYARN_STORE);
-  console.log("");
-  for (const [i, line] of store.lines.entries()) {
-    console.log(store.ok ? green(`✓ ${line}`) : i === 0 ? yellow(`⚠ ${line}`) : dim(line));
-  }
-  if (!store.ok) {
-    failed = true;
-    console.log(dim("  The seed itself succeeded and is durable — nothing above needs doing again."));
-  }
+  /* A `storeVerdict` line stood here until 2026-09-05 and could fail the run:
+     with the filesystem store selected, a dev server read `data/` and none of
+     the rows above reached the browser. There is one store now, so the seed and
+     the server cannot disagree about where an article is. */
 
   console.log(dim("\n  npm run db:admin-password              the email and password for this machine"));
   console.log(dim("  npx tsx scripts/browser-sign-in.ts --at /read/writes"));

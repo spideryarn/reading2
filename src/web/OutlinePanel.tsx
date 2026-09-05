@@ -18,6 +18,7 @@ import {
 import type { ArcCell, SummaryNode } from "./tree.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { NodeId, TreeNode } from "../types.js";
+import { onFontsChanged } from "./fonts.js";
 
 interface Props {
   /** The tree, nested and numbered. Null if it is unusable. */
@@ -190,10 +191,14 @@ export function OutlinePanel({
     for (const child of Array.from(measureRef.current?.children ?? [])) {
       ro.observe(child);
     }
-    /* `fonts.ready` as well, because a swap that changes each row's height
-       while leaving a list's total identical would get past even that. */
-    document.fonts?.ready.then(measure).catch(() => {});
-    return () => ro.disconnect();
+    /* Font changes as well, because a swap that changes each row's height while
+       leaving a list's total identical would get past even that. The event
+       rather than `fonts.ready` — see fonts.ts for what that getter cost. */
+    const offFonts = onFontsChanged(measure);
+    return () => {
+      ro.disconnect();
+      offFonts();
+    };
   }, [candidates]);
 
   const chosen = candidates[rung - 1] ?? candidates[0];

@@ -425,7 +425,7 @@ line meaningless, and a permanent "thousands of calls reported no cost" warning 
 signal that would show a real unpriced problem.
 
 From 2026-09-02 to 2026-09-05, [`costStore`](../../src/store/ai-calls.ts) answered that by handing
-the **filesystem** adapter to anything running under the test harness, whatever `SPIDERYARN_STORE`
+the **filesystem** adapter to anything running under the test harness, whatever the store flag
 said — redirecting rather than refusing, because a store that threw under test would stop the route
 suites exercising the metering lifecycle at all.
 
