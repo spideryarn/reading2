@@ -250,6 +250,38 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "a store or calls one, so the hinge changes it in no way.",
   },
   /**
+   * **Arrived from `dev` on 2026-09-05 with Debate mode, and the hole check
+   * caught it** — which is the second time that check has earned its keep by
+   * walking the import graph live rather than reading the stored answer. The
+   * witness JSON was measured at 02:10 that morning and this file did not exist.
+   *
+   * Measured rather than reasoned, on the `tree-redundant-rung.test.ts`
+   * precedent above:
+   * `npx tsx scripts/store-migration-witness.ts --files tests/debate-step-registration.test.ts`
+   * reported **"ran, touched nothing"** under full instrumentation, and the
+   * instrument's own `--self-check` passed immediately before — twelve control
+   * files, all eight modules still hooked at method level, 24 sites. An
+   * instrument that had quietly stopped hooking anything reports exactly the
+   * same "touched nothing", which is why the self-check comes first and is
+   * named here rather than assumed.
+   *
+   * `evidence` stays `static-only` because that is what the field means: the
+   * stored `touched` map does not name this file. The guard holds the two apart
+   * so the field cannot become decorative.
+   */
+  "tests/debate-step-registration.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Debate's step registration, asked as effects: the stamp field names inside the artefact, " +
+      "the `STAMP_SOURCE` row, and a model resolved through `modelFor` rather than compared " +
+      "against `CAPABLE_MODEL`. It reaches a condemned module through src/pipeline.js, which is " +
+      "how most of this map's files reach one, and it runs against `memoryArtefactsFrom` " +
+      "(tests/helpers/memory-artefacts.ts) rather than any store — the stage D helper written " +
+      "for exactly this. Nothing here selects a store, reads a path or writes a byte.",
+  },
+  /**
    * **The entry the dynamic witness could not produce**, and the reason the
    * registry does not take its silence as proof.
    *
