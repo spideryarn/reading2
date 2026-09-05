@@ -533,8 +533,8 @@ run 600 "install emacs" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install e
 
 # Three things name the editor, because three different callers ask a different
 # question and only one of them reads the environment:
-#   1. $EDITOR / $VISUAL, for everything that does. A login shell is enough --
-#      tmux job scripts end in `exec bash -l`, same as GJD_REMOTE_HOST below.
+#   1. $EDITOR / $VISUAL, for everything that does. A login shell is enough for
+#      a human at a prompt, which is who asks this one.
 #   2. the `editor` alternative, for sudoedit, visudo, and anything else that
 #      runs /usr/bin/editor with no environment to consult. Ubuntu points it at
 #      nano and nothing else here would change that.
@@ -1032,6 +1032,11 @@ EOF
 # it cannot establish the root-owned regular file the reader requires. `-T` on
 # the mv is load-bearing -- with a directory at the destination the plain form
 # puts the file INSIDE it and exits 0.
+# Anything a previous run left staged, first. An EXIT trap would be the tidier
+# answer, but this script already owns one (for the settings.json temp) and a
+# second would silently disarm the first. A sweep here covers what a trap could
+# not anyway: a run that was killed outright between mktemp and mv.
+rm -f /etc/.gjd-remote-host.*
 gjd_host_tmp=$(mktemp /etc/.gjd-remote-host.XXXXXX)
 printf '127.0.0.1\n' > "$gjd_host_tmp"
 chown root:root "$gjd_host_tmp"
@@ -1151,10 +1156,21 @@ check "no npm-global claude beside the native one" 'root=$(npm root -g) && test 
 # FAIL names what it actually found.
 check "gjd-remote host file is a root-owned 0644 regular file" \
   'test "$(stat -c "%F %U %a" /etc/gjd-remote-host)" = "regular file root 644"'
-check "gjd-remote host file holds one address" \
-  'test "$(cat /etc/gjd-remote-host)" = "127.0.0.1" && test "$(wc -l < /etc/gjd-remote-host)" -eq 1'
+# BYTE FOR BYTE, through cmp, and not `test "$(cat …)" = …`. Command
+# substitution DISCARDS NUL BYTES: a file holding `127.0.0.1\0\n` gives $(cat)
+# `127.0.0.1` and `wc -l` 1, so the string form passed a file the TypeScript
+# reader refuses -- established by writing exactly that file. This repo has
+# already lost time to NUL bytes that grep could not see.
+check "gjd-remote host file holds exactly one address" \
+  "printf '127.0.0.1\\n' | cmp -s - /etc/gjd-remote-host"
 # ...and the export it replaced is gone, so there is one answer to the question.
-check "no leftover GJD_REMOTE_HOST export" '! test -e /etc/profile.d/gjd-remote-loopback.sh'
+#
+# `-L` as well as `-e`: `test -e` follows the link, so a DANGLING symlink reads
+# as absent while the entry is still sitting there -- and the day its target
+# appeared, login shells would have the old answer back without provisioning
+# having changed anything.
+check "no leftover GJD_REMOTE_HOST export" \
+  '! test -e /etc/profile.d/gjd-remote-loopback.sh && ! test -L /etc/profile.d/gjd-remote-loopback.sh'
 # The loopback, end to end and as the user -- not "the key file exists". Three
 # separate things have to be true at once (a key, a line in authorized_keys, a
 # Host block that makes ssh actually OFFER a non-default key name), each of them
@@ -1168,8 +1184,17 @@ check "no leftover GJD_REMOTE_HOST export" '! test -e /etc/profile.d/gjd-remote-
 # pass both checks above, and this probe would still be testing the loopback that
 # `Host 127.0.0.1` covers. Then the tool would use an address ssh has no identity
 # for, and nothing here would have noticed.
+#
+# THE `case` IS LOAD-BEARING, and `test -n` was not enough. The address is read
+# here and then spliced into the string `su -c` hands to ANOTHER shell, which
+# parses it again: a file holding `not-a-host; true #` becomes
+# `ssh … not-a-host; true # hostname`, and the check reports ok having tested no
+# loopback at all -- established by reproducing it with the transport forced to
+# fail. So the value is held to the same characters scripts/gjd-remote-host.ts
+# allows, in the same order, before anything interpolates it: an alphanumeric
+# first, then letters, digits, dot, underscore and dash.
 check "gjd-remote loopback ssh works, at the address that file names" \
-  'addr=$(cat /etc/gjd-remote-host) && test -n "$addr" && timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new $addr hostname"'
+  'addr=$(cat /etc/gjd-remote-host) && case "$addr" in ""|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*) false ;; *) true ;; esac && timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new $addr hostname"'
 # Claude, over that same loopback -- deliberately AFTER it, so a broken ssh is
 # reported as a broken ssh rather than as a missing Claude.
 #
@@ -1191,11 +1216,12 @@ check "gjd-remote loopback ssh works, at the address that file names" \
 # printing it -- would pass. The statusline check below says the same thing for
 # the same reason; this file has been bitten by it before.
 check "claude runs over non-interactive ssh" 'out=$(timeout 30 su - '"$USER_NAME"' -c "ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 claude --version") && case "$out" in *"(Claude Code)"*) true ;; *) false ;; esac'
-# ...and the address it will use, which is the other half: the ssh above can
-# work perfectly and `gjd-remote ls` still die at "could not read the server
-# address from Terraform state", because the box has no tofu. A login shell,
-# because that is what a tmux session gets.
-check "GJD_REMOTE_HOST is set on the box" 'su - '"$USER_NAME"' -c "echo \$GJD_REMOTE_HOST" | grep -qx "127.0.0.1"'
+# The address it will use is the other half of that, and it is checked further
+# up, against /etc/gjd-remote-host. There used to be a check HERE that read
+# $GJD_REMOTE_HOST back out of a login shell -- deleted with the export it
+# tested, and it would now fail on a correctly configured box. Its comment said
+# "a login shell, because that is what a tmux session gets", which was the whole
+# mistake: the login shell comes AFTER claude exits.
 # Reads the value back out of the JSON rather than grepping the file for the
 # key name: a merge that landed the key with the wrong value, or under the wrong
 # parent, looks identical to a working one under grep.

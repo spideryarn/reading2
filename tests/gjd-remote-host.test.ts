@@ -2,7 +2,7 @@
  * Which address `gjd-remote` sends its ssh to.
  *
  * These exist because of a failure that looked like a missing feature: on the
- * box, `GJD_REMOTE_HOST` is exported from /etc/profile.d/, which only a LOGIN
+ * box, `GJD_REMOTE_HOST` *was* exported from /etc/profile.d/, which only a LOGIN
  * shell reads, and every agent tool shell is not one. The tool then fell
  * through to Terraform state, which the box has not got, and died saying
  * "could not read the server address from Terraform state" — so two separate

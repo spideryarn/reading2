@@ -219,6 +219,40 @@ leading-alphanumeric rule) is why F8's fix is removal rather than repair: IPv6 h
 `isIP(value) === 6` **and** a bracketed `[addr]:path` for scp, and that is worth writing the day
 something needs it.
 
+## Review ledger — GPT Sol, round 3 (Stage 2)
+
+[260905d-review-sol-stage2.md](260905d-review-sol-stage2.md), prompt in
+[260905d-review-prompt-stage2.md](260905d-review-prompt-stage2.md). Verdict: **do-not-land**, with
+F8–F10 confirmed fixed. All six accepted; none overruled.
+
+| | | |
+|---|---|---|
+| **F11** | P1 | A verify check I never saw — `check "GJD_REMOTE_HOST is set on the box"` — read the variable back out of a login shell. With the export deleted, **a correctly configured box would fail provisioning**. Deleted, and its comment ("a login shell, because that is what a tmux session gets") kept as a headstone, because that sentence *was* the bug. |
+| **F12** | P1 | `test "$(cat …)" = "127.0.0.1"` **discards NUL bytes**: Sol wrote `127.0.0.1\0\n` and the check passed a file the reader refuses. Now `printf '127.0.0.1\n' \| cmp -s - /etc/gjd-remote-host`, byte for byte. |
+| **F13** | P1 | The address is read in one shell and spliced into the string `su -c` hands to another, which **parses it again**: `not-a-host; true #` makes the probe report `ok` having tested no loopback at all. A `case` guard now holds the value to exactly the characters the TypeScript reader allows, before anything interpolates it. |
+| **F14** | P2 | `test -e` follows a symlink, so a **dangling** legacy symlink read as absent — and would come back to life the day its target appeared. `! -e && ! -L`. |
+| **F15** | P2 | Staged temp files still leaked on any failure before the rename, and on a kill. A sweep of `/etc/.gjd-remote-host.*` before `mktemp` — not an `EXIT` trap, because the script already owns one and a second would silently disarm the first, and the sweep covers the killed-outright case a trap cannot. |
+| **F16** | P3 | Two comments still described the deleted export. Both corrected. |
+
+**How I missed F11**, since it is the one that would have broken provisioning: I grepped for
+`GJD_REMOTE_HOST` across the tree and piped it through `head -20`. The hit was the twenty-first line.
+
+### The fixes, watched failing
+
+The check-can-fail spike, re-run against the *fixed* text — extracted from `provision.sh` by `grep`,
+bind-mounted variants, private mount namespace:
+
+| the file is | content check | address guard |
+|---|---|---|
+| `127.0.0.1\n` | ok | ok |
+| `127.0.0.1\0\n` — **F12's repro** | **FAIL** (it passed before) | ok |
+| no trailing newline | **FAIL** | ok |
+| `1.2.3.4\n` | **FAIL** | ok — shape is fine, and the ssh probe is what catches the address |
+| `not-a-host; true #` — **F13's repro** | **FAIL** | **FAIL**, so `su -c` is never handed the string |
+
+And the export check now fails on a dangling symlink (**F14**), while still passing when nothing is
+there.
+
 ## What done looks like
 
 - On the box, in a shell with no `GJD_REMOTE_HOST`: `ls`, `resolve`, `new-claude --no-attach -p -`
