@@ -662,14 +662,27 @@ the same thing the same day by passing `--reporter=basic`, which vitest 4 does n
 never started and was again reported as exit 0.
 
 So run it in `tmux` and judge it by the suite's own `Test Files` line, never by an exit code that
-reached you through something else:
+reached you through something else. **Use [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts)**, which
+picks a name nothing else has, prints the log path, and lets the session end when the command does:
 
 ```
-tmux new-session -d -s gate "npm test -- --reporter=dot > LOG 2>&1; echo EXIT=\$? >> LOG"
+npx tsx scripts/tmux-job.ts npm test -- --reporter=dot
 ```
+
+It prints the log; `tail -f` it, and the last line is `EXIT=<n>`. Same for anything else that takes
+minutes — `npm run typecheck`, an eval, a codex review.
 
 "It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
 section belongs to — [silent-success.md](../reusable/silent-success.md).
+
+**Do not hand-roll the `tmux new-session` yourself, and never leave a bare session behind.** This
+section used to give the raw incantation with `-s gate` hard-coded in it, and both halves drifted:
+the second agent to run it in a minute got `duplicate session` and improvised a name, and agents who
+had lost a one-shot session to a quoting mistake made a bare `bash -l` session and typed into it
+instead. A bare session never exits. On 2026-09-05 eight of those husks were sitting on the box
+under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of them fifteen hours old.
+`gjd-remote ls` now tells `shell busy` from `shell idle` so a husk is visible as one, and
+`gjd-remote kill <name>` will end any of them; the script above is so there is nothing to kill.
 
 ### `.env.local` is loaded into tests
 
