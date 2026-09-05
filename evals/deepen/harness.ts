@@ -4,9 +4,10 @@
  * model — tests/deepen-eval.test.ts.
  *
  * Everything the two evals share is **imported** from evals/cost/harness.ts
- * rather than copied: the eval spend overlay, the fixture stage-1 step, the
- * in-process pump silencer and the local-database gate. What is here is only
- * what is new:
+ * rather than copied: the eval spend overlay, the fixture stage-1 step and the
+ * local-database gate. ⟨A fourth, the in-process pump silencer, is gone:
+ * `enqueue` takes `pump: false` on the request now — src/jobs.ts § `pump`.
+ * 2026-09-05.⟩ What is here is only what is new:
  *
  * - **An ingress for an untracked file.** The book and the article are in
  *   `output/`, which is gitignored, so they cannot join
@@ -45,6 +46,7 @@ import {
   type CheckpointNamespace,
   type CheckpointStore,
 } from "../../src/store/checkpoints.js";
+import type { StepName } from "../../src/types.js";
 import type { CostFixture } from "../cost/fixtures.js";
 
 /* ------------------------------------------------------- the file on disk -- */
@@ -183,6 +185,135 @@ export function assertReaskNames(opts: {
     if (before === undefined) delete process.env[REASK_ENV];
     else process.env[REASK_ENV] = before;
   }
+}
+
+/* ------------------------------------------------ the step lists, checked -- */
+
+/**
+ * **What each kind of job in this run asks the queue for.** `stepsFor` in
+ * `run.ts` builds it; the shape lives here so it can be refused for free.
+ */
+export interface StepPlans {
+  /** Phases A, C and D's load articles: nothing to published, in one job. */
+  ingest: readonly StepName[];
+  /** Phases B, C and D's book pass: the step forced again on an existing article. */
+  rerun: readonly StepName[];
+  force: readonly StepName[];
+}
+
+/**
+ * **Would the queue take every list this run is about to send it?**
+ *
+ * Asked before anything is enqueued, on every path including `--preflight`, and
+ * the reason is a run that had already happened: `--dry-run` asked for
+ * `["blocks"]`, `enqueue` refused it with a 400 the moment `dev` merged in
+ * (src/jobs.ts § `unrunnableStepPlan`), and the rehearsal died at its first
+ * `enqueue` having created nothing — after printing its whole closing report,
+ * `Findings: none` included.
+ * docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md.
+ *
+ * **The rule is injected rather than imported**, so this can be watched refusing
+ * a bad list without `src/jobs.ts` — which imports the world — coming into the
+ * test suite with it. `run.ts` passes the real `unrunnableStepPlan`, so there is
+ * one rule and this is a caller of it, not a second copy.
+ */
+export function assertStepPlansRunnable(
+  plans: StepPlans,
+  refuse: (steps: readonly StepName[]) => string | undefined,
+): void {
+  for (const [name, steps] of Object.entries(plans) as [keyof StepPlans, readonly StepName[]][]) {
+    if (steps.length === 0) continue;
+    const why = refuse(steps);
+    if (why === undefined) continue;
+    throw new Error(
+      `This run's \`${name}\` step list [${steps.join(", ")}] is one the queue refuses: ${why}\n` +
+        "  Every phase would throw at `enqueue`, no job would exist, and the run would print a " +
+        "clean report over nothing. Fix the list in `stepsFor` rather than the rule.",
+    );
+  }
+}
+
+/* ------------------------------------------------ the measured step, lined up -- */
+
+/** What the run learned from waiting for the load jobs to reach the measured step. */
+export interface BarrierOutcome {
+  /** The slugs whose measured step announced itself, in the order they did. */
+  arrived: string[];
+  /** How many the run was waiting for. */
+  expected: number;
+  /** Why the wait ended. Only `"all"` means the phase is lined up. */
+  why: "all" | "timed out" | "jobs finished first";
+  ms: number;
+}
+
+/**
+ * **An eval-only start barrier, so that phase D's three measured windows can
+ * actually intersect.**
+ *
+ * The arithmetic in `peakConcurrency` was right and the phase did not arrange
+ * the thing it measures. The book's job is a forced `hierarchy` and begins its
+ * measured step at once; the two load articles begin at `fetch` and reach
+ * `hierarchy` only after stages 1-3. Whether the three windows shared a common
+ * intersection was left to how long those stages happened to take — and a peak
+ * below three makes question 5 unanswerable *after* the money has gone.
+ * ⟨GPT Sol, DPN-15.⟩
+ *
+ * **The book waits, and it waits outside a claim.** The two load jobs are driven
+ * first and announce themselves as their measured step begins; only then is the
+ * book's job driven at all. Making the *book* wait inside its own claim was the
+ * obvious shape and is the wrong one: its `hierarchy` step needs 658-778 s
+ * against a 740 s deadline, so seconds spent waiting are seconds taken off the
+ * one step in the run with no headroom.
+ *
+ * **It gives up rather than hanging.** A load job that fails before its measured
+ * step never announces anything, so the wait ends on the jobs finishing or on a
+ * deadline, and the run says which — an unlined-up phase is a finding, not a
+ * silence. Pure but for the clock, so every ending can be exercised.
+ */
+export function startBarrier(opts: {
+  expected: number;
+  timeoutMs: number;
+  now?: () => number;
+}): {
+  announce: (slug: string) => void;
+  wait: (abandonIf: Promise<unknown>) => Promise<BarrierOutcome>;
+} {
+  const now = opts.now ?? (() => Date.now());
+  const startedAt = now();
+  const arrived: string[] = [];
+  let everyone: () => void = () => undefined;
+  const all = new Promise<"all">((resolve) => {
+    everyone = () => resolve("all");
+  });
+  /* Zero to wait for is already lined up — otherwise the caller would wait out
+     the whole deadline to be told nothing was expected. */
+  if (opts.expected <= 0) everyone();
+  return {
+    announce(slug: string): void {
+      if (!arrived.includes(slug)) arrived.push(slug);
+      if (arrived.length >= opts.expected) everyone();
+    },
+    async wait(abandonIf: Promise<unknown>): Promise<BarrierOutcome> {
+      let timer: NodeJS.Timeout | undefined;
+      const alarm = new Promise<"timed out">((resolve) => {
+        timer = setTimeout(() => resolve("timed out"), opts.timeoutMs);
+      });
+      const why = await Promise.race([
+        all,
+        alarm,
+        abandonIf.then(() => "jobs finished first" as const),
+      ]);
+      if (timer !== undefined) clearTimeout(timer);
+      /* `arrived.length` rather than `why`: a job that announced itself in the
+         same tick as the last one settled must not be reported as missing. */
+      return {
+        arrived: [...arrived],
+        expected: opts.expected,
+        why: arrived.length >= opts.expected ? "all" : why,
+        ms: now() - startedAt,
+      };
+    },
+  };
 }
 
 /* ------------------------------------------------- the requeue, refused -- */
@@ -346,6 +477,14 @@ export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile 
  * rather than overwriting, which is what makes repeats comparable — so the way
  * to attribute a file to a phase is to list the directory before and after, and
  * that is what the runner does with `since`.
+ *
+ * **`slug` is a filter on the NAME, not only on the contents.** Phase D has
+ * three jobs writing into one directory, and this used to parse every new file
+ * before asking whose it was: a parse failure on a sibling's file rejected the
+ * whole read, marked the *asking* job fatal and left its own `recordsFiles`
+ * empty. ⟨GPT Sol, DPN-14.⟩ Both halves matter, and the name is the cheap one —
+ * the writer's atomic publication (`src/hierarchy-deepen.ts § saveDeepenRecords`)
+ * is what makes a file that IS ours whole when we open it.
  */
 export async function readRecordsDir(
   dir: string,
@@ -357,16 +496,33 @@ export async function readRecordsDir(
   } catch {
     return [];
   }
+  const prefix = opts.slug === undefined ? null : `${recordsFilePrefix(opts.slug)}-`;
   const wanted = names
     .filter((n) => n.endsWith(".json"))
-    .filter((n) => opts.since === undefined || !opts.since.has(n));
+    .filter((n) => opts.since === undefined || !opts.since.has(n))
+    .filter((n) => prefix === null || n.startsWith(prefix));
   const out: { file: string; parsed: DeepenRecordsFile }[] = [];
   for (const name of wanted) {
     const parsed = parseRecordsFile(await readFile(path.join(dir, name), "utf-8"), name);
+    /* The name is a filter, the contents are the authority: a slug long enough
+       to be truncated in the filename could share a prefix with another. */
     if (opts.slug !== undefined && parsed.slug !== opts.slug) continue;
     out.push({ file: name, parsed });
   }
   return out.sort(byWhenWritten);
+}
+
+/**
+ * **How `saveDeepenRecords` spells a slug into a filename**, and the one place
+ * this harness is allowed to know it.
+ *
+ * A second copy of a rule about names is how a filter silently stops matching,
+ * so it is one exported function with a test rather than an inline regex — and
+ * it stays deliberately *loose*: it is a prefilter, and the parsed `slug` is
+ * still what decides. src/hierarchy-deepen.ts § `saveDeepenRecords`.
+ */
+export function recordsFilePrefix(slug: string): string {
+  return slug.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "article";
 }
 
 /**
@@ -487,8 +643,10 @@ export interface CostEstimate {
   /** The nominal bill: one purchase of each row. */
   totalUsd: number;
   /**
-   * **What this run could cost if every re-asking pass bought its wave twice**,
-   * and the sentence that says whether that can happen.
+   * **What this run would cost if every re-asking pass bought its wave in all
+   * three of its permitted windows** — the *three-window requeue exposure*, one
+   * named risk rather than the run's worst case, which nothing computes because
+   * nothing caps it.
    *
    * The nominal total was printed as an "upper bound" and was not one. A
    * claimant that reaches its own 740 s deadline inside the `hierarchy` step
@@ -499,11 +657,16 @@ export interface CostEstimate {
    * could therefore buy the book's wave three times, and none of it appeared in
    * the estimate. ⟨GPT Sol reviewing the stage-5b harness, DPN-07.⟩
    *
-   * **The run enforces the bound now rather than only naming it**: `driveToDone`
+   * **The run refuses that exposure rather than only naming it**: `driveToDone`
    * stops a re-asking pass on its first requeue and makes it a fatal finding
    * instead of re-driving it. `worstCaseUsd` is what the same run would have
-   * cost without that refusal, kept and printed because a bound nobody can see
-   * is a bound nobody checks.
+   * cost without that refusal, kept and printed because a risk nobody can see is
+   * a risk nobody checks.
+   *
+   * **What it is not is a bound on the bill**, and saying it was overclaimed:
+   * nothing in this harness enforces a spend cap, an ordinary pass can re-buy
+   * work whose checkpoint write failed, and a redraw buys a second answer.
+   * ⟨GPT Sol, DPN-16.⟩
    */
   worstCaseUsd: number;
   bound: string;
@@ -530,19 +693,23 @@ export function estimate(counts: Readonly<Record<keyof typeof ESTIMATE_BASIS, nu
     totalUsd,
     worstCaseUsd: totalUsd + exposure,
     bound:
-      `The nominal total is $${totalUsd.toFixed(2)}. Without the requeue refusal it would be a ` +
-      `floor, not a bound: a re-asking pass that hands its claim back at its own 740s deadline ` +
-      `used to be re-claimed with the slug still named in the re-ask lever, buying the wave again ` +
-      `— three windows per pass, so up to $${(totalUsd + exposure).toFixed(2)}. This run STOPS a ` +
+      `$${totalUsd.toFixed(2)} is the NOMINAL ESTIMATE — one purchase of each row — and ` +
+      `$${(totalUsd + exposure).toFixed(2)} is the THREE-WINDOW REQUEUE EXPOSURE: what the same ` +
+      "run would cost if every re-asking pass were re-claimed at its own 740s deadline and bought " +
+      "its wave in each of the three windows `REQUEUE_BUDGET = 2` permits. This run stops a " +
       "re-asking pass on its first requeue and reports it fatally (evals/deepen/run.ts § " +
-      "driveToDone), so each pass buys its wave at most once and the nominal total is the bound. " +
-      "What it is not is a cap on the run: nothing here refuses a call at $N, and the per-row " +
-      "figures are the plan's arithmetic rather than a limit anything enforces.",
+      "driveToDone), so it does not buy that exposure. " +
+      "**NEITHER FIGURE IS A BOUND, AND NOTHING HERE ENFORCES A CAP.** No dollar or token limit " +
+      "refuses a call at $N. An ordinary, non-re-asking pass can requeue and re-buy any answer " +
+      "whose best-effort checkpoint write failed; a redraw buys a second answer to the same " +
+      "question; and every per-row figure is the plan's arithmetic rather than a limit anything " +
+      "checks against. Watch the bill.",
     caveat:
-      "Every per-row figure is an UPPER BOUND derived from the plan's own arithmetic, not a " +
-      "measurement, and the run's own `run.json` carries what it really cost. If the real bill " +
-      "lands far under this, that is question 4 answering itself; if it lands over, stop and read " +
-      "why before repeating.",
+      "Every per-row figure is an upper bound on ONE purchase of that row, derived from the plan's " +
+      "own arithmetic rather than measured — it is not a bound on how many purchases the run " +
+      "makes, which is the sentence above. The run's own `run.json` carries what it really cost. " +
+      "If the real bill lands far under this, that is question 4 answering itself; if it lands " +
+      "over, stop and read why before repeating.",
   };
 }
 
@@ -552,9 +719,9 @@ export function formatEstimate(e: CostEstimate): string {
       `  ${String(r.jobs).padStart(2)} x ${r.what.padEnd(56)} $${r.usdEach.toFixed(2).padStart(6)} each   ` +
       `$${(r.jobs * r.usdEach).toFixed(2).padStart(7)}`,
   );
-  lines.push(`  ${"".padEnd(61)}   TOTAL   $${e.totalUsd.toFixed(2).padStart(7)}`);
+  lines.push(`  ${"".padEnd(61)}   NOMINAL ESTIMATE   $${e.totalUsd.toFixed(2).padStart(7)}`);
   lines.push(
-    `  ${"".padEnd(61)}   worst case, were a requeue re-driven   $${e.worstCaseUsd.toFixed(2).padStart(7)}`,
+    `  ${"".padEnd(61)}   three-window requeue exposure   $${e.worstCaseUsd.toFixed(2).padStart(7)}`,
   );
   lines.push("");
   for (const r of e.rows) lines.push(`  - ${r.what}: ${r.basis}`);

@@ -518,6 +518,37 @@ export function isCredentialFailure(log: string): boolean {
 }
 
 /**
+ * The failure whose message points at the wrong thing.
+ *
+ * Codex reads a repo's `.codex/config.toml` only for a **trusted project** — a
+ * `[projects."<abs path>"]` entry with `trust_level = "trusted"` in `$CODEX_HOME/config.toml`,
+ * naming that directory or one above it. Everywhere else it skips the file in silence: a
+ * deliberately corrupt config in an untrusted directory raises nothing at all. So in a checkout
+ * nobody has trusted yet — a fresh clone on the box, a new machine — `-c default_permissions=review`
+ * dies with `default_permissions requires a [permissions] table` while the table is sitting right
+ * there, and `reviewProfileDefined()` above has already read it and agreed that it is. Measured
+ * 2026-09-05 on 0.153.4. Trust is inherited, so one entry covers a checkout's worktrees.
+ *
+ * Read off codex's own error rather than by re-implementing its trust resolution: the entry may
+ * live under a different `CODEX_HOME`, or on a directory above the checkout, and a reimplementation
+ * that drifted would refuse runs that work. This fails closed — no error line, no note.
+ *
+ * Anchored to the `Error:` line for the reason authHint gives: the log is mostly the contents of
+ * the files codex read, and this repo's own docs quote this string. They quote it *without* the
+ * `Error:` prefix on purpose, so an activity log that has read them cannot manufacture this note.
+ */
+export function untrustedCheckoutHint(log: string, sandbox: string, repoDir: string): string {
+  if (sandbox !== REVIEW_PROFILE || !reviewProfileDefined(repoDir)) return '';
+  const errors = log.split('\n').filter((l) => /^\s*Error\b/i.test(l)).join('\n');
+  if (!/default_permissions requires/i.test(errors)) return '';
+  const dir = resolve(repoDir);
+  return `\n  The [permissions.review] table IS in ${join(dir, '.codex/config.toml')} — codex never read it.`
+    + ' A project config is loaded only for a trusted project, so add this to ~/.codex/config.toml'
+    + ' (or $CODEX_HOME/config.toml) and re-run — a checkout\'s subdirectories and worktrees inherit'
+    + ` it:\n\n    [projects."${dir}"]\n    trust_level = "trusted"`;
+}
+
+/**
  * Whether to try the other credential. Reached only when an attempt produced no usable answer.
  *
  * **Positive evidence, every time.** The bar is a credential phrase in codex's own ERROR lines,
@@ -750,7 +781,8 @@ async function main(): Promise<void> {
   // go and buy credits because a 30-minute run was killed sends them somewhere useless.
   if (run.status !== 0) {
     fail(`codex exec exited ${run.status ?? 'null'}${run.signal ? ` [${run.signal}]` : ''}`
-      + `${hint}${accountNote(args, run, plan, attempt)}`);
+      + `${hint}${accountNote(args, run, plan, attempt)}`
+      + untrustedCheckoutHint(args.stream ? '' : combinedLog(run), args.sandbox, args.repoDir));
   }
   // Exit 0 and nothing to show for it. Same note as the branch above, and this is the path that
   // most needs it: a run that died on a spent credential *and reported success* is the one place a

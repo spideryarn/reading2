@@ -31,6 +31,10 @@ import fs from "node:fs";
 import { loadEnvLocal } from "../../src/env.js";
 import { transcribeWith, vocabularyFor } from "../../src/transcribe.js";
 import { SITE_TERMS, pack, phrases, properNouns, proseOf } from "../../src/vocabulary.js";
+/* **What came back, against what was sent**, shared with `bench-models.ts` so
+   neither can report a clean run over a condition that answered nothing, and
+   so the results file names the plan and the outcome separately. */
+import { callCounts, coverageLines, coverageOf, exitCodeFor } from "./coverage.js";
 /* **Scoring lives in one file now**, shared with `bench-models.ts`, so the two
    benchmarks' word error rates are the same measurement rather than two
    definitions that agree until they don't — score.ts says why. */
@@ -44,6 +48,13 @@ const DIR = new URL(".", import.meta.url).pathname;
 const DATA = `${DIR}../../data`;
 const MODEL = "google/gemini-3.1-flash-lite";
 const RUNS = Number(process.env.RUNS ?? 2);
+/* **The denominator, so it is checked where it is read.** `for (run = 0; run <
+   RUNS; run++)` runs `ceil(RUNS)` times, so `RUNS=1.5` would make two calls per
+   clip and record one and a half as attempted — every rate below then over a
+   population that never existed. GPT Sol's review, item 1. */
+if (!Number.isInteger(RUNS) || RUNS < 1) {
+  throw new Error(`RUNS must be a positive whole number, not ${JSON.stringify(process.env.RUNS)}`);
+}
 
 interface Utterance {
   id: string;
@@ -493,6 +504,18 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const rowsOf = (name: string) => [...(results.get(name) as Map<string, Row>).values()];
 
+/* **What each condition actually got back**, counted off the recorded rows
+   rather than off a counter, so the number cannot drift from the table it
+   describes. There is no `answeredBy` here — the model is the thing this
+   benchmark holds fixed — so `coverage.ts` gets the count and not the tally. */
+const coverage = coverageOf(
+  CONDITIONS.map((c) => ({
+    name: c.name,
+    attempted: utterances.length * RUNS,
+    answered: rowsOf(c.name).reduce((n, r) => n + r.ms.length, 0),
+  })),
+);
+
 console.log("\n\n=== Overall ===");
 console.log(
   "corpus WER is total edits / total reference words; mean WER averages the ten",
@@ -548,8 +571,25 @@ for (const c of CONDITIONS) {
   }
 }
 if (!any) {
-  console.log("  none — and read that as \"no exact vocabulary term was inserted\",");
-  console.log("  which is narrower than \"no harm\": the control WER column is the rest of it.");
+  /* **`none` over an empty set is not the same `none`.** A condition that
+     answered nothing has no transcripts to insert a term into, so it clears
+     this check by having failed — the shape the postmortem cited above is
+     about. Say which one it is.
+
+     **Per condition, not in aggregate.** The first version of this asked
+     `coverage.answered === 0`, so one silent condition beside nine healthy ones
+     still got the reassuring sentence — which is the same mistake one scale
+     down, a check over the whole where the claim is about a part. GPT Sol's
+     review, item 2. */
+  if (coverage.silent.length) {
+    console.log(
+      `  no transcripts came back for ${coverage.silent.join(", ")}, so nothing could be`,
+    );
+    console.log("  inserted there. This is not the reassuring `none` for those conditions.");
+  } else {
+    console.log("  none — and read that as \"no exact vocabulary term was inserted\",");
+    console.log("  which is narrower than \"no harm\": the control WER column is the rest of it.");
+  }
 }
 
 /**
@@ -607,7 +647,12 @@ fs.writeFileSync(
          forward into a re-run that did not happen. */
       /* **What it cost, so the plan's dollar figure can be checked.** */
       usd: Math.round(spent * 10_000) / 10_000,
-      calls: CONDITIONS.length * utterances.length * RUNS,
+      /* **The plan and the outcome, each under its own name.** This was
+         `calls: CONDITIONS.length * utterances.length * RUNS` — the count the
+         run *intended*, under a field that claims to say what happened. A
+         console line qualifying it does not survive into the artefact, and the
+         artefact is what gets pasted into a plan. */
+      calls: callCounts(coverage),
       /* Which calls never came back, so a thinned table cannot pass for a full
          one. Empty is the normal case and the one worth being able to see. */
       lost,
@@ -635,7 +680,12 @@ fs.writeFileSync(
   )}\n`,
 );
 if (lost.length) {
-  console.log(`\n${lost.length} of ${CONDITIONS.length * utterances.length * RUNS} calls never came back:`);
+  console.log(`\n${lost.length} of ${coverage.attempted} calls never came back:`);
   for (const one of lost) console.log(`  ${one}`);
 }
+console.log("\nCoverage:");
+for (const line of coverageLines(coverage)) console.log(line);
+/* Only ever raised, never cleared: an exit code already set is somebody else's
+   failure and this is not the place to overrule it. */
+if (exitCodeFor(coverage) === 1) process.exitCode = 1;
 console.log(`\nEvery transcript is in ${out.replace(`${DIR}`, "")}.`);

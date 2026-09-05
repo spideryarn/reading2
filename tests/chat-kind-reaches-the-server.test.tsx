@@ -110,7 +110,7 @@ describe("the kind a turn is sent under", () => {
 
   it.each(NOT_CHAT)("reaches the server for a %s turn", async (kind) => {
     await act(async () => {
-      chat?.send(null, "who could review this?", null, true, undefined, undefined, kind);
+      chat?.send(null, "who could review this?", null, { kind });
     });
     await settle();
 
@@ -124,7 +124,7 @@ describe("the kind a turn is sent under", () => {
 
   it("still sends no kind for an ordinary chat turn, which is what an old tab does", async () => {
     await act(async () => {
-      chat?.send(null, "why?", null, true, undefined, undefined, "chat");
+      chat?.send(null, "why?", null, { kind: "chat" });
     });
     await settle();
     expect(posts).toHaveLength(1);

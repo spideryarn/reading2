@@ -22,6 +22,13 @@
 #
 # docs/reusable/codex-cli-as-subagent.md § The review profile.
 
+# `default_permissions` is required as soon as a `[permissions]` table exists: without it codex
+# refuses to load ANY config in this directory, and every `codex` in the checkout exits 1 before the
+# model. `:workspace` is codex's built-in workspace-write profile, the posture a human's interactive
+# session wants; the wrapper overrides it with `review` or an explicit `--sandbox`, and measured
+# 2026-09-05 neither is loosened by this line -- both still refuse a write to the tree.
+default_permissions = ":workspace"
+
 [permissions.review.filesystem]
 "/" = "read"
 "/tmp" = "write"

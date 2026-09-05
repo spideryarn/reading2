@@ -97,6 +97,85 @@ export interface SpokenExchange {
   interrupted?: boolean;
 }
 
+/**
+ * Everything a send may carry beyond the question itself.
+ *
+ * Every field here is **per turn**, and several are *only* meaningful on the
+ * turn that creates a thread — which is said on each rather than assumed.
+ *
+ * **An object rather than a positional tail**, and that is the point of it: see
+ * `ChatApi.send`.
+ */
+export interface SendOptions {
+  /**
+   * Whether this answer should be written for the reader's profile.
+   *
+   * Per turn, not per thread, and composer-only: a chat answer is not an
+   * artefact anybody rewrites, so there is nothing to store a preference
+   * against and nothing to flip back to. A reader may reasonably want one
+   * plain answer in the middle of a conversation that is otherwise theirs.
+   * Absent means yes. docs/project/reader-profile.md.
+   */
+  useProfile?: boolean;
+  /**
+   * Called if the server gave the thread a different id than the one sent.
+   * See the `begin` frame — it lets the caller correct `?thread=` rather than
+   * leaving the URL pointing at a conversation that is not there.
+   */
+  onThreadId?: (id: string) => void;
+  /**
+   * The passage this conversation is about — **only on the send that creates
+   * the thread**. The server 409s an anchor for a thread that already has a
+   * different one, rather than quietly ignoring it.
+   */
+  anchor?: ChatAnchor;
+  /**
+   * Chat or Remember — **only on the send that creates the thread**, and the
+   * server 409s one that contradicts a thread that already exists.
+   *
+   * Deliberately absent from `retry` and `edit`: their thread already has a
+   * kind, and a field a stale tab could send wrongly is a field worth not
+   * having. The server refuses one sent with either.
+   */
+  kind?: ThreadKind;
+  /**
+   * How much this answer should say — Remember turns only, and the reader's
+   * current picker.
+   *
+   * Also absent from `retry` and `edit`, and that one is not symmetry: a retry
+   * re-asks a **stored** question, so it must be asked the way it was asked.
+   * `withRetry` on the server carries the stance over from the answer it is
+   * replacing; `withEdit` takes it from the answer being replaced. If this rode
+   * along instead, moving the picker and then pressing retry would silently
+   * rewrite the instruction attached to a stored turn.
+   */
+  stance?: RememberStance;
+  /**
+   * **The reader pressed the "?" beside a paragraph rather than typing this.**
+   *
+   * Report 1R's metadata and report 1S's pedagogy, in one flag. It is stored on
+   * the user row and read back off it, so — unlike everything above — a retry or
+   * an edit of a help question is still a help question without the client
+   * saying anything. Which is exactly why the server refuses it on both. See
+   * `ChatMessage.help` in src/types.ts.
+   *
+   * `true` or absent. The route validates *absent or literal `true`* and 400s
+   * anything else, so a `false` on the wire would be a bug that reads as
+   * politeness.
+   */
+  help?: true;
+  /**
+   * The comment this conversation is being started from — **only on the send
+   * that creates the thread**, and passed straight through to the server.
+   *
+   * The link is written *there*, once the real thread id exists, because the id
+   * `send` returns is minted optimistically and the client only hears about an
+   * overrule when there is one. See
+   * docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography.
+   */
+  sourceCommentId?: string;
+}
+
 export interface ChatApi {
   threads: ChatThread[];
   /**
@@ -142,65 +221,17 @@ export interface ChatApi {
    * Send a question. Returns the thread id it went to — minted here when the
    * reader is starting a new conversation, so `?thread=` can point at something
    * from the first frame rather than after the round trip.
+   *
+   * **Three positional arguments and then one options object**, and the change
+   * is not tidiness. This took nine positionals, and call sites read
+   * `send(text, at, true, undefined, undefined, undefined, id)` — which is
+   * exactly the shape that lets a new field land in the wrong slot with the
+   * compiler agreeing, because half of them are `string | undefined`. This repo
+   * has already had a field silently never reach the server
+   * (tests/chat-kind-reaches-the-server.test.tsx), and adding a tenth was the
+   * moment to stop.
    */
-  send(
-    threadId: string | null,
-    question: string,
-    at: string | null,
-    /**
-     * Whether this answer should be written for the reader's profile.
-     *
-     * Per turn, not per thread, and composer-only: a chat answer is not an
-     * artefact anybody rewrites, so there is nothing to store a preference
-     * against and nothing to flip back to. A reader may reasonably want one
-     * plain answer in the middle of a conversation that is otherwise theirs.
-     * Absent means yes. docs/project/reader-profile.md.
-     */
-    useProfile?: boolean,
-    /**
-     * Called if the server gave the thread a different id than the one sent.
-     * See the `begin` frame — it lets the caller correct `?thread=` rather than
-     * leaving the URL pointing at a conversation that is not there.
-     */
-    onThreadId?: (id: string) => void,
-    /**
-     * The passage this conversation is about — **only on the send that creates
-     * the thread**. The server 409s an anchor for a thread that already has a
-     * different one, rather than quietly ignoring it.
-     */
-    anchor?: ChatAnchor,
-    /**
-     * Chat or Remember — **only on the send that creates the thread**, and the
-     * server 409s one that contradicts a thread that already exists.
-     *
-     * Deliberately absent from `retry` and `edit` below: their thread already
-     * has a kind, and a field a stale tab could send wrongly is a field worth
-     * not having. The server refuses one sent with either.
-     */
-    kind?: ThreadKind,
-    /**
-     * How much this answer should say — Remember turns only, and the reader's
-     * current picker.
-     *
-     * Also absent from `retry` and `edit`, and that one is not symmetry: a
-     * retry re-asks a **stored** question, so it must be asked the way it was
-     * asked. `withRetry` on the server carries the stance over from the answer
-     * it is replacing; `withEdit` takes it from the answer being replaced. If
-     * this rode along instead, moving the picker and then pressing retry would
-     * silently rewrite the instruction attached to a stored turn.
-     */
-    stance?: RememberStance,
-    /**
-     * The comment this conversation is being started from — **only on the send
-     * that creates the thread**, and passed straight through to the server.
-     *
-     * The link is written *there*, once the real thread id exists, because the
-     * id this function returns is minted optimistically and the client only
-     * hears about an overrule when there is one. See
-     * docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography.
-     */
-    sourceCommentId?: string,
-  ): string;
+  send(threadId: string | null, question: string, at: string | null, opts?: SendOptions): string;
   /**
    * Answer the same question again, replacing the answer in place.
    *
@@ -562,13 +593,10 @@ export function useChat(slug: string): ChatApi {
       threadId: string | null,
       question: string,
       at: string | null,
-      useProfile = true,
-      onThreadId?: (id: string) => void,
-      anchor?: ChatAnchor,
-      kind?: ThreadKind,
-      stance?: RememberStance,
-      sourceCommentId?: string,
+      opts: SendOptions = {},
     ): string => {
+      const { onThreadId, anchor, kind, stance, help, sourceCommentId } = opts;
+      const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
       const replyId = mintId();
@@ -670,6 +698,10 @@ export function useChat(slug: string): ChatApi {
                tests/chat-kind-reaches-the-server.test.tsx. */
             ...(kind && kind !== "chat" ? { kind } : {}),
             ...(stance ? { stance } : {}),
+            /* Sent only when it is true, which is the only value there is. The
+               route refuses `false` outright rather than reading it as absent,
+               so this must never write one. */
+            ...(help ? { help: true as const } : {}),
             ...(sourceCommentId ? { sourceCommentId } : {}),
           },
         },

@@ -505,6 +505,13 @@
       "when": 1788578139327,
       "tag": "20260905031539_checkpoints_hierarchy_deepen",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1788604694640,
+      "tag": "20260905103814_chat_messages_help",
+      "breakpoints": true
     }
   ]
 }

@@ -375,6 +375,38 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`chat_threads_kind` CHECK is in play, and seeds through `scratchArticleInPg`. Its three " +
       "filesystem sites are the seeder's copy step and one ledger row from the stubbed model call.",
   },
+  /**
+   * **Written 2026-09-05, after the witness ran**, so `static-only` for the
+   * ordinary reason the header gives. Modelled line for line on
+   * `chat-anchor-route.test.ts`, which is the entry after next, and it reaches
+   * what it reaches by the same two doors.
+   */
+  "tests/chat-help-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_messages.help` at the route: what the wire may carry, and that a retry of a help " +
+      "question is still answered as one. It pins `postgres` before any import and seeds through " +
+      "`scratchArticleInPg`; what it still reaches is the seeder's copy step and the ledger row " +
+      "the stubbed model call records.",
+  },
+  /**
+   * **Written 2026-09-05.** A pure prompt-wording test, and it reaches a
+   * condemned module only by naming `src/converse.js` in an `import` — the same
+   * shape as `help-prompt.test.ts` below and as `tree-redundant-rung.test.ts` at
+   * the top of this list.
+   */
+  "tests/chat-search-triggers.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Report 1X: the chat system prompt's search triggers, read off " +
+      "`buildConverseMessages(...)[0].content` with fixture blocks written in the file. No " +
+      "network, no store, no path. It imports src/converse.js, which is how the graph reaches a " +
+      "condemned module, and executes none of it beyond building a message array.",
+  },
   "tests/chat-anchor-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -583,6 +615,22 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "every caller happened to write back through the reference it read. **Nothing here needs " +
       "doing when the filesystem store goes**: neither helper imports a condemned module, and the " +
       "graph only reaches one through `src/pipeline.ts`, which this file never asks for a path.",
+  },
+  /**
+   * **Written 2026-09-05.** Report 1S's addendum, and the property that costs
+   * money if it breaks: everything above the `cache_control` breakpoint has to
+   * be byte-identical between a help turn and an ordinary one. Its second half
+   * drives `converse` with a stubbed `fetch` to say the same thing about the
+   * tool definitions.
+   */
+  "tests/help-prompt.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Fixture blocks written in the file, `fetch` stubbed, and the assertions are on the message " +
+      "array and the serialised request body. It imports src/converse.js, which is how the graph " +
+      "reaches a condemned module; nothing here selects a store, reads a path or writes a byte.",
   },
   "tests/hierarchy-cascade.test.ts": {
     category: "shared-mechanism-collateral",
@@ -2043,6 +2091,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      indistinguishable from a regression. No GoTrue and no Storage: the article
      is the committed corpus and the provider is stubbed. */
   "tests/chat-live-turn.test.ts": "private-postgres",
+  /* Written 2026-09-05 for `chat_messages.help`. Same shape and same reasons as
+     `chat-anchor-route.test.ts` beside it: `postgres` pinned before any import,
+     the article seeded through `scratchArticleInPg`, the model stubbed. It
+     reads conversations back with `chatStore.load` after every post and asserts
+     on the first thread in the list, which is an assertion a neighbouring run
+     writing to the same `chat_threads` could falsify without touching this
+     file. */
+  "tests/chat-help-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
      rather than from the writes: three cases go and look in the store, and two

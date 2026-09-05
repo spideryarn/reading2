@@ -822,8 +822,19 @@ export interface StepClock {
   /** The step's own window, which is what the concurrency arithmetic is over. */
   startedAt: string | null;
   finishedAt: string | null;
-  /** Did this job leave a records file with a wave's stats on it? */
-  hasStats: boolean;
+  /**
+   * **Did this job leave a records file with a wave's stats on it, *and* did
+   * that wave finish?**
+   *
+   * It used to mean only "stats are present", which is a weaker fact than it
+   * reads as. When a wave exhausts its redraws, `generateHierarchy` catches the
+   * failure, writes a records file with `failed: true`, falls back to wave 1 and
+   * completes the `hierarchy` step — so three failed waves all carried stats, a
+   * `done` status and a clock, and question 5 printed "ran at once and finished
+   * inside" over three measurements of the FALLBACK path. Named positively so
+   * that the thing asserted is the thing the name says. ⟨GPT Sol, DPN-03-R.⟩
+   */
+  hasSuccessfulStats: boolean;
   /** What the wave could not do, from its stats — `null` where no wave ran. */
   outOfTime: number | null;
   withheld: number | null;
@@ -911,7 +922,10 @@ export interface Q5Budget {
  * - **A failed step carries a clock.** `startedAt` and `finishedAt` are both
  *   set on a step that started and blew up a second later, so three failures
  *   printed "All 3 hierarchy steps finished inside the budget". `status` and
- *   `hasStats` are what tell a completed step from a fast failure. ⟨DPN-03.⟩
+ *   `hasSuccessfulStats` are what tell a completed step from a fast failure —
+ *   and the second has to mean *the wave did not fail*, because a wave that
+ *   exhausts its redraws still leaves stats and still lets the step finish, on
+ *   the fallback tree. ⟨DPN-03, DPN-03-R.⟩
  * - **Whole-job windows overlap even when the steps do not.** The three phase-D
  *   promises are all alive while two of them are being told `busy`, so a
  *   serialised run passed a pairwise overlap check. The concurrency is taken
@@ -925,7 +939,9 @@ export function budgetReport(opts: {
   expected: number;
 }): Q5Budget {
   const measured = opts.clocks.filter((c) => c.ms !== null);
-  const completed = opts.clocks.filter((c) => c.status === "done" && c.ms !== null && c.hasStats);
+  const completed = opts.clocks.filter(
+    (c) => c.status === "done" && c.ms !== null && c.hasSuccessfulStats,
+  );
   const overBudget = completed.filter((c) => c.ms! > opts.budgetMs);
   const selfAborted = opts.clocks.filter((c) => (c.outOfTime ?? 0) > 0 || (c.withheld ?? 0) > 0);
   const wasted = opts.clocks.filter((c) => (c.uncheckpointed ?? 0) > 0);
@@ -937,11 +953,13 @@ export function budgetReport(opts: {
       kind: "not-answerable",
       fatal: true,
       message:
-        `Question 5 needs ${opts.expected} completed step(s) with a clock and a wave's stats, and ` +
+        `Question 5 needs ${opts.expected} completed step(s) with a clock and a wave that ` +
+        `finished, and ` +
         `this phase has ${completed.length} of ${opts.clocks.length} (` +
         `${opts.clocks.map((c) => `${c.label}=${c.status ?? "no such step"}`).join(", ") || "no clocks at all"}` +
         "). A step that started and failed carries both timestamps, so its clock is a duration " +
-        "and not a measurement — this is an absence, not a pass.",
+        "and not a measurement; neither is a step that finished on the fallback tree because its " +
+        "wave threw — this is an absence, not a pass.",
     });
   } else if (peak !== opts.expected) {
     findings.push({
@@ -1254,7 +1272,7 @@ export function formatQ5(q: Q5Budget): string {
   const lines = q.clocks.map(
     (c) =>
       `  ${c.label.padEnd(34)} ${(c.ms === null ? "—" : `${(c.ms / 1000).toFixed(1)}s`).padStart(8)}` +
-      `  ${(c.status ?? "no such step").padEnd(12)}${c.hasStats ? "" : " no stats"}` +
+      `  ${(c.status ?? "no such step").padEnd(12)}${c.hasSuccessfulStats ? "" : " no usable stats"}` +
       `   budget ${(q.budgetMs / 1000).toFixed(0)}s  deadline ${(q.deadlineMs / 1000).toFixed(0)}s` +
       (c.outOfTime ? `   outOfTime ${c.outOfTime}` : "") +
       (c.withheld ? `   withheld ${c.withheld}` : "") +
@@ -1483,6 +1501,17 @@ export function checkDriving(
 }
 
 export function formatDriving(jobs: readonly DrivenJob[]): string {
+  /* **An empty table is not a quiet table.** The first `--dry-run` after `dev`
+     merged printed this block, its explanatory paragraph and `Findings: none`
+     over a run in which every `enqueue` had thrown and no job existed. A summary
+     has to be able to say "there was nothing here". docs/reusable/silent-success.md,
+     docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md. */
+  if (jobs.length === 0) {
+    return (
+      "  NO JOBS. Not one was created, so nothing below this line was driven, forced, timed or\n" +
+      "  bought. An empty driving table is an absence, not a clean run — read the findings."
+    );
+  }
   const lines = jobs.map((j) => {
     const window =
       j.startedAt && j.finishedAt

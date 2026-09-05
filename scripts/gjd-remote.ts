@@ -31,6 +31,13 @@ import {
   parseEnv,
 } from "./gjd-remote-env.js";
 import {
+  BOX_HOST_FILE,
+  type HostSource,
+  describeSource,
+  readBoxHostFile,
+  resolveHost,
+} from "./gjd-remote-host.js";
+import {
   type EnvPlan,
   type EnvPlanTone,
   type Policy,
@@ -251,22 +258,18 @@ function shq(s: string): string {
 }
 
 /**
- * The address comes from Terraform state, never a constant: it changes on every
- * rebuild, and a hardcoded IP would be wrong exactly when you most need it.
+ * The address, and which of the three sources gave it — `GJD_REMOTE_HOST`, this
+ * machine's own /etc/gjd-remote-host, or Terraform state. The order, the reasons
+ * and the file's contract are in scripts/gjd-remote-host.ts; only the caching
+ * and the Terraform read are here.
+ *
+ * Never a constant: on the laptop it changes on every rebuild, and a hardcoded
+ * IP would be wrong exactly when you most need it.
  */
-let cachedHost: string | undefined;
+let cachedAddress: { host: string; source: HostSource } | undefined;
 
-function host(): string {
-  // Memoised for the process. HOST() is called on every ssh, scp and mosh, and
-  // `new-claude` makes six of those — six `tofu output` subprocesses to answer a
-  // question whose answer cannot change while we run. It also means an address
-  // that stays consistent across one command even if somebody rebuilds the box
-  // underneath us, which is the behaviour you want when half the work is done.
-  if (cachedHost) return cachedHost;
-  if (process.env.GJD_REMOTE_HOST) {
-    cachedHost = process.env.GJD_REMOTE_HOST;
-    return cachedHost;
-  }
+/** Terraform state's answer, or why it has none. Not run unless it is asked. */
+function terraformHost(): { ok: true; host: string } | { ok: false; why: string } {
   try {
     const out = execFileSync("tofu", ["-chdir=" + path.join(REPO, "infra/hetzner"), "output", "-json"], {
       encoding: "utf8",
@@ -274,15 +277,44 @@ function host(): string {
     });
     const ip = JSON.parse(out)?.ipv4?.value;
     if (!ip) throw new Error("no ipv4 output");
-    cachedHost = ip as string;
-    return cachedHost;
+    return { ok: true, host: ip as string };
   } catch (err) {
-    die(
-      `could not read the server address from Terraform state (${(err as Error).message}).\n` +
-        `  Run this from the repo, or set GJD_REMOTE_HOST=<ip> to override.`,
-    );
+    return {
+      ok: false,
+      why:
+        `could not read the server address from Terraform state (${(err as Error).message}).\n` +
+        `  Run this from the repo, or set GJD_REMOTE_HOST=<ip> to override.\n` +
+        `  On a machine that hosts sessions of its own, ${BOX_HOST_FILE} answers this instead —\n` +
+        `  provisioning writes it, and this one has not got it.`,
+    };
   }
 }
+
+/**
+ * The address and its source, resolved once.
+ *
+ * Memoised for the process. HOST() is called on every ssh, scp and mosh, and
+ * `new-claude` makes six of those — six `tofu output` subprocesses to answer a
+ * question whose answer cannot change while we run. It also means an address
+ * that stays consistent across one command even if somebody rebuilds the box
+ * underneath us, which is the behaviour you want when half the work is done.
+ *
+ * ONE object rather than two `let`s. Two could be half-assigned by a later
+ * branch — the host set, the source not — and the thing that then printed would
+ * be a plausible provenance for an address that did not come from there.
+ */
+function address(): { host: string; source: HostSource } {
+  if (cachedAddress) return cachedAddress;
+  const answer = resolveHost({ env: process.env, boxFile: () => readBoxHostFile(), terraform: terraformHost });
+  if (!answer.ok) die(answer.why);
+  cachedAddress = { host: answer.host, source: answer.source };
+  return cachedAddress;
+}
+
+const host = (): string => address().host;
+
+/** Where the address came from, for the two commands that say so. */
+const hostSource = (): HostSource => address().source;
 
 const HOST = () => `${USER}@${host()}`;
 
@@ -1678,6 +1710,7 @@ async function setUpTheClone(
  */
 function cmdResolve(opts: { repo?: string | undefined; dir?: string | undefined }): void {
   console.log(dim(`cwd:  ${process.cwd()}`));
+  console.log(dim(`host: ${host()}  (${describeSource(hostSource())})`));
   const id = identify(opts.repo);
   if (!id.ok) {
     console.error(red(`✗ ${id.why}`));
@@ -4675,7 +4708,10 @@ function doctorSetupPlan(id: Identity, d: Scoreboard): void {
  */
 function cmdDoctor(opts: { repo?: string | undefined; dir?: string | undefined; boxOnly: boolean }): void {
   const ip = host();
-  console.log(bold(`gjd-remote → ${ip}`));
+  // With the source, because the address is the first thing to doubt when a
+  // command talks to the wrong machine — and this heading is reachable with
+  // --box-only, from $HOME or a broken checkout, where `resolve` is not.
+  console.log(bold(`gjd-remote → ${ip}`) + dim(` (${describeSource(hostSource())})`));
 
   // Why the repo half is not running, or null. `--repo` and `--dir` both say
   // which repo to check explicitly, so either makes it run; otherwise the cwd
@@ -5310,8 +5346,12 @@ ${bold("EXAMPLES")}
       ${dim("✓ 12 keys, 0600 greg, read back and verified")}
 
 ${bold("ENVIRONMENT")}
-  GJD_REMOTE_HOST         override the address (default: read from Terraform state,
-                          so it is never stale after a rebuild)
+  GJD_REMOTE_HOST         override the address. Three sources, in this order: this
+                          variable, then ${dim(BOX_HOST_FILE)} if the machine
+                          has one (which is how the box drives itself — see
+                          ${dim("gjd-remote doctor")}, which prints the one that answered),
+                          then Terraform state, so a laptop is never stale after a
+                          rebuild
   GJD_REMOTE_TRANSPORT    ssh | mosh | auto (default: auto, which probes mosh once)
   GJD_REMOTE_REPO         ${dim("deprecated")} — an alias for --dir, and --dir wins over it.
                           It prints a line whenever it is set, and it REFUSES if the

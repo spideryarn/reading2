@@ -748,6 +748,12 @@ the wiring, the last two so that a paid run can answer the questions it is being
   filename carries a process-local counter as well as the second and the pid: `--repeat` is two
   passes over one slug in one process in one second, so the second used to land on the first.
 
+  **A file under its final name is always whole.** The bytes go to a temporary name and are published
+  with `link`, which is atomic and still fails on a name already taken. The reader is not
+  hypothetical: `evals/deepen/` runs three deepening jobs at once against one directory and lists it
+  as each stops, so it could otherwise open a sibling's file mid-write, fail to parse it, and mark the
+  wrong job fatal. ⟨GPT Sol reviewing the stage-5b harness, DPN-14, 2026-09-05.⟩
+
   **The range is there because `where` is not an identity.** It is an ordinal path derived from the
   answer's own fan-out, so two repeats that split one parent at different points both emit
   `root > child 1` — and pairing on that reads a boundary that moved as a verdict that held, which is

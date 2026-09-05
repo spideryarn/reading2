@@ -382,6 +382,81 @@ Two new fields on the answer's log line: `rounds` (how many times the whole arti
 `tools` (how many calls that bought). `rounds: 4` on a run of answers means the model is going round
 in circles and the tool descriptions need looking at.
 
+**`searchesFrom` beside `searches`**, added 2026-09-05 and copied from
+[`src/explain.ts`](../../src/explain.ts), which has carried it since 2026-08-25. A bare `searches: 0`
+is a number a reader believes and an operator cannot check: *the model chose not to search* and
+*OpenRouter renamed the usage field again, so every count is now permanently zero* print identically.
+`searchesFrom` says which field the number came from, and `neither` on a run of turns is the alarm.
+Its own trap is worth knowing — `explain.ts` initialised the value to `no-usage` and assigned it only
+on the branch where a count **was** found, which is the one branch that can never be `neither`, so
+the alarm could not fire; fixed in the same commit, and
+`tests/search-usage-tripwire.test.ts` reddens if it stops being able to.
+[silent-success.md](../reusable/silent-success.md).
+
+## Asking whether a claim holds up is a question about the world
+
+Report 1X, 2026-09-05: *"I added a Comment, asking about evidence for a claim, hoping that it would
+automatically know to and be able to automatically search the web. It didn't seem to do that :("*.
+
+Nothing was dropped. `require_parameters: true` is set, the tool reaches the wire, and the turn Greg
+is describing is in the logs as `rounds:2, tools:2, searches:0` — two of *our* tools and no web
+search. **It was offered the search and chose not to take it**, which makes this a prompt fault
+rather than a plumbing one.
+
+`SYSTEM` gave search one bullet and followed it with *"DO NOT reach for a tool to do something the
+article in front of you already answers. It is all here."* — and *"what is the evidence for this
+claim?"* is precisely the question that looks like something the article answers, because the article
+is where the claim is. Meanwhile [`src/explain.ts`](../../src/explain.ts), the path a comment is
+**not** on since 2026-08-28, gives the same model a titled section, **WEB RESEARCH: LEAN TOWARDS
+SEARCHING**, telling it to reach for the tool by default. That asymmetry was the bug.
+
+So the evidence case is now named as a trigger — in `explain.ts`'s own words rather than a second
+vocabulary for the same job — and the counter-pressure is narrowed to *what a paragraph plainly
+says*. `tests/chat-search-triggers.test.ts` pins all three, including the one that must **not**
+change: the existing *"USE web search unless you are genuinely sure"* stays exactly as strong. It is
+the one place this pulls against the "?" answer's pedagogical addendum, which is why that addendum
+says nothing at all about where an answer comes from
+([comments.md](comments.md), [260905c](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md)).
+
+## The "?" says so, and the answer teaches
+
+A press of the "?" in the gutter sends `help: true` on the POST body, validated as **absent or
+literal `true`** — a 400 otherwise, never coerced. It is stored on the reader's own message row
+(`chat_messages.help`, `ChatMessage.help`), and the route reads it back off **storage** rather than
+off the request, exactly as it already does for `kind` and `stance`. That is what makes a retry or an
+edit of a help question still a help question: a thread-level flag would have had to be refused on a
+turn that creates no thread, and pressing "Try again" on an explanation would then have been answered
+with the ordinary prompt.
+
+**And the meaning is enforced, not only the shape.** `help: true` means one thing —
+*the paragraph "?" created this thread* — so `streamChat` refuses it unless all three hold: the turn
+**creates** the thread, the anchor is a **whole block** (`{ blockId }`, no quote), and the effective
+kind is **`chat`**. Refused rather than dropped, the posture the anchor rule beside it already takes:
+a request the server silently reinterprets stores a press nobody made *and* answers with the teaching
+prompt, and nothing on screen says so. The first of the three is checked twice — early for the
+sentence, and again under `inTurnOrder` so a thread cannot appear between the look and the write.
+Each violation is its own 400 with its own sentence;
+`tests/chat-help-route.test.ts` pins all four, and pins that what `helpAboutBlock` sends still gets
+through. Found by GPT Sol reviewing the built code, 2026-09-05.
+
+The instruction it buys is `helpSection()` in [`src/converse.ts`](../../src/converse.ts), joined into
+the **final user message** between the anchor and the stance — below the `cache_control` breakpoint,
+so a help turn and an ordinary one share one cached article prefix
+([prompt-caching.md](prompt-caching.md)). `tests/help-prompt.test.ts` pins the byte identity.
+
+And the anchor it sits beside is really there now. `buildConverseMessages` had documented since
+2026-08-26 that the passage is **sent on every turn** — because `recentHistory` keeps only the most
+recent turns, so a passage living in the reader's first message stops being sent while the panel and
+the database still say the thread is anchored to it — but `ConverseRequest` had no `anchor` field and
+the route passed none, so on the chat path it had never happened. Fixed 2026-09-05 in the same review:
+the route passes `thread.anchor`, from the thread and never from the request body, and
+`tests/chat-help-route.test.ts` asserts it on the request that goes **out**, on a follow-up turn that
+names no anchor. The quote stays fenced in `anchorSection` — the article is untrusted
+([security.md](security.md)).
+
+**No UI.** Reports 1R and 1S asked for metadata and for a better answer; the conversation list gets
+no help tag.
+
 ## The bug that shaped the literal search
 
 The first live run asked *"how many times does this article use the word consciousness?"*. The tool
