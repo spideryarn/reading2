@@ -296,6 +296,12 @@ because `cat >` follows a symlink and keeps the destination's ownership), delete
 its exact content, the absence of the old export, and the loopback ssh **at the address read from
 the file**. Docs: the box doc's section rewritten, `feedback-reports.md`'s recipe de-prefixed.
 
+**After four rounds of review** (plan, Stage 1, Stage 2, and a narrow re-check), F1–F20, none
+overruled. The bug and its class are written up in
+[260905c-the-address-the-box-could-not-tell-itself.md](../postmortems/260905c-the-address-the-box-could-not-tell-itself.md)
+— *verifying the convenient path instead of the path the work takes*, for the second time in four
+days in the same file.
+
 **Applied to the live box** by hand, in the same shape the script now uses — the box is not rebuilt
 from `provision.sh` on every change, and a fix that only reached the next box would have left this
 one exactly as broken as it was. All four checks run by hand on the box afterwards: pass.
