@@ -273,6 +273,87 @@ what Greg asked for. This is not a tendency to nudge; it is a consistent shape, 
 and from its children, so it packs. Worth stating as a measurement rather than an impression,
 because it means the length change has a defined direction and a way to check it landed.
 
+## The plan review, and what it changed
+
+GPT Sol, 2026-09-05, on the plan before anything was built. Verdict: *"I would not build Stage C
+exactly as written. The prompt diagnosis is sound, but the plan has promoted an attractive
+hypothesis — question replaces gist — into a decision before the proposed evidence exists."*
+
+No P0s, six P1s. **Five are accepted outright and one is accepted with a narrowing.** Three were
+verified in code and would each have shipped a defect:
+
+- **P1-4 — the shape Greg asked for cannot survive the current contract.** The prompt requires the
+  string to end in `?` and `questionFor` (`src/hierarchy.ts:231`) *appends* one to anything without.
+  Greg's example ends `"(4 arguments)"`, so the stored value becomes
+  *"…sufficient for consciousness? (4 arguments)?"*. The punctuation order has to be specified —
+  something like *"Computational functionalism (four arguments): why …?"* — and the shape hint has
+  to be **optional**, because many sections honestly contain no enumerable set. A claimed count also
+  needs grounding: a child count is not an argument count. And `.summ-question` is styled *secondary*
+  — smaller, italic, faint (`styles.css:7942`) — so promoting it without restyling produces a
+  weak-looking primary line.
+- **P1-5 — the depth cap does not do what this plan said it does.** `MAX_QUESTION_DEPTH = 1` only
+  **drops** questions generated too deep; it never **produces** missing ones, and `EXPAND_SYSTEM` has
+  no question field at all (`hierarchy-expand.ts:245`). So a flat root deepened by the cascade gets
+  depth-1 children with no question, and a collapsed rung can promote questionless children to depth
+  1. The panel then mixes question-primary and gist-primary rows *at the same depth*. Benign while
+  the question is an optional second line; not benign when it is the only line.
+- **P1-6 — a UI-only deploy would make things worse before it made them better.** `question` is
+  optional and a `PROMPT_VERSION` bump does not regenerate stored trees. Every existing `toc/5` tree
+  carries **exactly the generic questions Greg disliked**, so replacing the gist in the renderer
+  would hide good gists behind bad stored questions on day one. Needs `question ?? gist` and an
+  explicit version boundary for "this question may replace a gist" — the presence of the field is
+  not the same claim.
+
+### The central call, reversed
+
+**P1-1 is accepted, and it is the important one.** The plan asserted that Greg's line *"carries the
+same information as the gist"*. Sol's reply is that it generally carries **less, deliberately** — it
+preserves the *direction* of a claim but not its substance, and the substance is what tells a reader
+which section is distinctive rather than which is on-topic. Worse, a presuppositional question
+**misrepresents genuinely exploratory, descriptive or inconclusive sections** by forcing a settled
+conclusion onto them.
+
+So *"the question replaces the gist"* moves out of § What changes, precisely and becomes **an outcome
+the eval is allowed to return**, alongside gist-only and gist-plus-question. That also matches the
+brief better than the plan did: Greg's word was *"maybe"*, hedged twice.
+
+**Both advisers now agree the final instrument is Greg reading rendered examples**, and they reached
+it from opposite directions — Fable from what the reader is doing in the panel, Sol from what a model
+judge cannot settle. That is worth more than either saying it alone.
+
+### The eval, cut down
+
+P1-2: the local corpus is five fixture-cut `toc/2` trees, so it is not ready for the twenty-article
+design, and the fixed-tree run *"tests exactly what changed"* was an overclaim — production asks for
+structure, titles, gists and questions in **one** long-context response, so even the control arm is
+not byte-identical to production. The staging Sol recommends, and this plan now adopts:
+
+1. fixed-tree generation to **reject** obviously bad variants — a screen, not a verdict;
+2. Greg blind-reads three or four variants **rendered**, on three varied articles;
+3. the winner and the incumbent run **end to end** on three hard articles — about six calls, not
+   eighty — to check production coupling and token behaviour.
+
+P1-3: an unlabelled control does not blind the intervention, because a question visibly identifies
+itself, and a judge primed to value "a door" will prefer it. The guards that follow from that:
+**negative anchors the judge must order correctly before its ranking is trusted at all** — a
+fabricated count, a neutral lookup question, an answer-leaking question, a title-only line — and
+**separate axes scored before any overall preference**. Judge the same frozen outputs repeatedly with
+shuffled order, since the incumbent-twice floor measures generation variance and not judge
+instability.
+
+### The one thing narrowed rather than accepted
+
+P2 on the token estimator: raising gist length without raising `TOKENS_PER_NODE` does not cause
+pre-call refusals, it causes **under-budgeted paid truncations** — and raising it honestly *does*
+push long articles over the refusal line (Sol's worked figure: a heading-dense handbook at 117,700
+today, 125,300 at 200/node, refused at 210/node). Also `evals/hierarchy-structure/score.ts` counts a
+multi-sentence gist as a **defect**, so change (4) breaks the existing baseline.
+
+**So two-sentence depth-2 gists are deferred out of this run**, rather than solved. The root-briefer
+half of Greg's ask is kept, because it needs no extra tokens and the measurement above gives it a
+direction. Making section gists longer is a change to a shared contract with a paid failure mode and
+an eval baseline behind it, and it deserves its own piece of work.
+
 ## Decisions and assumptions taken without asking
 
 (To be filled in as they arise — this is an autonomous run, so questions go here rather than to
