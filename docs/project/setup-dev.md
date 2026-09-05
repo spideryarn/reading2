@@ -13,16 +13,18 @@ npm run setup          # Docker up, migrations applied, accounts seeded — see 
 npm run dev            # Vite + the /api/article/:slug middleware, http://localhost:5273
 ```
 
-**`npm run dev` serves from Postgres**, since 2026-09-02 — the script sets
-`SPIDERYARN_STORE=${SPIDERYARN_STORE:-postgres}`, so it is a default rather than an override.
-**The way back to `data/` is a `SPIDERYARN_STORE=files` line in `.env.local`**, not a command-line
-prefix: this file beats the environment on purpose (§ `.env.local` beats what the shell exported),
-so a prefix works only while `.env.local` says nothing — and `.env.example` ships the variable set
-to `postgres`. Everything else — the CLI stages, seeding, evals, the test suite, and `vite preview`,
-which has no npm script — still treats *unset* as `files`
-([`src/store/live.ts`](../../src/store/live.ts)). The reason is the queue: the filesystem adapter
-cannot fence two servers over one checkout and the database can, which cost a third of all the AI
-spend we have ever made ([260902j](../plans/260902j-one-job-claimed-by-many-servers-and-the-money-it-spends.md)).
+**Everything serves from Postgres, and there is no way back to `data/`** — since 2026-09-05, when
+the filesystem store and the `SPIDERYARN_STORE` flag went
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F). The
+dev server, the CLI stages, seeding, the evals and the test suite all read one store, and nothing has
+to be told which. **Do not set `SPIDERYARN_STORE`**: what is left of it is a tombstone that throws on
+any value but `postgres` ([`src/store/live.ts`](../../src/store/live.ts)), because silently ignoring
+somebody who asked for the store that is gone is the failure this whole migration was leaving behind.
+
+`npm run dev` had defaulted the flag to `postgres` since 2026-09-02, and the reason it did is the
+reason the store move happened at all: the filesystem adapter cannot fence two servers over one
+checkout and the database can, which cost a third of all the AI spend we have ever made
+([260902j](../plans/260902j-one-job-claimed-by-many-servers-and-the-money-it-spends.md)).
 
 **So a stopped database now refuses to boot the dev server.** `assertStoreReachable` in
 `vite.config.ts` runs one `select 1` first and fails loudly, naming `npm run db:start`,

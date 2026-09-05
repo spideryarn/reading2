@@ -281,15 +281,13 @@ let slugs: readonly string[] = [];
    ten-second connect timeout and the warning both live in the helper now; its
    header quotes the paragraph this file used to carry, because this is the
    suite that learned it. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-parity.test.ts",
   tables: ["spideryarn.revision_blocks"],
 });
 
-if (reachable) {
-  onDiskSlugs = await completeArticles();
-  slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
-}
+onDiskSlugs = await completeArticles();
+slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
 
 /* **At module scope, not in the `beforeAll` below.** This waits for
    tests/store-roundtrip.test.ts to finish with the corpus, and on a bad day that
@@ -301,16 +299,14 @@ if (reachable) {
    hook timeout, and leaves the 300s covering only the work.
    tests/helpers/corpus-lock.ts § "Take it at MODULE SCOPE"; the measurements are
    in docs/plans/260902c-make-the-test-suite-pass-reliably.md § "Cause 4". */
-if (reachable) await takeCorpusLock("tests/store-parity.test.ts");
-
-const when = reachable ? describe : describe.skip;
+await takeCorpusLock("tests/store-parity.test.ts");
 
 afterAll(async () => {
   await releaseCorpusLock();
   await closeDb();
 });
 
-when("the filesystem and Postgres stores agree", () => {
+describe("the filesystem and Postgres stores agree", () => {
   /** What each load reported, so the tests can assert on it rather than assume. */
   const loaded = new Map<string, LoadedArticle>();
   /** What `seedShelfFromFiles` wrote, per slug — the floor for the monotonic

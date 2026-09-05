@@ -342,6 +342,34 @@ export interface HealthBody {
   commit?: string | null;
   sawUrl?: string | null;
   region?: string | null;
+  /** Present only while some variable that decides nothing is still set. */
+  retired?: { name?: string; why?: string }[];
+}
+
+/**
+ * **Chores the live deployment can see and this box cannot**, as lines to
+ * print rather than problems to fail on.
+ *
+ * Deliberately not part of `judgeHealth`. Everything that function returns
+ * fails the deploy, and the thing this reports — an environment variable that
+ * no longer decides anything — is not a fault: blocking a deploy over it would
+ * be a red that is not a fault, which is how a gate becomes one people force
+ * past. It is a nag, and it belongs where a nag can be read and acted on: the
+ * deploy log on the machine that has the Vercel credential to act.
+ *
+ * The reason it exists at all is that stage I of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * is gated on a variable being removed from Vercel, and until now the only
+ * instrument for noticing was somebody remembering to look.
+ *
+ * `src/vercel-health.ts` § `RETIRED` omits the field entirely when there is
+ * nothing left, so **this returns nothing on a clean deployment** — no line to
+ * ignore, and the line's disappearance is the signal that the stage can start.
+ */
+export function retiredNotes(body: HealthBody): string[] {
+  return (body.retired ?? []).map((r) =>
+    `${r.name ?? "?"} is still set on this deployment: ${r.why ?? ""}`.trim(),
+  );
 }
 
 /** What we believe we just deployed. Every field is optional to assert. */

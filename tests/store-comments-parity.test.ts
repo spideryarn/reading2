@@ -114,12 +114,10 @@ const QUOTE = "halves annotation time";
 /** The referee's own placement, at the `against` end. See `negative` below. */
 const PLACED_AT = -80;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-comments-parity.test.ts",
   tables: ["spideryarn.comments", "spideryarn.referee_criteria"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * The wire form, with the two fields named above removed and any minted id
@@ -205,7 +203,7 @@ async function refusal(work: () => Promise<unknown>): Promise<unknown> {
   }
 }
 
-when("the filesystem and Postgres comment stores agree about a placement", { timeout: 30_000 }, () => {
+describe("the filesystem and Postgres comment stores agree about a placement", { timeout: 30_000 }, () => {
   beforeEach(async () => {
     const db = getDb();
     await db.delete(articles).where(eq(articles.slug, SLUG));

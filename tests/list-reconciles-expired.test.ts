@@ -68,12 +68,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
  */
 const HOISTED = vi.hoisted(() => {
   const previousLevel = process.env.LOG_LEVEL;
-  const previousStore = process.env.SPIDERYARN_STORE;
   if (previousLevel === undefined || ["silent", "fatal", "error"].includes(previousLevel)) {
     process.env.LOG_LEVEL = "warn";
   }
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousLevel, previousStore };
+  return { previousLevel };
 });
 
 import { eq, inArray, sql } from "drizzle-orm";
@@ -86,7 +84,6 @@ import { listJobs, REQUEUE_BUDGET } from "../src/jobs.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { STEPS } from "../src/pipeline.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job, JobStep } from "../src/types.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -97,27 +94,12 @@ if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
 else process.env.LOG_LEVEL = HOISTED.previousLevel;
 /* Put the store flag back straight after the imports: vitest reuses a worker
    across files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/list-reconciles-expired.test.ts",
   tables: ["spideryarn.jobs"],
-});
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Said out loud, and **not** gated on `reachable`: the whole file is about
-       what a reader's poll does to rows in `spideryarn.jobs`, and the
-       filesystem queue would answer every call below happily while consulting
-       none of the predicates the cases are about. A control that disappears
-       when the database is missing disappears exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /**
@@ -161,17 +143,15 @@ async function forgetAll(ids: string[]): Promise<void> {
 afterEach(async () => {
   vi.restoreAllMocks();
   const ids = made.splice(0);
-  if (reachable) await forgetAll(ids);
+  await forgetAll(ids);
 });
 
 afterAll(async () => {
-  if (!reachable) return;
   await forgetAll(made.splice(0));
   await closeDb();
 });
 
 beforeAll(async () => {
-  if (!reachable) return;
   const db = getDb();
   await seedAuthUser(db, {
     id: ALICE,
@@ -266,7 +246,7 @@ async function spendBudget(job: Job, owner: OwnerId): Promise<void> {
   }
 }
 
-when("listing your jobs", () => {
+describe("listing your jobs", () => {
   /**
    * **The unfrozen version, on the poll the reader is actually looking at.**
    *

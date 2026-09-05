@@ -191,10 +191,29 @@ optimisation, which is the wrong way round. It costs less than it sounds — the
 first touch, it is that explain used to hit a cache *never* and chat re-paid the article on *every
 turn*.
 
-**Not cached, on purpose:** the hierarchy (one call per article — a prefix used once costs
-1.25× and earns nothing back) and summaries (each batch sends only the slice its scope covers, so
-batches mostly share nothing; the `repair` retry was moved out of position zero as the prerequisite,
-but the breakpoint is not in yet).
+**Not cached, on purpose:** the hierarchy's **whole-document structure call** (one call per article —
+a prefix used once costs 1.25× and earns nothing back) and summaries (each batch sends only the slice
+its scope covers, so batches mostly share nothing; the `repair` retry was moved out of position zero
+as the prerequisite, but the breakpoint is not in yet).
+
+**The hierarchy's other calls are a different question, and they do mark a prefix.** The deepening
+wave ([`src/hierarchy-expand.ts`](../../src/hierarchy-expand.ts) § `expansionRequest`) sends one
+scoped call per fat section, all sharing `EXPAND_SYSTEM` plus the frozen wave-1 outline, and every
+one of them carries a breakpoint on that shared part. Two things about it that are decisions rather
+than defaults:
+
+- **It reports whether the prefix could be cached at all.** `ExpansionRequest.estimatedCacheable` is
+  `estimateTokens(system + outline) >= CACHE_FLOOR_TOKENS`, and the estimate lands at 1,150–1,400
+  against a floor of 1,024 — near enough to fall either side. A zero in `cache_read_input_tokens` is
+  what both "there was nothing to read" and "there was, and it did not" look like, and this flag is
+  what separates them. § The floor.
+- **There is no warm-up call**, where [`src/labels.ts`](../../src/labels.ts) has one. The prefix is
+  1,150–1,400 tokens against per-call evidence measured at 14,889 and 76,558, so running the first
+  call alone would buy about 1% of a wave's input tokens for a whole call's latency. The reasoning is
+  on `runExpansionWave`, so that whoever changes the packing sees it.
+
+Nothing of this reaches a reader yet: the wave is behind `SPIDERYARN_DEEPEN_HIERARCHY`, which is off
+([260904d](../plans/260904d-deepen-fat-sections.md) § stage 8).
 
 ## The marker that used to ruin it
 

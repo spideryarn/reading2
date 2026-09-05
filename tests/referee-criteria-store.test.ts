@@ -244,12 +244,10 @@ describe("the filesystem store", () => {
 
 /* `pgReady` warns loudly for us when there is no database — a skipped test
    protects nothing, so the run has to say "skipped" rather than "passed". */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/referee-criteria-store.test.ts",
   tables: ["spideryarn.referee_criteria"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * **Whose criteria they are, against a database with two owners in it.**
  *
@@ -267,7 +265,7 @@ const when = reachable ? describe : describe.skip;
  * docs/reusable/silent-success.md is about, and it is easy to write here by
  * accident. Then that the store will not hand it over.
  */
-when("a criterion under somebody else's article", () => {
+describe("a criterion under somebody else's article", () => {
   const OTHER_SLUG = "test-referee-criteria-other-owner";
   const OTHER_OWNER = "3f0a17c6-9d54-4b8e-9a2f-5c1b7e0d4a63";
   const OTHER_ARTICLE = "dddddddd-0000-4000-8000-00000000d001";
@@ -316,7 +314,7 @@ when("a criterion under somebody else's article", () => {
   });
 });
 
-when("the two stores answer identically", () => {
+describe("the two stores answer identically", () => {
   const PSLUG = "test-referee-criteria-parity";
   const PDIR = path.resolve(import.meta.dirname, "..", "data", PSLUG);
   const ARTICLE_ID = "00000000-0000-4000-8000-0000000rc001".replace("r", "a").replace("c", "b");

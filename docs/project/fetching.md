@@ -336,7 +336,7 @@ fix — which is a re-fetch. The measurement, the two probes that produced it an
 **Retired 2026-09-05**, in stage E of
 [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md). It took a
 URL and wrote `data/<slug>/raw.html` (or `raw.pdf`) with the `raw.json` manifest beside it, off
-`process.cwd()` and by hand — which satisfied the queue's fetch step under `SPIDERYARN_STORE=files`
+`process.cwd()` and by hand — which satisfied the queue's fetch step under the filesystem store
 and, under Postgres, wrote files nothing reads.
 
 **A fetch-only job is not a thing the queue can express**, and that is the reason it became

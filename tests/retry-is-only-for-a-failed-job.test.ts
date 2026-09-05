@@ -171,21 +171,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/jobs.ts` picks its store **once, at module load** — `const store:
- * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
- * hoisted above every statement in a module, so a plain assignment here would
- * leave the whole file on the filesystem queue with nothing saying so.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
 
@@ -199,7 +185,6 @@ import type { AdvanceParts } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import type { ArtifactKind, ArtifactParts, ArtifactReads } from "../src/store/artifacts.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { StoreSession } from "../src/store/session.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
@@ -207,31 +192,13 @@ import { pgReady } from "./helpers/pg-ready.js";
 import { FIXTURE_ROOT } from "./helpers/require-fixture.js";
 import { scratchArticleInPg, SCRATCH_SOURCE, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
 const OWNER = DEV_OWNER_ID;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/retry-is-only-for-a-failed-job.test.ts",
   tables: ["spideryarn.jobs", "spideryarn.articles"],
-});
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* **Not gated on `reachable`.** A flag that failed to take would run every
-       case below against the filesystem queue, which answers all of them
-       happily — and the `where owner_id = $1` and the `steps` column that are
-       the point of the conversion would never be consulted. A control that
-       vanishes when the database is missing vanishes exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /**
@@ -506,7 +473,7 @@ async function settle(id: string): Promise<Job | null> {
 /** One seeded article per slug, so a claim has a draft to open and publish. */
 const seeded = new Map<string, ScratchArticle>();
 
-when("retrying a job", () => {
+describe("retrying a job", () => {
   beforeAll(async () => {
     for (const slug of SLUGS) {
       /* Owned by `DEV_OWNER_ID` explicitly, because that is who the walk runs

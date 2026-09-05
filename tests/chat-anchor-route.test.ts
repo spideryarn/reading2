@@ -31,18 +31,7 @@
  * the status codes and the SSE frames here are the route's.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Copied
- * from tests/candidates-route.test.ts, which explains the shape.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -55,27 +44,14 @@ loadEnvLocal();
 /** A throwaway slug, so the conversations written below belong to nobody. */
 const SLUG = "test-chat-anchor-route";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/chat-anchor-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
+const { chatStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* A flag that failed to take looks exactly like this suite working: the
-       filesystem store answers happily, and the foreign key the
-       article-membership check stands in front of is never touched. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * The article, and a real run of words inside one of its blocks.
@@ -91,7 +67,6 @@ let QUOTE = "";
 let START = 0;
 
 beforeAll(async () => {
-  if (!reachable) return;
   /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
      Postgres reader filters every article by owner. An article seeded as
      anybody else is invisible and every route below answers 404, which looks
@@ -208,7 +183,7 @@ async function post(pathname: string, body: unknown): Promise<Result> {
 
 const ask = (body: unknown) => post(`/api/chat/${SLUG}`, body);
 
-when("an anchor on the way in", () => {
+describe("an anchor on the way in", () => {
   /**
    * **Mutation.** The pilot conversion's own, recorded in
    * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
@@ -331,7 +306,7 @@ when("an anchor on the way in", () => {
   });
 });
 
-when("a thread is anchored once", () => {
+describe("a thread is anchored once", () => {
   it("refuses a second question that names a different passage", async () => {
     await ask({
       threadId: "spya-anchr2",
@@ -373,7 +348,7 @@ when("a thread is anchored once", () => {
   });
 });
 
-when("cancelling the first answer", () => {
+describe("cancelling the first answer", () => {
   it("throws the whole conversation away", async () => {
     const started = await ask({
       threadId: "spya-anchr2",

@@ -101,15 +101,6 @@ import path from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-/* `SPIDERYARN_STORE=postgres` before a single import is evaluated — src/store/live.ts
-   reads the flag once, at first import, and imports are hoisted above ordinary
-   statements. The reasoning in full is in tests/store-pg-session.test.ts. */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
-
 import { closeDb, getDb } from "../src/db/client.js";
 import {
   articleRevisions,
@@ -130,7 +121,6 @@ import { openPgStoreSession } from "../src/store/pg-session.js";
 import { pgGlossaryStore } from "../src/store/pg-glossary.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
-import { STORE } from "../src/store/live.js";
 import type { Block, Glossary, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
@@ -140,8 +130,6 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put the flag back straight away — vitest reuses a worker across files, and the
    modules above have already captured it. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
@@ -167,7 +155,7 @@ const NEW_TERM = "anastomosis";
 
 let runLock: HeldRunLock | undefined;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/glossary-delete-then-rebuild.test.ts",
   tables: [
     "spideryarn.jobs",
@@ -178,27 +166,23 @@ const { reachable } = await pgReady({
   ],
 });
 
-if (reachable) {
-  runLock = await takeRunLockAndSetUp(
-    "tests/glossary-delete-then-rebuild.test.ts",
-    async (lockClient) => {
-      await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-      await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-      await lockClient.query(
-        "update spideryarn.articles set current_revision_id = null where slug like $1",
-        [SLUG_RUBBLE],
-      );
-      await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-      await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-      await seedAuthUser(lockClient, {
-        id: OWNER,
-        email: `glossary-rebuild-${OWNER}@example.invalid`,
-      });
-    },
-  );
-}
-
-const when = reachable ? describe : describe.skip;
+runLock = await takeRunLockAndSetUp(
+  "tests/glossary-delete-then-rebuild.test.ts",
+  async (lockClient) => {
+    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query(
+      "update spideryarn.articles set current_revision_id = null where slug like $1",
+      [SLUG_RUBBLE],
+    );
+    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+    await seedAuthUser(lockClient, {
+      id: OWNER,
+      email: `glossary-rebuild-${OWNER}@example.invalid`,
+    });
+  },
+);
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -485,16 +469,14 @@ const mine = (name: string, body: () => Promise<void>) => it(name, () => runAsOw
 
 /* ------------------------------------------------------------------ tests -- */
 
-when("Start again, through the real claim and session path", () => {
+describe("Start again, through the real claim and session path", () => {
   afterEach(async () => {
-    if (!reachable) return;
     await db()
       .delete(jobsTable)
       .where(and(eq(jobsTable.ownerId, OWNER), inArray(jobsTable.status, ["queued", "running"])));
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     await cleanUpThenRelease(
       async () => {
         const database = getDb();
@@ -527,8 +509,6 @@ when("Start again, through the real claim and session path", () => {
    * proving nothing on its own.
    */
   mine("deletes the list, and the next ordinary run publishes a new one", async () => {
-    expect(STORE, "the vi.hoisted flag did not reach src/store/live.ts").toBe("postgres");
-
     const slug = `${SLUG_PREFIX}reset`;
     const fixture = await publishArticleWithAGlossary(slug);
     const log: StepLog = { calls: 0 };

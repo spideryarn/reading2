@@ -44,17 +44,15 @@ const LOCAL_HOSTS = ["127.0.0.1", "localhost", "::1", "[::1]"];
  * section about a command reaching a database other than the one on its command
  * line, with a success message either way.
  *
- * Takes both values rather than reading them, so this can be exercised for
- * every answer instead of only for the one this machine happens to give.
+ * Takes the URL rather than reading it, so this can be exercised for every
+ * answer instead of only for the one this machine happens to give.
+ *
+ * **It took the store as a first argument until 2026-09-05** and refused when it
+ * was not `postgres`, which was the honest check while `npm run eval:cost` had
+ * to set a flag to get the pipeline this measures. There is one store now, so
+ * there is nothing left to refuse and the only question is which database.
  */
-export function localTarget(store: string, url: string | undefined): string {
-  if (store !== "postgres") {
-    throw new Error(
-      `This eval measures the Postgres pipeline and the store is "${store}". ` +
-        "Run it as `npm run eval:cost`, which sets SPIDERYARN_STORE=postgres — the flag is " +
-        "read once at module load (src/store/live.ts), so setting it inside the runner is too late.",
-    );
-  }
+export function localTarget(url: string | undefined): string {
   if (!url) {
     throw new Error("DATABASE_URL is not set. `npm run db:start`, then it comes from .env.local.");
   }

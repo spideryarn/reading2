@@ -29,14 +29,12 @@ const SLUG = "store-lookups-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000f0";
 const TERM = "spya-term22";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-lookups-pg.test.ts",
   tables: ["spideryarn.glossary_lookups"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the Postgres glossary-lookup store", () => {
+describe("the Postgres glossary-lookup store", () => {
   beforeAll(async () => {
     await getDb()
       .insert(articles)

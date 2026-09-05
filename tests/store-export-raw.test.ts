@@ -89,12 +89,10 @@ requireFixture(FROM, [
 /** Ours, and `test-`-prefixed so the other suites' `data/` scans skip it. */
 const SLUG = "test-export-raw";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-export-raw.test.ts",
   tables: ["spideryarn.raw_sources"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts a job, so it takes the shared run lock.**
@@ -105,12 +103,12 @@ const when = reachable ? describe : describe.skip;
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
-const runLock = reachable ? await takeRunLock("tests/store-export-raw.test.ts") : undefined;
+const runLock = await takeRunLock("tests/store-export-raw.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
 
-when("exporting an article whose bytes are in the bucket", () => {
+describe("exporting an article whose bytes are in the bucket", () => {
   let out: string;
   let files: readonly string[] = [];
   /** `data/writes/raw.json`, the manifest stage 1 actually wrote. */

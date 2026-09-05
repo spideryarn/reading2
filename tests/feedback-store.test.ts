@@ -59,7 +59,6 @@ import { closeDb, getDb } from "../src/db/client.js";
  * the whole store layer inside an `it` puts five seconds of module transform
  * inside a five-second test timeout on a busy machine.
  */
-import { feedbackStore } from "../src/store/index.js";
 import { feedback as feedbackTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
@@ -92,31 +91,18 @@ else process.env.LOG_LEVEL = HOISTED.previousLevel;
 
 loadEnvLocal();
 
-/* ------------------------------------------------ the filesystem refusal -- */
+/* A `the feedback store on the filesystem` block stood here until 2026-09-05.
+   `feedbackStore` had a Postgres implementation and a filesystem *refusal* —
+   there is no feedback table on a filesystem, and a button that accepts a report
+   and drops it teaches the one reader who tried to tell us something that
+   telling us does nothing. It asserted the 501 and the sentence *"your report
+   was not saved"*.
 
-/**
- * **No database needed, and outside the `when` on purpose.**
- *
- * This is the half that has to hold on a fresh clone: `feedbackStore` is
- * selected at module load from `SPIDERYARN_STORE`, which is unset under
- * `npm test`, so what this file imports is the refusal itself.
- */
-describe("the feedback store on the filesystem", () => {
-  it("refuses to file a report, with a 501 and a sentence", async () => {
-    /* Wrapped in an async call, because the refusal is a **synchronous** throw
-       from a promise-shaped method — the shape `visibilityOnFiles` already
-       establishes, and the shape a route's `await store.submit(...)` inside a
-       try/catch sees either way. Asserting on the bare call would be asserting
-       on how the refusal is spelled rather than on what a caller gets. */
-    const refused = (async () => feedbackStore.submit(report({ id: mintId() })))();
-    /* `status: 501`, because src/routes.ts reads `status` off the error and a
-       500 would tell the reader something broke rather than that this store
-       cannot do it. And the sentence, because the dialog shows it: "your report
-       was not saved" is the only honest thing to say. */
-    await expect(refused).rejects.toMatchObject({ status: 501 });
-    await expect(refused).rejects.toThrow(/not saved/);
-  });
-});
+   The refusal went with the store it was refusing for
+   (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   § F), and with the flag gone this file imports `pgFeedbackStore`: the case
+   filed a real report into the private database and then failed for having not
+   thrown — which is what caught it. Nothing is lost that still exists. */
 
 /* ------------------------------------------------------- who is capped -- */
 
@@ -158,12 +144,10 @@ describe("the hourly cap", () => {
 const ALICE = "00000000-0000-4000-8000-00000000fb01" as OwnerId;
 const BOB = "00000000-0000-4000-8000-00000000fb02" as OwnerId;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/feedback-store.test.ts",
   tables: ["spideryarn.feedback"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** A minimal, valid report. Overrides on top, so each test says only what it means. */
 function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
@@ -275,7 +259,7 @@ async function rowsFor(owner: OwnerId, id?: string): Promise<number> {
   return rows.length;
 }
 
-when("the Postgres feedback store", { timeout: 30_000 }, () => {
+describe("the Postgres feedback store", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     await seedUser(ALICE, "feedback-alice@example.invalid");
     await seedUser(BOB, "feedback-bob@example.invalid");

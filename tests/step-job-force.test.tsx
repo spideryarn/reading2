@@ -98,7 +98,6 @@ const READ: GlossaryRead = {
   error: null,
   reload: async () => {},
   refresh: async () => {},
-  clear: () => {},
   patchEntry: () => {},
 };
 

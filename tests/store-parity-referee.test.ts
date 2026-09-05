@@ -105,13 +105,11 @@ const REVISION_ID = "00000000-0000-4000-8000-00000000af11";
 /** A slug no article has, in either store — see difference 1 in the header. */
 const ABSENT = "test-referee-parity-no-such-article";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-parity-referee.test.ts",
   tables: ["spideryarn.referee_criteria", "spideryarn.referee_claims"],
   max: 2,
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * Replace every minted id with `#n`, numbered by first appearance —
@@ -240,7 +238,7 @@ const BLOCKS = [
 
 const [FIRST_BLOCK, SECOND_BLOCK] = BLOCKS;
 
-when("the filesystem and Postgres stores agree about Referee mode", { timeout: 30_000 }, () => {
+describe("the filesystem and Postgres stores agree about Referee mode", { timeout: 30_000 }, () => {
   /**
    * **A real article on BOTH sides**, which is the whole point of the fixture.
    *

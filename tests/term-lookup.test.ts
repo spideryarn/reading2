@@ -74,20 +74,7 @@
  * docs/postmortems/260904c-the-glossary-said-the-term-was-not-there.md, and
  * tests/glossary-lookup-refusals.test.ts for which fact goes with which.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement.
- * `src/store/index.ts` reads it at module load to pick each adapter *and* to
- * decide whether `lookUpTerm` gets an `assertWritable`, so this has to be true
- * before that file is evaluated.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -95,7 +82,7 @@ import path from "node:path";
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { lookUpTerm, STORE } from "../src/store/index.js";
+import { lookUpTerm } from "../src/store/index.js";
 import { makeLookUpTerm } from "../src/term-lookup.js";
 import type { Block, GlossaryLookup, GlossaryResponse } from "../src/types.js";
 import type { LookupsByTerm } from "../src/glossary-lookups.js";
@@ -103,17 +90,13 @@ import type { Article } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/term-lookup.test.ts",
   tables: ["spideryarn.articles", "spideryarn.article_revisions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** A throwaway slug, so nothing here is read or written by anybody else. */
 const SLUG = "test-term-lookup-guards";
@@ -176,18 +159,7 @@ async function addAnUnmatchableTerm(dir: string): Promise<void> {
   await writeFile(at, JSON.stringify(glossary));
 }
 
-describe("the store this file's wiring was built from", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately. A flag that failed to
-       take would build `lookUpTerm` out of the filesystem adapters *and* hand it
-       an `assertWritable`, which is a different function with a different guard
-       — and three of the four cases below would still pass. A control that
-       vanishes when Postgres is missing vanishes exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("the guards, through the store's own wiring", () => {
+describe("the guards, through the store's own wiring", () => {
   beforeAll(async () => {
     /* `DEV_OWNER_ID`, because these calls are made outside a request and
        `currentOwnerId()` is the environment's owner there — an article seeded as

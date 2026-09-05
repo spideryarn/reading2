@@ -41,14 +41,12 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
  */
 loadEnvLocal();
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-quota-race.test.ts",
   tables: ["spideryarn.billing_accounts", "spideryarn.ingest_events"],
   keepPool: true,
   max: 8,
 });
-
-const dbIt = reachable ? it : it.skip;
 
 /**
  * A throwaway owner, needing a real `auth.users` row for the foreign key.
@@ -154,7 +152,7 @@ describe("the anchor row is created before it is locked", () => {
    * The deterministic one. If `reserveIngest` locked a row that might not
    * exist, B would sail past A and both would read zero.
    */
-  dbIt("a second admission blocks while the first holds the owner's row", async () => {
+  it("a second admission blocks while the first holds the owner's row", async () => {
     if (!pool) return;
     const a = await pool.connect();
     try {
@@ -196,7 +194,7 @@ describe("a barrier-synchronised burst cannot exceed the allowance", () => {
    * The postmortem's warning applies — *"load that arrives spread out is not
    * the load a race needs"* — so this deliberately does not stagger.
    */
-  dbIt("admits exactly three of twenty for a free account", async () => {
+  it("admits exactly three of twenty for a free account", async () => {
     const results = await Promise.all(
       Array.from({ length: 20 }, () => reserveIngest(OWNER, undefined, PRICES)),
     );
@@ -204,7 +202,7 @@ describe("a barrier-synchronised burst cannot exceed the allowance", () => {
     expect(results.filter((r) => r.kind === "refused")).toHaveLength(20 - FREE_LIFETIME_INGESTS);
   });
 
-  dbIt("counts an unsettled reservation, so the next request sees it", async () => {
+  it("counts an unsettled reservation, so the next request sees it", async () => {
     expect((await reserveIngest(OWNER, undefined, PRICES)).kind).toBe("admitted");
     /* Nothing has succeeded — the job has not even been created — and the
        usage still has to include it, or N concurrent requests all read zero. */
@@ -213,7 +211,7 @@ describe("a barrier-synchronised burst cannot exceed the allowance", () => {
 });
 
 describe("the entitlement is read under the lock, not handed in", () => {
-  dbIt("gives a paying subscriber the Reader allowance", async () => {
+  it("gives a paying subscriber the Reader allowance", async () => {
     await makePaid();
     const admitted = await reserveIngest(OWNER, undefined, PRICES);
     expect(admitted).toMatchObject({ kind: "admitted" });
@@ -224,7 +222,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
   /* An entitled status on a price this build does not sell is free, not Reader.
      The failure direction matters: the other way hands out a hundred ingests a
      month for something nobody costed. */
-  dbIt("falls to free when the subscription is on an unrecognised price", async () => {
+  it("falls to free when the subscription is on an unrecognised price", async () => {
     await makePaid();
     const admitted = await reserveIngest(OWNER, undefined, []);
     if (admitted.kind !== "admitted") throw new Error("expected an admission");
@@ -236,7 +234,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
    * block somebody who has paid; serving the Reader limit against a window that
    * has closed is an uncapped month.
    */
-  dbIt("answers `stale` when the stored period has closed", async () => {
+  it("answers `stale` when the stored period has closed", async () => {
     if (!pool) return;
     await makePaid();
     await pool.query(
@@ -251,7 +249,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
     expect(await usageFor(OWNER, FREE)).toEqual(NOTHING_CHARGED(0));
   });
 
-  dbIt("treats a cancelled subscription as free rather than as Reader", async () => {
+  it("treats a cancelled subscription as free rather than as Reader", async () => {
     if (!pool) return;
     await makePaid();
     await pool.query("update spideryarn.billing_accounts set status = 'canceled' where owner_id = $1", [
@@ -264,7 +262,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
 });
 
 describe("releasing a slot that never became a job", () => {
-  dbIt("gives the allowance back", async () => {
+  it("gives the allowance back", async () => {
     const taken = await Promise.all(
       Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, undefined, PRICES)),
     );
@@ -277,7 +275,7 @@ describe("releasing a slot that never became a job", () => {
     expect(await reserveIngest(OWNER, undefined, PRICES)).toMatchObject({ kind: "admitted" });
   });
 
-  dbIt("is idempotent, so a double release cannot free two slots", async () => {
+  it("is idempotent, so a double release cannot free two slots", async () => {
     const one = await reserveIngest(OWNER, undefined, PRICES);
     if (one.kind !== "admitted") throw new Error("expected an admission");
     expect(await releaseReservation(one.reservationId)).toBe(true);
@@ -291,7 +289,7 @@ describe("releasing a slot that never became a job", () => {
    * would leave a running job whose reservation is settled, so its publication
    * charges nothing. The `not exists` in `releaseReservation` is what stops it.
    */
-  dbIt("refuses to release a reservation a job is already spending", async () => {
+  it("refuses to release a reservation a job is already spending", async () => {
     if (!pool) return;
     const one = await reserveIngest(OWNER, undefined, PRICES);
     if (one.kind !== "admitted") throw new Error("expected an admission");
@@ -332,7 +330,7 @@ const NOTHING_CHARGED = (inFlight: number) => ({
 });
 
 describe("the refusal says what a reader needs", () => {
-  dbIt("carries the count, the limit, and no reset date for the free tier", async () => {
+  it("carries the count, the limit, and no reset date for the free tier", async () => {
     await Promise.all(
       Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, undefined, PRICES)),
     );
@@ -347,7 +345,7 @@ describe("the refusal says what a reader needs", () => {
     expect(refused).not.toHaveProperty("resetAt");
   });
 
-  dbIt("carries the period end for a paid account", async () => {
+  it("carries the period end for a paid account", async () => {
     if (!pool) return;
     const { end } = await makePaid();
     /* Fill the paid allowance by hand rather than by 100 admissions. */
@@ -367,7 +365,7 @@ describe("the refusal says what a reader needs", () => {
 });
 
 describe("the period is half-open", () => {
-  dbIt("counts a success at the start instant and not one at the end instant", async () => {
+  it("counts a success at the start instant and not one at the end instant", async () => {
     if (!pool) return;
     const at = async (when: string) => {
       await pool.query(

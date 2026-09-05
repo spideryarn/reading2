@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, type ReactNode } from "react";
-import { ArrowLeft, MessageSquareWarning, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
@@ -38,7 +38,13 @@ import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { adminByParam, sortDirParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
-import { ADMIN_FEEDBACK_HREF, ADMIN_HREF, ADMIN_USERS_HREF, LIBRARY_HREF } from "./router.js";
+import {
+  ADMIN_FEEDBACK_HREF,
+  ADMIN_HREF,
+  ADMIN_USERS_HREF,
+  DESIGN_HREF,
+  LIBRARY_HREF,
+} from "./router.js";
 import { FeedbackCard } from "./AdminFeedbackList.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
@@ -218,6 +224,22 @@ export function AdminHome() {
           }
           title="Feedback"
           blurb="Bug reports readers filed with the Feedback button, newest first"
+        />
+        {/* **Moved off the shelf's masthead on 2026-09-05**, at Greg's request:
+            > Move the Design link on the logged-in Homepage into /admin
+            > — Greg (SPIDERYARN-READING2-1T)
+
+            The odd one out on this page, and worth saying so rather than
+            letting the next reader wonder: `/design` reads across nothing and
+            is not gated — any signed-in reader can type the address, exactly as
+            before. It is here because it is developer furniture rather than
+            because it is privileged, and drawing a link was never a gate in any
+            case (docs/project/admin.md § The three refusals). */}
+        <Entry
+          href={DESIGN_HREF}
+          icon={<Palette size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Design"
+          blurb="Every token, face and component variant on one page — look here after changing tokens.css"
         />
       </ul>
       <BuildStampLine />

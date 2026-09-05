@@ -18,6 +18,11 @@
  * `limitUrlUpdates`).
  *
  * A note on where position is *not* kept: not `localStorage`, and not the hash.
+ * (`last-view.ts` keeps a *copy* of this query string per slug since
+ * 2026-09-05, so that reopening an article at a bare address puts you back where
+ * you were. It is read once, before anything paints, to choose the address you
+ * arrive at — and never again, so nothing here has a second source of truth to
+ * reconcile with.)
  * The hash would make the browser jump to the block itself, before our own
  * offset-for-the-sticky-bars scroll runs, so you would see it land twice. It
  * would also mean two unsynchronised state systems — `hashchange` for position,

@@ -73,7 +73,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
-| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's three links, and the one place a tooltip's trigger is not a host element |
+| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
 | [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
@@ -336,7 +336,8 @@ line:
   concluding a card is broken — and it is the same fact the unit test is built on
   ([§ Five things](#five-things-that-are-load-bearing), point 5).
 - **The group's instant phase is real**: moving from Profile to Design opened the second card with
-  no measurable delay.
+  no measurable delay. (Design left the masthead for `/admin` on 2026-09-05 — the measurement stands
+  as a dated example of the group, not as a description of that row today.)
 - **Colours, read rather than eyeballed**: panel `oklch(0.26 0 0)`, border `oklch(0.36 0 0)`, first
   line `oklab(0.97 0 0 / 0.85)`, the address under it `oklch(0.63 0 0)` — quieter, and still well
   clear of the ground.
