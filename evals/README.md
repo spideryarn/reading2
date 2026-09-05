@@ -582,11 +582,19 @@ Four things in it are worth copying:
   reported. **A phase that cannot line up buys nothing trying to.** A readiness wait that does not end
   `"all"` stops the run rather than driving the book at all; and if the *gate* gives up with all three
   already driven, every step it releases is released "abandoned" and throws before it runs. Those jobs
-  end `error` by this eval's doing and each carries a finding saying so. **What a successful gate
-  guarantees is a shared start, not a shared window** — the queue's cap is global and shared, so
-  whether the three overlap for long enough is still `peakConcurrency`'s to decide. Or, in one line:
-  **it can no longer buy an unanswerable question 5, and it still cannot promise an answerable one.**
-  All three phase-D promises
+  end `error` by this eval's doing and each carries a finding saying so. **And the three share one
+  fate**: once any of them has failed its measured step, fallen back to wave 1, or handed its claim
+  back, none of the others claims again — it stops them *starting* more paid work, not a call already
+  in flight. A measured job also stops on its first requeue rather than being re-driven, because a
+  re-drive takes the gate's latched verdict, runs outside it, and lets the queue overwrite the first
+  attempt's clock. In one line: **it no longer starts paid measured work when the rendezvous already
+  knows question 5 is impossible.** **What a successful gate guarantees is a shared start, not a
+  shared window**, and only one thing really bounds the window: another job **cannot** serialise the
+  three afterwards, because by then all three hold claims and that is all three of the cap's slots —
+  what remains is that the load articles' `hierarchy` is far shorter than the book's 658-778 s and
+  closes long before it. So the book's step is genuinely contended for as long as its shortest
+  sibling runs, and `peakConcurrency` confirms the phase ran rather than discovering that it
+  overlapped. All three phase-D promises
   stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
   agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the

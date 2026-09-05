@@ -1595,9 +1595,42 @@ were abandoned. It is the one place this eval fails a step deliberately, so it s
 thrown error carries `ABANDONED_MARKER`, and — because the queue rewrites a failed step's message
 into a reader-facing sentence, the trap `checkDriving` already exists for — a fatal finding goes on
 the job's own record, where `run.json` and the closing findings block will both carry it. What phase D
-now guarantees end to end is written out in three numbered statements in `runPhaseD`'s docblock; the
-short version is **it can no longer buy an unanswerable question 5, and it still cannot promise an
-answerable one.**
+now guarantees end to end is written out in numbered statements in `runPhaseD`'s docblock.
+
+**A sixth review found two more, and both were phase D again.** ⟨GPT Sol, 2026-09-05.⟩
+
+- **A re-driven measured job ran outside the gate** (DPN-25). A load job is not re-asking, so a
+  requeue re-drove it as any ordinary pass — and its second `arrive()` took the rendezvous's
+  *latched* verdict and returned at once, so the retry ran beside whatever its siblings happened to
+  be doing while the queue replaced the first attempt's clock (`src/jobs.ts` § `runStep`). What came
+  back looked like an ordinary question-5 pass and its duration omitted the attempt that had been
+  lined up. `requeueVerdict` now has a second reason to stop, and it is about evidence rather than
+  money: a job whose step question 5 is timing stops on its first requeue whether or not the re-ask
+  lever names it.
+- **The three measured jobs had no failure signal between them** (DPN-26) — the *fifth* instance of
+  "it buys after it already knows". They were driven concurrently and drained together and that was
+  all, so load 1's `hierarchy` could fail on its structure call while the book and load 2 went on
+  admitting expansion and label calls, for a question 5 that could no longer reach three usable
+  completions. Sol asked for the invariant rather than a fifth guard, and it is this: **the three
+  measured jobs share one fate, and none of them starts more paid work after any of them has lost
+  it** (`startPhaseFate`). A measured step that failed, a wave that fell back, a claim handed back —
+  any of them loses it, and the others stop before their next claim. The honest verb is **stops
+  starting**: a call already in flight belongs to the pipeline, and `src/` is not this eval's to
+  change.
+
+Three smaller ones came with them. Abandonment was producing a **false** `no-records` finding — the
+records were never *requested*, because an abandoned step never runs, and "they were lost" is exactly
+the invented fact DPN-19 exists to have stopped, one branch further on; `no-records` now fires only
+on a job that ended `done` (DPN-27). The abandoned jobs were named off `wait`'s `held` snapshot,
+which cannot see a step that arrived *after* the gate closed, so a late arrival was refused and left
+unexplained; the gate now says who it turned away, because the gate is the only thing that knows
+(DPN-28). And the three claims in the docblock were not exact (DPN-29): retries falsified the first
+until DPN-25 closed them, the second needed a paid-run qualification because `abandonStep` stands
+down under `--dry-run`, and the third repeated a risk **that is simply not real** — after a
+successful gate all three jobs hold claims, which is all three of `DEFAULT_JOB_CONCURRENCY`'s slots,
+so no other job can serialise them. I had asserted the contrary three times. Sol's narrower one-liner
+replaces mine and is the sentence to quote: **"it no longer starts paid measured work when the
+rendezvous already knows Q5 is impossible."**
 
 **The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
 job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global

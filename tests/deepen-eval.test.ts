@@ -47,6 +47,7 @@ import {
   recordingCheckpoints,
   recordsFilePrefix,
   type RendezvousOutcome,
+  startPhaseFate,
   requeueVerdict,
   type SeamProof,
   startRendezvous,
@@ -943,20 +944,90 @@ describe("the cost eval's checks, in this eval's vocabulary", () => {
  * windows, and none of it was in the printed $40.90.
  */
 describe("what to do when the claimant hands the job back", () => {
+  const ordinary = { reasking: false, measured: false };
+
   it("stops a re-asking pass on its first requeue", () => {
-    expect(requeueVerdict({ reasking: true, requeuesBefore: 0, requeuesNow: 1 })).toBe("stop");
-    expect(requeueVerdict({ reasking: true, requeuesBefore: 1, requeuesNow: 2 })).toBe("stop");
+    expect(requeueVerdict({ ...ordinary, reasking: true, requeuesBefore: 0, requeuesNow: 1 })).toBe("stop");
+    expect(requeueVerdict({ ...ordinary, reasking: true, requeuesBefore: 1, requeuesNow: 2 })).toBe("stop");
   });
 
   /* An ordinary pass is re-driven and MUST be: a book's hierarchy step needs
      658-778s against a 740s deadline, so a requeue there is routine, and
      without the lever the re-drive resumes what it has already paid for. */
   it("carries on driving a pass the lever does not name", () => {
-    expect(requeueVerdict({ reasking: false, requeuesBefore: 0, requeuesNow: 1 })).toBe("carry on");
+    expect(requeueVerdict({ ...ordinary, requeuesBefore: 0, requeuesNow: 1 })).toBe("carry on");
   });
 
   it("carries on where nothing was requeued at all, which is the ordinary answer", () => {
-    expect(requeueVerdict({ reasking: true, requeuesBefore: 2, requeuesNow: 2 })).toBe("carry on");
+    expect(requeueVerdict({ ...ordinary, reasking: true, requeuesBefore: 2, requeuesNow: 2 })).toBe("carry on");
+  });
+
+  /**
+   * **DPN-25 — the second reason to stop, and it is about evidence rather than
+   * money.** A phase-D load job is not re-asking, so it was re-driven like any
+   * ordinary pass. Its second `arrive()` takes the **latched** `"go"` and
+   * returns at once, so the retry runs *outside* the rendezvous — beside
+   * whatever its siblings happen to be doing — and the queue replaces the first
+   * attempt's clock (src/jobs.ts § `runStep`). The result is a Q5 pass that
+   * looks perfectly ordinary and whose duration silently omits the first
+   * attempt. ⟨GPT Sol, DPN-25.⟩
+   *
+   * So a job whose step question 5 is timing stops on its first requeue,
+   * whether or not the re-ask lever names it.
+   */
+  it("stops a measured pass on its first requeue, re-asking or not", () => {
+    expect(
+      requeueVerdict({ reasking: false, measured: true, requeuesBefore: 0, requeuesNow: 1 }),
+      "a re-driven measured step runs outside the rendezvous and loses its first clock",
+    ).toBe("stop");
+    expect(requeueVerdict({ reasking: true, measured: true, requeuesBefore: 1, requeuesNow: 2 })).toBe("stop");
+  });
+
+  it("carries on a measured pass that did not requeue", () => {
+    expect(requeueVerdict({ reasking: false, measured: true, requeuesBefore: 1, requeuesNow: 1 })).toBe("carry on");
+  });
+});
+
+/**
+ * **DPN-26 — the fifth instance of "it buys after it already knows".**
+ *
+ * Phase D's three jobs were driven concurrently and *drained* together, and that
+ * is all: no failure signal crossed between them. So load 1's `hierarchy` could
+ * fail on its structure call while the book and load 2 went on admitting
+ * expansion and label calls — for a question 5 that already could not reach
+ * three usable completions. The four earlier instances each got their own guard;
+ * this one gets the invariant instead. ⟨GPT Sol, DPN-26.⟩
+ *
+ * **The invariant, stated once:** *the three measured jobs share one fate, and
+ * none of them starts more paid work after any of them has lost it.* What can
+ * lose it is anything that puts three usable completions out of reach — a
+ * measured step that failed, a wave that fell back, or a claim handed back.
+ *
+ * **What it can and cannot do**, because the difference matters and the
+ * temptation is to overclaim: it stops a job before its **next claim**, so no
+ * further step and no re-drive begins. It cannot reach inside a `hierarchy`
+ * call that is already in flight — that is the pipeline's, and `src/` is not
+ * this eval's to change. So the honest claim is *stops starting*, not *stops
+ * spending*.
+ */
+describe("the fate three measured jobs share", () => {
+  it("is whole until something loses it", () => {
+    const fate = startPhaseFate();
+    expect(fate.lost()).toBeNull();
+  });
+
+  it("keeps the first reason, because the first one is the cause", () => {
+    const fate = startPhaseFate();
+    fate.lose("load 1's hierarchy failed");
+    fate.lose("the book requeued");
+    expect(fate.lost()).toBe("load 1's hierarchy failed");
+  });
+
+  it("tells a job that is about to claim again to stop", () => {
+    const fate = startPhaseFate();
+    expect(fate.lost()).toBeNull();
+    fate.lose("load 2's wave fell back to wave 1");
+    expect(fate.lost()).toBe("load 2's wave fell back to wave 1");
   });
 });
 
@@ -1764,10 +1835,31 @@ describe("what a stopped job has to have left behind", () => {
     ).toEqual([]);
   });
 
-  it("reports both when a paid job ended `error` with nothing written", () => {
+  /**
+   * **DPN-27 — and this said one of two things it could not tell apart**, which
+   * is the mistake DPN-19 exists to have fixed, made again one branch over.
+   *
+   * "The records were LOST" is only true if they were ever asked for. A job that
+   * ended `error` may have failed *before* `hierarchy` ran at all — a step this
+   * eval abandoned at the rendezvous never runs, so it never requests
+   * anything — and calling that a lost record is an invention. The generic
+   * `not-answerable` finding already says the job did not finish; that is the
+   * fact there is evidence for. ⟨GPT Sol, DPN-27.⟩
+   */
+  it("says nothing about missing records on a job that did not finish", () => {
     const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: false });
-    expect(f.map((x) => x.kind).sort()).toEqual(["no-records", "not-answerable"]);
+    expect(
+      f.map((x) => x.kind),
+      "an errored job's missing records are a consequence, not an independent fact",
+    ).toEqual(["not-answerable"]);
     expect(f.every((x) => x.fatal)).toBe(true);
+  });
+
+  /* And the DPN-19 case itself is untouched: `done` is where a missing records
+     file really is the record having been lost. */
+  it("still catches the lost record on a job that finished", () => {
+    const f = jobIntegrityFindings({ ...base, status: "done", deepenFlag: true, hasRecords: false });
+    expect(f.map((x) => x.kind)).toEqual(["no-records"]);
   });
 
   it("names the job it is about, so a findings block says which phase lost it", () => {
@@ -2012,6 +2104,36 @@ describe("the phase-D start rendezvous", () => {
     const r = startRendezvous({ expected: 3, timeoutMs: 5 });
     await r.wait(never);
     expect(await r.arrive("load1")).toBe("abandoned");
+  });
+
+  /**
+   * **DPN-28 — and the run named the wrong set.** The abandoned jobs were read
+   * off `wait`'s `held` snapshot, which is taken as the outcome is built — so a
+   * step that reached the entry *after* the gate closed was turned away with
+   * `"abandoned"` and got no explanatory finding, only the bare `error`. The
+   * gate is the only thing that knows who it really refused, so it is the gate
+   * that says. ⟨GPT Sol, DPN-28.⟩
+   */
+  it("names everyone it turned away, including whoever arrived after it closed", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    const early = r.arrive("load1");
+    const out = await r.wait(never);
+    expect(out.why).toBe("timed out");
+    expect(out.held.map((h) => h.slug), "the snapshot cannot see a late arrival").toEqual(["load1"]);
+    const late = r.arrive("load2");
+    expect([await early, await late]).toEqual(["abandoned", "abandoned"]);
+    expect(r.turnedAway().sort(), "the late arrival was refused and went unexplained").toEqual([
+      "load1",
+      "load2",
+    ]);
+  });
+
+  it("turns nobody away when the gate opened on everybody", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const all = ["load1", "load2", "book"].map((s) => r.arrive(s));
+    await r.wait(never);
+    await Promise.all(all);
+    expect(r.turnedAway()).toEqual([]);
   });
 
   /**

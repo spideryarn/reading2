@@ -343,12 +343,22 @@ export function startRendezvous(opts: {
   wait: (abandonIf: Promise<unknown>) => Promise<RendezvousOutcome>;
   /** The failure door: release whoever is held, abandoned, for a phase that will never wait. */
   release: () => void;
+  /**
+   * **Every slug this gate actually turned away**, which is not the same set as
+   * the `held` snapshot in an outcome: that is taken as the outcome is built, so
+   * a step arriving *after* the gate closed is missing from it. The run named the
+   * abandoned jobs off that snapshot and left a late arrival refused and
+   * unexplained. The gate is the only thing that knows, so the gate says.
+   * ⟨GPT Sol, DPN-28.⟩ Read it after the jobs have drained.
+   */
+  turnedAway: () => string[];
 } {
   const now = opts.now ?? (() => Date.now());
   const startedAt = now();
   const deadlineAt = startedAt + opts.timeoutMs;
   const arrived: string[] = [];
   const waiting: { slug: string; at: number }[] = [];
+  const turnedAway: string[] = [];
 
   /* **A resolver per threshold**, because two waits want two different counts:
      the readiness wait wants the load steps and the gate wants everybody. */
@@ -409,7 +419,13 @@ export function startRendezvous(opts: {
       if (!arrived.includes(slug)) arrived.push(slug);
       waiting.push({ slug, at: now() });
       for (const t of thresholds) if (arrived.length >= t.n) t.hit();
-      return gate;
+      /* Recorded as the verdict reaches this caller rather than from a snapshot
+         taken earlier, so a step that arrives after the gate closed is counted
+         among the refused — DPN-28. */
+      return gate.then((verdict) => {
+        if (verdict === "abandoned" && !turnedAway.includes(slug)) turnedAway.push(slug);
+        return verdict;
+      });
     },
     async waitFor(n: number, abandonIf: Promise<unknown>): Promise<RendezvousOutcome> {
       return outcome(n, await until(n, abandonIf));
@@ -424,6 +440,7 @@ export function startRendezvous(opts: {
       return out;
     },
     release: () => open("abandoned"),
+    turnedAway: () => [...turnedAway],
   };
 }
 
@@ -574,7 +591,15 @@ export function jobIntegrityFindings(opts: {
         "no later phase may be purchased on top of it.",
     });
   }
-  if (opts.deepenFlag && !opts.hasRecords) {
+  /* **Only on a job that finished**, and that is DPN-27 rather than caution.
+     "The records were LOST" is a claim about something having been asked for,
+     and a job that ended `error` may have failed before `hierarchy` ran at all —
+     a step this eval abandoned at the rendezvous never runs, so it never
+     requests anything. Saying "lost" over that is inventing the very fact DPN-19
+     was about not inventing, one branch further on. The status finding above
+     already says the job did not finish; the missing file is its consequence.
+     ⟨GPT Sol, DPN-27.⟩ */
+  if (opts.status === "done" && opts.deepenFlag && !opts.hasRecords) {
     findings.push({
       kind: "no-records",
       fatal: true,
@@ -613,11 +638,116 @@ export function jobIntegrityFindings(opts: {
  */
 export function requeueVerdict(opts: {
   reasking: boolean;
+  /**
+   * **Is question 5 timing this job's step?** Then a re-drive is not merely
+   * expensive, it is a lie: the second attempt takes the rendezvous's *latched*
+   * verdict and returns at once, so it runs outside the gate beside whatever its
+   * siblings are doing — and the queue replaces the first attempt's clock
+   * (src/jobs.ts § `runStep`), so what is left is a plausible-looking pass whose
+   * duration omits the attempt that was actually lined up. ⟨GPT Sol, DPN-25.⟩
+   */
+  measured: boolean;
   requeuesBefore: number;
   requeuesNow: number;
 }): "stop" | "carry on" {
-  if (!opts.reasking) return "carry on";
+  if (!opts.reasking && !opts.measured) return "carry on";
   return opts.requeuesNow > opts.requeuesBefore ? "stop" : "carry on";
+}
+
+/**
+ * **Why this run refused to re-drive a job the claimant handed back**, in the
+ * words of whichever of the two reasons applied — and both can.
+ *
+ * - **Re-asking** is about money (DPN-07). The next claim would ignore the
+ *   checkpoint rows this attempt just wrote and buy the whole wave again, and
+ *   `REQUEUE_BUDGET` permits three such windows, none of them in the estimate.
+ * - **Measured** is about evidence (DPN-25). The retry takes the start
+ *   rendezvous's *latched* verdict and returns at once, so it runs outside the
+ *   gate; the queue then replaces the first attempt's clock, and what is left is
+ *   a question-5 pass that looks ordinary and whose duration omits the attempt
+ *   that was actually lined up.
+ *
+ * Pure, so both halves of the sentence can be watched being written.
+ */
+export function requeueFinding(opts: {
+  label: string;
+  slug: string;
+  window: number;
+  windows: number;
+  reasking: boolean;
+  measured: boolean;
+}): DeepenFinding {
+  return {
+    kind: "requeued",
+    fatal: true,
+    message:
+      `${opts.label}: the claimant handed this job back at its own deadline (requeue window ` +
+      `${opts.window} of ${opts.windows}). This run STOPPED rather than re-claiming it. ` +
+      (opts.reasking
+        ? `${REASK_ENV} still named ${opts.slug}, so the next claim would ignore the checkpoint ` +
+          "rows this one just wrote and buy the whole wave again, and the budget permits three " +
+          "such windows. "
+        : "") +
+      (opts.measured
+        ? "Question 5 is timing this job's measured step, and a re-drive would take the start " +
+          "rendezvous's LATCHED verdict — running outside the gate, beside whatever its siblings " +
+          "were doing — while the queue replaced this attempt's clock. The pass that came back " +
+          "would look ordinary and its duration would omit the attempt that was lined up. "
+        : "") +
+      "The job is left `queued`, the article and the job are RETAINED rather than cleaned up, " +
+      "and no later job in this run can publish over that slug. This pass is partial and must " +
+      "not be quoted.",
+  };
+}
+
+/* ---------------------------------------------- one fate, three measured jobs -- */
+
+/**
+ * **The invariant phase D was missing, and the fifth time it was missing it.**
+ *
+ * Four separate guards had already been fitted for four separate ways of buying
+ * something the run already knew it could not use, and here was a fifth: the
+ * three measured jobs were driven concurrently and *drained* together, and
+ * nothing else passed between them. Load 1's `hierarchy` could fail on its
+ * structure call while the book and load 2 went on admitting expansion and label
+ * calls — for a question 5 that could no longer reach three usable completions.
+ * ⟨GPT Sol, DPN-26.⟩
+ *
+ * So rather than a fifth guard, the rule those four are instances of:
+ *
+ * > **The three measured jobs share one fate, and none of them starts more paid
+ * > work after any of them has lost it.**
+ *
+ * Anything that puts three usable completions out of reach loses it: a measured
+ * step that failed, a wave that fell back to wave 1, a claim handed back at the
+ * deadline.
+ *
+ * **What this can and cannot do**, because the whole of DPN-29 is that these
+ * claims must be exact. It is checked before each **claim**, so no further step
+ * and no re-drive begins after the fate is lost. It cannot reach inside a
+ * `hierarchy` call already in flight — that is the pipeline's, and `src/` is not
+ * this eval's to change. The honest verb is **stops starting**, not stops
+ * spending.
+ *
+ * The first reason is kept because the first reason is the cause; the ones after
+ * it are consequences, and a report that quoted the last would name the wrong
+ * job.
+ */
+export interface PhaseFate {
+  /** Say the phase is lost, and why. Only the first reason is kept. */
+  lose: (why: string) => void;
+  /** The reason this phase can no longer answer, or `null` while it still can. */
+  lost: () => string | null;
+}
+
+export function startPhaseFate(): PhaseFate {
+  let why: string | null = null;
+  return {
+    lose(reason: string): void {
+      if (why === null) why = reason;
+    },
+    lost: () => why,
+  };
 }
 
 /* ------------------------------------------------- the checkpoint file -- */
