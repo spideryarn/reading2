@@ -102,7 +102,7 @@ per-owner-per-month aggregate in SQL, for Stripe.
 **0.2 The test suite writes real rows into the dev Postgres ledger.** *Measured.* 3888 of 3924 rows
 are `test-chat-route-fixture` / `test-remember-route-fixture` / `test-candidates-route-fixture`.
 The **filesystem** store already separates them — `_ai-calls.test.jsonl`, keyed on `NODE_ENV`
-([`src/store/ai-calls-fs.ts:65`](../../src/store/ai-calls-fs.ts)), with a comment about this exact
+(`src/store/ai-calls-fs.ts:65`, deleted 2026-09-05), with a comment about this exact
 accident and how it was found. `ai-calls-pg.ts` has no equivalent: `grep NODE_ENV` returns nothing.
 So every count, every `By owner` and `By article` line is meaningless, and the permanent "3872 calls
 reported no cost" warning masks the one signal that would show a real unpriced problem. A

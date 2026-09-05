@@ -246,7 +246,7 @@ rather than leave it to a role setting nobody has read.
 
 **Evidence: proved from the code.**
 
-[`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) still has
+`src/store/ai-calls-fs.ts` (deleted 2026-09-05) still has
 
 ```ts
 let writing: Promise<void> = Promise.resolve();
