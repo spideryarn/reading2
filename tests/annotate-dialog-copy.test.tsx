@@ -13,6 +13,8 @@
  * no Clipboard API, or announced nothing to a screen reader would all *look*
  * right on screen. Each is a test below.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -312,5 +314,41 @@ describe("what it says is about the copy in front of you", () => {
       vi.advanceTimersByTime(700);
     });
     expect(icon()).toContain("lucide-copy");
+  });
+});
+
+/**
+ * **The size of the two header targets, read out of the stylesheet.**
+ *
+ * jsdom computes no layout, so every test above stays green with the size floor
+ * deleted — and the pair measured 19.8×19.8 with 2.4px between them until
+ * 2026-09-05, under WCAG 2.5.8's 24×24 and too close for its spacing exception
+ * either. A browser pass measured the fix once; this is the part that is
+ * deterministic, runs in milliseconds and needs no Chrome. Same technique and
+ * same reasoning as `tests/gutter-target-size.test.ts`, which arrived the same
+ * day for the same rule on the prose gutter.
+ *
+ * **In `px`, deliberately, and that is the half worth knowing.** `1.5rem` is 24
+ * CSS pixels only at a 16px root, and this app supports a 12px one — the trap
+ * that made GPT Sol's review of the gutter work commit-blocking. So this also
+ * asserts the declaration is *not* expressed in `rem`.
+ */
+describe("the header's targets", () => {
+  /* Off the project root rather than `new URL(…, import.meta.url)`, which is
+     how `gutter-target-size.test.ts` reads the same file: that one runs in the
+     node environment, and under `jsdom` `import.meta.url` is not a `file:` URL,
+     so the same line throws "The URL must be of scheme file" before a single
+     test runs. Vitest's cwd is the project root. */
+  const css = readFileSync(resolve(process.cwd(), "src/web/styles.css"), "utf8");
+
+  it("gives Copy and Close 24px in each direction, at every root size", () => {
+    const rule = /\.annotate-close,\s*\.annotate-copy\s*\{([^}]*)\}/.exec(css)?.[1];
+    expect(rule, "the shared .annotate-close/.annotate-copy rule").toBeTruthy();
+    for (const prop of ["min-width", "min-height"]) {
+      const value = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1]?.trim();
+      expect(value, `${prop} on the header buttons`).toBeTruthy();
+      expect(value).not.toMatch(/rem/);
+      expect(Number.parseFloat(value ?? "0")).toBeGreaterThanOrEqual(24);
+    }
   });
 });
