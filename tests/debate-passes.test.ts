@@ -95,7 +95,8 @@ const article: Article = { slug: "starter-week-3", blocks, tree, meta };
 function answer(opts: {
   fenced?: string;
   content?: string;
-  finish?: string;
+  /** `null` sends **no** `finish_reason` at all, which is a real wire state. */
+  finish?: string | null;
   searches?: number | null;
   annotations?: { url: string; title?: string; content?: string }[];
 }): unknown {
@@ -104,7 +105,7 @@ function answer(opts: {
   return {
     choices: [
       {
-        finish_reason: opts.finish ?? "stop",
+        ...(opts.finish === null ? {} : { finish_reason: opts.finish ?? "stop" }),
         message: {
           content,
           annotations: (opts.annotations ?? []).map((a) => ({
@@ -275,17 +276,101 @@ describe("two passes, one artefact", () => {
   });
 });
 
+/* ------------------------------------------------------------- the fence -- */
+
+/**
+ * **The fence is line-delimited, and the comment that said otherwise was
+ * simply untrue** (GPT Sol's F26).
+ *
+ * The old regex matched a ``` sequence *anywhere*, and its comment claimed a
+ * stray one inside a JSON string "would be an escaped one". JSON does not
+ * escape backticks and never has, so an answer whose prose quoted a fenced
+ * block was cut mid-document and refused — and, worse in the other direction, a
+ * closed `[]` followed by a truncated correction was read as a complete empty
+ * answer. Both are in this file: the truncation cases are in the atomicity list
+ * below, and the valid answer is here.
+ */
+describe("the fence the answer is read out of", () => {
+  it("keeps a row whose prose contains a literal fence", async () => {
+    const row = JSON.stringify([
+      {
+        url: BLOG.url,
+        blockId: "spya-aaaaaa",
+        claimQuote: "fall apart within a week",
+        sourceQuote: "collapse in about a week",
+        relation: "corroborates",
+        valence: "positive",
+        /* The characters the old parser cut the document at. */
+        applies: "It sets the claim in a ``` block and reports the same collapse.",
+      },
+    ]);
+    answers = [
+      answer({ fenced: "[]", searches: 3, annotations: [BLOG] }),
+      answer({ fenced: row, searches: 3, annotations: [BLOG] }),
+    ];
+
+    const run = await generateDebate({ article });
+
+    expect(run.debate.claims.counts.keptRows).toBe(1);
+    expect(run.debate.claims.rows[0]?.applies).toContain("```");
+  });
+
+  /** The last closed fence still wins, which is what lets a model correct itself. */
+  it("reads the last closed fence, not the first", async () => {
+    answers = [
+      answer({
+        searches: 3,
+        annotations: [REVIEW],
+        content: "```debate\n[]\n```\n\nOn reflection:\n\n```debate\n" + DIRECT_ROW + "\n```",
+      }),
+      answer({ fenced: "[]", searches: 3, annotations: [BLOG] }),
+    ];
+
+    const run = await generateDebate({ article });
+
+    expect(run.debate.direct.counts.keptRows).toBe(1);
+  });
+});
+
 /* --------------------------------------------------------------- atomicity -- */
 
 describe("either pass failing fails the whole step", () => {
   /** Every one of these is a way the panel would otherwise print a false sentence. */
   const passAFailures: [string, unknown][] = [
     ["the search reported zero searches", answer({ searches: 0 })],
+    /* **F27, and the shape of the bug matters more than the case.** `runPass`
+       refused `length` and `content_filter` by name and let everything else
+       through, so a terminal provider failure arrived with a positive search
+       count and a closed `[]` and was stored as a successful empty artefact —
+       which is this mode's commonest *honest* answer, so nothing looked wrong.
+       A blocklist is the wrong shape for a field whose values the provider
+       chooses; only `stop` is a clean finish. */
+    ["the provider ended in an error", answer({ fenced: "[]", searches: 4, finish: "error" })],
+    ["the answer carries no finish reason", answer({ searches: 4, finish: null })],
+    ["the provider stopped to call a tool", answer({ searches: 4, finish: "tool_calls" })],
+    ["the finish reason is a word we have never seen", answer({ searches: 4, finish: "banana" })],
     ["the search count is not in the response at all", answer({ searches: null })],
     ["the answer was cut off", answer({ fenced: DIRECT_ROW, finish: "length" })],
     ["the provider filtered its own answer", answer({ finish: "content_filter" })],
     ["there is no fence", answer({ content: "I could not find anything." })],
     ["the fence is not closed", answer({ content: "```debate\n[{" })],
+    /* **F26 — truncation dressed as a result.** A closed `[]`, then a second
+       fence the answer was cut off inside. The old parser took the last
+       *closed* fence and reported "nothing found" over an answer that was
+       still being written. A later unmatched opener now fails the pass. */
+    [
+      "a closed empty list is followed by a correction that was cut off",
+      answer({
+        searches: 4,
+        content: "```debate\n[]\n```\n\nActually, one more:\n\n```debate\n[{\"url\": \"https",
+      }),
+    ],
+    /* A closing delimiter has to have its own line, so a ``` that is only part
+       of a line does not end anything. */
+    [
+      "the fence is closed by something that is not a fence line",
+      answer({ searches: 4, content: "```debate\n[]\n``` and that is all" }),
+    ],
     ["the fenced text is not JSON", answer({ fenced: "not json at all" })],
     ["the fenced JSON is not a list", answer({ fenced: '{"rows": []}' })],
     ["the body is not JSON", null],

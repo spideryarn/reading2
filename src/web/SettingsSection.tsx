@@ -10,8 +10,9 @@
  *
  * What may go behind it, and the rule that a hidden feature stays reachable by
  * its own URL, are in docs/project/experimental-features.md. **Five of the
- * thirteen reading modes are behind it since 2026-09-03** — Quotes, Timeline,
- * Referee, Diagram and Remember, drawn by the bottom bar only for a reader who
+ * fourteen reading modes are behind it** — Quotes, Timeline, Referee and
+ * Remember since 2026-09-03, and Debate since 2026-09-05 — drawn by the bottom
+ * bar only for a reader who
  * turned this on (Dock.tsx § visibleModes). That doc's table says why each is
  * not ready. **This is no longer the only place the switch can be moved**: the
  * bottom bar draws one too, for a signed-in reader, at the end of the row

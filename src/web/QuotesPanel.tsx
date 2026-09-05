@@ -544,8 +544,9 @@ export function QuotesPanel({
   return (
     <aside className="mode-band quotes" aria-label="Quotes">
       <div className="band-head">
-        <QuoteIcon size={14} className="band-head-icon" />
-        <h2>Quotes</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the count below it. */}
         {quotes && (
           <span className="quotes-count">
             {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}

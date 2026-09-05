@@ -16,6 +16,7 @@ import {
   MAX_WAIT_SECONDS,
   haveTerminal,
   parseDuration,
+  positionalName,
   sshInvocation,
   waitHandover,
   waitPreamble,
@@ -228,5 +229,55 @@ describe("haveTerminal", () => {
   // "inherit" or treat it as falsy.
   it("treats fd 0 as the terminal it is", () => {
     expect(haveTerminal({ keyboard: 0, stdinIsTty: false })).toBe(true);
+  });
+});
+
+/**
+ * **The other half of the 2026-09-05 addressing bug.**
+ *
+ * A tmux session name may begin with a hyphen, and `resume` picked its argument
+ * with `rest.find((a) => !a.startsWith("-"))` — which skips such a name
+ * silently and falls back to the newest session. Attaching to something other
+ * than what was named looks exactly like success, which is the family this repo
+ * keeps writing comments about. Found by GPT Sol.
+ */
+describe("positionalName", () => {
+  it("takes the first argument that is not an option", () => {
+    expect(positionalName(["gateA"])).toBe("gateA");
+    expect(positionalName(["--ssh", "gateA"])).toBe("gateA");
+    expect(positionalName(["gateA", "--ssh"])).toBe("gateA");
+  });
+
+  it("has nothing to say about an empty argv", () => {
+    expect(positionalName([])).toBeUndefined();
+    expect(positionalName(["--ssh"])).toBeUndefined();
+  });
+
+  it("takes a name that starts with a hyphen when `--` says it is a name", () => {
+    expect(positionalName(["--", "-odd"])).toBe("-odd");
+    expect(positionalName(["--ssh", "--", "-odd"])).toBe("-odd");
+  });
+
+  /** Everything after `--` is positional, flag-shaped or not. */
+  it("does not read an option after the separator", () => {
+    expect(positionalName(["--", "--ssh"])).toBe("--ssh");
+  });
+
+  it("says nothing rather than guessing when `--` ends the line", () => {
+    expect(positionalName(["--"])).toBeUndefined();
+  });
+
+  /**
+   * LEFT TO RIGHT. The first version looked for `--` anywhere first, so a
+   * trailing one threw away a name that had already been given — `resume gateA
+   * --` returned undefined and attached to the newest session, which is the
+   * silent wrong-target this function exists to prevent. Both found by Sol.
+   */
+  it("keeps a name that came before a trailing separator", () => {
+    expect(positionalName(["gateA", "--"])).toBe("gateA");
+  });
+
+  it("does not let a later separator override a name already given", () => {
+    expect(positionalName(["gateA", "--", "other"])).toBe("gateA");
   });
 });

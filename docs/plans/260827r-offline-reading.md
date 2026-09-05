@@ -1,6 +1,12 @@
 # Reading offline
 
 Status: **Slices 0, 1 and 2 built, 2026-08-27** — see § What was built. Slices 3–5 not started.
+**Superseded in part, 2026-09-05:** the freshness rule and the transaction scope of the store's
+five operations were all wrong as first built, and were replaced by
+[260905g](260905g-cache-freshness-follows-issue-order-not-completion-order.md) — the design here is
+otherwise intact, but do not take this file as current on how a write is accepted. The five defects
+and why nothing caught them are in
+[a slow response overwrites a fast one](../postmortems/260905e-a-slow-response-overwrites-a-fast-one.md).
 Written 2026-08-27. GPT Sol's review of this proposal is in
 [260827r-offline-reading-review-sol.md](260827r-offline-reading-review-sol.md) and its findings are folded in below.
 

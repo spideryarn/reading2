@@ -79,7 +79,7 @@
  * three times the size of this one.
  */
 import { type MouseEvent, useRef, useState } from "react";
-import { ChevronRight, Layers } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { BlockId } from "../types.js";
 import { BlockRange } from "./BlockRef.js";
 import { TooltipGroup } from "./Tooltip.js";
@@ -181,10 +181,15 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
 
   return (
     <aside className="mode-band summ" aria-label="Summary">
-      <div className="band-head">
-        <Layers size={14} className="band-head-icon" />
-        <h2>Summary</h2>
-      </div>
+      {/* **No title row.** It said the mode's own name, which the Dock at the
+          foot of the page is already saying — Greg, 2026-09-05: *"I think we can
+          rely on the bottom bar to tell us what mode we're in, so for example
+          'Summary' mode doesn't need to say `Summary` at the top, nor o any
+          other modes."* Nothing else was in the row, so the row went with it and
+          the band starts at its content. The `<aside>`'s `aria-label` above is
+          what names the region, and always was — the `<h2>` was never carrying
+          that. docs/plans/260905d-declutter-the-reading-view-top-bars.md
+          § Stage 5. */}
 
       <div className="summ-controls">
         {/* Their structure panel's one control, and the one thing it proved:

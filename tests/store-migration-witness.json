@@ -1,5 +1,5 @@
 {
-  "what": "Witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact \u2014 see the plan's 'Counts are perishable'. Regenerate with: npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json",
+  "what": "Witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact — see the plan's 'Counts are perishable'. Regenerate with: npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json ADDENDUM 2026-09-05T17:40Z: tests/debate-step-registration.test.ts arrived after this measurement and was added by hand to ranAndTouchedNothing, on the evidence of `npx tsx scripts/store-migration-witness.ts --files tests/debate-step-registration.test.ts`, which reported \"ran, touched nothing\". The `counts` below are the full run's and were NOT adjusted — they are a dated measurement, and a hand-edited count would be neither the old one nor a new one. Re-derive with the full command above rather than trusting this addendum to have kept up.",
   "measured": "2026-09-05T02:10:24.757Z",
   "store": "default (SPIDERYARN_STORE unset => files)",
   "instrumentedModules": [
@@ -13,7 +13,7 @@
     "src/store/data-root.ts"
   ],
   "notInstrumented": [
-    "src/store/blobs-fs.ts \u2014 selected by credentials, out of scope"
+    "src/store/blobs-fs.ts — selected by credentials, out of scope"
   ],
   "unresolved": [
     "tests/gjd-remote-tab-lifecycle.test.ts"
@@ -623,6 +623,7 @@
     "tests/db-test-create.test.ts",
     "tests/db-tls.test.ts",
     "tests/db-transaction-errors.test.ts",
+    "tests/debate-step-registration.test.ts",
     "tests/declared-spend.test.ts",
     "tests/deploy-checks.test.ts",
     "tests/dev-server-store-default.test.ts",

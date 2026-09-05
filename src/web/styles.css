@@ -4155,6 +4155,26 @@ td.text.has-hit[data-hues="8"] {
   flex: none;
 }
 .band-head-icon { color: var(--ink-faint); flex: none; }
+/* **Chat is the only band with an `h2` left, and that is not an exemption.**
+   Every other one held the mode's own name, which the Dock at the foot of the
+   page is already saying — Greg, 2026-09-05: *"I think we can rely on the bottom
+   bar to tell us what mode we're in, so for example 'Summary' mode doesn't need
+   to say `Summary` at the top, nor o any other modes."* Chat's heading is the
+   open **thread's** title, so it was never naming the mode; it is also the
+   reason every declaration below exists — a thread title is the reader's first
+   sentence and can run to sixty characters.
+
+   **What went with the names, and what it moved.** The `h2` carried `flex: 1`,
+   so it was the heading that pushed a row's other child — `.gloss-count`,
+   `.quotes-count`, Remember's sub-mode switch, Diagram's caveat — over to the
+   right-hand edge. With no heading there is nothing to push with, and each of
+   those now sits at the left where the name used to be. That is the intended
+   look and not a regression to fix by adding `margin-left: auto`: a lone count
+   pinned to the right of an otherwise empty row reads as something that has lost
+   its label, which is exactly what it would be.
+
+   Summary and Search kept nothing at all, so their rows are gone rather than
+   empty. docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */
 .band-head h2 {
   flex: 1;
   margin: 0;
@@ -6077,6 +6097,42 @@ td.text.note-open {
    it at rung 2. Caught in a browser pass, 2026-09-02. */
 .dock.dock-fit-1 .dock-btn-label.always,
 .dock.dock-fit-2 .dock-btn-label.always { display: inline; }
+
+/* **And the mode you are actually in keeps its word, on every rung.**
+   Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
+   mode we're in, so for example 'Summary' mode doesn't need to say `Summary` at
+   the top."* Stage 5 of docs/plans/260905d-declutter-the-reading-view-top-bars.md
+   took him at his word and removed the name from every band's title row — and
+   that premise was **false at exactly the widths it matters**, which a
+   screenshot showed and no unit check could.
+
+   A band is 400px of the window, so opening one is itself what pushes the bar
+   onto rung 1 — where every mode label except Plain's is hidden. So in Summary
+   at 1440×900 the band no longer said "Summary" and the bar had never said it
+   either: the only thing naming the open mode was a highlighted glyph. The
+   sighted reader who wanted the word had to hover for a tooltip.
+
+   One word costs nothing the ladder cannot absorb, because the ladder is
+   *measured* rather than declared (dock-fit.ts) — it walks down until the row
+   fits, so a rung that no longer fits with this word simply steps to the next,
+   and past the last one § a coarse pointer scrolls rather than clips.
+
+   Higher specificity than the hides above (0,5,0) rather than tying with them,
+   deliberately, and it is the safe direction: the accident this file records
+   just above is a rule that was accidentally *longer* than the one meant to
+   win. This one is meant to win.
+
+   **Rung 1 only, and rung 2 was tried and measured first.** Past the last rung
+   the bar overflows and scrolls (§ a coarse pointer), and at 390×844 in a band
+   mode it already does: measured 2026-09-05, `scrollWidth` 617 against a
+   `clientWidth` of 390. Adding this word there took it to 758 — 141px more of a
+   row the reader already has to drag sideways, to reveal a word that is only
+   legible *after* they drag. A bar that scrolls cannot tell you anything you
+   have not scrolled to, so at rung 2 this rule is pure cost and no benefit, and
+   the reader on a phone has in any case just pressed the icon themselves. At
+   rung 1 it is free: all four band modes measured `scrollWidth === clientWidth
+   === 1440` with the word shown, on the same rung they were already on. */
+.dock.dock-fit-1 .dock-btn.on .dock-btn-label { display: inline; }
 
 
 /* --------------------------------------------------------- § search mode ----
@@ -13901,6 +13957,366 @@ td.text.kind-heading .blk-gutter[data-open] {
   padding: 0.45rem 0.7rem;
   border-top: 1px solid var(--rule);
 }
+
+/* --------------------------------------------------------- § debate mode ----
+   The fourteenth mode, and the only band whose content is not in the article.
+   `.dbt` is `.gloss` with a class beside it, like `.timeline` and `.ideas`, so
+   the band shell, the head, the run button, the stale banner, the counts and
+   the two empty-state faces all come from § glossary mode unchanged.
+
+   What is here is only what a debate row has and an event does not: a **host**
+   that has to be the first thing the eye lands on, a quotation from a
+   stranger's page, and a fenced-off block of things a model guessed. Those
+   three are the design (DebatePanel.tsx), and the whole job of this section is
+   to make them look like three different kinds of claim.
+
+   **No bar, no meter, no number.** Greg asked for a positive/negative icon and
+   a red/green scheme *"but without a score"*, so there is deliberately nothing
+   here that draws a proportion — no width driven by a value, no gradient, no
+   `--heat-*`. Adding one is a change to the design rather than to this file. */
+
+/* The same three properties every band's scroller has, for the reason § timeline
+   mode records: `.mode-band` is a fixed column between the controls bar and the
+   dock, so without a scrolling child everything past the dock is unreachable —
+   and it looks perfectly fine on a tall window, which is how it shipped wrong
+   once already. */
+.dbt-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+/* The three disclosures over the list — when it was searched, that the order
+   means nothing, and what the quotations were checked against. Said once here
+   rather than on every row, like `.tl-frame` next door. */
+.dbt-frame {
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.45rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+/* The date is the half a reader actually looks for, so it keeps the ink the
+   two disclaimers beside it give up. */
+.dbt-searched { color: var(--ink-soft); font-weight: 600; }
+
+/* The two groups. A heavier rule between them than between two rows, because
+   "pages about this piece" and "pages about what it claims" are two different
+   questions rather than two parts of one list — the same call § timeline mode
+   makes between what happened and what is merely expected. */
+.dbt-group { margin: 0; padding: 0.5rem 0 0; }
+.dbt-group + .dbt-group {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--rule-strong);
+}
+.dbt-group > h3 {
+  /* Sticky, so *which of the two searches am I reading* survives scrolling —
+     docs/reusable/css-sticky-containing-block.md for the case where this
+     silently does nothing. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dbt-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
+.dbt-blurb {
+  margin: 0.15rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+/* **The empty sentence is drawn like an answer, not like a gap.** Group one
+   being empty is this mode's commonest correct output, so it gets the ordinary
+   quiet ink and ordinary padding — dimming it further, or setting it in italics
+   as an aside, would teach the reader that the honest answer is a failure. */
+.dbt-empty { padding: 0.2rem 0 0.6rem; font-size: 0.86rem; line-height: 1.45; }
+
+.dbt-list { margin: 0; padding: 0; list-style: none; }
+.dbt-item { padding: 0.55rem 0; border-top: 1px solid var(--rule); }
+.dbt-item:first-child { border-top: none; }
+
+.dbt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+/* **The row's headline, and the only authority signal a reader can judge.**
+   Larger and in the full ink than anything else on the row, because there is no
+   honest ranking to draw and this is what a reader ranks with instead
+   (`DEBATE_NO_RANKING`). It is `--highlight-ink` rather than plain `--ink` for
+   the reason every other outward link in this app is: leaving for somebody
+   else's page is the one thing on the row worth colouring. */
+.dbt-host {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+.dbt-host:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dbt-host svg { flex: none; align-self: center; opacity: 0.7; }
+
+/* The ⓘ. Pushed to the far end and quiet, because it is a reveal rather than
+   the thing to press — the row is already readable without it. It is a real
+   button so it is a tab stop and `useHoverCard`'s `focusable` gives a keyboard
+   reader the same card a pointer gets. */
+.dbt-info {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: help;
+}
+.dbt-info:hover { color: var(--ink); }
+.dbt-info:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
+/* The search result's own title, never the model's. Under the host and quieter
+   than it, because on a lot of pages it is the publication's boilerplate. */
+.dbt-title {
+  margin: 0.15rem 0 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  line-height: 1.35;
+}
+
+/* **Characters we located in that page's own extract.** The solid rule down the
+   left is the provenance mark this app already uses for "these are not our
+   words" (`.gloss-part-senseHere`, and § timeline mode reuses it for the same
+   reason) — a third way of drawing the same distinction would teach the reader
+   it means three things. */
+.dbt-quote {
+  margin: 0.35rem 0 0;
+  padding: 0 0 0 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* Group two only: the article's own words for the claim being answered. Same
+   rule down the left as the quotation above, because it is the same kind of
+   thing — a located quotation — from the other side of the row. */
+.dbt-claim {
+  margin: 0.35rem 0 0;
+  padding: 0 0 0 0.55rem;
+  border-left: 2px dotted var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.dbt-claim-label {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-right: 0.3rem;
+}
+
+/* **The fence.** Everything above it is the wire's or the article's; everything
+   inside it is a model's reading of a stranger's page. Tinted and inset rather
+   than merely labelled, because a label alone is read once and the boundary has
+   to survive a reader scanning twelve rows. */
+.dbt-ai {
+  margin: 0.45rem 0 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--surface-raised) 45%, transparent);
+}
+.dbt-ai-label {
+  margin: 0 0 0.25rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.dbt-ai-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+  margin: 0 0 0.3rem;
+}
+/* What the page does to what it answers. A word, not a badge with a colour of
+   its own: `relation` groups the list and `valence` draws the colour, and
+   colouring both would make the row look as though it carried two verdicts. */
+.dbt-relation {
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* **Which way it leans, and never how far.** Two directions off the diverging
+   red↔green scale Greg asked for (styles/colourscales.css § `--div-rg-*`), and
+   one quiet grey for the two that take no side.
+
+   Every one of the four gets the same chip: same size, same weight, an icon and
+   a word. `neutral` and `unknown` are not failure states, and drawing them
+   dimmer or smaller than their neighbours would be the panel disbelieving its
+   own model out loud — the rule docs/project/timeline.md applies to an undated
+   row.
+
+   **The scale's middle step is deliberately unused.** `--div-rg-4` is the
+   centre of a ramp, and putting `neutral` there would say *zero on a scale*,
+   which is the score this mode does not compute. */
+.dbt-valence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.dbt-valence svg { flex: none; }
+.dbt-valence-for { color: var(--div-rg-7); }
+.dbt-valence-against { color: var(--div-rg-1); }
+.dbt-valence-quiet { color: var(--ink-faint); }
+
+.dbt-applies {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+/* Where it does *not* bear on the claim. Optional on the row and drawn quieter,
+   because a caveat set as loudly as the claim reads as a retraction. */
+.dbt-limits {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.4;
+}
+
+/* The two foot lines under each group — what the model offered against what
+   survived, and what the search returned against what got into the answer.
+   Modelled on `.quotes-discarded`, and quiet for the same reason: this is
+   provenance, not an error. */
+.dbt-foot {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px dotted var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.dbt-foot p { margin: 0 0 0.25rem; }
+.dbt-foot p:last-child { margin-bottom: 0; }
+
+/* The third disclosure, at the foot of the scroller rather than in the head —
+   what the quotations were checked against is a question you ask *of a
+   quotation*, and all three sentences at the top were an eight-line wall over
+   the first row at `MODE_MIN`. It is on every ⓘ card as well, which is the other
+   point of use. */
+.dbt-verified {
+  margin: 0.9rem 0 0;
+  padding: 0.5rem 0 0;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+/* Pinned under the scroller rather than at the end of it, like `.tl-again`: the
+   control that spends two web searches must not be something you have to scroll
+   twelve rows to reach. */
+.dbt-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* The ⓘ card. Narrower than the prose card next door because it holds one
+   quotation and a link rather than a whole footnote, and the band it hangs off
+   is 288px at its narrowest (`MODE_MIN` in layout.ts). */
+.tooltip.dbt-card { max-width: 22rem; }
+.dbt-card-body { display: block; }
+.dbt-card-title {
+  margin: 0 0 0.2rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+/* The full address, which the row shows only the host of. Wrapping rather than
+   truncating: half a URL is not an address, and the reader is looking at this
+   card precisely to decide whether to follow it. */
+.dbt-card-url {
+  margin: 0 0 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.dbt-card-quote {
+  margin: 0 0 0.35rem;
+  padding: 0 0 0 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-size: 0.87rem;
+  line-height: 1.5;
+}
+/* Group one's witness that this page names *this* article — the check that is
+   the whole difference between the two groups, so it is on the card rather than
+   buried. */
+.dbt-card-ref {
+  margin: 0 0 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.81rem;
+  line-height: 1.45;
+}
+.dbt-card-note {
+  margin: 0 0 0.45rem;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+.dbt-card-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dbt-card-out:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dbt-card-out svg { flex: none; }
 
 /* ------------------------------------------------------------------ quiz --
    The Quiz sub-mode of Remember — docs/plans/260831al-review-quiz-sub-mode.md.
