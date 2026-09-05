@@ -36,6 +36,7 @@
     "eval:pdf-read": "tsx src/pdf-read.ts",
     "eval:hierarchy": "tsx evals/hierarchy-labels.ts",
     "eval:hierarchy-structure": "tsx evals/hierarchy-structure/run.ts",
+    "eval:summaries": "tsx evals/summaries/run.ts",
     "eval:cost": "tsx evals/cost/run.ts",
     "eval:deepen": "tsx evals/deepen/run.ts",
     "eval:cost:interactions": "tsx evals/cost/interactions.ts",
