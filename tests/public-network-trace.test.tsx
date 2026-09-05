@@ -456,7 +456,7 @@ let notBuilt: string | null = null;
 
 /**
  * **What `GET /api/reader` says about the experimental switch**, for the tests
- * that need all thirteen mode buttons on screen.
+ * that need all fourteen mode buttons on screen.
  *
  * `null` is off, which is what every case here gets unless it says otherwise —
  * and what a **stranger** gets whatever this holds, because the store issues no
@@ -791,7 +791,7 @@ function readable(root: Element): string {
 /**
  * The band a visitor gets where an owner would get a feature — `VisitorBand` in
  * src/web/PublicChrome.tsx, addressed by the label a screen reader hears rather
- * than by a class, because eight of the thirteen modes end here and the class
+ * than by a class, because six of the fourteen modes end here and the class
  * they share is the one every band has.
  */
 const VISITOR_BAND = '.mode-band[aria-label="Not available on a shared link"]';
@@ -890,6 +890,11 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
   referee: { where: VISITOR_BAND, says: "Referee is for whoever added this article" },
+  /* Owners-only until Stage 4 builds the public contract its rows must not
+     bypass — src/web/visitor.ts § POLICY.debate says why that is staging rather
+     than the answer. When it becomes an artefact mode this row moves up beside
+     `timeline`. */
+  debate: { where: VISITOR_BAND, says: "Debate is for whoever added this article" },
 };
 
 /**
@@ -897,10 +902,10 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
  * same way and cannot drift into asking it differently.
  */
 /**
- * **How long a thirteen-mode sweep is allowed to take**, stated rather than
+ * **How long a fourteen-mode sweep is allowed to take**, stated rather than
  * inherited from Vitest's 5-second default.
  *
- * The three sweeps below each mount thirteen pages or press thirteen buttons,
+ * The three sweeps below each mount fourteen pages or press fourteen buttons,
  * and most of what they spend is **deliberate waiting**: six settle turns per
  * mode, plus `modeAfterPress` polling for the throttled `?mode=` write. Measured
  * 2026-09-02 on a box at load average 80: 3.6s, 3.7s and 3.8s — all three
@@ -1440,7 +1445,7 @@ describe("a signed-out browser on a shared document", () => {
        and `MODES` is only a vocabulary — they are deliberately not the same
        order. This is also what proves every press was live, so there is no
        per-press check that the mode changed: one assertion, at the end, that
-       thirteen presses reached thirteen modes. */
+       fourteen presses reached fourteen modes. */
     expect([...pressed].sort()).toEqual([...MODES].sort());
   }, SWEEP_MS);
 
@@ -2125,11 +2130,12 @@ describe("a signed-in reader who does not own it", () => {
   it("stays inside the public namespace when the modes are pressed", async () => {
     session.user = { id: "somebody-else", email: "else@example.com" };
     owned = () => json({ error: "not yours" }, 404);
-    /* **The switch on, so this sweep still presses all thirteen.** Five modes
-       went behind it on 2026-09-03, and this reader is the only one in the file
-       who *can* turn it on — a stranger is forcibly off. That makes this the
-       exhaustive press sweep, and the signed-out one above reaches the hidden
-       five by their URLs instead. Neither count was weakened. */
+    /* **The switch on, so this sweep still presses all fourteen.** Four modes
+       went behind it on 2026-09-03 and a fifth, Debate, followed on 2026-09-05,
+       and this reader is the only one in the file who *can* turn it on — a
+       stranger is forcibly off. That makes this the exhaustive press sweep,
+       and the signed-out one above reaches the hidden five by their URLs
+       instead. Neither count was weakened. */
     experimentalSince = "2026-09-01T00:00:00.000Z";
     await open();
     /* Clears the three requests a signed-in reader legitimately makes that a

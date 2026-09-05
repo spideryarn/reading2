@@ -158,7 +158,6 @@ function mount(slug: string | null) {
       createElement(FeedbackDialog, {
         open: true,
         onClose: () => {},
-        readerEmail: "reader@example.com",
         where: { url: "https://www.spideryarn.com/read/a-piece", slug },
       }),
     );

@@ -62,7 +62,10 @@ import {
   buildBindingsScript,
   buildSessionScript,
   formatWait,
+  escapeName,
   parseSessions,
+  printableName,
+  resolveSession,
   sessionRepo,
   sessionState,
 } from "./gjd-remote-tmux.js";
@@ -75,7 +78,14 @@ import {
   stagingPath,
   uploadDestination,
 } from "./gjd-remote-upload.js";
-import { haveTerminal, parseDuration, sshInvocation, waitHandover, waitPreamble } from "./gjd-remote-run.js";
+import {
+  haveTerminal,
+  parseDuration,
+  positionalName,
+  sshInvocation,
+  waitHandover,
+  waitPreamble,
+} from "./gjd-remote-run.js";
 import {
   LOG_SCHEMA,
   type LogRecord,
@@ -583,26 +593,31 @@ function moshProbe(): { ok: boolean; detail: string } {
  *  sh -c  mosh execs the remote command directly with no shell, so a bare
  *         `a || b` dies with "execvp: a || b: No such file or directory".
  */
-function attachCmd(name: string, transport: "mosh" | "ssh"): string {
+function attachCmd(id: string, transport: "mosh" | "ssh"): string {
   // Name the terminal tab after the session, and keep it named: `ls` renames a
   // placeholder session to Claude's own title for the work, and tmux pushes the
   // new title out to the attached client the moment that happens. Measured on
   // tmux 3.7b: `ESC]0;<name>BEL` on attach, and one more on each rename —
   // nothing in between, so this is not a per-frame cost.
   //
-  //  =name:  with the COLON. `set-option -t` takes a target *pane*, and the `=`
-  //          exact-match prefix is only recognised on the session part when a
-  //          colon follows: `-t =name` fails with "no such session". Dropping
-  //          the `=` instead would be worse than an error, because a bare
-  //          target prefix-matches and would configure somebody else's session.
+  //  $N:     tmux's own session id, not the name — see `Session.id`. It needs
+  //          no `=` exact-match prefix (an id is exact by construction) and it
+  //          cannot have become somebody else's session between the list being
+  //          read and this running, which a name can. The COLON is still
+  //          required on `set-option -t`, which takes a target *pane*: `-t $3`
+  //          fails there where `-t $3:` works.
   //  "#S"    quoted, or `#` starts a comment to the remote shell.
+  //
+  // `shq` on every target, because an unquoted `$N` is a POSITIONAL PARAMETER
+  // to the remote shell. It expands to nothing, `-t` then eats the next word,
+  // and the command addresses something nobody asked for.
   //
   // No `|| exec bash -l` here: a failed attach must fail. The job script keeps
   // the session alive after Claude exits, so nothing needs this as a safety net.
   const inner =
-    `tmux set -t =${name}: set-titles on && ` +
-    `tmux set -t =${name}: set-titles-string "#S" && ` +
-    `tmux attach -d -t =${name}`;
+    `tmux set -t ${shq(`${id}:`)} set-titles on && ` +
+    `tmux set -t ${shq(`${id}:`)} set-titles-string "#S" && ` +
+    `tmux attach -d -t ${shq(id)}`;
   return transport === "mosh"
     ? // Without MOSH_TITLE_NOPREFIX every tab reads "[mosh] " before the name.
       // No ControlPath here: mosh 1.4.0's default --experimental-remote-ip=proxy
@@ -708,12 +723,15 @@ function handOverToTheBox(
 
 /** Everything an attach does except handing over the terminal, which is the one
  *  step its two callers disagree about. */
-function attachHandover(name: string, force?: string): { status: number | null; signal: NodeJS.Signals | null } {
+function attachHandover(
+  target: AttachTarget,
+  force?: string,
+): { status: number | null; signal: NodeJS.Signals | null } {
   const keyboard = interactiveStdin();
   if (keyboard === null) {
     die(
       "the prompt came in on stdin, so there is no terminal left to attach with.\n" +
-        `  The session is running: 'gjd-remote resume ${name}'.\n` +
+        `  The session is running: gjd-remote resume ${printableName(target.name)}.\n` +
         "  Add --no-attach to say you meant that.",
     );
   }
@@ -726,12 +744,21 @@ function attachHandover(name: string, force?: string): { status: number | null; 
   // Built before the handover, not inside the spawn arguments: attachCmd calls
   // HOST(), which reads Terraform state and can die, and a die after the paint
   // is a violet tab with nothing in it.
-  const command = attachCmd(name, transport);
+  const command = attachCmd(target.id, transport);
   return handOverToTheBox("sh", ["-c", command], [keyboard, "inherit", "inherit"]);
 }
 
-function attach(name: string, force?: string): never {
-  const r = attachHandover(name, force);
+/**
+ * What it takes to attach: tmux's id to address, and the name to say out loud.
+ *
+ * Both, because they answer different questions and neither stands in for the
+ * other — the id is unambiguous and means nothing to a reader, the name is what
+ * the person typed and is the only half worth putting in a sentence.
+ */
+type AttachTarget = { id: string; name: string };
+
+function attach(target: AttachTarget, force?: string): never {
+  const r = attachHandover(target, force);
   if (r.signal) return process.exit(128 + (constants.signals[r.signal] ?? 0));
   return process.exit(r.status ?? 0);
 }
@@ -744,13 +771,16 @@ function attach(name: string, force?: string): never {
  * running on the box whatever happens to this terminal, so the useful thing is
  * to say the watching did not work and then go and read the verdict anyway.
  */
-function attachAndReturn(name: string, force?: string): void {
-  const r = attachHandover(name, force);
+function attachAndReturn(target: AttachTarget, force?: string): void {
+  const r = attachHandover(target, force);
   if (r.signal) {
     console.log(dim(`\n(the attach ended on ${r.signal}; the job on the box is unaffected)`));
     return;
   }
-  if ((r.status ?? 0) !== 0) console.log(yellow(`the attach to '${name}' exited ${r.status} — reading the status file anyway`));
+  if ((r.status ?? 0) !== 0)
+    console.log(
+      yellow(`the attach to ${printableName(target.name)} exited ${r.status} — reading the status file anyway`),
+    );
 }
 
 /** A tmux session name: lower-case, hyphenated, and never surprising to a shell. */
@@ -871,8 +901,15 @@ function adoptTitles(list: Session[]): Session[] {
     let want = slugify(s.title, s.name);
     if (want === s.name || !SLUG.test(want)) return s;
     for (let n = 2; taken.has(want); n++) want = `${slugify(s.title, s.name).slice(0, 37)}-${n}`;
-    ssh(`tmux rename-session -t =${s.name} ${want} && tmux set-environment -t =${want} GJD_PROVISIONAL 0`);
-    console.error(dim(`renamed ${s.name} → ${want}`));
+    // Addressed by id, and quoted: the old name came off the box and need not
+    // satisfy SLUG, and an unquoted `$N` is a positional parameter to the
+    // remote shell. `want` is a fresh slug, quoted beside it rather than
+    // trusted to stay one.
+    ssh(
+      `tmux rename-session -t ${shq(s.id)} ${shq(want)} && ` +
+        `tmux set-environment -t ${shq(s.id)} GJD_PROVISIONAL 0`,
+    );
+    console.error(dim(`renamed ${escapeName(s.name)} → ${want}`));
     taken.delete(s.name);
     taken.add(want);
     return { ...s, name: want, provisional: false };
@@ -1836,15 +1873,32 @@ function cdGuard(name: string, dir: string, what: string): string {
  * the note the guard left says why — the pane that printed it does not outlive
  * it.
  */
-function confirmStarted(name: string): void {
+function confirmStarted(name: string): string {
   const note = failNote(name);
+  // `display-message -p` rather than `has-session`, because the answer this
+  // needs is the SESSION ID and it is free here: the round trip is already
+  // being paid for, and the alternative is a second one from every caller that
+  // then wants to attach. See `Session.id` for why a name is not an address.
+  //
+  // **`=name:` WITH THE COLON.** `display-message` takes a target *pane*, and
+  // the `=` exact-match prefix is only honoured on the session part when a
+  // colon follows. Without it tmux 3.4 prints NOTHING and exits 0 — so this
+  // function would have read an empty id and declared every freshly started
+  // session dead. Measured on the box, 2026-09-05; it is the same trap as
+  // docs/project/hetzner-remote-server-box.md § Traps, and GPT Sol caught the
+  // repeat in review before it shipped.
   const out = ssh(
-    `sleep 1; if tmux has-session -t =${name} 2>/dev/null; then printf 'alive\\n'; ` +
+    `sleep 1; if id=$(tmux display-message -p -t ${shq(`=${name}:`)} '#{session_id}' 2>/dev/null) && [ -n "$id" ]; then ` +
+      `printf 'alive %s\\n' "$id"; ` +
       `else cat -- ${shq(note)} 2>/dev/null || ` +
       `printf '%s\\n' 'it was gone a second after it started, and left no note'; fi`,
     { check: false },
   );
-  if (out.trim() === "alive") return;
+  const alive = /^alive (\$\d+)$/.exec(out.trim());
+  // The shape is checked rather than the prefix: `alive` followed by something
+  // that is not a tmux id is a reply this was not written against, and using it
+  // as a target would address whatever tmux makes of it.
+  if (alive?.[1]) return alive[1];
   die(`'${name}' did not survive starting:\n  ${out.trim().split("\n").join("\n  ")}`);
 }
 
@@ -2021,7 +2075,15 @@ function stateLabel(state: SessionState): { rank: number; text: string } {
     case "no-claude":
       return { rank: 5, text: dim("  no claude") };
     case "shell":
-      return { rank: 6, text: dim("  shell") };
+      // A shell grinding through the test suite and a prompt somebody abandoned
+      // fifteen hours ago used to read the same, which is how eight of them
+      // accumulated on the box unnoticed. `busy` is one snapshot of the process
+      // table, so the quiet word is `idle` — "nothing is running in it right
+      // now" — and never `finished`, which claims something no snapshot can see.
+      return {
+        rank: 6,
+        text: dim(state.busy === null ? "  shell ?" : state.busy ? "  shell busy" : "  shell idle"),
+      };
   }
 }
 
@@ -2036,10 +2098,18 @@ function stateSummary(states: SessionState[]): string {
     ["working", (n) => green(`${n} working`)],
     ["waiting", (n) => dim(`${n} waiting to start`)],
     ["no-claude", (n) => dim(`${n} with no claude`)],
+    // The shells are split, because the split is the only actionable half:
+    // "7 shells" says nothing about which of them are doing work, and the ones
+    // that are not are the ones worth looking at.
     ["shell", (n) => dim(`${n} shell${n === 1 ? "" : "s"}`)],
   ];
+  const idleShells = states.filter((s) => s.kind === "shell" && s.busy === false).length;
   return say
-    .map(([kind, render]) => (counts.get(kind) ? render(counts.get(kind) as number) : null))
+    .map(([kind, render]) => {
+      const n = counts.get(kind);
+      if (!n) return null;
+      return kind === "shell" && idleShells > 0 ? `${render(n)}${dim(`, ${idleShells} idle`)}` : render(n);
+    })
     .filter((s): s is string => s !== null)
     .join(dim(" · "));
 }
@@ -2084,7 +2154,13 @@ function cmdLs(): void {
     })
     .sort((a, b) => a.label.rank - b.label.rank || a.s.name.localeCompare(b.s.name));
 
-  const w = Math.max(4, ...list.map((s) => s.name.length));
+  // ESCAPED BEFORE IT IS MEASURED, not after. The width has to be the width on
+  // screen, and an escaped name is longer than the one it came from — measuring
+  // the raw one staggers every column to its right, which is the bug padVisible
+  // exists to prevent for colour.
+  const shown = new Map(list.map((s) => [s.name, escapeName(s.name)]));
+  const nameOf = (s: Session) => shown.get(s.name) ?? s.name;
+  const w = Math.max(4, ...list.map((s) => nameOf(s).length));
   // Widths are measured on the UNDIMMED text and the cells are padded with
   // padVisible, because dim() wraps its argument in escape sequences that
   // .length counts and a terminal does not — the bug that once made the STATE
@@ -2099,7 +2175,7 @@ function cmdLs(): void {
     // it has been.
     const repo = sessionRepo(s);
     console.log(
-      `${s.name.padEnd(w)}  ${padVisible(repo.known ? repo.text : dim(repo.text), rw)}  ` +
+      `${nameOf(s).padEnd(w)}  ${padVisible(repo.known ? repo.text : dim(repo.text), rw)}  ` +
         `${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ` +
         `${padVisible(label.text, sw)}  ${s.title ? s.title : dim("(no title yet)")}`,
     );
@@ -2113,7 +2189,7 @@ function cmdLs(): void {
   const why = new Map<string, string[]>();
   for (const { s, state } of rows) {
     if (state.kind !== "unknown") continue;
-    why.set(state.why, [...(why.get(state.why) ?? []), s.name]);
+    why.set(state.why, [...(why.get(state.why) ?? []), nameOf(s)]);
   }
   for (const [reason, names] of why) {
     console.log(dim(`  ${names.length === 1 ? names[0] : `${names.length} sessions`}: ${reason}`));
@@ -2201,7 +2277,7 @@ function cmdResumeAll(opts: { includeAttached: boolean; transport?: "ssh" | unde
   if (!me) return die("ITERM_SESSION_ID is unset or malformed"); // openTabsRefusal already checked; this is for the types.
 
   const plan = planTabs(adoptTitles(sessions()), { includeAttached: opts.includeAttached });
-  for (const s of plan.skipped) console.log(dim(`skipped ${s.name} — ${s.why}`));
+  for (const s of plan.skipped) console.log(dim(`skipped ${escapeName(s.name)} — ${s.why}`));
   if (plan.open.length === 0) {
     console.log(dim(plan.skipped.length > 0 ? "nothing left to open." : "no sessions. `gjd-remote new-claude` to start one."));
     return;
@@ -2219,19 +2295,19 @@ function cmdResumeAll(opts: { includeAttached: boolean; transport?: "ssh" | unde
 
   const bin = resumeBin();
   const opened: string[] = [];
-  for (const name of plan.open) {
+  for (const tab of plan.open) {
     // No retry: this creates a tab, and a retried create is two tabs for one
     // session. It addresses the window by id, so the -1719 that retries exist
     // for cannot arise here.
-    const made = osa(newTabScript(), [String(here.windowId), resumeCommand(bin, name, opts.transport), "0.4"], {
+    const made = osa(newTabScript(), [String(here.windowId), resumeCommand(bin, tab, opts.transport), "0.4"], {
       retry: false,
     });
     if (!made.ok || !isSessionUuid(made.out)) {
-      console.error(red(`✗ opening a tab for ${name} failed: ${made.out || "no output"}`));
+      console.error(red(`✗ opening a tab for ${escapeName(tab.name)} failed: ${made.out || "no output"}`));
       break;
     }
-    opened.push(name);
-    console.log(`${green("✓")} ${name}`);
+    opened.push(tab.name);
+    console.log(`${green("✓")} ${escapeName(tab.name)}`);
   }
 
   // Last, and unconditional: a run that stopped halfway has stolen the keyboard
@@ -2502,7 +2578,7 @@ async function cmdNewClaude(
     name,
   );
 
-  confirmStarted(name);
+  const sessionTmuxId = confirmStarted(name);
 
   // Written after the session exists, because the record is of a launch that
   // happened — and it carries the uuid, which is the only handle that survives
@@ -2565,7 +2641,7 @@ async function cmdNewClaude(
       // (infra/hetzner/provision.sh, `set -g prefix None`). Telling somebody to
       // press ctrl-b d would be telling them to type `^Bd` into Claude.
       console.log(dim(`  attaching — the pane becomes Claude when the wait is over; close the tab to leave it running`));
-      attach(name, opts.transport);
+      attach({ id: sessionTmuxId, name }, opts.transport);
     } else if (handover.why === "no-terminal") {
       console.log(dim(`  no terminal here, so nothing to attach to — the session is waiting either way`));
     }
@@ -2574,7 +2650,7 @@ async function cmdNewClaude(
   }
 
   console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
-  if (opts.attach) attach(name, opts.transport);
+  if (opts.attach) attach({ id: sessionTmuxId, name }, opts.transport);
   else console.log(dim(`  gjd-remote resume ${name}`));
 }
 
@@ -2594,9 +2670,10 @@ async function cmdNewShell(
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
 
   const live = sessions();
-  if (live.some((x) => x.name === name)) {
+  const already = live.find((x) => x.name === name);
+  if (already) {
     console.log(dim(`'${name}' already exists — attaching`));
-    attach(name, opts.transport);
+    attach({ id: already.id, name: already.name }, opts.transport);
   }
 
   // As in cmdNewClaude: an absent checkout is offered a clone and a setup here,
@@ -2632,14 +2709,14 @@ async function cmdNewShell(
       shq(`${cdGuard(name, dir, "a shell")}; exec bash -l`),
     name,
   );
-  confirmStarted(name);
+  const shellTmuxId = confirmStarted(name);
   // A launch line, written after the session exists, the way cmdNewClaude
   // writes one. main() has already logged the bare `new-shell` invocation; this
   // is the record of a shell that actually started, and of where. No uuid and
   // no prompt, because a shell has neither.
   appendLog({ cmd: "new-shell", name, dir, repo: targetRepo(target), host: host() });
   console.log(green(`✓ shell '${name}'`) + dim(` in ${dir}`));
-  attach(name, opts.transport);
+  attach({ id: shellTmuxId, name }, opts.transport);
 }
 
 /**
@@ -3882,9 +3959,14 @@ function setupSessionName(slug: string, attempt: string): string {
 /** A setup job can exit before it writes anything, and then the pane is gone
  *  too — so `confirmStarted`'s "it left no note" is true and unhelpful. These
  *  are the three ways, each with its own exit code in `SETUP_EXIT`. */
-function confirmSetupStarted(name: string, slug: string, attempt: string, logPath: string, dir: string): void {
-  const alive = ssh(`sleep 1; tmux has-session -t =${name} 2>/dev/null && printf 'alive\\n'`, { check: false }).trim();
-  if (alive === "alive") return;
+function confirmSetupStarted(name: string, slug: string, attempt: string, logPath: string, dir: string): string {
+  // As `confirmStarted`: the id comes back with the proof, because the caller's
+  // next move is to attach and a name is not an address — and `=name:` with the
+  // COLON, for the reason spelled out there.
+  const out = ssh(`sleep 1; tmux display-message -p -t ${shq(`=${name}:`)} '#{session_id}' 2>/dev/null`, {
+    check: false,
+  }).trim();
+  if (/^\$\d+$/.test(out)) return out;
   const read = readSetupState(slug, dir);
   const wrote = read.ok && read.status !== undefined && read.status.attempt === attempt;
   die(
@@ -4143,7 +4225,7 @@ function runSetup(o: {
   ssh(`mkdir -p ${REMOTE_WORK}/jobs`);
   writeRemote(job, jobPath, { exec: true });
   ssh(`tmux new-session -d -s ${name} ${metaFlags(o.target, dir, "setup")} ${shq(`bash ${jobPath}`)}`);
-  confirmSetupStarted(name, o.slug, attempt, paths.logPath, dir);
+  const setupTmuxId = confirmSetupStarted(name, o.slug, attempt, paths.logPath, dir);
   appendLog({ cmd: "setup", repo: o.slug, attempt, outcome: "started", dir, host: host() }, { loud: true });
   console.log(green(`✓ started '${name}'`) + dim(` — its verdict will be ${paths.statusPath}`));
 
@@ -4156,7 +4238,7 @@ function runSetup(o: {
   // The job ends with `exec bash -l`, so the pane outlives the work and this
   // returns when the user detaches or closes it — which is why there is
   // anything to do afterwards at all.
-  attachAndReturn(name, o.transport);
+  attachAndReturn({ id: setupTmuxId, name }, o.transport);
   const seen = reportAfterAttach({ slug: o.slug, name, attempt, sha, dir, statusPath: paths.statusPath });
   return seen === null ? { kind: "detached", name, attempt } : { kind: "verdict", name, attempt, ...seen };
 }
@@ -5056,7 +5138,7 @@ ${bold("SESSIONS")}
   resume [name]           reattach; with no name, the most recent session
   resume-all              one new iTerm tab per session, each attached to its own
       --include-attached    take over sessions something else is already in
-  kill <name>             end a session
+  kill <name>             end a session ${dim("— any name ls shows, made by this tool or not")}
   log                     every session launched from here, and whether it ran
       --lost                only the ones that never started ${dim("— the reboot case")}
       --limit N             how many rows ${dim("(default 40)")}
@@ -5449,15 +5531,16 @@ async function main(): Promise<void> {
       const live = sessions();
       // `tmux ls` order is not a newest-first contract, so sort explicitly.
       const newest = [...live].sort((a, b) => a.created.getTime() - b.created.getTime()).at(-1);
-      const name = rest.find((a) => !a.startsWith("-")) ?? newest?.name;
+      const name = positionalName(rest) ?? newest?.name;
       if (!name) die("no sessions to attach to");
-      if (!SLUG.test(name)) die(`'${name}' is not a valid session name`);
-      // Without this, a typo'd name lands you in a login shell that looks
-      // exactly like a successful attach until you wonder where your work went.
-      if (!live.some((x) => x.name === name)) {
-        die(`no session '${name}'. Live: ${live.map((x) => x.name).join(", ") || "none"}`);
-      }
-      return attach(name, rest.includes("--ssh") ? "ssh" : undefined);
+      // NOT `SLUG`. `ls` lists every tmux session on the box, including ones an
+      // agent made by hand, and those names need only satisfy tmux — see
+      // `resolveSession`, which is the whole reasoning. Existence is the guard:
+      // without it a typo'd name lands you in a login shell that looks exactly
+      // like a successful attach until you wonder where your work went.
+      const found = resolveSession(live, name);
+      if (!found.ok) die(found.why);
+      return attach(found.session, rest.includes("--ssh") ? "ssh" : undefined);
     }
 
     case "resume-all": {
@@ -5476,8 +5559,19 @@ async function main(): Promise<void> {
     }
 
     case "kill": {
-      const name = rest[0];
-      if (!name || !SLUG.test(name)) die("gjd-remote kill <name>");
+      const name = positionalName(rest);
+      // TWO REFUSALS, NOT ONE, and telling them apart is the point. This used
+      // to be a single `!name || !SLUG.test(name)` printing the usage string,
+      // so `gjd-remote kill gateA` — a session sitting right there in `ls` —
+      // answered as though the argument had been left out, and left the session
+      // running. Sol's wording: missing syntax is a usage error, an absent
+      // session is a fact about the box.
+      if (!name) die("usage: gjd-remote kill <name>");
+      // NOT `SLUG`: see `resolveSession`. A name that `ls` prints is a name
+      // `kill` must accept, and `ls` prints every tmux session on the box.
+      const found = resolveSession(sessions(), name);
+      if (!found.ok) die(`${found.why}\n  nothing was killed.`);
+      const target = found.session;
       // Read the uuid BEFORE killing it, because a second later there is
       // nothing to ask. `gjd-remote log` matches kills by uuid rather than by
       // name: `ls` renames a provisional session to Claude's own title, so the
@@ -5485,12 +5579,19 @@ async function main(): Promise<void> {
       // matching on it would report every killed session as lost. Found by GPT
       // Sol. `check: false` — a session with no uuid is a `new-shell`, which is
       // a fine thing to kill and has nothing to record.
-      const killedId = ssh(`tmux show-environment -t =${name}: CLAUDE_SESSION_ID 2>/dev/null | cut -d= -f2-`, {
-        check: false,
-      }).trim();
-      ssh(`tmux kill-session -t =${name}`);
-      appendLog({ cmd: "kill", name, ...(killedId === "" ? {} : { id: killedId }) });
-      console.log(green(`✓ killed '${name}'`));
+      //
+      // Both commands address `target.id`, not the name: between the list being
+      // read and the kill being sent, the session can end and another take its
+      // name, and a kill that lands on the wrong session is not an error you
+      // get to take back. If the id has gone, `kill-session` fails — which is
+      // the outcome we want, never a fallback to the name.
+      const killedId = ssh(
+        `tmux show-environment -t ${shq(`${target.id}:`)} CLAUDE_SESSION_ID 2>/dev/null | cut -d= -f2-`,
+        { check: false },
+      ).trim();
+      ssh(`tmux kill-session -t ${shq(target.id)}`);
+      appendLog({ cmd: "kill", name: target.name, ...(killedId === "" ? {} : { id: killedId }) });
+      console.log(green(`✓ killed ${printableName(target.name)}`));
       return;
     }
 

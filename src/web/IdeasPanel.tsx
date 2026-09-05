@@ -169,8 +169,9 @@ export function IdeasPanel({
   return (
     <aside className="mode-band gloss ideas" aria-label="Ideas">
       <div className="band-head">
-        <Lightbulb size={14} className="band-head-icon" />
-        <h2>Ideas</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the count below it. */}
         {ideas && (
           <span className="gloss-count">
             {all.length} {all.length === 1 ? "idea" : "ideas"}

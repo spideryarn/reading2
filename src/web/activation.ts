@@ -106,20 +106,20 @@ import type { StepName } from "../types.js";
 import { jobEngine } from "./jobEngine.js";
 
 /**
- * The six surfaces a press can start.
+ * The seven surfaces a press can start.
  *
  * Spelt as `StepName`s because that is what they are — the step each panel's
  * job runs — which is also what `beginAutoAttempt` is keyed on. Naming them
  * twice, once for the token and once for the guard, is how the two would come
  * to disagree.
  *
- * **Two of them are chips inside Diagram rather than modes**, and they are the
- * two that spend the most: `sketch` and `illustrated`. See `MODE_TARGET` below
- * for why the mode itself arms nothing.
+ * **Two of them are chips inside Diagram rather than modes**, and they were the
+ * two that spend the most until `debate` arrived: `sketch` and `illustrated`.
+ * See `MODE_TARGET` below for why the mode itself arms nothing.
  */
 export type AutoRunTarget = Extract<
   StepName,
-  "glossary" | "ideas" | "quotes" | "timeline" | "sketch" | "illustrated"
+  "glossary" | "ideas" | "quotes" | "timeline" | "sketch" | "illustrated" | "debate"
 >;
 
 /**
@@ -136,6 +136,15 @@ export type AutoRunTarget = Extract<
  * Illustrated chip beside it arms `illustrated` for the same reason and a
  * dearer one: $0.40–$0.65 a press.
  *
+ * **`debate` is here and is the dearest mode press in the app** — two metered
+ * calls that each go out to the open web, up to ~$0.27 and rising with the
+ * length of the article. It is here rather than left off because the mode is
+ * *only* an artefact: with nothing stored, Debate has nothing whatever to draw,
+ * so a press that armed nothing would be a button that does nothing — which is
+ * the case Diagram is not in, its default picture being free. What keeps the
+ * price honest is that the mode is behind the experimental-features switch, so
+ * the button is not in front of every reader, and that the blurb on it says so.
+ *
  * Everything else in `MODES` is either free (Plain, Hierarchy, Outline,
  * Summary — they read the tree that is already there) or stores nothing at all
  * (Search, Chat, Referee, Remember).
@@ -145,6 +154,7 @@ const MODE_TARGET: Partial<Record<Mode, AutoRunTarget>> = {
   ideas: "ideas",
   quotes: "quotes",
   timeline: "timeline",
+  debate: "debate",
 };
 
 /**

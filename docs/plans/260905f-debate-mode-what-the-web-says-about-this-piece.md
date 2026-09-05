@@ -1,6 +1,8 @@
 # Debate mode — what the rest of the web says about this piece
 
-**Status: planned, not built.** Written 2026-09-05. Second draft, after Stage 0's spike
+**Status: Stages 0–3 built, 2026-09-05; Stage 4 not started, and no live run has happened.** The
+next step is Stage 3½ — run it once — and the reasoning for putting that before Stage 4 is there.
+Written 2026-09-05. Second draft, after Stage 0's spike
 ([results](260905f-debate-mode-stage-0-spike-results.md)) and a GPT Sol plan review that refused the
 first draft on four established P1s. The ledger is at the bottom.
 
@@ -406,10 +408,22 @@ thoroughness, and the cap does the limiting.
 The ceiling is therefore made of three things, none of them a parameter:
 
 1. **a prompt written for restraint** rather than exhaustiveness;
-2. **an abort deadline that actually fires**;
+2. **the claim-wide abort, which is the only deadline that fires** — and it is much later than it
+   looks. This said "an abort deadline that actually fires" and meant `STEP_BUDGET_MS.debate`, 120 s,
+   which is **not a runtime bound at all** (Sol's F31): that table is consulted only *between* steps,
+   to decide whether the claimant hands the job back before starting the next one, and the walk runs
+   its first runnable step unconditionally. A debate-only job — which is how a reader asks for this
+   mode — therefore starts whatever is left and runs to `LEASE_MS - DEADLINE_MARGIN_MS` = **740 s**
+   ([`src/jobs.ts`](../../src/jobs.ts)). So the honest sentence is that a run is bounded at 740 s, and
+   740 s of an unbounded search count is not a spend ceiling;
 3. **`webSearches` on the `ai_calls` ledger row as the alarm** — recorded on this wire since
    2026-09-02 ([`src/ai-call.ts`](../../src/ai-call.ts)), and a run showing 36 searches will show up
-   nowhere else.
+   nowhere else. It is an alarm rather than a ceiling: it fires *after* the money is spent.
+
+**So only the first of the three actually restrains the spend**, and that is worth saying plainly
+rather than leaving it to be inferred from a list of three. If a live run shows the search count
+running away, the lever is the prompt or a step-level timeout that really does fire — not this
+table.
 
 **Quote the mode's cost as up to ~$0.27 for a two-pass run**, typically $0.13–0.20 — not the $0.13 the
 first draft quoted from Stage 0's well-behaved call. That is near the illustrated diagram, which
@@ -563,7 +577,7 @@ evidence was never read. Nothing is wired to the new collector yet; that is Stag
 `tests/collect-citations.test.ts` gained a `collectSearchEvidence` block whose frames carry all five
 live keys.
 
-### Stage 2 — the stage and the artefact
+### Stage 2 — the stage and the artefact — **done, 2026-09-05**
 
 `ArtifactKind` / `ArtifactMap` / `SHAPE` / `STAMP_SOURCE`; the filesystem decoder; `StepName`,
 `STEP_ORDER`, `STEPS`, `STEP_BUDGET_MS`; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`, `AI_JOB_ROUTE`
@@ -594,7 +608,7 @@ the one Greg was asked to look at:
 > times that. So the real per-run cost is above the quoted range and rises with article length, which
 > none of the measured numbers did. **The first live runs are what should replace this paragraph.**
 
-Five further things the plan did not settle, decided here:
+Six further things the plan did not settle, decided here:
 
 - **The answer is a fenced JSON block, not `response_format: {type: "json_schema"}`.**
   `AI_JOB_ROUTE.debate` sends `require_parameters: true`, which turns a parameter an upstream does
@@ -639,9 +653,10 @@ Three test files: `tests/debate.test.ts` (the refusals and the counts, including
 fixture), `tests/debate-passes.test.ts` (the wire, and the ten ways a pass fails the whole step), and
 `tests/debate-step-registration.test.ts` (the stamp, the skip, and that the step buys two searches
 rather than one). **`STEP_BUDGET_MS` is still the 120 s guess** — the re-measurement wants a live run,
-which has not happened.
+which has not happened. Its comment now says what that number is and is not: a scheduling figure,
+consulted between steps, and **not** the deadline this step runs under (§ The spend ceiling).
 
-### Stage 3 — the band
+### Stage 3 — the band — **done, 2026-09-05**
 
 **The owner band only** — the visitor half moves to Stage 4, and that split is Sol's F23. The first
 draft built the owner/visitor pair here while `PUBLIC_PROJECTIONS`, the public DTO, the URL filtering
@@ -656,6 +671,35 @@ a link out); the owner foot line, comparing `reportedRows` with stored `keptRows
 `useOrderedRead` and `useStepJob`, with `useAutoRun` so **only an owner pressing an empty mode** starts
 the job — arrival never POSTs. `CACHEABLE`. Behind the experimental switch, `experimental: true` in
 `MODES_UI`, reason in the table there.
+
+### Stage 3½ — run it once, before Stage 4 — **the next thing to do**
+
+Added at the 2026-09-05 debrief, and it is a **reordering of the plan** rather than an extra step.
+
+**Nothing here has ever run against a live model.** Every screenshot, every fixture and every test in
+Stages 1–3 is synthetic. So four things this plan asserts are still unmeasured, and all four are
+cheaper to learn now than after Stage 4:
+
+- **whether the restrained prompt finds reviews that exist.** § The spend ceiling made restraint a
+  cost control on Stage 0b's evidence. Nobody has checked what it costs in *recall*.
+- **how often `articleReferenceQuote` empties group one.** The rule is strict on purpose, and the
+  plan argues an honest empty state is the right failure. If group one is empty on articles that
+  genuinely were reviewed, the argument stands and the mode is thinner than it reads.
+- **what a run actually costs.** Both probes carried **no article**; pass B sends the whole thing. The
+  true figure is above the quoted ~$0.27 and rises with length, and is currently unknown.
+- **whether `STEP_BUDGET_MS = 120_000` is anywhere near right.** It is an unmeasured guess, and Sol's
+  F31 established it is not a running deadline anyway.
+
+**Why before Stage 4 rather than after.** Stage 4 is the *sharing* half — the public contract, the
+visitor branch, the export chain. It is worth building for a mode that produces something worth
+sharing, and that is exactly the proposition no evidence yet supports. If a live run shows the output
+is thin on a typical article, the response is a prompt change or a product rethink, and Stage 4 built
+first would be work done on top of an unproved thing.
+
+Run it against two or three real articles on the shelf — one with known reception, one without —
+record `webSearches` and cost from the `ai_calls` ledger rows, and write the result into
+[the spike results doc](260905f-debate-mode-stage-0-spike-results.md). Then re-measure
+`STEP_BUDGET_MS` and decide about Stage 4 with numbers.
 
 ### Stage 4 — the shared link, and the docs
 
@@ -763,6 +807,29 @@ stops one step too early: it proves that two passages exist, not that one answer
 
 **Two rounds is the limit** ([engineering-manager.md](../reusable/engineering-manager.md)), so this
 plan now goes to build. Stage-end reviews continue against code, which is where they are worth more.
+
+## Review ledger — GPT Sol, round 3, 2026-09-05 — **the code, after Stages 2 and 3**
+
+The first review of what was *built* rather than of what was planned, and it is the one that found
+the worst bug in the mode: **the plan's own group-one rule was documented in `readDirectGroup`'s
+docblock and not implemented under it**. Sol reproduced F24, F25, F26 and F27 with adversarial
+inputs; Greg checked F24 and F27 against the tree himself before any of this was fixed.
+
+Every fix below has a test that was watched go red first, and where a fix could not be red-first —
+F31 is a comment and a paragraph — the disposition says so.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F24 | P1. `articleReferenceQuote` was located in the extract and never compared with the article, so a genuine quotation from an unrelated page proved directness | **Fixed** — `GroupInput.article` carries url, title and byline; `namesArticle` requires the located slice to name the piece by address (`sameTarget`), by a substantial title, or by a short title with the byline. Failure stays `directnessUnverified` and still drops the row |
+| F25 | P1. `locate` accepted any non-empty substring, so a one-character quote passed both evidence checks | **Fixed** — `MIN_QUOTE_WORDS` = 3 and `MIN_QUOTE_CHARS` = 16, applied inside `locate` so all three checks get them. Counted under the reason each check already had, deliberately: the reader's sentence is the same |
+| F26 | P1. The fence regex matched a ``` anywhere, so truncation was accepted as `[]` and valid JSON carrying a literal fence was rejected | **Fixed** — a line scan; opener and closer each occupy their own line; a later unmatched opener fails the pass. The comment claiming JSON escapes backticks is gone, because it was untrue |
+| F27 | P1. `finish_reason` was a blocklist, so `"error"` was stored as a successful empty artefact | **Fixed** — an allowlist of `"stop"`. `length` and `content_filter` keep their own reader-facing sentences; everything else is an unreadable pass, and the provider's own word for it never reaches the reader |
+| F28 | P2. A missing URL was counted as `malformed`, against the contract in `DebateLosses` | **Fixed** — the two fields tested separately; absent, non-string or blank URL is `uncited` |
+| F29 | P2. `SHAPE.debate` accepted `{direct:{}}` while the fs reader required both groups and Postgres checked nothing | **Fixed** — one predicate, `isDebateDocument` (src/types.ts), asked by `SHAPE`, `readDebate` and `loadDebate` |
+| F30 | P2. `requestTarget` decoded the whole pathname, so `/a%2Fb` and `/a/b` were one target | **Fixed** — only RFC 3986 unreserved escapes are folded, and a retained escape is upper-cased so `%2f` and `%2F` stay one target. Chat's two `sameTarget` callers still refuse what they refused |
+| F31 | P2. `STEP_BUDGET_MS.debate` is not a running-step deadline, and both the comment and § The spend ceiling presented it as one | **Fixed, comment-only by design** — no new timeout mechanism. Both places now say what bounds a run: the claim-wide abort at 740 s, and that only the restrained prompt bounds the *spend*. Not red-first: there is no behaviour to test |
+| F32 | P3. Two tests were weaker than their names | **Fixed** — the search-count case is deleted (both sides of it were the test's own literal, and the wire-level assertion already exists in `tests/debate-passes.test.ts`); the model case sets `SPIDERYARN_DEBATE_MODEL` so the resolver and `CAPABLE_MODEL` differ, proven by mutating the stage to the constant and watching it go red |
+| F33 | P3. The plan was stale | **Fixed** — status line, Stages 2 and 3 marked built, and "Five further things" was six |
 
 ---
 

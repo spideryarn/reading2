@@ -205,3 +205,32 @@ export function haveTerminal(o: { keyboard: number | "inherit" | null; stdinIsTt
   if (o.keyboard === "inherit") return o.stdinIsTty;
   return true;
 }
+
+/**
+ * The first positional argument, with `--` respected.
+ *
+ * `rest.find((a) => !a.startsWith("-"))` was what `resume` used, and it is
+ * wrong in the one direction that matters here: a tmux session name may begin
+ * with a hyphen, and that filter silently skips it — so `gjd-remote resume
+ * -odd` ignored the argument entirely and attached to the newest session
+ * instead. Sol's point. Attaching to something other than what was named is a
+ * worse outcome than an error, and it looks exactly like success.
+ *
+ * `--` ends the options, POSIX-style, so `resume -- -odd` says what it means.
+ * Everything after it is positional even if it looks like a flag.
+ *
+ * **Scanned left to right, not `indexOf("--")` first.** That was the first
+ * version and Sol found two ways it was wrong: `resume gateA --` returned
+ * `undefined` and attached to the newest session instead of `gateA`, and
+ * `resume gateA -- other` returned `other`. A separator only speaks for what
+ * comes after it, so a name already found before it wins.
+ */
+export function positionalName(argv: readonly string[]): string | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === undefined) continue;
+    if (a === "--") return argv[i + 1];
+    if (!a.startsWith("-")) return a;
+  }
+  return undefined;
+}

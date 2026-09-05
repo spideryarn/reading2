@@ -147,7 +147,6 @@ function showFeedback(open: boolean): void {
       createElement(FeedbackDialog, {
         open,
         onClose: () => {},
-        readerEmail: "reader@example.com",
         where: { url: "https://www.spideryarn.com/read/a-piece", slug: "a-piece" },
       }),
     );

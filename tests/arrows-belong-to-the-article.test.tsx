@@ -133,8 +133,8 @@ describe("the bottom bar's mode segment", () => {
    * **The half the deletion could quietly take away.** A roving tabindex is one
    * tab stop for the whole group, which is only reachable *because* the arrows
    * move within it. Take the arrows away and leave the roving tabindex, and
-   * eleven of the twelve modes cannot be reached by keyboard at all — a worse
-   * outcome than the one being fixed, and invisible to a mouse.
+   * thirteen of the fourteen modes cannot be reached by keyboard at all — a
+   * worse outcome than the one being fixed, and invisible to a mouse.
    */
   it("gives every mode its own tab stop", () => {
     paintDock();
@@ -146,8 +146,8 @@ describe("the bottom bar's mode segment", () => {
   });
 
   /* The claim the group still makes, and it is the one worth keeping: exactly
-     one of these is on. Twelve buttons where only one ever lights up read as
-     twelve toggles you could turn on together — styles.css § the modes
+     one of these is on. Fourteen buttons where only one ever lights up read as
+     fourteen toggles you could turn on together — styles.css § the modes
      segment says the same thing about the hairline frame. */
   it("is still a radiogroup with exactly one checked", () => {
     paintDock();

@@ -10,7 +10,7 @@
  *
  * See docs/project/library.md § What you can do to a card.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactElement } from "react";
 import {
   Archive,
   Check,
@@ -30,7 +30,7 @@ import { Link } from "./Link.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { TitleEditor } from "./TitleEditor.js";
-import { Tooltip } from "./Tooltip.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
 
@@ -294,12 +294,143 @@ export function Details({ entry }: { entry: LibraryEntry }) {
 /* ------------------------------------------------------------ actions ----- */
 
 /**
+ * **What each button's card says.**
+ *
+ * Here rather than inline in the row below, because four of the five have a
+ * second version — the sentence for when the action cannot be performed — and a
+ * row with nine `ControlTip`s written into it stops being readable as a row.
+ *
+ * `ControlTip`'s rule holds throughout (Tooltip.tsx): `what` is what pressing
+ * the button would have told you, and `how` is what it would not — what it
+ * costs, where the answer comes from, or what the control does *not* promise.
+ * A `how` that restates its `what` is the failure mode, and
+ * tests/shelf-action-tooltips.test.tsx checks the two against each other.
+ *
+ * **Every claim here is a claim about the code, and the first draft got four of
+ * them wrong** — GPT Sol's review, 2026-09-05. Each was the kind that reads
+ * fluently and cannot be caught by a restatement test: "the whole pipeline"
+ * where `DEFAULT_INGEST_STEPS` is five steps of eleven; "your notes come
+ * through" where block-ids.md is explicit that a rewritten passage can lose its
+ * target; "nobody else can open this" on an article the reader has already
+ * shared; and *"it was uploaded"* inferred from a missing URL, which is exactly
+ * the inference Metadata.tsx refuses to make in a comment of its own. If you
+ * edit a sentence here, check it against the thing it describes.
+ */
+const TIPS = {
+  edit: {
+    head: "Edit title",
+    what: "Rename the article. The shelf, the reading view and the browser tab all follow.",
+    how: "Yours alone, and reversible: the title the extractor found is kept underneath, and saving an empty box restores it.",
+  },
+  /**
+   * **Five steps, not eleven** — `DEFAULT_INGEST_STEPS` in src/pipeline.ts is
+   * `fetch`, `extract`, `blocks`, `hierarchy`, `assets`. The arc, the glossary,
+   * the quotes, the timeline and the rest are not rebuilt, and saying "the
+   * whole pipeline" promised a reader something this button does not do.
+   */
+  rerun: {
+    head: "Re-fetch and rebuild",
+    what: "Fetches the page again and reads it afresh: the text is re-extracted, the blocks and the hierarchy are rebuilt, and the article's images are re-hosted.",
+    how: "A few minutes, and it spends model calls. What you have written stays where the text did — notes are keyed to block ids, which are minted once and kept, so only a passage the page itself has rewritten can lose its marker.",
+  },
+  /**
+   * **The button that used not to be drawn at all.**
+   *
+   * It queued a job whose first step failed with "No source URL", every time,
+   * having looked exactly like a button that ought to work — so on 2026-08-27
+   * it was deleted where there was nothing to fetch. That fixed the dead
+   * button and left a row that is five wide on one card and three on the next,
+   * which is what Greg noticed on 2026-09-05: *"sometimes I see them,
+   * sometimes I don't"*. Drawn and unavailable is the answer to both.
+   *
+   * **It does not say why there is no address.** "You uploaded this" is a claim
+   * assembled from a gap in our own files, and an ordinary web article can be
+   * published with no `requested_url` and no `final_url` at all — the same
+   * reasoning, and the same refusal, as Metadata.tsx § `uploaded`.
+   */
+  rerunNoUrl: {
+    head: "Re-fetch and rebuild",
+    what: "We have no record of an address for this article, so there is nothing to fetch again.",
+    how: "Everything already built from it is unaffected and stays on the shelf. The article's own metadata page shows what we do know about where it came from.",
+  },
+  /**
+   * **And the same gate as the link**, since GPT Sol's review on 2026-09-05.
+   * The first version keyed the re-fetch on `entry.url` alone, so a
+   * `javascript:` or `mailto:` address got a live button — and stage 1 refuses
+   * anything but http(s) (src/fetch.ts), so it queued a job that always failed.
+   * That is precisely the dead button the 2026-08-27 fix was about, reached by
+   * the other door.
+   */
+  rerunNotWeb: {
+    head: "Re-fetch and rebuild",
+    what: "The address recorded for this article is not one we can fetch.",
+    how: "Only http and https are followed. The job would be accepted and then fail at its first step, so the button does not offer it.",
+  },
+  open: {
+    head: "Open the original",
+    what: "Leaves Spideryarn for the publisher's own page, in a new tab, at whatever it says today.",
+    how: "The link carries no referrer, so the site is never told which of your articles pointed at it.",
+  },
+  openNoUrl: {
+    head: "Open the original",
+    what: "We have no record of an address for this article.",
+    how: "That is a gap in what we stored rather than a judgement about the article — its metadata page lists what we do have.",
+  },
+  /**
+   * The other absence, and a rarer one: `final_url` is validated on the way in
+   * by the fetcher, but *imported* metadata is written into the row as given,
+   * so a `javascript:` or `data:` value is reachable. src/urls.ts § `isWebUrl`,
+   * docs/project/security.md.
+   */
+  openNotWeb: {
+    head: "Open the original",
+    what: "The address recorded for this article is not a web page.",
+    how: "Only http and https are opened, and no link is drawn for anything else — a scheme we have not vetted is a click whose destination we cannot vouch for.",
+  },
+  copy: {
+    head: "Copy link",
+    what: "Copies this article's address on Spideryarn — the reading view, not the publisher's page.",
+    how: "Copying changes nothing about who can read it: a private article still opens for you alone, whoever you send the link to.",
+  },
+  /**
+   * The public half of the same button. The shelf is the one place a reader
+   * sees every article at once, so it is the one place the two can be told
+   * apart — `visibility` is on the entry for exactly that reason (src/types.ts).
+   */
+  copyShared: {
+    head: "Copy link",
+    what: "Copies this article's address on Spideryarn — the reading view, not the publisher's page.",
+    how: "You have shared this one, so anybody you send it to can read it. Stop sharing from its metadata page and the same link goes back to opening for you alone.",
+  },
+  archive: {
+    head: "Archive",
+    what: "Takes the article off the shelf, and offers an Undo for nine seconds afterwards.",
+    how: "Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it. The card goes when the server has agreed, not before, so a failed archive cannot leave you looking at a shelf it is missing from.",
+  },
+} as const;
+
+/**
  * The row of buttons.
  *
  * **`opacity`, never `display: none`.** A hidden element is not focusable, so
  * hiding the row until hover would delete it outright for anyone navigating by
  * keyboard — and every check anybody ran with a mouse would look fine.
  * `focus-within` brings it back for exactly that reason.
+ *
+ * **Five buttons, always five.** Two of them used to be drawn only for an
+ * article with a usable source URL, which is right about the action and wrong
+ * about the row: the icons moved between cards, and a reader had no way to find
+ * out that a button existed, let alone why theirs was missing. So the
+ * precondition still decides whether the button *works*, and the card says
+ * which of the two absences this is. docs/project/library.md § When a button
+ * cannot do its job.
+ *
+ * **One `TooltipGroup` around the lot**, the DiagramPanel.tsx idiom: once one
+ * card is open the neighbours open instantly, so reading along five icons is a
+ * scrub rather than five 240ms waits. `keepSide` with it, for the reason
+ * Tooltip.tsx § `keepSide` gives about rows specifically — without it a card
+ * too wide to centre is thrown onto the cross axis and lands on top of the very
+ * buttons the reader is about to hover.
  */
 export function Actions({
   entry,
@@ -354,6 +485,30 @@ export function Actions({
     }
   }, [entry.slug, shelf]);
 
+  /* **Only where there is something to re-fetch.** An uploaded PDF has no
+     address, and neither has an article old enough to predate our recording
+     one — so this button queued a job whose first step failed with "No source
+     URL", every time. Keyed on the URL rather than on "is it an upload",
+     because that is the actual precondition and it covers both cases. GPT Sol,
+     2026-08-27.
+
+     **And `isWebUrl` on top of it, since 2026-08-31.** A shelf row's `url` is
+     the same `final_url` the reading view's controls bar and the metadata page
+     check, and for the same reason: the fetcher validates one on the way in,
+     but *imported* metadata is written straight into the row, so a
+     `javascript:` or `data:` value is reachable and the anchor below would be
+     an active URL sink. src/urls.ts, docs/project/security.md.
+
+     **One test, not two, and that is the correction.** Until GPT Sol's review
+     on 2026-09-05 the re-fetch was keyed on `entry.url` alone, on the reasoning
+     that a non-web address is still an address. It is not an address *stage 1
+     will follow* — src/fetch.ts refuses anything but http(s) — so a
+     `javascript:` article got a live button over a job that was accepted and
+     then failed at its first step. That is exactly the dead button the
+     2026-08-27 fix was about, reached by the other door, and the lesson is that
+     "can we fetch it" and "can we link to it" were never two questions. */
+  const hasWebUrl = Boolean(entry.url) && isWebUrl(entry.url ?? "");
+
   return (
     /* `opacity`, never `display: none` — a hidden element is not focusable, so
        hiding the row until hover would delete it outright for anyone navigating
@@ -363,67 +518,135 @@ export function Actions({
        controls you cannot see but can press by accident. Caught by a
        cross-family review, 2026-08-26. */
     <div className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100">
-      <IconButton label="Edit title" onClick={onEdit}>
-        <Pencil size={14} />
-      </IconButton>
-      {/* **Only where there is something to re-fetch.** An uploaded PDF has no
-          address, and neither has an article old enough to predate our
-          recording one — so this button queued a job whose first step failed
-          with "No source URL", every time, having looked exactly like a button
-          that ought to work. Keyed on the URL rather than on "is it an upload",
-          because that is the actual precondition and it covers both cases.
-          Re-running the *later* stages is still meaningful and is still
-          reachable from the metadata page; only the re-fetch is impossible.
-          GPT Sol, 2026-08-27. */}
-      {entry.url && (
-        <IconButton
-          label={rerunning ? "Queueing…" : "Re-fetch and rebuild"}
-          onClick={() => void rerun()}
-          disabled={rerunning}
-        >
-          <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
-        </IconButton>
-      )}
-      {/* **`isWebUrl`, since 2026-08-31.** A shelf row's `url` is the same
-          `final_url` the reading view's controls bar and the metadata page now
-          check, and for the same reason: the fetcher validates one on the way
-          in, but *imported* metadata is written straight into the row, so a
-          `javascript:` or `data:` value is reachable and this anchor would be an
-          active URL sink. No button rather than a dead one — the card has
-          nowhere to print the address, so there is nothing to keep. GPT Sol,
-          second pass, 2026-08-31. src/urls.ts, docs/project/security.md. */}
-      {entry.url && isWebUrl(entry.url) && (
-        <a
-          href={entry.url}
-          target="_blank"
-          // noreferrer as well as noopener: the target should not be told which
-          // of the reader's articles linked to it.
-          rel="noopener noreferrer"
-          title="Open the original page"
-          aria-label="Open the original page"
-          /* An `<a>` wearing the button's clothes, so the row does not have a
-             gap in it where the one link sits. Kept in step with `IconButton`
-             below by hand — a shared helper would have to take an element
-             type, which is more machinery than five utilities are worth. */
-          className="tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
-        >
-          <ExternalLink size={14} />
-        </a>
-      )}
-      <IconButton label={copied ? "Copied" : "Copy link"} onClick={copy}>
-        {copied ? <Check size={14} className="tw:text-highlight" /> : <Copy size={14} />}
-      </IconButton>
-      {/* **"Archive", and a box rather than a bin.** It said "Delete" with a
-          `Trash2` in it until 2026-09-04, over a handler that has always been
-          `shelf.archive` — and a reader filed a report asking for the archive
-          feature this already was, because nothing on screen said it was
-          reversible. The label, the icon and the red are all the same claim, so
-          all three moved: `destructive` is gone too, because red is this app's
-          word for *this cannot be undone* and undoing it is the whole design
-          (docs/project/library.md § Archive, and Undo is the confirmation). */}
-      <IconButton label="Archive" onClick={() => void shelf.archive(entry.slug)}>
-        <Archive size={14} />
-      </IconButton>
+      <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+        <ActionTip tip={TIPS.edit}>
+          <IconButton label="Edit title" titled={false} onClick={onEdit}>
+            <Pencil size={14} />
+          </IconButton>
+        </ActionTip>
+
+        <ActionTip tip={hasWebUrl ? TIPS.rerun : entry.url ? TIPS.rerunNotWeb : TIPS.rerunNoUrl}>
+          {/* **The name says which of the two absences this is**, and not merely
+              that there is one. A screen reader gets no card, so the parenthesis
+              is the only place the reason reaches it — and a name reading "no
+              address" over an article that has one, of a scheme we will not
+              follow, contradicts the card beside it. GPT Sol, 2026-09-05. */}
+          <IconButton
+            label={rerunLabel(entry, hasWebUrl, rerunning)}
+            titled={false}
+            onClick={() => void rerun()}
+            disabled={!hasWebUrl || rerunning}
+          >
+            <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
+          </IconButton>
+        </ActionTip>
+
+        <ActionTip tip={hasWebUrl ? TIPS.open : entry.url ? TIPS.openNotWeb : TIPS.openNoUrl}>
+          {hasWebUrl ? (
+            <a
+              href={entry.url}
+              target="_blank"
+              // noreferrer as well as noopener: the target should not be told which
+              // of the reader's articles linked to it.
+              rel="noopener noreferrer"
+              aria-label="Open the original page"
+              /* An `<a>` wearing the button's clothes, so the row does not have a
+                 gap in it where the one link sits. Kept in step with `IconButton`
+                 by hand — a shared helper would have to take an element
+                 type, which is more machinery than five utilities are worth. */
+              className="tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
+            >
+              <ExternalLink size={14} />
+            </a>
+          ) : (
+            /* **A `<button>` and not a dead `<a>`**, which is the whole point of
+               the `isWebUrl` gate: there must be no anchor whose `href` is a
+               value we would not follow, disabled or otherwise. This one has no
+               `href` to disable. */
+            <IconButton
+              label={
+                entry.url
+                  ? "Open the original page (the recorded address is not a web page)"
+                  : "Open the original page (no address recorded)"
+              }
+              titled={false}
+              disabled
+            >
+              <ExternalLink size={14} />
+            </IconButton>
+          )}
+        </ActionTip>
+
+        {/* **Two cards, because the sentence is false for one of them.** The
+            first version told every reader the link opened for nobody but them,
+            over a shelf that knows perfectly well which articles are shared —
+            `visibility` is on the entry precisely so the shelf can tell.
+            GPT Sol, 2026-09-05. */}
+        <ActionTip tip={entry.visibility === "public" ? TIPS.copyShared : TIPS.copy}>
+          <IconButton label={copied ? "Copied" : "Copy link"} titled={false} onClick={copy}>
+            {copied ? <Check size={14} className="tw:text-highlight" /> : <Copy size={14} />}
+          </IconButton>
+        </ActionTip>
+
+        {/* **"Archive", and a box rather than a bin.** It said "Delete" with a
+            `Trash2` in it until 2026-09-04, over a handler that has always been
+            `shelf.archive` — and a reader filed a report asking for the archive
+            feature this already was, because nothing on screen said it was
+            reversible. The label, the icon and the red are all the same claim, so
+            all three moved: `destructive` is gone too, because red is this app's
+            word for *this cannot be undone* and undoing it is the whole design
+            (docs/project/library.md § Archive, and Undo is the confirmation).
+            The card now says the same thing in a sentence. */}
+        <ActionTip tip={TIPS.archive}>
+          <IconButton
+            label="Archive"
+            titled={false}
+            onClick={() => void shelf.archive(entry.slug)}
+          >
+            <Archive size={14} />
+          </IconButton>
+        </ActionTip>
+      </TooltipGroup>
     </div>
+  );
+}
+
+/**
+ * The re-fetch button's accessible name, which has to carry what the card
+ * carries — a screen reader is given the card as a *description* and may not
+ * reach it at all, so the reason an unavailable control is unavailable belongs
+ * in the name as well.
+ */
+function rerunLabel(entry: LibraryEntry, hasWebUrl: boolean, rerunning: boolean): string {
+  if (hasWebUrl) return rerunning ? "Queueing…" : "Re-fetch and rebuild";
+  return entry.url
+    ? "Re-fetch and rebuild (the recorded address cannot be fetched)"
+    : "Re-fetch and rebuild (no address recorded)";
+}
+
+/**
+ * One card, in the placement the whole row shares.
+ *
+ * `bottom`, because the row sits at the top right of a card and in a table cell
+ * on a dense row — above it is the window edge or the row before, and below it
+ * is this article's own body, which is the thing the reader is least surprised
+ * to have covered for a moment.
+ */
+function ActionTip({
+  tip,
+  children,
+}: {
+  tip: { head: string; what: string; how: string };
+  children: ReactElement<Record<string, unknown>>;
+}) {
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      className="tip-soon"
+      content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
+    >
+      {children}
+    </Tooltip>
   );
 }

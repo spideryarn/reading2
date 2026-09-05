@@ -878,9 +878,45 @@ describe("the generation prompt", () => {
     expect(QUIZ_SYSTEM).toContain("NOT AN ANSWER KEY");
   });
 
-  it("asks for the spread structurally, in both bands", () => {
+  it("asks for the spread structurally, in both bands, and leans it easy", () => {
+    /* **The lean is the whole of SPIDERYARN-READING2-21**, Greg, 2026-09-05:
+       *"The quiz questions are too hard. Certainly, they should start much,
+       much easier."* The ordering already puts `easy` first; what was missing
+       was enough genuinely easy questions for it to put there, and a batch of
+       three-and-three opens with three and is uphill from the fourth.
+
+       **The easy end went up and the hard end stayed at three**, which is the
+       half a review had to put back. `missingBandEnds` measures what SURVIVED
+       validation, so a prompt asking for two hard questions halves the margin:
+       lose both to a bad quote and a paid batch is thrown away, which is
+       260903c wearing a different number. The lead the reader meets is decided
+       by the easy end anyway.
+       docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md. */
     expect(QUIZ_SYSTEM).toContain("THE SPREAD IS NOT OPTIONAL");
-    expect(QUIZ_SYSTEM).toMatch(/at least three "easy" and at least three "hard"/);
+    expect(QUIZ_SYSTEM).toMatch(/at least five "easy"/);
+    expect(QUIZ_SYSTEM).toMatch(/at least three "hard"/);
+    expect(QUIZ_SYSTEM).not.toMatch(/at least three "easy"/);
+  });
+
+  it("says what easy means in a way a model cannot round up", () => {
+    /* A band is a judgement the model makes about its own question, so "too
+       hard" is answered by moving the DEFINITION and not only the quota — a
+       batch of three easy questions that are not easy is the same complaint
+       with a different distribution. The test of `easy` is the reader, not the
+       question's shape. */
+    expect(QUIZ_SYSTEM).toMatch(/without effort/);
+    /* `\s+` across the line break, because the band table is indented prose and
+       a regex pinned to one line breaks on a re-wrap rather than on a change of
+       meaning. */
+    expect(QUIZ_SYSTEM).toMatch(/If a reader\s+who understood the piece would have to stop/);
+  });
+
+  it("asks for the questions to be about what the argument leans on", () => {
+    /* The other half of the report: *"they should focus on what's most
+       important."* That is a rule about which questions get SET — `value` only
+       orders what has already been chosen, so a batch of peripheral questions
+       is a batch of peripheral questions however it is sorted. */
+    expect(QUIZ_SYSTEM).toContain("MOST OF THE BATCH IS ABOUT WHAT MATTERS MOST");
   });
 
   it("does not promise a retry that does not exist, or describe the gate at all", () => {

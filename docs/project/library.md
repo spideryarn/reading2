@@ -139,6 +139,56 @@ the queue skips every step whose artefact is on disk, which is every step.
 The plan, the decisions and what was deliberately left out are in
 [260826k-library-shelf-actions-and-search.md](../plans/260826k-library-shelf-actions-and-search.md).
 
+Since 2026-09-05 each of the five carries a [`ControlTip`](tooltips.md#controltip-which-is-what-most-of-them-are-now)
+card rather than a `title`, the whole row in one `TooltipGroup`.
+
+### When a button cannot do its job
+
+Two of the five need a source URL, and until 2026-09-05 they were simply **not drawn** without one —
+each absence a real fix (a re-fetch with nothing to fetch, an anchor pointed at a `javascript:` URL),
+each made by deleting the control. The cost only shows across cards:
+
+> On the Homepage shelf, there are a few icons that show up on hover … (sometimes I see them,
+> sometimes I don't). And if some actions are not available, perhaps show them but disabled with a
+> tooltip explaining why.
+>
+> — Greg, 2026-09-05
+
+So all five are always drawn, and the precondition decides whether the button *works* rather than
+whether it exists. The card and the accessible name both say **which** absence it is: no address
+recorded at all, versus an address we will not follow. The card never says *why* there is no address
+— "you uploaded this" is a claim assembled from a gap in our own files, and a revision can be
+published with no `requested_url` and no `final_url`, which is the same refusal
+[`Metadata.tsx`](../../src/web/Metadata.tsx) § `uploaded` makes.
+
+**One test decides both buttons, not two.** Re-fetch was gated on "has a URL" and the link on "has a
+*web* URL", on the reasoning that a non-web address is still an address — but it is not an address
+stage 1 will follow ([`src/fetch.ts`](../../src/fetch.ts) refuses anything but http(s)), so a
+`javascript:` article got a live button over a job that always failed at its first step. GPT Sol,
+2026-09-05.
+
+**`aria-disabled`, never the `disabled` attribute**, and that is the whole feature rather than a
+detail: a natively disabled button is out of the tab order and suppresses activation, and engines
+differ on whether it dispatches pointer events at all — so it is not a reliable tooltip trigger by
+any route, and the card that must open is exactly the one explaining why the button is unavailable.
+[`IconButton.tsx`](../../src/web/IconButton.tsx) makes that the meaning of its `disabled` prop, and
+**stops** the click rather than merely declining it: an absent handler still lets the event bubble,
+and the card's stretched title link is what it would bubble towards.
+
+The cost is two dead tab stops per address-less article. That is the trade — the stop is what makes
+the explanation findable without a mouse.
+
+**jsdom does not reproduce the suppression**, so a test that opened the card on a natively disabled
+button and called that proof is green over exactly this bug —
+[`tests/shelf-action-tooltips.test.tsx`](../../tests/shelf-action-tooltips.test.tsx) asserts the
+attribute instead, and says so.
+
+The one thing still deleted rather than disabled is the **anchor**: where the recorded address is not
+`http(s)` the control is a `<button>`, so there is no `href` in the DOM holding a value we would not
+follow. [security.md](security.md), [`src/urls.ts`](../../src/urls.ts) § `isWebUrl`.
+
+[260905h-rich-tooltips-on-the-shelf-action-buttons.md](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md).
+
 ### The card is no longer one big link
 
 A button inside an anchor is invalid HTML and behaves differently in every browser, so the card is
@@ -912,6 +962,18 @@ two readers never see each other's shelf; eviction is whole-article rather than 
 half-evicted article cannot half-open. And a remembered identity **never authorises a request**: what
 is cached is what this reader already fetched, not permission to fetch more.
 [260827r-offline-reading.md](../plans/260827r-offline-reading.md) has the reasoning.
+
+**Which of two answers is fresher is decided before either was asked.** A cacheable GET reserves a
+ticket — its owner's epoch, and the next number in their sequence — before it is sent, and the write
+is accepted only if that ticket still beats what has committed for the URL. Ordering by *when the
+write landed* was the original design and let the slower of two replies win, and let a GET issued
+before a delete put the deleted thing back:
+[a slow response overwrites a fast one](../postmortems/260905e-a-slow-response-overwrites-a-fast-one.md)
+and [the fix](../plans/260905g-cache-freshness-follows-issue-order-not-completion-order.md). Two
+consequences worth knowing: a mutation or a sign-out retires **every** request that owner had in
+flight, so an article still loading when the reader posts a comment may end up partly cached; and a
+retirement that cannot be shown to have happened **deletes the whole cache**, because a copy we
+failed to clear is a copy we would go on serving.
 
 ## The fixture is always on the shelf
 

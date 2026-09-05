@@ -591,8 +591,16 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   glossary: 120_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
      effort, with a shorter answer than the glossary's because a quote is copied
-     rather than composed. Never measured on its own. */
-  quotes: 120_000,
+     rather than composed. Never measured on its own.
+
+     **Raised from 120s on 2026-09-05, when `suggestedQuotes` doubled.** The one
+     measurement there has ever been is 11.9s for five quotes
+     (docs/project/quotes.md § The first real run), and the answer is what got
+     longer — so the old number is not wrong, it is a headroom claim about a
+     call half this size. Raising it costs sixty seconds before a genuinely hung
+     call is declared dead; not raising it risks killing a good one the reader
+     has already paid for. */
+  quotes: 180_000,
   /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read
@@ -656,13 +664,22 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      10.3 s. This step is two of those in sequence, and the second carries the
      whole article, so 120 s is roughly six times the only thing measured.
 
-     **What it does NOT bound is the spend**, and that is the point to carry
-     away. `max_total_results` is enforced to the row and is not a budget: an
+     **What it does NOT bound is the spend, and it does not bound the runtime
+     either** (GPT Sol's F31). This number is consulted only *between* steps, to
+     decide whether to hand the claim back — see `advanceJobWith` — and the walk
+     runs its first runnable step **unconditionally**. A debate-only job, which
+     is how this step is normally asked for, therefore starts whatever is left
+     and runs until the claim-wide abort at `LEASE_MS - DEADLINE_MARGIN_MS` =
+     **740 s**. So 120 s is a *scheduling* number: it is what a long ingest asks
+     for before starting this step at the end of a queue, and nothing else.
+
+     `max_total_results` is enforced to the row and is not a budget either: an
      adversarial probe with the cap at 4 ran **36 searches** for $0.10, because
      nothing in the request caps the number of *searches* and searches are what
-     cost money. So the ceiling here is made of three things and none of them is
-     a parameter — a prompt written for restraint rather than thoroughness, this
-     deadline, and `webSearches` on the `ai_calls` ledger row as the alarm.
+     cost money. So what actually bounds a run is a prompt written for restraint
+     rather than thoroughness, the 740 s claim-wide abort, and `webSearches` on
+     the `ai_calls` ledger row as the alarm afterwards — and only the first of
+     those is a ceiling on spend at all.
 
      Re-measure at the end of the stage rather than leaving this a guess: the
      plan says so, and the first runs against the shelf are what will say

@@ -531,7 +531,7 @@ and a migration pilot. Risk is regression risk while implementing, not finding s
 
 | Order | Work | Value | Effort | Risk | Stop condition |
 |---|---|---|---|---|---|
-| First | A0 cache-ordering reproduction and fence | Confirmed reliability gap | M | Medium | Reverse completion/mutation cannot restore stale cached data |
+| ~~First~~ **done** | A0 cache-ordering reproduction and fence — [260905g](260905g-cache-freshness-follows-issue-order-not-completion-order.md), 2026-09-05 | Confirmed reliability gap | M | Medium | Met: reverse completion and pre-mutation responses can no longer restore stale cached data |
 | Next | A2 local failure containment, with A1's smallest controller extraction | High reliability and a safe seam | S–M | Medium | A broken mode leaves readable prose and a working escape |
 | Next | A1 article/reader/feature files; A3 exhaustive dispatch | High maintenance/extensibility | M | Medium | New mode integration no longer requires editing access or position logic |
 | Next | A4 secondary-route lazy loading | Measured bundle opportunity | S–M | Low–medium | Measured initial graph shrinks; offline reader path remains intact |
@@ -554,6 +554,15 @@ project docs, runs the required gates and commits/pushes to `dev`. No production
 API migration is needed for the recommended first stages. Do not rename URLs or mode IDs.
 
 ### Stage: Close the cache-ordering gap
+
+**Done, 2026-09-05**, in [260905g](260905g-cache-freshness-follows-issue-order-not-completion-order.md).
+Greg scoped that run to A0 alone; every stage below remains a proposal. Two things this section got
+wrong are worth carrying forward. The mechanism it sketched was right and the cheaper substitute was
+not — see that plan for why ordering by a stamped issue time restores deleted data. And it did not
+foresee that **bumping `DB_VERSION` at all** can hang the offline read behind a tab still running the
+old code, nor that bounding the database *open* bounds nothing else, since a transaction can wait
+indefinitely behind a locked one in another tab. Both were found by GPT Sol with a real harness, and
+both would apply to any future schema change here.
 
 - [ ] Reproduce A0's two deferred-response sequences against the current cache seam. Check the
   introducing history and write the required bug-class postmortem before implementing the fix.
