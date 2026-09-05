@@ -43,6 +43,13 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   actually succeeded, which is not the same question as whether it exited 0. Split out for the same
   reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
   See [Building a box](#building-a-box).
+- [`scripts/gjd-remote-host.ts`](../../scripts/gjd-remote-host.ts) — **which address to ssh to, and
+  which of the three sources said so**: `GJD_REMOTE_HOST`, then this machine's own
+  `/etc/gjd-remote-host`, then Terraform state. The file is what lets the box drive itself without
+  being told; the rule the tests hold is that only `ENOENT` means "no file", because a broad catch
+  turns a bad line in `/etc` into an error message about Terraform.
+  [`tests/gjd-remote-host.test.ts`](../../tests/gjd-remote-host.test.ts), and
+  [Running `gjd-remote` from the box](#running-gjd-remote-from-the-box).
 - [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — what `push-env` is allowed to send.
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
