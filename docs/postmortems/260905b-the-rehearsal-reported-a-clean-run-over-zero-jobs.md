@@ -293,8 +293,8 @@ exit code.
 | `evals/remember-stances.ts` § the summary block | prints `answers: ${CASES.length * REMEMBER_STANCES.length}` — the **planned** count — plus `flagged 0 / uncited 0 / truncated 0 (should be 0)` even if every call threw | a failed call does print its own `### stance — FAILED` section, but the Counts block still uses the planned total, there is no `failed` counter, and no `process.exitCode` anywhere in the file |
 | `evals/hierarchy-structure/floor.ts` | reads a run's `run.json` and reports per-arm stability without checking `completedAt`, so it quotes the surviving arms of a partial panel; a trailing advice paragraph prints even when the loop emitted nothing | unmitigated — and its two siblings, `verify-zdr.ts` and `verify-costs.ts`, both refuse exactly this, one of them saying *"the dangerous reading of a partial panel is the one where the arms that failed hardest are simply absent and the survivors get quoted as the result"* |
 | `evals/referee-mirror.ts` | Counts block prints `cases whose remarks contain a possible verdict: 0 (should be 0)` when zero cases produced remarks | lightly mitigated: failed cases get a `FAILED` table row; the only other tell is an empty `- model:` line |
-| `evals/dictation/bench-models.ts` | `clean` starts `true` and is falsified only by `odd.length`, so an arm whose every call was lost has an empty `seen` map and still prints *"every call named the model it was sent to"* | partly mitigated by a `lost N calls` line — **and the comment immediately above it is the fix for the previous version of this same bug**, in its own words *"a clean bill of health from a test that had not run"*, GPT Sol's item 4. See below |
-| `evals/dictation/bench-vocabulary-sources.ts` | prints `none — and read that as "no exact vocabulary term was inserted"` over a possibly empty set, and writes a **planned** `calls:` count into the results JSON people paste into plans | mitigated by `lost` printed and written beside it |
+| `evals/dictation/bench-models.ts` | `clean` starts `true` and is falsified only by `odd.length`, so an arm whose every call was lost has an empty `seen` map and still prints *"every call named the model it was sent to"* | partly mitigated by a `lost N calls` line — **and the comment immediately above it is the fix for the previous version of this same bug**, in its own words *"a clean bill of health from a test that had not run"*, GPT Sol's item 4. See below. **Fixed 2026-09-05** — [260905e](../plans/260905e-dictation-benchmarks-cannot-report-clean-over-nothing.md) |
+| `evals/dictation/bench-vocabulary-sources.ts` | prints `none — and read that as "no exact vocabulary term was inserted"` over a possibly empty set, and writes a **planned** `calls:` count into the results JSON people paste into plans | mitigated by `lost` printed and written beside it. **Fixed 2026-09-05** — [260905e](../plans/260905e-dictation-benchmarks-cannot-report-clean-over-nothing.md) |
 | `evals/referee-claims.ts` | Counts block reads `0 (should be 0)` over a run where nothing came back, beside held-out figures computed from static fixtures — which makes the block look like a live measurement | per-case `_Not run._` and `**FAILED**` are printed, so it is the weakest instance |
 
 **One cross-cutting fact, and it cuts the encouraging way.** None of those six ever touches
@@ -320,6 +320,17 @@ was sent to — a clean bill of health from a test that had not run"*, and direc
 write it down and reintroduced it in the next block. That is better evidence than another instance
 would be, because it shows the failure is not ignorance of the pattern.
 ⟨`spideryarn2-dd`, 2026-09-05, reading the code rather than taking the finding on report.⟩
+
+**Both dictation rows were fixed later the same day**, and the shape of the fix is the answer to
+the paragraph above: the judgement moved out of the scripts into
+[`evals/dictation/coverage.ts`](../../evals/dictation/coverage.ts), where `clean` is a positive
+statement — every arm answered every call it was sent — rather than the absence of one complaint,
+and where a test can hand it an arm that answered nothing. **A comment could not stop the relapse
+and a second comment would not have either**; what stops the next one is that both benchmarks are
+now unimportable-but-checked by
+[`tests/dictation-bench-coverage.test.ts`](../../tests/dictation-bench-coverage.test.ts), which
+fails if a `bench-*.ts` in that directory does not go through the module.
+[260905e](../plans/260905e-dictation-benchmarks-cannot-report-clean-over-nothing.md).
 
 Other fixed forms worth citing rather than re-deriving: `scripts/check.ts` § `verdict()`, which
 separates `clean` from `broke` (`findings === 0` **and** `code !== 0` → *DID NOT RUN*);

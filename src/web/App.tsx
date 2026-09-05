@@ -194,7 +194,13 @@ import {
   sectionDepth,
   type Section,
 } from "./position.js";
-import { DEFAULT_ROOT_PX, fitView, offerableGists, proseVisible } from "./layout.js";
+import {
+  bandCoversProse,
+  DEFAULT_ROOT_PX,
+  fitView,
+  offerableGists,
+  proseVisible,
+} from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
 import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
@@ -236,6 +242,7 @@ import {
   VisitorBand,
 } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
+import { SmallScreenHint } from "./SmallScreenHint.js";
 import { useRenderCount } from "./perf.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
@@ -2826,6 +2833,31 @@ function Reader({
           dismissible: it is what this page is, not a notification.
           PublicChrome.tsx. */}
       {!owner && <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />}
+      {/* **Why the article and the mode panel are never both on screen here**,
+          on a narrow touch window, once per device. Below it the reader is
+          about to press a mode button and watch the text disappear; this is the
+          sentence that says the way back is Plain.
+
+          After the visitor's notice, not before: what footing you are reading
+          on outranks a note about the shape of the window. Before the controls
+          bar, because the bar is what the note is about — and because the bar
+          is sticky and this is not, so a banner underneath it would slide out
+          from behind the thing it names.
+
+          **`bandCoversProse` rather than a width, and `showSpine` rather than
+          `fit.spine`.** The banner is about one layout decision and has to fire
+          exactly where that decision does — which moves with the rail, since
+          the rail is 12px of the window the band is negotiating for. The raw
+          parameter, not the resolved `fit.spine`, because this is a question
+          about a band that is *not open yet*: `fitView` turns the rail off in
+          outline mode, where there is no band, and reading that would make the
+          banner blink in and out as an iPad reader switched modes. layout.ts §
+          `modeSpine` is where the two resolutions were made one.
+
+          Asking layout.ts is also what keeps it live without a listener of its
+          own: `useWindowWidth` above re-measures on `resize` and
+          `orientationchange`, and this recomputes with it. SmallScreenHint.tsx. */}
+      <SmallScreenHint bandCovers={bandCoversProse(windowWidth, showSpine)} />
       {/* **What is left of this bar after 2026-09-05**, and the list of what
           went is the point — Greg: *"The top bars are really crowded and
           confusing … They're all unnecessary and confusing."* Gone: the `Spine`

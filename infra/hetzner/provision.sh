@@ -533,8 +533,8 @@ run 600 "install emacs" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install e
 
 # Three things name the editor, because three different callers ask a different
 # question and only one of them reads the environment:
-#   1. $EDITOR / $VISUAL, for everything that does. A login shell is enough --
-#      tmux job scripts end in `exec bash -l`, same as GJD_REMOTE_HOST below.
+#   1. $EDITOR / $VISUAL, for everything that does. A login shell is enough for
+#      a human at a prompt, which is who asks this one.
 #   2. the `editor` alternative, for sudoedit, visudo, and anything else that
 #      runs /usr/bin/editor with no environment to consult. Ubuntu points it at
 #      nano and nothing else here would change that.
@@ -1009,16 +1009,66 @@ Host 127.0.0.1 localhost
   IdentitiesOnly yes
 EOF
 '
-# ...and the address, so `gjd-remote ls` on the box needs no argument and no
-# Terraform. Only ever set on the box: on the laptop the variable stays unset
+# ...and the address, so `gjd-remote` on the box needs no argument and no
+# Terraform. Only ever written on a box: on the laptop this file does not exist
 # and the address still comes out of Terraform state, which is what makes it
-# survive a rebuild. A login shell is enough -- tmux sessions get one
-# (`exec bash -l` at the end of every job script).
-cat > /etc/profile.d/gjd-remote-loopback.sh <<'EOF'
-# Written by provision.sh. gjd-remote run ON the box talks to the box.
-export GJD_REMOTE_HOST=127.0.0.1
-EOF
-chmod 0644 /etc/profile.d/gjd-remote-loopback.sh
+# survive a rebuild. scripts/gjd-remote-host.ts is the reader.
+#
+# THIS USED TO BE AN EXPORT in /etc/profile.d/, and it was wrong for a year of
+# agent-days. The comment beside it said "a login shell is enough -- tmux
+# sessions get one (`exec bash -l` at the end of every job script)". They do
+# not: that `exec bash -l` is the line AFTER claude exits, so Claude and every
+# tool shell under it run from a stock-PATH non-login bash and never saw the
+# variable. gjd-remote then fell through to a tofu the box has not got and
+# reported a Terraform problem, and two readers concluded the tool could not run
+# on the box at all.
+#
+# The class is the one this file already learned about `claude` on PATH forty
+# lines down -- VERIFYING THE CONVENIENT PATH INSTEAD OF THE PATH THE WORK
+# TAKES. A file has no such path to be wrong about.
+#
+# Written to a temporary file and renamed, not `cat >`: `cat >` follows a
+# symlink and keeps whatever ownership and mode the destination already had, so
+# it cannot establish the root-owned regular file the reader requires. `-T` on
+# the mv is load-bearing -- with a directory at the destination the plain form
+# puts the file INSIDE it and exits 0.
+# Two cleanups, because they catch different things.
+#
+# FIRST, anything a previous run left staged. A trap cannot help there: a run
+# killed outright between the mktemp and the mv leaves its file with nobody to
+# tidy it.
+#
+# The staging name carries `.tmp.` so the sweep can be sure of what it is
+# deleting. Without it the glob was `.gjd-remote-host.??????`, which matches any
+# six-character suffix -- and `.gjd-remote-host.backup` is exactly six
+# characters, so a file somebody had put there on purpose was swept away. Found
+# by writing that file in a spike and watching it go.
+#
+# `test -f` as well, so a DIRECTORY with a matching name is stepped over rather
+# than making `rm -f` fail and abort the whole run under `set -e`.
+for gjd_host_stale in /etc/.gjd-remote-host.tmp.??????; do
+  if test -f "$gjd_host_stale"; then rm -f "$gjd_host_stale"; fi
+done
+gjd_host_tmp=$(mktemp /etc/.gjd-remote-host.tmp.XXXXXX)
+# SECOND, this run's own file, on any failure the shell can see -- including
+# `mv -T` REFUSING a directory at the destination rather than putting the file
+# inside it, which is the failure this whole form exists for. Measured against a
+# fake /etc on 2026-09-05: without it, one stray file per failed run, for ever.
+#
+# The trap is safe to set here. The one `provision.sh` sets earlier lives inside
+# a heredoc and belongs to a child bash, not to this process -- I had that wrong
+# in the first version and used it as the reason to avoid a trap entirely.
+trap 'rm -f "$gjd_host_tmp"' EXIT
+printf '127.0.0.1\n' > "$gjd_host_tmp"
+chown root:root "$gjd_host_tmp"
+chmod 0644 "$gjd_host_tmp"
+mv -f -T "$gjd_host_tmp" /etc/gjd-remote-host
+trap - EXIT
+# The export it replaces. Left behind it would be a second answer to the same
+# question, honoured only in login shells and read through the branch that does
+# no validation at all -- so a malformed file would be obeyed in one shell and
+# refused in the next.
+rm -f /etc/profile.d/gjd-remote-loopback.sh
 
 echo "=== ssh ==="
 systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
@@ -1116,13 +1166,58 @@ check "/usr/local/bin/claude points at that launcher" 'test "$(readlink /usr/loc
 # that npm's prefix here is computed rather than chosen, so hardcoding today's
 # answer would quietly stop checking anything if NodeSource ever changed it.
 check "no npm-global claude beside the native one" 'root=$(npm root -g) && test -n "$root" && ! test -e "$root/@anthropic-ai/claude-code"'
+# The file gjd-remote reads its address out of, checked as the READER requires
+# it and not merely as "a file is there": a regular file (not a symlink, not a
+# directory), root-owned, 0644, holding exactly one address and one newline.
+# `stat -c` prints all four in one string so a single check covers the lot and a
+# FAIL names what it actually found.
+check "gjd-remote host file is a root-owned 0644 regular file" \
+  'test "$(stat -c "%F %U %a" /etc/gjd-remote-host)" = "regular file root 644"'
+# BYTE FOR BYTE, through cmp, and not `test "$(cat …)" = …`. Command
+# substitution DISCARDS NUL BYTES: a file holding `127.0.0.1\0\n` gives $(cat)
+# `127.0.0.1` and `wc -l` 1, so the string form passed a file the TypeScript
+# reader refuses -- established by writing exactly that file. This repo has
+# already lost time to NUL bytes that grep could not see.
+check "gjd-remote host file holds exactly one address" \
+  "printf '127.0.0.1\\n' | cmp -s - /etc/gjd-remote-host"
+# ...and the export it replaced is gone, so there is one answer to the question.
+#
+# `-L` as well as `-e`: `test -e` follows the link, so a DANGLING symlink reads
+# as absent while the entry is still sitting there -- and the day its target
+# appeared, login shells would have the old answer back without provisioning
+# having changed anything.
+check "no leftover GJD_REMOTE_HOST export" \
+  '! test -e /etc/profile.d/gjd-remote-loopback.sh && ! test -L /etc/profile.d/gjd-remote-loopback.sh'
 # The loopback, end to end and as the user -- not "the key file exists". Three
 # separate things have to be true at once (a key, a line in authorized_keys, a
 # Host block that makes ssh actually OFFER a non-default key name), each of them
 # present-looking while the connection still fails, so the only check worth
 # having is the connection. BatchMode is what stops a broken one hanging on a
 # password prompt until the run times out.
-check "gjd-remote loopback ssh works" 'timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 hostname"'
+#
+# THE ADDRESS COMES OUT OF THE FILE, not out of a second copy of 127.0.0.1
+# written here. A hardcoded literal would let the file say one thing and this
+# check prove another -- the file could hold a syntactically fine PUBLIC address,
+# pass both checks above, and this probe would still be testing the loopback that
+# `Host 127.0.0.1` covers. Then the tool would use an address ssh has no identity
+# for, and nothing here would have noticed.
+#
+# THE `case` IS LOAD-BEARING, and `test -n` was not enough. The address is read
+# here and then spliced into the string `su -c` hands to ANOTHER shell, which
+# parses it again: a file holding `not-a-host; true #` becomes
+# `ssh … not-a-host; true # hostname`, and the check reports ok having tested no
+# loopback at all -- established by reproducing it with the transport forced to
+# fail. So the value is held to the same characters scripts/gjd-remote-host.ts
+# allows, in the same order, before anything interpolates it: an alphanumeric
+# first, then letters, digits, dot, underscore and dash.
+#
+# LC_ALL=C, because a bash range expression collates by LOCALE and the box runs
+# en_GB.UTF-8, where `A-Za-z` also admits the dotted and dotless Turkish i --
+# `Ihost` and `Ihost` passed the guard and would be refused by the reader. It is
+# set inside the check, which check() runs in a subshell of its own, so nothing
+# else in the run sees it.
+check "gjd-remote loopback ssh works, at the address that file names" \
+  'LC_ALL=C; addr=$(cat /etc/gjd-remote-host) && case "$addr" in ""|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*) false ;; *) true ;; esac && timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new $addr hostname"'
 # Claude, over that same loopback -- deliberately AFTER it, so a broken ssh is
 # reported as a broken ssh rather than as a missing Claude.
 #
@@ -1144,11 +1239,12 @@ check "gjd-remote loopback ssh works" 'timeout 20 su - '"$USER_NAME"' -c "ssh -o
 # printing it -- would pass. The statusline check below says the same thing for
 # the same reason; this file has been bitten by it before.
 check "claude runs over non-interactive ssh" 'out=$(timeout 30 su - '"$USER_NAME"' -c "ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 claude --version") && case "$out" in *"(Claude Code)"*) true ;; *) false ;; esac'
-# ...and the address it will use, which is the other half: the ssh above can
-# work perfectly and `gjd-remote ls` still die at "could not read the server
-# address from Terraform state", because the box has no tofu. A login shell,
-# because that is what a tmux session gets.
-check "GJD_REMOTE_HOST is set on the box" 'su - '"$USER_NAME"' -c "echo \$GJD_REMOTE_HOST" | grep -qx "127.0.0.1"'
+# The address it will use is the other half of that, and it is checked further
+# up, against /etc/gjd-remote-host. There used to be a check HERE that read
+# $GJD_REMOTE_HOST back out of a login shell -- deleted with the export it
+# tested, and it would now fail on a correctly configured box. Its comment said
+# "a login shell, because that is what a tmux session gets", which was the whole
+# mistake: the login shell comes AFTER claude exits.
 # Reads the value back out of the JSON rather than grepping the file for the
 # key name: a merge that landed the key with the wrong value, or under the wrong
 # parent, looks identical to a working one under grep.
