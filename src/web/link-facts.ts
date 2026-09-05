@@ -669,9 +669,18 @@ function wakeSummaryWatchers(): void {
   for (const wake of [...summaryWatchers]) wake();
 }
 
-/** `(slug, url)`, as one key. The newline cannot appear in either half. */
-function summaryKey(slug: string, url: string): string {
-  return `${slug}\n${url}`;
+/**
+ * `(slug, url, block)`, as one key. The newline cannot appear in any of them.
+ *
+ * **The block is in the key here for the same reason it is in the server's**: a
+ * destination linked twice in one article is two questions, and a map keyed on
+ * the address alone would answer the second mention with the first one's
+ * paragraph without ever asking. That is the bug this cache would have kept
+ * alive on its own after the server was fixed — the tab never asks twice.
+ * docs/project/links.md.
+ */
+function summaryKey(slug: string, url: string, blockId: string | null): string {
+  return `${slug}\n${blockId ?? ""}\n${url}`;
 }
 
 /**
@@ -732,8 +741,8 @@ export function forgetSummaries(): void {
  * 2026-09-05 was an upstream 429 arriving as the *first* frame, with no text on
  * screen to lose.
  */
-function loadSummary(slug: string, url: string): Promise<void> {
-  const key = summaryKey(slug, url);
+function loadSummary(slug: string, url: string, blockId: string | null): Promise<void> {
+  const key = summaryKey(slug, url, blockId);
   if (summaryCache.has(key)) return Promise.resolve();
   const existing = summaryPending.get(key);
   if (existing) return existing;
@@ -746,7 +755,12 @@ function loadSummary(slug: string, url: string): Promise<void> {
        anyway — it measures silence rather than duration, which is the thing
        that actually distinguishes a dead stream from a slow one. */
     try {
-      const query = `?slug=${encodeURIComponent(slug)}&url=${encodeURIComponent(url)}`;
+      /* **`block` is sent or the parameter is absent**, never sent empty: the
+         route reads a missing parameter as *the reader did not say which
+         mention*, and an empty string would be a block id it could not find and
+         therefore a refusal. */
+      const where = blockId === null ? "" : `&block=${encodeURIComponent(blockId)}`;
+      const query = `?slug=${encodeURIComponent(slug)}&url=${encodeURIComponent(url)}${where}`;
       const res = await apiFetch(`/api/link-summary${query}`);
       /**
        * **Checked before it is read as a stream**, and both halves matter.
@@ -846,6 +860,15 @@ export function useLinkFacts(
   link: LinkPreview | null,
   sourceUrl: string | null,
   slug: string | null,
+  /**
+   * **The block the hovered anchor sits in**, and `null` where there is not one
+   * — a link in a chat answer, or in the sources under it.
+   *
+   * Only the summary uses it. What a page says about itself is a property of
+   * the address, so the shelf, Wikipedia and the fetched preview are all keyed
+   * on the URL alone and are shared across every mention of it.
+   */
+  inBlock: string | null,
 ): LinkFacts {
   const url = link?.kind === "external" ? link.url : null;
   const wiki = link?.kind === "external" ? link.wiki : null;
@@ -941,6 +964,19 @@ export function useLinkFacts(
      */
     const alsoSummarise = () => {
       if (!live || !slug) return;
+      /* **No block, no summary**, and this is the client half of the same rule
+         the server enforces on a block it cannot place. A link in a chat answer
+         or in the sources under one sits in no paragraph, and so does a link in
+         a figure's lightbox — but if that same URL happens to appear in the
+         article's prose, the server would answer *"first mention"* and the card
+         would carry a fluent paragraph about a passage the reader is nowhere
+         near. The free card and the fetched preview still land; only the
+         relative half is withheld, which is the trade this feature is built on:
+         a wrong answer is worse than saying nothing. GPT Sol, 2026-09-05.
+
+         The server keeps its own `"first"` fallback, which is for a client from
+         before this parameter existed rather than for this path. */
+      if (inBlock === null) return;
       /* **The shelf again, and read *now* rather than from the closure.** The
          `shelved` test below runs before `/api/library` has landed on the first
          hover of a session, and the comment beside it accepts one spare preview
@@ -949,7 +985,7 @@ export function useLinkFacts(
          next comment says is never made for a page we already hold. GPT Sol,
          2026-09-05. */
       if (shelf?.get(urlKey(url)) !== undefined) return;
-      if (pageCache.get(url)) void loadSummary(slug, url).then(wake);
+      if (pageCache.get(url)) void loadSummary(slug, url, inBlock).then(wake);
     };
     if (slug && !lang && !title && !shelved && !ownLink) {
       void loadPage(slug, url).then(() => {
@@ -967,11 +1003,11 @@ export function useLinkFacts(
       unwatch();
       unwatchSummaries();
     };
-  }, [url, lang, title, slug, sourceUrl]);
+  }, [url, lang, title, slug, sourceUrl, inBlock]);
 
   if (!url) return NOTHING;
   const asked = lang && title ? wikiCacheKey({ lang, title }) : null;
-  const said = slug === null ? null : summaryKey(slug, url);
+  const said = slug === null ? null : summaryKey(slug, url, inBlock);
   /* The finished answer if there is one, else whatever has arrived — and the
      order matters only in the moment between the last token and the terminal
      frame, where both are present and the finished one is the checked one. */

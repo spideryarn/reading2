@@ -1,8 +1,8 @@
 /**
  * **The Luna summary's cache, and the claim that stops two hovers both paying.**
  *
- * One row per `(owner, article, target)`, validated against the four things that
- * change the answer — the destination's text, the article context, the reader's
+ * One row per `(owner, article, target, block)`, validated against the four things
+ * that change the answer — the destination's text, the article context, the reader's
  * profile, and the prompt and model that wrote it. src/db/schema.ts §
  * `linkSummaries` has the argument for the key and for those four; this file is
  * the mechanical half.
@@ -59,11 +59,13 @@ import type {
  */
 const LINK_SUMMARY_LOCK_NAMESPACE = 5283;
 
-/** A key, resolved: the three columns that address a row. */
+/** A key, resolved: the four columns that address a row. */
 interface Address {
   ownerId: string;
   articleId: string;
   target: string;
+  /** The block the anchor sits in — src/store/contracts.ts § `SummaryKey`. */
+  blockId: string;
 }
 
 /**
@@ -80,20 +82,22 @@ async function addressOf(key: SummaryKey): Promise<Address> {
     ownerId: currentOwnerId(),
     articleId: await articleIdForOwned(key.slug),
     target: key.target,
+    blockId: key.blockId,
   };
 }
 
 /** The address as one string, for the lock and for nothing else. */
 function lockKey(at: Address): string {
-  return `${at.ownerId}\n${at.articleId}\n${at.target}`;
+  return `${at.ownerId}\n${at.articleId}\n${at.target}\n${at.blockId}`;
 }
 
-/** The three columns that address a row. */
+/** The four columns that address a row. */
 function addresses(at: Address) {
   return and(
     eq(linkSummaries.ownerId, at.ownerId),
     eq(linkSummaries.articleId, at.articleId),
     eq(linkSummaries.target, at.target),
+    eq(linkSummaries.blockId, at.blockId),
   );
 }
 
@@ -148,13 +152,18 @@ const RETENTION_BATCH = 50;
     past its expiry is refreshed in place by the next hover. */
 const SUMMARY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
+/* **The tuple is the primary key, all four columns of it.** Naming three would
+   still be valid SQL and would delete every *sibling* of an expired row — the
+   other mentions of the same destination in the same article, which have their
+   own expiries and may be perfectly live. A row nobody can see disappearing is
+   exactly the kind of loss nothing reports. */
 async function sweepABatch(): Promise<void> {
   try {
     const db = getDb();
     await db.execute(sql`
       delete from ${linkSummaries}
-      where (${linkSummaries.ownerId}, ${linkSummaries.articleId}, ${linkSummaries.target}) in (
-        select ${linkSummaries.ownerId}, ${linkSummaries.articleId}, ${linkSummaries.target}
+      where (${linkSummaries.ownerId}, ${linkSummaries.articleId}, ${linkSummaries.target}, ${linkSummaries.blockId}) in (
+        select ${linkSummaries.ownerId}, ${linkSummaries.articleId}, ${linkSummaries.target}, ${linkSummaries.blockId}
         from ${linkSummaries}
         where ${linkSummaries.expiresAt} < now() - make_interval(secs => ${SUMMARY_RETENTION_MS / 1000})
         limit ${RETENTION_BATCH}
@@ -224,7 +233,16 @@ const rawPgLinkSummaryStore: LinkSummaryStore = {
           expiresAt: sql`now() + make_interval(secs => ${leaseMs / 1000})`,
         })
         .onConflictDoUpdate({
-          target: [linkSummaries.ownerId, linkSummaries.articleId, linkSummaries.target],
+          target: [
+            linkSummaries.ownerId,
+            linkSummaries.articleId,
+            linkSummaries.target,
+            /* **The whole primary key, or this is not an upsert.** `ON CONFLICT`
+               takes a unique constraint by its columns, so a target naming three
+               of the four names no constraint at all and Postgres raises rather
+               than updating. */
+            linkSummaries.blockId,
+          ],
           set: {
             status: "pending",
             summary: null,

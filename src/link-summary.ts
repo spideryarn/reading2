@@ -73,7 +73,7 @@ import { createHash } from "node:crypto";
 
 import { type AiRequestBody, classifyEnd, openRouterStream, ProviderRefused } from "./ai-call.js";
 import { errorFields, log, since } from "./log.js";
-import { linkInArticle } from "./link-previews.js";
+import { linkInArticle, type LinkOccurrence, type LinkSighting } from "./link-previews.js";
 import { ENDED_UNFINISHED, saidNothing } from "./messages.js";
 import { modelFor } from "./models.js";
 import { type StreamEnd, type Usage, stoppedByReader } from "./openrouter-stream.js";
@@ -102,8 +102,15 @@ const logger = log("model");
  * texts, closing the escape Sol named, which is to identify the destination in a
  * clause and then paraphrase the article's paragraph. That reads as relative and
  * is not: it could have been written without the destination in front of you.
+ *
+ * **3, 2026-09-05.** The prompt is unchanged and the *identity* is not: the
+ * block the anchor sits in joined the key, so every row written before that is
+ * one this build cannot address. Bumped anyway, and deliberately belt-and-braces
+ * — a row about the *first* mention of a twice-linked page has a byte-identical
+ * `contextHash` before and after this change, so this number is the only one of
+ * the five that a reader of `matches` can see the fix in.
  */
-export const LINK_SUMMARY_PROMPT_VERSION = 2;
+export const LINK_SUMMARY_PROMPT_VERSION = 3;
 
 /**
  * **How much of the destination the model reads.**
@@ -258,16 +265,14 @@ function clip(text: string, max: number): string {
  * this string — so a change to what goes in here must invalidate every cached
  * summary, and a test can hold the two facts together.
  */
-export function readerContext(
-  article: Article,
-  link: { text: string; blockIds: string[] },
-): string {
+export function readerContext(article: Article, at: LinkOccurrence): string {
   const root = article.tree.nodes[article.tree.rootId];
   const gist = root?.gist?.trim();
-  const blockId = link.blockIds[0];
-  const passage = blockId
-    ? article.blocks.find((b) => b.id === blockId)?.text ?? null
-    : null;
+  /* **The block the reader's own pointer is in**, not the first one this
+     destination happens to be linked from. Those are the same block for all but
+     a twice-linked address, and for that one they were the whole of the bug this
+     `LinkOccurrence` exists to close — src/link-previews.ts § `linkInArticle`. */
+  const passage = article.blocks.find((b) => b.id === at.blockId)?.text ?? null;
   /* **Defused too, and the article is not the untrusted party here.** A reader
      chose to ingest this piece, and the system prompt says the article is one of
      the two things that may ask for something. But the delimiters are *ours*,
@@ -279,7 +284,7 @@ export function readerContext(
     article.meta.byline ? `By: ${clip(article.meta.byline, 200)}` : null,
     gist ? `What the piece is about, in one sentence: ${clip(gist, 600)}` : null,
     "",
-    `The link's own words, as the author wrote them: "${clip(link.text, 200)}"`,
+    `The link's own words, as the author wrote them: "${clip(at.link.text, 200)}"`,
     passage
       ? `The passage the link sits in:\n"""\n${clip(passage, SUMMARY_PASSAGE_CHARS)}\n"""`
       : "The passage it sits in could not be found.",
@@ -725,6 +730,7 @@ export async function* linkSummaryStream({
   slug,
   article,
   url,
+  blockId,
   profile,
   signal,
 }: {
@@ -742,6 +748,20 @@ export async function* linkSummaryStream({
    */
   article: Article;
   url: unknown;
+  /**
+   * **Which sighting of that link the reader's pointer is actually on**, as the
+   * client sent it — `null` when it sent none.
+   *
+   * `unknown` for `url`'s reason: it is a query parameter, so nothing but this
+   * function's own check says what it is. A string is taken as *this block and
+   * no other* and is refused below if the link does not occur in it; `null` is
+   * *I did not say*, and gets the first sighting, which is what a client from
+   * before 2026-09-05 sends and what a chat link has no block for at all.
+   * Anything else is a malformed request and is refused rather than quietly
+   * read as "no block", because a client bug that dropped the id must not look
+   * like a client that never had one.
+   */
+  blockId: unknown;
   profile: string | null;
   signal?: AbortSignal;
 }): AsyncGenerator<LinkSummaryEvent> {
@@ -758,6 +778,8 @@ export async function* linkSummaryStream({
   }
   const target = requestTarget(url);
   if (target === null) return yield REFUSED;
+  if (blockId !== null && typeof blockId !== "string") return yield REFUSED;
+  const at: LinkSighting = blockId === null ? "first" : { blockId };
 
   /**
    * **The reader has already gone**, and nothing below is worth doing for a
@@ -777,9 +799,17 @@ export async function* linkSummaryStream({
   /* Membership, and the paragraph, from one pass. Ownership was settled by the
      route's `loadArticle` — see the parameter. Without membership this is an
      endpoint that will summarise any page on request. */
-  const link = linkInArticle(article.blocks, article.meta.url ?? undefined, target);
-  if (!link) {
-    logger.warn({ slug, host }, "link summary: that URL is not in that article");
+  /* **And the block id is checked here rather than anywhere else**, because
+     this is the one place that knows both the article and the link: a block that
+     is not this article's, or is this article's and has no such link in it,
+     finds no occurrence and is refused. A nominated block that fell back to the
+     first sighting would let a caller have any paragraph of their own article
+     summarised against any link in it — the same request-shaped authorization
+     surface stage 2's P1-1 was about, and the reason `linkInArticle` has no
+     third behaviour. */
+  const occurrence = linkInArticle(article.blocks, article.meta.url ?? undefined, target, at);
+  if (!occurrence) {
+    logger.warn({ slug, host }, "link summary: that URL is not in that article, or not in that block");
     return yield REFUSED;
   }
 
@@ -790,9 +820,14 @@ export async function* linkSummaryStream({
   if (!preview || preview.kind === "pending") return yield { kind: "pending" };
   if (preview.kind !== "ok" || preview.excerpt === null) return yield UNAVAILABLE;
 
-  const reader = readerContext(article, link);
+  const reader = readerContext(article, occurrence);
   const destination = destinationContext(host, preview.page, preview.excerpt);
-  const key: SummaryKey = { slug, target };
+  /* **The block is in the key, so two mentions are two rows.** The four
+     fingerprints below would already make the *other* mention a miss — the
+     passage is inside `contextHash` — but a miss on a shared key is the two of
+     them rewriting one row over each other, paying for a model call every time
+     the reader looks from one to the other. src/db/schema.ts § `linkSummaries`. */
+  const key: SummaryKey = { slug, target, blockId: occurrence.blockId };
   const inputs: SummaryInputs = {
     destHash: fingerprint(destination),
     contextHash: fingerprint(reader),

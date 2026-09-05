@@ -1,6 +1,7 @@
 # The external link panel: add it to your shelf, and say what is on the other side
 
-**Status:** all three stages built, 2026-09-05. Three stages, each landable on its own.
+**Status:** all three stages built, 2026-09-05, plus stage 4 — the follow-up fix from stage 3's
+review. Three stages, each landable on its own.
 
 - **Stage 1 — Add to Spideryarn:** built, commit `3a282b83`.
 - **Stage 2 — the server fetches the destination:** built. `GET /api/link-preview`,
@@ -16,6 +17,12 @@
   section on the card. What it turned out to be is written up in
   [links.md § And what it has to do with the piece in your hands](../project/links.md#and-what-it-has-to-do-with-the-piece-in-your-hands),
   with the measured price and latency and a verbatim sample; § Measured, below, has the rest.
+- **Stage 4 — the mention the pointer is on:** built. The one P1 from stage 3's review that was a
+  feature rather than a fix (`P1-1`): the card sends the hovered anchor's block id, `linkInArticle`
+  resolves *that* sighting or refuses, and the block joins `link_summaries`' primary key so a
+  twice-linked destination is two rows. `drizzle/20260905220759_link_summaries_block_id.sql`,
+  [`tests/link-summary-occurrence.test.ts`](../../tests/link-summary-occurrence.test.ts), and
+  [links.md § The mention the pointer is on](../project/links.md#the-mention-the-pointer-is-on-and-not-the-first-one).
 
 The built code went back to GPT Sol twice —
 [260905f-code-review-sol.md](260905f-code-review-sol.md) for stage 2, five P1s and no P0, and

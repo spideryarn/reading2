@@ -20,7 +20,7 @@
  *   PATCH  /api/reader           { profile?: string | null, experimental?: boolean }
  *                                 → { profile, experimentalSince }, both always
  *   GET    /api/link-preview    `?slug=&url=` → what that destination says about itself
- *   GET    /api/link-summary    `?slug=&url=` → SSE: how it stands to the piece being read
+ *   GET    /api/link-summary    `?slug=&url=&block=` → SSE: how it stands to the piece being read
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
  *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
@@ -1577,7 +1577,7 @@ async function answer(
 
 /**
  * **How the page on the other end of a hyperlink stands to the piece being
- * read** — `GET /api/link-summary?slug=…&url=…`, streamed.
+ * read** — `GET /api/link-summary?slug=…&url=…&block=…`, streamed.
  *
  * AGENTS.md's rule (*stream any model call a person is waiting on*) and
  * `explain.ts` is the shape. The plan originally argued for a non-streaming v1
@@ -1613,6 +1613,13 @@ async function answer(
 async function streamLinkSummary(
   slug: string,
   url: unknown,
+  /**
+   * **Which of that URL's mentions the pointer is on**, or `null` when the
+   * client did not say. Validated where the article is — src/link-summary.ts —
+   * because that is the only place that can tell a block of this article
+   * carrying this link from any other string.
+   */
+  blockId: string | null,
   res: ServerResponse,
 ): Promise<void> {
   const article = await loadArticle(slug);
@@ -1624,7 +1631,14 @@ async function streamLinkSummary(
 
   const { frame, gone } = sse(res);
   try {
-    for await (const event of linkSummaryStream({ slug, article, url, profile, signal: gone })) {
+    for await (const event of linkSummaryStream({
+      slug,
+      article,
+      url,
+      blockId,
+      profile,
+      signal: gone,
+    })) {
       frame(event.kind, event);
     }
   } catch (err) {
@@ -6588,10 +6602,10 @@ export async function serveAuthenticatedApi(
    *
    * **A `GET` that spends money**, which the file's own rule about counters
    * argues against. It is deliberate and it is the sibling above's shape: the
-   * question is *(slug, url)* and nothing else, the client's cache is keyed on
-   * exactly that, and an SSE stream is a `GET` everywhere else in this app's
-   * client. Nothing prefetches an `/api/` address, and the spending is behind
-   * three things a prefetch could not satisfy anyway — article ownership, link
+   * question is *(slug, url, block)* and nothing else, the client's cache is
+   * keyed on exactly that, and an SSE stream is a `GET` everywhere else in this
+   * app's client. Nothing prefetches an `/api/` address, and the spending is
+   * behind three things a prefetch could not satisfy anyway — article ownership, link
    * membership, and a cache that answers almost every call.
    */
   const linkSummaryRoute = path === "/api/link-summary";
@@ -7122,7 +7136,11 @@ export async function serveAuthenticatedApi(
     if (linkSummaryRoute && req.method === "GET") {
       const at = query.get("slug") ?? "";
       if (!isSlug(at)) throw httpError(400, "Not a slug");
-      await streamLinkSummary(at, query.get("url"), res);
+      /* `query.get` is `null` for a parameter that was never sent, which is
+         exactly what "the client did not say which mention" means here — a
+         client from before this existed, and a chat link, which sits in no
+         block at all. */
+      await streamLinkSummary(at, query.get("url"), query.get("block"), res);
       return;
     }
     if (visibility && req.method === "PUT") {
