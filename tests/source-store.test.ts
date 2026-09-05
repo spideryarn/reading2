@@ -332,13 +332,11 @@ function bucket(contents: Map<string, Uint8Array>): RawSourceStore {
  * The **reads** stay on drizzle, because `sourceReferenceQuery` is the thing
  * under test and a `SELECT` names only its projection.
  */
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/source-store.test.ts",
   columns: [{ table: "spideryarn.article_revisions", column: "raw_source_sha256" }],
   keepPool: true,
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * **Top-level, not inside the `describe`**, like tests/db-schema.test.ts.
  *
@@ -351,7 +349,7 @@ afterAll(async () => {
   await pool?.end();
 });
 
-when("the Postgres source store", { timeout: 20_000 }, () => {
+describe("the Postgres source store", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     await clean();
     const owner = currentOwnerId();

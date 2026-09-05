@@ -18,7 +18,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WidthGate } from "../src/concurrency.js";
+import { WidthGate, allOrStop } from "../src/concurrency.js";
 
 /** A 429 as the gate's classifier reports one: the `Retry-After`, or `null`. */
 const RATE_LIMITED = () => null;
@@ -425,6 +425,59 @@ describe("the width gate", () => {
   });
 
   /**
+   * **A burst is one piece of news about the width and several about the
+   * window.**
+   *
+   * Two calls admitted together are refused together, so the second carries a
+   * superseded epoch — and `refused` returned on that epoch *before* it applied
+   * the pause. Within one burst, a first refusal asking for a second and a
+   * second refusal asking for thirty therefore reopened the gate at one second,
+   * straight back into a window the provider had just named. The provider's own
+   * number was thrown away for being late.
+   * ⟨GPT Sol's review of stage 5a, finding 2, 2026-09-05. The gate is shared,
+   * so src/pdf-read.ts had it too, at width 100 against the same account.⟩
+   *
+   * The rule the fix states: **every refusal extends the account's pause; only
+   * the width adaptation is epoch-scoped.** The width still halves once, which
+   * is the property the burst test above is about, and this one is about the
+   * clock.
+   */
+  it("holds for the longest window any refusal of a burst asked for", async () => {
+    noJitter();
+    vi.useFakeTimers();
+    try {
+      const gate = new WidthGate(8);
+      /* In the order the two refusals are handled: the epoch-setting one asks
+         for a second, and the stale one — the news that gets discarded — asks
+         for thirty. */
+      const asked = [1_000, 30_000];
+      await peakInside(gate, 2, () => Promise.reject(new Refused()), () => asked.shift() ?? 0);
+      /* One halving, whatever the pause does: the two are separate claims. */
+      expect(gate.report()).toMatchObject({ width: 4, refusals: 2 });
+
+      let ran = false;
+      const next = gate
+        .run(
+          () => {
+            ran = true;
+            return Promise.resolve("ok");
+          },
+          NOT_LOAD,
+        )
+        .catch(() => null);
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(ran, "reopened at the first refusal's window, inside the second's").toBe(false);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await next;
+      expect(ran).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
    * **The cap matches what a request will obey**, so the gate cannot reopen
    * inside a window the provider has just declared closed — the cause of the
    * width walking to the floor on one repeated fact. A ten-minute ask is still
@@ -460,6 +513,162 @@ describe("the width gate", () => {
       expect(ran, "held for the whole ten minutes the provider named").toBe(true);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+/**
+ * The other half of `src/concurrency.ts`, and here rather than in a file of its
+ * own because it is the same module and the same subject: what happens to the
+ * calls that were already paid for when one of their siblings fails.
+ *
+ * `src/labels.ts` still has the copy this was lifted from, with the older
+ * contract and its own tests. These are about **this** one.
+ */
+/**
+ * **A window over a shared gate, so one wave's artefact can say what happened
+ * to *it*.**
+ *
+ * `report()` is cumulative over the life of a process singleton, so a wave that
+ * met nothing and a wave that met everything read identically once an earlier
+ * job had narrowed the gate. ⟨GPT Sol's second review of stage 5a, finding 7.⟩
+ */
+describe("watching one caller's stretch of the gate", () => {
+  it("reports this window's refusals and narrowing, not the gate's whole life", async () => {
+    const gate = new WidthGate(8);
+
+    /* Somebody else's burst, before the window opens. */
+    await peakInside(gate, 2, () => Promise.reject(new Refused()), RATE_LIMITED_NOW).catch(
+      () => {},
+    );
+    expect(gate.report().narrowest).toBe(4);
+    expect(gate.report().refusals).toBe(2);
+
+    const quiet = gate.watch();
+    await peakInside(gate, 2, () => Promise.resolve("fine"));
+    const nothingHappened = quiet.close();
+    /* The cumulative figures still say 4 and 2; this window saw neither. */
+    expect(nothingHappened).toEqual({
+      initialWidth: 4,
+      finalWidth: 4,
+      narrowestWidth: 4,
+      refusals: 0,
+    });
+
+    const busy = gate.watch();
+    await peakInside(gate, 2, () => Promise.reject(new Refused()), RATE_LIMITED_NOW).catch(
+      () => {},
+    );
+    const sawIt = busy.close();
+    expect(sawIt.refusals).toBe(2);
+    expect(sawIt.initialWidth).toBe(4);
+    expect(sawIt.narrowestWidth).toBe(2);
+    expect(sawIt.finalWidth).toBe(2);
+  });
+});
+
+describe("allOrStop", () => {
+  it("keeps the first failure and stops the rest", async () => {
+    let stopped = 0;
+    const err = new Error("the 429 that ended the run");
+    await expect(
+      allOrStop([Promise.resolve(1), Promise.reject(err)], () => {
+        stopped++;
+      }),
+    ).rejects.toBe(err);
+    expect(stopped).toBe(1);
+  });
+
+  it("does not call stop when everything succeeds", async () => {
+    let stopped = 0;
+    await expect(
+      allOrStop([Promise.resolve("a"), Promise.resolve("b")], () => {
+        stopped++;
+      }),
+    ).resolves.toEqual(["a", "b"]);
+    expect(stopped).toBe(0);
+  });
+
+  /**
+   * **The one that cost money.** A peer still on the wire when its sibling fails
+   * has an answer that has been paid for and a checkpoint row it has not written
+   * yet; returning before it settles is how that row was lost. See `allOrStop`.
+   */
+  it("does not return until the work already in the air has settled", async () => {
+    let settled = false;
+    const slow = new Promise((resolve) =>
+      setTimeout(() => {
+        settled = true;
+        resolve("late but paid for");
+      }, 30),
+    );
+    await expect(allOrStop([slow, Promise.reject(new Error("gone"))], () => {})).rejects.toThrow(
+      "gone",
+    );
+    expect(settled).toBe(true);
+  });
+
+  it("handles a second failure that arrives during the drain", async () => {
+    const rejections: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const later = new Promise((_, reject) => setTimeout(() => reject(new Error("second")), 5));
+      await expect(allOrStop([Promise.reject(new Error("first")), later], () => {})).rejects.toThrow(
+        "first",
+      );
+      await new Promise((r) => setTimeout(r, 20));
+      expect(rejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
+  /**
+   * **The drain is only finite if somebody bounds it.**
+   *
+   * The docblock used to assert the wait was finite because every caller either
+   * aborted in flight or was bounded by a claimant's deadline signal. Neither
+   * holds for a caller that passes no signal — the CLI and the exported
+   * `deepenTree` both permit that, and an injected executor has no abort
+   * contract at all — so one wedged call parked the whole wave for ever.
+   * ⟨GPT Sol's second review of stage 5a, finding 3.⟩
+   *
+   * A bound is the caller's to give, because only the caller knows what a
+   * straggler of its own is worth waiting for. Past it the original failure is
+   * rethrown with the straggler still running.
+   */
+  it("stops draining at the bound the caller gave, and still throws the first failure", async () => {
+    const wedged = new Promise(() => {});
+    const started = Date.now();
+    await expect(
+      allOrStop([wedged, Promise.reject(new Error("gone"))], () => {}, 20),
+    ).rejects.toThrow("gone");
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  /**
+   * A straggler abandoned at the bound must not become an unhandled rejection
+   * when it eventually fails — `allSettled`'s handlers stay attached to it after
+   * the race is lost, and that is the only thing keeping the process quiet.
+   */
+  it("keeps hold of a straggler that fails after the bound", async () => {
+    const rejections: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const late = new Promise((_, reject) => setTimeout(() => reject(new Error("late")), 40));
+      await expect(
+        allOrStop([late, Promise.reject(new Error("first"))], () => {}, 5),
+      ).rejects.toThrow("first");
+      await new Promise((r) => setTimeout(r, 80));
+      expect(rejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
     }
   });
 });

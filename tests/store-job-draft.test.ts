@@ -42,12 +42,10 @@ const FRESH_SLUG = "test-job-draft-fresh";
 
 /* ---------------------------------------------------- is there a database -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-job-draft.test.ts",
   tables: ["spideryarn.article_revisions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts a job, so it takes the shared run lock.**
@@ -58,7 +56,7 @@ const when = reachable ? describe : describe.skip;
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
-const runLock = reachable ? await takeRunLock("tests/store-job-draft.test.ts") : undefined;
+const runLock = await takeRunLock("tests/store-job-draft.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
@@ -184,7 +182,7 @@ async function cleanUp(slug: string): Promise<void> {
   }
 }
 
-when("the draft a job owns", () => {
+describe("the draft a job owns", () => {
   beforeAll(async () => {
     await cleanUp(SLUG);
     await cleanUp(OTHER_SLUG);

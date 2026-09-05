@@ -98,16 +98,16 @@
 import { randomUUID } from "node:crypto";
 /* **No `node:fs` and no `node:path` here any more, as of 2026-08-31**, and that
    is worth keeping. The last reader of the disk in this file was `sendSource`,
-   which went to `data/<slug>/raw.pdf` whatever `SPIDERYARN_STORE` said — so the
-   route worked on a laptop and 404d on Vercel, which has no such disk, for as
-   long as it existed. Every route now reaches its bytes through a store, and a
-   fresh `readFile` in this file is both that bug coming back and a route
-   ignoring the store switch. docs/plans/260831b-finish-the-database-move.md. */
+   which went to `data/<slug>/raw.pdf` whatever the store said — so the route
+   worked on a laptop and 404d on Vercel, which has no such disk, for as long as
+   it existed. Every route now reaches its bytes through a store, and a fresh
+   `readFile` in this file is that bug coming back.
+   docs/plans/260831b-finish-the-database-move.md. */
 import type { IncomingMessage, ServerResponse } from "node:http";
-/* From the store rather than from src/api.ts directly, so that
-   SPIDERYARN_STORE=postgres swaps every article read at once and no route has
-   to know which store it is talking to. `files` is the default and is exactly
-   src/api.ts, so nothing changes for anyone who has not opted in.
+/* From the store rather than from src/api.ts directly, so no route has to know
+   which store it is talking to. That was written when there were two and a flag
+   between them; there is one since 2026-09-05, and the indirection is what made
+   deleting the other one a change to `src/store/index.ts` and not to this file.
    docs/plans/260826e-postgres-storage-implementation.md */
 import {
   articleMetadata,
@@ -338,6 +338,7 @@ import {
   MAX_AUDIO_BASE64,
   isAudioFormat,
   parseWhere,
+  tooLongMessage,
   transcribe,
 } from "./transcribe.js";
 import type {
@@ -5309,17 +5310,11 @@ async function transcribeDictation(
     /* The number is in the message because the fix depends on it, and the fix
        is "record less" — which a reader can only act on if they know what the
        limit is. docs/project/copy.md. */
-    throw httpError(
-      413,
-      /* **Raw audio, not the encoded figure.** The limit is on base64, which is
-         a third larger than the file it encodes — so quoting it as "MB of
-         audio" overstated what a reader may record by exactly that third, and
-         the number in an error message is the one thing in it somebody acts on.
-         GPT Sol's code review, item 9. */
-      `That recording is too long. The limit is about ${
-        Math.round(((MAX_AUDIO_BASE64 * 3) / 4 / 1024 / 1024) * 10) / 10
-      } MB of audio. [mic-too-long]`,
-    );
+    /* **The same sentence the browser would have shown**, and the arithmetic
+       that turns base64 into "MB of audio" now lives once, beside the constant,
+       rather than here and again in `dictation-upload.ts`. The two used to be
+       different sentences under one code — `tests/dictation-codes.test.ts`. */
+    throw httpError(413, tooLongMessage());
   }
   if (!isAudioFormat(sent.format)) throw httpError(400, "format is not one we can transcribe");
   const where = parseWhere(sent.context);

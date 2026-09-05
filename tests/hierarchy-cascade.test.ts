@@ -49,6 +49,7 @@ import {
   planExpansionBatches,
   predictedChildren,
   proposalFromTree,
+  type ProposedChild,
   shouldExpand,
   structuralBlocksIn,
 } from "../src/hierarchy-cascade.js";
@@ -686,13 +687,29 @@ describe("planExpansionBatches", () => {
 
 /* ------------------------------------------------------- normalisation --- */
 
+/**
+ * `normaliseExpansion`, with the proposals dropped again.
+ *
+ * It hands back a `DerivedChild` — the node **and** the proposal it was built
+ * from — since 2026-09-05, so that a caller can find the verdict of the child in
+ * front of it. Most of the cases below are about ranges, drops and refusals and
+ * have nothing to say about the pairing, so they take the nodes and read as they
+ * did. The pairing has its own case at the end of this block, and
+ * `tests/hierarchy-deepen.test.ts` is where it is asserted against real verdicts.
+ */
+function expandedNodes<C extends ProposedChild>(
+  opts: Parameters<typeof normaliseExpansion<C>>[0],
+): ModelNode[] {
+  return normaliseExpansion(opts).map((c) => c.node);
+}
+
 describe("normaliseExpansion", () => {
   const blocks = article(20);
   const parent = [blockId(4), blockId(15)] as const;
 
   it("pins the first child to the parent's start and derives every end", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(5), title: "One" },
         { start: blockId(9), title: "Two" },
@@ -737,7 +754,7 @@ describe("normaliseExpansion", () => {
     ];
     for (const starts of cases) {
       const report = emptyReport();
-      const children = normaliseExpansion({
+      const children = expandedNodes({
         children: starts.map((start, i) => ({ start, title: `Child ${i + 1}` })),
         parent,
         blocks,
@@ -858,7 +875,7 @@ describe("normaliseExpansion", () => {
    */
   it("drops a duplicate start, and counts it", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(4), title: "One" },
         { start: blockId(4), title: "Two" },
@@ -888,7 +905,7 @@ describe("normaliseExpansion", () => {
    */
   it("keeps what a reversed list still supplies, and reports the distance", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(12), title: "Late" },
         { start: blockId(8), title: "Middle" },
@@ -910,7 +927,7 @@ describe("normaliseExpansion", () => {
 
   it("drops a non-increasing start in the middle and keeps its neighbours", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(4), title: "One" },
         { start: blockId(9), title: "Two" },
@@ -935,7 +952,7 @@ describe("normaliseExpansion", () => {
    * identical model output, silently. ⟨GPT Sol, 2026-09-04⟩
    */
   it("carries an empty sourceHeading and an empty gist through, rather than deleting them", () => {
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(4), title: "One", gist: "", sourceHeading: "" },
         { start: blockId(10), title: "Two", gist: "A gist.", sourceHeading: "Two" },
@@ -1040,7 +1057,7 @@ describe("normaliseExpansion", () => {
    */
   it("pins an in-parent first start back to the parent's own start, and measures it", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(8), title: "One" },
         { start: blockId(9), title: "Two" },
@@ -1072,7 +1089,7 @@ describe("normaliseExpansion", () => {
   it("moves a child back onto the heading it names, as planChildRanges does", () => {
     const withHeading = article(20, (i) => (i === 8 ? heading(i) : para(i)));
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(5), title: "One" },
         { start: blockId(9), title: "Two", sourceHeading: "Heading 8" },
@@ -1114,7 +1131,7 @@ describe("normaliseExpansion", () => {
   it("agrees with buildTree: a fresh build changes no range and records no repair", () => {
     const whole = article(16);
     const normalised = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(2), title: "One" },
         { start: blockId(6), title: "Two" },
@@ -1154,7 +1171,7 @@ describe("normaliseExpansion", () => {
   it("agrees with buildTree on a section that began one block after its heading", () => {
     const whole = article(16, (i) => (i === 8 ? heading(i) : para(i)));
     const normalised = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(0), title: "One" },
         { start: blockId(9), title: "Two", sourceHeading: "Heading 8" },

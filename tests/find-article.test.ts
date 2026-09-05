@@ -36,7 +36,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * would be read after the branch it is meant to choose. Every import below is
  * therefore dynamic.
  */
-process.env.SPIDERYARN_STORE = "postgres";
 
 import { eq } from "drizzle-orm";
 
@@ -76,14 +75,12 @@ const REVISION_ID = "5a5505bb-a401-4e48-8819-8ec32f46911f";
 /** Stored with `www.` and `https://`, so every spelling below is a real test. */
 const URL = "https://www.example.test/find-article";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/find-article.test.ts",
   columns: [{ table: "spideryarn.articles", column: "short_id" }],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("finding an article that is not named after what you have", { timeout: 20_000 }, () => {
+describe("finding an article that is not named after what you have", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     await clean();
     const db = getDb();

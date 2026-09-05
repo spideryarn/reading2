@@ -2,7 +2,7 @@
  * Pipeline stage 4 — build the deeply-nested table of contents / granularity
  * tree over a block sequence. See docs/project/hierarchy.md.
  *
- *   npm run hierarchy -- output/noema-mythology-of-conscious-ai.blocks.json
+ *   npm run hierarchy -- <slug> [--force]
  *
  * The model proposes INTERNAL nodes only. Leaves are generated here,
  * mechanically, one per block — which removes the whole class of partition
@@ -43,7 +43,7 @@ import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
-import { isBodyEvidence, isStructural } from "./block-policy.js";
+import { isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
 import { COVERAGE_FLOOR, generateLabels, isHeading, mergeLabels, type LabelsFile } from "./labels.js";
 import { checkpointKey, hashBlocks } from "./source-hash.js";
@@ -54,109 +54,34 @@ import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import { PRODUCTION_EFFORT as EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
+/* **The one value import that points at the cascade**, and the reason three
+   things were hoisted out of this file into leaves: everything under
+   `hierarchy-deepen.ts` may name this module's *types* and none of its values.
+   src/hierarchy-prompt.ts. */
+import {
+  DeepenFailed,
+  deepeningEnabled,
+  deepenTree,
+  describeFailure,
+  liveExpansionExecutor,
+  saveDeepenRecords,
+  type DeepenStats,
+  type ExpansionExecutor,
+} from "./hierarchy-deepen.js";
 import { log } from "./log.js";
 
-/* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
-   longer asks for them, and a tree written by toc/1 is a different artefact.
-
-   Bumped to 4 for the heading snap (`snapStartsToHeadings`), which is not a
-   prompt change at all: the wire request is byte-identical. The stamp still has
-   to move, because it is what the structure *checkpoint* is keyed on, and the
-   same answer now builds a different tree — a document part-way through the
-   stage would otherwise resume onto the old boundaries and nothing would say
-   so. One replayed call per article in flight, and that is the whole cost. */
-export const PROMPT_VERSION = "toc/4";
-
 /**
- * How hard the model thinks before it starts writing.
+ * **The three values that moved to [`hierarchy-prompt.ts`](hierarchy-prompt.ts),
+ * re-exported so that nothing which imports them from here had to change.**
  *
- * **`"low"` since 2026-09-04, and this setting has now been wrong in both
- * directions twice before that.**
- *
- * The history, because it is the argument. It was `"high"` originally, by
- * default rather than by decision. The max_tokens postmortem forced it down to
- * `"medium"`: raising `max_tokens` from 32,000 to 77,100 failed again, having
- * spent roughly 64,000 tokens on thinking, because at `"high"` adaptive thinking
- * **expands into whatever room it is given**. `max_tokens` is a ceiling, not a
- * leash; `effort` is the leash. Moving the nav labels out to src/labels.ts then
- * bought enough room to put it back to `"high"`, and the comment here argued
- * that case well.
- *
- * It went wrong the same way a third time. On 2026-08-30 Stephen Wolfram's
- * "Towards a theory of bugs" was sized for a 52,225-token budget — 12,225 for
- * the answer, 40,000 of `THINKING_HEADROOM` — and came back truncated having
- * spent 2,825 on the answer and 49,400 on reasoning. Those two sum to 52,225
- * **exactly**. The reasoning did not overrun the reservation; it expanded to
- * fill the ceiling, which is what it does at `"high"` and what it will do at
- * any ceiling. So no value of `THINKING_HEADROOM` fixes this, and neither does
- * a better answer estimate: both make the room bigger and the thinking takes
- * the room. Greg's call, the same day.
- *
- * **The measurement that was owed has now been taken, and it says `"low"`.**
- * 2026-09-04. The three paragraphs above said this setting had never been
- * measured for quality, only chosen off a failure mode. That is no longer true,
- * and the evidence points one way in three independent runs:
- *
- * - **Blind judging, eight of eight.** Two evals, two judge families (GPT Sol
- *   and Fable), two draw sets — `low` preferred over `medium` every time, with
- *   the free heading tree placing second. evals/results/hierarchy-effort-2026-09-03.md
- *   and evals/results/hierarchy-cheap-models-2026-09-03.md.
- * - **The same reliability, not worse.** Pooled across three articles both
- *   efforts produced a tree 6 times in 7, and the one article that beat them
- *   beat *both*. The earlier "low failed 1 in 8 where medium failed 0 in 10"
- *   reading came from one document.
- * - **Cheaper and faster, on the long articles that matter.** 2026-09-04, on
- *   the 360-block constitution: $0.264 against $0.293 and 150s against 172s,
- *   for the same seven depth-1 parts. On the 184-block gwern essay: $0.135
- *   against $0.234 — 42% less — and **eight parts against six**.
- *
- * **The failure modes are not commensurable, and that is the argument.**
- * `medium`'s named fault is *welding*: it fuses two of the author's own
- * sections under one title. That is valid, silent, shipped, and paid by every
- * reader of that article — nothing in the pipeline can detect it, and the
- * six-versus-eight parts above is it happening again. `low`'s fault is a tiling
- * violation, which `buildTree` throws on, the job card reports, and a Retry
- * recovers. A loud failure that costs one retry is a better trade than a quiet
- * one that costs every reader a worse map.
- *
- * **What is still not measured**: `high` against either, for this stage. It has
- * never been run and is unlikely to be worth the money now, given that the
- * argument for lowering was a failure mode and the argument for lowering
- * further is a quality result.
- *
- * **If you run any of these comparisons, read `repairedBlocks` and
- * `largestRepair` alongside the score.** Since `0062f74` a tree that does not
- * tile is snapped shut and repaired rather than thrown away, so an arm can
- * score `ok` having been repaired into shape — and a boundary one paragraph out
- * and a section handed forty of its neighbour's blocks would otherwise look
- * identical. `evals/hierarchy-structure/run.ts` records both.
- *
- * See docs/plans/260904c-hierarchy-structure-in-waves.md § Product decisions,
- * docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
+ * `PROMPT_VERSION`, `PRODUCTION_EFFORT` and `renderBlocks` are read as *values*
+ * by `hierarchy-expand.ts`, and this file imports the cascade — so leaving them
+ * here closed the cycle `npm run cycles` refuses. The reasoning behind each of
+ * the three travelled with it; only the address changed, and not one of the
+ * values did. See that file's header.
  */
-const EFFORT = "low" as const;
-
-/**
- * **What production actually thinks at, for anything that needs to say so.**
- *
- * Exported on 2026-09-03 because `evals/hierarchy-structure/arms.ts` had typed
- * the number in again, and drifted: it called `"high"` the incumbent for the
- * eight days after the max_tokens postmortem moved this to `"medium"`. Every
- * paid arm in that harness was therefore scored against a recipe the pipeline
- * does not run, and `smart-low` — declared as isolating the single variable
- * `effort` — was quietly answering high-vs-low instead of the medium-vs-low
- * question production has. GPT Sol found it by reading both files at once,
- * which is the only way a restated constant is ever found.
- *
- * *(That arm is `smart-medium` since 2026-09-04: production moved to `low`, so
- * the arm isolating effort had to move the other way or become a second copy of
- * the incumbent. The name in the paragraph above is the one it had at the time.)*
- *
- * `structureRequest` below already hands this out to callers who have blocks;
- * `evals/cost` reads it that way and stayed correct throughout. This export is
- * for the callers who only want the number.
- */
-export { EFFORT as PRODUCTION_EFFORT };
+export { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
 
 const SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
@@ -214,43 +139,6 @@ export interface ModelNode {
   range: [string, string];
   sourceHeading?: string;
   children?: ModelNode[];
-}
-
-/**
- * The article, as the structure model sees it.
- *
- * **A supplement's prose is withheld, and its id is not.** On the ordinary path
- * `generateHierarchy` hands this only the body, so the branch never fires — but the
- * split falls back to the whole article whenever the apparatus is not one
- * trailing run (src/supplement.ts), and on that path this function is the only
- * thing between a bibliography and the largest prompt the pipeline sends. A
- * marker alone was the shape of the original bug: `NOT-GISTABLE` is written from
- * `gistable`, and a prose footnote *is* gistable, so a note went out unmarked
- * and in full. Marking it would not have been a fix either — the text is what
- * must not travel. GPT Sol's review of stage 3, 2026-08-28.
- *
- * The **id stays**, because the model's ranges have to tile the whole article
- * and a block it cannot name is a block no node can cover. `NOT-GISTABLE` is
- * reused rather than a new marker invented: SYSTEM above already explains it,
- * and a word the prompt never defines is a word the model gets to interpret.
- *
- * **Exported for the scoped expansion call** (src/hierarchy-expand.ts), which
- * renders one section's slice with the identical rule. A second renderer would
- * be a second place for the withholding above to be forgotten, and
- * `estimateEvidenceTokens` (src/hierarchy-cascade.ts) already sizes a batch by
- * following *this* function's output — so a private copy would put the
- * estimator and the builder one edit apart with nothing to say so. The index in
- * `[i]` is a position within the array handed in, so a scoped call's slice is
- * numbered from 0 and its prompt says so.
- */
-export function renderBlocks(blocks: Block[]): string {
-  return blocks
-    .map((b, i) => {
-      if (!isBodyEvidence(b)) return `[${i}] ${b.id} <${b.tag}> NOT-GISTABLE: (withheld)`;
-      const mark = b.gistable ? "" : " NOT-GISTABLE";
-      return `[${i}] ${b.id} <${b.tag}>${mark}: ${b.text}`;
-    })
-    .join("\n\n");
 }
 
 /**
@@ -1959,6 +1847,27 @@ export interface HierarchyRun {
    */
   structureResumed: boolean;
   /**
+   * **What the deepening wave did**, or `null` where it was not run at all —
+   * which is every reader today, because the flag is off
+   * (src/hierarchy-deepen.ts § `DEEPEN_ENV`).
+   *
+   * `null` and a stats object of zeros are different facts and the difference is
+   * the one worth having: the first says nobody asked for a deepening, the
+   * second says one was asked for and found nothing eligible. Reported at zero
+   * like `strandedSupplement` and for the same reason.
+   */
+  deepen: DeepenStats | null;
+  /**
+   * **The wave was run and it threw**, so this tree is the one wave 1 produced.
+   *
+   * Its own boolean rather than an absent `deepen`, because those are the two
+   * cases that must not be confused: a run with `deepen: null` was never asked
+   * to deepen, and a run with this true was, and could not. The article is
+   * correct either way — which is exactly why it needs a number, or the failure
+   * has no symptom at all. docs/reusable/silent-success.md.
+   */
+  deepenFailed: boolean;
+  /**
    * Paragraphs left with no nav label — **normally 0, and it is reported at 0
    * as well as above it.**
    *
@@ -1972,10 +1881,13 @@ export interface HierarchyRun {
   labelsDropped: number;
   inputTokens: number;
   outputTokens: number;
-  /* From the label pass only — the structure call is one call per article and
-     is deliberately not cached, so there is nothing for it to read. See
-     docs/plans/260826g-prompt-caching.md on why a prefix used once is worth 1.25× and
-     no more. */
+  /* From the label pass and the deepening wave. **Not the structure call**,
+     which is one call per article and is deliberately not cached, so there is
+     nothing for it to read — see docs/plans/260826g-prompt-caching.md on why a
+     prefix used once is worth 1.25× and no more. The wave is the other way
+     round: its calls share `EXPAND_SYSTEM` plus the frozen outline, so on a cold
+     cache all of them write and on a resumed article none of them calls at all
+     (src/hierarchy-deepen.ts § `runExpansionWave`, "No warm-up"). */
   cacheReadTokens: number;
   cacheWriteTokens: number;
   elapsedMs: number;
@@ -1994,8 +1906,11 @@ export interface HierarchyRun {
  * parallel batches after it, then the tree, the labels file and this stage's
  * copy of the blocks — **returned, not written.**
  *
- * Exported because two callers run this stage and they must not drift —
- * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
+ * Exported because the ingest queue in the server process runs it
+ * (src/pipeline.ts), and because the stage has to be testable without one. It
+ * had a second caller — a `main()` at the foot of this file — until stage E of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * moved every stage CLI into `scripts/stage.ts` and through the queue.
  *
  * **The blocks come in, the artefacts go out, and the stage knows nothing about
  * where either lives.** It used to open a path and write a directory, which
@@ -2004,7 +1919,9 @@ export interface HierarchyRun {
  * the seven article-reading stages. docs/plans/260831b-finish-the-database-move.md.
  *
  * **Two model passes, one pipeline step, and nothing returned until both are
- * done.** The split exists so the unbounded half can be batched
+ * done** — three when the deepening wave is switched on, which runs between the
+ * structure call and the labels (`deepenTree`, off for every reader today). The
+ * split exists so the unbounded half can be batched
  * (docs/plans/260826h-toc-scaling.md), not so it can be published separately — a tree
  * stored with a third of its labels missing is a valid-looking artefact that
  * quietly describes part of an article, which is
@@ -2016,7 +1933,9 @@ export interface HierarchyRun {
  * `onProgress` reports what is arriving. For the structure call there is nothing
  * useful to say about *what* has been written — the JSON is unparseable until it
  * is complete — so it reports that something is still coming. The label pass can
- * do better, and counts finished sections.
+ * do better, and counts finished sections. The deepening wave, where it runs at
+ * all, reports nothing: it is off for every reader, and a progress line for a
+ * pass nobody asked for is worse than none.
  */
 export async function generateHierarchy(opts: {
   blocks: Block[];
@@ -2024,7 +1943,9 @@ export async function generateHierarchy(opts: {
   slug: string;
   /**
    * Where each finished **label batch** goes as it lands — passed straight down
-   * to `generateLabels`, which is the only thing here that checkpoints.
+   * to `generateLabels`. It was the only thing here that checkpointed until the
+   * structure call and the deepening wave gained rows of their own; this option
+   * is still the label pass's alone.
    *
    * It was a directory until 2026-09-01, and the store was not the seam this
    * call could go through because it is keyed on an `articleId` no stage was
@@ -2042,6 +1963,33 @@ export async function generateHierarchy(opts: {
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
+  /**
+   * **Whether to run the deepening wave.** Defaults to `deepeningEnabled()`,
+   * which is the `SPIDERYARN_DEEPEN_HIERARCHY` environment switch, which is off.
+   *
+   * Passed explicitly by a test and by an eval arm; production passes nothing and
+   * gets the switch. Two levers rather than one because the environment is how a
+   * *deployment* turns it on without a rebuild, and an argument is how a test
+   * turns it on without touching the process every other test shares.
+   * docs/plans/260904d-deepen-fat-sections.md § stage 8.
+   */
+  deepen?: boolean;
+  /**
+   * The seam the deepening wave talks to a model through. Defaults to
+   * `liveExpansionExecutor`, which streams. A test passes a function that
+   * returns a string, and no network happens anywhere.
+   */
+  expansionExecutor?: ExpansionExecutor;
+  /**
+   * **The wall clock this step has to be finished by** — `claimedMs + leaseMs -
+   * DEADLINE_MARGIN_MS`, which the queue already computes (src/jobs.ts).
+   *
+   * Only the deepening reads it, and only to decide whether to *start* another
+   * call: a wave that cannot finish stops between calls with everything it has
+   * bought written down, rather than being killed in the middle of one. Omitted,
+   * the wave runs to completion, which is what a command line and a test want.
+   */
+  deadlineAt?: number;
 }): Promise<HierarchyRun> {
   const { blocks, slug } = opts;
   const structural = blocks.filter((b) => isStructural(b)).length;
@@ -2107,12 +2055,25 @@ export async function generateHierarchy(opts: {
    * guarantee about the file. `checkTree` is pure and takes microseconds.
    * docs/postmortems/260830a-the-article-with-one-heading.md.
    */
-  const treeFrom = (answer: string): { tree: Tree; built: BuildReport } => {
+  const treeFrom = (answer: string): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
     const { root } = parseJson(answer);
     const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
     let tree: Tree;
+    /**
+     * **The tree before the apparatus is appended**, kept because the deepening
+     * wave has to be given this one and not the other.
+     *
+     * A supplement is a depth-one node of leaves carrying `treatment:
+     * "supplement"`, and `ModelNode` — which is what a deepening pass converts a
+     * tree back into — has nowhere to put that. So the appended node would come
+     * back as an ordinary childless node with its treatment gone, and the wave
+     * would take it for a section and try to divide a bibliography.
+     * src/hierarchy-deepen.ts § `deepenTree`, src/supplement.ts.
+     */
+    let bodyTree: Tree;
     try {
-      tree = appendSupplement(buildTree(root, {}, body, slug, built), groups);
+      bodyTree = buildTree(root, {}, body, slug, built);
+      tree = appendSupplement(bodyTree, groups);
     } catch (err) {
       /**
        * **A run that threw still says what it had mended on the way**, because
@@ -2150,7 +2111,7 @@ export async function generateHierarchy(opts: {
     /* The report goes back with the tree because `HierarchyRun` reports what was
        mended in the tree it is returning — which, on a resumed run, is the
        stored answer's build rather than a fresh one's. */
-    return { tree, built };
+    return { tree, bodyTree, built };
   };
 
   /**
@@ -2210,7 +2171,7 @@ export async function generateHierarchy(opts: {
    * of being wrong in this direction is one call; the cost of the other is an
    * article that can never be built again.**
    */
-  let cached: { tree: Tree; built: BuildReport } | null = null;
+  let cached: { tree: Tree; bodyTree: Tree; built: BuildReport } | null = null;
   if (raw !== null) {
     try {
       cached = treeFrom(raw);
@@ -2309,7 +2270,9 @@ export async function generateHierarchy(opts: {
   /* Built already if it came out of the checkpoint — the gate up there is this
      same function, because an answer that cannot become a tree has to read as a
      miss rather than as a resumption. */
-  const { tree: structure, built } = cached ?? treeFrom(raw);
+  const wave1 = cached ?? treeFrom(raw);
+  let structure = wave1.tree;
+  const built = wave1.built;
 
   /**
    * **Kept only now, and the lateness is the design.**
@@ -2340,6 +2303,117 @@ export async function generateHierarchy(opts: {
       log("pipeline").warn(
         { slug, key: structureFingerprint, err },
         "could not save the structure checkpoint; a later attempt will ask for the tree again",
+      );
+    }
+  }
+
+  /**
+   * **The deepening wave — off by default, and inert for every reader until it
+   * is not.**
+   *
+   * One additional scoped call per fat section, seeded from the tree
+   * `buildTree` has just derived rather than from the answer that produced it,
+   * because a scoped call must be shown the range the finished tree will give
+   * its node. All of the reasoning is in src/hierarchy-deepen.ts § `deepenTree`;
+   * what belongs *here* is the four decisions about where it sits in the step.
+   *
+   * **After the structure checkpoint's write**, so a wave that fails cannot
+   * cost the article the tree it has just paid two dollars for.
+   *
+   * **Before `generateLabels`**, necessarily: `labels.json` stamps
+   * `structureHash(tree)`, so a tree deepened after the labels were written
+   * would be stale at birth and nothing anywhere would say so
+   * (docs/project/hierarchy.md § Two passes). It also means the labels are cut
+   * along the deepened tree's own section boundaries, which is the same rule
+   * that has always applied, and it is most of why a deepened book costs
+   * several times what it costs today.
+   *
+   * **On the body tree, and the result is rebuilt from scratch.** The second
+   * `buildTree` is free — it is pure, takes milliseconds, and deriving
+   * already-derived ranges a second time derives the same ones — and it buys the
+   * thing that matters: every check `buildTree` and `assertTreeSound` make runs
+   * **once, over the finished tree**, with no second validation path to keep in
+   * step.
+   *
+   * **A failed wave is not a failed article.** The deepening is an enhancement;
+   * losing it costs the reader the level this plan is about, and losing the
+   * article costs them the article. So a throw here is a `warn` and the wave-1
+   * tree, with `deepen.failed` on the run so that an operator can see the
+   * difference between *"nothing was eligible"* and *"it broke"* —
+   * docs/reusable/silent-success.md. What was paid for is not lost either: each
+   * call's row was written the moment its answer stood up, and the reader's next
+   * Retry resumes onto them.
+   */
+  const deepening = opts.deepen ?? deepeningEnabled();
+  let deepen: DeepenStats | null = null;
+  let deepenFailed = false;
+  if (deepening) {
+    try {
+      const deepened = await deepenTree({
+        tree: wave1.bodyTree,
+        blocks: body,
+        slug,
+        checkpoints: opts.checkpoints,
+        execute: opts.expansionExecutor ?? liveExpansionExecutor(opts.signal),
+        ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+        ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+      });
+      deepen = deepened.stats;
+      /* **The per-candidate records, kept where a second run can be compared
+         with them** — and nowhere at all unless somebody named a directory
+         (src/hierarchy-deepen.ts § `DEEPEN_RECORDS_ENV`). Three of the five
+         questions the live run exists to answer are per-node rates across
+         repeats, and until 2026-09-05 every one of those records was built and
+         then dropped here. */
+      await saveDeepenRecords(slug, deepened);
+      if (deepened.root !== null) {
+        /* A report of its own, merged in below rather than written into
+           `built`'s array while the build is deciding what to put there. Over
+           already-derived ranges it should come back empty; a number in it is
+           worth seeing rather than hiding, which is why it is merged and not
+           dropped. */
+        const rebuilt: BuildReport = {
+          repairs: [],
+          droppedChildren: [],
+          droppedHeadings: [],
+          collapsedRungs: [],
+        };
+        const deeper = appendSupplement(
+          buildTree(deepened.root, {}, body, slug, rebuilt),
+          groups,
+        );
+        assertTreeSound(blocks, deeper);
+        structure = deeper;
+        for (const from of [deepened.report, rebuilt]) {
+          built.repairs.push(...from.repairs);
+          built.droppedChildren.push(...from.droppedChildren);
+          built.droppedHeadings.push(...from.droppedHeadings);
+          built.collapsedRungs.push(...from.collapsedRungs);
+        }
+      }
+    } catch (err) {
+      deepenFailed = true;
+      /**
+       * **The failure's own records, before the fallback.**
+       *
+       * A wave that dies fatally took wave 1's governor decisions, its paid
+       * peers' records, the gate's report and the token accounting with it — and
+       * for a run whose whole purpose is to answer five questions, a failure
+       * nobody can read is nearly as bad as no run. So the partial telemetry
+       * travels on the error and lands in a file marked `failed`.
+       * ⟨GPT Sol's second review of stage 5a, finding 5.⟩
+       *
+       * Only a `DeepenFailed` carries one. Anything else thrown here — the
+       * second `buildTree`, `assertTreeSound` — happened *after* the success
+       * path had already written its file.
+       */
+      if (err instanceof DeepenFailed) {
+        await saveDeepenRecords(slug, err.partial, { reason: describeFailure(err.cause) });
+      }
+      log("pipeline").warn(
+        { slug, err },
+        "the deepening wave failed; keeping the table of contents wave 1 produced",
       );
     }
   }
@@ -2480,8 +2554,12 @@ export async function generateHierarchy(opts: {
        this stage produces, so nothing can write two of the three and forget the
        third. That is worth having and it is not atomicity.
 
-     The ordering survives in exactly one place — `main()` below, which really
-     does write three files. GPT Sol, 2026-08-31. */
+     The ordering used to survive in one place — a `main()` at the foot of this
+     file, which really did write three files. That CLI went on 2026-09-05 with
+     stage E of
+     docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+     so nothing writes the three by hand any more and the ordering is now purely
+     the store's. GPT Sol, 2026-08-31; the CLI's removal, 2026-09-05. */
 
   return {
     parts,
@@ -2515,13 +2593,26 @@ export async function generateHierarchy(opts: {
     labelCalls: labelRun.calls,
     labelsResumed: labelRun.resumed,
     structureResumed,
+    deepen,
+    deepenFailed,
     labelsDropped: labelRun.dropped.length,
-    /* Both passes together. What this number answers is "what did a tree cost",
-       and a structure figure alone would now understate it by most of the bill. */
-    inputTokens: structureUsage.input_tokens + labelRun.inputTokens,
-    outputTokens: structureUsage.output_tokens + labelRun.outputTokens,
-    cacheReadTokens: labelRun.cacheReadTokens,
-    cacheWriteTokens: labelRun.cacheWriteTokens,
+    /* **All three passes together.** What this number answers is "what did a
+       tree cost", and a structure figure alone would now understate it by most
+       of the bill.
+
+       The deepening term is zero on every run with the flag off, because
+       `deepen` is `null` there — so an undeepened run's four figures are
+       arithmetically identical to what it reported before the wave was metered,
+       and `tests/hierarchy-deepen-tokens.test.ts` is the gate on that. What it
+       cannot recover is a wave that *threw*: `deepenTree` returns nothing to add
+       up, and `deepenFailed` beside these says the AI-spend ledger under task
+       `hierarchy` is where that attempt's money is. */
+    inputTokens:
+      structureUsage.input_tokens + labelRun.inputTokens + (deepen?.usage.inputTokens ?? 0),
+    outputTokens:
+      structureUsage.output_tokens + labelRun.outputTokens + (deepen?.usage.outputTokens ?? 0),
+    cacheReadTokens: labelRun.cacheReadTokens + (deepen?.usage.cacheReadTokens ?? 0),
+    cacheWriteTokens: labelRun.cacheWriteTokens + (deepen?.usage.cacheWriteTokens ?? 0),
     elapsedMs: Date.now() - started,
   };
 }
@@ -2539,9 +2630,14 @@ export async function generateHierarchy(opts: {
  * Two things a person used to get here are worth naming as losses: the long
  * per-run report (`Nodes:`, `Repaired:`, `Notes:`, the token counts), of which
  * the queue keeps the one-line `detail`; and re-labelling on its own, which was
- * `npm run labels` and is now `--force` on this command — the extra structure
- * call is the honest price, and there is no `labels` step to ask for instead.
- * `scripts/stage.ts` has the contract.
+ * `npm run labels` and has no replacement at all. `--force` is not one: it is a
+ * *step* flag, so the step runs again and then replays its structure and label
+ * batches out of `checkpoints` — measured 2026-09-05, two consecutive forced
+ * runs on an unchanged article, the first buying two model calls and the second
+ * **none**. So `--force` re-runs the step and not the purchase, and an earlier
+ * version of this sentence claiming "the extra structure call is the honest
+ * price" was wrong in the expensive direction. `scripts/stage.ts` has the
+ * contract and the measurement.
  *
  * **`withLedger("cli", …)` went with it, and that is not an oversight.** The
  * job runner opens a `job_step` spend collector per step, so a CLI wrapping the

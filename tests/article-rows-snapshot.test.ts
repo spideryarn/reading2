@@ -114,12 +114,10 @@ const MESSAGE_DURING = "spya-snpm24";
 const COMMENT_DURING = "spya-snpc24";
 const BLOCK_ID = "spya-snpb23";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/article-rows-snapshot.test.ts",
   tables: ["spideryarn.chat_messages", "spideryarn.chat_threads", "spideryarn.comments"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * The same handle, with a probe as the first statement of every transaction and
  * a refusal on every read made outside one.
@@ -163,7 +161,7 @@ function interleaving(real: Db, opened: Opened[], interleave: () => Promise<void
   }) as Db;
 }
 
-when("readArticleRows reads one article as one snapshot", () => {
+describe("readArticleRows reads one article as one snapshot", () => {
   beforeAll(async () => {
     const db = getDb();
     const owner = currentOwnerId();

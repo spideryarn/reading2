@@ -101,7 +101,6 @@ loadEnvLocal();
  * no second reader. It is why src/store/index.ts now refuses to boot on
  * `files` in production, and why that refusal is a throw rather than a warning.
  */
-process.env.SPIDERYARN_STORE = "postgres";
 
 const ALICE = "00000000-0000-4000-8000-0000000000a1" as OwnerId;
 const BOB = "00000000-0000-4000-8000-0000000000b2" as OwnerId;
@@ -1063,12 +1062,10 @@ const OUTSIDER = "00000000-0000-4000-8000-0000000000b1" as OwnerId;
 /* Probes for `owner_id` and not merely for the schema: the migration that
    added it is what this suite is about, and a database one behind should be
    told to migrate rather than fail with a column error. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/owner-isolation.test.ts",
   columns: [{ table: "spideryarn.articles", column: "owner_id" }],
 });
-
-const when = reachable ? describe : describe.skip;
 
 const SLUG = "test-owner-isolation";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000f7";
@@ -1077,7 +1074,7 @@ const BLOCK_ID = "spya-wnaaqa";
 /** Distinctive enough that a hit on it cannot be a coincidence. */
 const RARE = "thaumaturgical";
 
-when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
+describe("one owner's article, asked for by another", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     await clean();
     const db = getDb();
@@ -1363,7 +1360,7 @@ const theEnvironmentsOwner = currentOwnerId();
  * So: two HTTP requests to the same route, differing only in whose token the
  * verifier vouches for, and they must not see each other's profile.
  */
-when("the same route asked by two different people", { timeout: 20_000 }, () => {
+describe("the same route asked by two different people", { timeout: 20_000 }, () => {
   /**
    * The one who writes has to be the seeded development owner: `owner_id`
    * references `auth.users(id)` (drizzle/0001), and only that one exists. The
@@ -1602,7 +1599,7 @@ const LISTED: readonly (ListedSpec & { article: string; revision: string; shortI
 
 const listSlug = (key: ListedKey) => `test-listing-${key}-${LIST_RUN}`;
 
-when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, () => {
+describe("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     await cleanListing();
     const db = getDb();
@@ -1979,7 +1976,7 @@ const CAP_ROWS = Array.from({ length: CAP + 1 }, (_, i) => ({
   slug: `test-cap-${String(i).padStart(3, "0")}-${CAP_RUN}`,
 }));
 
-when("two hundred cards, and the two hundred and first", { timeout: 60_000 }, () => {
+describe("two hundred cards, and the two hundred and first", { timeout: 60_000 }, () => {
   /** How many public readable articles the cloned database already had. */
   let others = 0;
 

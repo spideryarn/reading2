@@ -48,7 +48,7 @@ loadEnvLocal();
 
 /* At module load, so the skip is a real vitest skip rather than a green tick
    for having checked nothing. tests/helpers/pg-ready.ts. */
-const { reachable: pgReachable } = await pgReady({
+await pgReady({
   suite: "tests/store-reader-parity.test.ts",
   columns: [{ table: "spideryarn.reader_profiles", column: "experimental_since" }],
 });
@@ -111,20 +111,19 @@ async function seedOwner(): Promise<void> {
 
 afterAll(async () => {
   await rm(FILE, { force: true });
-  if (!pgReachable) return;
   const db = getDb();
   await db.delete(readerProfiles).where(eq(readerProfiles.ownerId, OWNER));
   await db.execute(sql`delete from auth.users where id = ${OWNER}`);
   await closeDb();
 });
 
-const stores: [string, ReaderStore, boolean][] = [
-  ["the filesystem store", fsReaderStore, true],
-  ["Postgres", pgReaderStore, pgReachable],
+const stores: [string, ReaderStore][] = [
+  ["the filesystem store", fsReaderStore],
+  ["Postgres", pgReaderStore],
 ];
 
-for (const [name, store, available] of stores) {
-  describe.skipIf(!available)(name, () => {
+for (const [name, store] of stores) {
+  describe(name, () => {
     beforeAll(async () => {
       if (store === pgReaderStore) await seedOwner();
     });

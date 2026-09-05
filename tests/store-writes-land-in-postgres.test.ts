@@ -37,26 +37,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, set before **any** import runs.
- *
- * `vi.hoisted` and not a plain statement. `src/store/live.ts` reads the flag
- * once, the first time anything imports it — and imports are hoisted above every
- * statement in a module, so an ordinary assignment runs *after* the imports
- * below have already settled the answer to `files`.
- *
- * That is not hypothetical: it happened to tests/db-error-scrub.test.ts two
- * hours after it was written, when a new import chain reached `live.ts`. The
- * symptom was not an error — the tests quietly exercised the filesystem store
- * and passed for the wrong reason.
- */
-const PREVIOUS_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles } from "../src/db/schema.js";
@@ -75,32 +56,19 @@ const SLUG = "store-writes-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000e6";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-writes-land-in-postgres.test.ts",
   tables: ["spideryarn.chat_threads"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-const { chatStore, searchStore, STORE } = await import("../src/store/index.js");
+const { chatStore, searchStore } = await import("../src/store/index.js");
 
 /* Put back straight after the import: vitest reuses a worker across test files
    and does not reset `process.env` between them, so leaving it set hands the
    next file a store it did not ask for. The modules above have already captured
    the flag, so nothing here needs it any more. */
-if (PREVIOUS_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_FLAG;
 
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Without this, a flag that failed to take looks exactly like the fix
-       working: the filesystem store answers every call happily, and only the
-       "no file appears" assertion below would notice — from the wrong side. */
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("a write in postgres mode", () => {
+describe("a write in postgres mode", () => {
   /* The fixture is set up and torn down **around both tests**, not inside the
      first one. Vitest runs an `afterAll` when its own block finishes, so a
      fixture owned by the first `describe` is deleted before the second one

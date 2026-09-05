@@ -21,7 +21,7 @@
  * on silence.
  */
 import { describe, expect, it } from "vitest";
-import { KEEP_GOING, verdictFor } from "../src/web/dictation-errors.js";
+import { KEEP_GOING, KNOWN_CODES, verdictFor } from "../src/web/dictation-errors.js";
 
 /** The message, or a failure if the verdict was "keep going". Keeps the assertions readable. */
 function messageFor(code: string, ours = false): string {
@@ -105,8 +105,20 @@ describe("verdictFor", () => {
      messages in the app without them. docs/project/copy.md § The bracketed
      code. */
   it("gives every message a code, including the one for an unknown error", () => {
-    for (const code of ["not-allowed", "network", "audio-capture", "language-not-supported", "wat", ""]) {
-      expect(messageFor(code)).toMatch(/\[mic-[a-z-]+\]/);
+    /* **Over the table, not over a list somebody typed.** This used to name six
+       codes by hand, and `phrases-not-supported` and `bad-grammar` were not
+       among them — so those two returned a sentence with no code at all and
+       nothing said so for a year. A check whose scope is a hand-written list
+       goes stale silently, which is the same failure as the partial `onerror`
+       map this whole file was written about. GPT Sol, F11 on 260905c. */
+    for (const code of [...KNOWN_CODES, "wat", "", "网络"]) {
+      expect(messageFor(code), code).toMatch(/\[mic-[a-z-]+\]/);
+    }
+  });
+
+  it("shapes every one of them the same way: a sentence, then the code", () => {
+    for (const code of [...KNOWN_CODES, "wat", ""]) {
+      expect(messageFor(code).trim(), code).toMatch(/\.\s\[mic-[a-z-]+\]$/);
     }
   });
 });

@@ -66,14 +66,12 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-checkout.test.ts",
   tables: ["spideryarn.billing_accounts", "spideryarn.billing_tiers"],
   keepPool: true,
   max: 4,
 });
-
-const dbIt = reachable ? it : it.skip;
 
 /**
  * Two readers of this file's own, minted per run.
@@ -373,7 +371,7 @@ describe("starting a subscription", () => {
    * is whether it existed *before* a session capable of taking money did. So the
    * read happens inside `checkout.sessions.create`.
    */
-  dbIt("commits the customer mapping before the Checkout Session exists", async () => {
+  it("commits the customer mapping before the Checkout Session exists", async () => {
     let mappedWhenTheSessionWasMade: string | null | undefined;
     const fake = fakeStripe({
       whenCreatingSession: async () => {
@@ -391,7 +389,7 @@ describe("starting a subscription", () => {
     expect(fake.sessionsCreated[0]?.customer_creation).toBeUndefined();
   });
 
-  dbIt("takes the price from billing_tiers, and the owner from the gate", async () => {
+  it("takes the price from billing_tiers, and the owner from the gate", async () => {
     const fake = fakeStripe();
     await startCheckout(OWNER, { tierId: "reader" }, { stripe: fake.stripe });
 
@@ -404,7 +402,7 @@ describe("starting a subscription", () => {
     expect(fake.customersCreated[0]?.metadata).toEqual({ owner_id: OWNER });
   });
 
-  dbIt("reuses a customer this owner already has", async () => {
+  it("reuses a customer this owner already has", async () => {
     await givenAccount(OWNER, { customer: "cus_already_here" });
     const fake = fakeStripe();
 
@@ -421,7 +419,7 @@ describe("starting a subscription", () => {
    * one of them is entitled.
    */
   for (const status of ["active", "trialing", "past_due", "unpaid", "incomplete"]) {
-    dbIt(`sends an owner with a ${status} subscription to the portal instead`, async () => {
+    it(`sends an owner with a ${status} subscription to the portal instead`, async () => {
       await givenAccount(OWNER, { customer: "cus_subscriber", subscription: "sub_1", status });
       const fake = fakeStripe();
 
@@ -436,7 +434,7 @@ describe("starting a subscription", () => {
 
   /** Over is over: a cancelled subscription is a reader we may sell to again. */
   for (const status of ["canceled", "incomplete_expired"]) {
-    dbIt(`sells again to an owner whose subscription is ${status}`, async () => {
+    it(`sells again to an owner whose subscription is ${status}`, async () => {
       await givenAccount(OWNER, { customer: "cus_lapsed", subscription: "sub_old", status });
       const fake = fakeStripe();
 
@@ -459,7 +457,7 @@ describe("starting a subscription", () => {
    * sessions must name the **same** customer. Two would be two billing histories
    * for one person.
    */
-  dbIt("maps one customer for two concurrent requests, and both use it", async () => {
+  it("maps one customer for two concurrent requests, and both use it", async () => {
     let arrived = 0;
     let bothHere = () => {};
     const barrier = new Promise<void>((resolve) => {
@@ -528,7 +526,7 @@ describe("what the request is not allowed to decide", () => {
     expect(() => parseCheckoutRequest({ tierId: "reader", currency: "pounds" })).toThrow(/currency/);
   });
 
-  dbIt("refuses a tier this deployment does not sell", async () => {
+  it("refuses a tier this deployment does not sell", async () => {
     const fake = fakeStripe();
     await expect(
       startCheckout(OWNER, { tierId: "platinum" }, { stripe: fake.stripe }),
@@ -550,7 +548,7 @@ describe("what the request is not allowed to decide", () => {
    * `tests/billing-tiers.test.ts` asserts over the **active** rows and cannot
    * see it (the same reasoning as `sellATier` in tests/billing-admission.test.ts).
    */
-  dbIt("refuses a tier that has been retired", async () => {
+  it("refuses a tier that has been retired", async () => {
     if (!pool) return;
     await pool.query(
       `insert into spideryarn.billing_tiers
@@ -576,7 +574,7 @@ describe("what the request is not allowed to decide", () => {
    * key, and a 400 would send the reader looking for a mistake they did not
    * make. GPT Sol, 2026-09-03.
    */
-  dbIt("answers 503, not 400, for an active tier nobody has set up in Stripe", async () => {
+  it("answers 503, not 400, for an active tier nobody has set up in Stripe", async () => {
     if (!pool) return;
     await pool.query(
       `insert into spideryarn.billing_tiers
@@ -607,7 +605,7 @@ describe("what the request is not allowed to decide", () => {
    * `tierToSell` ever goes back to `allTiers()`. The earlier retired-tier case
    * above clears the cache and therefore cannot see this.
    */
-  dbIt("does not sell a tier retired seconds ago, cache or no cache", async () => {
+  it("does not sell a tier retired seconds ago, cache or no cache", async () => {
     if (!pool) return;
     await pool.query(
       `insert into spideryarn.billing_tiers
@@ -638,7 +636,7 @@ describe("what the request is not allowed to decide", () => {
     expect(second.sessionsCreated).toHaveLength(0);
   });
 
-  dbIt("refuses a currency the tier is not priced in", async () => {
+  it("refuses a currency the tier is not priced in", async () => {
     const fake = fakeStripe();
     await expect(
       startCheckout(OWNER, { tierId: "reader", currency: "jpy" }, { stripe: fake.stripe }),
@@ -646,7 +644,7 @@ describe("what the request is not allowed to decide", () => {
     expect(fake.sessionsCreated).toHaveLength(0);
   });
 
-  dbIt("passes a currency the tier is priced in", async () => {
+  it("passes a currency the tier is priced in", async () => {
     const fake = fakeStripe();
     await startCheckout(OWNER, { tierId: "reader", currency: "gbp" }, { stripe: fake.stripe });
     expect(fake.sessionsCreated[0]?.currency).toBe("gbp");
@@ -661,7 +659,7 @@ describe("test and live may not cross", () => {
    * which is exactly the shape of a prod deploy left on `sk_test_…`: it would
    * take card `4242…` and grant real quota.
    */
-  dbIt("refuses to sell a price from the other side of the divide", async () => {
+  it("refuses to sell a price from the other side of the divide", async () => {
     process.env.VERCEL_ENV = "production";
     const fake = fakeStripe();
 
@@ -673,7 +671,7 @@ describe("test and live may not cross", () => {
     expect(fake.sessionsCreated).toHaveLength(0);
   });
 
-  dbIt("refuses a Stripe customer that comes back in the wrong mode", async () => {
+  it("refuses a Stripe customer that comes back in the wrong mode", async () => {
     const fake = fakeStripe({ livemode: true });
     await expect(
       startCheckout(OWNER, { tierId: "reader" }, { stripe: fake.stripe }),
@@ -691,7 +689,7 @@ describe("test and live may not cross", () => {
    * removes that earlier gate and leaves the session's check as the only thing
    * standing. docs/reusable/silent-success.md.
    */
-  dbIt("refuses a Checkout Session that comes back in the wrong mode", async () => {
+  it("refuses a Checkout Session that comes back in the wrong mode", async () => {
     await givenAccount(OWNER, { customer: "cus_mapped_already" });
     const fake = fakeStripe({ livemode: true });
     await expect(
@@ -701,7 +699,7 @@ describe("test and live may not cross", () => {
     expect(fake.sessionsCreated).toHaveLength(1);
   });
 
-  dbIt("refuses a portal session that comes back in the wrong mode", async () => {
+  it("refuses a portal session that comes back in the wrong mode", async () => {
     await givenAccount(OWNER, { customer: "cus_mapped_already" });
     const fake = fakeStripe({ livemode: true });
     await expect(openPortal(OWNER, { stripe: fake.stripe })).rejects.toMatchObject({ status: 503 });
@@ -738,7 +736,7 @@ describe("a failure at Stripe", () => {
     return Object.assign(new Error(message), { type, ...(statusCode ? { statusCode } : {}) });
   }
 
-  dbIt("answers 502 with our own sentence when creating a customer fails", async () => {
+  it("answers 502 with our own sentence when creating a customer fails", async () => {
     const fake = fakeStripe();
     const failing: StripeCheckout = {
       ...fake.stripe,
@@ -753,7 +751,7 @@ describe("a failure at Stripe", () => {
     ).rejects.toMatchObject({ status: 502, message: expect.stringContaining("[pay-down]") });
   });
 
-  dbIt("never puts Stripe's own words on the wire", async () => {
+  it("never puts Stripe's own words on the wire", async () => {
     await givenAccount(OWNER, { customer: "cus_paying" });
     const failing: StripeCheckout = {
       ...fakeStripe().stripe,
@@ -775,7 +773,7 @@ describe("a failure at Stripe", () => {
    * **Only a 404 from Stripe means "no such session".** Answering that to a
    * timeout blames the identifier for an outage and hides the outage.
    */
-  dbIt("does not turn a Stripe outage into 'no such checkout session'", async () => {
+  it("does not turn a Stripe outage into 'no such checkout session'", async () => {
     await givenAccount(OWNER, { customer: "cus_mine" });
     const failing: StripeCheckout = {
       ...fakeStripe().stripe,
@@ -795,7 +793,7 @@ describe("a failure at Stripe", () => {
     ).rejects.toMatchObject({ status: 502 });
   });
 
-  dbIt("still answers 404 when Stripe says the session does not exist", async () => {
+  it("still answers 404 when Stripe says the session does not exist", async () => {
     await givenAccount(OWNER, { customer: "cus_mine" });
     const failing: StripeCheckout = {
       ...fakeStripe().stripe,
@@ -819,7 +817,7 @@ describe("a failure at Stripe", () => {
    * A bug in this file stays a 500 with its stack, which is what gets it
    * reported. Relabelling our own faults as Stripe's would be tidier and wrong.
    */
-  dbIt("leaves a fault of ours as a 500", async () => {
+  it("leaves a fault of ours as a 500", async () => {
     const failing: StripeCheckout = {
       ...fakeStripe().stripe,
       customers: {
@@ -837,7 +835,7 @@ describe("a failure at Stripe", () => {
 /* ----------------------------------------------------------------- portal -- */
 
 describe("the portal", () => {
-  dbIt("refuses an owner who has never subscribed", async () => {
+  it("refuses an owner who has never subscribed", async () => {
     const fake = fakeStripe();
     await expect(openPortal(OWNER, { stripe: fake.stripe })).rejects.toMatchObject({
       status: 409,
@@ -849,14 +847,14 @@ describe("the portal", () => {
     expect(await accountRow(OWNER)).toBeNull();
   });
 
-  dbIt("refuses an owner with a row but no Stripe customer", async () => {
+  it("refuses an owner with a row but no Stripe customer", async () => {
     /* The shape admission leaves behind — the anchor row, and nothing else. */
     await givenAccount(OWNER, {});
     const fake = fakeStripe();
     await expect(openPortal(OWNER, { stripe: fake.stripe })).rejects.toMatchObject({ status: 409 });
   });
 
-  dbIt("opens a session for an owner who has a customer", async () => {
+  it("opens a session for an owner who has a customer", async () => {
     await givenAccount(OWNER, { customer: "cus_paying" });
     const fake = fakeStripe();
 
@@ -871,7 +869,7 @@ describe("the portal", () => {
 /* ---------------------------------------------------------------- confirm -- */
 
 describe("the return path from a completed Checkout", () => {
-  dbIt("syncs a session that is this reader's", async () => {
+  it("syncs a session that is this reader's", async () => {
     await givenAccount(OWNER, { customer: "cus_mine" });
     const fake = fakeStripe({
       sessions: { cs_test_mine: { client_reference_id: OWNER, customer: "cus_mine" } },
@@ -896,7 +894,7 @@ describe("the return path from a completed Checkout", () => {
    * a reply that differed between "no such session" and "not yours" would answer
    * *did that person subscribe?*, which is why both refusals are the same 404.
    */
-  dbIt("refuses another owner's session, and does not sync", async () => {
+  it("refuses another owner's session, and does not sync", async () => {
     await givenAccount(OWNER, { customer: "cus_mine" });
     await givenAccount(STRANGER, { customer: "cus_theirs" });
     const fake = fakeStripe({
@@ -922,7 +920,7 @@ describe("the return path from a completed Checkout", () => {
    * `||` would have let through: our own `client_reference_id` says the right
    * owner while the customer belongs to somebody else.
    */
-  dbIt("refuses a session whose customer is not the one mapped to this owner", async () => {
+  it("refuses a session whose customer is not the one mapped to this owner", async () => {
     await givenAccount(OWNER, { customer: "cus_mine" });
     const fake = fakeStripe({
       sessions: { cs_test_mixed: { client_reference_id: OWNER, customer: "cus_someone_else" } },
@@ -942,7 +940,7 @@ describe("the return path from a completed Checkout", () => {
   });
 
   /** And the mirror: the right customer under somebody else's reference. */
-  dbIt("refuses a session whose client_reference_id is not this owner", async () => {
+  it("refuses a session whose client_reference_id is not this owner", async () => {
     await givenAccount(OWNER, { customer: "cus_mine" });
     const fake = fakeStripe({
       sessions: { cs_test_ref: { client_reference_id: STRANGER, customer: "cus_mine" } },
@@ -952,7 +950,7 @@ describe("the return path from a completed Checkout", () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
-  dbIt("does not even ask Stripe when this owner has no customer mapped", async () => {
+  it("does not even ask Stripe when this owner has no customer mapped", async () => {
     const fake = fakeStripe({
       sessions: { cs_test_any: { client_reference_id: OWNER, customer: "cus_x" } },
     });
@@ -1026,7 +1024,7 @@ describe("the routes, as the dispatcher serves them", () => {
     }
   });
 
-  dbIt("turns a body that names a price into a 400", async () => {
+  it("turns a body that names a price into a 400", async () => {
     const reply = await post("/api/billing/checkout", {
       tierId: "reader",
       priceId: "price_someone_elses",
@@ -1041,7 +1039,7 @@ describe("the routes, as the dispatcher serves them", () => {
     expect(String(reply.body.error)).toContain("sessionId");
   });
 
-  dbIt("answers the portal route with the reader's own refusal", async () => {
+  it("answers the portal route with the reader's own refusal", async () => {
     const reply = await post("/api/billing/portal", {});
     expect(reply.status).toBe(409);
     expect(String(reply.body.error)).toContain("[pay-none]");

@@ -55,7 +55,6 @@ import { pgReady } from "./helpers/pg-ready.js";
 loadEnvLocal();
 
 /** Postgres, and set before src/routes.ts is ever imported — see export-route. */
-process.env.SPIDERYARN_STORE = "postgres";
 
 /**
  * **The blob store, pointed at a temp directory.**
@@ -154,12 +153,10 @@ async function get(
   return { status, headers, body: Buffer.concat(chunks) };
 }
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/illustrated-route.test.ts",
   tables: ["spideryarn.articles", "spideryarn.article_revisions"],
 });
-const when = reachable ? describe : describe.skip;
-
 /* ------------------------------------------------------------ the fixture -- */
 
 function sketchFor(slug: string): Sketch {
@@ -276,7 +273,7 @@ async function sweepAbandoned(): Promise<void> {
   }
 }
 
-when("the illustrated routes", { timeout: 30_000 }, () => {
+describe("the illustrated routes", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     blobDir = await mkdtemp(path.join(tmpdir(), "spya-illus-route-"));
     /* **Two different pictures**, so "it served the wrong plate" and "it served

@@ -179,7 +179,7 @@ const FIXTURES: AiCallRow[] = [
 /** Everything the window should see — the last fixture is outside it. */
 const IN_WINDOW = FIXTURES.filter((r) => r.startedAt < UNTIL);
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/ai-calls-spend-pg.test.ts",
   tables: ["spideryarn.ai_calls"],
   /* The column the whole agreement rests on. A database one migration behind
@@ -189,9 +189,7 @@ const { reachable } = await pgReady({
   max: 3,
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the per-owner spend aggregate", () => {
+describe("the per-owner spend aggregate", () => {
   afterAll(async () => {
     const { getDb, closeDb } = await import("../src/db/client.js");
     const { aiCalls } = await import("../src/db/schema.js");

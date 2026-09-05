@@ -73,14 +73,12 @@ const legacyAnswered = (id: string, answer = "an old explanation") =>
     .set({ status: "done", answer })
     .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, id)));
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-comments.test.ts",
   tables: ["spideryarn.comments"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the Postgres comment store", () => {
+describe("the Postgres comment store", () => {
   beforeAll(async () => {
     const db = getDb();
     await db

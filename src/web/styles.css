@@ -8592,6 +8592,7 @@ td.text.note-open {
   line-height: 1.4;
 }
 .prof-recording-what { min-width: 0; color: var(--ink-faint); }
+.prof-recording-retry,
 .prof-recording-save,
 .prof-recording-drop {
   display: inline-flex;
@@ -8606,12 +8607,17 @@ td.text.note-open {
   font: inherit;
   cursor: pointer;
 }
+.prof-recording-retry:hover:not(:disabled),
 .prof-recording-save:hover,
 .prof-recording-drop:hover {
   border-color: var(--highlight);
   color: var(--highlight-ink, var(--highlight));
 }
 .prof-recording-drop { padding: 0.15rem 0.25rem; }
+/* The one the reader actually wants — the words, rather than a file to keep or
+   a thing to throw away — so it carries the ink the others do not. */
+.prof-recording-retry { color: var(--ink); }
+.prof-recording-retry:disabled { opacity: 0.5; cursor: default; }
 
 .prof-mic {
   display: inline-flex;

@@ -84,18 +84,7 @@
  * work, and nothing here could have told you.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Copied
- * from tests/candidates-route.test.ts, which explains the shape.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -108,29 +97,14 @@ loadEnvLocal();
 /** A throwaway slug, so the conversation written below belongs to nobody. */
 const SLUG = "test-the-query-string-does-not-decide-the-route";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/the-query-string-does-not-decide-the-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
+const { chatStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing is a control that vanishes exactly when it
-       matters. A flag that failed to take looks precisely like this suite
-       working — the filesystem chat store answers both branches happily for a
-       slug that is not an article at all. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /** Drive `handleApi` with a fake GET, and give back the status and parsed body. */
 async function get(url: string): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -171,7 +145,6 @@ let article: ScratchArticle | undefined;
 let THREAD = "";
 
 beforeAll(async () => {
-  if (!reachable) return;
   /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
      Postgres reader filters every article by owner — an article seeded as
      anybody else is invisible and both routes below answer 404, which looks
@@ -203,7 +176,7 @@ afterAll(async () => {
 type Thread = Record<string, unknown>;
 const threadsIn = (body: Record<string, unknown>): Thread[] => body.threads as Thread[];
 
-when("a query string does not decide whether a route exists", () => {
+describe("a query string does not decide whether a route exists", () => {
   it("answers the chat list when the URL carries no query string", async () => {
     const { status, body } = await get(`/api/chat/${SLUG}`);
     expect(status).toBe(200);

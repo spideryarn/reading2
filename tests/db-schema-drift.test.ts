@@ -263,7 +263,7 @@ const url = process.env.DATABASE_URL;
 /* Was on a **two-second** connect timeout, which is the drift the helper
    exists to stop. `keepPool` because the DDL half drops a real column through
    this pool and rolls it back. */
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/db-schema-drift.test.ts",
   tables: ["spideryarn.jobs"],
   keepPool: true,
@@ -273,9 +273,7 @@ afterAll(async () => {
   await pool?.end();
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("against a real database", () => {
+describe("against a real database", () => {
   /**
    * Run `body` in a transaction and always roll back.
    *

@@ -680,8 +680,15 @@ export class ProviderRefused extends Error {
  *
  * Still a parsed number and never a string: nothing a provider wrote leaves
  * this function — see `ProviderRefused`.
+ *
+ * **Exported since 2026-09-05** for the deepening wave
+ * (src/hierarchy-deepen.ts), which meets its 429s on the Anthropic SDK's road
+ * rather than this one and so has an `APIError` with a `Headers` on it instead
+ * of a `ProviderRefused`. The header is the same header; a second parser for it
+ * would be a second opinion about what "a minute" means, and the two would
+ * disagree the day one of them learned about the HTTP-date form.
  */
-function retryAfterMs(headers: Headers): number | null {
+export function retryAfterMs(headers: Headers): number | null {
   const header = headers.get("retry-after");
   if (!header) return null;
   const seconds = Number(header);

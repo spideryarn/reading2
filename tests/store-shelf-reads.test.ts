@@ -216,12 +216,10 @@ async function clean(): Promise<void> {
 
 /* Probes for `word_count` and not merely for the schema — the scalars this
    suite reads are what that migration added. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-shelf-reads.test.ts",
   columns: [{ table: "spideryarn.article_revisions", column: "word_count" }],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /* ----------------------------------------------------- counting statements -- */
 
@@ -279,7 +277,7 @@ const blockReads = (sent: string[]): string[] =>
 
 /* ------------------------------------------------------------- the checks -- */
 
-when("the shelf's reads", { timeout: 30_000 }, () => {
+describe("the shelf's reads", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     const db = getDb();
     await clean();
@@ -836,7 +834,7 @@ async function unseedCorpus(): Promise<void> {
 
 /* ------------------------------------------ the fourth spelling of one rule -- */
 
-when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => {
+describe("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => {
   beforeAll(seedCorpus, 120_000);
   afterAll(unseedCorpus, 120_000);
 
@@ -929,7 +927,7 @@ when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => 
 
 /* --------------------------------------- what parity can no longer tell you -- */
 
-when("every published revision's stored scalars", { timeout: 60_000 }, () => {
+describe("every published revision's stored scalars", { timeout: 60_000 }, () => {
   beforeAll(seedCorpus, 120_000);
   afterAll(unseedCorpus, 120_000);
 

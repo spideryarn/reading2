@@ -288,7 +288,7 @@ describe("every store seam has two implementations, or says why not", () => {
       wrong,
       `${wrong.join("; ")}.\n\n` +
         "  A seam with one side is a 501 in whichever store it is missing from, and " +
-        "SPIDERYARN_STORE=postgres is what production runs — so a missing Postgres " +
+        "Postgres is the store production runs — so a missing Postgres " +
         "side means the feature does not exist for anybody but a developer on a " +
         "laptop, with every test green. Either build the adapter, or declare the " +
         "asymmetry in SEAM_ASYMMETRIES (src/store/live.ts): a missing files side " +

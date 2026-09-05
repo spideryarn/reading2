@@ -101,12 +101,14 @@ errors, with its exit condition written into `scripts/check.ts`, and became a ga
 that condition was met. Writing the condition down is what made the promotion a two-line change
 rather than an argument.
 
-**The test gate runs under `REQUIRE_POSTGRES=1`.** About seventy test files turn themselves into
-`describe.skip` when Postgres is unreachable, so `npm test` is green having run none of them — and
-this is the command whose green result gets quoted as evidence, which is the run that flag exists
-for ([testing.md](testing.md#when-a-skip-is-not-acceptable-require_postgres1)). `npm run check --
---offline` drops it, so the other checks still work on a machine with no Docker; it prints in the
-summary that the database suites were free to skip and that this is not the real gate.
+**The test gate needs a database, and no flag turns that off.** About seventy test files used to
+turn themselves into `describe.skip` when Postgres was unreachable, so `npm test` was green having
+run none of them — and this is the command whose green result gets quoted as evidence.
+`REQUIRE_POSTGRES=1` was the answer until 2026-09-05; since the hinge there is one store and
+`npm test` fails once, before a file is collected, on a machine with no database
+([testing.md](testing.md#when-a-skip-is-not-acceptable-never-since-2026-09-05)). `npm run check --
+--offline` still runs the other checks without Docker and says in its summary that the test gate is
+not one of them.
 
 **The counted steps.** `complexity` and `dupes` both exit 0 while holding findings — Biome because
 `info` is not a failure, jscpd because it only fails above a `--threshold` we do not set. So

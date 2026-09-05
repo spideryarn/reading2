@@ -84,6 +84,27 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 const INHERITED: Readonly<Record<string, string | undefined>> = { ...process.env };
 
+/**
+ * **What the shell exported, before `.env.local` had a chance to replace it.**
+ *
+ * The precedence rule above is right and it has one consequence worth being able
+ * to see from outside: a value a person deliberately exported can be silently
+ * overruled by a file, and the warning that says so is suppressed under
+ * `NODE_ENV=test`. Most callers should not care — the applied value is the one
+ * that decides. **A refusal is the exception**: `src/store/live.ts` throws on
+ * `SPIDERYARN_STORE=files`, and a file quietly rewriting that to `postgres`
+ * would mean an operator who asked for the store that is gone was served the
+ * other one without a word. That is the whole failure the tombstone exists to
+ * prevent, arriving by a different door.
+ *
+ * So the snapshot is readable, one name at a time. Not the whole object: this is
+ * for asking "did the shell say something different", not for a second source of
+ * configuration.
+ */
+export function inheritedEnv(name: string): string | undefined {
+  return INHERITED[name];
+}
+
 let done = false;
 
 export function loadEnvLocal(): void {

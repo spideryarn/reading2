@@ -66,22 +66,7 @@
  * reach an index.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/jobs.ts` picks its store **once, at module load** — `const store:
- * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
- * hoisted above every statement in a module, so a plain assignment here would
- * leave the route below on the filesystem queue with nothing saying so. The
- * same trap at greater length in tests/enqueue-owns-the-article.test.ts.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
 
@@ -91,17 +76,11 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import type { OwnerId } from "../src/owner.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
 import { bareArticles, removeBareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
-
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
@@ -116,24 +95,10 @@ const { handleApi } = await import("../src/routes.js");
 const OWNER = TEST_SUB as OwnerId;
 const SLUG = "test-second-job-queues";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/second-job-queues.test.ts",
   tables: ["spideryarn.jobs"],
 });
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on `reachable`: a control that disappears when the database is
-       missing disappears exactly when it matters. A flag that failed to take is
-       invisible otherwise — the filesystem queue answers every call here
-       happily, and none of the indexes the cases below are about would be
-       consulted at all. */
-    expect(STORE).toBe("postgres");
-  });
-});
-
 
 /**
  * **`VERCEL`, so `enqueue` does not start driving what it queues.**
@@ -157,16 +122,14 @@ beforeAll(async () => {
      nothing this file asserts was about its absence — every case is about
      whether a *second job* on one article queues, collapses or is refused.
      ./helpers/bare-article.ts. */
-  if (reachable) await bareArticles([SLUG], OWNER);
+  await bareArticles([SLUG], OWNER);
 }, 60_000);
 afterAll(async () => {
   if (wasVercel === undefined) delete process.env.VERCEL;
   else process.env.VERCEL = wasVercel;
-  if (reachable) {
-    await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
-    await removeBareArticles([SLUG], OWNER);
-  }
-  if (reachable) await closeDb();
+  await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
+  await removeBareArticles([SLUG], OWNER);
+  await closeDb();
 });
 
 /**
@@ -230,7 +193,7 @@ async function hold(status: Job["status"]): Promise<Job> {
  * leaves rows no list of ids in this file has ever seen.
  */
 afterEach(async () => {
-  if (reachable) await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
+  await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
 });
 
 interface Reply {
@@ -267,7 +230,7 @@ async function post(body: unknown): Promise<Reply> {
   return { status, body: text ? (JSON.parse(text) as Record<string, unknown>) : {} };
 }
 
-when("POST /api/jobs on an article that already has a job", () => {
+describe("POST /api/jobs on an article that already has a job", () => {
   it("accepts Ideas while a glossary job is running on the same article", async () => {
     const held = await hold("running");
 

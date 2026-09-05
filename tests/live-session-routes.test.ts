@@ -77,17 +77,6 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement, and
- * `src/store/index.ts` picks `realtimeSessionStore` at its own module load.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { and, count, eq } from "drizzle-orm";
@@ -100,27 +89,20 @@ import { LIVE_MODEL, LIVE_TRANSCRIBER } from "../src/live.js";
 import { responseReport, transcriptionReport } from "../src/web/live/meter.js";
 import { handleApi } from "../src/routes.js";
 import { costStore } from "../src/store/ai-calls.js";
-import { realtimeSessionStore, STORE } from "../src/store/index.js";
+import { realtimeSessionStore } from "../src/store/index.js";
 import type { RealtimeSession } from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
 loadEnvLocal();
 
 const SLUG = "test-live-session-routes";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/live-session-routes.test.ts",
   tables: ["spideryarn.articles", "spideryarn.realtime_sessions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 let article: ScratchArticle | undefined;
 const realKey = process.env.OPENAI_API_KEY;
@@ -131,7 +113,6 @@ const realKey = process.env.OPENAI_API_KEY;
    flag is pinned to `postgres` above, so the rows go to the run's own private
    database and the redirect had nothing left to redirect. */
 beforeAll(async () => {
-  if (!reachable) return;
   /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
      Postgres journal resolves `article_slug` through `ownedSlug` — an article
      seeded as anybody else would leave `article_id` null on every row, which is
@@ -146,16 +127,6 @@ afterAll(async () => {
   await article?.remove();
   await closeDb();
 }, 60_000);
-
-describe("the store this journal is actually written to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this suite working — the filesystem
-       journal answers every read below with the same fields. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /** Whether OpenAI answers at all, so a test can drive the failure path. */
 let mintFails = false;
@@ -312,7 +283,7 @@ function turn(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 /* ------------------------------------------------------- the ticket -- */
 
-when("the ticket writes the journal row before it releases the token", () => {
+describe("the ticket writes the journal row before it releases the token", () => {
   it("hands back a session id, and there is a row behind it", () => {
     return (async () => {
       const id = await ticket("spya-laaaaa");
@@ -396,7 +367,7 @@ when("the ticket writes the journal row before it releases the token", () => {
 
 /* ------------------------------------------------------- the events -- */
 
-when("the acceptance endpoints", () => {
+describe("the acceptance endpoints", () => {
   it("records the data channel opening, and keeps the first time", async () => {
     const id = await ticket("spya-lbaaaa");
     expect((await post(`/api/live/${id}/connected`, {})).status).toBe(200);
@@ -493,7 +464,7 @@ when("the acceptance endpoints", () => {
   });
 });
 
-when("what the browser actually posts, end to end", () => {
+describe("what the browser actually posts, end to end", () => {
   /**
    * **The closest thing to a real session this box can run.** A raw provider
    * event goes through the client's own projection (src/web/live/meter.ts),
@@ -584,7 +555,7 @@ when("what the browser actually posts, end to end", () => {
   });
 });
 
-when("the gate", () => {
+describe("the gate", () => {
   it("refuses all three to a request with no session", async () => {
     /* **They are under `/api/live/`, not `/api/public/`**, so they are behind
        `requireUser` like everything else — and this is the assertion that says
@@ -601,7 +572,7 @@ when("the gate", () => {
 
 /* ------------------------------------- what this stage looks like alone -- */
 
-when("deployed on its own, before the browser posts anything", () => {
+describe("deployed on its own, before the browser posts anything", () => {
   it("shows an issued session that reported nothing, rather than an absence", async () => {
     /* **The whole point of Stage 2A.** Until the browser half lands, every
        session will look exactly like this — and that is the honest state rather

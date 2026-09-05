@@ -690,6 +690,119 @@ renamed its job — the article-level backstop, not the per-batch bound — and
 *(Both lines said the opposite of the code from 2026-08-30 until 2026-08-31, which is the drift
 CLAUDE.md warns about: a doc that restates a constant is a second copy that nothing keeps in step.)*
 
+### And, behind a switch that is off, a third pass <a id="deepening"></a>
+
+There is a **deepening wave** between the two passes above, and it does not run:
+`SPIDERYARN_DEEPEN_HIERARCHY` gates it and defaults to off, so every reader today gets exactly the
+two passes described above. Whether it is ever turned on is
+[260904d](../plans/260904d-deepen-fat-sections.md)'s stage 8, and the decision is a real one — it
+costs several times more on a book.
+
+What it does, when it is on: the whole-document call is the same call it is today, and then every
+**section a mechanical bound calls unfinished** — an authored heading no boundary starts on, or more
+words than the ceiling — gets one scoped call of its own, carrying that section's blocks, its
+ancestor titles and the frozen top-level outline. Disjoint sections go in parallel. Each answer is a
+complete child set for its parent, one level deep, with a per-child verdict that stage 5
+**records and does not obey**; obeying it is the recursion, and it is conditional on those numbers.
+
+Four things about where it sits, because each of them is load-bearing:
+
+- **After the structure checkpoint's write**, so a wave that fails cannot cost the article the tree
+  it has just paid for.
+- **Before `generateLabels`**, necessarily — `labels.json` stamps `structureHash(tree)`, so a tree
+  deepened afterwards would be stale at birth with nothing to say so. It also means the labels are
+  cut along the deepened tree's boundaries, which is most of why a deepened book costs what it does.
+- **Seeded from the *built* tree, never from the answer that produced it.** `buildTree` derives
+  ranges rather than accepting them, so a scoped call handed the raw proposal could be shown one
+  stretch of prose and have its titles land on another — a tree that passes every invariant while
+  describing the wrong paragraphs. `proposalFromTree` converts the built tree back, and `buildTree`
+  runs a second time over the result, which is free and keeps every check on one road.
+- **A failed wave is not a failed article.** It is an enhancement; a throw leaves the wave-1 tree and
+  sets `deepenFailed` on the run, which is the only thing distinguishing that from an article with no
+  fat sections in it.
+
+And what it leaves behind, all decided on 2026-09-05 — the first three after a cross-family review of
+the wiring, the last two so that a paid run can answer the questions it is being paid to answer:
+
+- **A wave the deadline cuts in half publishes none of itself.** Which calls got out and which were
+  declined at the gate is settled by the dispatch jitter, so attaching whatever came back would hand
+  one reader a tree that an identical run disagrees with. The article keeps wave 1's tree and every
+  call that landed keeps its checkpoint row — `withheld` on the run says how many are waiting, and
+  `uncheckpointed` beside it says how many were paid for and whose row never landed, which is money
+  that buys the next attempt nothing. The checkpoint write stays best-effort, because instrumentation
+  must not fail the article; what changed is that the count stopped claiming rows that do not exist.
+  **Nothing schedules the retry**: the wave returns normally, the labels are written and the job is
+  committed done, so the deeper tree waits for the reader's next Retry or a re-ingest, exactly as a
+  long PDF's second lease window does ([content-extraction.md](content-extraction.md)). Automatic
+  requeueing was named and deliberately not built.
+- **An answer the model ran out of room for is refused on `stop_reason`**, not on whether it happens
+  to parse. A response cut immediately after a closing brace is valid JSON describing half a section:
+  it derives, it checkpoints, and it publishes as a finished tree with nothing to say a level went
+  missing. It fails the wave rather than being redrawn, because `max_tokens` is a property of the
+  request and an identical redraw truncates identically; the lever is `expectedChildren`.
+- **What the governor decided about each node can be written down.** `SPIDERYARN_DEEPEN_RECORDS`
+  names a directory, and each pass drops one JSON file into it: per node, the raw verdict, the
+  effective decision, which bound overruled it, the redraws, the fan-out and the node's **derived
+  block range**. Unset — every reader today — nothing is written. Repeats accumulate as separate
+  files rather than overwriting, because the questions this is for are rates across runs, and the
+  filename carries a process-local counter as well as the second and the pid: `--repeat` is two
+  passes over one slug in one process in one second, so the second used to land on the first.
+
+  **The range is there because `where` is not an identity.** It is an ordinal path derived from the
+  answer's own fan-out, so two repeats that split one parent at different points both emit
+  `root > child 1` — and pairing on that reads a boundary that moved as a verdict that held, which is
+  wrong in the one direction that matters. Pairing is on the parent plus the range, and a changed
+  fan-out or an unmatched range is **structural instability**, a different finding from a verdict
+  flip. [`evals/deepen/report.ts`](../../evals/deepen/report.ts) does the counting and refuses to
+  compare a record with no range.
+
+  **A pass that threw writes a file too**, marked `failed` with the reason, carrying wave 1's
+  decisions, whatever the paid peers bought, the token accounting and what the gate did. For a run
+  whose purpose is to answer five questions, a failure nobody can read is nearly as bad as no run.
+- **A repeat over one article is free, and therefore says nothing about how stable a verdict is** —
+  so there is a second switch. The scoped calls are content-addressed, so an ordinary second run
+  reads its own rows back, makes no call, and produces identical verdicts *by construction*, which
+  looks exactly like a perfectly stable signal. `SPIDERYARN_DEEPEN_REASK` **names articles** — a
+  comma-separated list of slugs — and makes the wave **skip the checkpoint read** for those and buy
+  every scoped call again.
+
+  **It is a list rather than a boolean, and that is not cosmetic.** The variable is read on every
+  wave, so a worker started with a boolean set re-asked for *every* eligible article it later picked
+  up — and the repeats go through the queue, so the worker doing the measurement is the worker
+  serving everyone else. `1`, `true` and `yes` are read as slugs, match nothing, and produce a
+  warning saying so; there is deliberately no spelling that means "all articles".
+
+  It is not a delete, and it adds none: [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)
+  has `read` and `write` and rules a `delete` out. The rows are still **written**, because
+  last-write-wins means the freshest answer replaces the stale one under the same key — so an
+  ordinary run after a re-asking one is still cheap.
+
+  **It touches the deepening wave only, and leaving wave 1 resumed is the point.** A resumed
+  structure call holds the seed constant, so every repeat expands the identical tree from the
+  identical frozen outline and a verdict that moves is the scoped call changing its mind rather than
+  a different tree being asked a different question. So: run the article once ordinarily, then repeat
+  with the switch set — `POST /api/jobs { slug, steps: ["hierarchy"], force: ["hierarchy"] }` is the
+  re-run. `npm run hierarchy` is now the same thing — stage E moved it through the queue on
+  2026-09-05 ([`scripts/stage.ts`](../../scripts/stage.ts)), so it resumes like any other claim. Note
+  what that means: `--force` re-runs the *step*, not the *purchase*, and replays the structure call
+  out of its checkpoint, so on its own it changes nothing. The re-ask switch is what makes the wave
+  cost anything the second time.
+- **What a wave cost is on the run**, since 2026-09-05. Every scoped call's four token counts —
+  input, output, cache read, cache write, every draw of a redrawn call included — are summed onto
+  `DeepenStats.usage`, added into `HierarchyRun`'s four totals beside the structure call and the
+  label batches, and written into the records file. They were metered all along (every call goes
+  through `streamMessage`, so the money is in the AI-spend ledger under task `hierarchy`), and that
+  is the wrong shape for the cost question, which is answered by comparing one run's artefact with
+  another's. The figure is **not** conditioned on publication: a wave the deadline withheld spent the
+  money and says so. A wave that *threw* is the one gap — there is no result to add up, and
+  `deepenFailed` beside the totals says the ledger is where to look.
+
+The code is [`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) (the arithmetic),
+[`src/hierarchy-expand.ts`](../../src/hierarchy-expand.ts) (the prompt and the strict read) and
+[`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts) (the checkpoint, the width, and
+`deepenTree`). Its width, its 429 handling and its deadline behaviour all have their reasoning beside
+the constants in that last file.
+
 ### The path that turned out to exist anyway
 
 `COVERAGE_FLOOR` is **0.95 again** since 2026-08-30, because that last sentence was wrong. A
@@ -940,9 +1053,9 @@ boundary inside any run of more than ~9 blocks; 5–9 children per node; three l
 title, copied verbatim from the author's heading where there is one; and one gist sentence per
 internal node, a claim or a move rather than a topic label.
 
-**A second prompt is being built beside it**, for the scoped call that deepens one section at a time
-— [`EXPAND_SYSTEM`](../../src/hierarchy-expand.ts). It is called by nothing yet;
-[260904d](../plans/260904d-deepen-fat-sections.md) is where it is going. The rule it states that
+**There is a second prompt beside it**, for the scoped call that deepens one section at a time —
+[`EXPAND_SYSTEM`](../../src/hierarchy-expand.ts). `generateHierarchy` calls it, behind a switch that
+is off ([above](#deepening)); [260904d](../plans/260904d-deepen-fat-sections.md) is the plan. The rule it states that
 `SYSTEM` does not is the precedence between the two that collide on a book: an authored heading
 always begins a child, and the 5–9 fan-out applies only where the model is inventing the boundaries
 itself. It also asks, since `expand/2`, for the children **in document order** — which

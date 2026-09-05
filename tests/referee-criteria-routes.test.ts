@@ -67,17 +67,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Same
- * block, same reason, as tests/referee-routes-postgres.test.ts.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { CRITERION_ORPHAN_GRACE_MS } from "../src/routes.js";
@@ -90,27 +79,14 @@ loadEnvLocal();
 
 const SLUG = "test-referee-criteria-routes";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/referee-criteria-routes.test.ts",
   tables: ["spideryarn.referee_criteria", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { refereeCriteriaStore, STORE } = await import("../src/store/index.js");
+const { refereeCriteriaStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  /* The positive control. Every assertion below passes just as happily against
-     the filesystem store, which is how Claims — this sub-mode's twin — shipped
-     with no Postgres store at all and a full route suite in front of it. */
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
 
 interface Reply {
   status: number;
@@ -169,7 +145,7 @@ const stored = (): Promise<SavedCriterion[]> =>
 const begin = (criterion: string): Promise<SavedCriterion> =>
   asTestOwner(async () => (await refereeCriteriaStore.begin(SLUG, criterion, { kind: "single" })).row);
 
-when("Referee's criteria routes", { timeout: 60_000 }, () => {
+describe("Referee's criteria routes", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
 
   beforeAll(async () => {

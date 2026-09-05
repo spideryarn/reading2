@@ -435,7 +435,8 @@ would store it — but a page listing other people's accounts should not rest on
 manners, and an intermediary cannot know the policy unless the response states it.
 
 **Postgres only.** There are no user accounts on a filesystem — `data/` is one directory per slug —
-so under `SPIDERYARN_STORE=files` the endpoint answers **501** with its own sentence.
+so under the filesystem store the endpoint answered **501** with its own sentence. Both that store and
+the refusal went on 2026-09-05 ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
 [`src/store/index.ts`](../../src/store/index.ts) has the refusal, and the alternative it exists to
 avoid: an empty array, which looks exactly like a working page saying *you have no users*.
 

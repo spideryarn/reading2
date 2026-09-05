@@ -21,11 +21,9 @@
  */
 
 import type { AiCallRow } from "../ai-spend.js";
-import { fsCostStore } from "./ai-calls-fs.js";
 import { pgCostStore } from "./ai-calls-pg.js";
 import type { CostStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
-import { STORE } from "./live.js";
 
 /**
  * Guarded on the Postgres side only, like `guarded()` in `index.ts` and for the
@@ -87,17 +85,7 @@ const guardedLedger: CostStore = guardDbStore("ai-calls", pgCostStore);
  * somewhere it did not intend while looking exactly like a suite that had been
  * configured.
  */
-function selected(): CostStore {
-  return STORE === "postgres" ? guardedLedger : fsCostStore;
-}
-
-export const costStore: CostStore = {
-  describe: () => selected().describe(),
-  record: (row) => selected().record(row),
-  read: (since, until) => selected().read(since, until),
-  forJob: (jobId) => selected().forJob(jobId),
-  size: () => selected().size(),
-};
+export const costStore: CostStore = guardedLedger;
 
 /**
  * **What a set of ledger rows cost**, and the four ways the answer can be

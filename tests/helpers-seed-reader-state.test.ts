@@ -77,12 +77,10 @@ requireFixture(FROM, [
 /** A block id that is not in `writes`'s text, and never was. */
 const VANISHED = "spya-zzzzzz";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/helpers-seed-reader-state.test.ts",
   tables: ["spideryarn.revision_blocks"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts a job, so it takes the shared run lock.**
@@ -93,7 +91,7 @@ const when = reachable ? describe : describe.skip;
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
-const runLock = reachable ? await takeRunLock("tests/helpers-seed-reader-state.test.ts") : undefined;
+const runLock = await takeRunLock("tests/helpers-seed-reader-state.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
@@ -149,7 +147,7 @@ function comment(id: string, blockId: string) {
   };
 }
 
-when("the reader-state seeder", () => {
+describe("the reader-state seeder", () => {
   afterAll(async () => {
     await closeDb();
   });

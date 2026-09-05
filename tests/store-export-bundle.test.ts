@@ -131,7 +131,7 @@ const workingStore: RawSourceStore = {
 
 const owner = () => currentOwnerId();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-export-bundle.test.ts",
   tables: ["spideryarn.chat_messages", "spideryarn.block_identities", "spideryarn.raw_sources"],
   columns: [
@@ -140,9 +140,7 @@ const { reachable } = await pgReady({
   ],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the bundle is the faithful projection", () => {
+describe("the bundle is the faithful projection", () => {
   /** Every entry of the zip, decoded. */
   let bundled: Map<string, string>;
   let byteLength: number;
@@ -513,7 +511,7 @@ when("the bundle is the faithful projection", () => {
 
 /* ------------------------------------------------------------ the bucket -- */
 
-when("the bundle never reads the blob store", () => {
+describe("the bundle never reads the blob store", () => {
   /* Its own fixture rather than the one above, because the article has to name
      a source document for the control to have anything to fetch — and this
      describe deliberately runs with every blob store refusing. */
@@ -656,7 +654,7 @@ const XSS_URL = "javascript:alert(4)";
  */
 const ONLY_IN_THE_ARTICLE = "prose-that-must-not-reach-the-index-page";
 
-when("index.html is safe to open", () => {
+describe("index.html is safe to open", () => {
   let html: string;
   /** Every `href` the page emits, for the URL-scheme assertions. */
   let hrefs: string[];
