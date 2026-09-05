@@ -306,7 +306,7 @@ product.
 | 3c — the sharing copy that 3a owed | **on `dev`** (`56eecb43`, `ef0ac457`) |
 | 4b — a Reader can reach Researcher | **on `dev`** (`47345d3a`); GPT Sol's six findings in flight |
 | 4 — byline and a takedown route | in flight |
-| 4c — showcase links from the marketing pages | not started |
+| 4c — showcase links from the marketing pages | **built, uncommitted** (2026-09-05) |
 | 5 — a public article counts half | not started; needs a migration |
 
 **What is Greg's and cannot be done for him:** flipping the showcase articles public, in the
@@ -692,6 +692,84 @@ ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the
 - No rate limit beyond what the namespace has. Cluster C and S4 of that plan are still open.
 
 ## Log
+
+- **2026-09-05, GPT Sol reviewed stage 4c's code. No P0 and no P1**, and its verdict on the two
+  questions that mattered was that nothing here puts a request, a token or owner-scoped data on a
+  page a stranger renders, and that `/pricing` stays request-free — importing `PublicShowcase` has no
+  side effect, the fetch exists only inside its mounted effect. Three findings, all fixed:
+  - **P2, and it was a real hole in the test: `articlesLinked` compared strings.** A same-origin
+    *absolute* link — `https://spideryarn.com/read/a-slug`, which is how somebody pasting a
+    production URL writes it — is the identical destination and walked straight past
+    `startsWith("/read/")`. Every `href` is resolved through `new URL(href, location.origin)` now.
+    Sol also pointed out that the fresh-remount helper is **not** the hole, which is worth recording
+    because it looks like one.
+  - **P2, the other half of the same finding, and it is the more useful one: a rendered-DOM test
+    cannot prove that no slug is named in source.** It can only say *this listing produced these
+    links*, and the two come apart in exactly the case somebody would introduce — a hand-written
+    link to the one good article, added beside the derived list, which the DOM cases catch only
+    because the fixture happens not to name that slug. There is a source guard now, over all three
+    files, refusing a literal read address in an `href`; what it cannot see (a slug assembled at
+    runtime) is written at the test, and is what the DOM cases are for. **Watched failing**: an
+    `<a href="/read/scaling-hypothesis">` planted in `FeaturesPage.tsx` turned it red on
+    `expected [ 'href="/read/scaling-hypothesis' ] to deeply equal []`, and turned the derived-links
+    case red beside it.
+  - **P2, and the copy rule caught us in a link label.** *"All the shared articles →"* asserts the
+    shelf is the whole set, which the archived filter, the readability bar and the row cap each
+    falsify — the same claim `PUBLIC_SHELF_LEDE` took two rewrites to stop making, arriving where
+    nobody was looking for it, and swapping *all* for *every* is not a fix. It is
+    `PUBLIC_SHELF_BROWSE_LINK` now, *"Browse shared articles →"*.
+  - **P3: the heading was false in a state the tests already drive.** *"See it on a real article."*
+    stays on screen when the read fails and when the shelf is empty, over no article at all. A bare
+    plural — *"Articles people have made public."* — is true in every state, and the lede lost its
+    first sentence with it, which was the shelf's own opening written a second time.
+  - **Raised and knowingly accepted:** `LandingPage` is the signed-out answer for `/profile`,
+    `/design`, `/admin`, `/add/…` and an unshared `/read/<slug>`, so the listing is read on all of
+    them. One anonymous request nobody asked for; Sol agreed it leaks nothing, and a prop threaded
+    through five call sites to suppress it is more machinery than the request costs.
+  - **And Sol's verdict on the mechanism itself was against it**, which is recorded rather than
+    acted on because it is Greg's call: *"No — the per-article marketing mechanism is not worth its
+    complexity … Keep a simple static link to `/read/public` on `/` and `/features`, and let that
+    page be the showcase."* Its grounds are the 200-row response fetched to draw three lines, the
+    fallback URLs above, and the size of the proof. **The cheap version is a subset of what is
+    built**, not a rewrite: delete `useShowcaseEntries` and the `<ul>` and the heading, the sentence
+    and the link stay — which is exactly the page the failed-read case already asserts. The argument
+    the other way is that *showcase* was the word in the request: three real titles with real
+    bylines are evidence, and a link is a promise the reader must spend a click to test.
+
+- **2026-09-05, stage 4c built** — `/` and `/features` each draw one `PublicShowcase`
+  ([`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx)), and every link in it comes out
+  of `GET /api/public/library`. Five things worth knowing:
+  - **The mechanism was chosen against the two cheaper ones, and the argument is at the top of the
+    component.** Hardcoded slugs are the only option that can honour *"pick a few"* and are exactly
+    the failure the rule forbids; a deploy-time list is the same failure an hour later with a build
+    to run before anybody can fix it. What is lost is the *picking*: the listing is ordered by
+    `public_at` descending, so the three shown are the most recently shared. If choosing matters
+    more than the dead link does, the honest next step is a column the flip owns — a `showcase_at`
+    or a rank on `articles` — not a list in a component. **Named rather than built**, because a
+    column is a migration and Greg has not asked for one.
+  - **The third option — link to `/read/public` and let the shelf be the showcase — was rejected on
+    one argument.** It is by far the cheapest and it cannot go dead, but a link that says *see what
+    people have shared* shows nothing; a stranger reading three real titles with real bylines is the
+    difference between a claim and its evidence. The link is kept anyway, and is the part of the
+    block that is drawn before the network is asked.
+  - **`/pricing` gets nothing, and that is the constraint rather than a preference.**
+    `tests/pricing-page-current-plan.test.tsx` asserts a signed-out `/pricing` makes no request at
+    all; it is also the page a stranger is most often *sent*, where a showcase would be a link
+    because there is room. `/` and `/features` each already make a claim about public articles a few
+    lines above the block, which is what makes them the two that want one.
+  - **The fetch can only add.** Heading, sentence and the `/read/public` link are drawn before the
+    listing lands; a failure, an empty shelf and a 404 all leave a page one link short rather than an
+    apology on a marketing page. That is deliberately the opposite of `/read/public`, where the list
+    *is* the page — argued at both files.
+  - **Red first, three ways, and one of them was the test's own bug.** With the derived list replaced
+    by a curated one, `links only to articles the listing is currently returning` failed
+    `expected [ 'alpha', 'beta' ] to deeply equal [ 'beta' ]` on both pages — an article that had
+    stopped being public, still linked. The empty-shelf and the three-at-most cases went red on the
+    same mutation; an apology paragraph added to the block turned the silent-failure case red. And
+    the negative case was **green for the wrong reason at first**: it re-rendered into the same root,
+    so the mount-once effect never re-ran and the first listing's entries survived. It tears the root
+    down and rebuilds it now, which is what a page load does; the limit that leaves — a tab held open
+    across an unshare — is written at the helper.
 
 - **2026-09-05, stage 4b's review findings fixed** — GPT Sol read the `purchase` union and found two
   money-path defects and three gaps. All six are closed, and none of them was wrong:

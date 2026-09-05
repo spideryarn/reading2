@@ -106,6 +106,30 @@ rule for the row is about the path and this is a `/read/` address;
 [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) records the day that exclusion was read as
 being about the reading *view* instead, and had it called rationalising.
 
+## Who sends people here
+
+Two marketing pages, `/` and `/features`, each draw the same block — a heading, a sentence, up to
+three real shared articles, and a link back to this shelf.
+[`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx) is the component and carries the
+argument; [marketing-pages.md](marketing-pages.md) is the pages it sits on.
+
+**Every link in it is derived from this shelf's own listing**, and that is the whole design rather
+than a convenience. Greg flips an article's visibility in the production UI whenever he likes and
+nobody redeploys afterwards, so a marketing page naming a slug in its source is a page that will one
+day hand a stranger a 404. `tests/public-showcase.test.tsx` proves the property — an article that
+stops being public leaves no link behind — by mounting each page twice against two different
+listings, because a test that only found the articles it seeded would be green for a hardcoded list.
+
+Two consequences worth knowing before changing it:
+
+- **The listing cannot *pick*.** It is ordered by `public_at` descending, so the three shown are the
+  most recently shared rather than the three best — a real gap against Greg's *"pick a few of those
+  to link to"*, left open because picking means naming and naming is the failure above. The honest
+  next step is a column the flip owns, not a list in a component.
+- **`/pricing` does not get the block**, and that is a constraint rather than a preference:
+  `tests/pricing-page-current-plan.test.tsx` asserts a signed-out `/pricing` makes no network request
+  at all.
+
 ## What is deliberately not here
 
 - **No search indexing.** `robots.txt` is `Disallow: /` and stays that way for now.
@@ -114,4 +138,3 @@ being about the reading *view* instead, and had it called rationalising.
 - **No cursor.** The row cap is a ceiling rather than a page size, so there is nothing to paginate
   through. The ordering is total on `(public_at, slug)` precisely so that a cursor is possible the
   day it starts biting.
-- **Showcase links from other pages**, which are stage 4c of the plan.
