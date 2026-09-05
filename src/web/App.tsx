@@ -201,6 +201,7 @@ import {
 } from "./position.js";
 import { DEFAULT_ROOT_PX, fitView, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
+import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
@@ -974,6 +975,17 @@ function ArticlePage({
   readerId: string | null;
 }) {
   useRenderCount("ArticlePage");
+  /* **Reopen this article where the reader left it.** Above the fetch, and
+     first, because its restore is a layout effect that settles the address
+     before anything paints — `useReadingPosition` then reads the `?at=` it put
+     back exactly as it reads a pasted one, and needs to know nothing about it.
+
+     Here rather than in main.tsx, which is where every other address rewrite
+     lives, because those run once per page load and the commonest way to reopen
+     an article is a click on the shelf — a client-side navigation that never
+     re-runs that file. src/web/last-view.ts has the whole of it, including why
+     a shared link always beats the memory. */
+  useLastView(slug);
   const access = useArticleAccess(slug, readerId);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
@@ -2924,9 +2936,16 @@ function Reader({
             comments: {commentError}
           </span>
         )}
-        <span className="provenance" title={article.tree.generator}>
-          {article.tree.version}
-        </span>
+        {/* **The tree's version sat here, in a dashed monospace chip, on every
+            article.** It went on 2026-09-05 with the glossary's and the
+            quotes' provenance lines, which are the same fact in the same voice
+            — Greg: *"those are all confusing and unnecessary"*, then *"and any
+            other modes as needed"*. This one is the controls bar rather than a
+            mode, and it is the most-seen of the three, which is the argument
+            for rather than against. `hierarchy/4` tells a reader nothing they
+            can act on; `Metadata` is where an owner sees it
+            (Metadata.tsx § `StageRow`). The narrow breakpoint already hid it,
+            which was the first sign it was not carrying its space. */}
       </div>
       <TableView
         article={article}

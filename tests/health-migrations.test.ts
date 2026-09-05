@@ -77,7 +77,6 @@ async function callHealth(opts: {
   }));
 
   vi.doMock("../src/store/index.js", () => ({
-    STORE: "postgres",
     listArticles: async () => [{ slug: "a" }],
   }));
 
@@ -221,33 +220,9 @@ describe("the migrations block", () => {
     expect(body.migrations.error.length).toBe(200);
   });
 
-  it("is absent entirely on a filesystem store", async () => {
-    vi.resetModules();
-    vi.doMock("../src/store/index.js", () => ({
-      STORE: "files",
-      listArticles: async () => [{ slug: "a" }],
-    }));
-    vi.doMock("../src/db/client.js", () => ({
-      getDb: () => {
-        throw new Error("no database on a filesystem store");
-      },
-    }));
-    const { health } = await import("../src/vercel-health.js");
-
-    let raw = "";
-    const res = {
-      statusCode: 200,
-      setHeader() {},
-      end(chunk?: string) {
-        raw = chunk ?? "";
-      },
-    } as unknown as ServerResponse;
-    await health(
-      { method: "GET", url: "/api/health", headers: {} } as unknown as IncomingMessage,
-      res,
-    );
-
-    /* Absent, not null: "not checked" must not read as "checked and in step". */
-    expect("migrations" in (JSON.parse(raw) as Record<string, unknown>)).toBe(false);
-  });
+  /* A case stood here until 2026-09-05 saying the migration report was **absent**
+     — not null — on a filesystem store, because there was no ledger to read and
+     "not checked" must not read as "checked and in step". The store it named is
+     gone and the report is now unconditional, so the state it described cannot
+     be reached. docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § F. */
 });

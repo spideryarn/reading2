@@ -30,7 +30,7 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/db-referee-criteria.test.ts",
   tables: ["spideryarn.referee_criteria"],
   keepPool: true,
@@ -109,10 +109,8 @@ async function addComment(
   );
 }
 
-const dbIt = it.skipIf(!reachable);
-
 describe("referee_criteria", () => {
-  dbIt("takes a diverging criterion with both poles and a scale", async () => {
+  it("takes a diverging criterion with both poles and a scale", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const { rows } = await c.query(
@@ -127,7 +125,7 @@ describe("referee_criteria", () => {
     });
   });
 
-  dbIt("refuses half a diverging criterion, in every direction", async () => {
+  it("refuses half a diverging criterion, in every direction", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const insert = (id: string, cols: string, vals: string) =>
@@ -155,7 +153,7 @@ describe("referee_criteria", () => {
     });
   });
 
-  dbIt("refuses a scale that names no stylesheet block", async () => {
+  it("refuses a scale that names no stylesheet block", async () => {
     await inRollback(async (c) => {
       await seed(c);
       /* TIGHT on purpose, unlike `referee_criteria_colour` two cases below. A
@@ -173,7 +171,7 @@ describe("referee_criteria", () => {
     });
   });
 
-  dbIt("accepts a colour slot past the end of today's palette", async () => {
+  it("accepts a colour slot past the end of today's palette", async () => {
     await inRollback(async (c) => {
       await seed(c);
       /* LOOSE on purpose, copied from `search_runs_colour` (drizzle/0016). The
@@ -198,7 +196,7 @@ describe("referee_criteria", () => {
     });
   });
 
-  dbIt("refuses half an attempt fence", async () => {
+  it("refuses half an attempt fence", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await expectViolation(c, /referee_criteria_attempt_both/, () =>
@@ -214,7 +212,7 @@ describe("referee_criteria", () => {
 });
 
 describe("the referee's own mark on a comment", () => {
-  dbIt("stores a negative valence unchanged — the whole point of the feature", async () => {
+  it("stores a negative valence unchanged — the whole point of the feature", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await addComment(c, "spya-mmmmmm", CRIT, -70);
@@ -230,7 +228,7 @@ describe("the referee's own mark on a comment", () => {
     });
   });
 
-  dbIt("lets a comment answer a criterion without scoring it", async () => {
+  it("lets a comment answer a criterion without scoring it", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await addComment(c, "spya-nnnnnn", CRIT, null);
@@ -242,7 +240,7 @@ describe("the referee's own mark on a comment", () => {
     });
   });
 
-  dbIt("leaves an ordinary reading note exactly as it was", async () => {
+  it("leaves an ordinary reading note exactly as it was", async () => {
     await inRollback(async (c) => {
       await seed(c);
       /* The additive guarantee, at the database: a comment written the way
@@ -262,7 +260,7 @@ describe("the referee's own mark on a comment", () => {
     });
   });
 
-  dbIt("refuses a placement with nothing to place it on", async () => {
+  it("refuses a placement with nothing to place it on", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await expectViolation(c, /comments_valence_needs_criterion/, () =>
@@ -271,7 +269,7 @@ describe("the referee's own mark on a comment", () => {
     });
   });
 
-  dbIt("refuses a placement outside −100…+100, at both ends", async () => {
+  it("refuses a placement outside −100…+100, at both ends", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await expectViolation(c, /comments_valence_range/, () =>
@@ -283,7 +281,7 @@ describe("the referee's own mark on a comment", () => {
     });
   });
 
-  dbIt("refuses a criterion belonging to another article", async () => {
+  it("refuses a criterion belonging to another article", async () => {
     await inRollback(async (c) => {
       await seed(c);
       /* What the COMPOSITE key buys beyond the reference itself, and the same
@@ -316,7 +314,7 @@ describe("the referee's own mark on a comment", () => {
 /* ------------------------------------------------------------------ */
 
 describe("deleting a criterion, and deleting the article under it", () => {
-  dbIt("refuses to delete a criterion the referee has written against", async () => {
+  it("refuses to delete a criterion the referee has written against", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await addComment(c, "spya-uuuuuu", CRIT, -70);
@@ -332,7 +330,7 @@ describe("deleting a criterion, and deleting the article under it", () => {
     });
   });
 
-  dbIt("still deletes the whole article, which is why it is not `restrict`", async () => {
+  it("still deletes the whole article, which is why it is not `restrict`", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await addComment(c, "spya-vvvvvv", CRIT, -70);
@@ -355,7 +353,7 @@ describe("deleting a criterion, and deleting the article under it", () => {
 });
 
 describe("the owner key", () => {
-  dbIt("exists, and drizzle-kit does not know about it", async () => {
+  it("exists, and drizzle-kit does not know about it", async () => {
     /* drizzle/0043, by hand, for the reason drizzle/0040 sets out: a future
        generated migration that drops and recreates this table takes the
        constraint with it and says nothing. This is the alarm. */

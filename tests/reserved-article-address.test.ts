@@ -167,12 +167,10 @@ describe("the reserved shelf address", () => {
 
 /* ------------------------------------------- the third enforcer, for real -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/reserved-article-address.test.ts",
   tables: ["spideryarn.articles"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * **The one line in the repo that brings an article address into existence.**
  *
@@ -184,7 +182,7 @@ const when = reachable ? describe : describe.skip;
  * fixture, and a transaction that throws is the cheapest way to have written
  * nothing — which also means these cases cannot collide with a peer's run.
  */
-when("creating an article with the reserved name", { timeout: 20_000 }, () => {
+describe("creating an article with the reserved name", { timeout: 20_000 }, () => {
   afterAll(async () => {
     await closeDb();
   });

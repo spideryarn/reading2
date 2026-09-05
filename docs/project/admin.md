@@ -435,7 +435,8 @@ would store it — but a page listing other people's accounts should not rest on
 manners, and an intermediary cannot know the policy unless the response states it.
 
 **Postgres only.** There are no user accounts on a filesystem — `data/` is one directory per slug —
-so under `SPIDERYARN_STORE=files` the endpoint answers **501** with its own sentence.
+so under the filesystem store the endpoint answered **501** with its own sentence. Both that store and
+the refusal went on 2026-09-05 ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
 [`src/store/index.ts`](../../src/store/index.ts) has the refusal, and the alternative it exists to
 avoid: an empty array, which looks exactly like a working page saying *you have no users*.
 
@@ -553,9 +554,16 @@ without a database; the aggregate itself is checked against a real one in
 
 ## The page itself
 
-`/admin` is an index with one entry. It exists rather than redirecting straight to the users table
-because Greg asked for the address, and because the second admin page then has somewhere to be
-listed rather than somewhere to be remembered.
+`/admin` is an index. It exists rather than redirecting straight to the users table because Greg
+asked for the address, and because the second and third entries then have somewhere to be listed
+rather than somewhere to be remembered.
+
+**The third of those is `/design`, and it is not an admin page.** It moved here off the shelf's
+masthead on 2026-09-05 — *"Move the Design link on the logged-in Homepage into /admin"* — because a
+page of colour tokens is developer furniture that every signed-in reader was being shown. The page
+itself is unchanged and ungated: anybody signed in can still type the address, which is fine because
+it reads no data at all, and because a drawn link was never a gate in the first place (§ The three
+refusals above). [design-css-overview.md](design-css-overview.md) is its written counterpart.
 
 `/admin/users` is [`DataTable`](../../src/web/lib/DataTable.tsx) with sort chips — the same seam the
 shelf's table uses, which is what Greg meant by *"using Tanstack Table"*: the columns are the page's

@@ -78,8 +78,9 @@
  * a cycle `npm run cycles` refuses. Types are erased and are exempt, which is why
  * `ModelNode` and `BuildReport` may still come from there.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { link, mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { retryAfterMs } from "./ai-call.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -982,11 +983,15 @@ export const CALL_RESERVE_MS = 60_000;
  * `allOrStop` drains before it rethrows, so that a peer already on the wire gets
  * to write the checkpoint row its answer was bought for. The drain was
  * unbounded, on a docblock's claim that every caller either aborts in flight or
- * is bounded by a claimant's deadline signal. **Neither is true here**: this
- * wave is reachable from the CLI and from an exported `deepenTree` with no
- * signal at all, and `ExpansionExecutor` is a seam with no abort contract even
- * when there is one. One wedged call hung the wave for ever. ⟨GPT Sol's second
- * review of stage 5a, finding 3.⟩
+ * is bounded by a claimant's deadline signal. **Neither is true here**: the
+ * exported `deepenTree` can be called with no signal at all — the tests do, and
+ * so does `evals/deepen/run.ts`'s free seam probe — and `ExpansionExecutor` is a
+ * seam with no abort contract even when there *is* one. One wedged call hung the
+ * wave for ever. ⟨GPT Sol's second review of stage 5a, finding 3. The CLI this
+ * used to name went with the six stage CLIs on 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § stage E); the unsignalled callers it named are still here, so the bound
+ * stays.⟩
  *
  * **Bounding the drain rather than aborting the calls**, which is the other fix
  * and the wrong one: aborting them would undo the change that put the drain
@@ -1733,11 +1738,24 @@ export interface DeepenRecordsFile {
  * stage 5a, finding 4.⟩
  *
  * So the name also carries a **process-local monotonic counter**, and the file
- * is created with `wx` — exclusive — so that a collision is an `EEXIST` this
+ * appears under its final name **exclusively** — a collision is an `EEXIST` this
  * function can see rather than an overwrite it cannot. On one, it takes the
  * next number and tries again, a bounded number of times. Two processes writing
- * into one directory in one second are the case `wx` is actually for; the
+ * into one directory in one second are the case that is actually for; the
  * counter is what makes the retry terminate.
+ *
+ * ## And why the bytes are written somewhere else first
+ *
+ * They used to go straight to the visible name, and a reader is not
+ * hypothetical: the stage-5b eval runs three deepening jobs at once against one
+ * records directory and lists it as each job stops, so it could open a sibling's
+ * file **between the create and the last byte**, fail to parse it, and mark the
+ * wrong job fatal. ⟨GPT Sol reviewing the stage-5b harness, DPN-14.⟩
+ *
+ * So the body goes to a unique temporary name and is published with `link`,
+ * which is atomic *and* fails with `EEXIST`. `rename` would be atomic and would
+ * silently overwrite, which is the other half of what this function is for. A
+ * file under the final name is therefore always whole.
  */
 export async function saveDeepenRecords(
   slug: string,
@@ -1766,23 +1784,34 @@ export async function saveDeepenRecords(
   const safe = slug.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "article";
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   const body = `${JSON.stringify(file, null, 2)}\n`;
+  /* Not named `.json`, so a concurrent reader listing the directory never even
+     considers it. */
+  const temp = join(dir, `.${safe}-${process.pid}-${randomUUID()}.records-tmp`);
   try {
     await mkdir(dir, { recursive: true });
-    for (let tries = 0; tries < RECORD_NAME_ATTEMPTS; tries++) {
-      const at = join(dir, `${safe}-${stamp}-${process.pid}-${++recordsWritten}.json`);
-      try {
-        /* **`wx`, so a name already taken is an error rather than an
-           overwrite.** This is the whole point: the failure being guarded
-           against is one file where there should be two. */
-        await writeFile(at, body, { encoding: "utf-8", flag: "wx" });
-        return;
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    await writeFile(temp, body, { encoding: "utf-8", flag: "wx" });
+    try {
+      for (let tries = 0; tries < RECORD_NAME_ATTEMPTS; tries++) {
+        const at = join(dir, `${safe}-${stamp}-${process.pid}-${++recordsWritten}.json`);
+        try {
+          /* **`link`, so a name already taken is an error rather than an
+             overwrite.** That is the whole point of the counter: the failure
+             being guarded against is one file where there should be two. And
+             the file appears whole or not at all, which is the other. */
+          await link(temp, at);
+          return;
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+        }
       }
+      throw new Error(
+        `${RECORD_NAME_ATTEMPTS} record filenames in a row were already taken under ${dir}`,
+      );
+    } finally {
+      /* The link is the file now. A temp left behind after a failed link is
+         litter rather than damage, so this failing is not worth reporting. */
+      await unlink(temp).catch(() => undefined);
     }
-    throw new Error(
-      `${RECORD_NAME_ATTEMPTS} record filenames in a row were already taken under ${dir}`,
-    );
   } catch (err) {
     log("pipeline").warn(
       { slug, dir, err },

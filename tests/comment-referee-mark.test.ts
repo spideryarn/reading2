@@ -39,17 +39,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — see the same block
- * in tests/chat-route.test.ts.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -64,24 +54,14 @@ const SLUG = "test-comment-referee-mark";
 /** A second article, for the one case about a criterion saved under another. */
 const ELSEWHERE = "test-comment-referee-mark-other";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/comment-referee-mark.test.ts",
   tables: ["spideryarn.comments", "spideryarn.referee_criteria"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { commentStore, refereeCriteriaStore, STORE } = await import("../src/store/index.js");
+const { commentStore, refereeCriteriaStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * The two articles, and the passage every case anchors to.
@@ -100,7 +80,6 @@ let QUOTE = "";
 const AT = 0;
 
 beforeAll(async () => {
-  if (!reachable) return;
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
   elsewhere = await scratchArticleInPg(ELSEWHERE, { ownerId: TEST_OWNER });
   expect(article.copied).toContain("blocks");
@@ -198,7 +177,7 @@ afterEach(async () => {
   });
 });
 
-when("the referee's own placement crosses the comment API", () => {
+describe("the referee's own placement crosses the comment API", () => {
   it("keeps a negative valence, in the answer and on disk", async () => {
     const criterionId = await aCriterion();
     const r = await call("POST", POST, {
@@ -282,7 +261,7 @@ when("the referee's own placement crosses the comment API", () => {
   });
 });
 
-when("what the route refuses, and it refuses rather than rounds", () => {
+describe("what the route refuses, and it refuses rather than rounds", () => {
   /** Every refusal must also leave nothing behind. */
   const refused = async (body: Record<string, unknown>, match: RegExp) => {
     const r = await call("POST", POST, { blockId: BLOCK, quote: QUOTE, start: AT, ...body });
@@ -313,7 +292,7 @@ when("what the route refuses, and it refuses rather than rounds", () => {
 
        (The reason given here used to be *"it runs against the filesystem
        store, which has no notion of an owner at all"*, which is simply false:
-       this file sets `SPIDERYARN_STORE=postgres` before any import and asserts
+       this file runs against Postgres like every other suite and asserts
        it, in "the store these tests are actually talking to" above. The
        conclusion was right and the reason was wrong, which is the worse of the
        two ways to be wrong in a file whose whole value is that a reader can
@@ -381,7 +360,7 @@ when("what the route refuses, and it refuses rather than rounds", () => {
   });
 });
 
-when("a second Save under a stored id", () => {
+describe("a second Save under a stored id", () => {
   it("hands the same comment back when the placement has not changed", async () => {
     const criterionId = await aCriterion();
     const made = { blockId: BLOCK, quote: QUOTE, start: AT, criterionId, valence: -80 };
@@ -476,7 +455,7 @@ async function fromStore(id: string): Promise<Comment | undefined> {
   return (await asTestOwner(() => commentStore.load(SLUG))).find((c) => c.id === id);
 }
 
-when("changing a placement the referee already made", () => {
+describe("changing a placement the referee already made", () => {
   it("moves a passage from one end of the scale to the other", async () => {
     const criterionId = await aCriterion();
     const id = await madeComment({ criterionId, valence: -80 });
@@ -563,7 +542,7 @@ when("changing a placement the referee already made", () => {
   });
 });
 
-when("what the placement edit refuses, and it refuses rather than rounds", () => {
+describe("what the placement edit refuses, and it refuses rather than rounds", () => {
   /**
    * Every refusal must also leave the placement that was already there alone.
    *

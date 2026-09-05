@@ -88,22 +88,19 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 /**
- * `SPIDERYARN_STORE=postgres` before **any** import.
+ * The scratch data root, before **any** import.
  *
- * `vi.hoisted` and not a plain statement. `src/store/live.ts` reads the flag
- * once, the first time anything imports it, and imports are hoisted above every
- * statement in a module — so an ordinary assignment would run after the imports
- * below had settled the answer to `files`, and this whole file would exercise
- * the filesystem session and pass for the wrong reason.
+ * `vi.hoisted` and not a plain statement, because imports are hoisted above every
+ * statement in a module and `src/store/data-root.ts` is read by things this file
+ * imports. A `SPIDERYARN_STORE=postgres` assignment sat here for the same reason
+ * until 2026-09-05; there is one store now and nothing to pin.
  *
  * The data root is **not** hoisted, because it is not one value here: every
  * claim gets its own, and `withFreshScratch` below is what sets it.
  */
 const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
   const previousRoot = process.env.SPIDERYARN_DATA_ROOT;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore, previousRoot };
+  return { previousRoot };
 });
 
 import { getDb } from "../src/db/client.js";
@@ -129,7 +126,6 @@ import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
 import { DATA_ROOT_ENV } from "../src/store/data-root.js";
-import { STORE } from "../src/store/live.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { pgArticleReader } from "../src/store/pg.js";
@@ -143,17 +139,13 @@ import { takeRunLock } from "./helpers/run-lock.js";
    across files and does not reset `process.env` between them, so leaving it set
    hands the next file a store it did not ask for. Everything above has already
    captured it. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/claim-session-postgres.test.ts",
   tables: ["spideryarn.jobs", "spideryarn.article_revisions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts jobs, so it takes the shared run lock.**
@@ -163,7 +155,7 @@ const when = reachable ? describe : describe.skip;
  * fixture rows themselves. Taken after `pgReady` and only when reachable,
  * because a suite about to skip must not sit holding it.
  */
-const runLock = reachable ? await takeRunLock("tests/claim-session-postgres.test.ts") : undefined;
+const runLock = await takeRunLock("tests/claim-session-postgres.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
@@ -567,16 +559,7 @@ async function arcTextOf(revisionId: string): Promise<string | null> {
 
 /* ---------------------------------------------------------------- the cases -- */
 
-describe("the store this file is talking to", () => {
-  it("is the Postgres one", () => {
-    /* Without this, a flag that failed to take looks exactly like the flip
-       working: the filesystem session answers every call happily and the job
-       ends `done`, which is what most of the cases below assert. */
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("a claim under Postgres", () => {
+describe("a claim under Postgres", () => {
   /**
    * **Jobs first and by slug, articles second.** A job row carries
    * `draft_revision_id`, and that foreign key blocks deleting the revision the

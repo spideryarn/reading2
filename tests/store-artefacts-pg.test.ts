@@ -169,12 +169,10 @@ describe("the two storage maps", () => {
 
 /* ---------------------------------------------------- is there a database -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-artefacts-pg.test.ts",
   tables: ["spideryarn.article_revisions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts a job, so it takes the shared run lock.**
@@ -185,7 +183,7 @@ const when = reachable ? describe : describe.skip;
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
-const runLock = reachable ? await takeRunLock("tests/store-artefacts-pg.test.ts") : undefined;
+const runLock = await takeRunLock("tests/store-artefacts-pg.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
@@ -367,7 +365,7 @@ async function cleanUp(): Promise<void> {
   await closeDb();
 }
 
-when("reading an artefact out of Postgres", () => {
+describe("reading an artefact out of Postgres", () => {
   beforeAll(async () => {
     await cleanUpQuietly();
     await makeFixture();
@@ -469,7 +467,7 @@ when("reading an artefact out of Postgres", () => {
   });
 });
 
-when("reassembling meta and raw from their columns", () => {
+describe("reassembling meta and raw from their columns", () => {
   beforeAll(async () => {
     await cleanUpQuietly();
     await makeFixture();
@@ -703,7 +701,7 @@ when("reassembling meta and raw from their columns", () => {
   });
 });
 
-when("an article whose blocks have all gone", () => {
+describe("an article whose blocks have all gone", () => {
   beforeAll(async () => {
     await cleanUpQuietly();
     await makeFixture();
@@ -721,7 +719,7 @@ when("an article whose blocks have all gone", () => {
   });
 });
 
-when("what the store recorded about a run", () => {
+describe("what the store recorded about a run", () => {
   beforeAll(async () => {
     await cleanUpQuietly();
     await makeFixture();
@@ -869,7 +867,7 @@ async function cleanUpQuietly(): Promise<void> {
   await db.delete(articles).where(eq(articles.id, article.id));
 }
 
-when("whether a step has actually produced anything", () => {
+describe("whether a step has actually produced anything", () => {
   /* `has` is presence **and completion**, and never freshness — see the long
      header on `hasArtefacts`. Every case below was watched red against the
      mutation named in it. */
@@ -1073,7 +1071,7 @@ const NEW_BLOCKS: Block[] = [
   { id: B2, tag: "p", kind: "text", text: "rewritten second", words: 2, html: "<p>b</p>", gistable: true },
 ];
 
-when("writing artefacts into a draft", () => {
+describe("writing artefacts into a draft", () => {
   beforeAll(async () => {
     await cleanUpQuietly();
     await makeFixture();
@@ -1639,7 +1637,7 @@ when("writing artefacts into a draft", () => {
   });
 });
 
-when("the store, assembled", () => {
+describe("the store, assembled", () => {
   beforeAll(async () => {
     await cleanUpQuietly();
     await makeFixture();

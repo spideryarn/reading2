@@ -39,7 +39,6 @@ import { feedback as feedbackTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { runAsOwner, type OwnerId } from "../src/owner.js";
-import { adminStore } from "../src/store/index.js";
 import type { NewFeedback } from "../src/store/contracts.js";
 import { pgFeedbackStore } from "../src/store/pg-feedback.js";
 import {
@@ -53,34 +52,14 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
-/* ------------------------------------------------ the filesystem refusal -- */
-
-/**
- * **Outside the `when`, and no database needed.** `adminStore` is selected at
- * module load from `SPIDERYARN_STORE`, which is unset under `npm test` — so
- * what this file imports is the refusal itself.
- */
-describe("the admin feedback read on the filesystem", () => {
-  it("refuses the list with a 501 and a sentence, rather than an empty inbox", async () => {
-    /* Wrapped in an async call: the refusal is a synchronous throw from a
-       promise-shaped method, and what a route's `await` sees is what matters. */
-    const refused = (async () => adminStore.listFeedbackAcrossOwners(10, null))();
-    await expect(refused).rejects.toMatchObject({ status: 501 });
-    /* The sentence, not just the status. An empty array would render as "nobody
-       has filed a report yet", which is a lie that looks like good news. */
-    await expect(refused).rejects.toThrow(/needs Postgres/);
-  });
-
-  it("refuses one report and one screenshot the same way", async () => {
-    const owner = "00000000-0000-4000-8000-00000000fc01";
-    await expect(
-      (async () => adminStore.readFeedbackAcrossOwners(owner, mintId()))(),
-    ).rejects.toMatchObject({ status: 501 });
-    await expect(
-      (async () => adminStore.readFeedbackScreenshotAcrossOwners(owner, mintId()))(),
-    ).rejects.toMatchObject({ status: 501 });
-  });
-});
+/* An `the admin feedback read on the filesystem` block stood here until
+   2026-09-05: two cases about `adminStore`'s filesystem *refusal* — a 501 and a
+   sentence rather than an empty inbox, because an empty array renders as
+   "nobody has filed a report yet", which is a lie that looks like good news.
+   The refusal went with the store it was refusing for
+   (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   § F). The first of the two also *listed real rows* from the private database
+   once the flag was gone, which is how it was noticed. */
 
 /* ------------------------------------------------------------ the cursor -- */
 
@@ -144,12 +123,10 @@ describe("the page cursor", () => {
 const ALICE = "00000000-0000-4000-8000-00000000fc01" as OwnerId;
 const BOB = "00000000-0000-4000-8000-00000000fc02" as OwnerId;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/admin-feedback-store.test.ts",
   tables: ["spideryarn.feedback"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
   return {
@@ -194,7 +171,7 @@ async function ours(limit = ADMIN_FEEDBACK_MAX) {
   return page.reports.filter((r) => r.ownerId === ALICE || r.ownerId === BOB);
 }
 
-when("the admin feedback read on Postgres", () => {
+describe("the admin feedback read on Postgres", () => {
   beforeEach(async () => {
     await seedAuthUser(getDb(), {
       id: ALICE,

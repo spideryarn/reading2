@@ -199,20 +199,6 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { Pool } from "pg";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres` before a single import is evaluated.
- *
- * `vi.hoisted` and not a plain statement, for the reason tests/store-guarded.ts
- * spells out: imports are hoisted above every statement in a module, so an
- * ordinary assignment runs *after* the module it is configuring has made up its
- * mind. src/store/live.ts reads the flag once, at first import.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
-
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, blockIdentities, jobs as jobsTable, revisionBlocks, revisionStepRuns } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -232,7 +218,6 @@ import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactOutcome, ArtifactReads } from "../src/store/artifacts.js";
 import { isGuardedStore } from "../src/store/db-errors.js";
 import { StaleAttemptError, mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import {
@@ -264,8 +249,6 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
    reuses a worker process across files. Leaving it set hands the next file a
    store it did not ask for — which is how tests/store-jobs-parity.test.ts once
    found a stray Postgres job left behind by tests/jobs.test.ts. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
@@ -309,7 +292,7 @@ const LEASE_MS = 60_000;
  */
 let runLock: HeldRunLock | undefined;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-pg-session.test.ts",
   /* Schema-qualified, always. `to_regclass('jobs')` is null even on a fully
      migrated database, and this whole suite would then report itself skipped. */
@@ -322,33 +305,29 @@ const { reachable } = await pgReady({
   ],
 });
 
-if (reachable) {
-  /* After `pgReady`, and only when reachable — a file that is about to skip
-     must not sit holding the lock. See tests/helpers/run-lock.ts. */
-  /* Through `takeRunLockAndSetUp`, so a sweep statement that throws gives the
-     key back: this is module scope, and no `afterAll` exists yet to do it.
-     tests/helpers/lock-lifecycle.ts. */
-  runLock = await takeRunLockAndSetUp("tests/store-pg-session.test.ts", async (lockClient) => {
-    /* The lock is held, so no sibling can be using any of this. Jobs first: they
-       reference drafts, and a leftover `running` row from a killed run blocks
-       this file's own slugs and counts against the concurrency cap until its
-       lease lapses. */
-    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query(
-      "update spideryarn.articles set current_revision_id = null where slug like $1",
-      [SLUG_RUBBLE],
-    );
-    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-    await seedAuthUser(lockClient, {
-      id: OWNER,
-      email: `store-pg-session-${OWNER}@example.invalid`,
-    });
+/* After `pgReady`, and only when reachable — a file that is about to skip
+   must not sit holding the lock. See tests/helpers/run-lock.ts. */
+/* Through `takeRunLockAndSetUp`, so a sweep statement that throws gives the
+   key back: this is module scope, and no `afterAll` exists yet to do it.
+   tests/helpers/lock-lifecycle.ts. */
+runLock = await takeRunLockAndSetUp("tests/store-pg-session.test.ts", async (lockClient) => {
+  /* The lock is held, so no sibling can be using any of this. Jobs first: they
+     reference drafts, and a leftover `running` row from a killed run blocks
+     this file's own slugs and counts against the concurrency cap until its
+     lease lapses. */
+  await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+  await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query(
+    "update spideryarn.articles set current_revision_id = null where slug like $1",
+    [SLUG_RUBBLE],
+  );
+  await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+  await seedAuthUser(lockClient, {
+    id: OWNER,
+    email: `store-pg-session-${OWNER}@example.invalid`,
   });
-}
-
-const when = reachable ? describe : describe.skip;
+});
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -874,7 +853,7 @@ async function arcTextOf(revisionId: string): Promise<string | null> {
 const mine = (name: string, body: () => Promise<void>) =>
   it(name, () => runAsOwner(OWNER, body));
 
-when("the transactional session", () => {
+describe("the transactional session", () => {
   /* Nothing to build once and share: each case publishes its own article under
      its own slug, because half of them end the job and clear the draft, and a
      shared fixture would make the order of the file part of the test. */
@@ -896,7 +875,6 @@ when("the transactional session", () => {
    * the assertions above have already read.
    */
   afterEach(async () => {
-    if (!reachable) return;
     await db()
       .delete(jobsTable)
       .where(
@@ -905,7 +883,6 @@ when("the transactional session", () => {
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     /* Release last, and whatever the cleanup did: one failed statement used to
        skip it, leaving the key held until the worker exited and every peer
        suite waiting on it. tests/helpers/lock-lifecycle.ts. */
@@ -951,8 +928,6 @@ when("the transactional session", () => {
    * would only show up as a raw Drizzle error on somebody's homepage.
    */
   mine("runs against the Postgres job store, behind the error guard", async () => {
-    expect(STORE, "the vi.hoisted flag did not reach src/store/live.ts").toBe("postgres");
-
     const fixture = await publishArticle(`${SLUG_PREFIX}guard`, "old");
     const claimed = await claimWithSession(fixture.slug, ["arc"]);
     expect(isGuardedStore(claimed.session)).toBe("session");

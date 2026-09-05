@@ -21,15 +21,21 @@ manual; that one is the taste.
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
 written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
 
-## Which store is live, and the one refusal that matters
+## There is one store, and a tombstone where the flag was
 
-`SPIDERYARN_STORE` still **defaults to `files`** for a CLI script, a test, or anything else that
-imports [`src/store/live.ts`](../../src/store/live.ts) directly. `npm run dev` is the one exception,
-since 2026-09-02: `package.json`'s `dev` script itself sets `postgres` unless something already set
-the variable, so a fresh checkout's dev server reads Postgres without anyone opting in. But
-[`src/store/index.ts`](../../src/store/index.ts)
-**refuses to boot on `files` in production**, and the reason generalises well beyond deployment: the
-filesystem store has **no owner column**, so it has no second reader, and a store with no second
+**`SPIDERYARN_STORE` chose between a directory under `data/` and Postgres until 2026-09-05.** It
+chooses nothing now: [`src/store/index.ts`](../../src/store/index.ts) wires Postgres and only
+Postgres, and what is left of the variable in
+[`src/store/live.ts`](../../src/store/live.ts) is a **validator** — unset and `postgres` pass in
+silence, `files` or anything else throws a sentence with the date in it. It is there because Vercel's
+Preview and Production environments still carry the variable and only Greg can take it out; silently
+ignoring somebody who asked for the store that is gone would be the failure this whole migration was
+leaving behind. It goes when the variable does
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § I).
+
+Everything below about *why* the filesystem store could not be the live one is kept, because it is
+the argument that got us here rather than a description of a switch. The sharpest form: the
+filesystem store had **no owner column**, so it had no second reader, and a store with no second
 reader cannot express "somebody who is not the owner". That is why
 [auth.md](auth.md#whose-data-is-it) is a Postgres story, and why
 [260827ai-public-read-only-access.md](../plans/260827ai-public-read-only-access.md#postgres-is-the-destination-and-this-feature-cannot-work-without-it)
@@ -123,9 +129,9 @@ and it said it would move when that moved.
 **It moved first, on 2026-08-27**, and the reason it did not wait is that it had a harder deadline
 than the queue: minting a grant and queueing the job are **two HTTP requests**, and on a serverless
 host they may not run on the same machine, so a record on a function's local disk is one the second
-request cannot find. There is now a `spideryarn.uploads` table and two adapters behind
-[`src/store/uploads.ts`](../../src/store/uploads.ts) — `SPIDERYARN_STORE` picks one, exactly as it
-does for everything else. The rules the record obeys never moved at all: `canTransition`,
+request cannot find. There is now a `spideryarn.uploads` table behind
+[`src/store/uploads.ts`](../../src/store/uploads.ts). There were two adapters and a flag choosing
+between them until 2026-09-05, exactly as for everything else. The rules the record obeys never moved at all: `canTransition`,
 `grantExpired` and `sweepable` are in [`src/source.ts`](../../src/source.ts) and touch no storage,
 which is what made this a change of adapter rather than of rules.
 
@@ -221,11 +227,9 @@ nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the
 visible; it was not in the first version of that file, which reported nine passes for having checked
 nothing.
 
-**Reads now come out of Postgres when you ask them to — and, since 2026-09-02, without asking.**
-`npm run dev` serves every article, the library, the metadata page and the reader's comments from
-the database instead of from disk; `SPIDERYARN_STORE=files npm run dev` is the escape hatch back to
-disk, and `files` remains the default for everything that is not `npm run dev` — `vite preview`
-included, which still wants `SPIDERYARN_STORE=postgres` said out loud. The work,
+**Reads come out of Postgres, and since 2026-09-05 there is nowhere else for them to come from.**
+Every article, the library, the metadata page and the reader's comments. There was an escape hatch
+back to disk — `SPIDERYARN_STORE=files npm run dev` — and it went with the store it named. The work,
 and what is still missing, is in
 [260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md).
 
@@ -344,7 +348,7 @@ column on an exported table is still a hand-written line in `exportArticle`, whi
 | [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
 | [`tests/store-parity-referee.test.ts`](../../tests/store-parity-referee.test.ts) | the same, for Referee's two stores — the suite that would have caught Claims shipping filesystem-only |
 | [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts) | every seam in `contracts.ts` has both adapters, or declares its one-sidedness — see below |
-| [`tests/referee-routes-postgres.test.ts`](../../tests/referee-routes-postgres.test.ts) | Referee's routes driven under `SPIDERYARN_STORE=postgres`, because every other route suite runs on the default |
+| [`tests/referee-routes-postgres.test.ts`](../../tests/referee-routes-postgres.test.ts) | Referee's routes driven against Postgres — which every route suite does since 2026-09-05, and this one did first |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
 
 Three rules that outrank convenience, all learned the expensive way:
@@ -1317,10 +1321,10 @@ What to know before touching any of it:
   `warn`. The worst a broken checkpoint may cost is the saving. The filesystem version could not say
   that — a full `/tmp` made `mkdir` throw straight out of the stage, which is a cache becoming an
   outage.
-- **A laptop with `SPIDERYARN_STORE=files` checkpoints nothing.** `fsStoreSession` has no `articles`
-  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines default
-  to `files` and do the same, since none of them go through `npm run dev`'s `package.json`-level
-  `postgres` default. Articles come out identical and a *second* attempt after a killed
+- ~~**A laptop with `SPIDERYARN_STORE=files` checkpoints nothing.**~~ Not since 2026-09-05: there is
+  one store and every run has an `articles` row to key on. `fsStoreSession` had none and handed out
+  `nullCheckpointStore()`, and the stage command lines defaulted to the same. Articles came out
+  identical and a *second* attempt after a killed
   one pays again. That is a decision, written down at `nullCheckpointStore` in
   [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), and it ends when the filesystem store
   does.
@@ -1336,8 +1340,10 @@ adapter uses `getDb()` and takes no `tx`.
   the same link ran at 119 KB/s and the whole import took under two minutes. The tell is
   `pg_stat_activity` showing the statement `active` on `Client:ClientRead` — the server waiting for
   you. Measure the upload before blaming the database.
-- **Vercel does not have these values yet** — `SPIDERYARN_STORE`, `DATABASE_URL`,
-  `SPIDERYARN_OWNER_ID`, `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables).
+- **Vercel does not have these values yet** — `DATABASE_URL`, `SPIDERYARN_OWNER_ID`,
+  `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables). (`SPIDERYARN_STORE` was
+  on this list and is now the opposite: it is set there and wants **taking off** — stage I of
+  [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).)
 - **`on delete restrict` is inherited, not chosen.** All seven `owner_id` foreign keys use it, which
   means deleting the user from the Auth admin API or the dashboard will fail with `23503` while any
   row is owned. Supabase's own guidance is `cascade` or `set null`; keeping `restrict` is defensible

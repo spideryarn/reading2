@@ -1473,6 +1473,20 @@ describe("the run's token totals", () => {
       const files = await readdir(dir);
       expect(files).toHaveLength(3);
       expect(new Set(files).size).toBe(3);
+      /* **And nothing half-written left where a reader would look.** The bytes
+         go to a temporary name and are published with `link`, so a `.json` in
+         this directory is always whole — the stage-5b eval reads it from three
+         jobs at once and used to be able to parse a sibling's file mid-write
+         (⟨GPT Sol, DPN-14⟩). The temp is not named `.json` and is unlinked
+         either way, so a leftover here means one of those two stopped being
+         true. */
+      expect(files.filter((f) => f.endsWith(".json"))).toHaveLength(3);
+      for (const file of files) {
+        expect(JSON.parse(await readFile(path.join(dir, file), "utf-8"))).toMatchObject({
+          slug: SLUG,
+          version: "deepen-records/2",
+        });
+      }
     } finally {
       delete process.env[DEEPEN_RECORDS_ENV];
     }

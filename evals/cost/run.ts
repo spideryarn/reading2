@@ -152,7 +152,6 @@ import { effortFor, STAGE_EFFORT } from "../../src/models.js";
 import { environmentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../../src/owner.js";
 import { DEFAULT_INGEST_STEPS, STEPS } from "../../src/pipeline.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import { STORE } from "../../src/store/live.js";
 import type { Job, StepName } from "../../src/types.js";
 import { type CostFixture, FIXTURES, fixtureByName } from "./fixtures.js";
 import {
@@ -222,7 +221,6 @@ interface RunMeta {
    * could not be asked. GPT Sol, 2026-09-02.
    */
   srcPatchSha256: string | null;
-  store: string;
   databaseTarget: string;
   /** Who the articles belong to. Never the environment owner — see `assertDistinctEvalOwner`. */
   evalOwnerId: string;
@@ -883,7 +881,6 @@ function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): Run
        to `src` and `evals`, which are the directories that decide what a call
        costs; a doc edit does not make two runs incomparable. */
     srcPatchSha256: patchDigest(git),
-    store: STORE,
     databaseTarget,
     evalOwnerId: EVAL_OWNER_ID,
     environmentOwnerId: environmentOwnerId(),
@@ -1155,7 +1152,7 @@ async function runDraws(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const databaseTarget = localTarget(STORE, process.env.DATABASE_URL);
+  const databaseTarget = localTarget(process.env.DATABASE_URL);
   /* **Before anything else that could spend.** A job in one job is one cache
      group, so a step list holding two compatible modes measures the second one
      warm — and no amount of checking afterwards can un-warm it. */
@@ -1164,7 +1161,7 @@ async function main(): Promise<void> {
   const meta = currentMeta(databaseTarget, args.batchedModes ? "batched-modes" : "per-mode");
 
   console.log(`Target: ${databaseTarget}`);
-  console.log(`Store:  ${meta.store}   commit ${meta.commit.slice(0, 8)}${meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""}`);
+  console.log(`Commit: ${meta.commit.slice(0, 8)}${meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""}`);
   console.log(`Ledger: ${costStore.describe()}`);
   console.log(`Owner:  ${meta.evalOwnerId}   (environment owner ${meta.environmentOwnerId})`);
   console.log(

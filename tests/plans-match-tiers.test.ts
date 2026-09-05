@@ -147,12 +147,10 @@ describe("the website's price table", () => {
 
 /* -------------------------------------------------------------------------- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/plans-match-tiers.test.ts",
   tables: ["spideryarn.billing_tiers", "spideryarn.billing_tier_prices"],
 });
-const dbIt = reachable ? it : it.skip;
-
 describe("the website's price table, against the real rows", () => {
   /**
    * **One assertion per tier, over the whole row.**
@@ -163,7 +161,7 @@ describe("the website's price table, against the real rows", () => {
    * swapped-id mutation, and the two swaps next to it — an allowance or a price
    * moved between rows — which the old text search could not see either.
    */
-  dbIt("gives every tier on sale a row whose every field is that tier's", async () => {
+  it("gives every tier on sale a row whose every field is that tier's", async () => {
     for (const tier of offerableTiers(await readTiers())) {
       const row = BY_TIER_ID.get(tier.id);
       expect(
@@ -203,7 +201,7 @@ describe("the website's price table, against the real rows", () => {
     }
   });
 
-  dbIt("advertises no plan that no active tier sells", async () => {
+  it("advertises no plan that no active tier sells", async () => {
     /* The other direction: a tier deleted or deactivated leaves a row on the
        website advertising something nobody can buy, which the check above cannot
        see because it only walks what is on sale. */

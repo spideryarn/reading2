@@ -445,9 +445,15 @@ their own controls. **Two more used to be on that list and are not any more**, a
 better reason. Since 2026-08-31 the prose gutter is icons at every width, so there is
 nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)) —
 3.7rem of them since 2026-09-04, when the targets grew to WCAG's 24px
-([260904b-gutter-help-button-and-detached-streaming-chat.md](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md)) —
-two columns wide, though only one of them is the line of buttons
-([260905b-gutter-back-to-a-vertical-line-and-a-help-prompt-that-admits-nearby-blocks.md](../plans/260905b-gutter-back-to-a-vertical-line-and-a-help-prompt-that-admits-nearby-blocks.md)); and
+([260904b-gutter-help-button-and-detached-streaming-chat.md](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md)),
+and back to 2.2rem — one 24px column — the day after, when the gutter stopped
+reserving room and started measuring it: it is a size container, and a
+`@container` query draws as many controls as the row has space for, with a "…"
+for whatever is left over
+([260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md)).
+**That is the one place in this stylesheet where a container query decides what
+is drawn**, and it is worth knowing about before reaching for a media query for
+something a box already knows; and
 since 2026-09-03 the mode band going full-screen is a *class*, not a query — `App.tsx` writes
 `band-covers` on `.reader` from `fit.modeW === 0`. That one could never have been a width: the
 crossover is the window minus the rail, so it moves with `?spine=0`, and the `@media (max-width:

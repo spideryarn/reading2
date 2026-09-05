@@ -98,16 +98,16 @@
 import { randomUUID } from "node:crypto";
 /* **No `node:fs` and no `node:path` here any more, as of 2026-08-31**, and that
    is worth keeping. The last reader of the disk in this file was `sendSource`,
-   which went to `data/<slug>/raw.pdf` whatever `SPIDERYARN_STORE` said — so the
-   route worked on a laptop and 404d on Vercel, which has no such disk, for as
-   long as it existed. Every route now reaches its bytes through a store, and a
-   fresh `readFile` in this file is both that bug coming back and a route
-   ignoring the store switch. docs/plans/260831b-finish-the-database-move.md. */
+   which went to `data/<slug>/raw.pdf` whatever the store said — so the route
+   worked on a laptop and 404d on Vercel, which has no such disk, for as long as
+   it existed. Every route now reaches its bytes through a store, and a fresh
+   `readFile` in this file is that bug coming back.
+   docs/plans/260831b-finish-the-database-move.md. */
 import type { IncomingMessage, ServerResponse } from "node:http";
-/* From the store rather than from src/api.ts directly, so that
-   SPIDERYARN_STORE=postgres swaps every article read at once and no route has
-   to know which store it is talking to. `files` is the default and is exactly
-   src/api.ts, so nothing changes for anyone who has not opted in.
+/* From the store rather than from src/api.ts directly, so no route has to know
+   which store it is talking to. That was written when there were two and a flag
+   between them; there is one since 2026-09-05, and the indirection is what made
+   deleting the other one a change to `src/store/index.ts` and not to this file.
    docs/plans/260826e-postgres-storage-implementation.md */
 import {
   articleMetadata,
@@ -6394,9 +6394,11 @@ export async function serveAuthenticatedApi(
      `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
   const askTerm = /^\/api\/glossary\/([\w.%-]+)\/ask$/.exec(path);
   /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
-     so re-running the step already *is* "start again". The glossary needs a
-     delete precisely because running it again would add to the list it is
-     trying to throw away. Asking for these is
+     so re-running the step already *is* "start again". The glossary has a delete
+     precisely because running it again would add to the list it is trying to
+     throw away — though since 2026-09-05 nothing in the client calls it, and
+     this route's shape is the one the glossary's button was measured against
+     when it went (docs/project/glossary.md § Finding more). Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(path);
   /* Read only, and no DELETE, for exactly the reason `ideas` above has none:

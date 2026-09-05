@@ -58,12 +58,10 @@ import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "the per-article Postgres stores' slug guard",
   tables: ["spideryarn.articles"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * A string `isSlug` refuses, and one a person could plausibly send.
  *
@@ -98,7 +96,7 @@ const STORES: readonly (readonly [string, (slug: string) => Promise<unknown>])[]
   ["the glossary delete", (slug) => pgGlossaryStore.deleteGlossary(slug)],
 ];
 
-when("a malformed slug", () => {
+describe("a malformed slug", () => {
   afterAll(async () => {
     await closeDb();
   });

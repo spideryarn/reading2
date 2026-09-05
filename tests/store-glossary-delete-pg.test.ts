@@ -79,12 +79,10 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-glossary-delete-pg.test.ts",
   tables: ["spideryarn.article_revisions", "spideryarn.jobs"],
 });
-const when = reachable ? describe : describe.skip;
-
 /* ------------------------------------------------------------- the fixture -- */
 
 /** One run's suffix, so two processes running this file cannot collide. */
@@ -271,7 +269,7 @@ async function forget(jobId: string, draftRevisionId?: string): Promise<void> {
 const deleteMine = (slug: string) =>
   runAsOwner(DEV_OWNER_ID, () => pgGlossaryStore.deleteGlossary(slug));
 
-when("deleting the glossary in Postgres", () => {
+describe("deleting the glossary in Postgres", () => {
   beforeAll(async () => {
     await seedAuthUser(getDb(), {
       id: OTHER_OWNER,

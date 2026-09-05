@@ -3012,15 +3012,13 @@ async function main() {
    left to watch: `npm run labels` was retired and `npm run hierarchy` went
    through the queue, where the job's own `job_step` scope does this job.
 
-   **The ledger it opens is the *filesystem* one on a default shell**, and that
-   is worth knowing rather than fixing here. This npm script sets no
-   `SPIDERYARN_STORE`, so `costStore` is `data/_ai-calls.jsonl` — which stopped
-   being authoritative on 2026-09-02, so this command's spend does not reach
-   `npm run cost`. Pre-existing, unchanged by the rename deliberately (the
-   decision was that the quality tool keeps its behaviour), and it goes away with
-   the flag in stage F of
+   **Its spend reaches `npm run cost` again as of 2026-09-05.** It used to open
+   the *filesystem* ledger on a default shell — this npm script set no
+   `SPIDERYARN_STORE`, so `costStore` was `data/_ai-calls.jsonl`, which stopped
+   being authoritative on 2026-09-02 — and the only spelling that landed in the
+   real ledger was a flag on the command line. There is one store and one ledger
+   now; stage F of
    docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
-   Until then, `SPIDERYARN_STORE=postgres npm run eval:pdf-read -- …` is the
-   spelling that lands in the real ledger. Awaited rather than `void`ed, so flushing the ledger
+   Awaited rather than `void`ed, so flushing the ledger
    and any failure in it stay part of the command finishing. */
 await stageCli(import.meta.url, main);

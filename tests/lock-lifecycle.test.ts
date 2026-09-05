@@ -43,9 +43,7 @@ import { pgReady } from "./helpers/pg-ready.js";
 loadEnvLocal();
 
 /* No table of its own: this file locks and unlocks and never writes a row. */
-const { reachable } = await pgReady({ suite: "tests/lock-lifecycle.test.ts" });
-
-const when = reachable ? describe : describe.skip;
+await pgReady({ suite: "tests/lock-lifecycle.test.ts" });
 
 /**
  * One key per case, all of them this run's own.
@@ -67,9 +65,7 @@ function caseKey(): number {
 }
 
 /** A connection that never holds a lock, kept for asking about other people's. */
-const observer = reachable
-  ? new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })
-  : undefined;
+const observer = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 
 afterAll(async () => {
   /* Belt as well as braces: a case that somehow ended holding one of this run's
@@ -116,7 +112,7 @@ async function keyFree(key: number, withinMs = 3000): Promise<number> {
 /** The statement the suites' setup and teardown are standing in for when it fails. */
 const BAD_SQL = "select 1 / 0";
 
-when("a suite that takes the run lock", () => {
+describe("a suite that takes the run lock", () => {
   it("does not keep the key when its module-scope setup throws", async () => {
     const key = caseKey();
 
@@ -186,7 +182,7 @@ when("a suite that takes the run lock", () => {
   });
 });
 
-when("a suite that takes the corpus lock", () => {
+describe("a suite that takes the corpus lock", () => {
   it("releases the key even when an earlier teardown step throws", async () => {
     const key = caseKey();
     await takeCorpusLock("tests/fake-corpus-teardown.test.ts", { key });

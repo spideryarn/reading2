@@ -29,31 +29,7 @@
  */
 
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, set before **any** import runs.
- *
- * `vi.hoisted` and not a plain statement, and this is the trap rather than a
- * style choice. `src/store/live.ts` reads the flag once, the first time anything
- * imports it — and imports are hoisted above every statement in a module, so
- * `process.env.SPIDERYARN_STORE = "postgres"` written as an ordinary line runs
- * *after* the import below has already evaluated `live.ts` and settled the
- * answer to `files`. Which import? `store/db-errors.js` → `src/chat.ts` →
- * `src/store/live.ts`, a chain that did not exist when this file was written
- * and appeared two hours later.
- *
- * The symptom was not an error. Every assertion here ran against the
- * *filesystem* comment store, where a NUL byte in a quote is just a character,
- * so `create` **succeeded** and the test complained that an insert it expected
- * to fail had not. A test silently exercising the wrong store is the shape
- * docs/reusable/silent-success.md is about, arriving inside the fix for it.
- */
-const PREVIOUS_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles, comments as commentsTable } from "../src/db/schema.js";
@@ -92,12 +68,10 @@ const SENTINEL = "SENTINEL-e7f2-the-readers-own-words";
  */
 const NUL = "\u0000";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/db-error-scrub.test.ts",
   tables: ["spideryarn.comments"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * The store as `SPIDERYARN_STORE=postgres` selects it — asserted, not assumed.
@@ -108,20 +82,12 @@ const when = reachable ? describe : describe.skip;
  * assertion against the filesystem store, because a failure to *select* the
  * Postgres store looks exactly like the Postgres store behaving well.
  */
-const { commentStore, STORE } = await import("../src/store/index.js");
+const { commentStore } = await import("../src/store/index.js");
 
 /* Put back straight after the import, because vitest reuses a worker process
    across test files and `process.env` is not reset between them — the modules
    above have already captured the flag, so nothing here needs it any more, and
    leaving it set hands the next file a store it did not ask for. */
-if (PREVIOUS_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_FLAG;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * Every string an error could put on a wire, in a log line, or in a stored
@@ -148,7 +114,7 @@ function everyStringIn(value: unknown, depth = 0): string[] {
   return out;
 }
 
-when("a failed query in the Postgres store", () => {
+describe("a failed query in the Postgres store", () => {
   beforeAll(async () => {
     const db = getDb();
     await db

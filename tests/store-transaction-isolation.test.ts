@@ -293,12 +293,10 @@ describe("the isolation level every store transaction runs at", () => {
 
 /* ------------------------------------------ and that it reaches Postgres -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-transaction-isolation.test.ts",
   tables: ["spideryarn.articles"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * A pool whose connections default to `repeatable read`.
  *
@@ -316,13 +314,13 @@ function repeatableReadPool(): Pool {
 }
 
 let pool: Pool | undefined;
-if (reachable) pool = repeatableReadPool();
+pool = repeatableReadPool();
 
 afterAll(async () => {
   await pool?.end();
 });
 
-when("READ_COMMITTED, down a connection whose default is wrong", () => {
+describe("READ_COMMITTED, down a connection whose default is wrong", () => {
   /** What the transaction says about itself, which is the only honest answer. */
   async function levelInside(options?: typeof READ_COMMITTED): Promise<string> {
     const db = drizzle(pool as Pool, { schema });

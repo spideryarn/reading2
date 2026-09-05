@@ -524,7 +524,7 @@ The honest status: **four declarations that this class was closed, four of them 
 round was the one written up in [260826p-error-boundary.md](../plans/260826p-error-boundary.md) — Drizzle puts every
 bound parameter into `Error.message`, so a failed comment write puts the reader's quote, and then
 the model's answer, into an error that is returned, logged, streamed and stored. **That one was
-live, not latent**: production sets `SPIDERYARN_STORE=postgres`
+live, not latent**: production runs on Postgres
 ([deployment.md](deployment.md#environment-variables)), so comments there are Postgres rows and the
 quote is a bound parameter.
 
