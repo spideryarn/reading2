@@ -19,6 +19,7 @@
  */
 import { useEffect, useState } from "react";
 import { activeSectionIndex, type Section } from "./position.js";
+import { rowsForBlockIds } from "./rows.js";
 
 /** Where the reader's eye is assumed to be, as a fraction of the viewport. */
 export const FOCUS_LINE = 0.4;
@@ -101,9 +102,10 @@ export function useColumnContext({
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger
   useEffect(() => {
     if (!enabled) return;
-    const rows = sections.map((s) =>
-      document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(s.blockId)}"]`),
-    );
+    /* One pass over the table, not one document scan per section — see
+       rows.ts, and the measurements in
+       docs/plans/260905d-mode-switching-is-sluggish-on-a-very-long-article.md. */
+    const rows = rowsForBlockIds(sections.map((s) => s.blockId));
     const heads = new Map(
       depths.map((d) => [d, document.querySelector<HTMLElement>(`thead th[data-col="${d}"]`)]),
     );

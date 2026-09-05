@@ -618,6 +618,45 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
         {/* Mounted only while open, so the state lives in exactly one place and
             the overlay cannot hold a stale copy of it. */}
         {full && <div className="ill ill-in-full">{body}</div>}
+
+        {/* **The brief, beside the picture rather than under it.** Greg,
+            2026-09-05: *"if I have clicked Enlarge, show the prompt text in a
+            column to one side so I can scroll up down independently through
+            that text while looking at the image it refers to."* Which is the
+            one thing the `<details>` inside the band cannot do: it is *below*
+            the plate in a single scrolling column, so reading the prompt
+            against the picture means scrolling the picture off the screen.
+
+            A sibling of `.ill-in-full`, not a child, and that is what keeps the
+            change small. The dialog is already a centred flex row, so a second
+            column needs no new container and no change to `body` — the plate
+            column keeps its own `.ill-scroll`, this one has its own, and the
+            two scroll independently because they always were two boxes.
+
+            **Only one copy of the prompt is on screen at any width.** Below the
+            breakpoint there is no room for a column, so the CSS hides this and
+            the band's `<details>` stays; above it, this shows and that one is
+            hidden. Stacking was the alternative and is worse: `.ill-in-full` is
+            `height: 100dvh`, so a column stacked under it starts one whole
+            screen down, which is the scrolling this report is about. */}
+        {full && (
+          <aside className="ill-aside">
+            <h2 className="ill-aside-head" id="ill-aside-head">
+              What the illustrator was asked for
+            </h2>
+            {/* Focusable because it scrolls: a keyboard reader cannot reach the
+                bottom of 350 words in a region nothing can put the caret in,
+                and there is no button inside it to tab to. No key handler —
+                the arrows belong to the article
+                (tests/arrows-belong-to-the-article.test.tsx), and this only
+                takes the ones the browser already spends on a scroll box. */}
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll box with no control inside it is unreachable from the keyboard without one, and 350 words of brief is exactly that. The rule is aimed at tab stops that lead nowhere; this one leads to the only way to read the text. A labelled <section> rather than a div, so it is a named landmark when focus lands. */}
+            <section className="ill-aside-scroll" tabIndex={0} aria-labelledby="ill-aside-head">
+              {illustrated.style && <p className="ill-style">{illustrated.style}</p>}
+              <p className="ill-aside-prompt">{plate.prompt}</p>
+            </section>
+          </aside>
+        )}
       </dialog>
     </div>
   );

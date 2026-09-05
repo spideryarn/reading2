@@ -64,7 +64,10 @@ const TEMPLATE_VARS: Record<string, string> = {
  */
 const USER_DATA_LIMIT = 32 * 1024;
 
-const CHECK_ENV = 'USER_NAME=greg; GJD_NODE_MAJOR=26; SUPABASE_VERSION=2.115.0;';
+const CHECK_ENV = 'USER_NAME=greg; GJD_NODE_MAJOR=26; SUPABASE_VERSION=2.115.0;'
+  // A mktemp path in the real script; any path parses the same here, and
+  // naming it is what keeps the -u expansion below honest.
+  + ' CODEX_CFG_PROBE=/tmp/codex-cfg-probe.sh;';
 
 /**
  * Things the finished box must be proven to have. Each earned its place by
@@ -89,6 +92,10 @@ const REQUIRED_CHECKS = [
   "claude statusline is wired up",
   "claude statusline shows context %",
   "codex",
+  // By its full name, for the reason the two status line checks give: a
+  // bare "codex" is satisfied by `codex --version`, and this is the one
+  // that asks whether the config every repo here carries still loads.
+  "codex accepts a repo-shaped [permissions] config",
   "chrome",
   "playwright",
   "mcp",

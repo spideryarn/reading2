@@ -2115,6 +2115,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/hierarchy.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
           droppedHeadings: run.droppedHeadings,
+          /* **Socratic questions written but not kept.** Nothing on screen
+             distinguishes a question the model chose not to write from one
+             this stage threw away, so this is the only place a prompt that
+             had drifted into writing unusable ones would show up.
+             src/hierarchy.ts § `questionFor`. */
+          droppedQuestions: run.droppedQuestions,
           /* **Rungs that restated their parent**, spliced away rather than
              stored — two gist columns of identical extent is a duplicated cell
              the reader sees, not a wasted column. Nothing about it moves a

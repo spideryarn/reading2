@@ -420,6 +420,58 @@ describe("what it depicts", () => {
     expect(host.querySelector(".ill-elsewhere"), "the band is stuck saying it is full screen").toBeNull();
   });
 
+  /**
+   * SPIDERYARN-READING2-1P. The prompt has to be **beside** the plate when the
+   * plate is full screen, in a box of its own that scrolls on its own — the
+   * band's `<details>` sits below the picture in one column, so reading the two
+   * against each other means scrolling the picture away.
+   *
+   * The assertion is on the markup rather than on the geometry, because jsdom
+   * has no layout and no media queries: what it can prove is that the column
+   * exists only while the overlay is open and that the prompt is really in it.
+   * That the two columns are side by side, and that only one copy of the prompt
+   * shows at a given width, is CSS, and the browser pass in the plan doc is
+   * what checked it.
+   */
+  it("puts the prompt beside the plate, in its own scrolling column, once enlarged", async () => {
+    serving();
+    await mount();
+
+    expect(
+      host.querySelector(".ill-aside"),
+      "the column is up before anything was enlarged — it belongs to the overlay",
+    ).toBeNull();
+
+    const dialog = host.querySelector<HTMLDialogElement>("dialog.ill-full");
+    if (dialog) {
+      dialog.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute("open", "");
+      };
+      dialog.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute("open");
+        this.dispatchEvent(new Event("close"));
+      };
+    }
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(".ill-zoom")?.click();
+    });
+    await settle();
+
+    const aside = host.querySelector("dialog.ill-full .ill-aside");
+    expect(aside, "nothing beside the enlarged plate to read the prompt in").not.toBeNull();
+    expect(
+      aside?.textContent,
+      "the column is there but the prompt is not in it",
+    ).toContain("vellum page");
+
+    const scroller = aside?.querySelector<HTMLElement>(".ill-aside-scroll");
+    expect(scroller, "the prompt is not inside a scroller of its own").not.toBeNull();
+    expect(
+      scroller?.tabIndex,
+      "a scrolling region with no control in it and no tab stop cannot be read to the bottom from the keyboard",
+    ).toBe(0);
+  });
+
   it("says the picture is an interpretation, in a visible line rather than a tooltip", async () => {
     serving();
     await mount();

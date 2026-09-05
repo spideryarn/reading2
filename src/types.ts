@@ -156,6 +156,23 @@ export interface TreeNode {
    * paragraph could be. Never fall back to navLabel when this is missing.
    */
   gist?: string;
+  /**
+   * **One Socratic question the node's prose answers**, on the root and depth-1
+   * nodes only, and only where the tree was built after 2026-09-05.
+   *
+   * Shown in **Summary mode alone**, under the gist — see
+   * docs/project/summaries.md § Socratic questions. It is a second field rather
+   * than a change to `gist` because the gist is rendered in ten places and is
+   * also fed back to the later structure waves as context; the argument is in
+   * `questionFor` (src/hierarchy.ts) and the plan doc.
+   *
+   * **Absence is ordinary**, unlike a missing `gist`: every tree built before
+   * this existed has none, and nothing renders a gap. Do not add it to
+   * `checkTree` — the gist rule is stated in both directions precisely because
+   * a missing gist must not pass as deliberate, and that argument does not
+   * apply to a line the model is free not to write.
+   */
+  question?: string;
   /** Leaves only. Navigation chrome for the ToC and spine; never reading content. */
   navLabel?: string;
   summary?: string;
@@ -2504,6 +2521,32 @@ export interface ChatMessage {
    * See docs/plans/260827ah-review-mode.md § Where the stance picker's value lives.
    */
   stance?: RememberStance;
+  /**
+   * **The reader pressed the "?" beside a paragraph rather than typing this.**
+   * User turns only.
+   *
+   * Report 1R asked for *"simple type-metadata … to indicate it was a
+   * request-for-explanation"*, and this is it: the answer is written with an
+   * extra pedagogical instruction (`helpSection` in src/converse.ts), and
+   * "how many explanations were asked for" becomes a query over message rows.
+   *
+   * **On the message, not on the thread**, and that is the whole design.
+   * `docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md`
+   * refused a fourth `ThreadKind` — a help conversation is an anchored chat, and
+   * keeping it one is what lets the reading view go on treating every mark it
+   * draws as a chat. The first draft of 1R put a `from_help` on `chat_threads`
+   * instead; GPT Sol's review moved it here, because a thread-level flag has to
+   * be *refused* on retry and edit (neither creates a thread) and a refused flag
+   * means pressing "Try again" on an explanation is silently answered with the
+   * ordinary prompt. Here `withRetry` hands the stored question back and
+   * `withEdit` spreads it, so all three paths agree without anyone arranging it.
+   *
+   * `true` or absent, never `false` — the same rule `stopped` and `interrupted`
+   * follow above, and what tests/store-roundtrip.test.ts compares. It is the
+   * mirror of `stance`, which lives on the assistant row: one says how the
+   * answer was asked for, the other how it was written.
+   */
+  help?: true;
 }
 
 /**

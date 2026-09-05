@@ -111,6 +111,7 @@ import {
 } from "./spine-marks.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
+import { onFontsChanged } from "./fonts.js";
 
 /**
  * Where a band sits inside the part it belongs to.
@@ -417,11 +418,15 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
     ro.observe(document.body);
     window.addEventListener("resize", run);
     // Webfonts land after first paint and change every row height with them.
-    document.fonts?.ready.then(run).catch(() => {});
+    // The event rather than `fonts.ready`: reading that getter was 21.5% of all
+    // script time on a 2,046-block article, and this effect re-runs on every
+    // mode switch. See rows.ts's sibling, fonts.ts.
+    const offFonts = onFontsChanged(run);
 
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", run);
+      offFonts();
       cancelAnimationFrame(raf);
     };
   }, [outline, layoutKey]);

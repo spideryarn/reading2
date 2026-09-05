@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/4");
+    expect(PROMPT_VERSION).toBe("toc/5");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -84,9 +84,24 @@ describe("hoisting the structure prompt's three values", () => {
     );
   });
 
-  it("mints the structure checkpoint key the pre-move code minted", () => {
+  /**
+   * **The key moved on 2026-09-05, and it was supposed to.**
+   *
+   * `2993e1e4b2aaf1d6` was the pre-move key, and it held from the hoist until
+   * the Socratic `question` went into SYSTEM (SPIDERYARN-READING2-1V). That is
+   * a real change to the bytes of the request, so the digest of those bytes
+   * changes with it, and a checkpoint written under toc/4 is correctly no
+   * longer found — an article part-way through the stage replays one call
+   * rather than resuming onto a prompt that no longer asks the same thing.
+   *
+   * So this pin has done its job rather than failed at it. What it still
+   * guards is the same thing it always did: that nobody moves these bytes
+   * *without meaning to*. Change the number only alongside a deliberate change
+   * to SYSTEM, `renderBlocks` or `EFFORT`, and say which in the message.
+   */
+  it("mints one stable key for the toc/5 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
-      "2993e1e4b2aaf1d6",
+      "18e7504c732c5722",
     );
   });
 });

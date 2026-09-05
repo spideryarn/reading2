@@ -141,7 +141,7 @@ function target(from: number, to: number, where: string): ExpansionTarget {
 }
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 }
 
 const state = (root: CascadeNode, capReached: CascadeState["capReached"] = []): CascadeState => ({
@@ -1267,14 +1267,23 @@ describe("normaliseExpansion", () => {
 describe("proposalFromTree", () => {
   const blocks = article(16, (i) => (i === 8 ? heading(i) : para(i)));
   const navLabels = { [blockId(2)]: "A leaf label" };
+  /* **The root and both parts carry a `question`**, and that is not decoration:
+     a field this fixture does not exercise is a field `proposalFromTree` can
+     quietly drop. It dropped exactly this one — GPT Sol reproduced four
+     questions before `deepenTree` and zero after, because deepening any single
+     section rebuilds the whole tree through that function
+     (SPIDERYARN-READING2-1V). `toEqual(proposal)` below is what now says so.
+     A new optional field on `TreeNode` belongs here the day it is added. */
   const proposal: ModelNode = {
     title: "Root",
     gist: "The whole argument, in one sentence.",
+    question: "Why should the whole argument be believed?",
     range: [blockId(0), blockId(15)],
     children: [
       {
         title: "One",
         gist: "The first half.",
+        question: "How does the first half get off the ground?",
         range: [blockId(0), blockId(7)],
         children: [
           { title: "One a", gist: "Opening.", range: [blockId(0), blockId(3)] },
@@ -1284,6 +1293,7 @@ describe("proposalFromTree", () => {
       {
         title: "Two",
         gist: "The second half.",
+        question: "What follows if the second half is right?",
         range: [blockId(8), blockId(15)],
         sourceHeading: "Heading 8",
       },

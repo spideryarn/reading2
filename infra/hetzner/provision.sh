@@ -1290,6 +1290,61 @@ check "/usr/local/bin/codex points at that launcher" 'test "$(readlink /usr/loca
 # its resources out of its install tree at RUNTIME, so a leftover npm copy is
 # not merely stale -- it is a second tree that a stray PATH could still reach.
 check "no npm-global codex beside the native one" 'root=$(npm root -g) && test -n "$root" && ! test -e "$root/@openai/codex"'
+# Every repo we run codex in carries a `[permissions]` table in its own
+# `.codex/config.toml` -- the review profile scripts/run-codex.ts selects. A
+# codex whose permissions schema has moved does not degrade there, it STOPS:
+# codex refuses to load *any* config in a directory whose project config it
+# cannot accept, so every `codex` and `codex exec` in the checkout exits 1
+# before the model is reached, while `codex --version` above goes on passing.
+# That is what happened on 2026-09-05 -- a table without `default_permissions`
+# became an error, on 0.150.1 and 0.153.4 alike -- and nothing on the box said
+# so. This check is what would have caught it here.
+#
+# BOTH DIRECTIONS, and the negative one is the load-bearing half: without it the
+# check would pass just as happily on a codex that had stopped reading project
+# configs at all, which is the same silent nothing it is here to detect.
+#
+# What it does NOT prove, both GPT Sol's, 2026-09-05: the probe's project is
+# deliberately trusted, so this is schema compatibility and not the operational
+# readiness of any checkout (an untrusted one reads no project config at all --
+# scripts/run-codex.ts is where that is caught); and it runs at provisioning
+# time only, so a later `codex update` can still break the schema underneath a
+# box that passed.
+CODEX_CFG_PROBE=$(mktemp)
+cat > "$CODEX_CFG_PROBE" <<'PROBE'
+set -eu
+# `pwd -P` because the trust entry below is matched against the path codex sees:
+# on macOS `mktemp -d` hands back a /var symlink to /private/var, the two do not
+# compare equal, and an untrusted probe reads no config at all -- which fails the
+# negative arm rather than passing quietly, exactly as it should.
+d=$(cd "$(mktemp -d)" && pwd -P); h=$(mktemp -d)
+trap 'rm -rf "$d" "$h"' EXIT
+mkdir -p "$d/.codex"
+# Its OWN CODEX_HOME: a project's `.codex/config.toml` is read only when the
+# project is trusted, and the real ~/.codex is not a check's to write.
+printf '[projects."%s"]\ntrust_level = "trusted"\n' "$d" > "$h/config.toml"
+cd "$d"
+# The structured verdict rather than the report's prose: `codex doctor` exits 1
+# on an unauthenticated box whatever the config says -- and provisioning runs
+# before the human logs codex in -- so the exit code cannot be the signal. The
+# `select` makes a schema change fail CLOSED: no schemaVersion 1, no verdict, no
+# pass. GPT Sol's, 2026-09-05; `--json` measured on 0.152.1 and 0.153.4.
+verdict() {
+  CODEX_HOME="$h" timeout 60 codex doctor --json 2>/dev/null \
+    | jq -er 'select(.schemaVersion == 1) | .checks["config.load"].status'
+}
+# The shape the repos actually carry, `:workspace_roots` included, so a codex
+# that kept `default_permissions` and dropped the relative-path token still
+# fails here. It is a COPY of that shape, not the file itself -- provisioning
+# has no checkout -- so .codex/config.toml stays the authority on the real one.
+printf 'default_permissions = ":workspace"\n[permissions.review.filesystem]\n"/" = "read"\n"/tmp" = "write"\n[permissions.review.filesystem.":workspace_roots"]\n"node_modules/.cache" = "write"\n' > "$d/.codex/config.toml"
+test "$(verdict)" = ok
+printf '[permissions.review.filesystem]\n"/" = "read"\n' > "$d/.codex/config.toml"
+test "$(verdict)" = fail
+PROBE
+chmod 0644 "$CODEX_CFG_PROBE"
+check "codex accepts a repo-shaped [permissions] config" 'timeout 180 su - '"$USER_NAME"' -c "bash '"$CODEX_CFG_PROBE"'"'
+rm -f "$CODEX_CFG_PROBE"
 check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chrome --version"'
 # Was: `playwright cr --version || ls ~/.cache/ms-playwright/.../chrome`. Both
 # halves were wrong. The `||` put the WEAK test first -- `cr --version` prints

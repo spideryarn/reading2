@@ -124,11 +124,27 @@ GISTS (internal nodes)
   handholds — and ordinary words for everything else. A gist is read at a glance
   and has to land first time: plainer than the article, never further from it.
 
+QUESTIONS (the root and depth-1 nodes only)
+
+- Exactly ONE question on the root and on each depth-1 node. Omit it entirely
+  on deeper nodes.
+- It is the question this node's text answers and its gist does NOT. The reader
+  has the gist beside it; the question is what sends them into the prose for
+  the rest of the answer.
+- It must need the argument to answer, not a fact to look up: "why", "how", or
+  "what follows if" — never "which example", "who said", or anything one
+  sentence settles.
+- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- The root's question is the one the whole piece exists to answer.
+- Under 15 words, ending in "?". The article's own words for what it names,
+  ordinary words for the rest, exactly as with gists.
+
 OUTPUT
 
 JSON only, no prose, no code fence:
 
-{"root": {"title": "...", "gist": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
+{"root": {"title": "...", "gist": "...", "question": "...",
+          "range": ["<firstBlockId>", "<lastBlockId>"],
           "sourceHeading": "...", "children": [ ... ]}}
 
 Use only block ids that appear in the input. Do not invent ids.`;
@@ -136,9 +152,106 @@ Use only block ids that appear in the input. Do not invent ids.`;
 export interface ModelNode {
   title: string;
   gist?: string;
+  /** One Socratic question, asked for on the root and depth-1 nodes only. */
+  question?: string;
   range: [string, string];
   sourceHeading?: string;
   children?: ModelNode[];
+}
+
+/**
+ * **The question a node keeps, or nothing.** SPIDERYARN-READING2-1V.
+ *
+ * Greg, 2026-09-05: *"Tweak the prompt that generates the Summary mode to be a
+ * bit more in the form of Socratic questions that encourage the reader to read
+ * the actual text to get the full answers."*
+ *
+ * Why this is a **second field** rather than a change to the gist is the whole
+ * design decision, and it is in
+ * docs/plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md.
+ * The short version: the gist is not only shown in Summary mode, it is shown in
+ * ten places — the zoom columns, the shelf card, the spine tooltip — **and it is
+ * fed back in as context to the later structure waves**
+ * (src/hierarchy-expand.ts § `chainRung`). Making it Socratic would change a
+ * shelf blurb into a question and degrade the input the cascade builds on.
+ *
+ * **Depth is enforced here rather than trusted from the prompt.** The prompt
+ * asks for the root and depth 1; a model that writes fifty of them anyway would
+ * otherwise fill a long article's Summary panel with a question per section,
+ * which is the noise this feature is scoped to avoid. Enforcing it in code
+ * means the scope is a fact rather than a request.
+ *
+ * **Punctuation is normalised, never read for meaning.** The first real run of
+ * the toc/5 prompt (noema, 141 blocks, 2026-09-05 — the plan doc has the whole
+ * output) wrote six questions, and **one of the six came back with no `?` on
+ * the end**: *"What should conscious AI mean for how we see ourselves"*. A rule
+ * that required the mark would have thrown that away over punctuation, and
+ * thrown it away invisibly. So a missing mark is added.
+ *
+ * The first fix for that went one step too far the other way and **dropped
+ * anything ending in `.` or `!` as a "statement"**. GPT Sol killed it, rightly:
+ * a terminal full stop is not evidence of mood. *"How did this affect the
+ * U.S."* is a question that rule discarded, and *"It closes by concluding
+ * something"* is a statement it happily kept. It made the *invisible* mistake
+ * on the good input and the visible one on the bad — exactly backwards.
+ *
+ * So the rule is syntactic and does one thing: strip any trailing `.`/`!` and
+ * end with a single `?`.
+ *
+ * **The failure the prompt actually names — *"never the gist with a question
+ * mark on it"* — is caught by comparing it with the gist**, which is the only
+ * check here that means what it says. Punctuation and case are ignored, so a
+ * gist echoed back with a `?` bolted on is caught however it is dressed.
+ *
+ * Nothing mechanical can catch a *lookup* question dressed as a Socratic one;
+ * that is what the prompt is for and what reading the output is for.
+ *
+ * Dropping is counted into `droppedQuestions` rather than done quietly —
+ * a line that silently fails to appear looks exactly like a model that chose
+ * not to write one (docs/reusable/silent-success.md).
+ *
+ * Absence is ordinary and always was: every tree built before this field
+ * existed has none, and `SummaryPanel` draws the row exactly as it did. That is
+ * why this is not in `tree-invariants.ts` § the gist rule, which is stated in
+ * both directions precisely because a *missing gist* must never pass as
+ * deliberate.
+ */
+export const MAX_QUESTION_DEPTH = 1;
+
+/** Lower-cased, terminal punctuation and repeated spaces gone — for comparing
+    two sentences on their words alone. */
+function bareWords(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[.!?]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function questionFor(mn: ModelNode, depth: number): string | undefined {
+  if (depth > MAX_QUESTION_DEPTH) return undefined;
+  if (typeof mn.question !== "string") return undefined;
+  const q = mn.question.trim();
+  /* Truthiness is not the test: a string of spaces is truthy and trims to
+     nothing, which is how a gist of three spaces once rendered as a blank
+     internal node (src/hierarchy-expand.ts § `gist` is required). */
+  if (q === "") return undefined;
+  /* The gist, asked again. Two lines saying one thing is the duplication this
+     whole feature exists to avoid, so it is dropped rather than drawn. */
+  if (mn.gist !== undefined && bareWords(q) === bareWords(mn.gist)) return undefined;
+  if (q.endsWith("?")) return q;
+  /* **Only `!` is stripped, never `.`** — a trailing full stop is as likely to
+     belong to an abbreviation as to a sentence, and stripping it turned GPT
+     Sol's example *"How did this affect the U.S."* into *"the U.S?"*. So the
+     mark is appended to whatever is there.
+
+     The cost, named rather than hidden: a genuine statement that is not the
+     gist comes out as *"…something.?"*. That is ugly and **visible**, which is
+     the right way round — the rule it replaced lost good questions silently
+     (docs/reusable/silent-success.md). The prompt asks for a question, the
+     gist check above catches the failure it actually warns about, and six of
+     six on the first real run were questions. */
+  return `${q.replace(/!+$/, "")}?`;
 }
 
 /**
@@ -764,6 +877,18 @@ export interface BuildReport {
    * Normally 0, and reported at 0 like the two above.
    */
   collapsedRungs: string[];
+  /**
+   * **Socratic questions the model wrote that the tree did not keep**, by
+   * position in the model's proposal — see `questionFor`. Either the node was
+   * deeper than `MAX_QUESTION_DEPTH`, or the string was not a question.
+   *
+   * Counted rather than dropped quietly, for `droppedHeadings`' reason. A
+   * question is an optional field on an optional line: if the prompt drifts and
+   * every one of them stops ending in "?", Summary mode loses the feature
+   * entirely and looks exactly as it did before it existed. This is the only
+   * number that would say so. Normally 0.
+   */
+  droppedQuestions: string[];
 }
 
 export interface PartitionRepair {
@@ -1293,6 +1418,11 @@ function recordBoundaryFaults(
  * every message and every counter still names a child by where it sits in the
  * model's own proposal.
  */
+/** Whether a rung about to be spliced away was carrying a question. */
+function redundantQuestion(node: ModelNode): boolean {
+  return typeof node.question === "string" && node.question.trim() !== "";
+}
+
 function collapseRestatedRungs(
   children: ModelNode[],
   parent: readonly [number, number],
@@ -1302,6 +1432,7 @@ function collapseRestatedRungs(
   repairs: PartitionRepair[],
   droppedChildren: string[],
   collapsedRungs: string[],
+  droppedQuestions: string[],
 ): { children: ModelNode[]; plans: ChildPlan[] | null; where: string; absorbed: ModelNode[] } {
   /* In range: both came out of `index`, which is built over `blocks`. */
   const wholeStart = blocks[parent[0]]!.id;
@@ -1330,6 +1461,18 @@ function collapseRestatedRungs(
     const redundant = here[rung]!;
     at = `${at} > child ${rung + 1}`;
     collapsedRungs.push(at);
+    /* **A collapsed rung takes its question with it**, and its children come up
+       to stand in its place carrying none — the model wrote theirs one level
+       deeper, where `questionFor` keeps none. So this article has a part with
+       no question, which is fine (absence is ordinary) and would otherwise be
+       *unaccounted for*: without this line `droppedQuestions` reads 0 while a
+       question the model wrote is nowhere on screen. GPT Sol's F2, 2026-09-05.
+
+       Counted rather than repaired. Repairing it means asking the model for a
+       question one level deeper than it needs on every article, to cover a
+       rung that is collapsed rarely — the plan doc says why that trade is not
+       worth making yet. */
+    if (redundantQuestion(redundant)) droppedQuestions.push(at);
     absorbed.push(redundant);
     here = redundant.children ?? [];
     /* Nothing underneath it: this node becomes the deepest internal one and
@@ -1414,6 +1557,7 @@ export function buildTree(
   const droppedChildren = report?.droppedChildren ?? [];
   const dropped = report?.droppedHeadings ?? [];
   const collapsed = report?.collapsedRungs ?? [];
+  const droppedQuestions = report?.droppedQuestions ?? [];
   const nodes: Record<NodeId, TreeNode> = {};
   let counter = 0;
   const nextId = () => `n${String(++counter).padStart(4, "0")}`;
@@ -1455,6 +1599,12 @@ export function buildTree(
     const heading = backedHeading(mn, lo, hi, blocks);
     if (heading.wrote && heading.kept === undefined) dropped.push(where);
 
+    /* A question the model wrote and this node does not keep — too deep, or not
+       a question at all. Counted for the same reason `droppedHeadings` is: the
+       loss is invisible on screen. `questionFor` has the rules. */
+    const question = questionFor(mn, depth);
+    if (mn.question !== undefined && question === undefined) droppedQuestions.push(where);
+
     const node: TreeNode = {
       id,
       depth,
@@ -1463,6 +1613,7 @@ export function buildTree(
       range,
       title: mn.title,
       ...(mn.gist ? { gist: mn.gist } : {}),
+      ...(question !== undefined ? { question } : {}),
       ...(heading.kept !== undefined ? { sourceHeading: heading.kept } : {}),
     };
     nodes[id] = node;
@@ -1512,6 +1663,7 @@ export function buildTree(
               repairs,
               droppedChildren,
               collapsed,
+              droppedQuestions,
             )
           : { children: mn.children, plans: null, where, absorbed: [] as ModelNode[] };
 
@@ -1803,6 +1955,15 @@ export interface HierarchyRun {
   droppedChildren: number;
   droppedHeadings: number;
   /**
+   * **Socratic questions the model wrote that the tree did not keep** — too
+   * deep, or not a question. src/hierarchy.ts § `questionFor`.
+   *
+   * Reported at 0 like the others, and it is the only figure that would show a
+   * drifting prompt quietly turning the Summary panel's second line off:
+   * absent questions and unwritten ones look identical on screen.
+   */
+  droppedQuestions: number;
+  /**
    * **Rungs that restated their parent and were spliced away** — a node whose
    * sole child covered the whole of it, which would have shown the reader the
    * same paragraphs twice at two levels. src/hierarchy.ts §
@@ -2057,7 +2218,7 @@ export async function generateHierarchy(opts: {
    */
   const treeFrom = (answer: string): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
     const { root } = parseJson(answer);
-    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
     let tree: Tree;
     /**
      * **The tree before the apparatus is appended**, kept because the deepening
@@ -2378,6 +2539,7 @@ export async function generateHierarchy(opts: {
           droppedChildren: [],
           droppedHeadings: [],
           collapsedRungs: [],
+          droppedQuestions: [],
         };
         const deeper = appendSupplement(
           buildTree(deepened.root, {}, body, slug, rebuilt),
@@ -2390,6 +2552,7 @@ export async function generateHierarchy(opts: {
           built.droppedChildren.push(...from.droppedChildren);
           built.droppedHeadings.push(...from.droppedHeadings);
           built.collapsedRungs.push(...from.collapsedRungs);
+          built.droppedQuestions.push(...from.droppedQuestions);
         }
       }
     } catch (err) {
@@ -2587,6 +2750,7 @@ export async function generateHierarchy(opts: {
     droppedChildren: built.droppedChildren.length,
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
+    droppedQuestions: built.droppedQuestions.length,
     labelled: Object.values(parts.tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
