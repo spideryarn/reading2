@@ -177,6 +177,8 @@ export type TitleSpec =
   | { kind: "features" }
   /** What it costs — PricingPage.tsx. */
   | { kind: "pricing" }
+  /** How to reach us — ContactPage.tsx. */
+  | { kind: "contact" }
   /**
    * **The shelf of shared articles** — `/read/public`, PublicLibraryPage.tsx.
    *
@@ -278,6 +280,9 @@ function segments(spec: TitleSpec): string[] {
 
     case "pricing":
       return ["Pricing", APP_NAME];
+
+    case "contact":
+      return ["Contact", APP_NAME];
 
     /* The page's own heading, unshortened — it is already two words, which is
        the length the two cases above had to cut down to. It says *Shared* and

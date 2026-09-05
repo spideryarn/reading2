@@ -55,6 +55,43 @@ worth reading the header for. `tests/site-footer.test.tsx` pins the dropping, th
 The inventory is there because every other test in the file is satisfied by a component nothing
 renders.
 
+## The contact page
+
+[`ContactPage.tsx`](../../src/web/ContactPage.tsx) at `/contact`, since 2026-09-05, because Greg
+asked for one:
+
+> Add a /contact page and link to it appropriately. For now it can be really brief. Mostly just
+> saying Spideryarn is in beta, but we'd really love your feedback or suggestions. The best way to do
+> it is with the Feedback button in the top right. You can also contact us at hello@spideryarn.com.
+>
+> — Greg, 2026-09-05
+
+Three sentences, in that order, and the order is the content: **the Feedback button is the answer and
+the address is the fallback**. That is not only manners — a report filed through the button always
+arrives with the address the reader was standing on and, on an article, its slug; tick the box and it
+also carries which passages were on screen, the requests the page made and the id Vercel logged them
+under ([feedback.md](feedback.md)). An email carries none of that.
+
+**The sentence about the button is hedged, and the hedges were bought at review.** It says *"if you
+are signed in"*, because `FeedbackButton` is in the signed-in chrome and this page renders bare to a
+stranger; and it says the report *carries that page's address* rather than *"so we can see what you
+saw"*, because pressing Feedback here sends `/contact`, and no screenshot goes unless the reader
+attaches one. GPT Sol established both as a P1 against the first draft — the page that tells people
+how to reach us is the worst place in the app to overclaim.
+
+**Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry `SiteNav`,
+a hero and the `--site-*` token scope, which exist to sell something over a long scroll; this is four
+sentences, so it takes the policy page's Back link, `h1` and `SiteFooter`.
+
+**Linked from one place**: `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is
+what that array is for. That puts it on all eight pages that carry the row and nowhere under
+`/read/`. **The row's `mailto:` stayed** — mildly redundant beside a Contact link, and the redundancy
+is the cheaper mistake, since the address is the one thing in the row a stuck reader can act on in
+one press. The plan
+([260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md)) names that as a
+judgment call Greg can overrule in one line, along with the decision not to add it to `SiteNav`,
+whose top bar was measured tight at the 320px reflow width.
+
 ## The privacy policy
 
 It has a doc of its own: **[privacy.md](privacy.md)** — the four decisions Greg

@@ -14,7 +14,7 @@
  * Escape, top-layer painting — is the platform's, and a test asserting the
  * platform works would be testing the wrong thing.
  */
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -122,6 +122,35 @@ function mount() {
   document.body.append(host);
   root = createRoot(host);
   show(true);
+}
+
+/**
+ * **Mount it the way `FeedbackButton` does — with `open` in a parent's state.**
+ *
+ * `mount()` above pins `open` at `true` and hands the dialog an `onClose` that
+ * does nothing, which is right for every test about what gets posted and wrong
+ * for the one test about *closing*: with the prop nailed open, nothing can shut.
+ *
+ * Returns the `<dialog>` so a test can read the real `open` attribute the stub
+ * at the top of this file maintains.
+ */
+function mountControlled(): HTMLDialogElement {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    return createElement(FeedbackDialog, {
+      open,
+      onClose: () => setOpen(false),
+      readerEmail: "reader@example.com",
+      where: { url: "https://www.spideryarn.com/read/a-piece", slug: "a-piece" },
+    });
+  }
+  act(() => root.render(createElement(Harness)));
+  const dialog = host.querySelector("dialog");
+  if (!dialog) throw new Error("no dialog");
+  return dialog;
 }
 
 /** Shut it the way Escape or the backdrop does, then open it again. */
@@ -638,6 +667,235 @@ describe("the feedback dialog", () => {
  * with a stylesheet that still looks right — `.cmt-dialog` learnt this once
  * already, with its ✕.
  */
+describe("the thank-you, and getting out of it", () => {
+  /** The sentence in the `.fb-done` panel, whitespace-collapsed. */
+  function thanks(): string {
+    const panel = host.querySelector(".fb-done p");
+    if (!panel) throw new Error("no thank-you panel");
+    return (panel.textContent ?? "").replace(/\s+/g, " ").trim();
+  }
+
+  /** File a report, having optionally pressed one of the two kind toggles. */
+  async function fileOne(label?: string) {
+    if (label) pick(label);
+    type("Something happened.");
+    send();
+    await act(async () => {});
+  }
+
+  /* **Matched loosely, on one distinguishing word each.** copy.md's rule is that
+     tests match the code and not the prose, precisely so copy stays rewritable;
+     there is no bracketed code here to match on, because a thank-you is not a
+     failure. So each assertion names the one thing that must survive a rewrite —
+     that a problem is answered with sympathy, a suggestion with thanks for the
+     suggestion — and leaves the rest of the sentence free. */
+  it("is sorry about a problem, and says it will look into it", async () => {
+    mount();
+    await fileOne("A problem");
+    expect(thanks().toLowerCase()).toContain("sorry");
+    expect(thanks().toLowerCase()).toContain("look into it");
+  });
+
+  it("thanks a suggestion for the suggestion", async () => {
+    mount();
+    await fileOne("A suggestion");
+    expect(thanks().toLowerCase()).toContain("suggestion");
+    expect(thanks().toLowerCase()).not.toContain("sorry");
+  });
+
+  it("still thanks a report whose reader picked neither", async () => {
+    mount();
+    await fileOne();
+    expect(thanks().toLowerCase()).toContain("thank you");
+    expect(thanks().toLowerCase()).not.toContain("sorry");
+  });
+
+  /**
+   * **Close is instant, and this is what "instant" turned out to mean.**
+   *
+   * Greg, 2026-09-05: *"when I click close on the thank you that is filed, there
+   * shouldn't be a delay, it should happen instantly."*
+   *
+   * Nothing was slow. The button called `discard()` and `onClose()` together, so
+   * one commit emptied the form *and* asked for the dialog to shut — and the
+   * emptied form is what the browser painted, because the shutting was a passive
+   * effect and those run after the paint. The reader saw a blank feedback form
+   * flash up in place of the thank-you they were dismissing.
+   *
+   * **jsdom cannot see a paint**, so a test that waited a microtask and read
+   * `dialog.open` was green before the fix as well as after — it was written,
+   * watched pass against the bug, and thrown away. docs/reusable/silent-success.md.
+   * What *is* observable is the order the DOM changes in, so that is what this
+   * pins: at the moment `close()` is called, the thank-you must still be on
+   * screen. Under the old arrangement the form had already replaced it.
+   */
+  it("shuts before it empties the panel, so nothing is drawn on the way out", async () => {
+    mountControlled();
+    type("Something happened.");
+    send();
+    await act(async () => {});
+
+    const proto = window.HTMLDialogElement.prototype;
+    const real = proto.close;
+    const onScreenWhenItShut: boolean[] = [];
+    proto.close = function close(this: HTMLDialogElement) {
+      onScreenWhenItShut.push(host.querySelector(".fb-done") !== null);
+      real.call(this);
+    };
+    try {
+      const button = host.querySelector<HTMLButtonElement>(".fb-done button");
+      if (!button) throw new Error("no Close");
+      act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    } finally {
+      proto.close = real;
+    }
+
+    expect(onScreenWhenItShut).toEqual([true]);
+    /* And it did empty afterwards — otherwise the assertion above is satisfied
+       by a Close button that does nothing at all. */
+    expect(firstBox().value).toBe("");
+  });
+
+  /**
+   * **Words typed after Send are not the report that was filed**, so dismissing
+   * the thank-you must not delete them.
+   *
+   * The box stays editable while the request is in the air, so a reader can add
+   * a sentence between pressing Send and the answer arriving — and that sentence
+   * was never in the POST. GPT Sol established this as a P0 on 2026-09-05 and
+   * reproduced it in a harness of its own: the POST carried `A`, and after the
+   * dismissal the box was empty rather than holding `A+B`.
+   *
+   * It predates this change — the old Close button called the same `discard()` —
+   * but this change would have widened it from the button to every dismissal, so
+   * it is closed here rather than inherited.
+   */
+  it("keeps a sentence added after Send, and starts a new report for it", async () => {
+    mountControlled();
+    type("The first thing.");
+    /* Send, and answer it only after the reader has typed more. */
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    type("The first thing. And another.");
+    act(() => release?.());
+    await act(async () => {});
+
+    /* What went is what was in the box when Send was pressed. */
+    expect(body().body).toBe("The first thing.");
+
+    const button = host.querySelector<HTMLButtonElement>(".fb-done button");
+    if (!button) throw new Error("no Close");
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(firstBox().value).toBe("The first thing. And another.");
+    /* And it is a new report, not a second send of the one already filed. */
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(idOf(1)).not.toBe(idOf(0));
+    expect(body().body).toBe("The first thing. And another.");
+  });
+
+  /**
+   * **A report filed while nobody was looking is not dismissed.**
+   *
+   * Close the dialog mid-flight and the request goes on; when it lands, `stage`
+   * becomes `sent` with `open` already false. Without the `thanksSeen` guard the
+   * reset effect fires there, and the reader reopens onto an empty box with no
+   * way to tell whether their report went.
+   */
+  it("shows the thank-you next time when the send landed after they left", async () => {
+    mountControlled();
+    type("Something happened.");
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    /* Out of the dialog before the answer comes back. */
+    const shut = host.querySelector<HTMLButtonElement>(".fb-close");
+    if (!shut) throw new Error("no ✕");
+    act(() => shut.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    act(() => release?.());
+    await act(async () => {});
+
+    expect(host.querySelector(".fb-done")).not.toBeNull();
+  });
+
+  /**
+   * **A picture still being re-encoded when the report is dismissed does not
+   * turn up attached to the next one.**
+   *
+   * `discard()` cleared `shot` but left `shotGeneration` alone, so the late
+   * conversion still passed its own currency check and wrote the old report's
+   * image into a freshly minted one. GPT Sol established it as a P1 on
+   * 2026-09-05 and reproduced it; it predates this change.
+   */
+  it("does not attach a late picture to the report after it", async () => {
+    mountControlled();
+    type("Something happened.");
+
+    /* Send, and hold the request open — the form is still on screen and still
+       accepts a picture while `stage` is `sending`. */
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+
+    const input = host.querySelector<HTMLInputElement>('.fb-shot-pick input[type="file"]');
+    if (!input) throw new Error("no file input");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["x"], "shot.png", { type: "image/png" })],
+    });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+
+    /* The report lands and the reader dismisses the thank-you, all while the
+       picture is still being re-encoded. */
+    act(() => release?.());
+    await act(async () => {});
+    const button = host.querySelector<HTMLButtonElement>(".fb-done button");
+    if (!button) throw new Error("no Close");
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    /* Only now does the conversion finish. It belongs to a report that is filed
+       and gone, so it must not land on the one that replaced it. */
+    await act(async () => {
+      finishShot?.("bGF0ZQ==");
+    });
+
+    expect(host.querySelector(".fb-shot-have")).toBeNull();
+  });
+
+  /**
+   * **Every way out of the thank-you starts the next report**, not only the
+   * button — Escape, the ✕ and the backdrop all merely flip `open`.
+   *
+   * Before the reordering above, those three left `stage` at `sent`: the next
+   * press of Feedback opened on a stale thank-you for a report filed some time
+   * ago, with the old draft still behind it.
+   */
+  it("does not come back showing the last report's thank-you", async () => {
+    mount();
+    type("Something happened.");
+    send();
+    await act(async () => {});
+    expect(host.querySelector(".fb-done")).not.toBeNull();
+
+    reopen();
+
+    expect(host.querySelector(".fb-done")).toBeNull();
+    expect(firstBox().value).toBe("");
+  });
+});
+
 describe("the keyboard, and the button under it", () => {
   it("keeps Send out of the part that scrolls", () => {
     mount();
