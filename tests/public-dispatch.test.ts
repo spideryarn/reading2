@@ -123,7 +123,7 @@ describe("the authenticated dispatcher's one parameter", () => {
        `NOT_A_ROW` exemption: that key is the uuid, so exempting it would have
        blinded the guard to the neighbour row as well. */
     const impostor: AuthedUser = {
-      id: "00000000-0000-4000-8000-00000000face" as AuthedUser["id"],
+      id: "d15a0001-0000-4000-8000-000000000001" as AuthedUser["id"],
       email: "someone@example.test",
     };
     // @ts-expect-error an AuthedUser is not a VerifiedUser — that is the brand
@@ -152,7 +152,7 @@ describe("the authenticated dispatcher's one parameter", () => {
   });
 
   it("refuses an object that merely looks like a user", async () => {
-    const impostor = { id: "00000000-0000-4000-8000-00000000face", email: "x@example.test" };
+    const impostor = { id: "d15a0001-0000-4000-8000-000000000001", email: "x@example.test" };
     await expect(
       runInRequest(() => serveAuthenticatedApi(impostor as never, envelope("/api/library"))),
     ).rejects.toThrow(/did not come from requireUser/);

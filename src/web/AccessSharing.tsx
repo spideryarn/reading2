@@ -65,6 +65,7 @@ import {
   SHARING_COPY_TIP,
   SHARING_OPEN_TIP,
   SHARING_STOP_TIP,
+  UNSHARING_COSTS_ALLOWANCE,
   sharingConfirmBody,
   sharingInFlight,
 } from "../messages.js";
@@ -513,6 +514,15 @@ export function AccessSharing({
               <CopyLink link={link} />
               <Inventory inventory={inventory} />
               <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{SHARING_CANNOT_UNRING}</p>
+              {/* **The allowance, and only on this side of the card.** A public
+                  article counts as half, so taking it down puts the other half
+                  back — a consequence worth saying before the press rather than
+                  discovering on the next add. It is a sentence and not a gate:
+                  no tick-box, no second confirmation, no red. And it is
+                  deliberately absent from the confirmation box below, where the
+                  rights tick-box lives — src/messages.ts §
+                  `UNSHARING_COSTS_ALLOWANCE` has the three rules. */}
+              <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{UNSHARING_COSTS_ALLOWANCE}</p>
               <Tooltip placement="bottom" content={<TipNote>{SHARING_STOP_TIP}</TipNote>}>
                 {/* `outline` and **not** `destructive`, which is the tint the
                     eye reaches for on a button that takes something away. It

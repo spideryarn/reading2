@@ -334,7 +334,7 @@ export function SearchPanel({
           moved they land on the wrong ones or on nothing at all. Only for
           searches that are actually switched on — a warning about a run whose
           box is unticked is a warning about nothing on screen. */}
-      <StaleNote runs={matcher === "meaning" ? runs : []} active={active} />
+      <StaleNote runs={matcher === "meaning" ? runs : []} active={active} own={own !== null} />
 
       <Results
         found={found}
@@ -832,11 +832,14 @@ function Saved({
                       {run.stale && (
                         <span
                           className="srch-saved-stale"
-                          title={
-                            "This search describes an older version of the article. The text was " +
-                            "re-fetched or re-extracted afterwards, so its passages may have moved " +
-                            "— or gone. ↺ puts the question back in the box so you can ask it again."
-                          }
+                          /* **The last clause is the owner's alone**, since
+                             2026-09-04: it names ↺, and a visitor has neither
+                             the button nor a box to put a question into.
+                             GPT Sol found it reviewing the built code — the
+                             same shape as the empty state two screens up, where
+                             the true half of a sentence carries a false half
+                             along with it (docs/project/copy.md). */
+                          title={STALE_ROW + (own ? ` ${STALE_ASK_AGAIN}` : "")}
                         >
                           <AlertTriangle size={11} /> older version
                         </span>
@@ -930,6 +933,44 @@ function Saved({
 }
 
 /**
+ * **What *stale* actually licenses us to say**, which is less than the first
+ * wording of it claimed.
+ *
+ * `isStale` (src/search-stale.ts) answers `true` in **two** states: the run's
+ * fingerprint differs from the article's, and *we cannot tell* — a run imported
+ * before runs recorded one, or an article whose blocks could not be read.
+ * Unknown counting as stale is the right call and it is the safe way round to
+ * be wrong; what was wrong was the sentence built on top of it, which asserted
+ * a cause — *"The text was re-fetched or re-extracted afterwards"* — that in
+ * the second state nobody knows. GPT Sol, 2026-09-04.
+ *
+ * So the wording says what we know: this may no longer match, and here is the
+ * thing that would have caused it. That is true in both states and loses
+ * nothing in the common one. It was already wrong for owners; publishing saved
+ * searches on 2026-09-04 is what made it worth fixing rather than noting.
+ */
+const STALE_ROW =
+  "This search may no longer match the article as it is now. The text may have been re-fetched or " +
+  "re-extracted since it was answered, so its passages may have moved — or gone.";
+
+/**
+ * **The owner's half of it**, appended only for them.
+ *
+ * ↺ is one of the four controls a visitor's rows do not have
+ * (`SearchAccess`), so on a shared link this sentence names a button that is
+ * not on the screen and a box that is not either.
+ */
+const STALE_ASK_AGAIN = "↺ puts the question back in the box so you can ask it again.";
+
+/** The banner's version of `STALE_ROW`, about the marks rather than the row. */
+const STALE_WHY =
+  "The text may have been re-fetched or re-extracted since it was answered, so the marks may sit " +
+  "on words that have moved — or be missing where the words have gone.";
+const STALE_WHY_MANY =
+  "The text may have been re-fetched or re-extracted since they were answered, so the marks may " +
+  "sit on words that have moved — or be missing where the words have gone.";
+
+/**
  * The article moved and these searches did not.
  *
  * The same fact the tweet thread page and the glossary panel already state, in
@@ -948,10 +989,25 @@ function Saved({
  * **find** is the second click. That is the same two-clicks-not-one rule
  * `Rewrite` on the thread page settled on, arrived at from the other direction.
  *
+ * **And a visitor is offered nothing at all**, which is not a lesser version of
+ * that: they have no ↺, no box and no permission to ask, so naming the button
+ * would be an instruction they cannot follow. The banner still appears, because
+ * the *warning* is exactly as true for them — the marks in their prose may be
+ * on words that have moved.
+ *
  * Counted rather than named. With eight ticked and three stale, listing three
  * criteria here would be a paragraph; the ⚠ on each row says which.
  */
-function StaleNote({ runs, active }: { runs: SavedSearch[]; active: string[] }) {
+function StaleNote({
+  runs,
+  active,
+  own,
+}: {
+  runs: SavedSearch[];
+  active: string[];
+  /** Whether ↺ is on the rows below — see `STALE_ASK_AGAIN`. */
+  own: boolean;
+}) {
   /* `done` only. A pending run has no passages to be wrong about yet, and a
      failed one has none at all — flagging either would put a warning on a row
      that is already saying something truer about itself. */
@@ -967,9 +1023,8 @@ function StaleNote({ runs, active }: { runs: SavedSearch[]; active: string[] }) 
           : `${stale.length} of these searches describe an older version of the article.`}
       </p>
       <p className="srch-stale-hint">
-        The text was re-fetched or re-extracted after {stale.length === 1 ? "it was" : "they were"}{" "}
-        answered, so the marks may sit on words that have moved — or be missing where the words have
-        gone. ↺ on a row puts its question back in the box.
+        {stale.length === 1 ? STALE_WHY : STALE_WHY_MANY}
+        {own ? " ↺ on a row puts its question back in the box." : ""}
       </p>
     </div>
   );
@@ -1290,6 +1345,25 @@ function Results({
      `Saved` above is already showing a spinner; two of them stacked is noise,
      and "Nothing matched" underneath it would be a second wrong answer. */
   if (matcher === "meaning" && !loaded) return null;
+
+  /* **And nothing to say when there are none**, which the paragraph above this
+     block has claimed since it was written — *"with no saved searches at all,
+     `Saved` above is already explaining that, and two empty states stacked is
+     one too many"* — and which nothing implemented. The guard was `!loaded`
+     alone, so an article nobody had searched fell through every case here to
+     the last one and printed *"Nothing matched. The model found nothing in this
+     article that matches."* underneath *"Nothing searched for yet."*: two empty
+     states saying different things about one article, the second of them an
+     answer to a question nobody asked.
+
+     Found in a signed-out browser pass on 2026-09-04, where the two read as a
+     flat contradiction — *"Whoever added this article hasn't searched it"*
+     followed by a report on the search's results. **It was there for owners
+     too**, and had been since the ticks landed; a visitor's screen is only
+     where somebody finally looked. An intention written in a comment and left
+     unimplemented is the exact shape docs/reusable/silent-success.md is about,
+     with the comment standing in for the check. */
+  if (matcher === "meaning" && runs.length === 0) return null;
 
   if (matcher === "meaning" && runs.length > 0 && switchedOn.length === 0) {
     return (

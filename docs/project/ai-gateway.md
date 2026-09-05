@@ -424,12 +424,18 @@ evidence and contains no complete ingest.
 line meaningless, and a permanent "thousands of calls reported no cost" warning burying the one
 signal that would show a real unpriced problem.
 
-Since 2026-09-02 [`costStore`](../../src/store/ai-calls.ts) hands out the **filesystem** adapter to
-anything running under the test harness, whatever `SPIDERYARN_STORE` says. Redirecting rather than
-refusing, because a store that threw under test would stop the route suites exercising the metering
-lifecycle at all — which is the half of the ledger those tests are the only cover for. The focused
-`pgCostStore` tests still go to Postgres, by importing the adapter directly and cleaning up after
-themselves. `tests/cost-store-under-test.test.ts` is what says the redirect is still there.
+From 2026-09-02 to 2026-09-05, [`costStore`](../../src/store/ai-calls.ts) answered that by handing
+the **filesystem** adapter to anything running under the test harness, whatever `SPIDERYARN_STORE`
+said — redirecting rather than refusing, because a store that threw under test would stop the route
+suites exercising the metering lifecycle at all.
+
+**It is now a database rather than a branch.** The `private-postgres` vitest lane mints a database
+for the run and drops it afterwards ([testing.md](testing.md)), so a fixture row goes through the
+real Postgres adapter into somewhere no report can see. That is what the redirect was standing in
+for, and it is stronger where it counts: while the redirect was in place **no route suite had ever
+put a row through `pgCostStore`**, which is the only adapter that deploys.
+[`tests/cost-store-under-test.test.ts`](../../tests/cost-store-under-test.test.ts) is what says the
+rows land in the private database and not in the developer's own.
 
 **And the report names its database**, not just its table: `npm run cost` prints
 `postgres: spideryarn.ai_calls at <host>/<db>`, password stripped. Local and remote Postgres are

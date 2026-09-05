@@ -689,13 +689,18 @@ when("the Postgres ledger", () => {
    * A second run id for the money tests, so the sum below counts its own four
    * fixtures and nothing the two round-trip tests above happen to have left.
    *
-   * **Explicit cleanup, because these are the tests that still write to the
-   * real dev ledger.** Since 2026-09-02 `costStore` hands the *filesystem*
-   * store to anything running under the test harness — src/store/ai-calls.ts
-   * says why — so the route suites no longer fill this table with fixture rows.
-   * These tests deliberately go round that, by importing `pgCostStore`
-   * directly, because a Postgres CHECK is not something a JSONL file can prove.
-   * The cost of that is that they have to tidy up after themselves.
+   * **The cleanup below is a belt, and the braces are the lane.** It was
+   * written when these were the only tests reaching a real `ai_calls` table:
+   * from 2026-09-02 `costStore` handed the *filesystem* store to anything under
+   * the test harness, and this file deliberately went round that by importing
+   * `pgCostStore` directly, because a Postgres CHECK is not something a JSONL
+   * file can prove. It paid for that by having to tidy up after itself.
+   *
+   * Since stage C, 2026-09-05, this file runs in the `private-postgres` lane
+   * against a database minted for the run and dropped after it, so there is
+   * nothing left to tidy. The delete stays: it is two lines, it makes the file
+   * runnable against any database somebody points it at, and a cleanup that has
+   * become unnecessary is cheaper than one that turns out not to have been.
    */
   const MONEY = "00000000-0000-4000-8000-00000000c002";
 

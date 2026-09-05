@@ -89,7 +89,7 @@ async function main(): Promise<void> {
   );
 
   const { root } = parseJsonAnswer<{ root: ModelNode }>(raw, "the table of contents");
-  const report: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
+  const report: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
   const tree = buildTree(root, {}, body, "spike", report);
   console.log(
     `tree: ${Object.keys(tree.nodes).length} nodes, ${report.repairs.length} repair(s), ` +

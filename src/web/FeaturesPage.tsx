@@ -37,6 +37,7 @@ import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { WebsitePlans } from "./PlanCards.js";
+import { PublicShowcase } from "./PublicShowcase.js";
 import { PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -254,6 +255,14 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           quotes — so that everyone who opens it can benefit from them. Your own comments, chats and
           searches stay yours.
         </Showcase>
+        {/* **The claim above, with the evidence under it.** The paragraph in
+            that showcase is the strongest thing this page says about public
+            articles, and until 2026-09-05 a stranger had no way to check it
+            short of signing up. Every link in the block is derived from the
+            listing `/read/public` draws, so an article Greg unshares leaves
+            nothing behind here — PublicShowcase.tsx has the argument and the
+            two mechanisms it was chosen over. */}
+        <PublicShowcase />
         <div className="site-bento site-reveal">
           {/* Greg, 2026-08-26, the reader-profile request, rephrased. */}
           <Tile name="It knows who is reading." span="wide">

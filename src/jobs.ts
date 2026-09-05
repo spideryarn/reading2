@@ -248,6 +248,15 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * (src/pdf-read.ts § `CHUNK_CONCURRENCY`, `slugForRetry`) — and what the sum
  * above is really pinning is that the *ordinary* article still fits one.
  *
+ * **`extract` stopped being the expensive half later the same day**, when
+ * `CHUNK_CONCURRENCY` went 16 → 100 and the 142-page paper's extract went
+ * 394s → 69s measured. The budget above is unchanged and is still a *ceiling*
+ * rather than a forecast — retries stack on top of a fan-out and no number
+ * bounds them — but the walk it describes now spends its first window on
+ * `hierarchy`, not on transcription. **It still takes two claims**, because
+ * `hierarchy` measured 658–778s and no arithmetic makes that share a window with
+ * anything.
+ *
  * 420s was right for the one-step-per-request shape this replaces, where every
  * step got a fresh deadline. Under a claim that walks the whole job it is a
  * per-step constraint in a per-claim world: `hierarchy` alone at 320.4s would have
@@ -486,8 +495,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
 
      *PDF* is `runPdfExtract`, and **no number can bound it**, which is why this
      is a ceiling and not a measurement. 250 pages plans ~84 chunks; at
-     `CHUNK_CONCURRENCY` 16 that is 270 s at the 45 s mean call and 588 s if
-     every wave hits the 98 s tail — and on top of *that* sit two retry layers
+     `CHUNK_CONCURRENCY` 100 — raised from 16 on 2026-09-04 — that is one wave
+     rather than six, and the real 142-page paper's extract went from **394 s to
+     248 s** measured. Not to 45 s, because one wave of calls is not one call:
+     the step is now bounded by its slowest chunk asked twice rather than by how
+     many waves it needs. What stops this being a bound at all is the same as it
+     ever was: on top of it sit two retry layers
      this file cannot see, `ATTEMPTS` for a chunk that fails its check and
      `TRANSPORT_ATTEMPTS` with backoff for one that never answered
      (src/pdf-read.ts). A first draft of this row said 600 s and read as though

@@ -85,23 +85,72 @@ export const PROSE_MIN = 544; // 34rem — the narrowest the reading column may 
  * alone is. Keeping it that way is also what keeps this file free of mode
  * names, which is the point of `plainCols` in App.tsx.
  *
- * 50rem is `--reading-measure` (65ch, ≈46rem in the reading face) plus the text
- * cell's own `--text-pad-l` and `--text-pad-r`, rounded up to something round.
- * The rounding runs upwards on purpose: `.prose` keeps its own clamp, so slack
- * here is a few pixels of margin inside the column rather than a clipped
- * measure.
+ * **Everything in it except the gutter is rem, so it is not one number any
+ * more.** `proseAloneMaxPx` below is the cap; this is the rem part of it.
+ *
+ * 49rem is `--reading-measure` (65ch, ≈46rem in the reading face), plus the
+ * cell's `--text-pad-r` (1.4), plus the gutter's inset on each side (0.35 × 2)
+ * — 48.1, rounded up to something round, exactly as the old 50 rounded its own
+ * 49.5. The rounding runs upwards on purpose: `.prose` keeps its own clamp, so
+ * slack here is a few pixels of margin inside the column rather than a clipped
+ * measure. A whole number of rem is worth keeping — 51.6 was tried on the way
+ * here and left every width this derives fractional, so the tests had to round
+ * with it and stopped asserting anything checkable by hand.
  *
  * **Rem, and this is the second time that has mattered in this file.** `SPINE_W`
  * above records the same lesson from the other side: nothing in this app locks
  * the root font size, and a px constant standing in for a rem-relative length is
- * only correct at 16px. Everything this number stands for scales with the root —
- * `--reading-size` is `1.0625rem`, `ch` scales with the font size, and both pads
- * are rem — so a reader whose browser default is 20px would have had the cap
- * clip their measure from 65ch to about 51ch, which is the one thing the cap
- * must never do. GPT Sol, 2026-09-03. `fitView` multiplies by the root size the
- * page is actually painted at; see `FitInput.rootFontPx`.
+ * only correct at 16px. Everything *this* number stands for scales with the
+ * root — `--reading-size` is `1.0625rem`, `ch` scales with the font size, and
+ * both of those pads are rem — so a reader whose browser default is 20px would
+ * have had a px cap clip their measure from 65ch to about 51ch, which is the one
+ * thing the cap must never do. GPT Sol, 2026-09-03.
+ *
+ * **And the gutter is the exception that proves it, which is why it left this
+ * constant.** See `proseAloneMaxPx`.
  */
-export const PROSE_ALONE_MAX_REM = 50;
+export const PROSE_ALONE_MAX_REM = 49;
+
+/**
+ * **One cell of the prose gutter, in rem and in px — the two halves of
+ * `--blk-slot: max(1.5rem, 24px)` in styles.css § tokens.**
+ *
+ * A copy, and copies are what this file spends its comments warning about, so
+ * it needs its reason: **CSS knows the reader's root font size and this file
+ * does not know the CSS.** The lone-column cap has to reserve the gutter's real
+ * width at the root the page is painted at, and that width stopped being a rem
+ * fact the moment it grew a px floor. `tests/gutter-target-size.test.ts` reads
+ * the declaration out of the stylesheet and fails when these two disagree with
+ * it — which is the only thing that makes a copy safe.
+ *
+ * The px number is WCAG 2.5.8's, not ours.
+ */
+export const BLK_SLOT_MIN_PX = 24;
+export const BLK_SLOT_REM = 1.5;
+
+/**
+ * **The widest a lone reading column goes, in px at the root it is painted at.**
+ *
+ * `PROSE_ALONE_MAX_REM * root` would be the whole answer if every term scaled
+ * with the root. Two of the gutter's do not: `--blk-slot` is `max(1.5rem, 24px)`,
+ * so below a 16px root the gutter stops shrinking and the *rem* width of the
+ * cell's left padding goes **up** — 3.7rem at 16, 4.7rem at 12. A single rem
+ * constant therefore cannot be right at every root, and the one that was here
+ * under-reserved by 1.2px at 12px and by 12.9px at 9px, silently clipping the
+ * measure it exists to protect. GPT Sol's stage 1 review, 2026-09-04.
+ *
+ * Adding the gutter as its own term instead is exact at every root **and does
+ * not move the common ones**: 832px at 16 and 1040 at 20, both unchanged, with
+ * only the 12px case widening (624 → 636) — which is the case that was wrong.
+ *
+ * `Math.round` because a fractional CSS pixel in a table width is a hairline
+ * seam, and because every number derived from this is asserted by hand in
+ * tests/layout.test.ts.
+ */
+export function proseAloneMaxPx(rootFontPx: number): number {
+  const slot = Math.max(BLK_SLOT_REM * rootFontPx, BLK_SLOT_MIN_PX);
+  return Math.round(PROSE_ALONE_MAX_REM * rootFontPx + slot * 2);
+}
 
 /** The root font size everything not told otherwise assumes. */
 export const DEFAULT_ROOT_PX = 16;
@@ -417,15 +466,16 @@ export function fitView({
    * there is nothing to negotiate: `detailW` came out as the whole window, and
    * a 1588px cell holding a 738px measure is 850px of empty page rather than a
    * wide reading column. See `PROSE_ALONE_MAX_REM` for why the cap is phrased as
-   * "alone" rather than "Plain", and styles.css § plain, centred for the auto
-   * margins that put the leftover on both sides instead of one.
+   * "alone" rather than "Plain", `proseAloneMaxPx` for why it is a function of
+   * the root rather than one number, and styles.css § plain, centred for the
+   * auto margins that put the leftover on both sides instead of one.
    *
    * Outline mode is excluded by `showText`: its lone column is nav labels, not
    * prose, and `--reading-measure` has nothing to say about those.
    */
   const alone = fixedCount === 0 && showText;
   const columnW = alone
-    ? Math.min(detailW, Math.round(PROSE_ALONE_MAX_REM * rootFontPx))
+    ? Math.min(detailW, proseAloneMaxPx(rootFontPx))
     : detailW;
 
   const widths = [...Array<number>(fixedCount).fill(gistW), columnW];

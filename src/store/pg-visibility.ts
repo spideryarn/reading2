@@ -22,6 +22,13 @@
  * transition — a log that says a thing happened twice is worse than no log,
  * because it is the kind of wrong that gets believed.
  *
+ * ## The lock order, since the discount
+ *
+ * `billing_accounts` **before** `articles`, and the same way round as admission.
+ * A public article counts half a slot, so this method changes what its owner has
+ * used — see the comment on the line that takes it, and ./pg-billing.ts §
+ * *The lock order*.
+ *
  * ## Idempotence, on purpose
  *
  * Asking for the state a document is already in returns the current
@@ -40,6 +47,7 @@ import type { Visibility, VisibilityState, VisibilityStore } from "./contracts.j
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
+import { lockBillingAccount } from "./pg-billing.js";
 import { requireSlug } from "./require-slug.js";
 
 /**
@@ -110,6 +118,39 @@ const rawPgVisibilityStore: VisibilityStore = {
     requireSlug(slug);
 
     return getDb().transaction(async (tx) => {
+      /* **Is there anything here to change?** Unlocked, and asked before
+         anything is written, because the next line *writes*: it creates the
+         caller's `billing_accounts` anchor if they have none. Without this
+         probe, a stranger's `PUT` at somebody else's slug would mint a row for
+         the stranger and then 404 — a write on a path that fails, and in the
+         tests a 500 where a 404 belongs, because a synthetic owner id has no
+         `auth.users` row for the foreign key to find.
+
+         **It is not the ownership check** — `lockedArticleQuery` below is, and
+         it asks the same `ownedSlug` question under a lock. This one can be
+         stale in exactly one direction: an article that vanishes between the two
+         reads is caught by the second, at the cost of an anchor row for its own
+         owner, which pressing Upgrade would have created anyway. */
+      const [present] = await tx.select({ id: articles.id }).from(articles).where(ownedSlug(slug)).limit(1);
+      if (!present) throw notFound(slug);
+
+      /* **The billing row first, then the article — the order, everywhere.**
+         Since 2026-09-05 a public article costs half a slot, so this switch
+         changes its owner's usage; and admission counts that usage under the
+         owner's `billing_accounts` lock. Without this line an unshare could
+         commit between an admission's count and its reservation, and the
+         reservation would commit against usage that had stopped being true.
+         Taking it in the *same order* as admission is also what stops the two
+         deadlocking — a writer that took the article first and the billing row
+         second would be the cycle. `read committed` is then enough;
+         serializable is not needed. GPT Sol, 2026-09-04; the argument in full is
+         in ./pg-billing.ts § *The lock order*.
+
+         It costs a free reader their `billing_accounts` anchor row on their
+         first share, which is the same row pressing Upgrade would have created
+         and means nothing on its own. */
+      await lockBillingAccount(tx, currentOwnerId());
+
       const [row] = await lockedArticleQuery(tx, slug);
       if (!row) throw notFound(slug);
 

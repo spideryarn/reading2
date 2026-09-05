@@ -37,8 +37,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SharedNotice } from "../src/web/PublicChrome.js";
 import { SHARED_WITH_YOU } from "../src/messages.js";
+import { SharedNotice } from "../src/web/PublicChrome.js";
 
 const CSS = readFileSync(path.join(process.cwd(), "src/web/styles.css"), "utf8");
 
@@ -75,8 +75,14 @@ describe("a visitor's notice, in the strip the band takes over", () => {
        What it is really asserting is that `SharedNotice` rendered its text at
        all, and `SHARED_WITH_YOU` says that without going stale.
 
-       Two things keep that from being weaker than the sentence it replaced,
-       both from GPT Sol, 2026-09-05:
+       **Why the wording moved**, since the reason outlives this test: the old
+       assertion was the fragment "shared this article with you", and the
+       sentence had to stop saying somebody sent this reader a link, because the
+       public shelf brings readers nobody sent anything. A grep for the whole
+       old sentence does not find a fragment of it, which is how it went red.
+
+       Two things keep the constant from being weaker than the sentence it
+       replaced, both from GPT Sol, 2026-09-05:
 
        - **The non-empty guard.** `toContain("")` is vacuously true, so an
          emptied constant would have passed an assertion whose whole job is to

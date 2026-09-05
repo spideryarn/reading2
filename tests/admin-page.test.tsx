@@ -108,6 +108,7 @@ const ALICE: AdminUser = {
   plan: "reader",
   planStatus: "active",
   ingests: 4,
+  ingestsShared: 0,
   ingestLimit: 20,
   ingestWindow: "period",
 };
@@ -135,6 +136,7 @@ const BOB: AdminUser = {
      the Plan cell draws nothing under the word rather than an empty line. */
   plan: "free",
   ingests: 0,
+  ingestsShared: 0,
   ingestLimit: 3,
   ingestWindow: "lifetime",
 };
@@ -249,6 +251,24 @@ describe("the users page", () => {
     const alice = table.find((r) => r[0]?.includes("alice@example.test")) ?? [];
     expect(alice.join("|")).toContain("12");
     expect(alice.join("|")).toContain("40");
+  });
+
+  /**
+   * **`6 / 3` in this cell reads as the wall having failed**, and it is what the
+   * page drew for an account that shared six articles and then made them all
+   * private again: nothing public, twelve half-units against a budget of six.
+   * The half-slot form was chosen on *is anything public* alone, which is the
+   * wrong question — the fraction stops being a fraction the moment the count
+   * passes the allowance, whichever way it got there. GPT Sol, 2026-09-05.
+   */
+  it("shows half-slots when the count is over the allowance, even with nothing public", async () => {
+    const unshared: AdminUser = { ...BOB, ingests: 6, ingestsShared: 0, ingestLimit: 3 };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [unshared] })));
+    const el = await show();
+
+    const row = (rows(el)[0] ?? []).join("|");
+    expect(row).toContain("12 / 6 half");
+    expect(row).not.toContain("6 / 3");
   });
 
   it("draws exactly as many rows as it says there are accounts", async () => {
