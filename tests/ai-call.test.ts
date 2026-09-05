@@ -943,6 +943,59 @@ describe("a `StreamEnd` handed to a second stream", () => {
     expect(shared.terminated).toBe(false);
     expect(classifyEnd(shared, calm())).toEqual({ kind: "unterminated" });
   });
+
+  it("clears it when the second call never gets a body at all", async () => {
+    /* **The reset belongs at the start of the attempt, not once the attempt
+       starts going well.** It sat after the response had been validated, so a
+       retry that was refused, aborted, or came back with no body left the
+       previous stream's `[DONE]` standing — and the caller then classified a
+       call that never reached a byte using the last one's terminator. GPT Sol,
+       finding F8, 2026-09-05. */
+    const shared: StreamEnd = { terminated: false };
+    let call = 0;
+    stubTransport(() => {
+      call++;
+      if (call === 1) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          body: new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              c.close();
+            },
+          }),
+        } as unknown as Response;
+      }
+      // The second attempt is refused before there is anything to stream.
+      return { ok: false, status: 503, headers: new Headers(), body: null } as unknown as Response;
+    });
+
+    await collectSpend(async () => {
+      for await (const _ of openRouterStream(
+        "chat",
+        { model: "anthropic/claude-sonnet-5", messages: [] },
+        { signal: new AbortController().signal, onActivity: noop, end: shared },
+      )) {
+        // Drained for its side effects on `shared`.
+      }
+      expect(shared.terminated).toBe(true);
+      await expect(
+        (async () => {
+          for await (const _ of openRouterStream(
+            "chat",
+            { model: "anthropic/claude-sonnet-5", messages: [] },
+            { signal: new AbortController().signal, onActivity: noop, end: shared },
+          )) {
+            // Never reached: the call is refused.
+          }
+        })(),
+      ).rejects.toThrow();
+    });
+
+    expect(shared.terminated).toBe(false);
+  });
 });
 
 describe("nothing else may talk to OpenRouter", () => {

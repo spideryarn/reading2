@@ -198,6 +198,22 @@ AssertionError: expected true to be false // Object.is equality
 Two streams through one `StreamEnd`: the first ends on `[DONE]`, the second at EOF with nothing to
 say why, and `classifyEnd` calls the second one `finished`.
 
+### M8 — F8, the reset that happened too late
+
+Mutation: move the three reset assignments back to where they were, after the response has been
+validated.
+
+```
+ FAIL  tests/ai-call.test.ts > a `StreamEnd` handed to a second stream >
+       clears it when the second call never gets a body at all
+AssertionError: expected true to be false // Object.is equality
+      Tests  1 failed | 37 passed (38)
+```
+
+A first stream ends on `[DONE]`; the second attempt is refused with a 503 before there is anything
+to stream, and the object still says `terminated: true`. An out-parameter that means "how did *this*
+attempt end" has to be cleared when the attempt starts, not when it starts going well.
+
 ### The suites that are not mine, run anyway
 
 `classifyEnd`'s precedence is shared, so the F5 fix reaches `quiz-mark`, `explain` and `search` as

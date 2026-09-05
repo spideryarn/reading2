@@ -458,8 +458,40 @@ end-to-end reproductions."* Both were reproduced independently here before anyth
       its brief and must not touch `src/web/`, and what a reader is shown is a product decision that
       is Greg's. Written down where the field is defined rather than left for somebody to rediscover.
 
+**The narrowly scoped check of those fixes** —
+[260901g-stage-h-narrow-check-sol.md](260901g-stage-h-narrow-check-sol.md), which
+`engineering-manager.md` requires because the fix for an established P1 is by definition not in the
+round it was found in. It passed the three things that mattered and found one more:
+
+- **F5's fix verified, including the part I could not.** *"`terminated = true` has one production
+  writer, the literal `[DONE]` branch… Production constructors use `false`; no production caller
+  aliases or reuses the object. Gating the signals is correct."* And on the three callers this job
+  does not own: *"the changed precedence accepts only an already-complete stream"*.
+- **Stage G verified behaviour-neutral**, which was its whole claim: *"no disagreeing completed-turn
+  input found"*, with the `noteRound`-then-`classifyEnd` ordering checked explicitly.
+- [x] **F8 (P2, new, established, fixed).** The reset sat **after** the response had been validated,
+      so a reused `end` was still stale for an attempt that aborted, was refused, or came back with
+      no body — the caller would then classify a call that never reached a byte using the previous
+      stream's terminator. The three assignments now run **before `send`**, which is what an
+      out-parameter meaning "how did *this attempt* end" requires: cleared when the attempt starts,
+      not when it starts going well. Red-first, and the mutation that moves it back turns the new
+      test red.
+
+**F6 is the one thing left open, and it is deliberately not mine.** Sol's verdict was REFUSE on it a
+second time, and on the disposition rather than the reasoning: *"The server-only boundary is
+defensible as ownership, but it does not resolve F6. Put the copy change to the product owner."*
+Which is exactly what this is. The panel says *"This answer ran out of room and stopped
+mid-sentence"* where the server now only claims the answer *may* be incomplete, and Sol's suggested
+replacement is:
+
+> A model step hit its output limit after writing part of this answer. The answer may be incomplete;
+> try again.
+
+It is one string in `src/web/ChatPanel.tsx`, this job's brief forbids touching `src/web/`, and what a
+reader is shown is Greg's call. **Not overruled — handed over.**
+
 *Abandonable as:* the migration, plus a shared-classifier bug that was there before it and is now
-fixed for all seven callers.
+fixed for all seven callers, plus one sentence of reader-facing copy waiting on Greg.
 
 ## What this is not
 
@@ -479,6 +511,11 @@ twice; the classifier is what stops there being an eighth.
 
 ## The reviews
 
+- The **narrowly scoped check of the F5/F6/F7 fixes and of Stage G**, neither of which was in the
+  round-two snapshot: [260901g-stage-h-narrow-check-sol.md](260901g-stage-h-narrow-check-sol.md),
+  prompt at [260901g-stage-h-narrow-check-prompt.md](260901g-stage-h-narrow-check-prompt.md). Found
+  F8, and refused a second time on F6 — on the disposition rather than the reasoning, which is what
+  puts that one in front of Greg rather than in a plan.
 - Stages D–G, **on the built code**:
   [260901g-stages-def-code-review-sol.md](260901g-stages-def-code-review-sol.md) — refused, on two
   established P1s it had reproduced by running harnesses rather than by reading. Both were real, one

@@ -1187,26 +1187,34 @@ export async function* openRouterStream(
    */
   let ranToEnd = false;
   try {
+    /* **Reset, so a reused `end` cannot carry a stale verdict into a new
+       attempt.** `converse` runs up to four requests in a turn; it builds a
+       fresh object for each, so nothing depends on this today — which is exactly
+       when to write it, because the next caller to loop will not know it had to.
+
+       **Before `send`, not after the body arrives**, and the difference is the
+       whole point of an out-parameter: this says "here is how *this attempt*
+       ended", so it has to be cleared when the attempt starts rather than when
+       it starts going well. Placed after the response was validated, a retry
+       that aborted, was refused, or came back with no body left the previous
+       stream's verdict standing — so the caller classified a call that never
+       reached a byte using the last one's terminator. GPT Sol, finding F8.
+
+       **`terminated` was missing from the list entirely until 2026-09-05**,
+       which made the sentence above false in the one way that matters most: a
+       reused object whose first stream ended on `[DONE]` and whose second ended
+       at EOF with nothing to say why classified as `finished`, and — since F5 —
+       the stale `true` would also suppress the clock checks. A promise in a
+       comment that the code does not keep is worse than no promise, because the
+       next caller reads the comment. GPT Sol, finding F7. */
+    options.end.terminated = false;
+    options.end.finishReason = null;
+    options.end.answered = false;
     const response = await send(prepared, options.signal);
     meter.generationId = generationIdOf(response);
     if (!response.ok || !response.body) await refuse(response);
     /* Non-null: `refuse` throws, but TypeScript cannot see through the `await`. */
     const stream = response.body as ReadableStream<Uint8Array>;
-    /* **Reset, so a reused `end` cannot carry a stale verdict into a new
-       stream.** `converse` runs up to four requests in a turn; it builds a fresh
-       object for each, so nothing depends on this today — which is exactly when
-       to write it, because the next caller to loop will not know it had to.
-
-       **`terminated` was missing from this list until 2026-09-05**, which made
-       the sentence above false in the one way that matters most: a reused object
-       whose first stream ended on `[DONE]` and whose second ended at EOF with no
-       terminator classified as `finished`, and — since F5 — the stale `true`
-       would also suppress the clock checks. A promise in a comment that the code
-       does not keep is worse than no promise, because the next caller reads the
-       comment. GPT Sol, finding F7. */
-    options.end.terminated = false;
-    options.end.finishReason = null;
-    options.end.answered = false;
     for await (const chunk of sseChunks(
       stream,
       options.signal,
