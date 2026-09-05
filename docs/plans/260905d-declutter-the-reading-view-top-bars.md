@@ -154,8 +154,9 @@ One thing it found that is **not ours and not in scope**: at 390px `document.bod
 exactly the rail's 12px, so it predates this work — a table minimum-width constraint at narrow
 viewports.
 
-There is also **a red arriving from `dev`**, `tests/doc-links.test.ts`: `summaries.md` cites
-`types.ts` § `TreeNode.question`. Neither file is touched by this plan.
+There was also **a red arriving from `dev`**, `tests/doc-links.test.ts`: `summaries.md` cited
+`types.ts` § `TreeNode.question`. Neither file was touched by this plan, and it was fixed on `dev` by
+whoever owned it — green again here after the merge before stage 3.
 
 ### Stage 2 — the arc leaves Hierarchy
 
@@ -243,10 +244,36 @@ Also in this stage:
   `tests/prose-centred-in-its-cell.test.ts:123`.
 - **`?text=0` gets normalised away at boot** rather than left as a state with no exit. The `Text`
   pill was the only way back to the prose, so an old `?mode=hierarchy&text=0` link would strand the
-  reader. `main.tsx` already rewrites two superseded spellings of the metadata panel; this is a
-  third rewrite in the same place, to `?mode=outline` — which is what that link was asking for and
-  is the mode built to answer it. The parameter machinery stays for the `structure-mode` worktree
-  to delete.
+  reader. The place is **`settleAddress` in `router.ts`**, not `main.tsx` as this said until
+  2026-09-05: the four rewrites were consolidated into one pure function on 2026-08-30, after an
+  interaction between two of them sent a reader to the wrong page. The parameter machinery stays for
+  the `structure-mode` worktree to delete.
+
+  **The destination is `?mode=outline`**, arbitrated by Fable, 2026-09-05. The deciding argument is
+  not the obvious one: the reader who saved that link was looking at a bar that said **OUTLINE** —
+  the old `reading`/`outline` chip flipped whenever `text=0` was on, `granularity-zoom.md` calls the
+  compact-table state "outline mode" throughout, and `TableView.tsx` still classes the table
+  `zoom outline` in it. Outline is the name that reader already associates with what they
+  bookmarked, so it is the *least* surprising landing, not a rename.
+
+  Two facts, checked in the code, that correct the obvious framing of the choice:
+
+  - **Neither destination restores the no-prose state**, so "which one honours what they asked for"
+    cannot decide it. `proseVisible` is `modeBand || showText` ([`layout.ts`](../../src/web/layout.ts)
+    § `proseVisible`) — a mode band never hides the article. Both options put the prose back, and
+    the tie-break is which shows a whole-article overview at a glance.
+  - **`text=0` bites only in Hierarchy**: `inMode = mode !== "hierarchy"`, and `proseVisible`
+    ignores `showText` everywhere else. A bare `?text=0` already lands harmlessly in Plain.
+
+  **So: `mode=hierarchy` + `text=0` → `mode=outline`, and the `text` pair is dropped in every case,
+  whatever the mode.** Dropping it unconditionally is not tidying an inert parameter — it defuses
+  one that arms itself later. Left in a Plain address, `text=0` strands the reader the moment they
+  press Hierarchy on the Dock.
+
+  Fable's own summary of the stakes, which is the right one: the `Text` pill only ever wrote this
+  inside Hierarchy, Hierarchy stopped being the default on 2026-08-31, paying readers arrived on
+  2026-09-03 and the pill went on 2026-09-05 — so the realistic population is Greg's own bookmarks.
+  Low stakes; pick it, write it, and do not spend a second review round on it.
 
 Files: `TableView.tsx`, `tree.ts`, `scroll.ts`, `main.tsx`, `styles.css`,
 `tests/mobile-chrome.test.ts`, `tests/column-names.test.ts`, `tests/url-state.test.ts`. Docs:
