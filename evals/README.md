@@ -584,17 +584,25 @@ Four things in it are worth copying:
   already driven, every step it releases is released "abandoned" and throws before it runs. Those jobs
   end `error` by this eval's doing and each carries a finding saying so. **And the three share one
   fate**: once any of them has failed its measured step, fallen back to wave 1, or handed its claim
-  back, none of the others claims again — it stops them *starting* more paid work, not a call already
-  in flight. A measured job also stops on its first requeue rather than being re-driven, because a
-  re-drive takes the gate's latched verdict, runs outside it, and lets the queue overwrite the first
-  attempt's clock. In one line: **it no longer starts paid measured work when the rendezvous already
-  knows question 5 is impossible.** **What a successful gate guarantees is a shared start, not a
-  shared window**, and only one thing really bounds the window: another job **cannot** serialise the
-  three afterwards, because by then all three hold claims and that is all three of the cap's slots —
-  what remains is that the load articles' `hierarchy` is far shorter than the book's 658-778 s and
-  closes long before it. So the book's step is genuinely contended for as long as its shortest
-  sibling runs, and `peakConcurrency` confirms the phase ran rather than discovering that it
-  overlapped. All three phase-D promises
+  back, the other two stop before their next claim **and cancel the calls their running step has not
+  yet made**. Stopping before the next claim was not enough on its own, because one claim runs the
+  whole `hierarchy` step — structure call, expansion wave *and* a whole pass of labels, which
+  `generateHierarchy` starts even after the wave failed. So the fate carries an `AbortSignal` that
+  `announcing` combines into the measured step's own `ctx.signal`; label batches are queued with that
+  signal, and `tests/labels-batching.test.ts` already pins the property that matters — *"the callback
+  must never run either, or the 'stop paying' half of fail-fast buys nothing"*. The remaining bound is
+  the single request already in flight, which may still be billed. A measured job also stops on its
+  first requeue rather than being re-driven, because a re-drive takes the gate's latched verdict, runs
+  outside it, and lets the queue overwrite the first attempt's clock. In one line: **it no longer
+  starts paid measured work when the rendezvous already knows question 5 is impossible.**
+  **What a successful gate guarantees is a shared start, not a shared window.** Another job **cannot**
+  serialise the three afterwards — by then all three hold claims, which is all three of the cap's
+  slots — so `peakConcurrency` reaching 3 is *arranged* and confirms the wiring rather than measuring
+  anything. The load measurement is **`fullConcurrencyMs`**, the longest interval with all three
+  genuinely in flight, held to a floor **declared in preflight before anything is bought**. It is
+  bounded by the shortest of the three, and the load articles' `hierarchy` is far shorter than a
+  book's 658-778 s — so below the floor, question 5 reports latency after a synchronised start rather
+  than sustained three-job load, and says so. All three phase-D promises
   stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
   agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the

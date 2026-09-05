@@ -38,6 +38,7 @@ import {
   byWhenWritten,
   checkpointWriter,
   estimate,
+  fateReason,
   formatEstimate,
   jobIntegrityFindings,
   loadReadiness,
@@ -63,6 +64,7 @@ import {
   checkRepeatBoughtItsWave,
   compareRepeats,
   costReport,
+  fullConcurrencyMs,
   type DrivenJob,
   parentPath,
   peakConcurrency,
@@ -603,11 +605,44 @@ describe("the budget report", () => {
   ];
 
   it("is quiet inside the budget when all three really overlapped", () => {
-    const q = budgetReport({ clocks: threeAtOnce, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: threeAtOnce, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.answerable).toBe(true);
     expect(q.peakConcurrency).toBe(3);
     expect(q.overBudget).toHaveLength(0);
     expect(q.reading).toMatch(/inside STEP_BUDGET_MS/);
+  });
+
+  /**
+   * **The floor is the load check now, and it has to be able to refuse.**
+   *
+   * `threeAtOnce` overlaps fully for 78 s — the second article ends at 1:20 and
+   * the last of them starts at 0:02. Held to a floor above that, question 5 must
+   * refuse: all three *started* together, which the rendezvous arranges, and the
+   * load was over long before the longest step was.
+   */
+  it("refuses when the three were not up together for long enough", () => {
+    const q = budgetReport({
+      clocks: threeAtOnce,
+      budgetMs: 700_000,
+      deadlineMs: 740_000,
+      expected: 3,
+      fullConcurrencyFloorMs: 120_000,
+    });
+    expect(q.fullConcurrencyMs).toBe(78_000);
+    expect(q.answerable, "an instant of overlap is arranged, not measured").toBe(false);
+    expect(q.findings.some((f) => f.fatal && /synchronised start/.test(f.message))).toBe(true);
+  });
+
+  it("passes the floor when they really were up together for it", () => {
+    const q = budgetReport({
+      clocks: threeAtOnce,
+      budgetMs: 700_000,
+      deadlineMs: 740_000,
+      expected: 3,
+      fullConcurrencyFloorMs: 60_000,
+    });
+    expect(q.answerable).toBe(true);
+    expect(q.fullConcurrencyFloorMs).toBe(60_000);
   });
 
   it("names a step past the budget", () => {
@@ -615,6 +650,7 @@ describe("the budget report", () => {
       clocks: [clock({ ms: 800_000, finishedAt: "2026-09-05T00:13:20.000Z" }), ...threeAtOnce.slice(1)],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 3,
     });
     expect(q.answerable).toBe(true);
@@ -633,6 +669,7 @@ describe("the budget report", () => {
       clocks: [clock({ ms: null, status: null, startedAt: null, finishedAt: null, hasSuccessfulStats: false })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 3,
     });
     expect(q.measured).toBe(0);
@@ -653,7 +690,7 @@ describe("the budget report", () => {
    */
   it("refuses three fast failures, which each carry a clock", () => {
     const failed = threeAtOnce.map((c) => clock({ ...c, status: "error", ms: 900, hasSuccessfulStats: false }));
-    const q = budgetReport({ clocks: failed, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: failed, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.measured).toBe(3);
     expect(q.completed).toBe(0);
     expect(q.answerable).toBe(false);
@@ -678,7 +715,7 @@ describe("the budget report", () => {
    */
   it("refuses three waves that FAILED, completed the step and finished inside the budget", () => {
     const fellBack = threeAtOnce.map((c) => clock({ ...c, hasSuccessfulStats: false }));
-    const q = budgetReport({ clocks: fellBack, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: fellBack, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.measured).toBe(3);
     /* Every one is `done`, inside the budget and overlapping its two siblings —
        the three things question 5 asks — and it is still not an answer. */
@@ -697,6 +734,7 @@ describe("the budget report", () => {
       clocks: [threeAtOnce[0]!, clock({ ...threeAtOnce[1]!, status: "error", hasSuccessfulStats: false })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 3,
     });
     expect(q.completed).toBe(1);
@@ -716,7 +754,7 @@ describe("the budget report", () => {
       clock({ label: "D 2", startedAt: "2026-09-05T00:01:00.000Z", finishedAt: "2026-09-05T00:02:00.000Z" }),
       clock({ label: "D 3", startedAt: "2026-09-05T00:02:00.000Z", finishedAt: "2026-09-05T00:03:00.000Z" }),
     ];
-    const q = budgetReport({ clocks: serial, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: serial, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.completed).toBe(3);
     expect(q.peakConcurrency).toBe(1);
     expect(q.answerable).toBe(false);
@@ -730,7 +768,7 @@ describe("the budget report", () => {
       clock({ label: "D 2", startedAt: "2026-09-05T00:00:30.000Z", finishedAt: "2026-09-05T00:01:30.000Z" }),
       clock({ label: "D 3", startedAt: "2026-09-05T00:02:00.000Z", finishedAt: "2026-09-05T00:03:00.000Z" }),
     ];
-    const q = budgetReport({ clocks: partly, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: partly, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.peakConcurrency).toBe(2);
     expect(q.answerable).toBe(false);
   });
@@ -746,6 +784,7 @@ describe("the budget report", () => {
       clocks: [clock({ withheld: 4 })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 1,
     });
     expect(cheap.selfAborted).toHaveLength(1);
@@ -754,6 +793,7 @@ describe("the budget report", () => {
       clocks: [clock({ withheld: 4, uncheckpointed: 4 })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 1,
     });
     expect(dear.wasted).toHaveLength(1);
@@ -794,6 +834,72 @@ describe("peak concurrency", () => {
         { startedAt: undefined, finishedAt: undefined },
       ]),
     ).toBe(1);
+  });
+});
+
+/**
+ * **`peakConcurrency` became a wiring check, and this is what replaced it as the
+ * measurement.**
+ *
+ * The start rendezvous releases all three measured steps within one turn of the
+ * event loop, and a measured job that requeues is now refused rather than
+ * re-driven. So *given three valid completions, all three clocks open before
+ * `arrive()` returns and the gate says go only once all three have arrived* —
+ * which makes `peakConcurrency === 3` **constructed**, true of any run that got
+ * that far, and false only if a clock is corrupt. It confirms the wiring; it
+ * does not discover anything. ⟨GPT Sol, confirming an argument raised here.⟩
+ *
+ * `fullConcurrencyMs` is the honest replacement: **the longest interval during
+ * which all three were genuinely in flight**, which for windows that share a
+ * start is `min(finishedAt) - max(startedAt)`. It is bounded by the *shortest*
+ * of the three — and the load articles' `hierarchy` is far shorter than the
+ * book's 658-778 s — so it says out loud how much of the book's step was really
+ * contended.
+ */
+describe("how long all three were really in flight", () => {
+  const w = (from: string, to: string | null) => ({ startedAt: from, finishedAt: to });
+
+  it("is the overlap of the three, not the length of the longest", () => {
+    expect(
+      fullConcurrencyMs([
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:12:00Z"),
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"),
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:00:40Z"),
+      ]),
+      "the book ran twelve minutes; all three were up for forty seconds of it",
+    ).toBe(40_000);
+  });
+
+  it("takes the latest start as well as the earliest end", () => {
+    expect(
+      fullConcurrencyMs([
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:10:00Z"),
+        w("2026-01-01T00:00:30Z", "2026-01-01T00:10:00Z"),
+      ]),
+    ).toBe(570_000);
+  });
+
+  /* Windows that never all overlapped have no such interval, and a negative
+     number would read as a small positive one to anybody skimming. */
+  it("is zero where they did not all overlap", () => {
+    expect(
+      fullConcurrencyMs([
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:00:10Z"),
+        w("2026-01-01T00:00:20Z", "2026-01-01T00:00:30Z"),
+      ]),
+    ).toBe(0);
+  });
+
+  /* An unfinished or unstarted window makes the answer unknown, not zero — the
+     distinction this whole harness exists to keep. */
+  it("is null where any window is missing an end", () => {
+    expect(
+      fullConcurrencyMs([w("2026-01-01T00:00:00Z", "2026-01-01T00:10:00Z"), w("2026-01-01T00:00:00Z", null)]),
+    ).toBeNull();
+  });
+
+  it("is null over no windows at all", () => {
+    expect(fullConcurrencyMs([])).toBeNull();
   });
 });
 
@@ -1028,6 +1134,109 @@ describe("the fate three measured jobs share", () => {
     expect(fate.lost()).toBeNull();
     fate.lose("load 2's wave fell back to wave 1");
     expect(fate.lost()).toBe("load 2's wave fell back to wave 1");
+  });
+
+  /**
+   * **DPN-30 — and this is the level below where DPN-26 was fixed.**
+   *
+   * Stopping before the next *claim* does not stop the next paid *call*: one
+   * claim runs the whole `hierarchy` step, and that step buys a structure call,
+   * an expansion wave and a whole pass of labels. `generateHierarchy` catches a
+   * failed wave and falls straight through to `generateLabels` regardless
+   * (src/hierarchy.ts § the `deepenFailed` catch), so after question 5 is known
+   * unanswerable a sibling could still *begin* an entire label pass.
+   *
+   * The fate therefore carries a signal as well as a reason. It is combined into
+   * the measured step's `ctx.signal` by `announcing`, and `src/` already threads
+   * that signal to the places that matter: label batches are queued with it
+   * (`src/labels.ts` § `queue.add(…, { signal })`), so an abort **drops the ones
+   * that have not started**, and the wave's own calls carry it too.
+   */
+  it("aborts the instant it is lost, and not before", () => {
+    const fate = startPhaseFate();
+    expect(fate.signal.aborted, "a phase that is still whole must not cancel anything").toBe(false);
+    fate.lose("the book's hierarchy failed");
+    expect(fate.signal.aborted).toBe(true);
+  });
+
+  it("gives the reason as the abort reason, so a cancelled call says why", () => {
+    const fate = startPhaseFate();
+    fate.lose("load 1's wave fell back");
+    expect(String(fate.signal.reason)).toContain("load 1's wave fell back");
+  });
+
+  it("does not re-abort on a second loss", () => {
+    const fate = startPhaseFate();
+    fate.lose("first");
+    const reason = fate.signal.reason;
+    fate.lose("second");
+    expect(fate.signal.reason).toBe(reason);
+  });
+});
+
+/**
+ * **DPN-30, item 4 — the rehearsal could not exercise the failure path at all.**
+ *
+ * The fate was disarmed wholesale under `--dry-run`, for a good reason: every
+ * rehearsal job is *expected* to fail at its last free step, so the first one to
+ * do so would have stopped its siblings and the rehearsal would have stopped
+ * being a faithful shape of the paid run. But that also meant the one thing
+ * DPN-26 and DPN-30 are about — a live failure reaching its siblings — was the
+ * one thing the free run could never show.
+ *
+ * The distinction that lets both be true: **the expected ending is a failure at
+ * the last step this job was asked to run.** Anything else — a failure earlier
+ * in the list, a requeue, a wave that fell back — is a real failure even in a
+ * rehearsal, and loses the phase.
+ */
+describe("what loses the phase, and what is merely the rehearsal ending", () => {
+  const paid = { dryRun: false, label: "load 1", requeued: false, waveFailed: false };
+  const steps = ["fetch", "extract"] as const;
+
+  it("loses it when a paid measured job ends `error`", () => {
+    expect(
+      fateReason({ ...paid, status: "error", failedStep: "hierarchy", steps: ["hierarchy"] }),
+    ).toMatch(/load 1/);
+  });
+
+  it("loses it on a requeue", () => {
+    expect(
+      fateReason({ ...paid, requeued: true, status: "queued", failedStep: null, steps: ["hierarchy"] }),
+    ).toMatch(/claim/i);
+  });
+
+  it("loses it on a wave that fell back", () => {
+    expect(
+      fateReason({ ...paid, waveFailed: true, status: "done", failedStep: null, steps: ["hierarchy"] }),
+    ).toMatch(/wave/i);
+  });
+
+  it("says nothing about a job that finished", () => {
+    expect(fateReason({ ...paid, status: "done", failedStep: null, steps: ["hierarchy"] })).toBeNull();
+  });
+
+  /* The rehearsal's expected ending: the LAST step of the list fails, because
+     publishing needs a tree and a tree needs a model call. */
+  it("is not lost by a dry run failing at its last free step", () => {
+    expect(
+      fateReason({ ...paid, dryRun: true, status: "error", failedStep: "extract", steps }),
+      "the rehearsal's own expected ending must not stop its siblings",
+    ).toBeNull();
+  });
+
+  /* But a dry run that fails EARLY is a real failure, and the rehearsal should
+     show it propagating — which is the whole of item 4. */
+  it("is lost by a dry run failing before its last free step", () => {
+    expect(
+      fateReason({ ...paid, dryRun: true, status: "error", failedStep: "fetch", steps }),
+      "a rehearsal that cannot show a real failure reaching its siblings is not a rehearsal of it",
+    ).toMatch(/load 1/);
+  });
+
+  it("is lost by a dry run that requeues", () => {
+    expect(
+      fateReason({ ...paid, dryRun: true, requeued: true, status: "queued", failedStep: null, steps }),
+    ).not.toBeNull();
   });
 });
 

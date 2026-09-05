@@ -723,11 +723,20 @@ export function requeueFinding(opts: {
  * deadline.
  *
  * **What this can and cannot do**, because the whole of DPN-29 is that these
- * claims must be exact. It is checked before each **claim**, so no further step
- * and no re-drive begins after the fate is lost. It cannot reach inside a
- * `hierarchy` call already in flight — that is the pipeline's, and `src/` is not
- * this eval's to change. The honest verb is **stops starting**, not stops
- * spending.
+ * claims must be exact — and the first version of this paragraph got it wrong,
+ * which is DPN-30. It has two halves, and the second exists because the first
+ * was not enough:
+ *
+ * - **Before each claim**, `lost()` refuses: no further step and no re-drive.
+ * - **Inside a running claim**, `signal` cancels. One claim runs the *whole*
+ *   `hierarchy` step — structure call, expansion wave **and a full pass of
+ *   labels**, which `generateHierarchy` starts even after the wave failed — so
+ *   "stops starting" was true of steps and false of calls, and up to ~$10.80 of
+ *   phase D could still be bought after question 5 was lost.
+ *
+ * What remains uncancelled is **the single request already in flight**, which
+ * may still be billed by the provider. That is the honest bound; it is not "a
+ * whole label pass", which is what this used to say.
  *
  * The first reason is kept because the first reason is the cause; the ones after
  * it are consequences, and a report that quoted the last would name the wrong
@@ -738,16 +747,86 @@ export interface PhaseFate {
   lose: (why: string) => void;
   /** The reason this phase can no longer answer, or `null` while it still can. */
   lost: () => string | null;
+  /**
+   * **Aborts the instant the fate is first lost**, and never otherwise.
+   *
+   * This is the half that reaches *inside* a claim, and it exists because
+   * stopping before the next claim was not enough (DPN-30). One claim runs the
+   * whole `hierarchy` step, and that step buys a structure call, an expansion
+   * wave **and a whole pass of labels** — `generateHierarchy` catches a failed
+   * wave and falls straight through to `generateLabels` regardless
+   * (src/hierarchy.ts § the `deepenFailed` catch). So a sibling could *begin* an
+   * entire label pass after question 5 was already unanswerable.
+   *
+   * `announcing` combines this into the measured step's `ctx.signal`, and `src/`
+   * already threads that signal where it needs to go — **read rather than
+   * assumed**: label batches are queued *with* it (`src/labels.ts` §
+   * `queue.add(…, { signal })`), so an abort drops the ones that have not
+   * started; the wave's own calls carry it through `liveExpansionExecutor`; and
+   * `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+   * wait, never a call in flight"*, which is exactly the bound to quote.
+   *
+   * **Only a lost fate aborts.** `ctx.signal` keeps doing its own job beside it.
+   */
+  signal: AbortSignal;
 }
 
 export function startPhaseFate(): PhaseFate {
   let why: string | null = null;
+  const controller = new AbortController();
   return {
     lose(reason: string): void {
-      if (why === null) why = reason;
+      if (why !== null) return;
+      why = reason;
+      /* Aborting inside the same guard is what makes "lost" and "cancelled" one
+         fact rather than two that can drift apart. */
+      controller.abort(new Error(`Phase D was already lost: ${reason}`));
     },
     lost: () => why,
+    signal: controller.signal,
   };
+}
+
+/**
+ * **Does this job's ending lose the phase for its siblings, or is it the
+ * rehearsal ending the way a rehearsal ends?**
+ *
+ * The fate used to be disarmed wholesale under `--dry-run`, and for a good
+ * reason: every rehearsal job is *expected* to fail at its last free step, so
+ * the first one to do so would stop its siblings and the rehearsal would stop
+ * being a faithful shape of the paid run — the one thing it is for
+ * (docs/postmortems/260905b-…-clean-run-over-zero-jobs.md). But that also meant
+ * the free run could never show the one thing DPN-26 and DPN-30 are about: a
+ * live failure reaching its siblings. ⟨Greg, 2026-09-05.⟩
+ *
+ * The distinction that lets both be true: **the expected ending is a failure at
+ * the last step this job was asked to run.** A failure earlier in the list, a
+ * requeue, or a wave that fell back are real failures even in a rehearsal, and
+ * lose the phase there too.
+ *
+ * Pure, so the rehearsal's own ending can be watched *not* losing it.
+ */
+export function fateReason(opts: {
+  label: string;
+  dryRun: boolean;
+  status: JobStatus | undefined;
+  requeued: boolean;
+  waveFailed: boolean;
+  /** The step that errored, where one did. */
+  failedStep: StepName | null;
+  /** The steps this job was asked to run, in order. */
+  steps: readonly StepName[];
+}): string | null {
+  if (opts.requeued) {
+    return `${opts.label} handed its claim back at its own deadline and was not re-driven`;
+  }
+  if (opts.waveFailed) return `${opts.label}'s deepening wave fell back to wave 1`;
+  if (opts.status === "done") return null;
+  /* The rehearsal's expected ending, and only that: publishing needs a tree and
+     a tree needs a model call, so a free job fails at the end of its list. */
+  const last = opts.steps.at(-1) ?? null;
+  if (opts.dryRun && opts.failedStep !== null && opts.failedStep === last) return null;
+  return `${opts.label} ended \`${opts.status ?? "unknown"}\` rather than \`done\``;
 }
 
 /* ------------------------------------------------- the checkpoint file -- */

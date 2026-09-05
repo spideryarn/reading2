@@ -1632,6 +1632,47 @@ so no other job can serialise them. I had asserted the contrary three times. Sol
 replaces mine and is the sentence to quote: **"it no longer starts paid measured work when the
 rendezvous already knows Q5 is impossible."**
 
+**And a seventh review found the sixth instance of the class, one level below where the fifth was
+fixed.** ⟨GPT Sol, 2026-09-05.⟩
+
+- **The shared fate stopped new claims, not new calls** (DPN-30). One claim runs the *whole*
+  `hierarchy` step, and that step buys a structure call, an expansion wave **and a whole pass of
+  labels** — `generateHierarchy` catches a failed wave and falls straight through to `generateLabels`
+  regardless (`src/hierarchy.ts`, the `deepenFailed` catch). So the exact DPN-26 scenario survived at
+  the level below: after question 5 was known unanswerable, a sibling could still *begin* an entire
+  label pass. My own sentence — *"a call already in flight finishes"* — was the overclaim, which is
+  the DPN-29 standard failing on the sentence DPN-29 wrote. Up to about **$10.80 of phase D's
+  $14.20** was exposed: the book's $7.40 pass plus whatever remained of the other load's ~$3.40.
+
+  **It was fixable without touching `src/`, and the fix is the abort path `src/` already documents.**
+  The claim's own `AbortController` is private to `advanceJobWith`, so the *claim* cannot be
+  cancelled — and does not need to be. `announcing` already intercepts `run(ctx, …)`, so it hands the
+  step a `ctx` whose `signal` is `AbortSignal.any([ctx.signal, fate.signal])`; `StepContext` is plain
+  data whose `report` is an arrow closing over the step, so a shallow spread carries the rest across
+  intact. Only a *lost* fate aborts, and `ctx.signal` keeps doing its own job. What that buys was read
+  out of `src/` rather than assumed: label batches are queued **with** the signal
+  (`src/labels.ts` § `queue.add(…, { signal })`), and `tests/labels-batching.test.ts` already pins the
+  consequence — *"the callback must never run either, or the 'stop paying' half of fail-fast buys
+  nothing"*. The honest remaining bound is **the single request already in flight**, which may still
+  be billed.
+- **`peakConcurrency` had become a tautology, and `fullConcurrencyMs` replaces it.** Sol confirmed
+  the argument: given three valid completions, all three clocks open before `arrive()` returns and the
+  gate says go only once all three have arrived, so `peakConcurrency === 3` is *constructed* and false
+  only if a clock is corrupt. It is kept as the wiring check it has become. The load measurement is
+  now the longest interval with all three genuinely in flight — `min(finishedAt) - max(startedAt)` —
+  held to a floor **declared before the run and printed in preflight**, so it cannot be chosen after
+  the figure is seen. It is bounded by the shortest of the three, which is the point: below the floor,
+  question 5 reports *latency after a synchronised start*, not sustained three-job load.
+- **The rehearsal could not exercise the failure path**, which was a fair hit: the fate was disarmed
+  wholesale under `--dry-run`, so the one thing DPN-26 and DPN-30 are about — a live failure reaching
+  its siblings — was the one thing the free run could never show. `fateReason` draws the line
+  instead: a rehearsal job failing at the **last** step it was asked to run is the expected ending and
+  loses nothing, while a failure earlier in the list, a requeue, or a fallen-back wave lose the phase
+  in the rehearsal exactly as in the paid run.
+- Non-blocking, fixed with them: `budgetReport` still told a reader that another agent could have
+  serialised a successful gate. It cannot, for the reason DPN-29 established, and a peak below three
+  now means **a clock is wrong** rather than that the phase was serialised.
+
 **The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
 job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global
 variable across that call — so two overlapping `enqueue`s race on it and one job runs production's

@@ -144,6 +144,7 @@ import {
   type GateVerdict,
   type CostEstimate,
   estimate,
+  fateReason,
   fileFixture,
   formatEstimate,
   jobIntegrityFindings,
@@ -214,6 +215,31 @@ const LOAD_RENDEZVOUS_TIMEOUT_MS = 3 * 60_000;
  * `STEP_BUDGET_MS.hierarchy` is reading a number with idle waiting inside it.
  */
 const NOTABLE_HOLD_MS = 5_000;
+
+/**
+ * **How long all three measured steps must be in flight *together* before
+ * question 5 may be quoted as an answer about load.**
+ *
+ * Declared here, printed in preflight, and passed into `budgetReport` — so the
+ * number the report holds itself to is one chosen **before** the run spent
+ * rather than after the figure was seen. ⟨Greg, 2026-09-05.⟩
+ *
+ * **Why a floor at all.** `peakConcurrency` used to be the load check and is now
+ * arranged by construction: the rendezvous releases all three within one turn of
+ * the event loop, so an instant of triple overlap is guaranteed to any run that
+ * gets that far. What is *not* guaranteed is duration, and duration is bounded by
+ * the **shortest** of the three — the load articles' `hierarchy`, which is far
+ * shorter than a book's 658-778 s.
+ *
+ * **Why sixty seconds.** Against a 700 s budget it is under a tenth of the
+ * book's step: below that, whatever the book's clock says is a clock for a step
+ * that was contended at its beginning and alone for the rest, and calling it
+ * "under load" would be the kind of overclaim this harness keeps having to
+ * retract. It is a floor on what is worth quoting, **not** a prediction that the
+ * run will clear it — and if you think it will not, that is an argument for not
+ * buying phase D rather than for lowering the number afterwards.
+ */
+const FULL_CONCURRENCY_FLOOR_MS = 60_000;
 
 /**
  * **How long any one read of the ledger may take before it gives up and says
@@ -410,11 +436,13 @@ async function driveToDone(
     if (Date.now() - startedAt > JOB_TIMEOUT_MS) {
       throw new Error(`${job.slug}: still not done after ${JOB_TIMEOUT_MS / 60_000} minutes`);
     }
-    /* **Asked before every claim, which is the whole invariant** (DPN-26). The
+    /* **Asked before every claim, which is half the invariant** (DPN-26). The
        three measured jobs share one fate, and once any of them has lost it none
-       of the others starts more paid work: no further step, and no re-drive. It
-       cannot reach inside a call already in flight — so this **stops starting**,
-       and does not stop spending. `startPhaseFate`. */
+       of the others begins another step or a re-drive. The other half is inside
+       a claim that is already running, where this check cannot reach: the fate's
+       abort signal, combined into the measured step's own `ctx.signal` by
+       `announcing`, which is what stops a running step buying the calls it has
+       not made yet (DPN-30). `startPhaseFate`. */
     const lost = opts.fate?.lost() ?? null;
     if (lost !== null) {
       return { job, elapsedMs: Date.now() - startedAt, requeuedAt: null, abandoned: lost };
@@ -589,6 +617,7 @@ function announcing(
   base: StepRegistry,
   announce: NonNullable<JobSpec["announce"]>,
   dryRun: boolean,
+  fate: PhaseFate | undefined,
 ): StepRegistry {
   const step = base[announce.step];
   return {
@@ -599,7 +628,22 @@ function announcing(
         const verdict = await announce.arrive(ctx.slug);
         const refuse = abandonStep({ verdict, dryRun, slug: ctx.slug, step: announce.step });
         if (refuse !== null) throw refuse;
-        return step.run(ctx, store, checkpoints);
+        /* **The step runs under its own signal AND the phase's** — DPN-30, and
+           the only lever this eval has that reaches inside a claim. The claim's
+           own `AbortController` is private to `advanceJobWith`, so the phase
+           cannot cancel the *claim*; it does not need to. `ctx` is a plain data
+           object whose `report` is an arrow closing over the step (src/jobs.ts §
+           the `StepContext` literal), so a shallow spread carries `dir`,
+           `htmlFile`, `deadlineAt`, `cacheArticle` and the rest across intact,
+           and only `signal` is replaced.
+
+           `AbortSignal.any` rather than a replacement: **`ctx.signal` keeps
+           doing its own job**, and only a *lost fate* adds a second reason to
+           stop. The same composition `src/labels.ts` and
+           `src/hierarchy-deepen.ts` already make. */
+        if (fate === undefined) return step.run(ctx, store, checkpoints);
+        const under = { ...ctx, signal: AbortSignal.any([ctx.signal, fate.signal]) };
+        return step.run(under, store, checkpoints);
       },
     },
   } as StepRegistry;
@@ -633,7 +677,7 @@ async function enqueueJob(ctx: RunContext, spec: JobSpec): Promise<QueuedJob> {
   const base: StepRegistry = spec.ingress
     ? { ...STEPS, fetch: fixtureFetch(spec.ingress.fixture, spec.ingress.bytes, spec.url ?? "") }
     : STEPS;
-  const registry = evalRegistry(spec.announce ? announcing(base, spec.announce, ctx.dryRun) : base);
+  const registry = evalRegistry(spec.announce ? announcing(base, spec.announce, ctx.dryRun, spec.fate) : base);
   const job: Job = await enqueue({
     slug: spec.slug,
     ...(spec.url !== null ? { url: spec.url } : {}),
@@ -730,21 +774,45 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
   /**
    * **Tell the siblings, and tell them at the instant this job stopped** — not
    * after its ledger and its records have been read, which takes seconds the
-   * other two spend. Never under `--dry-run`: every rehearsal job is *expected*
-   * to fail at its last free step, so the first one to do so would stop its
-   * siblings claiming and the rehearsal would stop being a faithful shape of the
-   * paid run — the one thing it is for
-   * (docs/postmortems/260905b-…-clean-run-over-zero-jobs.md). The mechanism is
-   * held to `tests/deepen-eval.test.ts` instead. ⟨DPN-26.⟩
+   * other two spend. `fateReason` decides *whether* this ending counts, and it
+   * is where the rehearsal earns its faithfulness: a dry run's job failing at
+   * its **last** free step is the expected ending and loses nothing, while a
+   * failure earlier in the list, a requeue or a fallen-back wave lose the phase
+   * in the rehearsal exactly as they would in the paid run. ⟨DPN-26, DPN-30.⟩
+   *
+   * `fateBefore` is read first, so a job can tell "I lost it" from "it was
+   * already lost when I stopped" — the second is a casualty and says so.
    */
-  const loseTheFate = (why: string): void => {
-    if (!measured || ctx.dryRun) return;
-    spec.fate?.lose(why);
+  const fateBefore = spec.fate?.lost() ?? null;
+  const loseTheFate = (waveFailed: boolean): void => {
+    if (!measured) return;
+    const why = fateReason({
+      label: spec.label,
+      dryRun: ctx.dryRun,
+      status: driven.job.status,
+      requeued: driven.requeuedAt !== null,
+      waveFailed,
+      failedStep: driven.job.steps.find((st) => st.status === "error")?.name ?? null,
+      steps: spec.steps,
+    });
+    if (why !== null) spec.fate?.lose(why);
   };
-  if (driven.requeuedAt !== null) {
-    loseTheFate(`${spec.label} handed its claim back at its own deadline and was not re-driven`);
-  } else if (driven.job.status !== "done") {
-    loseTheFate(`${spec.label} ended \`${driven.job.status}\` rather than \`done\``);
+  loseTheFate(false);
+
+  /* **A step this phase cancelled**, rather than one that broke. The fate was
+     already lost when this job stopped, and its `ctx.signal` was aborted with
+     it — so whatever it was in the middle of was cut short and whatever it had
+     not started was never started. ⟨DPN-30.⟩ */
+  if (fateBefore !== null && driven.job.status !== "done" && driven.abandoned === null) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${spec.label}: this job's measured step was CANCELLED, not broken — the phase had already ` +
+        `lost the ability to answer (${fateBefore}) and the fate's abort signal is combined into ` +
+        "this step's own. Calls it had not yet made were never made; at most the one request in " +
+        "flight was paid for. Its clock is not a measurement.",
+    });
   }
 
   /* **The sibling gave up before this job could claim again.** Not a failure of
@@ -865,7 +933,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
        to be readable before it can be known. `budgetReport` wants three
        completions with a wave's stats and **no failure**, so a fallback wave
        puts three out of reach exactly as an error does. ⟨DPN-26.⟩ */
-    loseTheFate(`${spec.label}'s deepening wave fell back to wave 1`);
+    loseTheFate(true);
   }
 
   /* **Did this job stop having lost what it was bought for?** Two facts that
@@ -1082,6 +1150,7 @@ function answerTheQuestions(opts: {
     clocks,
     budgetMs: STEP_BUDGET_MS.hierarchy,
     deadlineMs: EFFECTIVE_DEADLINE_MS,
+    fullConcurrencyFloorMs: FULL_CONCURRENCY_FLOOR_MS,
     expected: opts.expectedLoadSteps,
   });
   lines.push(formatQ5(q5));
@@ -1451,9 +1520,10 @@ async function main(): Promise<void> {
     "phase D: the two load steps are HELD at their entry, and only once both are there is the book driven at all — it reaches the same entry, and all three are released together. A shared START is what the run can arrange; whether the three windows then stay open together is `peakConcurrency`'s to measure, below",
     "phase D: if the load steps do not both reach the entry, the book's pass under load is NOT DRIVEN and NOT BOUGHT — it answers question 5 and nothing else, and question 5 is then unanswerable at any price",
     "phase D: if the gate gives up with all three driven, every measured step it releases is ABANDONED and throws before it runs, so a phase that cannot answer question 5 buys nothing trying to. Those jobs end `error` by this eval's doing and each says so in a finding of its own",
-    "phase D: the three measured jobs share one fate — a failed step, a wave that fell back, or a claim handed back, and none of the others claims again. It stops them STARTING more paid work; a call already in flight is the pipeline's and finishes",
+    "phase D: the three measured jobs share one fate — a failed step, a wave that fell back, or a claim handed back, and the other two stop before their next claim AND cancel the calls their running step has not made yet. One claim runs the whole hierarchy step (structure call, wave, AND a full label pass, which starts even after the wave failed), so stopping at the claim alone left up to ~$10.80 still to be bought; the fate's abort signal is combined into the measured step's own. What is left is the single request already in flight, which may still be billed",
     "phase D: a measured job STOPS on its first requeue rather than being re-driven — a re-drive takes the rendezvous's latched verdict, runs outside the gate, and lets the queue overwrite the first attempt's clock",
     "phase D: the hierarchy STEPS' own windows reach concurrency 3, and three of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement",
+    `phase D: all three measured steps are in flight TOGETHER for at least ${(FULL_CONCURRENCY_FLOOR_MS / 1000).toFixed(0)}s — declared here, before anything is bought, so it cannot be chosen after the figure is seen. Peak concurrency 3 is ARRANGED by the rendezvous and is only a wiring check; this is the load measurement, and below the floor question 5 reports latency after a synchronised start rather than sustained three-job load`,
     "a re-asking pass that hands its claim back at its own deadline is STOPPED, not re-driven: re-claiming it buys the whole wave again",
     "candidates paired across repeats on parent-plus-range, never on `where` — refused outright if the range is missing",
     "question 1 over phases A and B only, over passes whose wave did not throw, and refused outright if it matched nothing",
@@ -1937,11 +2007,32 @@ async function runPhases(opts: {
  *    doing** and say so in a finding on their own records. *On a paid run*
  *    because `abandonStep` deliberately stands down under `--dry-run`, whose
  *    jobs are expected to fail at their last free step anyway.
- * 3. **Once any of the three has lost the phase, none of them starts more paid
- *    work.** A measured step that failed, a wave that fell back, a claim handed
- *    back: any of them and the other two stop before their next claim
- *    (`startPhaseFate`). The honest verb is **stops starting** — a `hierarchy`
- *    call already in flight is the pipeline's and finishes and is paid for.
+ * 3. **Once any of the three has lost the phase, the other two stop before their
+ *    next claim AND cancel the calls their running step has not yet made.** A
+ *    measured step that failed, a wave that fell back, a claim handed back: any
+ *    of them, and `startPhaseFate` both refuses the next claim and aborts a
+ *    signal that `announcing` has combined into the measured step's own
+ *    `ctx.signal`.
+ *
+ *    **The first half alone was not enough, and the sentence that said it was is
+ *    the one DPN-29's standard let through** (DPN-30). One claim runs the *whole*
+ *    `hierarchy` step, and that step buys a structure call, an expansion wave and
+ *    a whole pass of labels — `generateHierarchy` catches a failed wave and falls
+ *    straight through to `generateLabels` regardless. So "a call already in
+ *    flight finishes" did not cover the calls a *running* step had not started
+ *    yet, and up to about **$10.80** of phase D's $14.20 could still be bought
+ *    after question 5 was known unanswerable: the book's $7.40 pass, plus
+ *    whatever of the other load article's ~$3.40 remained.
+ *
+ *    What the abort really buys, read out of `src/` rather than assumed: label
+ *    batches are queued *with* the signal (`src/labels.ts` §
+ *    `queue.add(…, { signal })`), so **the ones that have not started are
+ *    dropped**; the wave's calls carry it through `liveExpansionExecutor`; and
+ *    `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+ *    wait, never a call in flight"*. So the honest bound is now **the single
+ *    request already in flight**, which may still be billed, rather than a whole
+ *    label pass. The claim itself cannot be aborted — its `AbortController` is
+ *    private to `advanceJobWith` — and does not need to be.
  * 4. **Whether the three windows stayed open together long enough to measure is
  *    NOT guaranteed, and is measured.** Two things can end the overlap, and the
  *    one I kept repeating is not one of them: **another agent's job cannot

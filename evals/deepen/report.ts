@@ -885,6 +885,44 @@ export function peakConcurrency(
   return peak;
 }
 
+/**
+ * **How long every one of these windows was open at the same time**, which is
+ * `min(finishedAt) - max(startedAt)` and `0` where they never all were.
+ *
+ * **This is what `peakConcurrency` stopped being able to tell you.** The start
+ * rendezvous releases the three measured steps within one turn of the event
+ * loop, and a measured job that requeues is refused rather than re-driven — so
+ * given three valid completions, all three clocks open before `arrive()` returns
+ * and the gate says go only once all three have arrived. `peakConcurrency === 3`
+ * is therefore **constructed**: true of any run that got that far, false only if
+ * a clock is corrupt. It confirms the wiring and discovers nothing.
+ * ⟨GPT Sol, confirming the argument, 2026-09-05.⟩
+ *
+ * This one is bounded by the **shortest** of the three, which is the fact that
+ * matters: the load articles' `hierarchy` is far shorter than a book's
+ * 658-778 s, so it says how much of the book's step was really contended rather
+ * than letting an instant of overlap stand in for the whole of it.
+ *
+ * `null` — not zero — where any window is missing an end, because an unfinished
+ * window makes the answer unknown and a zero would read as measured.
+ */
+export function fullConcurrencyMs(
+  windows: readonly { startedAt?: string | null | undefined; finishedAt?: string | null | undefined }[],
+): number | null {
+  if (windows.length === 0) return null;
+  let latestStart = Number.NEGATIVE_INFINITY;
+  let earliestEnd = Number.POSITIVE_INFINITY;
+  for (const w of windows) {
+    if (!w.startedAt || !w.finishedAt) return null;
+    const from = Date.parse(w.startedAt);
+    const to = Date.parse(w.finishedAt);
+    if (Number.isNaN(from) || Number.isNaN(to)) return null;
+    if (from > latestStart) latestStart = from;
+    if (to < earliestEnd) earliestEnd = to;
+  }
+  return Math.max(0, earliestEnd - latestStart);
+}
+
 export interface Q5Budget {
   budgetMs: number;
   deadlineMs: number;
@@ -896,8 +934,18 @@ export interface Q5Budget {
   expected: number;
   /** Steps that ran to `done`, carried a clock, and left a wave's stats behind. */
   completed: number;
-  /** The most of those steps that were ever in flight at once. */
+  /**
+   * The most of those steps that were ever in flight at once. **A wiring check
+   * rather than a measurement** — `fullConcurrencyMs` says why.
+   */
   peakConcurrency: number;
+  /**
+   * **How long all of them were in flight together**, and `null` where that is
+   * unknown. The real load figure; `peakConcurrency` is constructed.
+   */
+  fullConcurrencyMs: number | null;
+  /** The floor this run declared BEFORE it spent, so it could not be chosen after. */
+  fullConcurrencyFloorMs: number;
   /** **May this answer be quoted?** Every clock present, and all of them at once. */
   answerable: boolean;
   findings: DeepenFinding[];
@@ -937,6 +985,14 @@ export function budgetReport(opts: {
   deadlineMs: number;
   /** How many steps this phase planned to run — three, for phase D. */
   expected: number;
+  /**
+   * **The floor for `fullConcurrencyMs`, declared before the run spends.**
+   *
+   * Passed in rather than hard-coded here so that the number the report holds
+   * itself to is the same one preflight printed — chosen before the figure was
+   * seen, which is the whole point of a threshold. `run.ts` § `FULL_CONCURRENCY_FLOOR_MS`.
+   */
+  fullConcurrencyFloorMs: number;
 }): Q5Budget {
   const measured = opts.clocks.filter((c) => c.ms !== null);
   const completed = opts.clocks.filter(
@@ -946,6 +1002,7 @@ export function budgetReport(opts: {
   const selfAborted = opts.clocks.filter((c) => (c.outOfTime ?? 0) > 0 || (c.withheld ?? 0) > 0);
   const wasted = opts.clocks.filter((c) => (c.uncheckpointed ?? 0) > 0);
   const peak = peakConcurrency(completed);
+  const full = fullConcurrencyMs(completed);
   const findings: DeepenFinding[] = [];
 
   if (opts.expected <= 0 || completed.length !== opts.expected) {
@@ -968,9 +1025,30 @@ export function budgetReport(opts: {
       message:
         `Question 5 is "does it fit the budget UNDER LOAD", and the ${opts.expected} steps reached ` +
         `a peak of ${peak} in flight at once. They ran ${peak <= 1 ? "serially" : "partly serially"}, ` +
-        "so the wall clocks below are single-job clocks: this box is shared, the queue's cap is " +
-        "global, and another agent's dev server holding a claim slot serialises them without " +
-        "anything else saying so.",
+        "so the wall clocks below are single-job clocks. The start rendezvous releases all three " +
+        "together, so a peak below that means a CLOCK IS WRONG — a step that never ran, or one " +
+        "whose timestamps were replaced by a re-drive — rather than the phase having been " +
+        "serialised. (It cannot have been: the gate opens only when all three hold claims, which " +
+        "is all three of the queue's slots, so no other job can get between them afterwards. This " +
+        "line said otherwise until 2026-09-05 — DPN-29.)",
+    });
+  } else if (full === null || full < opts.fullConcurrencyFloorMs) {
+    /* **The measurement `peakConcurrency` stopped being.** An instant of triple
+       overlap is now arranged by construction, so the question worth asking is
+       how LONG all three were up — and the floor is declared before the run and
+       printed in preflight, so it cannot be chosen after seeing the number. */
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `Question 5 is "does it fit the budget UNDER LOAD", and all ${opts.expected} steps were ` +
+        `in flight together for ${full === null ? "an unknown time" : `${(full / 1000).toFixed(1)}s`} ` +
+        `against the ${(opts.fullConcurrencyFloorMs / 1000).toFixed(0)}s floor this run declared ` +
+        "before it spent. The steps did start together — the rendezvous arranges that, which is " +
+        "why `peakConcurrency` reaching 3 confirms the wiring and measures nothing — but the load " +
+        "ended when the shortest of them did, and the budget reading below is for a step that was " +
+        "contended only at its beginning. Quote it as latency after a synchronised start, not as " +
+        "sustained three-job load.",
     });
   }
 
@@ -986,6 +1064,8 @@ export function budgetReport(opts: {
     expected: opts.expected,
     completed: completed.length,
     peakConcurrency: peak,
+    fullConcurrencyMs: full,
+    fullConcurrencyFloorMs: opts.fullConcurrencyFloorMs,
     answerable,
     findings,
     reading:
@@ -1281,7 +1361,15 @@ export function formatQ5(q: Q5Budget): string {
   );
   lines.push(
     `  completed ${q.completed} of ${q.expected} expected; peak ${q.peakConcurrency} step(s) in ` +
-      `flight at once (must be ${q.expected})`,
+      `flight at once (must be ${q.expected}; the rendezvous arranges this, so it is a wiring ` +
+      "check rather than a measurement)",
+  );
+  lines.push(
+    `  all ${q.expected} in flight TOGETHER for ` +
+      `${q.fullConcurrencyMs === null ? "an unknown time" : `${(q.fullConcurrencyMs / 1000).toFixed(1)}s`}` +
+      ` against a ${(q.fullConcurrencyFloorMs / 1000).toFixed(0)}s floor declared before the run. ` +
+      "This is the load figure; below the floor, the times above measure latency after a " +
+      "synchronised start, not sustained three-job load.",
   );
   lines.push(`  ${q.reading}`);
   if (q.selfAborted.length > 0) {
