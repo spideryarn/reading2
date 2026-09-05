@@ -10,7 +10,15 @@
  *
  * See docs/project/library.md § What you can do to a card.
  */
-import { useCallback, useState, type ReactElement } from "react";
+import {
+  cloneElement,
+  useCallback,
+  useState,
+  type Dispatch,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement,
+  type SetStateAction,
+} from "react";
 import {
   Archive,
   Check,
@@ -431,6 +439,9 @@ const TIPS = {
  * Tooltip.tsx § `keepSide` gives about rows specifically — without it a card
  * too wide to centre is thrown onto the cross axis and lands on top of the very
  * buttons the reader is about to hover.
+ *
+ * **And on a finger, the first tap reads a control and the second presses it**
+ * — `pressCapture` below. docs/project/touch.md § Reveal, then commit.
  */
 export function Actions({
   entry,
@@ -444,8 +455,105 @@ export function Actions({
   const [copied, setCopied] = useState(false);
   const [rerunning, setRerunning] = useState(false);
 
+  /**
+   * Which control's card is open, and whether a finger opened it.
+   *
+   * **One piece of state for five controlled tooltips, which is the shape that
+   * took the spine's hover cards away for a day.** Once a tooltip is
+   * controlled, every route Floating UI has to `onOpenChange(false)` becomes a
+   * route into this value — `useDelayGroup` closes every *other* member the
+   * instant one opens, and `useHover`'s close timer fires 90ms behind the
+   * pointer without asking who is open by then. So the close is guarded by
+   * identity in `ActionTip`, and that guard is the whole reason this is safe:
+   * docs/postmortems/260828g-spine-hover-cards.md, whose last paragraph names
+   * this exact situation as the one to watch for.
+   *
+   * `byTouch` decides only whether the card says "tap again" — a mouse reader
+   * is already being told everything by hovering.
+   */
+  const [armed, setArmed] = useState<{ id: ActionKey; byTouch: boolean } | null>(null);
+
+  /**
+   * **The whole touch gesture, in one handler on the row.**
+   *
+   * Capture phase, so it runs *before* the control's own click and can cancel
+   * the press outright — which is what makes one handler enough for five
+   * controls that are not alike. Two of them can be an `IconButton` that
+   * swallows its own click (IconButton.tsx § `disabled`), and one of them is an
+   * `<a>` whose default is to navigate; a per-control design would need a hole
+   * punched in the first and a `preventDefault` threaded through the second.
+   * Here the button goes on refusing its own click and the anchor never sees
+   * the event at all.
+   *
+   * **`pointerType`, not a media query.** `(hover: none)` describes the UA's
+   * *primary* pointer, so a touchscreen laptop would jump on the first tap and
+   * a tablet with a mouse plugged in would need two clicks — both hybrids, both
+   * common, both wrong. This is a fact about *this press*. That is
+   * `bandPress`'s own second version (Spine.tsx), on GPT Sol's correction of
+   * 2026-08-27; optional-chained the same way, because a synthetic click — a
+   * test, an extension — carries no pointer, and the safe reading of "no
+   * pointer" is "not a finger", which presses.
+   *
+   * A mouse therefore takes the `commit` branch every time and the event passes
+   * through untouched, so nothing about pointer behaviour changes.
+   */
+  const pressCapture = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      const id = actionAt(e.target);
+      if (!id) return;
+      /* **`pen` as well as `touch`**, because docs/project/touch.md § An Apple
+         Pencil counts as a finger says so: iPadOS reports a Pencil as `pen`, it
+         cannot hover any more than a finger can, and `swipe.ts` already accepts
+         both. Taking only `touch` would have left a Pencil committing blind on
+         the one row where the card is the point — and Floating UI treats `pen`
+         as mouse-like, so its own hover would not have opened the card either.
+         GPT Sol, 2026-09-05. */
+      const finger =
+        (e.nativeEvent as PointerEvent).pointerType === "touch" ||
+        (e.nativeEvent as PointerEvent).pointerType === "pen";
+      /* `armed?.id !== id` rather than `armed === null`, so a finger moving
+         along the row re-reveals rather than firing at whatever it lands on —
+         the row can be read by walking it. Spine.tsx § `bandPress`. */
+      if (finger && armed?.id !== id) {
+        e.preventDefault();
+        e.stopPropagation();
+        setArmed({ id, byTouch: true });
+        return;
+      }
+      /* Committing. **Only a card a finger revealed is taken down**, and that
+         distinction is the difference between this changing nothing for a mouse
+         and it changing something: an unconditional clear closes a
+         *hover-opened* card the moment you click Copy, and leaves it closed
+         while the pointer is still sitting on the button — `useHover` has
+         already fired its `mouseenter` and will not fire another. Before these
+         tooltips were controlled, `useDismiss`'s `referencePress: false` meant
+         pressing a trigger never closed its own card, and that is worth
+         preserving. A finger's card, by contrast, has done its job the moment
+         the press it was explaining goes through. GPT Sol, 2026-09-05. */
+      setArmed((prev) => (prev?.byTouch ? null : prev));
+    },
+    [armed],
+  );
+
   const copy = useCallback(() => {
     const url = new URL(readHref(entry.slug), window.location.origin).toString();
+    /* **There may be no clipboard object at all**, and this was the one copy
+       button in the app that did not say so. `navigator.clipboard` is undefined
+       outside a secure context, so on anything but https or localhost this threw
+       a `TypeError` out of a React event handler — past the `.catch` below,
+       which only ever sees a *rejected promise* — and the reader got a button
+       that did nothing and no message.
+
+       A statement rather than `navigator.clipboard?.writeText(…)`, because the
+       optional chain evaluates to `undefined` and then `.then` throws on it:
+       the same trap, moved one line down. BlockGutter.tsx and
+       AccessSharing.tsx already guard it this way and say so; this one was the
+       odd one out, found on 2026-09-05 when a new touch test pressed Copy and
+       vitest reported the uncaught `TypeError`. */
+    if (!navigator.clipboard) {
+      shelf.report("Couldn't copy the link: this browser won't give the page a clipboard here.");
+      return;
+    }
     /* Caught, because `writeText` rejects for real reasons — a page without
        focus, a browser that refuses the permission — and an unhandled rejection
        here left the reader looking at a button that had simply done nothing. */
@@ -517,15 +625,24 @@ export function Actions({
        hover, so without it these buttons stayed invisible AND hit-testable —
        controls you cannot see but can press by accident. Caught by a
        cross-family review, 2026-08-26. */
-    <div className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100">
+    <div
+      className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100"
+      onClickCapture={pressCapture}
+    >
       <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
-        <ActionTip tip={TIPS.edit}>
+        <ActionTip id="edit" armed={armed} onArm={setArmed} tip={TIPS.edit} commits>
           <IconButton label="Edit title" titled={false} onClick={onEdit}>
             <Pencil size={14} />
           </IconButton>
         </ActionTip>
 
-        <ActionTip tip={hasWebUrl ? TIPS.rerun : entry.url ? TIPS.rerunNotWeb : TIPS.rerunNoUrl}>
+        <ActionTip
+          id="rerun"
+          armed={armed}
+          onArm={setArmed}
+          tip={hasWebUrl ? TIPS.rerun : entry.url ? TIPS.rerunNotWeb : TIPS.rerunNoUrl}
+          commits={hasWebUrl && !rerunning}
+        >
           {/* **The name says which of the two absences this is**, and not merely
               that there is one. A screen reader gets no card, so the parenthesis
               is the only place the reason reaches it — and a name reading "no
@@ -541,7 +658,13 @@ export function Actions({
           </IconButton>
         </ActionTip>
 
-        <ActionTip tip={hasWebUrl ? TIPS.open : entry.url ? TIPS.openNotWeb : TIPS.openNoUrl}>
+        <ActionTip
+          id="open"
+          armed={armed}
+          onArm={setArmed}
+          tip={hasWebUrl ? TIPS.open : entry.url ? TIPS.openNotWeb : TIPS.openNoUrl}
+          commits={hasWebUrl}
+        >
           {hasWebUrl ? (
             <a
               href={entry.url}
@@ -582,8 +705,18 @@ export function Actions({
             over a shelf that knows perfectly well which articles are shared —
             `visibility` is on the entry precisely so the shelf can tell.
             GPT Sol, 2026-09-05. */}
-        <ActionTip tip={entry.visibility === "public" ? TIPS.copyShared : TIPS.copy}>
-          <IconButton label={copied ? "Copied" : "Copy link"} titled={false} onClick={copy}>
+        <ActionTip
+          id="copy"
+          armed={armed}
+          onArm={setArmed}
+          tip={entry.visibility === "public" ? TIPS.copyShared : TIPS.copy}
+          commits
+        >
+          <IconButton
+            label={copied ? "Copied" : "Copy link"}
+            titled={false}
+            onClick={copy}
+          >
             {copied ? <Check size={14} className="tw:text-highlight" /> : <Copy size={14} />}
           </IconButton>
         </ActionTip>
@@ -597,7 +730,7 @@ export function Actions({
             word for *this cannot be undone* and undoing it is the whole design
             (docs/project/library.md § Archive, and Undo is the confirmation).
             The card now says the same thing in a sentence. */}
-        <ActionTip tip={TIPS.archive}>
+        <ActionTip id="archive" armed={armed} onArm={setArmed} tip={TIPS.archive} commits>
           <IconButton
             label="Archive"
             titled={false}
@@ -625,18 +758,75 @@ function rerunLabel(entry: LibraryEntry, hasWebUrl: boolean, rerunning: boolean)
 }
 
 /**
+ * The five controls, named. `ActionTip` puts one on its trigger as
+ * `data-action`, and `actionAt` reads it back.
+ *
+ * The union is **derived from the list** rather than written beside it, so the
+ * two cannot drift — a name added to one is added to both or neither.
+ */
+const KEYS = ["edit", "rerun", "open", "copy", "archive"] as const;
+export type ActionKey = (typeof KEYS)[number];
+
+/**
+ * Which control the finger landed on, from wherever inside it the event started
+ * — usually the `<svg>`, sometimes its `<path>`.
+ *
+ * Read off the DOM rather than from React identity because there is one handler
+ * for the row rather than one per control (`pressCapture`), and `closest` is
+ * what turns a point into a control.
+ *
+ * **The attribute is written by `ActionTip` from its own typed `id`, never by
+ * hand in the JSX**, and that is not tidiness. `actionAt` answering `null` sends
+ * `pressCapture` down its early return, which lets the press through — so a
+ * mistyped `data-action="cop"` would not fail loudly, it would quietly restore
+ * the tap-commits-blind bug for that one control, and every test that did not
+ * happen to name it would stay green. Sourcing the attribute from the same value
+ * that keys the state makes the class of mistake unwriteable. GPT Sol,
+ * 2026-09-05.
+ *
+ * The `KEYS` check remains, because the DOM hands back a string either way and
+ * `pressCapture` compares the result against typed state.
+ */
+function actionAt(target: EventTarget | null): ActionKey | null {
+  if (!(target instanceof Element)) return null;
+  const found = target.closest("[data-action]")?.getAttribute("data-action");
+  return found && (KEYS as readonly string[]).includes(found) ? (found as ActionKey) : null;
+}
+
+/**
  * One card, in the placement the whole row shares.
  *
  * `bottom`, because the row sits at the top right of a card and in a table cell
  * on a dense row — above it is the window edge or the row before, and below it
  * is this article's own body, which is the thing the reader is least surprised
  * to have covered for a moment.
+ *
+ * **Controlled, and that is the risky part.** The card has to survive a tap and
+ * outlive the `mouseleave` a tap synthesises, which needs an owner of "which
+ * card is open" outside the tooltip — so `Actions` holds one `armed` for all
+ * five. See its docstring, and the postmortem it cites, for what that costs.
  */
 function ActionTip({
+  id,
+  armed,
+  onArm,
   tip,
+  commits,
   children,
 }: {
+  id: ActionKey;
+  armed: { id: ActionKey; byTouch: boolean } | null;
+  onArm: Dispatch<SetStateAction<{ id: ActionKey; byTouch: boolean } | null>>;
   tip: { head: string; what: string; how: string };
+  /**
+   * Whether a second tap would actually do anything.
+   *
+   * False for a control drawn unavailable, and then the card says nothing about
+   * tapping again — the first tap has already given the reader everything this
+   * control has, and inviting a second press that is designed to be refused is
+   * worse than silence.
+   */
+  commits: boolean;
   children: ReactElement<Record<string, unknown>>;
 }) {
   return (
@@ -644,9 +834,37 @@ function ActionTip({
       placement="bottom"
       keepSide
       className="tip-soon"
-      content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
+      open={armed?.id === id}
+      /**
+       * **A close only counts from the control that is actually open.**
+       *
+       * `onOpenChange(false)` is not a statement that this tooltip was open:
+       * `useDelayGroup` fires it at every *other* member the moment one opens,
+       * and `useHover`'s close timer fires it 90ms after the pointer left,
+       * by which time the card it would close may be a neighbour's. Unguarded,
+       * with one state behind five triggers, the row's cards would flicker and
+       * vanish — which is precisely what happened to the spine's fifty:
+       * docs/postmortems/260828g-spine-hover-cards.md, and this is its fix.
+       */
+      onOpenChange={(v: boolean) =>
+        onArm((prev) => (v ? { id, byTouch: false } : prev?.id === id ? null : prev))
+      }
+      content={
+        <ControlTip
+          head={tip.head}
+          what={tip.what}
+          how={tip.how}
+          tap={commits && armed?.id === id && armed.byTouch ? "Tap again to do it." : undefined}
+        />
+      }
     >
-      {children}
+      {/* **The trigger is marked here, from the same `id` that keys the state**
+          — see `actionAt` for why writing it by hand in the JSX is a bug
+          waiting to happen rather than a style. `cloneElement` rather than a
+          wrapper element, because the row is a flex line of 28px squares and an
+          extra box in it would have to be given a layout of its own; `Tooltip`
+          clones this again for its ref and handlers, and props survive both. */}
+      {cloneElement(children, { "data-action": id })}
     </Tooltip>
   );
 }
