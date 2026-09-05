@@ -1343,9 +1343,11 @@ Stage 5b goes through the queue.
 self-contained eval that
 drives the four phases above through the **production** ingest queue and answers all five questions
 from one run's artefacts. `report.ts` is the arithmetic and has no IO, `harness.ts` owns the ingress
-and the levers, `run.ts` only drives and prints; the cost eval's three proved mechanisms — the
-`scopeKind: "eval"` overlay, the fixture stage-1 step and the `pump()` silencer — are imported from
-[`evals/cost/harness.ts`](../../evals/cost/harness.ts) rather than copied.
+and the levers, `run.ts` only drives and prints; the cost eval's proved mechanisms — the
+`scopeKind: "eval"` overlay and the fixture stage-1 step — are imported from
+[`evals/cost/harness.ts`](../../evals/cost/harness.ts) rather than copied. ⟨There were three: the
+`pump()` silencer is gone, replaced by `pump: false` on the request itself — see the dated note
+below.⟩
 [`tests/deepen-eval.test.ts`](../../tests/deepen-eval.test.ts) holds it to a case per way it could
 report a clean result having measured nothing.
 
@@ -1437,6 +1439,61 @@ absent, partial or failed, printed as though it were a result**
   now rather than a note: an unchanged tree there is a coincidence, not the evidence phase C exists
   to produce.
 
+**A second review refused it again, and a third closed it.** ⟨GPT Sol, 2026-09-05.⟩ The second pass
+found seven more, two of them reopening findings the first round had been recorded as closing — which
+is the argument for reviewing the *code* as well as the plan.
+
+- **Phase C assigned over the findings array instead of appending to it**, so a fatal scope or
+  ledger-completeness finding recorded moments earlier was dropped, and nothing downstream recomputes
+  those checks. The sweep it prompted found one more of the shape: `passesOf` was called twice over
+  the same jobs, reporting a re-driven job's extra records file twice.
+- **The scope and completeness checks now run on the end-of-run ledger read as well.** Where the
+  per-job read failed, those checks had never run over those rows at all — the failure was recorded
+  and the checks it would have performed were simply skipped, so a job billed to Product could have
+  gone unreported.
+- **A fatal finding on a job that has stopped now stops the run.** Turning a failed ledger read into
+  a finding was right — a throw takes the levers down under two jobs still running — but nothing
+  acted on it: an unreadable phase A, whose records are the whole of question 1, went on to buy B, C
+  and D anyway. Phase D still drains all three before stopping.
+- **A requeued re-asking pass is retained rather than cleaned up.** "Left `queued` and resumable" was
+  a claim the harness then undid: ordinary cleanup deleted the article, which cascades to its
+  expansion checkpoint rows, so the paid answers the refusal existed to keep were thrown away under a
+  comment saying they had been kept. It retains them and goes no further, so no later job can publish
+  over that slug.
+- **`hasStats` became `hasSuccessfulStats`, and now means the wave did not fail.** When a wave
+  exhausts its redraws, `generateHierarchy` catches it, writes stats with `failed: true`, falls back
+  to wave 1, generates labels and **completes the step** — so three failed waves were `done`, carried
+  clocks, carried stats and overlapped, and question 5 read as measured. It was measuring the
+  fallback path.
+- **The estimate stopped calling itself a bound.** $40.90 is the **nominal estimate** and $85.30 the
+  **three-window requeue exposure**; neither is a bound and nothing enforces a cap. An ordinary,
+  non-re-asking pass can requeue and re-buy any answer whose best-effort checkpoint write failed, and
+  a redraw buys a second answer. The sentence claiming otherwise was an overclaim and is gone.
+- **The records file is published atomically.** Phase D reads one directory from three jobs at once
+  and could parse a sibling's file mid-write, fail, and mark the wrong job fatal
+  ([hierarchy.md](../project/hierarchy.md#deepening)). The reader also filters by slug on the
+  filename before opening anything.
+- **The run's own errors stopped replacing each other.** `reportRun` runs whether or not the phases
+  finished, so a throw from the reporting used to replace whatever had actually killed the run; both
+  travel in an `AggregateError` now, and the reporting is told that the run died so it can say so at
+  the top instead of reading like a run that finished. The end-of-run ledger re-reads are concurrent
+  and under a deadline. ⟨Where this went against Sol: he asked for a *database-side* statement
+  deadline. `costStore.forJob` takes its connection from the shared pool, so a `SET statement_timeout`
+  would land on whichever of five connections it got and outlive this function on it — a change to
+  every later query a paid job makes. The client-side deadline does the job the deadline is for,
+  which is making sure the original error still arrives; what is genuinely lost, and owed, is
+  cancelling the query at the server rather than abandoning it here.⟩
+- **Phase D lines its three windows up before it measures them.** The concurrency arithmetic was
+  right and the phase did not arrange the thing it measures: the book's job is a forced `hierarchy`
+  and starts its measured step at once, while the two load articles start at `fetch` and get there
+  only after stages 1–3. The two load jobs are driven first and announce their measured step as it
+  begins; the book is driven only once both have, and it waits **outside** a claim, because its own
+  step needs 658–778 s against a 740 s deadline and has no seconds to give away. Sol's other
+  suggestion — pre-ingest the load articles as far as `blocks`, then force three hierarchy-only jobs
+  together — cannot work, and a free `--dry-run` is what showed it: a job that stops short of a
+  publishable article fails, and a failed job's draft revision is rolled back, so the second job
+  opens on an article with no fetched document.
+
 **The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
 job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global
 variable across that call — so two overlapping `enqueue`s race on it and one job runs production's
@@ -1447,9 +1504,27 @@ is concurrent. The check that catches it reads the fixture step's own `detail` �
 message with a reader-facing sentence: the error-matching version was watched printing *"none"* over
 a run where **every fetch had gone to the network**.
 
+> **Overtaken, 2026-09-05.** `withoutTheInProcessPump` is gone: `enqueue` takes `pump: false` on the
+> request now (`src/jobs.ts` § `pump`), so the hazard is per-request and there is no global for two
+> `enqueue`s to race on. **Serial queueing is therefore no longer load-bearing** — it is kept because
+> it reads better, and phase D now says so in as many words rather than justifying itself by a race
+> that cannot happen. The `detail`-reading check outlived its bug and stays.
+
 **What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
 a model call, so every dry-run job stops at its last free step and fails, and the run prints what the
 driving proved instead of a table of zeroes.
+
+> **And what it did not prove, 2026-09-05.** For a morning it proved nothing at all: `dev` merged in
+> `unrunnableStepPlan`, which refuses `blocks` without `hierarchy` — exactly what the free step list
+> asked for — so every phase threw at `enqueue`, no job was created, and the run printed its whole
+> closing report including `Findings: none` before dying on its last line.
+> [260905b](../postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md) is the
+> write-up. The free lists are `fetch,extract` and a forced `extract` now, every list is checked
+> against the queue's own rule before anything is enqueued (`assertStepPlansRunnable`), and the
+> summaries can say *there was nothing here*. The same run also proved, for free, that **the ingest
+> cannot be split across two jobs**: a job that stops short of a publishable article fails, and a
+> failed job's draft revision is rolled back, so the second job finds no fetched document. That is
+> why phase D lines its three windows up with a start barrier rather than by pre-ingesting.
 
 ### Stage 6 — recursion, once the verdict has earned it
 
