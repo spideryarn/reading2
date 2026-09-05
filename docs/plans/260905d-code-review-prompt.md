@@ -33,9 +33,8 @@ docs/user-feedback/260905_0957-reopen-an-article-where-you-left-it.md
 ```
 
 `git diff 750c91fd -- <the tracked paths above>` shows the tracked half; read the untracked files
-directly. Not durable — I will write the resulting commit SHA into
-`docs/plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md`
-once it lands.
+directly. **Landed as `a04dc7f5d3f9`**, which closes the live candidate above: that commit is what the
+review actually saw, plus the fixes for F1–F5.
 
 **Start with** `src/web/last-view.ts` and its use in `src/web/App.tsx` (search for `useLastView`).
 That is where to begin, not the limit of scope — the manifest above is.
