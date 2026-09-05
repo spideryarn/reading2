@@ -254,14 +254,27 @@ first thing [vision.md](vision.md) asks of this feature — *scan before you com
 deciding whether to descend needs to know what the section says. The claim says it; the question is
 the door, which is the same job [§ A summary is a door](#a-summary-is-a-door) gives the block ids.
 
-### A statement is dropped; a missing question mark is repaired
+### Punctuation is normalised, never read for meaning
 
 Measured, on the first real toc/5 run — noema, 141 blocks, 2026-09-05. Six questions, none written
-deeper than a part, and **one of the six came back with no `?`**. So the terminal character is read
-as evidence of what the model wrote rather than enforced as a format: `?` is kept, a `.` or `!` is a
-statement and is dropped, anything else gets the mark added. `questionFor` has the reasoning, and
-`BuildReport.droppedQuestions` counts the losses — nothing on screen distinguishes a question that
-was thrown away from one the model chose not to write.
+deeper than a part, and **one of the six came back with no `?`**, so a missing mark is added rather
+than treated as a fault.
+
+The first version of that rule also *dropped* anything ending in `.` as a statement, and GPT Sol
+killed it: a full stop is not evidence of mood. *"How did this affect the U.S."* is a question that
+rule discarded invisibly, while a real statement without a mark sailed through. So the rule is now
+syntactic and does one thing — append the mark — and the failure the prompt actually names, *"never
+the gist with a question mark on it"*, is caught by **comparing the question with the gist**,
+ignoring case and punctuation.
+
+`BuildReport.droppedQuestions` counts every loss, including a question that went down with a
+[collapsed rung](../../src/hierarchy.ts) — nothing on screen distinguishes a question that was
+thrown away from one the model chose not to write.
+
+**Two places a part can end up with no question**, both benign absence rather than breakage, both
+named in the plan doc: a rung that restated its parent is spliced away and its children come up in
+its place carrying none; and a flat article deepened through stage 5 grows its parts from the
+expansion call, whose prompt does not ask for questions.
 
 ### Existing articles have none until their hierarchy is re-run
 

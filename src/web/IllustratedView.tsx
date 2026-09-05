@@ -640,18 +640,21 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
             `height: 100dvh`, so a column stacked under it starts one whole
             screen down, which is the scrolling this report is about. */}
         {full && (
-          <aside className="ill-aside" aria-label="What the illustrator was asked for">
-            <h2 className="ill-aside-head">What the illustrator was asked for</h2>
+          <aside className="ill-aside">
+            <h2 className="ill-aside-head" id="ill-aside-head">
+              What the illustrator was asked for
+            </h2>
             {/* Focusable because it scrolls: a keyboard reader cannot reach the
                 bottom of 350 words in a region nothing can put the caret in,
                 and there is no button inside it to tab to. No key handler —
                 the arrows belong to the article
                 (tests/arrows-belong-to-the-article.test.tsx), and this only
                 takes the ones the browser already spends on a scroll box. */}
-            <div className="ill-aside-scroll" tabIndex={0}>
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll box with no control inside it is unreachable from the keyboard without one, and 350 words of brief is exactly that. The rule is aimed at tab stops that lead nowhere; this one leads to the only way to read the text. A labelled <section> rather than a div, so it is a named landmark when focus lands. */}
+            <section className="ill-aside-scroll" tabIndex={0} aria-labelledby="ill-aside-head">
               {illustrated.style && <p className="ill-style">{illustrated.style}</p>}
               <p className="ill-aside-prompt">{plate.prompt}</p>
-            </div>
+            </section>
           </aside>
         )}
       </dialog>

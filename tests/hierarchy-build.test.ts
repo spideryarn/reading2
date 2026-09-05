@@ -575,11 +575,43 @@ describe("the Socratic question", () => {
     expect(deeper?.question).toBeUndefined();
   });
 
-  it("drops a statement, rather than showing the gist twice on one row", () => {
+  it("drops the gist asked again, however it is punctuated", () => {
     /* The failure the prompt names — "never the gist with a question mark on
-       it" — arriving without even the mark. Two declarative sentences in a row
-       is the duplication this feature exists to avoid. */
+       it". Caught by comparing the two strings, which is the only check here
+       that means what it says; the fixture's "Closing" repeats its own gist
+       verbatim. Punctuation and case are ignored, so bolting a "?" on does not
+       get it past. */
     expect(by("Closing")?.question).toBeUndefined();
+
+    const dressed = buildTree(
+      {
+        ...deep,
+        gist: "The article argues something.",
+        question: "  the ARTICLE argues something?  ",
+        children: [],
+      },
+      NAV,
+      BLOCKS,
+      "test",
+    );
+    expect(dressed.nodes[dressed.rootId]?.question).toBeUndefined();
+  });
+
+  /**
+   * **Punctuation is normalised, never read for meaning.** The first fix for
+   * the missing-mark case below dropped anything ending in "." as a
+   * "statement", and GPT Sol killed it with this example: a question ending in
+   * an abbreviation. The rule made the *invisible* mistake on good input and
+   * the visible one on bad. src/hierarchy.ts § `questionFor`.
+   */
+  it("keeps a question that ends in an abbreviation", () => {
+    const abbrev = buildTree(
+      { ...deep, question: "How did this affect the U.S.", children: [] },
+      NAV,
+      BLOCKS,
+      "test",
+    );
+    expect(abbrev.nodes[abbrev.rootId]?.question).toBe("How did this affect the U.S.?");
   });
 
   it("drops a blank one", () => {
@@ -618,11 +650,78 @@ describe("the Socratic question", () => {
   });
 
   it("counts both losses, because neither is visible on screen", () => {
+    /* The depth-2 "Deeper", and "Closing" repeating its own gist. */
     expect(report.droppedQuestions).toHaveLength(2);
   });
 
   it("leaves a tree that was never asked for questions exactly as it was", () => {
     const plain = buildTree(ROOT, NAV, BLOCKS, "test");
     for (const n of Object.values(plain.nodes)) expect(n.question).toBeUndefined();
+  });
+});
+
+/**
+ * **A collapsed rung takes its question with it, and the count says so.**
+ * GPT Sol's F2, 2026-09-05.
+ *
+ * `collapseRestatedRungs` splices away a child that covers the whole of its
+ * parent, and the grandchildren come up to stand in its place. Those were
+ * written at proposal depth 2, where the prompt asks for no question — so the
+ * parts the reader ends up with have none, and before this the figure meant to
+ * notice that read 0.
+ *
+ * It is **counted, not repaired**: repairing means asking for a question one
+ * level deeper on every article to cover a rung that collapses rarely. The
+ * plan doc records that trade.
+ */
+describe("a question lost to a collapsed rung", () => {
+  const report = {
+    repairs: [],
+    droppedChildren: [],
+    droppedHeadings: [],
+    collapsedRungs: [],
+    droppedQuestions: [],
+  };
+
+  /* The root's sole child covers the root's whole range, so it is the rung. */
+  const restated: ModelNode = {
+    title: "Whole piece",
+    gist: "The article argues something.",
+    question: "Why should the whole thing be believed?",
+    range: ["spya-aaaaaa", "spya-dddddd"],
+    children: [
+      {
+        title: "The rung",
+        gist: "A level that restates its parent.",
+        question: "What does this level add?",
+        range: ["spya-aaaaaa", "spya-dddddd"],
+        children: [
+          { title: "First", gist: "Opening.", range: ["spya-aaaaaa", "spya-bbbbbb"] },
+          { title: "Second", gist: "Closing.", range: ["spya-cccccc", "spya-dddddd"] },
+        ],
+      },
+    ],
+  };
+
+  const tree = buildTree(restated, NAV, BLOCKS, "test", report);
+
+  it("collapses the rung, as it always did", () => {
+    expect(report.collapsedRungs).toHaveLength(1);
+    expect(Object.values(tree.nodes).map((n) => n.title)).not.toContain("The rung");
+  });
+
+  it("counts the question that went with it", () => {
+    expect(
+      report.droppedQuestions,
+      "a question the model wrote is nowhere on screen and nothing says so",
+    ).toHaveLength(1);
+  });
+
+  it("leaves the promoted parts without questions, which is absence and not a fault", () => {
+    const parts = Object.values(tree.nodes).filter((n) => n.depth === 1 && n.children.length > 0);
+    expect(parts.map((n) => n.title)).toEqual(["First", "Second"]);
+    for (const p of parts) expect(p.question).toBeUndefined();
+    /* The root keeps its own, which is the half that still works. */
+    expect(tree.nodes[tree.rootId]?.question).toBe("Why should the whole thing be believed?");
   });
 });

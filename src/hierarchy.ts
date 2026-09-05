@@ -181,23 +181,27 @@ export interface ModelNode {
  * which is the noise this feature is scoped to avoid. Enforcing it in code
  * means the scope is a fact rather than a request.
  *
- * **A statement is dropped; a missing question mark is repaired.** That split
- * is a measurement rather than a preference. The first real run of the toc/5
- * prompt (noema, 141 blocks, 2026-09-05 — the plan doc has the whole output)
- * wrote six questions, and **one of the six came back with no `?` on the end**:
- * *"What should conscious AI mean for how we see ourselves"*. A rule that
- * required the mark would have thrown away a perfectly good question over
- * punctuation, and thrown it away invisibly.
+ * **Punctuation is normalised, never read for meaning.** The first real run of
+ * the toc/5 prompt (noema, 141 blocks, 2026-09-05 — the plan doc has the whole
+ * output) wrote six questions, and **one of the six came back with no `?` on
+ * the end**: *"What should conscious AI mean for how we see ourselves"*. A rule
+ * that required the mark would have thrown that away over punctuation, and
+ * thrown it away invisibly. So a missing mark is added.
  *
- * So the terminal character is read as evidence of what the model *wrote*,
- * not as a format to enforce:
+ * The first fix for that went one step too far the other way and **dropped
+ * anything ending in `.` or `!` as a "statement"**. GPT Sol killed it, rightly:
+ * a terminal full stop is not evidence of mood. *"How did this affect the
+ * U.S."* is a question that rule discarded, and *"It closes by concluding
+ * something"* is a statement it happily kept. It made the *invisible* mistake
+ * on the good input and the visible one on the bad — exactly backwards.
  *
- * - ends in `?` — keep it;
- * - ends in `.` or `!` — a **statement**, which is the failure mode the prompt
- *   names ("never the gist with a question mark on it") arriving without even
- *   the mark. Dropped, because a second declarative sentence under the gist is
- *   the duplication this feature is supposed to avoid;
- * - ends in anything else — a question missing its mark. Add the mark.
+ * So the rule is syntactic and does one thing: strip any trailing `.`/`!` and
+ * end with a single `?`.
+ *
+ * **The failure the prompt actually names — *"never the gist with a question
+ * mark on it"* — is caught by comparing it with the gist**, which is the only
+ * check here that means what it says. Punctuation and case are ignored, so a
+ * gist echoed back with a `?` bolted on is caught however it is dressed.
  *
  * Nothing mechanical can catch a *lookup* question dressed as a Socratic one;
  * that is what the prompt is for and what reading the output is for.
@@ -214,6 +218,16 @@ export interface ModelNode {
  */
 export const MAX_QUESTION_DEPTH = 1;
 
+/** Lower-cased, terminal punctuation and repeated spaces gone — for comparing
+    two sentences on their words alone. */
+function bareWords(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[.!?]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function questionFor(mn: ModelNode, depth: number): string | undefined {
   if (depth > MAX_QUESTION_DEPTH) return undefined;
   if (typeof mn.question !== "string") return undefined;
@@ -222,10 +236,22 @@ export function questionFor(mn: ModelNode, depth: number): string | undefined {
      nothing, which is how a gist of three spaces once rendered as a blank
      internal node (src/hierarchy-expand.ts § `gist` is required). */
   if (q === "") return undefined;
+  /* The gist, asked again. Two lines saying one thing is the duplication this
+     whole feature exists to avoid, so it is dropped rather than drawn. */
+  if (mn.gist !== undefined && bareWords(q) === bareWords(mn.gist)) return undefined;
   if (q.endsWith("?")) return q;
-  /* A statement, not a question — see above. */
-  if (/[.!]$/.test(q)) return undefined;
-  return `${q}?`;
+  /* **Only `!` is stripped, never `.`** — a trailing full stop is as likely to
+     belong to an abbreviation as to a sentence, and stripping it turned GPT
+     Sol's example *"How did this affect the U.S."* into *"the U.S?"*. So the
+     mark is appended to whatever is there.
+
+     The cost, named rather than hidden: a genuine statement that is not the
+     gist comes out as *"…something.?"*. That is ugly and **visible**, which is
+     the right way round — the rule it replaced lost good questions silently
+     (docs/reusable/silent-success.md). The prompt asks for a question, the
+     gist check above catches the failure it actually warns about, and six of
+     six on the first real run were questions. */
+  return `${q.replace(/!+$/, "")}?`;
 }
 
 /**
@@ -1392,6 +1418,11 @@ function recordBoundaryFaults(
  * every message and every counter still names a child by where it sits in the
  * model's own proposal.
  */
+/** Whether a rung about to be spliced away was carrying a question. */
+function redundantQuestion(node: ModelNode): boolean {
+  return typeof node.question === "string" && node.question.trim() !== "";
+}
+
 function collapseRestatedRungs(
   children: ModelNode[],
   parent: readonly [number, number],
@@ -1401,6 +1432,7 @@ function collapseRestatedRungs(
   repairs: PartitionRepair[],
   droppedChildren: string[],
   collapsedRungs: string[],
+  droppedQuestions: string[],
 ): { children: ModelNode[]; plans: ChildPlan[] | null; where: string; absorbed: ModelNode[] } {
   /* In range: both came out of `index`, which is built over `blocks`. */
   const wholeStart = blocks[parent[0]]!.id;
@@ -1429,6 +1461,18 @@ function collapseRestatedRungs(
     const redundant = here[rung]!;
     at = `${at} > child ${rung + 1}`;
     collapsedRungs.push(at);
+    /* **A collapsed rung takes its question with it**, and its children come up
+       to stand in its place carrying none — the model wrote theirs one level
+       deeper, where `questionFor` keeps none. So this article has a part with
+       no question, which is fine (absence is ordinary) and would otherwise be
+       *unaccounted for*: without this line `droppedQuestions` reads 0 while a
+       question the model wrote is nowhere on screen. GPT Sol's F2, 2026-09-05.
+
+       Counted rather than repaired. Repairing it means asking the model for a
+       question one level deeper than it needs on every article, to cover a
+       rung that is collapsed rarely — the plan doc says why that trade is not
+       worth making yet. */
+    if (redundantQuestion(redundant)) droppedQuestions.push(at);
     absorbed.push(redundant);
     here = redundant.children ?? [];
     /* Nothing underneath it: this node becomes the deepest internal one and
@@ -1619,6 +1663,7 @@ export function buildTree(
               repairs,
               droppedChildren,
               collapsed,
+              droppedQuestions,
             )
           : { children: mn.children, plans: null, where, absorbed: [] as ModelNode[] };
 

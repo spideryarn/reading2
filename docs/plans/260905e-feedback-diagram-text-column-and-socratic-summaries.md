@@ -81,9 +81,12 @@ Breakpoint 1080px = 720 (plate) + 340 (column) + gutters.
   `tests/arrows-belong-to-the-article.test.tsx` is the repo-wide sweep that keeps it that way.
 - **The backdrop click still closes.** The dialog's handler tests `e.target === dialog`, and a click
   inside the aside has the aside as its target, so it does not close by accident.
-- **The scroller has `tabIndex={0}`.** It contains no control, so without a tab stop a keyboard
-  reader cannot reach the bottom of 350 words. This is the browser's own scroll-box behaviour, not a
-  new key binding.
+- **The scroller has `tabIndex={0}`, and is a labelled `<section>`.** It contains no control, so
+  without a tab stop a keyboard reader cannot reach the bottom of 350 words — the browser's own
+  scroll-box behaviour, not a new key binding. Biome's `noNoninteractiveTabindex` fires on it, and
+  the rule is right in general and wrong here; rather than shrug, the element became a `<section>`
+  with `aria-labelledby` pointing at the column's heading, so focus lands somewhere named, and the
+  remaining suppression carries that reasoning.
 - **`overscroll-behavior: contain`**, so a trackpad flick at the end of the brief does not scroll
   the article behind the overlay — `.ill-scroll` has it for the same reason.
 
@@ -95,7 +98,31 @@ the prompt text, and its scroller is focusable. **Seen red** (`expected null not
 the render disabled, green with it.
 
 jsdom has no layout and no media queries, so what a test can prove here is the markup. That the two
-columns sit side by side, and that exactly one copy of the prompt shows at a given width, is CSS.
+columns sit side by side, and that exactly one copy of the prompt shows at a given width, is CSS —
+so it was checked in a real browser.
+
+### The browser pass, and the bug it found that this change did not cause
+
+Checked in Chrome on the box via a throwaway preview page built to the repo's own convention
+(`preview-illustrated.html` + `src/web/preview-illustrated.tsx`, beside `preview-sketch.tsx`), which
+mounts the **real** `IllustratedView` with the real stylesheet and a stubbed `fetch`. Measured, not
+eyeballed — `getComputedStyle`, `getBoundingClientRect`, `scrollTop`, `Element.checkVisibility()`.
+
+All five claims passed: one visible copy of the prompt at 1280 and one at 900, independent
+scrolling (the aside scrolled to its end while the plate column and the window both stayed at 0),
+no overlap or clipping, and Escape still closing the overlay.
+
+**And it found a real bug that predates this report.** `.ill-in-full` also carries `.ill`, which is
+`flex: 1` — and a non-`auto` `flex-basis` beats `width` for the main-axis size, so
+`width: min(94vw, 720px)` had **never once applied**. At 1280px of viewport the panel was 1280px
+wide. It went unnoticed because `.ill-in-full .ill-plate` caps the picture at 78vh, so the surplus
+was empty space rather than the 1920-tall plate the CSS comment warns about; adding a column beside
+it is what made it visible. Fixed with `flex: none` and re-verified: the plate column now measures
+exactly 720px (left 110, right 830) with the 340px column adjacent (830→1170), the pair centred
+symmetrically in 1280, and at 900px the panel is still 720 rather than 94vw's 846.
+
+This is the kind of thing only a browser finds — the unit tests were green throughout, on both
+sides of the bug.
 
 ---
 
@@ -201,10 +228,21 @@ not exist. Every row of the Summary panel was a gist and nothing else.
    have discarded a perfectly good question over punctuation — invisibly. That is a
    [silent success](../reusable/silent-success.md) I built and the run caught.
 
-So the rule changed: **`?` is kept; a `.` or `!` is a statement and is dropped; anything else gets
-the mark added.** A statement is still refused, because a second declarative sentence under the gist
-is the duplication this whole feature avoids. Nothing mechanical can catch a lookup question dressed
-as a Socratic one — that is what the prompt and reading the output are for.
+So the rule changed to add the mark rather than require it. **The first version of that fix also
+dropped anything ending in `.` or `!` as a "statement", and GPT Sol was right to kill it** (F5): a
+full stop is not evidence of mood. *"How did this affect the U.S."* is a question that rule
+discarded — invisibly — while a genuine statement without a mark went straight through. It made the
+silent mistake on good input and the visible one on bad, which is exactly backwards.
+
+The rule now is syntactic and does one thing: strip a trailing `!`, append `?`. Not the `.`, because
+stripping it turned *"the U.S."* into *"the U.S?"*. And the failure the prompt actually names —
+*"never the gist with a question mark on it"* — is caught by **comparing the question with the
+gist**, ignoring case and punctuation, which is the only check here that means what it says. Nothing
+mechanical can catch a lookup question dressed as a Socratic one; that is what the prompt and
+reading the output are for.
+
+The named cost: a genuine statement that is not the gist comes out as *"…something.?"* — ugly and
+**visible**, which is the right way round.
 
 **Spend: one structure call, in≈19,767 / out≈2,795 tokens on `anthropic/claude-sonnet-5`, roughly
 $0.10.** It ran outside a spend collector (the log said so), so it is in no ledger total; recorded
@@ -232,6 +270,44 @@ The checkpoint-key pin in `tests/hierarchy-prompt-hoist.test.ts` moved with it
 (`2993e1e4b2aaf1d6` → `18e7504c732c5722`), which is that pin doing its job rather than failing at
 it: it exists to stop anyone moving those bytes *without meaning to*.
 
+### The GPT Sol review, and what it changed
+
+Round one, on the committed code, with the diff and the tests to run. It reproduced its findings
+rather than reasoning to them, which is why three of them stood.
+
+- **F1 (P1) — fixed, and it was a real bug I would have shipped.** `proposalFromTree`
+  (`src/hierarchy-cascade.ts`) did not copy `question`, so **deepening any one section rebuilt the
+  tree and wiped every question in the article**. Sol reproduced it: four before `deepenTree`, zero
+  after. The function's own comment states the rule I broke — *"a field the tree carries must not
+  vanish on the way back out"*. The fix is one line; the guard is that the shared round-trip fixture
+  in `tests/hierarchy-cascade.test.ts` now carries questions, so `toEqual(proposal)` catches it.
+  Seen red.
+- **F2 (P1) — counted rather than repaired.** Questions are filtered on *proposal* depth, and
+  `collapseRestatedRungs` can splice away a depth-1 rung so its depth-2 children — correctly written
+  without questions — become the parts. Those parts show none, and `droppedQuestions` read 0.
+  Repairing it properly means asking the model for questions one level deeper on **every** article
+  to cover a rung that collapses rarely; that is a worse trade than the absence. So the loss is now
+  counted, which makes it diagnosable, and the absence is documented. Test seen red.
+- **F3 (P1) — deferred, deliberately.** My claim that expansion only writes depth ≥ 2 is false: a
+  flat root can itself land on the deepening frontier, and expanding it creates depth-1 children.
+  I had spotted the same hole before the review and Sol reproduced it on a ten-block flat root.
+  **Not fixed**, because the fix is to teach `hierarchy-expand.ts`'s *second* prompt and its strict
+  field validator to write and carry questions — the scope this change deliberately excluded. The
+  consequence is benign and of a kind the design already handles: those parts show no question,
+  which is what every pre-2026-09-05 article shows. It affects only the opt-in deepening path on a
+  flat article. Named here so the next person meets it as a decision rather than a surprise.
+- **F4 (P2) — fixed.** `droppedQuestions` reached the eval's `BuildReport` but was dropped from the
+  saved result and the printer, so the harness whose job is to notice prompt drift could not report
+  the one new way this prompt can drift. Threaded through, optional, read via `?? []` exactly as
+  `collapsedRungs` is, so old result files still print.
+- **F5 (P2) — fixed, see above.**
+
+Sol found nothing wrong with the diagram breakpoint or its accessibility, the public-DTO decision,
+or the checkpoint-key update, and ran 136 + 94 tests itself.
+
+**Not sent for a round two.** The three fixes are small and each is covered by a test seen red
+first; F3 is a deferral rather than a fix, and it is written down here.
+
 ### Deferred, and why
 
 - **Questions on sections (depth ≥ 2).** The named follow-up if use shows readers want a hook per
@@ -240,6 +316,8 @@ it: it exists to stop anyone moving those bytes *without meaning to*.
 - **A backfill stage.** A separate light call in the `arc.json` shape could give existing articles
   questions without a full re-run. It costs a stage, an artefact and a route, and with a small beta
   readership and Greg re-running his own articles, the field on the tree is the right v1.
+- **Questions on a flat article's parts (GPT Sol F3).** See above — it needs the expansion prompt
+  and its validator, and the failure is benign absence.
 - **A token-budget bump.** Not needed and deliberately not made: `TOKENS_PER_NODE` is 175 against a
   worst measured per-node cost of 145, and questions are added to ~6–10 nodes at ~25 tokens each
   (~250 total). The headroom already there dwarfs it, and that constant carries its own measurement
