@@ -277,9 +277,10 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
      hundred terms — but the same ceiling, because the cap is a guard against a
      corrupt or hostile file rather than a size estimate. */
   ideas: { maxBytes: 32 * MiB, decode: json("ideas") },
-  /* At most sixteen quotes of at most 400 characters each, so a real one is a
-     few KB — but the same ceiling as its neighbours, because the cap is a
-     guard against a corrupt or hostile file rather than a size estimate. */
+  /* At most `MAX_QUOTES` quotes (32 since 2026-09-05) of at most 400 characters
+     each, so a real one is a few KB — but the same ceiling as its neighbours,
+     because the cap is a guard against a corrupt or hostile file rather than a
+     size estimate. */
   quotes: { maxBytes: 32 * MiB, decode: json("quotes") },
   /* Forty events at most (`MAX_EVENTS` in src/timeline.ts), each a short label,
      an interval and up to six quoted passages — the real one on the test

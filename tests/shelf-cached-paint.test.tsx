@@ -52,6 +52,7 @@ const readCache = vi.fn();
 vi.mock("../src/web/lib/offline-store.js", () => ({
   readCached: readCache,
   writeCached: vi.fn(),
+  reserveTicket: vi.fn(async () => null),
   invalidate: vi.fn(),
   cachedSlugs: vi.fn(),
   rememberUser: vi.fn(),

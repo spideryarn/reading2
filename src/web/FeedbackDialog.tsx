@@ -96,9 +96,9 @@
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bug, Check, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
 
-import { ADMIN_EMAIL } from "../admin.js";
 import { mintId } from "../ids.js";
 import { FEEDBACK_NOT_AVAILABLE, FEEDBACK_SEND_FAILED } from "../messages.js";
+import { CONTACT_EMAIL } from "../site-text.js";
 import {
   MAX_FEEDBACK_ANSWER_CHARS,
   type FeedbackKind,
@@ -120,20 +120,29 @@ export interface FeedbackWhere {
   slug: string | null;
 }
 
+/**
+ * **There is no `readerEmail` here, and there was until 2026-09-05.**
+ *
+ * The dialog used to print *"It is sent as you@example.com, so we can reply"*,
+ * interpolating whoever was signed in. Greg, who is signed in as himself,
+ * filed a report about reading his own address back:
+ *
+ * > In the feedback box, it has the following: "It is sent as
+ * > greg@gregdetre.com, so we can reply.". Remove that sentence, and remove any
+ * > other mentions in the UI of my personal email address, greg@gregdetre.com.
+ * > The only email address we should include on the site is
+ * > hello@spideryarn.com.
+ *
+ * Nothing about the report changed: the address still goes, and it still comes
+ * from the auth gate rather than from this body — a browser-supplied address
+ * would be a claim, and the point of the column is that it is not
+ * (src/feedback.ts). What went is the *saying so*, which now lives only in the
+ * hover card on the Feedback button (FeedbackButton.tsx) and on /privacy, both
+ * of which say it without naming anybody.
+ */
 interface Props {
   open: boolean;
   onClose(): void;
-  /**
-   * The address the report is filed under, shown to the reader rather than
-   * merely sent.
-   *
-   * Greg asked that the email always go, and the server takes it from the auth
-   * gate rather than from this body — a browser-supplied address would be a
-   * claim, and the point of the column is that it is not. So this prop is for
-   * *saying so*: "sent as you@example.com" is the difference between a form
-   * that quietly identifies you and one that tells you it does.
-   */
-  readerEmail: string | null;
   where: FeedbackWhere;
 }
 
@@ -305,7 +314,7 @@ function reportBody(input: {
   };
 }
 
-export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
+export function FeedbackDialog({ open, onClose, where }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -684,7 +693,22 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
     const attempt = ++attempts.current;
     const stillMine = () => mine === reportIdRef.current && attempt === attempts.current;
 
-    /* Collected **at send time and only when consented**, so an unticked box
+    /* **A spinner that cannot paint until this line finishes.** `setStage`
+       above only schedules a render, and everything from there to the first
+       `await` runs on one task: this collection, and `JSON.stringify` over a
+       body that may carry a base64 screenshot. So on a heavy consented report
+       the button sits unchanged for as long as the blob takes to build.
+
+       Deliberately NOT fixed here. One `await` before this line closes it, and
+       it was written and reverted on 2026-09-05: it reds four tests on the send
+       path, and — the deciding fact — it is **not** why
+       SPIDERYARN-READING2-23 was filed. That report carried `consented: false`
+       and no screenshot, so this branch collected nothing and the body was
+       small. Changing the send path to fix a gap the reporter did not hit is
+       the wrong trade. docs/project/feedback.md § Send spins, and it already
+       did.
+
+       Collected **at send time and only when consented**, so an unticked box
        never builds the blob at all. The server refuses diagnostics without
        consent (`[fb-consent]`) and so does the table's CHECK — this is the third
        of the three, and the only one that stops the collection happening. */
@@ -861,15 +885,11 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
             with two minutes here.
           </p>
 
-          <p className="fb-intro">
-            A rough note is worth far more than nothing.
-            {readerEmail ? (
-              <>
-                {" "}
-                It is sent as <span className="fb-email">{readerEmail}</span>, so we can reply.
-              </>
-            ) : null}
-          </p>
+          {/* **One sentence, and it does not name an address.** It said "It is
+              sent as <your address>, so we can reply" until 2026-09-05 — see
+              `Props` above for Greg's report and for where a reader is still
+              told the address goes. */}
+          <p className="fb-intro">A rough note is worth far more than nothing.</p>
 
           {/* **Two buttons rather than radios**, so that pressing the pressed one
               puts it back to unset — Greg asked for the toggle to start on
@@ -997,9 +1017,14 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
                   button until GPT Sol's review on 2026-09-01, while the sentence
                   beside it said to send the report by email — so at the one moment
                   the app holds the only copy of something a person wrote, it told
-                  them to email it and did not say to whom. The address is
-                  `ADMIN_EMAIL`, the same constant that decides who sees /admin, so
-                  there is one answer to "who runs this" rather than two.
+                  them to email it and did not say to whom.
+
+                  The address is `CONTACT_EMAIL` — the site's one address, from
+                  src/site-text.ts. It was `ADMIN_EMAIL` until 2026-09-05, which
+                  named a person on the one screen in the app that asks a reader
+                  to write to us; Greg's report is quoted on `Props` above.
+                  `ADMIN_EMAIL` goes on meaning what it always meant: an identity
+                  for logs and for the seed, never something a reader is shown.
 
                   The subject carries the report id: if the row *did* land and only
                   the reply was lost, the email and the row can still be matched
@@ -1011,12 +1036,12 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
                 </button>
                 <a
                   className="fb-copy"
-                  href={`mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(
+                  href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
                     `Spideryarn feedback ${reportId}`,
                   )}`}
                 >
                   <Mail size={14} />
-                  Email it to {ADMIN_EMAIL}
+                  Email it to {CONTACT_EMAIL}
                 </a>
               </div>
               {/* Clipboard access can be refused outright — a permissions policy,

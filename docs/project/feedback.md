@@ -57,6 +57,51 @@ before the deploy and folds them into `body` the same way; sending both shapes a
 has the reasoning, the GPT Sol review that changed five things about it, and the deploy window Greg
 accepted knowingly.
 
+### The dialog names no address, since 2026-09-05
+
+It named two, and both were the same person. The intro said *"It is sent as `<whoever is signed
+in>`, so we can reply"*, and the failed-send fallback offered a `mailto:` to `ADMIN_EMAIL`. Greg,
+filing it from inside the dialog:
+
+> In the feedback box, it has the following: "It is sent as greg@gregdetre.com, so we can reply.".
+> Remove that sentence, and remove any other mentions in the UI of my personal email address,
+> greg@gregdetre.com. The only email address we should include on the site is hello@spideryarn.com.
+>
+> — Greg, 2026-09-05
+
+So the sentence went, the fallback is `CONTACT_EMAIL` ([website-text.md](website-text.md#the-contact-address)),
+and the `readerEmail` prop went with the sentence — `App.tsx` → `FeedbackButton` → `FeedbackDialog`
+existed only to print it. **Nothing about the report changed**: the address still travels with it and
+still comes from the auth gate rather than from the browser's body.
+
+**A reader is still told**, and it is worth knowing where, because the removed sentence was the only
+place that said it *in the dialog*: the hover card on the button
+([tooltips.md](tooltips.md)) — *"It carries this page's address and your email address, so we can
+write back"* — and [privacy.md § What a bug report carries](privacy.md). Neither names anybody, which
+is the difference.
+
+**`ADMIN_EMAIL` is untouched and stays.** It is the label on an identity, for logs and for the seed,
+and the gate compares ids ([admin.md](admin.md)). What is now pinned is that no browser file imports
+it: *the one address a reader is shown* in `tests/site-footer.test.tsx`.
+
+### Send spins, and it already did
+
+> When I click the send button in the feedback dialog, show a loading spinner while it's sending.
+>
+> — Greg, 2026-09-05
+
+It has done since 2026-09-01: the button's label is a four-way switch, and three of the four are
+`.cmt-spinner` plus a word — *Sending*, *Adding the picture*, *Writing that down*
+([icons.md](icons.md#the-loading-spinner)). It is `disabled` throughout, and a `sending` ref latch
+behind that is what stops two clicks inside one frame filing two reports.
+
+**Nothing was pinning the spinner**, though, so a refactor of that switch could have dropped it with
+every test in the file still green. *Spins on Send while the report is in flight* in
+`tests/feedback-dialog.test.tsx` now holds it, driven by a `Promise` deliberately left unsettled so
+the test can stand inside the `sending` stage and look. If the report says otherwise on a real
+screen, the thing to suspect is not the markup: the POST body is built **synchronously** before the
+first `await`, so a large pasted screenshot is stringified before React gets to paint the spinner.
+
 ## The thank-you, and getting out of it
 
 > After submitting a bit of feedback in the feedback dialogue, it says something like thank you that

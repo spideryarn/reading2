@@ -107,15 +107,24 @@ afterEach(() => {
  * deliberately fire-and-forget, so without letting the macrotask queue turn,
  * the next test would be reading a database the previous one had not finished
  * writing — and would pass or fail depending on timing.
+ *
+ * **Turned until an answer arrives rather than a fixed number of times**, since
+ * 2026-09-05: `apiFetch` now reserves a place in the cache's queue before it
+ * sends (see `reserveTicket`), so a request costs one IndexedDB round trip more
+ * than it used to and one turn of the queue stopped being enough. The cases that
+ * expect nothing wait the whole way, which makes their emptiness better
+ * evidenced than it was.
  */
 async function mountAndRead(slug: string): Promise<string[]> {
   let seen: string[] = [];
   await act(async () => {
     root.render(<Terms slug={slug} onTerms={(t) => (seen = t)} />);
   });
-  await act(async () => {
-    await new Promise((go) => setTimeout(go, 0));
-  });
+  for (let i = 0; i < 50 && seen.length === 0; i++) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 1));
+    });
+  }
   return seen;
 }
 

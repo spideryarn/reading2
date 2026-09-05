@@ -370,8 +370,12 @@ export const termParam = parseAsBlockId.withOptions({ history: "replace" });
 export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * Which quote is selected, and therefore which passage is marked in the prose
- * and painted down the rail.
+ * Which quote is selected, and therefore which marked passage wears the ring.
+ *
+ * **Not which passage is marked**, since 2026-09-05: every quote the panel is
+ * showing is washed in the prose and drawn in the rail, and the selection is
+ * only which of them the reader pressed (`mark.hit[data-hit-open]`).
+ * docs/project/quotes.md § Every visible quote is marked.
  *
  * A quote's id is minted by `mintId`, so it is a block id by construction and
  * the same parser validates it for free — and the same "a mangled link degrades
