@@ -500,8 +500,8 @@ effects nothing can call. Each had tests; the sequence had none.
 Two things changed, and the second is the more important:
 
 1. **The query is edited as text throughout.** That was already this file's rule for `?slug=` and
-   `about=` — round-tripping re-encodes as it serialises, and `?cols=0,1` comes back as
-   `?cols=0%2C1`, still correct and no longer readable ([params.ts](../../src/web/params.ts) spells
+   `about=` — round-tripping re-encodes as it serialises, and `?cols=1,2` comes back as
+   `?cols=1%2C2`, still correct and no longer readable ([params.ts](../../src/web/params.ts) spells
    those commas out on purpose). The hash rewrite was the one breaking the rule, and it was mangling
    those commas too.
 2. **The sequence is one pure function** — `settleAddress` in [`router.ts`](../../src/web/router.ts).

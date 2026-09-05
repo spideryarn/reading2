@@ -963,43 +963,12 @@ td.gist.active .title { color: var(--highlight-ink); }
    a special table mechanism that is not inheritance. Set on `.col-depth-*` this
    resolved on an element nothing ever read it from, so every bar in every
    column painted the `--rule-strong` fallback grey. */
-td.gist.depth-0 { --tint: var(--depth-0); }
 td.gist.depth-1 { --tint: var(--depth-1); }
 td.gist.depth-2 { --tint: var(--depth-2); }
 td.gist.depth-3 { --tint: var(--depth-3); }
-/* ---------------------------------------------------------------- the arc --
-   The L0 column. Its cells share the parts' boundaries exactly, so it needs to
-   read as a *different kind of thing* from the column beside it rather than as
-   a second opinion about the same one: no title, a step marker instead, and the
-   sentence set smaller and lighter. See tree.ts § the arc. */
-td.gist.arc .gist-text {
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--ink-faint);
-}
-
-td.gist.arc.active .gist-text { color: var(--ink-soft); }
-
-.arc-step {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  line-height: 1;
-  margin-bottom: 0.45rem;
-  color: var(--depth-0);
-  font-weight: 600;
-}
-.arc-step .of { color: var(--ink-faint); font-weight: 400; opacity: 0.8; }
-/* The apparatus in the arc column: its title where a part has its marker, set
-   as chrome rather than as prose. "Notes" is a label *about* the article, not a
-   compression *of* it, so it must not dress as a gist — a reader who has
-   learned the column's grammar reads the difference without being told.
-   docs/plans/260828o-footnotes.md § What the reader sees. */
-.arc-step.arc-supplement {
-  color: var(--ink-faint);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+/* The L0 column and its arc styling left on 2026-09-05 —
+   docs/plans/260905d-declutter-the-reading-view-top-bars.md. `.outln-arc` in
+   § outline mode is a different rule, and is where the arc is drawn now. */
 
 td.gist .title::before {
   content: "";
@@ -3023,46 +2992,6 @@ td.text.has-hit[data-hues="8"] {
 .ctx-title .own { margin-left: 0.35em; color: var(--highlight); font-weight: 400; }
 .ctx-item.tier-cur .range { margin-top: 0.35rem; }
 
-/* The arc's step marker, as it was in the cell (see .arc-step): mono and
-   tinted, so it reads as a position and not as a title. The column has no
-   titles — that is the point of it.
-
-   Written `.ctx-title.ctx-step`, both classes, because they land on the SAME
-   div and the plainer selector loses. `.ctx-item.tier-cur .ctx-title` is three
-   classes and beat `.ctx-item .ctx-step` at two, so the marker took the title's
-   face and colour while a *later* rule at equal weight still set its size — a
-   step marker in the UI font at 0.72rem, with the gist below it rendering
-   LARGER than it. Verified in the browser by computed style, not by reading
-   the cascade, 2026-08-25. */
-.ctx-item .ctx-title.ctx-step {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--depth-0);
-}
-.ctx-item.tier-cur .ctx-title.ctx-step {
-  /* The cell's 0.68rem, not a bigger "current" size: the arc's marker is
-     deliberately the smallest thing in the column, and the sentence under it
-     is the part worth reading. Making it larger than the sentence turned the
-     position into the headline. */
-  line-height: 1;
-  margin-bottom: 0.45rem;
-}
-/* `/ 9` recedes, as it does in the cell: the pair is one position, not two
-   numbers. Kept as two numbers all the way from context.ts so this is a span
-   and not a slice of a formatted string. */
-.ctx-item .ctx-step .of,
-.tip-title .of { color: var(--ink-faint); font-weight: 400; opacity: 0.8; }
-/* The arc's sentence stays smaller and lighter than a gist, as it was in the
-   cell: the arc shares the parts' boundaries exactly, so it has to read as a
-   different KIND of thing rather than as a second opinion about the same one
-   (tree.ts § the arc). Keyed off the step marker rather than off depth-0,
-   because depth 0 is the parts column when there is no arc. */
-.ctx-item.tier-cur:has(.ctx-step) .gist-text {
-  font-size: 0.82rem;
-  color: var(--ink-faint);
-}
-
 /* The row-hover wash, carried over from the cells: an entry on the hovered
    row's ancestor path lights the way `td.gist.active` did. */
 .ctx-item.active { background: var(--highlight-wash); }
@@ -3221,7 +3150,6 @@ td.text.has-hit[data-hues="8"] {
 /* Nothing to centre, so no room needed above it: the list starts at the top of
    the panel. See `hasCurrent` in ContextPanel.tsx. */
 .ctx-panel.no-current .ctx-panel-list { padding-top: 0.85rem; }
-.ctx-panel.depth-0 { --tint: var(--depth-0); }
 .ctx-panel.depth-1 { --tint: var(--depth-1); --ctx-parent-tint: var(--depth-0); }
 .ctx-panel.depth-2 { --tint: var(--depth-2); --ctx-parent-tint: var(--depth-1); }
 
@@ -3252,13 +3180,6 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-soft);
 }
 .tip-entry .own { color: var(--ink-faint); font-weight: 400; }
-/* An arc card's title is a position, not a name — set like the marker in the
-   column it came from rather than like every other card's title. */
-.tip-entry .tip-title.tip-step {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--depth-0);
-}
 
 /* ------------------------------------------------------------------ dock --
    The bottom bar and the drawer that rises out of it — Dock.tsx, and
@@ -7824,12 +7745,12 @@ td.text.note-open {
 .summ-entry.d1 > .summ-children { border-left-color: var(--depth-2); }
 .summ-entry.d0 > .summ-children { border-left-color: var(--depth-1); }
 
-/* The apparatus, in the same key it wears in the spine and the arc: present in
-   the structure, quieter than the argument, and carrying no number. It is a row
-   the reader can jump to and never a section of the piece — the same grammar
-   `.arc-step.arc-supplement` and `.spine-part.supplement` use, so a reader who
-   has learned it in one panel reads it in this one without being told.
-   docs/plans/260828o-footnotes.md. */
+/* The apparatus, in the same key it wears in the spine: present in the
+   structure, quieter than the argument, and carrying no number. It is a row the
+   reader can jump to and never a section of the piece — the same grammar
+   `.spine-part.supplement` uses (and `.arc-step.arc-supplement` used, until the
+   arc's column went), so a reader who has learned it in one panel reads it in
+   this one without being told. docs/plans/260828o-footnotes.md. */
 .summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
   color: var(--ink-faint);
   font-weight: 500;
@@ -13363,45 +13284,10 @@ table.only-prose thead { display: none; }
 .outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
 .outln-card-gist { margin: 0; font-family: var(--font-reading); }
 
-/* ── The arc, while it is being written ───────────────────────────────────────
-
-   Since 2026-08-29 the arc is not built before the article can be opened, so the
-   L0 column shows the root gist until one arrives (src/web/useArc.ts). The
-   fallback is good — which is the problem: without a mark, a reader cannot tell
-   "this is all there is" from "this is still coming", and Greg asked for a
-   loading state rather than a silent wait.
-
-   A breathing tint on the cell rather than a spinner: the cell already holds
-   text the reader can use, and a spinner over readable content says "wait" about
-   something they do not have to wait for. `::after` rather than a border, so
-   nothing in the table's own geometry moves — this column is measured
-   (layout.ts) and a width change here would shift every other column. */
-.gist.arc-pending {
-  position: relative;
-}
-
-.gist.arc-pending::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--accent-soft, currentColor);
-  opacity: 0.06;
-  animation: arc-pending-breathe 2.4s ease-in-out infinite;
-}
-
-@keyframes arc-pending-breathe {
-  0%, 100% { opacity: 0.04; }
-  50% { opacity: 0.12; }
-}
-
-/* A reader who has asked for less motion still gets the signal, held still. */
-@media (prefers-reduced-motion: reduce) {
-  .gist.arc-pending::after {
-    animation: none;
-    opacity: 0.08;
-  }
-}
+/* The L0 column's "arc still being written" tint went with the column on
+   2026-09-05. Outline mode simply omits the rung until the sentence exists, so
+   it needs no such mark; `UseArc.working` is still there for whatever wants to
+   say so next. */
 
 /* ---------------------------------------------------------- § quotes mode ----
    The tenth mode: the lines worth keeping, in the article's own words —

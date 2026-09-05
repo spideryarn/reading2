@@ -168,7 +168,32 @@ Files: `App.tsx`, `TableView.tsx`, `tree.ts`, `keynav.ts`, `layout.ts`, `Context
 `granularity-zoom.md` § the arc, `keyboard.md` § What each zone means.
 
 **Done when** no `?cols=` value can open an L0 column, ← walks to Parts and stops, Outline mode's
-rung 4 still shows the arc sentence, and `npm run arc` still works.
+rung 4 still shows the arc sentence, and the `arc` step still runs. (**Not** `npm run arc`, which
+this plan named and which does not exist — that script and its six siblings were deleted; the stage
+runs through `POST /api/jobs { steps: ["arc"] }`, `ingest-queue.md` § `npm run arc` is gone.)
+
+**Landed 2026-09-05.** The removal is `layout.ts` § `offerableGists` — one exported rule, applied by
+the two callers that need it for different reasons: `fitView`, which still takes the article's full
+depth range, and the pill row in `App.tsx`, which offers exactly what the fit can open. `?cols=0,1,2`
+therefore drops the `0` in silence and opens 1 and 2, which is pinned in `tests/layout.test.ts`.
+Both behaviour changes were red first.
+
+Three things it settled beyond the brief:
+
+- **`ContextItem.text` and `step` went too.** I had kept them as tombstoned dead code on the
+  argument that [260903b](260903b-one-structure-mode-hierarchy-and-outline-merged.md) decision 7's
+  Argument mode would want them back. Sol's counter is decisive and I took it: that decision
+  describes a **band** carrying part titles, gists and section doors — not this fisheye column — so
+  the implementation buys nothing. `Step`, `STEP_LANDMARK_PX`, `crumbFor`'s `"The argument"`,
+  `.ctx-step` / `.tip-step` and `ContextPanel`'s now-redundant `navDepth` prop went with them.
+- **A real regression this stage widened**, found by Sol and not by me: `?cols=0,3` now resolves to
+  `[3]`, and a leaf-only column set passed `panels` while yielding no levels — so `useColumnContext`
+  measured every row on every scroll to place entries in a list of nothing. `?cols=3` already
+  reached it; stage 2 opened a second door. The panels now mount on `panels && depths.length > 0`,
+  and swipe is untouched.
+- **`docs/project/browser-testing.md`'s column cases were exercising Plain**, because `DEFAULT_MODE`
+  is `plain` — so a browser pass following that text could not have seen a stage-2 regression at
+  all. Every case now says `?mode=hierarchy`. Worth knowing before stage 3's pass.
 
 ### Stage 3 — the column-header row loses its height, not its element
 
@@ -196,12 +221,16 @@ is quietly doing:
 Also in this stage:
 
 - **`stickyOffset()` stops querying `thead` at all.** An article's *own* prose can contain a
-  `<table><thead><th>` — Sol ran the sanitizer and confirmed one survives — so a global
-  `document.querySelector("thead th")` can match article content and add its height to the chrome
-  offset. Pre-existing rather than introduced, and cheap to close: measure `.controls` only, with a
-  floor of `safeAreaInsets().top` (there is a fixed opaque `.reader::before` of exactly that height,
-  `styles.css:396`), and **`safeTop`, not `0`, when there is no bar**. Regression test with an
-  ordinary article `<thead>` present as a decoy.
+  `<table><thead><th>`, and it survives sanitising — checked here by running
+  [`src/sanitize.ts`](../../src/sanitize.ts) over one, not by reading the allowlist. So the global
+  `document.querySelector("thead th")` can match article content.
+  **It is latent rather than live, in both directions**: our head is inside `table.zoom` whose
+  `<tbody>` holds the prose, so ours is always first in document order — before this change *and*
+  after it, since the head keeps existing. What makes the query pointless is that a zero-height head
+  contributes zero. So the change is a simplification with a safety margin, not a repair: measure
+  `.controls` only, floored at `safeAreaInsets().top` (there is a fixed opaque `.reader::before` of
+  exactly that height, `styles.css:396`), and **`safeTop`, not `0`, when there is no bar**.
+  Regression test with an ordinary article `<thead>` present as a decoy.
 - **`columnPill` collapses into `columnLabel`** — `Parts`, `Sections`, `Paragraphs`.
 - **The aim indicator** moves from `th.nav-aim` to a `data-aim` attribute on the `<table>` — no
   per-cell class, so `memo(TableView)` is unaffected. It must be a **later `background-image:
@@ -278,6 +307,12 @@ already are and Greg asked for this now: `structure-mode` is mid-stage-1 and Str
 The rule instead is **whoever lands second merges `dev` and adapts** — and this plan states its new
 contracts explicitly (the rail's default, `stickyOffset`'s selector, `?text=0`'s rewrite, the
 zero-height head) so there is something to adapt *to*. Merge `dev` between every stage.
+
+**Round 2, on stage 2's code** — [`…-stage2-review-sol.md`](260905d-declutter-top-bars-stage2-review-sol.md),
+GPT Sol, 2026-09-05. **Accept with changes**, seven findings, no P0 or P1: one reachable performance
+regression, one over-retained tombstone, and five documentation and comment defects. All seven were
+accepted and fixed; the dispositions table is in that file. The two that changed the code rather
+than the prose are recorded under stage 2 above.
 
 ## What this deliberately does not do
 

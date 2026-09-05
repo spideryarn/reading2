@@ -31,7 +31,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 
 | Param | Meaning | History | Example |
 |---|---|---|---|
-| `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
+| `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. **A `0` is dropped in silence** since 2026-09-05: there is no L0 column any more, and an old link is not an error (`offerableGists`, [layout.ts](../../src/web/layout.ts)). | push | `?cols=1,2`, or `?cols=none` |
 | `text` | `1` reading mode, `0` outline mode. **Read-only since 2026-09-05** — see below | push | `?text=0` |
 | `spine` | whether the bird's-eye rail is on screen. **Absent means on**, in every mode ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)); `0` is the only thing that takes it away. **Read-only since 2026-09-05** — see below | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
@@ -142,8 +142,10 @@ reader's question.
 the 'Spine' button (let's just default to always showing it)"* — so the rail is on wherever nobody
 has said otherwise, outline mode included, and nothing on screen writes `?spine=` or `?text=` any
 more ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)). Both are still honoured
-on arrival: a bookmarked `?text=0` still gives the whole-article outline, `?spine=0` still hides the
-rail. Deleting them would save little — `fitView` still needs a three-state answer, and App.tsx puts
+on arrival: `?spine=0` still hides the rail, and `?text=0` still collapses the rows — though only
+alongside `?mode=hierarchy`, since the default mode is Plain and Plain has no columns to collapse.
+**Stage 3 of that plan normalises a bare `?text=0` to `?mode=outline` at boot**, because the `Text`
+pill was the only way back to the prose and an old link would otherwise strand the reader. Deleting them would save little — `fitView` still needs a three-state answer, and App.tsx puts
 `?spine=` back to *absent* when Search or Ideas opens for a reader who had hidden the rail — and it
 is a URL-contract change, which is a different kind of change from taking a button off a bar. So
 this is now a parameter with no writer, which is a fair description of a **link format**.

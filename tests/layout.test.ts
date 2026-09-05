@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ROOT_PX,
   fitView,
+  offerableGists,
   proseAloneMaxPx,
   SPINE_W,
   type FitInput,
@@ -20,6 +21,24 @@ import {
 const article = { gistDepths: [0, 1, 2], leafDepth: 3 };
 const fit = (o: Partial<FitInput> & { windowWidth: number }) =>
   fitView({ ...article, showText: true, chosen: null, ...o });
+
+/**
+ * The one rule about *which* columns exist to be chosen from, tested where it
+ * lives rather than where each caller applies it.
+ *
+ * Both callers matter and they want different things: `fitView` below, and the
+ * pill row in App.tsx, which offers exactly this list. A pill for a column the
+ * fit will never open is a control that does nothing — which is what `Arg` had
+ * become by the time it was deleted.
+ */
+describe("offerableGists", () => {
+  it("drops depth 0 and keeps the rest, in order", () => {
+    expect(offerableGists([0, 1, 2])).toEqual([1, 2]);
+    expect(offerableGists([0])).toEqual([]);
+    expect(offerableGists([1, 2, 3])).toEqual([1, 2, 3]);
+    expect(offerableGists([])).toEqual([]);
+  });
+});
 
 describe("the widths granularity-zoom.md promises", () => {
   it("1600px: L1 and L2 at 240 and 1108 of prose — L0 stays closed", () => {
@@ -81,17 +100,40 @@ describe("the default hierarchy view (no ?cols=)", () => {
     expect(f.columns).toEqual([1]);
   });
 
-  it("an explicit ?cols= is honoured exactly, L0 included if asked for", () => {
-    const wide = fit({ windowWidth: 1600, chosen: [0, 1, 2] });
-    expect(wide.columns).toEqual([0, 1, 2]);
+  it("an explicit ?cols= is honoured exactly", () => {
+    const wide = fit({ windowWidth: 1600, chosen: [1, 2] });
+    expect(wide.columns).toEqual([1, 2]);
 
-    const narrow = fit({ windowWidth: 760, chosen: [0, 1, 2] });
+    const narrow = fit({ windowWidth: 760, chosen: [1, 2] });
     // Unchanged even though it overflows — the window must not overrule it.
-    expect(narrow.columns).toEqual([0, 1, 2]);
+    expect(narrow.columns).toEqual([1, 2]);
     expect(narrow.overflowing).toBe(true);
 
-    const onlyCoarse = fit({ windowWidth: 1600, chosen: [0] });
-    expect(onlyCoarse.columns).toEqual([0]);
+    const onlyCoarse = fit({ windowWidth: 1600, chosen: [1] });
+    expect(onlyCoarse.columns).toEqual([1]);
+  });
+
+  /**
+   * **An old link is not an error.** The L0 column left Hierarchy on
+   * 2026-09-05 — Greg: "let's get rid of the 'Arg' button and functionality
+   * altogether" — and every `?cols=0,1,2` written before that day is still in
+   * somebody's tabs and somebody's notes. The `0` is dropped in silence and
+   * the rest of the link works, which is the only behaviour that does not
+   * punish a reader for having saved something.
+   *
+   * The arc artefact itself survives all of this: `src/arc.ts` still runs and
+   * Outline mode still renders its sentence — see layout.ts § `offerableGists`
+   * and docs/plans/260905d-declutter-the-reading-view-top-bars.md.
+   */
+  it("drops the 0 from an old ?cols=0,1,2 rather than breaking the link", () => {
+    expect(fit({ windowWidth: 1600, chosen: [0, 1, 2] }).columns).toEqual([1, 2]);
+    // Still honoured exactly in the direction that matters: it does not fit,
+    // and it is not quietly cut down to what does.
+    const narrow = fit({ windowWidth: 760, chosen: [0, 1, 2] });
+    expect(narrow.columns).toEqual([1, 2]);
+    expect(narrow.overflowing).toBe(true);
+    // `?cols=0` on its own is an empty table, not a column of one cell.
+    expect(fit({ windowWidth: 1600, chosen: [0] }).columns).toEqual([]);
   });
 });
 
@@ -146,8 +188,8 @@ describe("which levels get given up", () => {
        still cut off the right-hand edge when they get there. So the widths
        follow the window, always; only the set of columns is theirs. */
     expect(f.widths).toEqual([176, 378]);
-    const wide = fit({ windowWidth: 900, chosen: [0, 1, 2] });
-    expect(wide.columns).toEqual([0, 1, 2]);
+    const wide = fit({ windowWidth: 900, chosen: [1, 2] });
+    expect(wide.columns).toEqual([1, 2]);
     expect(wide.overflowing).toBe(true);
   });
 
@@ -203,8 +245,8 @@ describe("a wider window never shows less of the article", () => {
 
 describe("the reader's choice beats the window", () => {
   it("an explicit set is honoured even when it doesn't fit", () => {
-    const f = fit({ windowWidth: 700, chosen: [0, 1, 2] });
-    expect(f.columns).toEqual([0, 1, 2]);
+    const f = fit({ windowWidth: 700, chosen: [1, 2] });
+    expect(f.columns).toEqual([1, 2]);
     expect(f.overflowing).toBe(true);
   });
 
@@ -215,7 +257,7 @@ describe("the reader's choice beats the window", () => {
   });
 
   it("ignores a depth this article hasn't got", () => {
-    expect(fit({ windowWidth: 1600, chosen: [0, 9] }).columns).toEqual([0]);
+    expect(fit({ windowWidth: 1600, chosen: [1, 9] }).columns).toEqual([1]);
   });
 });
 

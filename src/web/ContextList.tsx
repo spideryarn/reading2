@@ -12,9 +12,10 @@
  * ancestor path across the other columns that pointing at its rows does.
  *
  * **The current entry is the cell.** Everything the column's sticky cell used
- * to show — title, the author's-own-heading mark, gist, block range, the arc's
- * step marker — is shown here and nowhere else now, so nothing that was on
- * screen before the panel existed has been lost to it. The row-hover wash
+ * to show — title, the author's-own-heading mark, gist, block range, and (until
+ * the L0 column left on 2026-09-05) the arc's step marker — is shown here and
+ * nowhere else now, so nothing that was on screen before the panel existed has
+ * been lost to it. The row-hover wash
  * comes along too: entries on the hovered row's ancestor path light up, which
  * is what the cells did.
  *
@@ -54,39 +55,22 @@ interface Props {
   /**
    * How many lines of gist a landmark gets, from `landmarkLines` in
    * context.ts — 0 when the level is too long to afford any, which is the
-   * title-only landmark this column had before. The arc column takes at least
-   * one whatever the budget says: its sentence is the only content it has, and
-   * a landmark of nothing but `3 / 5` is a hole in the list.
+   * title-only landmark this column had before.
    */
   lines: number;
-}
-
-/**
- * The arc's position marker, set as the cell set it: the number in the level's
- * tint, the `/ total` after it faded and unbolded so the pair reads as one
- * position rather than as two numbers.
- */
-function Step({ index, total }: { index: number; total: number }) {
-  return (
-    <>
-      {index}
-      <span className="of"> / {total}</span>
-    </>
-  );
 }
 
 /** What a landmark says when hovered: the same things the open entry shows. */
 function EntryCard({ item, crumb }: { item: ContextItem; crumb: string | null }) {
   const { node } = item;
-  const body = item.text ?? node.gist;
   return (
     <div className="tip-entry">
       {crumb && <div className="tip-crumb">{crumb}</div>}
-      <div className={item.step ? "tip-title tip-step" : "tip-title"}>
-        {item.step ? <Step {...item.step} /> : node.title}
+      <div className="tip-title">
+        {node.title}
         {node.sourceHeading && <span className="own"> §</span>}
       </div>
-      {body && <p className="tip-gist">{body}</p>}
+      {node.gist && <p className="tip-gist">{node.gist}</p>}
     </div>
   );
 }
@@ -134,40 +118,31 @@ export function ContextList({ entries, onJump, onHoverNode, activeChain, crumbFo
           );
         }
         const cur = e.tier === "cur";
-        const heading = e.item.step ? <Step {...e.item.step} /> : node.title;
-        const body = e.item.text ?? node.gist;
         const className = [
           "ctx-item",
           `tier-${e.tier}`,
           e.before ? "before" : "",
           activeChain.has(node.id) ? "active" : "",
         ].filter(Boolean).join(" ");
-        // The arc's step marker is not a title and must not read as one — it
-        // kept its own mono, tinted treatment in the cell and keeps it here.
-        const titleClass = e.item.step ? "ctx-title ctx-step" : "ctx-title";
         if (cur) {
           return (
             <li key={node.id} className={className} onClick={jump} onMouseEnter={enter}>
-              <div className={titleClass}>
-                {heading}
+              <div className="ctx-title">
+                {node.title}
                 {node.sourceHeading && (
                   <span className="own" title="the author's own heading">§</span>
                 )}
               </div>
-              {/* Empty string for an arc with no sentence draws nothing —
-                  never the part's gist, which would turn the arc column into
-                  a copy of the parts column. See TableView § levels. */}
-              {body && <p className="gist-text">{body}</p>}
-              {!e.item.step && (
-                <BlockRange className="range" range={node.range} onJump={onJump} />
-              )}
+              {node.gist && <p className="gist-text">{node.gist}</p>}
+              <BlockRange className="range" range={node.range} onJump={onJump} />
             </li>
           );
         }
-        // The arc column has no titles — its sentence *is* the landmark — so
-        // it never drops to none. A title column shows its gist only when the
-        // level is short enough to pay for it.
-        const clamp = e.item.step ? Math.max(1, lines) : lines;
+        // A landmark shows its gist only when the level is short enough to pay
+        // for it — `lines` is 0 on a long level, and then this is the
+        // title-only list it has always been. It was `max(1, lines)` for the
+        // arc column, whose sentence was its only content; that column went on
+        // 2026-09-05 and every landmark here has a title now.
         return (
           <Tooltip
             key={node.id}
@@ -176,8 +151,8 @@ export function ContextList({ entries, onJump, onHoverNode, activeChain, crumbFo
             content={<EntryCard item={e.item} crumb={crumbFor(e.item)} />}
           >
             <li className={className} onClick={jump} onMouseEnter={enter}>
-              <div className={titleClass}>
-                {heading}
+              <div className="ctx-title">
+                {node.title}
                 {/* The same label the open entry gives it. A bare section sign
                     is not self-explanatory to anyone, and to a screen reader it
                     is a stray symbol — GPT Sol's review, 2026-08-26. */}
@@ -185,12 +160,12 @@ export function ContextList({ entries, onJump, onHoverNode, activeChain, crumbFo
                   <span className="own" title="the author's own heading">§</span>
                 )}
               </div>
-              {clamp > 0 && body && (
+              {lines > 0 && node.gist && (
                 <span
                   className="ctx-clamp"
-                  style={{ "--ctx-lines": clamp } as React.CSSProperties}
+                  style={{ "--ctx-lines": lines } as React.CSSProperties}
                 >
-                  {body}
+                  {node.gist}
                 </span>
               )}
             </li>

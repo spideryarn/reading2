@@ -194,7 +194,7 @@ import {
   sectionDepth,
   type Section,
 } from "./position.js";
-import { DEFAULT_ROOT_PX, fitView, proseVisible } from "./layout.js";
+import { DEFAULT_ROOT_PX, fitView, offerableGists, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
 import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
@@ -1691,13 +1691,31 @@ function Reader({
   const windowWidth = useWindowWidth();
   const rootFontPx = useRootFontPx();
 
-  // Gist columns are 0 … leafDepth-1. The leaf column is not user-toggled: it
-  // only makes sense in outline mode, where it is the deepest rung of the table
-  // of contents, and is meaningless beside the prose it labels.
+  /**
+   * Every gist depth this article has, 0 … leafDepth-1 — what `fitView` asks
+   * for, and it asks for all of them.
+   *
+   * The leaf column is not one: it only makes sense in outline mode, where it
+   * is the deepest rung of the table of contents, and is meaningless beside the
+   * prose it labels — so it gets its own pill below rather than a place here.
+   */
   const gistDepths = useMemo(
     () => geometry.columnDepths.filter((d) => d < geometry.leafDepth),
     [geometry],
   );
+
+  /**
+   * The subset a reader may actually open — 1 … leafDepth-1, because depth 0
+   * stopped being a column on 2026-09-05.
+   *
+   * Separate from `gistDepths` on purpose: `fitView` documents its input as the
+   * article's *full* depth range and applies the same rule itself, so handing it
+   * a pre-filtered list would quietly make the two disagree about what they are
+   * saying. One rule, `offerableGists` in layout.ts; two callers that need
+   * different things from it. This one is the pill inventory — a pill for a
+   * column the fit will never open is a control that does nothing.
+   */
+  const offerableGistDepths = useMemo(() => offerableGists(gistDepths), [gistDepths]);
 
   const [cols, setCols] = useQueryState("cols", colsParam);
   /* Read-only since 2026-09-05: the `Text` pill that wrote it went with the
@@ -1825,17 +1843,21 @@ function Reader({
   );
 
   /**
-   * What the L0 column renders — one sentence per part on where the argument
-   * stands there, rather than the root node repeated down the whole page.
-   * Null until `npm run arc` has been run for this article, and then the column
-   * falls back to the root exactly as it used to. See tree.js § the arc.
+   * The arc — one sentence per part on where the argument stands there — keyed
+   * by the row each part starts on.
+   *
+   * **Outline mode is the only thing that reads this now**, as its rung 4
+   * (`OutlinePanel` § `row.arc`). It used to draw Hierarchy's L0 column as
+   * well; that column went on 2026-09-05 with the rest of the declutter
+   * (layout.ts § `offerableGists`) and the artefact did not — `src/arc.ts`, the
+   * `arc` job step and `arc.json` are all untouched.
+   *
+   * **The owner's live arc, falling back to the payload's.** An owner may have
+   * arrived without one and had it written while they read, so theirs comes
+   * from `useArc` — which also returns `null` for an arc it knows to be stale,
+   * rather than showing sentences whose ranges no longer match. A visitor has
+   * only the payload. src/web/useArc.ts.
    */
-  /* **The owner's live arc, falling back to the payload's.** An owner may have
-     arrived without one and had it written while they read, so their column
-     comes from `useArc` — which also returns `null` for an arc it knows to be
-     stale, rather than drawing a column that would silently omit the entries
-     whose ranges no longer match. A visitor has only the payload.
-     src/web/useArc.ts. */
   const liveArc = capability.kind === "owner" ? (capability.arc.arc ?? undefined) : article.arc;
   const arcCells = useMemo(
     () => buildArcColumn(geometry, liveArc),
@@ -2333,8 +2355,8 @@ function Reader({
    * afterwards, when you have lost your place.
    */
   const nav = useMemo(
-    () => navPlan(geometry, fit.columns, proseOn, !!arcCells),
-    [geometry, fit.columns, proseOn, arcCells],
+    () => navPlan(geometry, fit.columns, proseOn),
+    [geometry, fit.columns, proseOn],
   );
   const navDepth = useArrowNav(
     nav,
@@ -2726,7 +2748,11 @@ function Reader({
 
   // Toggling writes the set into the URL, which also takes the columns off
   // automatic — the window should not quietly overrule a choice the reader made.
-  // The `auto` control clears it again.
+  // **And there is no way back to automatic** since the `auto` control went with
+  // the rest of the bar on 2026-09-05: only deleting `?cols=` by hand restores
+  // it. Deliberate — the pills are how a reader says what they want, and a
+  // control whose whole job is undoing them was part of what made this bar
+  // unreadable (docs/plans/260905d-declutter-the-reading-view-top-bars.md).
   const toggle = (d: number) => {
     const next = new Set(fit.columns);
     next.has(d) ? next.delete(d) : next.add(d);
@@ -2827,13 +2853,13 @@ function Reader({
             what this bar was full of. */}
         {!inMode && (
           <>
-            {gistDepths.map((d) => (
+            {offerableGistDepths.map((d) => (
               <Toggle
                 key={d}
                 className={PILL}
                 pressed={shownGists.includes(d)}
                 onPressedChange={() => toggle(d)}
-                title={columnHint(d, geometry.leafDepth, d === 0 && !!arcCells)}
+                title={columnHint(d, geometry.leafDepth)}
               >
                 {columnPill(d, geometry.leafDepth)}
               </Toggle>
@@ -2906,8 +2932,6 @@ function Reader({
            3 of docs/plans/260905d-declutter-the-reading-view-top-bars.md, which
            owes the aim a quieter indicator of its own. */
         navDepth={navDepth}
-        arcCells={arcCells}
-        arcPending={capability.kind === "owner" && capability.arc.working}
         onJump={jumpTo}
         notes={notes}
         noteReturn={noteReturn}

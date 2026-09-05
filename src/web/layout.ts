@@ -16,9 +16,12 @@
  *
  *  - **Shrink first, drop second.** Gists squeeze from a comfortable 15rem down
  *    to 11rem before any level is given up.
- *  - **Give up the coarse levels first.** They are what the spine already
- *    shows; the finest gist is the one that earns its place beside the
- *    paragraph it summarises. So L0 goes, then L1.
+ *  - **L0 is not a candidate at all** — the spine already shows what it would,
+ *    and since 2026-09-05 it is not an offerable column from any source
+ *    (`offerableGists`). Among what is left, the *finest* goes first: a reader
+ *    squeezed to one column is choosing between "the part I'm in" and "the
+ *    paragraph I'm in", and the part is what orients them, so L2 goes before
+ *    L1. See the `chosen === null` branch of `fitView` for the history.
  *
  * The detail column — prose in reading mode, the leaf column in outline mode —
  * takes whatever is left, so the table fills the window exactly when it can and
@@ -254,6 +257,32 @@ function spineWidth(mode: SpineMode): number {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/**
+ * The gist columns a reader may open, out of every gist depth the article has.
+ *
+ * **Depth 0 is not one of them, whoever asks.** Until 2026-09-05 it was merely
+ * closed by automatic fit and still honoured from `?cols=`; Greg took the whole
+ * column out — *"For Hierarchy mode, let's get rid of the 'Arg' button and
+ * functionality altogether"* — so the exclusion moved in front of the reader's
+ * choice as well. An old `?cols=0,1,2` therefore drops the `0` in silence and
+ * opens 1 and 2: a link somebody saved is not an error, and a column with one
+ * cell in it spanning the whole article was close to zero information per
+ * pixel anyway ("I can't currently see any value to the L0 column", Greg —
+ * granularity-zoom.md).
+ *
+ * **The arc artefact is not what left.** `src/arc.ts`, the `arc` job step and
+ * `arc.json` all still run, and Outline mode still renders the arc sentence for
+ * the part you are in. What went is the *column* in Hierarchy that used to draw
+ * it — docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5.
+ *
+ * Exported because two things have to agree about it: this file, which decides
+ * which columns are on screen, and the pill row in App.tsx, which offers them.
+ * A pill for a column the fit will never open is a control that does nothing.
+ */
+export function offerableGists(gistDepths: number[]): number[] {
+  return gistDepths.filter((d) => d !== 0);
+}
+
 export interface FitInput {
   windowWidth: number;
   /** Every gist depth this article has: 0 … leafDepth-1. */
@@ -368,8 +397,9 @@ export function fitView({
    * § Open for Greg.
    *
    * Takes `maxN` rather than always starting from `gistDepths.length`, because
-   * automatic fit (below) no longer considers L0 a candidate at all — the pool
-   * it is choosing among can be smaller than the article's full depth range.
+   * the pool it is choosing among is `offerableGists` rather than the
+   * article's full depth range — smaller by one on every article that has an
+   * L0 at all.
    */
   const gistsThatFit = (avail: number, maxN: number) => {
     let n = maxN;
@@ -405,18 +435,12 @@ export function fitView({
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   /**
-   * **Automatic never opens L0.** `?cols=` unset is not "every level that
-   * fits" — it is a starting *preference*, and L0 is not in it: the spine
-   * already carries the coarse levels (granularity-zoom.md#the-arc), a
-   * single-cell column spanning the whole article is close to zero
-   * information per pixel, and Greg's own read of it was "I can't currently
-   * see any value to the L0 column" (same doc). A reader who wants it back
-   * still can — `?cols=0,1,2` is honoured exactly, below.
+   * The choice, out of the columns there are to choose from — and `?cols=`
+   * cannot reach past that pool, which is the whole of what changed on
+   * 2026-09-05. See `offerableGists`.
    */
-  let gists =
-    chosen === null
-      ? gistDepths.filter((d) => d !== 0)
-      : gistDepths.filter((d) => chosen.includes(d));
+  const offerable = offerableGists(gistDepths);
+  let gists = chosen === null ? offerable : offerable.filter((d) => chosen.includes(d));
 
   /**
    * The leaf column — one nav label per paragraph — beside the prose.

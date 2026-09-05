@@ -45,7 +45,7 @@ the thing that decides where any future piece of state goes:
 **The path says which article, and which of its pages. The query string says how you are looking at
 it.**
 
-So `/read/noema-mythology-of-conscious-ai?cols=0,1&at=spya-tgnssb` is one link that carries both, and
+So `/read/noema-mythology-of-conscious-ai?cols=1,2&at=spya-tgnssb` is one link that carries both, and
 [url-state.md](url-state.md) still owns the second half of it. Old `/?slug=x` links are rewritten to
 `/read/x` before React mounts, keeping every parameter they arrived with — see
 [`main.tsx`](../../src/web/main.tsx), which also sends the two superseded spellings of the article's
@@ -572,8 +572,9 @@ The date at bottom-right is the one thing on the card that moves: it says whatev
 currently sorted by — see [§ The card says what it is sorted by](#the-card-says-what-it-is-sorted-by).
 
 The blurb is **the tree root's `gist`** — one sentence about the whole article, from the same pass
-that fills the L0 column ([granularity-zoom.md](granularity-zoom.md)). That is this product's own
-idea turned on its own library, and it costs nothing, because the sentence already exists.
+that writes every other gist ([granularity-zoom.md](granularity-zoom.md)); the L0 column it used to
+fill is gone, the sentence is not. That is this product's own idea turned on its own library, and it
+costs nothing, because the sentence already exists.
 
 Note what is deliberately *not* a fallback for it: **the first arc entry**. An arc sentence says
 where the argument stands at the end of part one ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)),

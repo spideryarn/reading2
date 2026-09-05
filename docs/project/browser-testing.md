@@ -401,25 +401,32 @@ click. Google needs the port to be on the local redirect allow-list; see
 
 ## The URLs and widths worth checking
 
-The view has two modes and the second is easy to forget:
+**`/` is Plain, not Hierarchy** — `DEFAULT_MODE` in [`src/modes.ts`](../../src/modes.ts) has been
+`plain` since 2026-08-29, so every case below that is about columns says `?mode=hierarchy`
+explicitly. A pass run against a bare `/` looks fine and exercises none of it.
 
 | URL | What you're looking at |
 |---|---|
-| `/` | reading mode: column headers `Article L0 │ Parts L1 │ Sections L2 │ Text verbatim` (the first reads `Argument L0` once `arc.json` exists), and a controls bar of `Arg · L1 · L2 · Para` and nothing else — [granularity-zoom.md § What the bar calls each column](granularity-zoom.md#what-the-bar-calls-each-column) |
-| `/?text=0` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
-| `/?at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
+| `/` | **Plain** — the article and nothing else. Since 2026-09-05 there is no controls bar to speak of here at all |
+| `/?mode=hierarchy` | reading mode: column headers `Parts L1 │ Sections L2 │ Text verbatim` and a controls bar of `L1 · L2 · Para` and nothing else — [granularity-zoom.md § What the bar calls each column](granularity-zoom.md#what-the-bar-calls-each-column) |
+| `/?mode=hierarchy&cols=0,1,2` | an old link from before the L0 column went. It must open **1 and 2**, silently dropping the `0` — not error, not draw an empty column |
+| `/?mode=outline` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
+| `/?mode=hierarchy&at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
-| `/?cols=0,1&text=1` | an explicit column choice, which pins the columns and takes them off auto-fit |
-| `/?spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
-| `/?text=0` (again) | since 2026-09-05 the rail is **on** here too, where it used to be off by default. `?text=0&spine=0` is the combination that proves `?spine=` still bites |
+| `/?mode=hierarchy&cols=1,2` | an explicit column choice, which pins the columns and takes them off auto-fit. There is no way back to automatic from the UI — the `auto` control went on 2026-09-05 |
+| `/?mode=hierarchy&spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
+| `/?mode=outline&spine=0` | since 2026-09-05 the rail is **on** in outline mode, where it used to be off by default, so this is the combination that proves `?spine=` still bites |
 | `/?mode=chat&spine=0` | the rail hidden with a mode band open, which is the only way `fitMode` returns `off`. Both smallest terms of the sticky bars' `left` at once |
 | `/?slug=<slug>` | a different article; defaults to `example` |
 
-**Widths.** At the default three gist columns the table is 1120px wide. Anything under that
-overflows horizontally and the pinned end columns start overlapping the middle ones — which is the
-design, not a fault: the pinned columns sit *on top* and the drop shadow is there to say "more to
-scroll". 1000×900 is a good window for exercising it; a full-width window hides the whole class of
-bug. Below the `td.text` minimum of 34rem the prose measure clamps rather than breaking.
+**Widths.** Auto-fit opens two gist columns at most — L1 and L2, never L0 — so the default
+Hierarchy table is those two plus the prose, and it fits the window rather than overflowing it
+(`tests/layout.test.ts` has the worked numbers). Overflow is now something you have to **ask for**:
+`?mode=hierarchy&cols=1,2,3` in a narrow window is the way to see the pinned end columns overlap the
+middle ones, which is the design and not a fault — the pinned columns sit *on top* and the drop
+shadow is there to say "more to scroll". 1000×900 is a good window for exercising it; a full-width
+window hides the whole class of bug. Below the `td.text` minimum of 34rem the prose measure clamps
+rather than breaking.
 
 ## Scroll, then read the address bar
 
@@ -668,10 +675,11 @@ with a frame count before believing otherwise:
    `keynav.ts` is measuring mid-flight instead of stepping from its own last target.
 5. **Press Back.** As with scrolling, it must leave the page — arrow keys write `?at=` through the
    ordinary position listener and must never push a history entry.
-6. **Walk ← to the far left and → to the far right.** The label must reach *Argument* at one end
-   and *Paragraphs* (with the `Text` header lit) at the other, and stop rather than wrap. Exactly one
-   header lights at a time. This is the check that catches a rung being folded into its neighbour,
-   which is what the arc column was doing until 2026-08-26.
+6. **Walk ← to the far left and → to the far right.** The aim must reach *Parts* at one end and
+   *Paragraphs* (with the `Text` header lit) at the other, and stop rather than wrap. Exactly one
+   header lights at a time. This is the check that catches a rung being folded into its neighbour.
+   The left end was *Argument* until 2026-09-05, when the L0 column went
+   ([keyboard.md § Choosing the level without a mouse](keyboard.md#choosing-the-level-without-a-mouse)).
 7. **Click a bottom-bar mode button with the mouse, then press ← / →.** The *columns* must move and
    the mode must not. Then Tab into that group and press ← / →: now the *mode* must move. One
    behaviour is the article's and the other is the radiogroup's, and the only thing that tells them

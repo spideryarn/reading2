@@ -262,7 +262,7 @@ The controls bar is a row of pills, one per column, coarse to fine — and since
 all it is:
 
 ```
-  Arg   L1   L2   Para
+  L1   L2   Para
   └─ the columns, coarse to fine ─┘
 ```
 
@@ -273,11 +273,15 @@ the `reading`/`outline` chip, the `↑↓` readout and the tree-version chip all
 rail is simply on now, and the prose is simply there; `?spine=0` and `?text=0` still work and
 nothing on screen writes them ([url-state.md](url-state.md)).
 
-- **`Arg`** is the L0 column: one sentence per part on where the argument stands
-  ([the arc](#the-arc)). Named for what it holds rather than for its depth, Greg 2026-08-27 — and it
-  keeps the name on an article with no `arc.json` yet, where the column falls back to the root gist.
-  A pill is furniture, and it should not rename itself because of a pipeline stage the reader never
-  ran; the column's own header and the pill's tooltip both still say `Article` there.
+**And so did `Arg`**, on the same day and by the same instruction:
+
+> For Hierarchy mode, let's get rid of the "Arg" button and functionality altogether.
+>
+> — Greg, 2026-09-05
+
+That is the L0 column, and it is the *column* that went — see [the arc](#the-arc), which is still
+generated and still on screen elsewhere.
+
 - **`L1` and `L2`** keep their numbers, because *Parts* and *Sections* is exactly what those depths
   mean here, and both the column header and the tooltip say so.
 - **`Para`** is the leaf column, one line per paragraph beside the prose
@@ -298,10 +302,14 @@ Greg, 2026-08-24:
 
 Those are two different requests and both are satisfied, but not by the same change.
 
-**One level higher** is literal: depth 0 now gets its own column. Without it the coarsest thing on
-screen was the parts list, and there was no single place saying what the piece *is*. (What that
-column *renders* changed later — the root node turned out to be a constant, and the column now
-carries [the arc](#the-arc). "What the piece is" moved to the masthead.)
+**One level higher** was answered literally at first: depth 0 got its own column, because without
+it the coarsest thing on screen was the parts list and there was no single place saying what the
+piece *is*. Both halves of that have since moved. What the column *rendered* changed once — the root
+node turned out to be a constant, so it carried [the arc](#the-arc) instead, and "what the piece is"
+moved to the masthead — and then on 2026-09-05 the column itself went
+([above](#what-the-bar-calls-each-column)). **Depth 0 is not an offerable column any more**, from
+`?cols=` or anywhere else: `offerableGists` in [`layout.ts`](../../src/web/layout.ts) is the one
+place that says so, and an old `?cols=0,1,2` drops the `0` and opens the other two.
 
 **Seeing the whole table of contents** is not about adding a column, and this is the part worth
 understanding. In reading mode the ToC rows are all present — but a part's row and the next part's
@@ -329,7 +337,7 @@ button you have to find. `#<blockid>` opens at a paragraph.
 > — Greg, 2026-08-25
 
 The leaf column — one `navLabel` per paragraph — is no longer confined to outline mode. Turned on
-with the **L3** control, it sits between the gists and the prose, so reading mode now contains
+with the **`Para`** pill, it sits between the gists and the prose, so reading mode now contains
 everything outline mode had *plus* the article, each label on the same row as the paragraph it
 labels. Opt-in, never chosen by auto-fit, because it costs a column's width and most reading doesn't
 want it.
@@ -449,14 +457,24 @@ Four decisions worth keeping:
   Entering search mode clears `?spine=`, so a reader who had put the rail away gets it back rather
   than half a feature drawn where they cannot see it.
 
-Because the spine now carries the coarse levels, **auto-fit never opens the L0 column at all** —
+Because the spine now carries the coarse levels, **auto-fit stopped opening the L0 column at all** —
 not "first to go on a narrow window", but never a candidate in the first place, on any window (below)
-— and what the article *is* lives in the masthead, so that costs nothing. A reader can still ask for
-it with `?cols=0,1,2` ([url-state.md](url-state.md)); the window just stops offering it unasked.
+— and what the article *is* lives in the masthead, so that cost nothing.
 [SPIDERYARN-READING2-Z], 2026-09-04: Greg on an iPad had reached `?cols=1,2` by hand and asked
-whether that shouldn't be the default.
+whether that shouldn't be the default. **On 2026-09-05 the column went entirely**, `?cols=0` and all
+([above](#what-the-bar-calls-each-column)).
 
 ### The arc
+
+**Where it is today, first.** The arc is generated exactly as this section describes, and it is
+rendered as **Outline mode's rung 4** — the sentence for the part you are in
+([`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)). It is no longer a column in Hierarchy: Greg,
+2026-09-05, *"let's get rid of the 'Arg' button and functionality altogether"*, and
+[260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Decisions 5 took the column and
+left the artefact, because Outline was already reading it and
+[260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md) decision 7 makes it
+Argument mode v1. Nothing below about *what an arc sentence is and why* has changed; read it as the
+description of a live artefact whose column has moved.
 
 > I can't currently see any value to the L0 column. It just has a single entry. Can you? Can we do
 > more with it? If not, should we remove it?
@@ -472,9 +490,8 @@ even new information, because the same sentence was in the masthead an inch abov
 It was not free, either — at the time this was written, L0 appeared automatically whenever three gist
 columns fit, from ~1100px up, so on any laptop at full screen. Across 1100–1440px it squeezed L1 and
 L2 down to 176–229px *and* held the prose at its 544px floor. Turning the constant sentence into the
-arc bought back some of that cost without giving up the column; auto-fit no longer opening L0 at all
-([above](#too-many-levels-fit-the-columns-dont-just-scroll-them)) buys back the rest — a reader who
-wants it is one `?cols=0,1,2` away.
+arc bought back some of that cost without giving up the column; auto-fit no longer opening L0 bought
+back the rest; and deleting the column on 2026-09-05 finished the thought.
 
 So the question became: is there anything that is genuinely **article-level** and still **varies
 vertically**? One thing, and it is not a level of the tree:
@@ -487,7 +504,7 @@ vertically**? One thing, and it is not a level of the tree:
   the test, and the reason it cannot collapse into being a second gist.
 
 ```
-  arc (L0)                              part gist (L1)
+  arc                                   part gist (L1)
   "Brains are not Turing machines;      "Leaving Turing world drags the
    what is left is to say where          material substrate back into any
    else there is to stand."              account of experience."
@@ -502,20 +519,21 @@ the argument said directly. Relational is still required; it just has to be carr
 
 **Its cells are the parts' cells.** The arc is built from the L1 column's own geometry
 ([`tree.ts` § the arc](../../src/web/tree.ts)), so the two share boundaries by construction rather
-than by two walks of the tree happening to agree. That also settles the arrow keys: ↑ / ↓ over the
-arc step part to part, because part-to-part is what its boundaries actually mean. It tags itself
-`data-nav-depth="0"` all the same — it is its own rung on the ← / → ladder, and the borrowing of the
-parts' boundaries happens once, in `navPlan` ([keyboard.md](keyboard.md#choosing-the-level-without-a-mouse)).
+than by two walks of the tree happening to agree — which is what lets Outline mode hang the sentence
+off the part row it belongs to. It used to be its own rung on the ← / → ladder, borrowing the parts'
+row starts inside `navPlan`; with the column gone, ← stops at Parts
+([keyboard.md](keyboard.md#choosing-the-level-without-a-mouse)).
 
-Three decisions worth keeping:
+Three decisions worth keeping, the first two of them written for the column and kept for whatever
+draws the arc next:
 
 - **It reads as a different kind of thing, not a second opinion.** Same boundaries as L1 means the
-  risk is looking like a duplicate column, so it carries no title — a step marker (`3 / 9`) instead —
-  and sets its sentence smaller and lighter. The distinction has to be visible before it is read.
-- **A missing sentence draws an empty cell.** Never the part's gist, which would quietly turn the
-  column back into a copy of its neighbour, and never a skipped `<td>` — a missing cell in an HTML
-  table does not leave a gap, it shifts every later cell in the row one column left, so the whole
-  view would silently misalign. Every part gets a cell whether or not the arc has words for it.
+  risk is looking like a duplicate, so it carried no title — a step marker (`3 / 9`) instead — and
+  set its sentence smaller and lighter. The distinction has to be visible before it is read.
+- **A missing sentence draws nothing.** Never the part's gist, which would quietly turn the arc back
+  into a copy of its neighbour. In the column this had teeth beyond taste: a skipped `<td>` does not
+  leave a gap in an HTML table, it shifts every later cell in the row one column left, so every part
+  got a cell whether or not the arc had words for it. `buildArcColumn` still emits them that way.
 - **It is a separate artefact, joined by range.** `arc.json`, not a field on `tree.json`, because
   the tree is stage 4's and `npm run hierarchy` rewrites it wholesale — anything merged in would vanish
   without a trace on the next run. Entries are matched to parts by block range and never by node id:
@@ -523,15 +541,15 @@ Three decisions worth keeping:
   its neighbour while still looking perfectly plausible. An entry that no longer matches is dropped.
 
 Generation is [`src/arc.ts`](../../src/arc.ts) — stage 5b, one model pass over the tree skeleton plus
-the full text, run with `POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`. Both inputs on purpose: you cannot write "what
-remains" without seeing what comes after, and the full text is what keeps the sentences in the
-author's vocabulary rather than in a summary of a summary. Without `arc.json` the column falls back
-to the root node exactly as before, so the feature is additive and an article is readable without it.
+the full text, run with `POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`. Both inputs on
+purpose: you cannot write "what remains" without seeing what comes after, and the full text is what
+keeps the sentences in the author's vocabulary rather than in a summary of a summary. Without
+`arc.json` nothing draws the rung, so the feature is additive and an article is readable without it.
 
-**Still open.** Whether this earns its column at all is being judged by using it, and the honest risk
-is the one the [vision](vision.md) warns about: an arc sentence is generated prose about the argument
-rather than a door into it. The defence is that it says *where you are in a case being made*, which
-is orientation rather than substitution — but that is an argument, not evidence.
+**Still open.** Whether this earns its place is being judged by using it, and the honest risk is the
+one the [vision](vision.md) warns about: an arc sentence is generated prose about the argument rather
+than a door into it. The defence is that it says *where you are in a case being made*, which is
+orientation rather than substitution — but that is an argument, not evidence.
 
 ### Too many levels: fit the columns, don't just scroll them
 
@@ -553,8 +571,10 @@ So the view now **chooses which columns to show, and how wide**, in
 - **Shrink first, drop second.** Gist columns squeeze from a comfortable 15rem down to 11rem before a
   level is given up. At 1035px two columns at 15rem don't fit, but the same two squeezed to ~14.9rem
   do — two levels of context beat one.
-- **L0 is never a candidate, and after that the coarser of what's left wins.** The spine already
-  shows what L0 would (above), so automatic fit's starting set is L1 and L2, not L0/L1/L2 —
+- **L0 is not a column at all, and after that the coarser of what's left wins.** The spine already
+  shows what L0 would (above), so fit's starting set is L1 and L2 — and since 2026-09-05 that is
+  true of an explicit `?cols=` too, which is `offerableGists` in
+  [`layout.ts`](../../src/web/layout.ts). It was merely never *auto*-opened before then —
   [SPIDERYARN-READING2-Z](../plans/260904b-address-user-feedback-reports-batch.md). Squeezed further
   than that, L2 goes before L1: the finest gist is the one that earns its place next to the paragraph
   it summarises, but a reader down to one column is choosing between "the part I'm in" and "the
@@ -593,13 +613,13 @@ Three things that make this work rather than merely function:
   neighbours once you deliberately scroll away from them. Pinning right is not free. A sticky element
   is painted with **no space reserved for it**, so `right: 0` shifts the last column left by the
   entire horizontal overflow the moment the page loads — covering that many pixels of live content at
-  rest, before the reader has touched anything. At 700px with `?cols=0,1,2` that was the whole
-  Sections column, 396px of it, hidden under the prose on arrival with nothing to indicate it was
-  there. Reserving the space properly means lifting the column out of the table's scroll extent (the
-  frozen-pane pattern: two tables kept in sync), which is a large restructure to buy back a behaviour
-  that only matters while overflowing — and auto-fit makes overflowing rare. So the prose no longer
-  pins; you scroll right to reach it, and the coarse column stays put on the left. (Mechanism
-  diagnosed by the `narrow-layout-probe` agent, 2026-08-25.)
+  rest, before the reader has touched anything. At 700px with three gist columns open that was the
+  whole Sections column, 396px of it, hidden under the prose on arrival with nothing to indicate it
+  was there. Reserving the space properly means lifting the column out of the table's scroll extent
+  (the frozen-pane pattern: two tables kept in sync), which is a large restructure to buy back a
+  behaviour that only matters while overflowing — and auto-fit makes overflowing rare. So the prose
+  no longer pins; you scroll right to reach it, and the coarse column stays put on the left.
+  (Mechanism diagnosed by the `narrow-layout-probe` agent, 2026-08-25.)
 - **The left pin sticks at the spine's edge, not at zero.** The rail is `position: fixed`, so it does
   not push the sticky edge along for us; `left: 0` would slide the pinned column underneath it.
 - **Overflow has to be discoverable.** macOS hides its scrollbars until you move, so a table that runs
@@ -682,8 +702,8 @@ stays put while the text breathes around it.
 - ~~**Zoom out (←)** — each visible group of items collapses into its parent's gist.~~
   ~~**Zoom in (→)** — each visible gist is replaced by its children's gists.~~ **Superseded.** That
   was written for a view showing one level at a time; the tabular view shows every level at once, so
-  there is no single "current level" for a key to move. Choosing levels is the `Arg / L1 / L2`
-  buttons ([what the bar calls each column](#what-the-bar-calls-each-column)) and `?cols=`
+  there is no single "current level" for a key to move. Choosing levels is the `L1 / L2` buttons
+  ([what the bar calls each column](#what-the-bar-calls-each-column)) and `?cols=`
   ([url-state.md](url-state.md#the-parameters)). The keys went instead to **stepping
   through the article one item at a time, at whichever level the pointer is hovering** — and ended up
   on ↑ / ↓ rather than ← / →, because up-down is the axis that means "further through the piece" at

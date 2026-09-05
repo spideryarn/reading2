@@ -38,9 +38,14 @@ import { navigableItems, type Cell } from "./tree.js";
 export type Tier = "cur" | "near" | "mid" | "far";
 
 /**
- * One item of a column, in document order. Built from a gist cell, or from an
- * arc cell — which is why `text` and `step` exist: the arc column has no
- * titles, only a sentence per part and a `3 / 9` marker.
+ * One item of a column, in document order, built from a gist cell.
+ *
+ * It carried two more fields until 2026-09-05 — `text` and `step` — because it
+ * could also be built from an *arc* cell, and the arc column had no titles,
+ * only a sentence per part and a `3 / 9` marker. That column went with the
+ * top-bar declutter (layout.ts § `offerableGists`) and took them with it, so
+ * every entry here now has a title and a gist. The arc artefact is untouched
+ * and Outline mode still renders it.
  */
 export interface ContextItem {
   node: TreeNode;
@@ -51,15 +56,6 @@ export interface ContextItem {
    * the list shows its title — "Notes" — and nothing else.
    */
   supplement?: boolean;
-  /** The arc sentence, when this is the arc column. Otherwise the gist is used. */
-  text?: string;
-  /**
-   * The arc column's step marker, in place of a title — `3` of `9`. Kept as
-   * two numbers rather than a formatted string because the marker is set like
-   * the cell's: the position in the tint, the `/ total` after it faded and
-   * unbolded (`.arc-step .of` in styles.css).
-   */
-  step?: { index: number; total: number };
 }
 
 export interface ContextEntry {
@@ -287,11 +283,13 @@ const GROUP_PX = 40;
  * A landmark's own padding, and its title — charged as **two lines**, because
  * in an eleven-rem column most section titles wrap and a budget that assumed
  * one would be systematically too generous for exactly the columns with the
- * least room. The arc's landmarks are charged less: their heading is a `3 / 5`
- * step marker, which cannot wrap.
+ * least room.
+ *
+ * There was a second, cheaper rate until 2026-09-05 (`STEP_LANDMARK_PX`, 22):
+ * the arc column's heading was a `3 / 5` marker, which cannot wrap. That column
+ * is gone, so every landmark here has a title that can.
  */
 const TITLE_LANDMARK_PX = 40;
-const STEP_LANDMARK_PX = 22;
 /** One more clamped line of gist, with the margin above the first folded in. */
 const LINE_PX = 18;
 /**
@@ -318,13 +316,11 @@ export function landmarkLines(entries: ContextEntry[], stableH: number): number 
   let groups = 0;
   let items = 0;
   let hasCurrent = false;
-  let arc = false;
   for (const e of entries) {
     if (e.kind === "group") groups += 1;
     else {
       items += 1;
       if (e.tier === "cur") hasCurrent = true;
-      if (e.item.step) arc = true;
     }
   }
   // A level with no item under the focus line (see currentIndex above) has no
@@ -334,12 +330,11 @@ export function landmarkLines(entries: ContextEntry[], stableH: number): number 
   // gone, with nothing to see and nothing to error.
   const landmarks = hasCurrent ? items - 1 : items;
   if (landmarks <= 0) return 0;
-  const perLandmark = arc ? STEP_LANDMARK_PX : TITLE_LANDMARK_PX;
   const spare =
     (stableH - HEADER_PX) * FILL -
     (hasCurrent ? CURRENT_PX : 0) -
     groups * GROUP_PX -
-    landmarks * perLandmark;
+    landmarks * TITLE_LANDMARK_PX;
   if (spare <= 0) return 0;
   return Math.min(MAX_LINES, Math.floor(spare / (landmarks * LINE_PX)));
 }
