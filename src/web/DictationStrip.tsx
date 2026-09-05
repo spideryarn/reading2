@@ -44,13 +44,14 @@
  * meter reading nothing and a meter pointed at a dead conferencing loopback
  * were the same picture.
  */
-import { Download, Loader2, Mic, Square, TriangleAlert, X } from "lucide-react";
+import { Download, Loader2, Mic, RotateCcw, Square, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MicLevel } from "./MicLevel.js";
 import { type MicDevice, listInputs } from "./mic-devices.js";
 import { type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
 import type { UseDictation } from "./useDictation.js";
 import { useNow } from "./useNow.js";
+import { useOnline } from "./useOnline.js";
 
 /**
  * What the strip says, in one place — because it is also what the live region
@@ -95,6 +96,25 @@ function dictationWords(d: UseDictation): string {
 const DICTATION_PROMISE =
   "Your voice is sent to be transcribed, and isn't stored. The words appear when you stop.";
 
+/**
+ * **What the button says instead when there is no network**, and why it is not
+ * merely disabled.
+ *
+ * The words that get saved come from `POST /api/transcribe`, so with no
+ * connection a dictation is a minute of talking and then a failure. Greg asked
+ * for exactly this, 2026-09-05: *"If it's offline before, we should disable the
+ * mic input button."*
+ *
+ * It takes the description slot from `DICTATION_PROMISE` while it applies. The
+ * promise is a fact about a control the reader cannot use yet; the reason they
+ * cannot use it is the more urgent of the two, and there is one slot.
+ *
+ * Only ever shown on a `navigator.onLine` of `false`, which is the one
+ * direction that value can be trusted — [`useOnline.ts`](./useOnline.ts).
+ */
+const DICTATION_OFFLINE =
+  "Dictation needs an internet connection, and your browser says there isn't one.";
+
 /** Ids have to be unique on a page with four of these. */
 let promiseSeq = 0;
 
@@ -108,6 +128,15 @@ export function DictationButton({
   disabled?: boolean | undefined;
 }) {
   const busy = dictation.transcribing;
+  /* **Read here rather than passed in**, so that all six boxes get it from one
+     place and a seventh cannot forget. `false` only; see `useOnline.ts`. */
+  /* **Only while idle**, because this one control is also Stop. Disabling it on
+     `offline` while a dictation is running would trap the recording: the reader
+     could not stop the microphone, and since 2026-09-05 a recogniser losing its
+     connection no longer ends the dictation either, so nothing else would.
+     GPT Sol's plan review, F1 — a P0 the first implementation had. Stopping
+     always works; the guard is about starting something that cannot. */
+  const offline = !useOnline() && !dictation.armed && !dictation.transcribing;
   /* Stable across renders, and unique per button: `useState` with an
      initialiser rather than a counter read during render, which would hand two
      buttons the same id under StrictMode's double invocation. */
@@ -119,7 +148,7 @@ export function DictationButton({
           nothing: it is a fact about how the control works, not a warning about
           whether it does. */}
       <span id={describedBy} className="prof-mic-note">
-        <span className="sr-only">{DICTATION_PROMISE}</span>
+        <span className="sr-only">{offline ? DICTATION_OFFLINE : DICTATION_PROMISE}</span>
       </span>
     <button
       type="button"
@@ -132,17 +161,38 @@ export function DictationButton({
       className={`prof-mic${dictation.phase === "listening" ? " on" : ""}${
         dictation.phase === "opening" ? " opening" : ""
       }${busy ? " busy" : ""}`}
-      aria-label={busy ? "Turning your words into text" : dictation.armed ? "Stop dictating" : "Dictate"}
+      /* **The reason goes in the name when the control is dead.** A disabled
+         button announces its name and its disabled state and nothing else, so a
+         name that still says "Dictate" tells somebody the one thing they can
+         already see. Ordered before `armed` because a dictation cannot be
+         running while the browser reports no network at all. */
+      aria-label={
+        offline
+          ? DICTATION_OFFLINE
+          : busy
+            ? "Turning your words into text"
+            : dictation.armed
+              ? "Stop dictating"
+              : "Dictate"
+      }
       /* The promise is the button's *description*, so focusing it reads the
          name and then the sentence. There is deliberately no `title`: with an
          `aria-label` present an unused `title` becomes the description anyway,
          so the slot was already spoken for. */
       aria-describedby={describedBy}
+      /* **The one case where a `title` is right on this button.** The comment
+         below says there is deliberately none, and that holds for the working
+         control: with an `aria-label` present an unused `title` becomes the
+         description, and that slot carries the promise. Offline, the label and
+         the description are already saying this same sentence, so the tooltip
+         adds no third voice — and it is the only way a mouse user finds out why
+         the button is dead. */
+      {...(offline ? { title: DICTATION_OFFLINE } : {})}
       /* **Disabled while transcribing, and that is not merely cosmetic.** The
          microphone is already off; a press here can only mean "start again",
          and starting again two hundred milliseconds before the words arrive
          throws away the dictation the reader just gave. */
-      disabled={disabled || busy}
+      disabled={disabled || busy || offline}
       onClick={toggle}
     >
       {busy ? (
@@ -286,7 +336,11 @@ export function DictationStrip({
       )}
 
       {dictation.recording && (
-        <SaveRecording recording={dictation.recording} onDiscard={dictation.clearRecording} />
+        <SaveRecording
+          recording={dictation.recording}
+          onDiscard={dictation.clearRecording}
+          onRetry={dictation.canRetry ? dictation.retry : null}
+        />
       )}
 
       {/* `aria-hidden`, because the live region above is already carrying this
@@ -324,7 +378,8 @@ function Elapsed({ since }: { since: number }) {
 }
 
 /**
- * The audio of a dictation that produced nothing, offered back.
+ * The audio of a dictation that produced nothing, offered back — and, when the
+ * reason was a failure rather than an answer, a second go at it.
  *
  * **It is a download, and the copy does not promise more than that.** Greg asked
  * to "reveal it in the OS file explorer"; no web page can do that, so this hands
@@ -340,10 +395,23 @@ function Elapsed({ since }: { since: number }) {
 function SaveRecording({
   recording,
   onDiscard,
+  onRetry,
 }: {
   recording: MicRecording;
   onDiscard(): void;
+  /**
+   * Send the same audio again, or null when that could not help.
+   *
+   * Null after `[mic-silent]` — a *successful* transcription of a recording
+   * with no speech in it. The audio is still worth offering there (the reader
+   * can hear what we heard) and a second identical request is not.
+   */
+  onRetry: (() => void) | null;
 }) {
+  /* A retry is a request, so with no network it is a button that cannot work.
+     Same rule and same direction as the microphone button above: `false` is
+     trusted, `true` is not. */
+  const online = useOnline();
   const save = () => {
     const url = URL.createObjectURL(recording.blob);
     const a = document.createElement("a");
@@ -357,9 +425,29 @@ function SaveRecording({
 
   return (
     <p className="prof-recording">
-      <span className="prof-recording-what">
-        Nothing was transcribed. The audio is still here if you want it.
-      </span>
+      {/* **One sentence for both cases, because there are two now.** It used to
+          say "Nothing was transcribed", which was true while the audio was kept
+          only when the box was empty. Since 2026-09-05 it is kept whenever the
+          transcription failed — including when the recogniser's rough words are
+          in the box — and that sentence would then be false. The error line
+          above already says what happened; this row's job is the audio. */}
+      <span className="prof-recording-what">The audio is still here if you want it.</span>
+      {onRetry && (
+        /* **First, and it is the primary action.** Everything else in this row
+           is salvage — a file to keep, a thing to throw away — and the reader's
+           actual want is the words. Greg asked for it by name, 2026-09-05.
+           `title` rather than a disabled button with no reason on it, for the
+           offline case. */
+        <button
+          type="button"
+          className="prof-recording-retry"
+          onClick={onRetry}
+          disabled={!online}
+          {...(online ? {} : { title: DICTATION_OFFLINE })}
+        >
+          <RotateCcw size={12} /> Try again
+        </button>
+      )}
       <button type="button" className="prof-recording-save" onClick={save}>
         <Download size={12} />{" "}
         {/* Says which it is when it is only part of it, because "the recording"

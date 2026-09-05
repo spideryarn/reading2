@@ -10,7 +10,7 @@
  * [`src/transcribe.ts`](../transcribe.ts) for why a chat model rather than one
  * of OpenRouter's nineteen dedicated transcribers.
  */
-import { MAX_AUDIO_BYTES, formatOf } from "../dictation-limits.js";
+import { MAX_AUDIO_BYTES, formatOf, tooLongMessage } from "../dictation-limits.js";
 import { apiFetch, failure } from "./lib/api.js";
 import type { DictationContext } from "./useDictation.js";
 
@@ -41,9 +41,24 @@ function base64(bytes: Uint8Array): string {
  */
 export type TranscriptionResult =
   | { ok: true; text: string }
-  | { ok: false; message: string }
+  | {
+      ok: false;
+      message: string;
+      /**
+       * **Whether sending the same bytes again could possibly work.**
+       *
+       * The reason a Retry button needs a field rather than a guess:
+       * [copy.md](../../docs/project/copy.md) is explicit that telling somebody
+       * to try again when retrying cannot work is the expensive mistake — they
+       * do it four or five times and conclude the app is broken. A recording
+       * this browser cannot encode, or one over the size cap, will be refused
+       * identically for ever; a 502 or a dropped connection very likely will
+       * not. GPT Sol's plan review, F5.
+       */
+      retryable: boolean;
+    }
   /** The reader navigated away or pressed again. Say nothing to anybody. */
-  | { ok: false; abandoned: true; message: string };
+  | { ok: false; abandoned: true; message: string; retryable: false };
 
 /**
  * How long the client waits before giving the box back.
@@ -71,7 +86,12 @@ export async function sendForTranscription(
 ): Promise<TranscriptionResult> {
   const format = formatOf(mimeType);
   if (!format) {
-    return { ok: false, message: "This browser recorded audio in a format we can't transcribe. [mic-format]" };
+    /* The same browser will encode the same way next time. */
+    return {
+      ok: false,
+      retryable: false,
+      message: "This browser recorded audio in a format we can't transcribe. [mic-format]",
+    };
   }
   /* **Checked before the megabyte goes over the wire**, not after. The recorder
      stops below this, so reaching here means its own accounting and reality
@@ -79,10 +99,11 @@ export async function sendForTranscription(
      makes possible. The reader is told the recording was too long rather than
      handed whatever a refused request looks like from here. */
   if (blob.size > MAX_AUDIO_BYTES) {
-    return {
-      ok: false,
-      message: "That recording is too long to transcribe in one go. Try a shorter passage. [mic-too-long]",
-    };
+    /* **The same sentence the server would have sent**, from the file that owns
+       the number. Two ends wrote their own until 2026-09-05, and a reader who
+       hit the client one and a reader who hit the server one quoted the same
+       four characters at us for two different sentences. */
+    return { ok: false, retryable: false, message: tooLongMessage() };
   }
   /* One signal out of two: the caller's, which is the reader moving on, and
      ours, which is nothing having answered. `AbortSignal.any` rather than a
@@ -100,7 +121,23 @@ export async function sendForTranscription(
     });
     if (!res.ok) {
       const err = await failure(res);
-      return { ok: false, message: err.message };
+      /* **From the status, not from the sentence.** A 429 is a service that is
+         busy and a 5xx is one that broke, and both are worth another go in ten
+         seconds; a 400, a 402, a 413 or a 401 is a refusal of *this* request or
+         of this app's account, and no amount of pressing a button changes
+         either. Reading the code out of the prose would work today and stop
+         working the moment somebody rewords a message, which is the thing
+         copy.md keeps freely rewritable on purpose.
+
+         **503 is the exception, and it is not a generic one.** The only 503
+         `POST /api/transcribe` returns is `[mic-not-set-up]` — this server has
+         no `OPENROUTER_API_KEY` (`src/transcribe.ts`). That is copy.md's `ours`
+         kind: nothing the reader can do, and a Retry button under it is the
+         expensive mistake that file names, where somebody presses five times
+         and concludes the app is broken. If this endpoint ever grows a
+         genuinely transient 503, this is the line to revisit. */
+      const retryable = res.status === 429 || (res.status >= 500 && res.status !== 503);
+      return { ok: false, message: err.message, retryable };
     }
     const json = (await res.json()) as { text?: unknown };
     return { ok: true, text: typeof json.text === "string" ? json.text : "" };
@@ -115,13 +152,25 @@ export async function sendForTranscription(
          `abandoned` for that would hand the box back with no explanation at
          all. `TimeoutError` is what `AbortSignal.timeout` aborts with. */
       if (deadline.aborted) {
-        return { ok: false, message: "That took too long to transcribe. Try again, or type it. [mic-slow]" };
+        return {
+          ok: false,
+          retryable: true,
+          message: "That took too long to transcribe. Try again, or type it. [mic-slow]",
+        };
       }
-      return { ok: false, abandoned: true, message: "" };
+      return { ok: false, abandoned: true, retryable: false, message: "" };
     }
     if ((err as { name?: string } | null)?.name === "TimeoutError") {
-      return { ok: false, message: "That took too long to transcribe. Try again, or type it. [mic-slow]" };
+      return {
+        ok: false,
+        retryable: true,
+        message: "That took too long to transcribe. Try again, or type it. [mic-slow]",
+      };
     }
-    return { ok: false, message: "We couldn't reach the server to transcribe that. [mic-offline]" };
+    return {
+      ok: false,
+      retryable: true,
+      message: "We couldn't reach the server to transcribe that. [mic-offline]",
+    };
   }
 }

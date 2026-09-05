@@ -125,6 +125,19 @@ The lesson worth keeping: *don't guess on the author's behalf* was sound, but a 
 only a forcing function if somebody is coming who will be forced. Meanwhile it hides the next
 regression from everyone, which is what it was doing.
 
+**And the general form, which the other session named better than this batch did.** Caution about
+touching someone else's work is not one rule, it is two, and the test is what the timid option
+destroys:
+
+- Raising the allowance from 9 to 10 would have **destroyed information** — the guard stops being
+  able to ask the question again. Caution was right there, and would still be right.
+- Correcting a sentence that misleads its next reader **destroys nothing**. There, caution was only
+  delay dressed up as respect — and working out whose the sentence was cost more than fixing it.
+
+Resolved on `dev` at `0e89d69f`: the two halves landed in different files and did not collide, and
+`tests/store-migration-registry.test.ts` is green again — 13 tests, verified here rather than taken
+on report.
+
 Every agent in this batch was told it is inherited, so nobody wastes time deciding whether it is
 theirs. It is listed here so it is not lost; it is not on
 [awaiting-approval.md](../user-feedback/awaiting-approval.md), which is for feedback reports.
