@@ -733,15 +733,12 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin-left: 0.5rem;
 }
 
-.provenance {
-  margin-left: auto;
-  font-size: 0.68rem;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  border: 1px dashed var(--rule-strong);
-  border-radius: 4px;
-  padding: 0.1rem 0.45rem;
-}
+/* `.provenance` was here — the dashed monospace chip in the controls holding the
+   tree's version, `margin-left: auto` so it sat hard right. Gone on 2026-09-05
+   with the glossary's and the quotes' provenance lines; App.tsx says why, at the
+   spot it used to occupy. Note the comment further up this file (§ `.about`)
+   still warns that `.provenance` is "taken" — it is not any more, but the reason
+   that class was the wrong name for a masthead list stands on its own. */
 
 /* What ↑ / ↓ are currently aimed at, in words. The aim follows the pointer
    (keynav.ts), and the column header lights up to match — but the aimed zone
@@ -11870,16 +11867,18 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
      deletion machine. Items keep their size and the row scrolls instead. */
   .controls > * { flex: none; }
 
-  /* The four things in the bar that a phone cannot use or does not need:
+  /* The three things in the bar that a phone cannot use or does not need:
      the section label above the pills (the pills say `L2`, which is the part
-     that matters), the ↑↓ hint (a phone has no arrow keys), the `fit`/`auto`
-     and `reading`/`outline` chips, and the tree version. `.mode.on` is NOT in
-     this list — in a mode band it is the only thing on screen naming which mode
-     you are in. */
+     that matters), the ↑↓ hint (a phone has no arrow keys), and the `fit`/`auto`
+     and `reading`/`outline` chips. `.mode.on` is NOT in this list — in a mode
+     band it is the only thing on screen naming which mode you are in.
+
+     There were four: the tree version was the fourth, and hiding it here was
+     the first admission that it was not worth its space. It is gone from every
+     width now (2026-09-05) — see § the controls, where the rule was. */
   .controls-label,
   .keynav,
-  .controls .mode:not(.on),
-  .controls .provenance { display: none; }
+  .controls .mode:not(.on) { display: none; }
 
   /* The masthead's left padding follows `--logo-w` on its own (§ shell), but its
      generous vertical padding does not, and it is the first thing between the
@@ -13416,18 +13415,16 @@ table.only-prose thead { display: none; }
 .quotes-why-card { max-width: 16rem; }
 .quotes-where { flex: none; }
 
+/* One child now — the rerun button — but the column and the gap stay: they cost
+   nothing and they are what a second row would land in. `.quotes-provenance`
+   was the first row, and went with the glossary's on 2026-09-05. `Foot` in
+   QuotesPanel.tsx says why. */
 .quotes-foot {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.55rem 0.7rem;
   border-top: 1px solid var(--rule);
-}
-.quotes-provenance {
-  margin: 0;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
 }
 
 /* ------------------------------------------------------- § score bars ----

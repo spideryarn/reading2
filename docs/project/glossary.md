@@ -208,6 +208,16 @@ move when a pass lands and both of which are the number the reader was actually 
 on 2026-09-05 — [above](#there-was-a-start-again-beside-it-and-it-went). It is still on the artefact
 and in the export.
 
+**The same day, the same line went from everywhere else it was shown to a reader**, on Greg's *"also
+do the same for Quotes (and any other modes as needed)"*: the quotes panel's foot
+([`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx) § `Foot`) and the dashed chip in the
+reading view's controls that held the tree's version
+([`src/web/App.tsx`](../../src/web/App.tsx)). Those were the only three. Two survivors, both
+deliberate: [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) § `StageRow`, which is where an
+owner is *meant* to look, and the thread page's *"Written by …"*
+([`src/web/Tweets.tsx`](../../src/web/Tweets.tsx)), which sits on a page of its own, carries when and
+how long as well, and reads as a byline rather than as a build stamp. ⟨Fable⟩
+
 The second pass is given their FORBIDDEN checklist almost verbatim, because a plain "don't repeat
 these" is not enough: the model's idea of a repeat is looser than ours, and it will happily return
 the synonym, the plural and the subcategory of something already on the list.
