@@ -4439,6 +4439,37 @@ export const linkPreviews = spideryarn.table(
     /** Readability's word count for the destination. Null when it found none. */
     words: integer("words"),
     /**
+     * **The opening of Readability's plain text, capped — what the summariser
+     * reads, and the only column here that never reaches a card.**
+     *
+     * Stage 3 asks a model how this destination stands to the piece the reader
+     * is holding, and Greg's spec is *"run Mozilla Readability first before
+     * passing to GPT Luna"*. The alternatives were both worse: summarising from
+     * the four metadata fields above gives the model a CMS blurb to paraphrase,
+     * and fetching the page a second time at summary time would undo the one
+     * thing this table exists for — that a destination learns of one fetch,
+     * ever, rather than of one per reader.
+     *
+     * **It is more of exactly what is already here**, not a new kind of thing:
+     * the page's own public words, under the same expiry and the same retention
+     * sweep, in a table that still holds nothing about who asked.
+     *
+     * **Two caps, and they are different numbers on purpose.**
+     * `PREVIEW_EXCERPT_CHARS` in src/link-previews.ts is what is *stored* here —
+     * 8,000 — and `SUMMARY_DEST_CHARS` in src/link-summary.ts is what reaches a
+     * *prompt* — 6,000. The gap is slack: a modest change to the prompt's
+     * appetite must not mean refetching every destination in the cache. Cutting
+     * again at the prompt is not theatre either, for the mirror of that reason:
+     * a row written by a build with a larger store must not silently become a
+     * larger prompt.
+     *
+     * Null on every row that is not an `ok`, and null on an `ok` written before
+     * this column existed — in which case there is no summary for that address
+     * until its preview expires and is fetched again. A degradation, deliberately,
+     * rather than a refetch on the summary path.
+     */
+    excerpt: text("excerpt"),
+    /**
      * **Retention only, and it must never reach a caller.** See the header,
      * point 1: a `fetched_at` in a response says whether and when some prior
      * reader caused a fetch.
@@ -4489,22 +4520,25 @@ export const linkPreviews = spideryarn.table(
      * `failure` and no content; an `ok` has at least one of the three things
      * worth showing, because a row with none of them is a cache hit that draws
      * an empty section, which reads as a lookup that broke.
+     *
+     * **`excerpt` counts as content**, so only an `ok` may carry one — which is
+     * what stops a failure row keeping the text of a page it never read.
      */
     check(
       "link_previews_shape",
       sql`case ${t.outcome}
             when 'alias' then ${t.finalTarget} is not null and ${t.failure} is null
                         and ${t.claimId} is null
-                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}) = 0
+                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}, ${t.excerpt}) = 0
             when 'ok' then ${t.finalTarget} is null and ${t.failure} is null
                         and ${t.claimId} is null
                         and num_nonnulls(${t.title}, ${t.description}, ${t.firstParagraph}) > 0
             when 'pending' then ${t.finalTarget} is null and ${t.failure} is null
                         and ${t.claimId} is not null
-                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}) = 0
+                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}, ${t.excerpt}) = 0
             else ${t.finalTarget} is null and ${t.failure} is not null
                         and ${t.claimId} is null
-                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}) = 0
+                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}, ${t.excerpt}) = 0
           end`,
     ),
     check("link_previews_words", sql`${t.words} is null or ${t.words} >= 0`),
@@ -4554,7 +4588,19 @@ export const linkPreviews = spideryarn.table(
  * is the whole point, and neither table may grow a column that joins them.
  *
  * Rows older than the window are deleted by the same statement that counts them,
- * so the table is bounded by (readers × allowance) rather than by history.
+ * so an **active** reader's rows are bounded by their allowance rather than by
+ * their history.
+ *
+ * **It sweeps the asking owner's rows and nobody else's**, which is the honest
+ * version of a sentence that used to say "rows older than the window are
+ * deleted" and stop. A reader who stops hovering links leaves their last
+ * window's rows behind for good: nothing counts them, nothing serves them, and
+ * nothing comes back to remove them. That is a bounded leak — at most one
+ * window's allowance per reader who ever used the feature, which at these caps
+ * is a few hundred rows for a whole readership — and it is written down rather
+ * than swept because a cron for it would be more machinery than the rows are.
+ * The `ON DELETE CASCADE` on `owner_id` is what clears them when an account
+ * goes. GPT Sol, 2026-09-05.
  */
 export const rateLimitEvents = spideryarn.table(
   "rate_limit_events",
@@ -4577,8 +4623,143 @@ export const rateLimitEvents = spideryarn.table(
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
   },
   (t) => [
-    check("rate_limit_events_bucket", sql`${t.bucket} in ('link-preview-fetch')`),
+    check(
+      "rate_limit_events_bucket",
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill')`,
+    ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),
+    /**
+     * **The global fuse's query, which is the one that reads across owners.**
+     *
+     * Everything else here is per-owner and served by the index above. The
+     * daily fuse on Luna fills (`RatePolicy.daily.globalFills`) counts one
+     * bucket over one window for *everybody*, and without this it is a scan of
+     * every reader's rows on the cold path of a summary.
+     */
+    index("rate_limit_events_bucket_started").on(t.bucket, t.startedAt),
+  ],
+);
+
+/* --------------------------------------------------------- link summaries -- */
+
+/**
+ * **How the page on the far end of a link stands to the piece the reader is
+ * holding** — the Luna summary, and the owned half of the link card.
+ *
+ * `linkPreviews` above is ownerless because it holds *what a page says about
+ * itself*, which is the same for everybody. This row is the opposite kind of
+ * thing: it is written from the reader's own profile, from the article they are
+ * in, and from the paragraph the link sits in, so it is about **this reader
+ * reading this piece** and a shared row would be both wrong and a disclosure.
+ * Two caches, deliberately, and the split is the most important structural fact
+ * in
+ * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md.
+ *
+ * ## The owner IS in the key, unlike `glossary_lookups`
+ *
+ * The obvious shape to copy is `glossaryLookups`, whose primary key is
+ * `(article_id, entry_id)` with `owner_id` as a column beside it — and that is
+ * correct there, because an `articles` row has exactly one owner today, so the
+ * owner in the key would be redundant.
+ *
+ * This table does not copy it, and the reason is what the two rows *are*. A
+ * glossary lookup is a model's answer about **the article**; two readers of one
+ * article would want the same one. This is a model's answer about **the
+ * reader** — their profile is a prompt input. The day `articles` stops being
+ * one row per owner (docs/plans/260827ai-public-read-only-access.md, stage 3,
+ * splits `articles` from `shelf_entries` along exactly that line) an
+ * article-keyed row would start serving one reader's personalised summary to
+ * another. Redundancy today against a cross-reader leak later is not a close
+ * call, and it costs one uuid in an index.
+ *
+ * ## Staleness is validated, not assumed
+ *
+ * `(owner, article, target)` alone never changes when the article is
+ * re-extracted or the reader edits their profile, and both are prompt inputs —
+ * so a personalised summary would be stale for ever. GPT Sol, 2026-09-05,
+ * finding P1-3. The four fingerprints below are compared on every read and a
+ * mismatch is a miss, which rewrites the row in place.
+ *
+ * They are four columns rather than one combined hash on purpose: when a
+ * summary is being regenerated more often than it should be, the column that
+ * changed is the whole diagnosis, and a single fingerprint would say only that
+ * something did.
+ */
+export const linkSummaries = spideryarn.table(
+  "link_summaries",
+  {
+    /** `auth.users(id)`. FK in the custom migration, as with every `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /**
+     * `requestTarget(url)` — the same identity `link_previews.target` uses, and
+     * deliberately not `urlKey`. src/urls.ts, and GPT Sol's P1-2.
+     */
+    target: text("target").notNull(),
+    /** `pending` while somebody is generating it; `ready` once there is one. */
+    status: text("status").notNull(),
+    /** The summary itself. Null on a `pending` row and never otherwise. */
+    summary: text("summary"),
+    /**
+     * **The fencing token for the single-flight claim**, exactly as
+     * `link_previews.claim_id` is, and for the reason written there: without one
+     * a claimant that stalled past its lease could delete its successor's claim.
+     * Here it also stops a loser writing its answer over a winner's.
+     */
+    claimId: uuid("claim_id"),
+    /**
+     * A hash of the destination text the model was given. Changes when the
+     * far-end page is fetched again and says something different.
+     */
+    destHash: text("dest_hash").notNull(),
+    /**
+     * A hash of what the reader is currently reading, as the prompt carried it
+     * — the title, the piece's one-sentence gist, the link's own words and the
+     * paragraph it sits in. Changes when the article is re-extracted.
+     */
+    contextHash: text("context_hash").notNull(),
+    /**
+     * `hashProfile(renderProfile(…))`, or the sentinel for a reader who has
+     * written nothing. src/profile.ts already mints this for exactly this
+     * purpose, and it has a defined value for "no profile" so that *having no
+     * profile* and *not having asked* cannot be the same string.
+     */
+    profileHash: text("profile_hash").notNull(),
+    /**
+     * The prompt's version, bumped by hand when the wording changes — see
+     * `LINK_SUMMARY_PROMPT_VERSION` in src/link-summary.ts. A prompt edit that
+     * left every stored summary standing would be a change nobody could see the
+     * effect of.
+     */
+    promptVersion: integer("prompt_version").notNull(),
+    /** Which model wrote it. A tier change makes every row stale, as it should. */
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When this stops being an answer. On a `pending` row it is the claim's
+     * lease, which is why an abandoned generation cannot wedge a link.
+     */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.articleId, t.target] }),
+    check("link_summaries_status", sql`${t.status} in ('pending','ready')`),
+    /**
+     * The union, as a constraint — `link_previews_shape`'s argument, one table
+     * down: a `pending` row holds a claim and no answer, a `ready` row holds an
+     * answer and no claim.
+     */
+    check(
+      "link_summaries_shape",
+      sql`case ${t.status}
+            when 'pending' then ${t.summary} is null and ${t.claimId} is not null
+            else ${t.summary} is not null and ${t.claimId} is null
+          end`,
+    ),
+    /** The sweep's query, and the only one that does not name a key. */
+    index("link_summaries_expires_at").on(t.expiresAt),
   ],
 );

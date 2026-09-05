@@ -213,7 +213,9 @@ describe("declaredTables", () => {
        `rate_limit_events` arrived 2026-09-05
        (drizzle/20260905172612_link_previews_and_rate_limit_events.sql,
        docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
-       § Stage 2) and made it four. */
+       § Stage 2) and made it four. `link_summaries` arrived the same day
+       (drizzle/20260905190941_link_summaries_and_excerpt.sql, § Stage 3) and
+       made it five. */
     expect(declared.map((d) => d.table)).toEqual([
       "ai_calls",
       "article_revisions",
@@ -232,6 +234,7 @@ describe("declaredTables", () => {
       "ingest_events",
       "jobs",
       "link_previews",
+      "link_summaries",
       "queue_state",
       "rate_limit_events",
       "raw_sources",
@@ -312,7 +315,11 @@ describe("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(28);
+      /* Twenty-nine since `link_summaries` arrived, 2026-09-05. A number here is
+         a second copy of the list above and it is deliberate: it is what makes a
+         table that reaches the *schema* and not the *database* say so, which is
+         the whole of the drift guard. */
+      expect(report.declaredTables).toBe(29);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

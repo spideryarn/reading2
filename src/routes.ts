@@ -20,6 +20,7 @@
  *   PATCH  /api/reader           { profile?: string | null, experimental?: boolean }
  *                                 → { profile, experimentalSince }, both always
  *   GET    /api/link-preview    `?slug=&url=` → what that destination says about itself
+ *   GET    /api/link-summary    `?slug=&url=` → SSE: how it stands to the piece being read
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
  *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
@@ -267,6 +268,9 @@ import { isWebUrl } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
+/* The other half of the same card, and the half we wrote — a model call with a
+   reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
+import { linkSummaryStream } from "./link-summary.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import {
   advanceJob,
@@ -1059,11 +1063,14 @@ export function heartbeat(
  * Server-sent events on a response that is otherwise a plain Node one.
  *
  * Shared by chat and by comments, which were the only two things in this app a
- * reader waited on when this was extracted. **Six callers now** — add
- * meaning-search, quiz marking, both referee runs and the mirror — so "the only
- * two" stopped being true without anyone noticing, which is the ordinary way a
- * count in prose goes wrong. Corrected 2026-09-03; if you add a seventh, this
- * sentence is the one to fix. Note that `streamChat` writes its own SSE headers
+ * reader waited on when this was extracted. **Seven callers now** — add
+ * meaning-search, quiz marking, both referee runs, the mirror, and the link
+ * summary — so "the only two" stopped being true without anyone noticing, which
+ * is the ordinary way a count in prose goes wrong. Corrected 2026-09-03, and
+ * again on 2026-09-05 by the review of the seventh, which found the same
+ * sentence wrong the same way it says it went wrong: **a count in prose is a
+ * copy of the code that nothing checks.** If you add an eighth, this is the
+ * sentence to fix. Note that `streamChat` writes its own SSE headers
  * rather than coming through here, so a grep for callers of this function
  * undercounts the streams in this file by one.
  *
@@ -1563,6 +1570,72 @@ async function answer(
     }
   } finally {
     release();
+    res.end();
+  }
+}
+
+/**
+ * **How the page on the other end of a hyperlink stands to the piece being
+ * read** — `GET /api/link-summary?slug=…&url=…`, streamed.
+ *
+ * AGENTS.md's rule (*stream any model call a person is waiting on*) and
+ * `explain.ts` is the shape. The plan originally argued for a non-streaming v1
+ * and the review overturned it: the cited precedent is itself a stream whose
+ * batch interface drains the same generator, so this is the existing shape
+ * rather than extra machinery.
+ *
+ * **The two reads that can throw happen before a single header is written**, and
+ * that is `answer`'s rule one section up rather than a preference. `loadArticle`
+ * is owner-scoped and 404s on somebody else's slug; the profile is two queries
+ * with no timeout on them. Once `sse(res)` has run, a throw is a stream that
+ * stops, which the reader cannot tell from a model that failed.
+ *
+ * Frames are the `LinkSummaryEvent` members by name: any number of `delta`, then
+ * exactly one of `ready`, `unavailable`, `refused` or `pending`.
+ *
+ * **A failure ends as `pending`, and that is a decision rather than a
+ * convenience.** The client's rule — stage 2's P2-1, applied to the same four
+ * outcomes — is that it remembers what is a property of the *link* and forgets
+ * what is a property of *this moment*. A failure here is the second kind, and
+ * the commonest one measured on 2026-09-05 was not our bug at all: OpenRouter
+ * answering `429 … temporarily rate-limited upstream` in the middle of a
+ * perfectly good stream. Framing that as `unavailable` would silence that link
+ * for the rest of the session over a busy minute; framing nothing would do the
+ * same, because a stream with no terminal frame is cached as nothing. So the
+ * reader gets the same blank card either way and the *next* hover asks again.
+ *
+ * It is still reported: `captureFailure` runs first, so a real bug of ours is in
+ * Sentry rather than quietly retried for ever. The cost of being wrong this way
+ * is bounded by the limiter — a hard failure spends one fill per hover until the
+ * reader's allowance runs out and then refuses.
+ */
+async function streamLinkSummary(
+  slug: string,
+  url: unknown,
+  res: ServerResponse,
+): Promise<void> {
+  const article = await loadArticle(slug);
+  /* Always the reader's own, never the client's word for it — `useProfile` above
+     says why that flag exists on the routes that have one, and this route
+     deliberately has none: there is no control on the card to turn it off, so
+     offering the client a way to would be a switch nobody can see. */
+  const profile = await resolveProfile(slug);
+
+  const { frame, gone } = sse(res);
+  try {
+    for await (const event of linkSummaryStream({ slug, article, url, profile, signal: gone })) {
+      frame(event.kind, event);
+    }
+  } catch (err) {
+    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+       function owns the response and the outer catch never sees the error — the
+       same note `answer` carries, and a stream is exactly where a model call
+       fails. */
+    captureFailure(err, { route: "link-summary", slug });
+    /* And then `pending`, so the client forgets rather than remembers — see the
+       header. `frame` is a no-op on a socket the reader has already left. */
+    frame("pending", { kind: "pending" });
+  } finally {
     res.end();
   }
 }
@@ -6507,6 +6580,19 @@ export async function serveAuthenticatedApi(
    * a fact about what somebody was reading. docs/project/logging.md.
    */
   const linkPreviewRoute = path === "/api/link-preview";
+  /**
+   * **How that page stands to the piece the reader is holding** — the other half
+   * of the same card, and the half we wrote. src/link-summary.ts.
+   *
+   * **A `GET` that spends money**, which the file's own rule about counters
+   * argues against. It is deliberate and it is the sibling above's shape: the
+   * question is *(slug, url)* and nothing else, the client's cache is keyed on
+   * exactly that, and an SSE stream is a `GET` everywhere else in this app's
+   * client. Nothing prefetches an `/api/` address, and the spending is behind
+   * three things a prefetch could not satisfy anyway — article ownership, link
+   * membership, and a cache that answers almost every call.
+   */
+  const linkSummaryRoute = path === "/api/link-summary";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(path);
   /**
    * **The sharing switch, and it is a sub-resource rather than a field.**
@@ -7027,6 +7113,12 @@ export async function serveAuthenticatedApi(
       const at = query.get("slug") ?? "";
       if (!isSlug(at)) throw httpError(400, "Not a slug");
       send(res, 200, await linkPreview(at, query.get("url")));
+      return;
+    }
+    if (linkSummaryRoute && req.method === "GET") {
+      const at = query.get("slug") ?? "";
+      if (!isSlug(at)) throw httpError(400, "Not a slug");
+      await streamLinkSummary(at, query.get("url"), res);
       return;
     }
     if (visibility && req.method === "PUT") {

@@ -351,6 +351,10 @@ describe("no Postgres store is selected without a guard", () => {
       "pgJobStore",
       "pgLibrarySearch",
       "pgLinkPreviewStore",
+      /* And the summary's, 2026-09-05, for the same reason with more on it: the
+         bound parameters in `pgLinkSummaryStore` are a URL somebody hovered
+         *and* a model's paragraph about what they are reading. */
+      "pgLinkSummaryStore",
       "pgReaderStore",
       "pgRealtimeSessionStore",
       "pgRefereeClaimsStore",

@@ -69,7 +69,12 @@
 
 import { Readability } from "@mozilla/readability";
 
-import { articleLinks, MAX_URL_CHARS, MAX_URL_QUERY_CHARS } from "./chat-tools.js";
+import {
+  type ArticleLink,
+  articleLinks,
+  MAX_URL_CHARS,
+  MAX_URL_QUERY_CHARS,
+} from "./chat-tools.js";
 import { FetchFailure, fetchDocument, type FetchFailureCode } from "./fetch.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { log, since } from "./log.js";
@@ -257,7 +262,34 @@ function tidy(value: string | null, max: number): string | null {
  * JavaScript is a real and stable answer, and caching it as such is what stops
  * every hover re-asking.
  */
-export function extractPreview(html: string, url: string): PagePreview | null {
+/**
+ * **How much of the destination's text is kept for the summariser.**
+ *
+ * Eight thousand characters — a little over the 6,000 the prompt actually sends
+ * (`SUMMARY_DEST_CHARS` in src/link-summary.ts), so that a modest change to the
+ * prompt's appetite does not need every cached page refetched. It is the only
+ * field in this table that no card ever shows.
+ *
+ * The store is the ownerless one, so the size question is a retention question
+ * as well as a cost one: src/db/schema.ts § `linkPreviews.excerpt` is where the
+ * argument for keeping it at all lives.
+ */
+export const PREVIEW_EXCERPT_CHARS = 8_000;
+
+/**
+ * What Readability made of the page, as plain text — the summariser's input, and
+ * nothing a reader sees.
+ *
+ * Returned beside the card fields rather than folded into them, because
+ * `PagePreview` is the wire type and this must never reach it. `answerFrom`
+ * hands the client `page` alone.
+ */
+export interface Extracted {
+  page: PagePreview;
+  excerpt: string | null;
+}
+
+export function extractPreview(html: string, url: string): Extracted | null {
   const { JSDOM } = jsdom();
   const dom = new JSDOM(html, { url });
   const doc = dom.window.document;
@@ -286,12 +318,19 @@ export function extractPreview(html: string, url: string): PagePreview | null {
      which is why everything above is read first. */
   let firstParagraph: string | null = null;
   let words: number | null = null;
+  let excerpt: string | null = null;
   try {
     const parsed = new Readability(doc).parse();
     const body = parsed?.textContent?.trim() ?? "";
     if (body) {
       const counted = body.split(/\s+/).length;
       words = counted >= MIN_COUNTABLE_WORDS ? counted : null;
+      /* **The opening of the text, for the summariser and for nobody else.**
+         Gated on the same word count as `words` above, and for the same reason:
+         under forty words what Readability found is a button and a cookie
+         notice, and handing that to a model buys a paid call whose honest
+         answer is "this page could not be read". */
+      excerpt = words === null ? null : body.slice(0, PREVIEW_EXCERPT_CHARS);
       /* The first block of text, not the first line: Readability's output wraps
          a paragraph across newlines on some pages and not on others, so
          splitting on a single newline gives half a sentence about as often as
@@ -307,11 +346,14 @@ export function extractPreview(html: string, url: string): PagePreview | null {
 
   if (title === null && description === null && firstParagraph === null) return null;
   return {
-    ...(title === null ? {} : { title }),
-    ...(siteName === null ? {} : { siteName }),
-    ...(description === null ? {} : { description }),
-    ...(firstParagraph === null ? {} : { firstParagraph }),
-    ...(words === null ? {} : { words }),
+    page: {
+      ...(title === null ? {} : { title }),
+      ...(siteName === null ? {} : { siteName }),
+      ...(description === null ? {} : { description }),
+      ...(firstParagraph === null ? {} : { firstParagraph }),
+      ...(words === null ? {} : { words }),
+    },
+    excerpt,
   };
 }
 
@@ -393,16 +435,45 @@ const REFUSED: LinkPreviewResponse = { state: "refused" };
  * is deliberately not here: it is a cache with an invalidation question in front
  * of it, and nothing has yet shown that this is slow. Revisit when something
  * measures it rather than when somebody reads this paragraph.
+ *
+ * **It answers with the link rather than with a yes**, since stage 3. The row
+ * carries the anchor's own words and the ids of the blocks it appears in, which
+ * is exactly what the summary needs in order to say how the destination stands
+ * to the passage the reader is in (src/link-summary.ts § `readerContext`) — and
+ * it costs nothing extra, because the walk was already happening.
+ *
+ * **First match wins, and that is a known defect rather than a nicety.** The
+ * same URL linked twice in one article is ordinary — the noema essay has two
+ * such pairs in sixty-two links — and hovering the *second* mention gets, and
+ * caches, the paragraph the *first* one sits in. The summary is then fluent,
+ * about a real relationship in this piece, and about the wrong sentence, which
+ * is worse than saying nothing. Membership is unaffected: the yes/no answer is
+ * the same either way.
+ *
+ * The fix is the card sending the hovered anchor's **block id**, this function
+ * checking that occurrence against the target, and the id joining the summary's
+ * identity so two mentions are two rows. It is a change to what the client
+ * sends rather than a tweak here, which is why it is written down instead of
+ * done. GPT Sol, 2026-09-05; docs/project/links.md § Two known limitations.
  */
+export function linkInArticle(
+  blocks: Parameters<typeof articleLinks>[0],
+  baseUrl: string | undefined,
+  target: string,
+): ArticleLink | null {
+  for (const link of articleLinks(blocks, baseUrl)) {
+    if (link.url !== null && requestTarget(link.url) === target) return link;
+  }
+  return null;
+}
+
+/** The membership question on its own, for the route that only needs the yes. */
 function articlePointsAt(
   blocks: Parameters<typeof articleLinks>[0],
   baseUrl: string | undefined,
   target: string,
 ): boolean {
-  for (const link of articleLinks(blocks, baseUrl)) {
-    if (link.url !== null && requestTarget(link.url) === target) return true;
-  }
-  return false;
+  return linkInArticle(blocks, baseUrl, target) !== null;
 }
 
 /**
@@ -612,8 +683,8 @@ async function fetchAndStore(
 
     /* `doc.url` and not the requested one: it is the base relative links resolve
        against, and a `doi.org` address is not where the piece lives. */
-    const page = extractPreview(doc.text, doc.url);
-    if (page === null) {
+    const extracted = extractPreview(doc.text, doc.url);
+    if (extracted === null) {
       logger.info(
         { host, status: doc.status, bytes: doc.bytes.length, ms: since(started) },
         "link preview: nothing to show",
@@ -629,13 +700,17 @@ async function fetchAndStore(
         host,
         status: doc.status,
         bytes: doc.bytes.length,
-        words: page.words ?? 0,
+        words: extracted.page.words ?? 0,
+        /* Whether the summariser will have anything to read, as a boolean and
+           never as the text. A run of `false` here means every card on this
+           corpus is the free one, and nothing else would say so. */
+        excerpt: extracted.excerpt !== null,
         ms: since(started),
       },
       "link preview: fetched a destination",
     );
     return await store(target, doc.url, {
-      entry: { kind: "ok", page },
+      entry: { kind: "ok", page: extracted.page, excerpt: extracted.excerpt },
       expiresAt: new Date(started + PREVIEW_LIFETIMES.ok),
     });
   } catch (err) {

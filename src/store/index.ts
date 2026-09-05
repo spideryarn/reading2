@@ -68,6 +68,7 @@ import type {
   GlossaryStore,
   LibrarySearch,
   LinkPreviewStore,
+  LinkSummaryStore,
   ReaderStore,
   RealtimeSessionStore,
   RefereeClaimsStore,
@@ -86,6 +87,7 @@ import { pgCommentStore } from "./pg-comments.js";
 import { pgFeedbackStore } from "./pg-feedback.js";
 import { pgGlossaryStore } from "./pg-glossary.js";
 import { pgLinkPreviewStore } from "./pg-link-previews.js";
+import { pgLinkSummaryStore } from "./pg-link-summaries.js";
 import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
@@ -463,6 +465,17 @@ export const feedbackStore: FeedbackStore = guarded("feedback", pgFeedbackStore)
  * here is a URL somebody hovered.
  */
 export const linkPreviewStore: LinkPreviewStore = guarded("link-previews", pgLinkPreviewStore);
+
+/**
+ * **How that page stands to the piece the reader is holding** — the Luna
+ * summary, cached per reader, per article, per address.
+ *
+ * The owned half of the same card, and the counterpart to the ownerless seam
+ * above: one holds what a page says about itself and is the same for everybody,
+ * this one is written from a reader's own profile and is shared with nobody.
+ * src/db/schema.ts § `linkSummaries` for why the two are separate tables.
+ */
+export const linkSummaryStore: LinkSummaryStore = guarded("link-summaries", pgLinkSummaryStore);
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

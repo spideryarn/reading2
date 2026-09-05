@@ -1900,7 +1900,21 @@ import type { PagePreview } from "../types.js";
 export type CachedPreview =
   /** Somebody is fetching this right now and holds the claim. */
   | { kind: "pending" }
-  | { kind: "ok"; page: PagePreview }
+  /**
+   * We have something worth showing.
+   *
+   * `excerpt` is the opening of the destination's plain text, capped — what
+   * stage 3's summariser reads, and **the one field here that never leaves the
+   * server**: `answerFrom` in src/link-previews.ts hands the client `page` and
+   * nothing else. `null` is ordinary and means *no summary for this address*:
+   * a row written before the column existed, or a page whose text Readability
+   * could not reach. src/db/schema.ts § `linkPreviews.excerpt`.
+   *
+   * **Required and nullable rather than optional**, so that a writer which
+   * forgets it is a compile error. Forgetting it would otherwise be invisible:
+   * previews would go on working and summaries would silently never appear.
+   */
+  | { kind: "ok"; page: PagePreview; excerpt: string | null }
   /**
    * We asked and could not use the answer. `why` is a `FetchFailureCode` or one
    * of this feature's own classes; it is diagnostic and never reaches a reader.
@@ -2003,8 +2017,16 @@ export type PreviewClaim =
 
 /* ------------------------------------------------------- fetch allowance -- */
 
-/** The only allowance there is today. A closed set, matching the table's CHECK. */
-export type RateBucket = "link-preview-fetch";
+/**
+ * The two allowances there are. A closed set, matching the table's CHECK.
+ *
+ * They are separate buckets rather than one, because they bound different
+ * things: `link-preview-fetch` bounds how much of somebody else's server a
+ * reader's pointer may ask for, and `link-summary-fill` bounds how much money it
+ * may spend. A reader who has hovered a hundred cold links has done nothing
+ * wrong by the second measure.
+ */
+export type RateBucket = "link-preview-fetch" | "link-summary-fill";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**
@@ -2037,7 +2059,18 @@ export type AllowanceTaken =
   /** Too many fills in the window. */
   | { kind: "rate" }
   /** Too many at once. */
-  | { kind: "concurrency" };
+  | { kind: "concurrency" }
+  /**
+   * **Everybody together has spent the day's allowance** — the fuse, not this
+   * reader's own limit.
+   *
+   * Its own member rather than folding into `rate`, because the two send
+   * whoever reads the logs to different places: one is a reader hovering a lot
+   * of links, the other is the app as a whole being further through the day's
+   * money than anybody expected. Only a policy with a `daily.globalFills` can
+   * ever answer this.
+   */
+  | { kind: "global" };
 
 /**
  * The numbers, which are **guesses rather than measurements**.
@@ -2062,4 +2095,133 @@ export interface RatePolicy {
   concurrency: number;
   /** How long a fill holds its concurrency slot if nothing releases it. */
   leaseMs: number;
+  /**
+   * **A second, longer window — and the fuse that goes with it.** Absent for a
+   * bucket that has only an hourly cap.
+   *
+   * One optional object rather than three optional fields, so that a daily
+   * per-owner cap with no window, or a fuse with no window to count it over,
+   * are states nobody can write. A policy that carries this is counted three
+   * times in the one transaction: the hourly cap, this cap for the owner, and
+   * this fuse across everybody.
+   */
+  daily?: {
+    /** How many fills one owner gets over `windowMs` below. */
+    fills: number;
+    /**
+     * How many fills **everybody together** gets over the same window.
+     *
+     * The blast radius, not a fairness rule: it is what stands between a bug or
+     * a determined account and a day's worth of model spend. Counted across
+     * owners, which is the one query in the limiter that is not per-reader.
+     */
+    globalFills: number;
+    /** The rolling window both of the above are counted over, in ms. */
+    windowMs: number;
+  };
 }
+
+/* -------------------------------------------------------- link summaries -- */
+
+/**
+ * **How the destination stands to the piece the reader is holding**, cached per
+ * reader, per article, per address.
+ *
+ * `LinkPreviewStore` above is the ownerless half — what a page says about
+ * itself, fetched once for everybody. This is the owned half, and the two must
+ * stay apart: this row is written from the reader's own profile, so a shared one
+ * would be a disclosure as well as a wrong answer. src/db/schema.ts §
+ * `linkSummaries`.
+ *
+ * **Deliberately the same shape as the preview store rather than a shared
+ * generic.** The claim protocol is the same idea — one advisory lock, a
+ * `pending` row with a lease, a `claim_id` that fences the destructive writes —
+ * and the *data* is not: a preview is a five-member union keyed by one string, a
+ * summary is one string keyed by three and validated against four fingerprints.
+ * A generic over both would have to take the columns, the validity test and the
+ * key builder as parameters, which is more machinery than the second copy and
+ * harder to read than either. The protocol is written down in one place — this
+ * comment and `LinkPreviewStore`'s — and copied deliberately.
+ */
+export interface LinkSummaryStore {
+  /**
+   * The summary we already hold for this key, or `null` for "nothing usable".
+   *
+   * **An expired row, a `pending` row and a row whose inputs have moved on all
+   * read as nothing**, so no caller can serve a stale summary by forgetting to
+   * compare a hash. This is the path a cache hit takes and it takes no lock.
+   */
+  read(key: SummaryKey, inputs: SummaryInputs): Promise<string | null>;
+  /**
+   * Read again under the lock, and take the claim if there is nothing there.
+   *
+   * `hit` — somebody filled it while we waited. `claimed` — you are the one
+   * spending, so `fill` the answer or `release` the claim. `pending` — somebody
+   * else is generating it right now.
+   */
+  claim(key: SummaryKey, inputs: SummaryInputs, leaseMs: number): Promise<SummaryClaim>;
+  /**
+   * Store the answer, **if this claim is still the live one** — and say whether
+   * it was.
+   *
+   * Fenced on the token for `release`'s reason: a claimant that stalled past its
+   * lease and woke up must not write its stale answer over the row its successor
+   * has already filled.
+   *
+   * **It returns whether the write landed, and that is not decoration.** The
+   * first version returned `void`, so a caller whose claim had been taken away
+   * wrote nothing and then handed the reader its own superseded answer anyway —
+   * a summary about an older profile or an older version of the article,
+   * presented as current, and cached in that reader's tab for the session. The
+   * fence stopped the *database* being wrong and let the *screen* be wrong,
+   * which is the half a reader can see. GPT Sol, 2026-09-05.
+   *
+   * `false` means: somebody else owns this key now. Ask again rather than
+   * answering.
+   */
+  fill(key: SummaryKey, claimId: string, summary: string, expiresAt: Date): Promise<boolean>;
+  /** Give **your own** claim back without an answer, so the next caller may try. */
+  release(key: SummaryKey, claimId: string): Promise<void>;
+}
+
+/**
+ * Which article, and which address in it.
+ *
+ * **A slug rather than an article id, and no owner at all** — the store resolves
+ * both, through `articleIdForOwned`, exactly as `pgGlossaryLookupStore` does.
+ * That keeps the owner-scoped resolution in one place: a caller that assembled
+ * its own `ownerId` would be a second answer to "whose article is this", and the
+ * one that matters is the one the database enforces.
+ */
+export interface SummaryKey {
+  slug: string;
+  /** `requestTarget(url)` — never `urlKey`. */
+  target: string;
+}
+
+/**
+ * **Everything the answer depends on that is not in the key**, so that a change
+ * to any of it is a miss rather than a stale row for ever.
+ *
+ * GPT Sol, 2026-09-05, P1-3: `(owner, article, url)` alone never changes when
+ * the article is re-extracted or the reader edits their profile, and both are
+ * prompt inputs.
+ */
+export interface SummaryInputs {
+  /** A hash of the destination text the model was given. */
+  destHash: string;
+  /** A hash of what the reader is currently reading, as the prompt carried it. */
+  contextHash: string;
+  /** `hashProfile`, or the sentinel for a reader who has written nothing. */
+  profileHash: string;
+  /** `LINK_SUMMARY_PROMPT_VERSION`. */
+  promptVersion: number;
+  /** The model id, so a tier change makes every row stale. */
+  model: string;
+}
+
+export type SummaryClaim =
+  | { kind: "hit"; summary: string }
+  /** You are spending. `claimId` is the fencing token. */
+  | { kind: "claimed"; claimId: string }
+  | { kind: "pending" };

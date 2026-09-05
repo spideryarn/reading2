@@ -132,7 +132,7 @@ describe("the link-preview cache", () => {
     await pgLinkPreviewStore.fill([
       {
         target,
-        entry: { kind: "ok", page: { title: "A title" } },
+        entry: { kind: "ok", page: { title: "A title" }, excerpt: null },
         expiresAt: new Date(Date.now() + PREVIEW_LIFETIMES.ok),
       },
     ]);
@@ -142,6 +142,7 @@ describe("the link-preview cache", () => {
     expect(await pgLinkPreviewStore.read(target)).toEqual({
       kind: "ok",
       page: { title: "A title" },
+      excerpt: null,
     });
   });
 
@@ -150,7 +151,7 @@ describe("the link-preview cache", () => {
     await pgLinkPreviewStore.fill([
       {
         target,
-        entry: { kind: "ok", page: { title: "The good answer" } },
+        entry: { kind: "ok", page: { title: "The good answer" }, excerpt: null },
         expiresAt: new Date(Date.now() + PREVIEW_LIFETIMES.ok),
       },
     ]);
@@ -169,6 +170,7 @@ describe("the link-preview cache", () => {
     expect(await pgLinkPreviewStore.read(target)).toEqual({
       kind: "ok",
       page: { title: "The good answer" },
+      excerpt: null,
     });
   });
 
@@ -187,13 +189,14 @@ describe("the link-preview cache", () => {
     await pgLinkPreviewStore.fill([
       {
         target,
-        entry: { kind: "ok", page: { title: "It came back" } },
+        entry: { kind: "ok", page: { title: "It came back" }, excerpt: null },
         expiresAt: new Date(Date.now() + PREVIEW_LIFETIMES.ok),
       },
     ]);
     expect(await pgLinkPreviewStore.read(target)).toEqual({
       kind: "ok",
       page: { title: "It came back" },
+      excerpt: null,
     });
 
     /* And once that answer has expired, a failure may take its place. */
@@ -219,7 +222,7 @@ describe("the link-preview cache", () => {
     await pgLinkPreviewStore.fill([
       {
         target,
-        entry: { kind: "ok", page: { title: "Stale" } },
+        entry: { kind: "ok", page: { title: "Stale" }, excerpt: null },
         expiresAt: new Date(Date.now() - 1_000),
       },
     ]);
@@ -235,7 +238,7 @@ describe("the link-preview cache", () => {
     await pgLinkPreviewStore.fill([
       {
         target: final,
-        entry: { kind: "ok", page: { title: "Where it went" } },
+        entry: { kind: "ok", page: { title: "Where it went" }, excerpt: null },
         expiresAt,
       },
       {
@@ -247,12 +250,13 @@ describe("the link-preview cache", () => {
     expect(await pgLinkPreviewStore.read(requested)).toEqual({
       kind: "ok",
       page: { title: "Where it went" },
+      excerpt: null,
     });
     /* And the claim path agrees with the read path, which is what stops a
        fresh alias causing a fetch on every hover. */
     expect(await pgLinkPreviewStore.claim(requested, LEASE_MS)).toEqual({
       kind: "hit",
-      entry: { kind: "ok", page: { title: "Where it went" } },
+      entry: { kind: "ok", page: { title: "Where it went" }, excerpt: null },
     });
   });
 
@@ -262,7 +266,7 @@ describe("the link-preview cache", () => {
     await pgLinkPreviewStore.fill([
       {
         target: final,
-        entry: { kind: "ok", page: { title: "Old" } },
+        entry: { kind: "ok", page: { title: "Old" }, excerpt: null },
         expiresAt: new Date(Date.now() - 1_000),
       },
       {
@@ -286,7 +290,7 @@ describe("the link-preview cache", () => {
     await pgLinkPreviewStore.fill([
       {
         target: alive,
-        entry: { kind: "ok", page: { title: "Alive" } },
+        entry: { kind: "ok", page: { title: "Alive" }, excerpt: null },
         expiresAt: new Date(Date.now() + PREVIEW_LIFETIMES.ok),
       },
       {

@@ -280,6 +280,15 @@ export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
       "P1-5, 2026-09-05. The Postgres side counts rows under an owner-scoped " +
       "advisory lock; a files side could only count its own process's.",
   },
+  LinkSummaryStore: {
+    missing: "files",
+    why:
+      "`LinkPreviewStore`'s reason with money on it. The seam is a claim two servers " +
+      "can contend for, and here losing that contention costs a model call rather than " +
+      "a metadata fetch — a files adapter with no single-flight would be a feature that " +
+      "pays twice and calls it a cache. It also compares four fingerprints on every " +
+      "read, which is a WHERE clause rather than a file format.",
+  },
   /* **The two below are a different kind of entry from the five above**, and
      the difference is worth reading before adding a fourth like them.
 

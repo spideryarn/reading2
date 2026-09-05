@@ -43,7 +43,7 @@ describe("what a page says about itself", () => {
       ),
       AT,
     );
-    expect(found).toMatchObject({
+    expect(found?.page).toMatchObject({
       title: "A Paper",
       siteName: "The Journal",
       description: "What it argues.",
@@ -62,8 +62,8 @@ describe("what a page says about itself", () => {
       page('<title>Ignored</title><meta property="twitter:title" content="By property">'),
       AT,
     );
-    expect(byName?.title).toBe("By name");
-    expect(byProperty?.title).toBe("By property");
+    expect(byName?.page.title).toBe("By name");
+    expect(byProperty?.page.title).toBe("By property");
   });
 
   it("falls back to <title> and <meta name=description>, which three of eight need", () => {
@@ -76,13 +76,13 @@ describe("what a page says about itself", () => {
       ),
       AT,
     );
-    expect(found).toMatchObject({
+    expect(found?.page).toMatchObject({
       title: "Writes and Write-Nots",
       description: "What happens when writing gets easy.",
     });
     /* No `og:site_name` means no site name. It is never guessed from the host,
        because the card already prints the host one line up. */
-    expect(found?.siteName).toBeUndefined();
+    expect(found?.page.siteName).toBeUndefined();
   });
 
   it("counts the destination's words", () => {
@@ -91,7 +91,7 @@ describe("what a page says about itself", () => {
       page("<title>Long</title>", `<article><p>${words}</p></article>`),
       AT,
     );
-    expect(found?.words).toBeGreaterThan(250);
+    expect(found?.page.words).toBeGreaterThan(250);
   });
 
   it("says nothing about length when there is barely anything to count", () => {
@@ -104,8 +104,8 @@ describe("what a page says about itself", () => {
       page('<meta property="og:title" content="A shell">', "<p>Body.</p>"),
       AT,
     );
-    expect(found).toMatchObject({ title: "A shell" });
-    expect(found?.words).toBeUndefined();
+    expect(found?.page).toMatchObject({ title: "A shell" });
+    expect(found?.page.words).toBeUndefined();
   });
 
   it("answers null when a page says nothing worth a card", () => {
@@ -122,7 +122,7 @@ describe("what a page says about itself", () => {
       page('<meta property="og:title" content="Still here">', ""),
       AT,
     );
-    expect(found).toMatchObject({ title: "Still here" });
+    expect(found?.page).toMatchObject({ title: "Still here" });
   });
 });
 

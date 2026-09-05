@@ -655,6 +655,102 @@ Two more things worth knowing about it:
   and **those numbers are guesses rather than measurements**, said out loud in
   `PREVIEW_RATE_POLICY` so the next reader tunes them from telemetry.
 
+## And what it has to do with the piece in your hands
+
+Built 2026-09-05, stage 3 of
+[the plan](../plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md).
+[`src/link-summary.ts`](../../src/link-summary.ts), behind `GET /api/link-summary?slug=&url=`, which
+is a **stream**. It is the only thing on this card that we wrote rather than quoted, and the only one
+that costs money.
+
+Greg, 2026-09-05:
+
+> Perhaps run Mozilla Readability first before passing to GPT Luna, and ask for brief output (e.g.
+> just a paragraph or two) with low/medium reasoning, and perhaps also feed it (a summary of?) the
+> current article (indicating that this is what the reader is currently reading) with a slight
+> request for the summary to be relative to this one, with the user-profile-prompt + article-prompt
+> as background.
+
+**The framing is the whole feature and a generic gist is the failure.** Fable argued against a model
+call here at all, on [vision.md](vision.md)'s *augments rather than replaces*: once the page is
+fetched, its own opening paragraph is free, honest, and a door rather than a wall, where a gist lets
+a reader feel they have absorbed the link without following it. What answers that is not a better
+summary but a different question — *how does this stand to the paragraph you are standing in?* — which
+is not available anywhere else and points **back into the article**. The prompt says so in as many
+words: *if what you wrote would be just as true had you never been told which article it was hovered
+from, you have written the wrong thing.*
+
+So four things travel, and the last two are the ones that make it relative: the article's title, its
+one-sentence gist (the hierarchy root's), **the link's own anchor text**, and **the paragraph the
+author put it in**. Those two cost nothing — the blocks are already in memory for the membership
+check the route does anyway. The reader's profile rides along after the fence, as it does in explain.
+
+What it produced on the noema essay, 2026-09-05, verbatim and with no reader profile set:
+
+> An Encyclopaedia entry on Alfred North Whitehead, whose process-oriented philosophy and
+> intellectual biography are introduced in the opening. Seth invokes Whitehead's warning that a
+> metaphor must not be confused with the thing itself to challenge viewing the brain as merely a
+> Turing-style computational system; the destination identifies the philosopher behind that warning
+> but does not, in the provided opening, discuss the quotation or consciousness.
+
+The second sentence is the feature. The same link with a profile saying *"I am a software engineer
+with no philosophy background… I want plain language"* drops "process-oriented philosophy" and
+explains it instead — *"his view that reality consists of interconnected processes rather than
+separate things"* — which is also a different `profile_hash` and therefore a different cached row.
+
+**Measured, on `openai/gpt-5.6-luna`** — the first job ever put on the quick tier
+([`src/models.ts`](../../src/models.ts) § `TASK_TIER`):
+
+| | |
+|---|---|
+| cost per call | **$0.00015** — about a hundredth of a penny (2,008 prompt tokens, 87 completion, most of the prompt served from the upstream's automatic prefix cache) |
+| first visible token | 0.9–2.1s |
+| whole answer | 2.0–4.7s |
+| a cache hit | ~90ms, and no stream at all — one `ready` frame |
+| reasoning tokens | **0 reported**, at `effort: "low"`. `models.ts` warned of a documented 1,024-token floor billed against the completion budget; on Azure-served Luna nothing of the sort appeared in `completion_tokens_details`. The ceiling is sized for it anyway |
+
+Two things that are the same shape as the fetch half and one that is not:
+
+- **A different cache, with a different key.** `link_previews` is ownerless because what a page says
+  about itself is the same for everybody; `link_summaries` is keyed `(owner, article, target)`
+  because this is about *this reader reading this piece*. The owner is **in the primary key** here
+  where `glossary_lookups` keeps it beside one — an article has one owner today, so it is redundant,
+  and the day `articles` stops being one row per owner an article-keyed row would start serving one
+  reader's personalised summary to another.
+- **Four fingerprints are compared on every read**: the destination's text, the article context
+  above, the reader's profile, and the prompt version and model. `(owner, article, url)` alone never
+  changes when the article is re-extracted or the reader edits their box, and both are prompt inputs
+  — so the naive key is a summary that is stale for ever.
+- **The destination's prose is fenced as untrusted, and the fence cannot be closed from inside.**
+  Explicit markers, a system instruction saying the page is data rather than a request, a reminder
+  after the page as well as before it, **no tools of any kind** on the call — and every run of three
+  or more `=` in the page is rewritten, so a page carrying our own end-marker in its text cannot put
+  what follows outside the quotation.
+
+The limiter gains a second bucket, `link-summary-fill`: 30 fills per owner per hour, 100 per day,
+concurrency 2, and a **global daily fuse of 1,000** — Sol's numbers, explicitly guesses, and at the
+measured price the fuse is about fifteen pence a day. Cache hits bypass all of it.
+
+**It fires only where the fetch worked.** The summariser reads
+`link_previews.excerpt`, so a destination behind a bot challenge, a PDF, or a page whose text
+Readability could not reach gets the free card and nothing more.
+
+### Two known limitations, and the second is the one to fix first
+
+**An article already on your shelf gets no summary**, because no preview row is ever fetched for a
+page we already hold — and that is exactly the case where *how does it stand to this one* would be
+most interesting. Summarising from our own stored extraction is the repair.
+
+**A destination linked twice in one article is summarised against the first of the two.** The client
+sends `(slug, url)` and `linkInArticle` takes the first match, so hovering the *second* mention gets
+— and caches — the paragraph the *first* one sits in. That is the sharpest thing wrong with this
+feature: the answer is about a real relationship in this piece, it is fluent, and it is about the
+wrong sentence, which is a worse failure than saying nothing. It is not rare either — the noema
+essay has two such pairs in sixty-two links. The fix is to send the hovered anchor's **block id**,
+check that occurrence against the target, and put it in the summary's identity so the two mentions
+are two rows. GPT Sol, 2026-09-05, and it is a change to what the card sends rather than a tweak,
+which is why it is written here rather than done.
+
 ## What is deliberately not built yet
 
 Two smaller things left on the floor, both cheap, neither obviously worth it yet:
@@ -671,10 +767,8 @@ payoff, produces stale entries for links nobody visits, and stacks more per-link
 queue whose Vercel story is [already an open question](deployment.md). The cache above delivers the
 "fetch once, serve everyone" benefit people reach for prefetch to get — lazily instead of eagerly.
 
-**A summary of the destination, relative to the piece in your hands.** Stage 3 of
-[the plan](../plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md), and it
-is a different cache with a different key: what the page says about itself is shareable, and what it
-means *for this reader reading this piece* is not.
+**Quotes pulled from the destination.** Greg asked for "summary and/or quotes"; the summary below is
+the "and/or" resolved, and pulled quotes can follow if it proves itself.
 
 ## What a card actually says
 
@@ -733,6 +827,22 @@ mutation rather than merely being green:
   fill goes on counting against the hour.
 - [`tests/link-preview-extract.test.ts`](../../tests/link-preview-extract.test.ts) — the pure half.
   Every case is a real destination's shape, including noema's "Credits".
+
+**Stage 3 adds two more seams**, both watched red under mutation:
+
+- [`tests/link-summary-prompt.test.ts`](../../tests/link-summary-prompt.test.ts) — the prompt, which
+  *is* the feature, and every case is a property that fails silently. Dropping the passage from
+  `readerContext` reddens two cases (the relative half, and the staleness that depends on it);
+  removing the `===` rewrite reddens two more (a page cannot close its own fence). It also pins the
+  three things this job sends differently from every other chat caller here —
+  `max_completion_tokens` rather than the deprecated `max_tokens`, `reasoning: {effort: "low"}`, and
+  no tools at all — because OpenRouter drops a parameter a provider does not take *silently*, so the
+  only symptom of getting any of them wrong is a bill.
+- [`tests/link-summary-cache.test.ts`](../../tests/link-summary-cache.test.ts) — the four
+  fingerprints, the claim, and the fencing token. Making `matches` ignore the profile hash reddens
+  the profile case and nothing else; making it ignore the context hash reddens the re-extraction
+  case; making `claim` stop refusing a second caller reddens single-flight. `tests/fetch-allowance.test.ts`
+  gains the day and the fuse, and a sweep that keeps only the shorter window reddens both.
 
 The asynchronous half has tests only either side of the wire, and **the reason given here for that
 has now been wrong twice.** The first version said a test of the hook would be a test of a mock; a

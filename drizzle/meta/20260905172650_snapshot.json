@@ -687,6 +687,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "debate": {
+          "name": "debate",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "assets": {
           "name": "assets",
           "type": "jsonb",
@@ -742,57 +748,57 @@
         "article_revisions_article_id_articles_id_fk": {
           "name": "article_revisions_article_id_articles_id_fk",
           "tableFrom": "article_revisions",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
           "columnsFrom": [
             "article_id"
           ],
-          "tableTo": "articles",
-          "schemaTo": "spideryarn",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "article_revisions_based_on_revision_id_article_revisions_id_fk": {
           "name": "article_revisions_based_on_revision_id_article_revisions_id_fk",
           "tableFrom": "article_revisions",
+          "tableTo": "article_revisions",
+          "schemaTo": "spideryarn",
           "columnsFrom": [
             "based_on_revision_id"
           ],
-          "tableTo": "article_revisions",
-          "schemaTo": "spideryarn",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "article_revisions_raw_source_fk": {
           "name": "article_revisions_raw_source_fk",
           "tableFrom": "article_revisions",
+          "tableTo": "raw_sources",
+          "schemaTo": "spideryarn",
           "columnsFrom": [
             "raw_source_sha256",
             "raw_source_kind"
           ],
-          "tableTo": "raw_sources",
-          "schemaTo": "spideryarn",
           "columnsTo": [
             "sha256",
             "kind"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "article_revisions_article_id_id": {
           "name": "article_revisions_article_id_id",
+          "nullsNotDistinct": false,
           "columns": [
             "article_id",
             "id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -3886,16 +3892,16 @@
         "revision_step_runs_revision_id_article_revisions_id_fk": {
           "name": "revision_step_runs_revision_id_article_revisions_id_fk",
           "tableFrom": "revision_step_runs",
+          "tableTo": "article_revisions",
+          "schemaTo": "spideryarn",
           "columnsFrom": [
             "revision_id"
           ],
-          "tableTo": "article_revisions",
-          "schemaTo": "spideryarn",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -3912,7 +3918,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

@@ -303,11 +303,18 @@ project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.t
 ([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
 caller.
 
-**Every job is on the capable tier today.** The quick tier is about a tenth the price and nothing
-here has been measured on it, so it exists as a named option rather than as a change: moving a job
-means running an eval under [`evals/`](../../evals/README.md) first and writing down what it cost.
-Greg, 2026-08-26 — *"use your judgment about which tasks to use for which (default to capable-model
-for now)."*
+**Every job is on the capable tier except one.** The quick tier is about a tenth the price, and
+`link-summary` — how a hovered link's destination stands to the piece being read
+([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — was **written for it**
+rather than moved onto it, on 2026-09-05. That distinction is the whole of the policy: a new job may
+be born on the quick tier by judgment, and **moving an existing one still means running an eval under
+[`evals/`](../../evals/README.md) first and writing down what it cost**. Greg, 2026-08-26 — *"use
+your judgment about which tasks to use for which (default to capable-model for now)."*
+
+What that one job measured, which is all this repository knows about the tier: $0.00015 a call, 2–5
+seconds, and **no reasoning tokens reported at all** at `effort: "low"` — the 1,024-token floor the
+paragraph below warns about did not appear on the upstream that served it. That is one week's
+evidence from one job, not a general fact.
 
 **Changing a row is not the whole of moving a job**, and the file carries the list: the completion
 ceilings were sized for a model that does not spend a reasoning allocation out of them, the
@@ -367,6 +374,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
 | `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |
+| `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — **the one job on the quick tier**, so this is the variable for asking whether the cheap model is good enough |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the

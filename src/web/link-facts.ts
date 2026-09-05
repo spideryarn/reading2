@@ -7,7 +7,7 @@
  * card is already on screen. Both were named and deferred by the survey on
  * 2026-08-27 (docs/research/260827a-link-previews.md); Greg asked for both the next day.
  *
- * ## The three sources
+ * ## The four sources
  *
  * 1. **An article already on this shelf.** Its title, its root gist and its
  *    length are already ours — stage 2 ran Readability over that page at ingest
@@ -24,6 +24,13 @@
  *    since 2026-09-05 — the general case, and the only source that can answer
  *    for an arbitrary page. It gives the destination's own title, site name,
  *    description and opening paragraph, plus a word count.
+ *
+ * 4. **A model, saying how that page stands to the piece being read.** `GET
+ *    /api/link-summary`, since 2026-09-05 — the only thing on this card that we
+ *    wrote rather than quoted, and the only one that costs money. It **streams**,
+ *    and its accumulated text lives at module level rather than in the card, for
+ *    the reason `summaryPartial` gives: the card is torn down on pointer-out.
+ *    src/link-summary.ts.
  *
  * **The third one is a *server* fetch, and that is not a preference.** The
  * obvious version — fetch the destination from the reader's browser and run
@@ -71,6 +78,7 @@ import { urlKey } from "../ingest.js";
 import { isWebUrl } from "../urls.js";
 import type { LibraryEntry, LinkPreviewResponse, PagePreview } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import type { LinkPreview } from "./link-preview.js";
 
 /** The fields of Wikipedia's summary response this card actually uses. */
@@ -114,6 +122,21 @@ export interface LinkFacts {
    * the reader an action, so the three do not need telling apart.
    */
   page: PagePreview | null;
+  /**
+   * **How that destination stands to the piece the reader is holding** — the
+   * one thing on this card that we wrote, and the only one that costs money.
+   *
+   * `text` is what has arrived so far, which is the whole answer once
+   * `streaming` is false. **Two fields rather than one string**, because a
+   * paragraph that has stopped growing and a paragraph that is still arriving
+   * look identical and mean different things: the card draws a cursor for the
+   * second and nothing for the first, and without the flag a stream that broke
+   * off would read as a summary that ended mid-sentence on purpose.
+   *
+   * Null covers not asked, nothing to say, and refused — all of which draw no
+   * section at all. src/link-summary.ts.
+   */
+  summary: { text: string; streaming: boolean } | null;
 }
 
 export interface LibraryMatch {
@@ -128,6 +151,7 @@ const NOTHING: LinkFacts = {
   wiki: null,
   shelfKnown: false,
   page: null,
+  summary: null,
 };
 
 /**
@@ -595,6 +619,204 @@ function loadPage(slug: string, url: string): Promise<void> {
   return run;
 }
 
+/* --------------------------------------------------------- the summary --- */
+
+/**
+ * **The finished summary for one link in one article**, or null for "asked, and
+ * there is nothing to show".
+ *
+ * **Keyed by `(slug, url)` and not by url alone**, which is the difference
+ * between this cache and `pageCache` above and is the whole point of the
+ * feature: what the destination *says* is a property of the address, and how it
+ * *stands to what you are reading* is not. The same link hovered in two articles
+ * is two different answers, and a URL-keyed cache would show the first one under
+ * the second article — a sentence about the wrong piece, in a card that looks
+ * entirely normal.
+ */
+const summaryCache = new Map<string, string | null>();
+
+/**
+ * **What has arrived so far, for a stream still in flight.**
+ *
+ * Module level, and that is not tidiness. The card is torn down when the pointer
+ * leaves *and* by a `MutationObserver` when the prose re-renders
+ * (ProseHoverCard.tsx), so a stream held in component state would start again
+ * from nothing on every re-hover — several times a minute, each time paying for
+ * a model call that the reader then interrupts. Here the tokens go on
+ * accumulating whoever is looking, and a card that comes back picks up whatever
+ * has arrived. GPT Sol, 2026-09-05, P1-6.
+ */
+const summaryPartial = new Map<string, string>();
+const summaryPending = new Map<string, Promise<void>>();
+
+/**
+ * Told on every token, so a card that is on screen grows as the answer does.
+ *
+ * A bare listener set rather than a store, for `shelfWatchers`' reason: the
+ * answer is derived during render from the maps above, so all a subscriber needs
+ * is a poke.
+ */
+const summaryWatchers = new Set<() => void>();
+
+function watchSummaries(onChange: () => void): () => void {
+  summaryWatchers.add(onChange);
+  return () => {
+    summaryWatchers.delete(onChange);
+  };
+}
+
+function wakeSummaryWatchers(): void {
+  for (const wake of [...summaryWatchers]) wake();
+}
+
+/** `(slug, url)`, as one key. The newline cannot appear in either half. */
+function summaryKey(slug: string, url: string): string {
+  return `${slug}\n${url}`;
+}
+
+/**
+ * **Throw the summaries away, because the reader just changed one of the things
+ * they were written from.**
+ *
+ * The server compares four fingerprints on every read and a stale row is a miss
+ * — but **this map is in front of the server** and knows none of them, so a
+ * cache hit here never asks. The reader edits *"why you're reading this one"* on
+ * the metadata page, comes back to the article, hovers a link they hovered
+ * before, and gets the answer written for the sentence they replaced. Nothing
+ * looks wrong: it is a paragraph about the right link. GPT Sol, 2026-09-05.
+ *
+ * **The whole map, not one article's rows**, because the global half of a
+ * profile is true of every article — and because a map of a few dozen strings is
+ * not worth a selective delete and the risk of getting the selection wrong.
+ *
+ * It is deliberately not a subscription to anything: the two places a reader
+ * can change these call it directly, which is a line a reviewer sees at the
+ * write, where the alternative is a listener somebody has to know exists.
+ */
+export function forgetSummaries(): void {
+  summaryCache.clear();
+  wakeSummaryWatchers();
+}
+
+/**
+ * **Ask our server how this link stands to the piece being read.**
+ *
+ * A stream rather than a request that answers once, because AGENTS.md says to
+ * stream anything a person is waiting on and because the first sentence at two
+ * seconds and a spinner for fifteen are the same call — see src/link-summary.ts.
+ * A cache hit arrives as a single `ready` frame and looks instantaneous.
+ *
+ * **What is remembered and what is not** is `loadPage`'s rule one section up,
+ * applied to the same four outcomes:
+ *
+ * - `ready` — the answer. Remembered.
+ * - `unavailable` — there is nothing here to summarise: the destination could
+ *   not be read, or what came back was navigation furniture. A property of the
+ *   pairing, so it is remembered and not asked again.
+ * - `refused` and `pending` — about *this moment*, not about this link. A spent
+ *   allowance, or a fetch that has not landed yet. **Not** remembered, so the
+ *   next hover asks again — and a `pending` in particular is the one answer that
+ *   is certainly about to change.
+ * - a stream that ends with **no terminal frame at all** — a dropped connection
+ *   on our side of the wire, since the route frames `pending` even for its own
+ *   failures. Cached as nothing, which is the same trade the other three sources
+ *   make: the alternative is a card that re-asks on every hover for the rest of
+ *   a session that started badly.
+ *
+ * **Partial text is discarded when the stream does not finish**, so a reader
+ * watching a summary arrive and then break off sees it vanish rather than stop
+ * mid-sentence. That is deliberate and it is the lesser of two bad options: half
+ * a summary left on the card would be indistinguishable from a summary that
+ * chose to be short, and this is a section a reader is meant to be able to
+ * trust. It is also rare in the direction that matters — the failure measured on
+ * 2026-09-05 was an upstream 429 arriving as the *first* frame, with no text on
+ * screen to lose.
+ */
+function loadSummary(slug: string, url: string): Promise<void> {
+  const key = summaryKey(slug, url);
+  if (summaryCache.has(key)) return Promise.resolve();
+  const existing = summaryPending.get(key);
+  if (existing) return existing;
+
+  const run = (async () => {
+    /* **No `deadline()` here**, and it is the one lookup in this file without
+       one. The eight-second clock is right for a metadata lookup that either
+       answers or does not; a model writing a paragraph legitimately takes
+       longer, and `readEvents`' own stall clock is the better instrument
+       anyway — it measures silence rather than duration, which is the thing
+       that actually distinguishes a dead stream from a slow one. */
+    try {
+      const query = `?slug=${encodeURIComponent(slug)}&url=${encodeURIComponent(url)}`;
+      const res = await apiFetch(`/api/link-summary${query}`);
+      /**
+       * **Checked before it is read as a stream**, and both halves matter.
+       *
+       * The route does its two throwing reads — the article and the profile —
+       * *before* a header is written, so a 400, a 404 or a 500 arrives as an
+       * ordinary JSON body. Fed to `readEvents` that produces no frames, no
+       * error and no terminal event, which this function would then have cached
+       * as "nothing here" for the session: a slug typo or a database blip
+       * silencing every link in the article until a reload. Throwing instead
+       * lands in the `catch`, which is the same trade the other sources make
+       * and at least says so. GPT Sol, 2026-09-05.
+       */
+      if (!res.ok) throw new Error(`link summary: ${res.status}`);
+      if (!res.headers.get("content-type")?.includes("text/event-stream")) {
+        throw new Error("link summary: not a stream");
+      }
+      if (!res.body) throw new Error("no body");
+      let text = "";
+      let settled = false;
+      for await (const event of readEvents(res.body, { stallMs: STREAM_STALL_MS })) {
+        if (event.name === "delta") {
+          const piece = (event.data as { text?: unknown }).text;
+          if (typeof piece === "string" && piece !== "") {
+            text += piece;
+            summaryPartial.set(key, text);
+            wakeSummaryWatchers();
+          }
+          continue;
+        }
+        if (event.name === "ready") {
+          const whole = (event.data as { summary?: unknown }).summary;
+          /* The server's own `summary` rather than the accumulated deltas —
+             they are the same string on a healthy stream, and on an unhealthy
+             one the terminal frame is the half that was checked. */
+          if (typeof whole === "string" && whole.trim() !== "") {
+            summaryCache.set(key, whole.trim());
+            settled = true;
+          }
+          break;
+        }
+        if (event.name === "unavailable") {
+          summaryCache.set(key, null);
+          settled = true;
+          break;
+        }
+        /* `refused` and `pending` leave the cache empty — see the header. */
+        if (event.name === "refused" || event.name === "pending") {
+          settled = true;
+          break;
+        }
+      }
+      /* No terminal frame: the route hit an error and framed nothing rather
+         than manufacturing a fact about this link. Cached as nothing. */
+      if (!settled) summaryCache.set(key, null);
+    } catch {
+      /* A transport failure, a stall, an offline moment. `apiFetch` has already
+         put it in the console. */
+      summaryCache.set(key, null);
+    } finally {
+      summaryPartial.delete(key);
+      summaryPending.delete(key);
+      wakeSummaryWatchers();
+    }
+  })();
+
+  summaryPending.set(key, run);
+  return run;
+}
+
 /* ------------------------------------------------------------- the hook --- */
 
 /**
@@ -695,15 +917,66 @@ export function useLinkFacts(
      */
     const shelved = shelf?.get(urlKey(url)) !== undefined;
     const ownLink = sourceUrl !== null && urlKey(sourceUrl) === urlKey(url);
-    if (slug && !lang && !title && !shelved && !ownLink) void loadPage(slug, url).then(wake);
+    /**
+     * **And then, if the destination could be read, what it has to do with this
+     * piece.**
+     *
+     * *After* the page lookup and never beside it, because the summary is
+     * written from the text that lookup stored: asking both at once would put a
+     * paid call behind a race it usually loses, and the server would answer
+     * `pending` to every one of them. So it is chained, and it is skipped
+     * entirely unless the fetched section actually arrived — a destination
+     * behind a bot challenge has nothing to summarise, and the whole point of a
+     * cheap call is that it is not made for nothing.
+     *
+     * The same three refusals as the page lookup come for free, because they are
+     * refusals to *ask the page*: a Wikipedia link, an article already on the
+     * shelf, and a link to the piece the reader is standing in never reach here.
+     * That is the right rule for the first and the third; for the second it is a
+     * simplification worth naming — an article on your own shelf is exactly the
+     * case where *how does it stand to this one* would be interesting, and it is
+     * skipped for now because the summariser reads `link_previews.excerpt` and
+     * that row is never fetched for a page we already hold. The repair is to
+     * summarise from our own stored extraction instead, and it is a follow-up.
+     */
+    const alsoSummarise = () => {
+      if (!live || !slug) return;
+      /* **The shelf again, and read *now* rather than from the closure.** The
+         `shelved` test below runs before `/api/library` has landed on the first
+         hover of a session, and the comment beside it accepts one spare preview
+         request for that. It must not also buy a summary: by the time the
+         preview is back the shelf usually is too, and this is the paid call the
+         next comment says is never made for a page we already hold. GPT Sol,
+         2026-09-05. */
+      if (shelf?.get(urlKey(url)) !== undefined) return;
+      if (pageCache.get(url)) void loadSummary(slug, url).then(wake);
+    };
+    if (slug && !lang && !title && !shelved && !ownLink) {
+      void loadPage(slug, url).then(() => {
+        wake();
+        alsoSummarise();
+      });
+    }
+    /* **And when somebody else's stream is filling the same summary**, which is
+       the ordinary case for a card torn down and re-hovered mid-answer: the
+       tokens are accumulating at module level and what is missing is only the
+       render that reads them. */
+    const unwatchSummaries = watchSummaries(wake);
     return () => {
       live = false;
       unwatch();
+      unwatchSummaries();
     };
   }, [url, lang, title, slug, sourceUrl]);
 
   if (!url) return NOTHING;
   const asked = lang && title ? wikiCacheKey({ lang, title }) : null;
+  const said = slug === null ? null : summaryKey(slug, url);
+  /* The finished answer if there is one, else whatever has arrived — and the
+     order matters only in the moment between the last token and the terminal
+     frame, where both are present and the finished one is the checked one. */
+  const finished = said === null ? null : summaryCache.get(said) ?? null;
+  const arriving = said === null ? null : summaryPartial.get(said) ?? null;
   const key = urlKey(url);
   const found = shelf?.get(key);
   const self = sourceUrl !== null && urlKey(sourceUrl) === key;
@@ -725,5 +998,16 @@ export function useLinkFacts(
     wiki: (asked ? wikiCache.get(asked) : null) ?? null,
     shelfKnown: shelf !== undefined,
     page: pageCache.get(url) ?? null,
+    /* **The summary does not count towards `loading` above**, deliberately. The
+       spinner it would join says *we are still finding out where this goes*, and
+       by the time this is outstanding that question has been answered and the
+       card is drawn — so a spinner here would say the card was incomplete when
+       it is merely growing. What the summary shows while it arrives is its own
+       label and the words themselves, which is the point of streaming it. */
+    summary: finished
+      ? { text: finished, streaming: false }
+      : arriving
+        ? { text: arriving, streaming: true }
+        : null,
   };
 }

@@ -251,6 +251,25 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "a lease, an `expires_at` in a WHERE clause and an upsert that refuses to downgrade a live " +
       "row. Every one of those is a property of the database rather than of a store interface.",
   },
+  "tests/link-summary-cache.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres, for `link-preview-cache.test.ts`'s reason with money on it: its subject " +
+      "is an advisory-lock claim, a lease, a fencing token and four staleness comparisons in a " +
+      "WHERE clause. It also seeds two articles under two real owners, because the store resolves " +
+      "the slug through `articleIdForOwned` and the owner filter IS half of what it tests.",
+  },
+  "tests/link-summary-prompt.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Pure functions in, strings out. It imports src/link-summary.js for the prompt builders and " +
+      "the request body, and that module imports the store — which is how the import graph reaches " +
+      "a condemned one — but nothing here selects a store, opens a connection or writes a byte. " +
+      "Same shape and same backstop as link-preview-extract.test.ts.",
+  },
   "tests/fetch-allowance.test.ts": {
     category: "database-integration",
     evidence: "static-only",
@@ -2331,6 +2350,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      second owner; neither wants the shared stack. */
   "tests/link-preview-cache.test.ts": "private-postgres",
   "tests/link-preview-route.test.ts": "private-postgres",
+  /* Stage 3's half of the same feature, and the private lane for the same two
+     reasons: it clears `link_summaries` between cases, which is a thing no
+     shared database may have done to it while a peer is mid-run, and it seeds an
+     article under a second owner. */
+  "tests/link-summary-cache.test.ts": "private-postgres",
   "tests/load-article-serialisation.test.ts": "private-postgres",
   "tests/lock-lifecycle.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",

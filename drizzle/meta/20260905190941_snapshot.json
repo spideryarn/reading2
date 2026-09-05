@@ -1,6 +1,6 @@
 {
-  "id": "7dc42054-2352-453f-b2f9-65ca92090da7",
-  "prevId": "40e50a81-6429-4a1e-8fdc-d14ac4f37055",
+  "id": "db57e0b9-ae4f-4c66-ade2-fbef1a40e55a",
+  "prevId": "67d72915-6720-4d3f-ab92-fc57658ff5ad",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2913,6 +2913,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "excerpt": {
+          "name": "excerpt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "fetched_at": {
           "name": "fetched_at",
           "type": "timestamp with time zone",
@@ -2961,11 +2967,152 @@
         },
         "link_previews_shape": {
           "name": "link_previews_shape",
-          "value": "case \"spideryarn\".\"link_previews\".\"outcome\"\n            when 'alias' then \"spideryarn\".\"link_previews\".\"final_target\" is not null and \"spideryarn\".\"link_previews\".\"failure\" is null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"site_name\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\", \"spideryarn\".\"link_previews\".\"words\") = 0\n            when 'ok' then \"spideryarn\".\"link_previews\".\"final_target\" is null and \"spideryarn\".\"link_previews\".\"failure\" is null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\") > 0\n            when 'pending' then \"spideryarn\".\"link_previews\".\"final_target\" is null and \"spideryarn\".\"link_previews\".\"failure\" is null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is not null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"site_name\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\", \"spideryarn\".\"link_previews\".\"words\") = 0\n            else \"spideryarn\".\"link_previews\".\"final_target\" is null and \"spideryarn\".\"link_previews\".\"failure\" is not null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"site_name\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\", \"spideryarn\".\"link_previews\".\"words\") = 0\n          end"
+          "value": "case \"spideryarn\".\"link_previews\".\"outcome\"\n            when 'alias' then \"spideryarn\".\"link_previews\".\"final_target\" is not null and \"spideryarn\".\"link_previews\".\"failure\" is null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"site_name\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\", \"spideryarn\".\"link_previews\".\"words\", \"spideryarn\".\"link_previews\".\"excerpt\") = 0\n            when 'ok' then \"spideryarn\".\"link_previews\".\"final_target\" is null and \"spideryarn\".\"link_previews\".\"failure\" is null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\") > 0\n            when 'pending' then \"spideryarn\".\"link_previews\".\"final_target\" is null and \"spideryarn\".\"link_previews\".\"failure\" is null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is not null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"site_name\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\", \"spideryarn\".\"link_previews\".\"words\", \"spideryarn\".\"link_previews\".\"excerpt\") = 0\n            else \"spideryarn\".\"link_previews\".\"final_target\" is null and \"spideryarn\".\"link_previews\".\"failure\" is not null\n                        and \"spideryarn\".\"link_previews\".\"claim_id\" is null\n                        and num_nonnulls(\"spideryarn\".\"link_previews\".\"title\", \"spideryarn\".\"link_previews\".\"site_name\", \"spideryarn\".\"link_previews\".\"description\", \"spideryarn\".\"link_previews\".\"first_paragraph\", \"spideryarn\".\"link_previews\".\"words\", \"spideryarn\".\"link_previews\".\"excerpt\") = 0\n          end"
         },
         "link_previews_words": {
           "name": "link_previews_words",
           "value": "\"spideryarn\".\"link_previews\".\"words\" is null or \"spideryarn\".\"link_previews\".\"words\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.link_summaries": {
+      "name": "link_summaries",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dest_hash": {
+          "name": "dest_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "context_hash": {
+          "name": "context_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "profile_hash": {
+          "name": "profile_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "link_summaries_expires_at": {
+          "name": "link_summaries_expires_at",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "link_summaries_article_id_articles_id_fk": {
+          "name": "link_summaries_article_id_articles_id_fk",
+          "tableFrom": "link_summaries",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "link_summaries_owner_id_article_id_target_pk": {
+          "name": "link_summaries_owner_id_article_id_target_pk",
+          "columns": [
+            "owner_id",
+            "article_id",
+            "target"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "link_summaries_status": {
+          "name": "link_summaries_status",
+          "value": "\"spideryarn\".\"link_summaries\".\"status\" in ('pending','ready')"
+        },
+        "link_summaries_shape": {
+          "name": "link_summaries_shape",
+          "value": "case \"spideryarn\".\"link_summaries\".\"status\"\n            when 'pending' then \"spideryarn\".\"link_summaries\".\"summary\" is null and \"spideryarn\".\"link_summaries\".\"claim_id\" is not null\n            else \"spideryarn\".\"link_summaries\".\"summary\" is not null and \"spideryarn\".\"link_summaries\".\"claim_id\" is null\n          end"
         }
       },
       "isRLSEnabled": false
@@ -3087,6 +3234,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "rate_limit_events_bucket_started": {
+          "name": "rate_limit_events_bucket_started",
+          "columns": [
+            {
+              "expression": "bucket",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -3096,7 +3264,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill')"
         }
       },
       "isRLSEnabled": false

@@ -4103,3 +4103,41 @@ export type LinkPreviewResponse =
    * URL and they own the article, so they could already read its links.
    */
   | { state: "refused" };
+
+/**
+ * **What `GET /api/link-summary` sends**, one frame at a time.
+ *
+ * The other half of the card, and the half we wrote: how the destination stands
+ * to the piece the reader is holding. It streams — AGENTS.md's rule, and
+ * `explain.ts` is the shape — so the reader watches it arrive rather than
+ * watching a spinner. src/link-summary.ts.
+ *
+ * The four terminal members mirror `LinkPreviewResponse`'s deliberately, because
+ * the client's caching rule is the same rule: **cache what is a property of the
+ * question, and never what is a property of this request.** A `ready` and an
+ * `unavailable` are about this reader, this article and this address, and are
+ * remembered; a `refused` (a spent allowance) and a `pending` (somebody else is
+ * generating it, or the fetch has not landed yet) are about this moment and are
+ * not.
+ *
+ * `kind` rather than `state`, because these are frames rather than one answer:
+ * a `delta` is not a state anything is in.
+ */
+export type LinkSummaryEvent =
+  /** More of the answer. Any number of these, then exactly one terminal frame. */
+  | { kind: "delta"; text: string }
+  /** The whole summary — after the deltas, or on its own from the cache. */
+  | { kind: "ready"; summary: string }
+  /**
+   * There is nothing here to summarise: the destination could not be read, or
+   * what came back was a cookie notice rather than a piece. A property of the
+   * pairing, so the client remembers it and stops asking.
+   */
+  | { kind: "unavailable" }
+  /** We did not ask — the URL is not in this article, or the allowance is spent. */
+  | { kind: "refused" }
+  /**
+   * Not yet: the destination's own fetch has not landed, or another request is
+   * generating this very summary. Ask again shortly; it is not an answer.
+   */
+  | { kind: "pending" };

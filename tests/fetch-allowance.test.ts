@@ -37,6 +37,7 @@ import { runAsOwner, type OwnerId } from "../src/owner.js";
 import { pgFetchAllowanceStore } from "../src/store/pg-rate-limit.js";
 import type { RatePolicy } from "../src/store/contracts.js";
 import { PREVIEW_RATE_POLICY } from "../src/link-previews.js";
+import { SUMMARY_RATE_POLICY } from "../src/link-summary.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -168,6 +169,84 @@ describe("the fetch allowance", () => {
   });
 });
 
+/**
+ * **The second bucket, which bounds money rather than somebody else's
+ * bandwidth** — added with the Luna summary on 2026-09-05.
+ *
+ * Three things it has that the fetch bucket does not: a day on top of the hour,
+ * a fuse counted across every reader, and a sweep that has to keep the longer of
+ * the two windows. The third is the one that would go wrong silently: a sweep
+ * that kept only an hour would make the daily cap count the last hour and call
+ * it a day — a limiter answering the right question about the wrong period.
+ */
+describe("a bucket with a day and a fuse", () => {
+  /** An hour of two, a day of three, and everybody together gets four. */
+  const DAILY: RatePolicy = {
+    fills: 2,
+    windowMs: 60 * 60 * 1000,
+    concurrency: 4,
+    leaseMs: 30_000,
+    daily: { fills: 3, globalFills: 4, windowMs: 24 * 60 * 60 * 1000 },
+  };
+
+  const spend = async (who: OwnerId): Promise<void> => {
+    const taken = await runAsOwner(who, () =>
+      pgFetchAllowanceStore.take("link-summary-fill", DAILY),
+    );
+    if (taken.kind !== "allowed") throw new Error(`expected allowance, got ${taken.kind}`);
+    await runAsOwner(who, () => pgFetchAllowanceStore.finish(taken.id));
+  };
+  const ask = (who: OwnerId) =>
+    runAsOwner(who, () => pgFetchAllowanceStore.take("link-summary-fill", DAILY));
+
+  /** Push this owner's rows back far enough to leave the hour and not the day. */
+  async function anHourAgo(who: OwnerId): Promise<void> {
+    await getDb()
+      .update(rateLimitEvents)
+      .set({ startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .where(eq(rateLimitEvents.ownerId, who));
+  }
+
+  it("counts the day as well as the hour", async () => {
+    await spend(ALICE);
+    await spend(ALICE);
+    expect((await ask(ALICE)).kind).toBe("rate");
+    /* The hour rolls over and the day does not — so the third fill is allowed
+       and the fourth is not, on a daily cap of three. **This is the case that
+       would pass with a sweep that kept only the shorter window**, because the
+       rows it needs to count would have been deleted rather than aged. */
+    await anHourAgo(ALICE);
+    await spend(ALICE);
+    await anHourAgo(ALICE);
+    expect((await ask(ALICE)).kind).toBe("rate");
+  });
+
+  it("blows the fuse for everybody, and says which limit it was", async () => {
+    /* Two each, which is inside both of their own caps and reaches the global
+       four. The fifth is refused whoever asks — and refused as `global` rather
+       than `rate`, because the two send whoever reads the log to different
+       places: one is a reader hovering a lot of links, the other is the app as
+       a whole being further through the day's money than anybody expected. */
+    await spend(ALICE);
+    await spend(ALICE);
+    await spend(BOB);
+    await spend(BOB);
+    await anHourAgo(ALICE);
+    await anHourAgo(BOB);
+    expect(await ask(ALICE)).toEqual({ kind: "global" });
+    expect(await ask(BOB)).toEqual({ kind: "global" });
+  });
+
+  it("leaves a bucket with no day alone", async () => {
+    /* The fetch bucket carries no `daily`, so nothing above applies to it and
+       the global count is never taken — which is also what keeps the second
+       advisory lock off the hot path of a preview. */
+    await fill(ALICE, LOOSE);
+    await fill(BOB, LOOSE);
+    expect((await take(ALICE, LOOSE)).kind).toBe("allowed");
+  });
+});
+
 describe("the starting policy", () => {
   it("is the shape Sol proposed, and the numbers are guesses", () => {
     /* Pinned so that a change is a decision rather than a drift, and *only*
@@ -178,5 +257,20 @@ describe("the starting policy", () => {
     expect(PREVIEW_RATE_POLICY.fills).toBe(120);
     expect(PREVIEW_RATE_POLICY.windowMs).toBe(60 * 60 * 1000);
     expect(PREVIEW_RATE_POLICY.concurrency).toBe(4);
+    /* And no day: this bucket bounds somebody else's bandwidth, which the hour
+       and the cache between them already do. */
+    expect(PREVIEW_RATE_POLICY.daily).toBeUndefined();
+  });
+
+  it("bounds the summary tighter, because that one spends money", () => {
+    /* Sol's numbers again, and guesses again — `SUMMARY_RATE_POLICY`'s own
+       comment says so and says what to tune them from. The fuse is the one worth
+       reading before changing: it is a blast radius against a bug or a
+       determined account rather than a budget, and at a few hundredths of a cent
+       a call a thousand fills is a small sum of money. */
+    expect(SUMMARY_RATE_POLICY.fills).toBe(30);
+    expect(SUMMARY_RATE_POLICY.concurrency).toBe(2);
+    expect(SUMMARY_RATE_POLICY.daily?.fills).toBe(100);
+    expect(SUMMARY_RATE_POLICY.daily?.globalFills).toBe(1_000);
   });
 });

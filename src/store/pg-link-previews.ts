@@ -81,6 +81,11 @@ const PREVIEW_COLUMNS = {
   description: linkPreviews.description,
   firstParagraph: linkPreviews.firstParagraph,
   words: linkPreviews.words,
+  /* Read on every hit and returned to nobody: `answerFrom` in
+     src/link-previews.ts hands the client `page` alone. It is here because the
+     summariser reads it, and reading it with the rest costs one column rather
+     than a second query on the cold path. */
+  excerpt: linkPreviews.excerpt,
 };
 
 /**
@@ -99,6 +104,7 @@ interface PreviewRow {
   description: string | null;
   firstParagraph: string | null;
   words: number | null;
+  excerpt: string | null;
 }
 
 /**
@@ -117,7 +123,7 @@ function toPreview(row: PreviewRow): CachedPreview | null {
     case "alias":
       return row.finalTarget === null ? null : { kind: "alias", finalTarget: row.finalTarget };
     case "ok":
-      return { kind: "ok", page: toPage(row) };
+      return { kind: "ok", page: toPage(row), excerpt: row.excerpt };
     case "transient":
       return { kind: "transient", why: row.failure ?? "failed" };
     case "permanent":
@@ -163,6 +169,7 @@ function toColumns(entry: CachedPreview, claimId: string | null = null): Omit<Pr
     description: null,
     firstParagraph: null,
     words: null,
+    excerpt: null,
   };
   switch (entry.kind) {
     case "pending":
@@ -182,6 +189,7 @@ function toColumns(entry: CachedPreview, claimId: string | null = null): Omit<Pr
         description: entry.page.description ?? null,
         firstParagraph: entry.page.firstParagraph ?? null,
         words: entry.page.words ?? null,
+        excerpt: entry.excerpt,
       };
   }
 }
@@ -340,6 +348,7 @@ const rawPgLinkPreviewStore: LinkPreviewStore = {
           description: sql`excluded.description`,
           firstParagraph: sql`excluded.first_paragraph`,
           words: sql`excluded.words`,
+          excerpt: sql`excluded.excerpt`,
           fetchedAt: sql`now()`,
           expiresAt: sql`excluded.expires_at`,
         },

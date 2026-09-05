@@ -42,6 +42,10 @@ import {
   Globe,
   LoaderCircle,
   Plus,
+  /* The house mark for "a model wrote this" — `SearchPanel`'s meaning search and
+     `QuotesPanel` both use it for the same distinction, and using a different
+     icon here would make the same claim in a second vocabulary. */
+  Sparkles,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
 import type { BlockId, GlossaryEntry, Job, PagePreview } from "../types.js";
@@ -107,19 +111,26 @@ export function ProseHoverCard({
 }: {
   entries: GlossaryEntry[];
   /**
-   * **Which article the reader is in**, and it is here for exactly one thing:
-   * `GET /api/link-preview` is article-scoped.
+   * **Which article the reader is in**, and both server-side sources are
+   * article-scoped: `GET /api/link-preview` and, since 2026-09-05,
+   * `GET /api/link-summary`.
    *
-   * That route will not fetch a URL until it has proved the caller owns this
-   * article *and* that this article really points at that URL — which is what
-   * turns an arbitrary-URL fetch endpoint into one that can only ever reach
-   * things an author already published in a piece this reader owns. So the slug
-   * travels with the request as the *permission* rather than as part of the
-   * question: the answer is a property of the address and the server's cache is
-   * keyed on the address alone. GPT Sol, 2026-09-05, P1-1; src/link-previews.ts.
+   * Neither will touch a URL until it has proved the caller owns this article
+   * *and* that this article really points at that URL — which is what turns an
+   * arbitrary-URL fetch endpoint into one that can only ever reach things an
+   * author already published in a piece this reader owns. GPT Sol, 2026-09-05,
+   * P1-1; src/link-previews.ts.
    *
-   * `null` in any context that has no article — the card then keeps its other
-   * two lookups and asks the server nothing.
+   * **The slug means something different to each of them, and the difference is
+   * the whole shape of the feature.** To the preview it is the *permission* and
+   * nothing more: what a page says about itself is a property of the address, so
+   * that cache is keyed on the address alone and shared with everybody. To the
+   * summary it is part of the *question* — how this destination stands to *this*
+   * piece — so that cache is keyed on the reader, the article and the address
+   * together, and is shared with nobody. src/link-summary.ts.
+   *
+   * `null` in any context that has no article — the card then keeps its two
+   * href-and-Wikipedia lookups and asks the server nothing.
    */
   slug: string | null;
   /**
@@ -554,6 +565,10 @@ const NO_LINK_FACTS: LinkFacts = {
      authenticated and article-scoped, so a visitor could not call it if the
      card tried. This is the same second lock on the same door. */
   page: null,
+  /* And nothing bought on their behalf. `/api/link-summary` is behind the same
+     gate and, unlike the fetch, spends money — so this is the second lock on a
+     door that costs something to have opened. */
+  summary: null,
 };
 
 /* ------------------------------------------------- add it to my shelf --- */
@@ -873,10 +888,12 @@ export function describeAdd(state: Asked | undefined, job: Job | null, add: () =
  *    plainly rather than dressed up as a page.
  *
  * **The asynchronous half is additive, never load-bearing.** The card is drawn
- * and complete from the href alone; a shelf match or a Wikipedia summary is a
- * section that appears under it a moment later. Nothing above waits, and a
- * lookup that fails or finds nothing leaves a card that was already worth
- * reading. That is what lets those lookups be allowed to be slow.
+ * and complete from the href alone; a shelf match, a Wikipedia summary, what the
+ * page says about itself, and — since 2026-09-05 — a model's line on how that
+ * page stands to the piece being read are all sections that appear under it a
+ * moment later. Nothing above waits, and a lookup that fails or finds nothing
+ * leaves a card that was already worth reading. That is what lets those lookups
+ * be allowed to be slow, and the last of them to be allowed to *stream*.
  *
  * One thing above *does* change, and it is deliberate rather than a wobble: a
  * real title replaces the path trail rather than sitting under it, so the guess
@@ -999,6 +1016,50 @@ function PageSaid({ page }: { page: PagePreview }) {
 }
 
 /**
+ * **How the destination stands to the piece in your hands** — the one part of
+ * this card that we wrote, and the only one that costs money.
+ *
+ * Every other section is quoted: the shelf's own gist, Wikipedia's lead
+ * paragraph, the page's own `og:description`. This one is a model's answer, so
+ * it is labelled differently — *"in relation to what you're reading"* rather
+ * than a source's name — because a reader is owed the difference between a page
+ * saying something about itself and us saying something about it.
+ *
+ * **It streams, and the cursor is why the flag exists.** A paragraph that has
+ * stopped growing and a paragraph still arriving look identical, and the second
+ * one ending mid-sentence is a stream that broke rather than a summary that
+ * chose to stop. `LinkFacts.summary` carries `streaming` for exactly this.
+ *
+ * There is deliberately **no spinner before the first token**. The card is
+ * already useful and already complete-looking by then, and an empty section with
+ * a heading reads as a lookup that broke — `readSummary`'s rule, one source up.
+ * What the reader sees is nothing, and then a paragraph appearing.
+ */
+function LinkRelation({ summary }: { summary: { text: string; streaming: boolean } }) {
+  return (
+    <div className="prose-card-part prose-card-part-relation">
+      <p className="prose-card-label">
+        <Sparkles size={9} />
+        in relation to what you're reading
+      </p>
+      <p className="prose-card-text">
+        {/* **Clipped, and the number is a bound on the card rather than an
+            editorial view.** `.tooltip` has a width cap and no height cap, so an
+            answer that ran long would make a card taller than a phone with
+            nothing to scroll. Nine hundred characters is about a hundred and
+            fifty words against a prompt that asks for under a hundred, so it
+            should never bite — and if it starts biting, the prompt is what to
+            look at. The other sections clip at 220–260 for a different reason:
+            they are somebody else's blurb, and this is the section the reader is
+            here for. */}
+        {clip(summary.text, 900)}
+        {summary.streaming && <span className="prose-card-caret" aria-hidden="true" />}
+      </p>
+    </div>
+  );
+}
+
+/**
  * A link out — the commonest case, and the only one with more than one source.
  *
  * Its own component rather than a branch of `LinkCard`, because it is the half
@@ -1022,7 +1083,7 @@ function ExternalBody({
   add: AddToShelf;
   href: string | null;
 }) {
-  const { library, wiki, loading, shelfKnown, page } = facts;
+  const { library, wiki, loading, shelfKnown, page, summary } = facts;
   /**
    * **Nothing to add when we already have it — or when we cannot yet say.**
    *
@@ -1135,6 +1196,14 @@ function ExternalBody({
           (`saneParagraph`), because it is prose the author wrote rather than a
           field somebody's CMS filled in. */}
       {said && <PageSaid page={said} />}
+
+      {/* **And what it has to do with the piece in your hands** — the only
+          section here that we wrote, streamed in under the destination's own
+          words once they have landed. It comes last on purpose: the reader
+          should meet what the page says about itself before they meet what a
+          model says about it, so the quoted half is never framed by ours.
+          src/link-summary.ts, docs/project/links.md. */}
+      {summary && <LinkRelation summary={summary} />}
 
       {/* Only while something is genuinely outstanding, and only when there is
           nothing yet to show — a spinner *under* an answer that has already
