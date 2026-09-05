@@ -702,18 +702,15 @@ came out of GPT Sol's review of the built code, 2026-09-04; the argument for eac
 ### Where the numbers on it come from, and why nobody derives them twice
 
 Every number on the card — words, minutes, blocks, parts, sections — and the blurb are produced by
-one function, [`deriveLibraryScalars`](../../src/library-scalars.ts). Both stores use it, at
-different moments:
+one function, [`deriveLibraryScalars`](../../src/library-scalars.ts), which runs at **publish**,
+inside the transaction that writes the blocks and the tree, writing the five columns the shelf then
+reads. (Until 2026-09-05 the filesystem store ran it at read instead, over the artefacts the
+directory walk had just loaded, since there was no publish transaction to hang it on.)
 
-| | when it runs | what the shelf then reads |
-|---|---|---|
-| **filesystem** | at read, over the artefacts the directory walk just loaded | its return value |
-| **Postgres** | at **publish**, inside the transaction that writes the blocks and the tree | the five columns it wrote |
-
-`describeArticle` in `src/api.ts` *receives* those five and assembles the card.
-It used to derive them itself, which made it a second implementation — and the two had **already
-diverged once**, over the `excerpt` rung of the blurb's fallback, found in review rather than by a
-test.
+`describeArticle` in [`src/library-scalars.ts`](../../src/library-scalars.ts) *receives* those five
+and assembles the card. It used to derive them itself, which made it a second implementation — and
+the two had **already diverged once**, over the `excerpt` rung of the blurb's fallback, found in
+review rather than by a test.
 
 **On the Postgres side that was also the shelf's whole cost.** Deriving per request meant reading
 every block row of every article — `text`, `html` and the generated `fts` vector — and running each
@@ -823,25 +820,27 @@ the date to the mtime of `blocks.json`. It just has no byline and no source link
 
 ## When this becomes Postgres
 
-See [database.md](database.md) for the store as a whole, and
+**Done, since 2026-09-01, and since 2026-09-05 the only store there is** — kept here because the
+left column below is what the filesystem store actually did, and the reasoning for the move still
+holds. See [database.md](database.md) for the store as a whole, and
 [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) for the schema and the risks.
 
-`src/api.ts` is the seam, and it is the only file that knows there are
-directories. Above it the client sees two types, both already shaped as rows:
+`src/store/pg.ts`, reached through `src/store/index.ts`, is the seam now; it is the only place that
+knows articles are Postgres rows. Above it the client sees two types, both shaped as rows:
 
 - `Article` — one article in full, `GET /api/article/:slug`
 - `LibraryEntry` — one shelf record, `GET /api/library` ([`src/types.ts`](../../src/types.ts))
 
 Every field of `LibraryEntry` is a scalar a column could hold. Nothing in it is a path, a directory
-name that means something, or a nested artefact. So the migration is:
+name that means something, or a nested artefact. So the migration was:
 
-| Today | Then |
+| Then (filesystem, gone 2026-09-05) | Now |
 |---|---|
 | `listArticles()` walks `data/*/`, reads three JSON files per directory | one `SELECT` over an `articles` table |
 | counts (`words`, `blocks`, `parts`, `sections`) derived per request | columns, written once at ingest |
 | `addedAt` from `meta.fetchedAt`, falling back to file mtime | a `fetched_at` column, no fallback |
 | `comments` counted by reading `comments.json` | `SELECT count(*)` or a denormalised column |
-| the `example/` fixture, always listed, flagged `fixture: true` | a seed row, or dropped entirely |
+| the `example/` fixture, always listed, flagged `fixture: true` | a seed row, listed like any other article — see [§ The fixture was always on the shelf](#the-fixture-was-always-on-the-shelf) |
 
 The one thing that must survive the move unchanged is **block ids** — they are the join key for
 everything a reader has ever pointed at, and they are minted once and preserved. Read
@@ -869,8 +868,8 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl`, `isSlug` — shared by the extractor, the add box and the server |
-| `src/api.ts` | `listArticles()`, `describeArticle()` — **the Postgres seam** |
-| [`src/library-scalars.ts`](../../src/library-scalars.ts) | **the two derivations every reader shares**: the card's five numbers and blurb, and the `<h1>` a missing title falls back to |
+| [`src/store/pg.ts`](../../src/store/pg.ts) | `listArticlesQuery()`, bound to `listArticles()` in [`src/store/index.ts`](../../src/store/index.ts) — **the Postgres seam** |
+| [`src/library-scalars.ts`](../../src/library-scalars.ts) | `describeArticle()`, and **the two derivations every reader shares**: the card's five numbers and blurb, and the `<h1>` a missing title falls back to |
 | [`src/shelf.ts`](../../src/shelf.ts) | `MAX_TITLE_CHARS`, and `loadShelf` for fixtures — the writes moved to Postgres |
 | [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | archived, renamed, opened, and searching every article at once — all of it, in SQL |
 | [`src/web/useShelf.ts`](../../src/web/useShelf.ts) | the shelf and its verbs, client side, including Undo — and **which of the saved copy and the live answer wins** |
@@ -975,15 +974,20 @@ flight, so an article still loading when the reader posts a comment may end up p
 retirement that cannot be shown to have happened **deletes the whole cache**, because a copy we
 failed to clear is a copy we would go on serving.
 
-## The fixture is always on the shelf
+## The fixture was always on the shelf
 
-`example/` is listed under the slug `example`, flagged, and sorted below the real articles. A fresh
-clone has no `data/` at all, and an empty homepage reads as a broken app rather than an empty shelf.
+Until 2026-09-05, `example/` was listed under the slug `example`, flagged, and sorted below the real
+articles, on every clone unconditionally — a fresh clone had no `data/` at all, and an empty homepage
+reads as a broken app rather than an empty shelf. It was listed under its **directory name** and not
+under the slug inside its own `meta.json` — that one names the full Noema article the fixture is an
+excerpt of, and listing it there would collide with the real thing. `loadArticle("example")` resolved
+by falling through (`src/api.ts`, the filesystem reader, deleted that day with the store it read
+from).
 
-Note it is listed under its **directory name** and not under the slug inside its own `meta.json` —
-that one names the full Noema article the fixture is an excerpt of, and listing it there would
-collide with the real thing. `loadArticle("example")` resolves by falling through
-(`src/api.ts`), so the slug that lists is the slug that opens.
+**Under Postgres it is not automatic.** `npm run setup` seeds the fixture into the local database on
+one development account ([`scripts/db-seed-dev.ts`](../../scripts/db-seed-dev.ts)) and it is then
+listed the ordinary way, on that account's shelf, still flagged and still sorted last — see
+[example/README.md](../../example/README.md).
 
 ## See also
 

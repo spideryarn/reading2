@@ -460,7 +460,8 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
 2. **`src/validate-tree.ts` is a CLI**, with top-level `await` and `process.exit`. It's exercised as
    a subprocess, so its tests are slower (~1.5s) than everything else combined. If it ever grows a
    pure `validateTree(blocks, tree)` export, move those tests to it.
-3. **Which artefact store to hand it, and never `createFsArtifactStore`.** Three answers, and the
+3. **Which artefact store to hand it** — `createFsArtifactStore` is gone, deleted 2026-09-05 with the
+   rest of the filesystem store, so this is no longer a temptation to resist. Three answers, and the
    choice is *what the test is about* rather than what is cheapest to construct:
    - the test is about **an article existing in Postgres** — a route, a reader, a comment to hang
      somewhere: [`scratchArticleInPg`](../../tests/helpers/scratch-article.ts), or
@@ -473,7 +474,7 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
      slug)` to start from a fixture on disk. It applies the same shape rules as the real stores;
      it **copies on the way in and out**, so a value it handed you is not the one it holds, like
      both real stores and unlike a `Map`; and it deliberately does **not** put
-     `extractedHtml` and `stampedHtml` at one address the way the filesystem does;
+     `extractedHtml` and `stampedHtml` at one address the way the filesystem store used to;
    - the test is about **a job**, and the article is only there so the job may name it:
      [`bareArticles`](../../tests/helpers/bare-article.ts), which inserts an `articles` row and
      nothing else. Five suites needed it the day `enqueue` started refusing a bare-slug request for
