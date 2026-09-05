@@ -1366,7 +1366,11 @@ export interface Article {
   meta: Meta;
   blocks: Block[];
   tree: Tree;
-  /** Absent until `npm run arc` has been run — the L0 column falls back to the root gist. */
+  /**
+   * One sentence per part on where the argument stands there (src/arc.ts,
+   * stage 5b). Absent until that step has run, and then Outline mode simply
+   * omits its rung 4 — it drew Hierarchy's L0 column too until 2026-09-05.
+   */
   arc?: Arc;
   /**
    * The article's own images, and which of them we hold — `Assets`

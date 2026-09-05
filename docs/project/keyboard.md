@@ -53,8 +53,9 @@ what your hand is doing.
 **We have since bought a small piece of exactly that**, and it is worth being clear about the price.
 ← / → set a level and it stays set, which is a state you can be wrong about. Three things keep it
 cheap: any mouse movement clears it, so it cannot outlive the moment you stop thinking about it; the
-controls bar and the lit column header say what it is, the same two indicators the pointer already
-had; and it can only ever hold a level that is on screen. It is a mode you leave by accident rather
+lit column header says what it is, the indicator the pointer already had; and it can only ever hold
+a level that is on screen. (The controls bar said it too, in words, until 2026-09-05 —
+[§ The aim is visible before you press anything](#the-aim-is-visible-before-you-press-anything).) It is a mode you leave by accident rather
 than one you have to remember to leave, which is the only kind this view can afford.
 
 ## What each zone means
@@ -65,7 +66,6 @@ whichever column you walk it to.
 | Where the pointer is | ↑ / ↓ step by |
 |---|---|
 | A gist column at depth *d* | that level's items — L1 parts, L2 sections, … |
-| The arc column (L0) | **parts** — its cells are the parts' cells, but it is its own rung |
 | The `Text` column (the prose) | one paragraph — the leaf level, which is 1:1 with blocks |
 | The leaf column beside the prose | the same: one paragraph |
 | The spine, anywhere on it | **parts (L1)** |
@@ -84,21 +84,30 @@ they sit in on screen. **The rungs are the columns actually on screen**, not eve
 which is indistinguishable from a broken key. `navPlan` in
 [`keynav.ts`](../../src/web/keynav.ts) builds that list, and it is tested.
 
-**Both ends are reachable, and that is the point.** Greg, 2026-08-26:
+**Both ends are reachable, and one of the ends moved.** Greg, 2026-08-26:
 
 > I need to be able to hit left all the way to be able to select L0 (the Argument), and to be able
 > to hit right all the way to select the Text.
 
-So the argument column is a rung of its own rather than an alias for Parts, which is what it was for
-a few hours. It still *steps* by part, because the arc's cells are the parts' cells
-([tree.ts § the arc](granularity-zoom.md#the-arc)) — the borrowing happens once, in `navPlan`, and
-nowhere in the view. The far right is the prose, which shares its rung with the leaf column beside
-it: both mean one paragraph, so making them two rungs would cost a press to cross a distinction that
-does not exist.
+Then, 2026-09-05:
 
-The one level that is a column but not a rung is **L0 without the arc**, which is the root repeated
-down the page: one item, so both arrows are already dead ends there. A rung you cannot step on is a
-key that does nothing, so it is left off.
+> For Hierarchy mode, let's get rid of the "Arg" button and functionality altogether.
+
+**The later one wins**, and it is the reason the first row of the table above is gone. There is no
+L0 column to select, so ← stops at Parts. The argument column had been a rung of its own — it
+*stepped* by part, borrowing the parts' cells ([the arc](granularity-zoom.md#the-arc)), which was
+the only thing that made "left all the way" anything but a dead end — and both the column and the
+borrowing went with it
+([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Decisions 5). **The arc
+itself is still generated and still on screen**, as Outline mode's rung 4.
+
+The right-hand end is untouched: the prose shares its rung with the leaf column beside it, since both
+mean one paragraph, and making them two rungs would cost a press to cross a distinction that does not
+exist.
+
+Depth 0 is still in the tree, and it is still what it always was off the arc — the root repeated down
+the page, one item, both arrows dead ends. It falls off the ladder on the ordinary rule ("a rung you
+cannot step on is a key that does nothing") rather than by a special case.
 
 **Pressing ← or → holds the level until you move the mouse.** This is the one piece of modal state
 the pointer design was built to avoid, so it is deliberately the weakest kind available: no
@@ -140,10 +149,10 @@ The blur on click survives all of that, and still earns its place: nothing eats 
 focused button still takes Enter and Space, and leaving focus on it after a mouse click is not what
 the reader asked for.
 
-Both indicators already exist and both keep working: the aimed column header lights up — exactly
-one column, even where the arc and Parts share a stride, because the reader has to be able to see
-which of the two another → would leave — and the controls bar names the level. That matters more for the keys than it did for the pointer — with the
-pointer, where you are aiming is where your hand is.
+The aimed column header lights up — exactly one column, even where the arc and Parts share a
+stride, because the reader has to be able to see which of the two another → would leave. That
+matters more for the keys than it did for the pointer — with the pointer, where you are aiming is
+where your hand is. There was a second indicator beside it until 2026-09-05; see below.
 
 At the ends of the ladder the key is handed back to the browser rather than swallowed, the same
 concession ↑ / ↓ make at the ends of the article. So → at the finest column still pans an
@@ -155,16 +164,21 @@ the table by adding one attribute, and why a new panel would too.
 
 ## The aim is visible before you press anything
 
-Two places say it, because either one alone has a hole:
+An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
+running it. So the aim is drawn:
 
 - **The column header lights up** as the pointer crosses into it (`thead th.nav-aim`). Quieter than
   an `.on` button in the controls bar, deliberately: it follows the mouse, and something that changes
   on every sideways twitch must not shout.
-- **The controls bar names the level** — `↑↓ Sections`. This is the one that still works when the
-  aimed zone is the spine, which has no header, or is nothing at all.
 
-An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
-running it.
+**Two places said it until 2026-09-05, and one of them has gone.** The controls bar carried an
+`↑↓ Sections` readout, and it was the half that still worked when the aimed zone is the spine —
+which has no header — or is nothing at all. It went with the rest of the bar
+([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), leaving the lit header as the
+only indicator and the spine's aim unnamed. **The header goes too, in stage 3 of that plan**, which
+owes the aim a replacement: a tint on the aimed column's cells, which can name the spine and the
+prose column as well as a gist. Until it lands, this section describes one indicator with a known
+hole rather than two that covered each other.
 
 ## Five rules, each with a reason
 
@@ -290,12 +304,12 @@ buys focus management we do not need.
 [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) originally gave ← / → to *zoom
 out* and *zoom in* — one level at a time, in a view that showed a single level at a time. The table
 view superseded that by showing every level at once, which left "zoom" without an axis to move
-along; choosing levels is the `Arg / L1 / L2` buttons and `?cols=`
+along; choosing levels is the `L1 / L2` buttons and `?cols=`
 ([url-state.md](url-state.md#the-parameters)). So ← / → were free.
 
 They have now come back round to something close to that original intent — ← / → *do* choose the
 level again — but on a view that shows every level at once, so the key moves your **aim** across the
-columns rather than replacing what is drawn in them. The zoom is still the `Arg / L1 / L2` buttons
+columns rather than replacing what is drawn in them. The zoom is still the `L1 / L2` buttons
 and `?cols=`. What the old sketch had right was the axis; what it could not have known was that the
 levels would stop being a thing you switch between and start being a thing you point at.
 

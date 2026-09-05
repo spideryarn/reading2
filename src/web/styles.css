@@ -538,9 +538,12 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    would make a checked PDF look broken. The scan wording carries its own weight
    without any help from the colour.
 
-   **Not `.provenance`**, which this was for a few hours and which is taken:
-   there is a `.provenance` chip further down this file — monospace, in a dashed
-   box, right-aligned — and being declared later it simply won. The masthead
+   **Not `.provenance`**, which this was for a few hours. The name was taken at
+   the time: there was a `.provenance` chip further down this file — monospace,
+   in a dashed box, right-aligned, holding the tree version — and being declared
+   later it simply won. That chip went on 2026-09-05 with the rest of the
+   controls bar, so the collision is gone and the name is free; the class is
+   still not worth reclaiming, since `.source-note` says what this is. The masthead
    line came out as a debug-looking box beside a sans-serif facts line, and no
    test could see it. A Sonnet subagent driving Chrome caught it, by reading the
    *computed* styles rather than by looking at the screenshot: 10.88px Geist
@@ -644,94 +647,26 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   transition: transform 0.18s ease;
 }
 
-.controls-label {
-  font-size: 0.68rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  margin-right: 0.3rem;
-}
-
-/* The granularity pills used to be styled from here, by a `.controls button`
+/* **There is no `.controls button` rule at all, and that is not an oversight.**
+   The granularity pills used to be styled from here, by a `.controls button`
    block plus `:hover` and `.on`. They are shadcn `Toggle`s now, carrying the
    PILL string in App.tsx, and Radix marks the on state with `data-state="on"`
    rather than a class — so `.controls button.on` had stopped matching anything
-   at all, and the rest was being overridden a declaration at a time.
+   at all, and the rest was being overridden a declaration at a time. So any
+   button ever put back in this bar states its own reset in full: there is
+   nothing here to inherit one from.
 
-   What is left is the one control in this bar that never became a Toggle. It
-   is spelled out in full rather than leaning on a shared button reset, because
-   there is no longer a shared button reset to lean on. */
+   Two such buttons lived here until 2026-09-05 and both were deleted with the
+   rest of the bar (App.tsx § the controls bar): a `.linky` `auto`, and a
+   `.mode-close` `×`. `.linky` survives elsewhere and is still what it always
+   was — a shape, not a shared class; see `.cmt-dialog button.linky`. */
 
-/* A control that reads as a link rather than a toggle — it does something once
-   rather than being on or off. */
-.controls button.linky {
-  /* `font: inherit` is the load-bearing half of any button reset: without it
-     the UA supplies its own 13.3px Arial. Everything below restates what this
-     button used to inherit, so the pixels are unchanged. */
-  font: inherit;
-  font-size: 0.75rem;
-  padding: 0.22rem 0.3rem;
-  /* Transparent, not absent. The border is 2px of box, and the pills beside it
-     have one — drop it and this control alone shrinks from 27.6px to 25.6px.
-     The text does NOT move: `.controls` centres its items, so a symmetric
-     border shrinks and re-centres. What moves is everything else — the outer
-     rect, so every item after it slides 2px left; the hit area; and the bounds
-     the focus ring is drawn around.
-
-     The radius is not dead either, despite there being nothing to round. An
-     outline follows `border-radius` (Chrome always, Safari since 16.4), and it
-     does so independently of the transparent border — so this line is the one
-     that keeps the keyboard focus ring a lozenge instead of a rectangle. */
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-faint);
-  cursor: pointer;
-  /* Only the colour ever moves. The old rule also animated background and
-     border-color, but this control's are both permanently transparent — the
-     `.controls button:hover` border was already losing to the transparent one
-     above it, on source order at equal specificity. */
-  transition: color 0.12s;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.controls button.linky:hover { color: var(--highlight); }
-
-/* **The way out of a mode** — App.tsx, beside the chip naming the mode you are
-   in. It was a `.linky` reading `back to contents` until 2026-08-31; the reason
-   it is an icon now, and names no destination, is in App.tsx where the button is.
-
-   Sized off `.linky` deliberately rather than off `.chat-icon`, which is the
-   other × in the app: this one sits in a row of pills and has to line up with
-   them, and `.linky` is the control in that row whose box was already worked out
-   against the pills (see its own note on the transparent border). Square, so the
-   glyph is centred rather than sitting in a lozenge meant for words. */
-.controls button.mode-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font: inherit;
-  /* The same 27.6px box the pills and `.linky` come out at, taken as a square. */
-  width: 1.725rem;
-  height: 1.725rem;
-  padding: 0;
-  margin-left: 0.35rem;
-  /* Transparent and 999px for the two reasons `.linky` spells out: the border is
-     2px of box the pills beside it also spend, and an outline follows
-     `border-radius`, so this is what keeps the focus ring round. */
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-faint);
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
-}
-.controls button.mode-close:hover {
-  color: var(--highlight);
-  border-color: var(--highlight);
-}
-
+/* A word in the bar that states rather than acts. **One consumer left**: the
+   read-only chip a visitor gets (PublicChrome.tsx § `ViewOnlyChip`), which
+   writes `mode on`. The chips it was designed alongside — the mode's name,
+   `fit`, `reading`/`outline` — all went on 2026-09-05, and it stays because a
+   visitor's footing is the one fact in this bar that outranks the controls.
+   Nothing to do with `.mode-band`, which is the middle column. */
 .mode {
   font-size: 0.68rem;
   letter-spacing: 0.09em;
@@ -746,19 +681,6 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    spot it used to occupy. Note the comment further up this file (§ `.about`)
    still warns that `.provenance` is "taken" — it is not any more, but the reason
    that class was the wrong name for a masthead list stands on its own. */
-
-/* What ↑ / ↓ are currently aimed at, in words. The aim follows the pointer
-   (keynav.ts), and the column header lights up to match — but the aimed zone
-   can be the spine, which has no header, so this is the one place that can
-   always say it. See docs/project/keyboard.md. */
-.keynav {
-  font-size: 0.68rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  margin-left: 0.6rem;
-  white-space: nowrap;
-}
 
 /* ----------------------------------------------------------------- table -- */
 /* border-collapse must be `separate` for `position: sticky` to work reliably on
@@ -1041,43 +963,12 @@ td.gist.active .title { color: var(--highlight-ink); }
    a special table mechanism that is not inheritance. Set on `.col-depth-*` this
    resolved on an element nothing ever read it from, so every bar in every
    column painted the `--rule-strong` fallback grey. */
-td.gist.depth-0 { --tint: var(--depth-0); }
 td.gist.depth-1 { --tint: var(--depth-1); }
 td.gist.depth-2 { --tint: var(--depth-2); }
 td.gist.depth-3 { --tint: var(--depth-3); }
-/* ---------------------------------------------------------------- the arc --
-   The L0 column. Its cells share the parts' boundaries exactly, so it needs to
-   read as a *different kind of thing* from the column beside it rather than as
-   a second opinion about the same one: no title, a step marker instead, and the
-   sentence set smaller and lighter. See tree.ts § the arc. */
-td.gist.arc .gist-text {
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--ink-faint);
-}
-
-td.gist.arc.active .gist-text { color: var(--ink-soft); }
-
-.arc-step {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  line-height: 1;
-  margin-bottom: 0.45rem;
-  color: var(--depth-0);
-  font-weight: 600;
-}
-.arc-step .of { color: var(--ink-faint); font-weight: 400; opacity: 0.8; }
-/* The apparatus in the arc column: its title where a part has its marker, set
-   as chrome rather than as prose. "Notes" is a label *about* the article, not a
-   compression *of* it, so it must not dress as a gist — a reader who has
-   learned the column's grammar reads the difference without being told.
-   docs/plans/260828o-footnotes.md § What the reader sees. */
-.arc-step.arc-supplement {
-  color: var(--ink-faint);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+/* The L0 column and its arc styling left on 2026-09-05 —
+   docs/plans/260905d-declutter-the-reading-view-top-bars.md. `.outln-arc` in
+   § outline mode is a different rule, and is where the arc is drawn now. */
 
 td.gist .title::before {
   content: "";
@@ -3101,46 +2992,6 @@ td.text.has-hit[data-hues="8"] {
 .ctx-title .own { margin-left: 0.35em; color: var(--highlight); font-weight: 400; }
 .ctx-item.tier-cur .range { margin-top: 0.35rem; }
 
-/* The arc's step marker, as it was in the cell (see .arc-step): mono and
-   tinted, so it reads as a position and not as a title. The column has no
-   titles — that is the point of it.
-
-   Written `.ctx-title.ctx-step`, both classes, because they land on the SAME
-   div and the plainer selector loses. `.ctx-item.tier-cur .ctx-title` is three
-   classes and beat `.ctx-item .ctx-step` at two, so the marker took the title's
-   face and colour while a *later* rule at equal weight still set its size — a
-   step marker in the UI font at 0.72rem, with the gist below it rendering
-   LARGER than it. Verified in the browser by computed style, not by reading
-   the cascade, 2026-08-25. */
-.ctx-item .ctx-title.ctx-step {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--depth-0);
-}
-.ctx-item.tier-cur .ctx-title.ctx-step {
-  /* The cell's 0.68rem, not a bigger "current" size: the arc's marker is
-     deliberately the smallest thing in the column, and the sentence under it
-     is the part worth reading. Making it larger than the sentence turned the
-     position into the headline. */
-  line-height: 1;
-  margin-bottom: 0.45rem;
-}
-/* `/ 9` recedes, as it does in the cell: the pair is one position, not two
-   numbers. Kept as two numbers all the way from context.ts so this is a span
-   and not a slice of a formatted string. */
-.ctx-item .ctx-step .of,
-.tip-title .of { color: var(--ink-faint); font-weight: 400; opacity: 0.8; }
-/* The arc's sentence stays smaller and lighter than a gist, as it was in the
-   cell: the arc shares the parts' boundaries exactly, so it has to read as a
-   different KIND of thing rather than as a second opinion about the same one
-   (tree.ts § the arc). Keyed off the step marker rather than off depth-0,
-   because depth 0 is the parts column when there is no arc. */
-.ctx-item.tier-cur:has(.ctx-step) .gist-text {
-  font-size: 0.82rem;
-  color: var(--ink-faint);
-}
-
 /* The row-hover wash, carried over from the cells: an entry on the hovered
    row's ancestor path lights the way `td.gist.active` did. */
 .ctx-item.active { background: var(--highlight-wash); }
@@ -3299,7 +3150,6 @@ td.text.has-hit[data-hues="8"] {
 /* Nothing to centre, so no room needed above it: the list starts at the top of
    the panel. See `hasCurrent` in ContextPanel.tsx. */
 .ctx-panel.no-current .ctx-panel-list { padding-top: 0.85rem; }
-.ctx-panel.depth-0 { --tint: var(--depth-0); }
 .ctx-panel.depth-1 { --tint: var(--depth-1); --ctx-parent-tint: var(--depth-0); }
 .ctx-panel.depth-2 { --tint: var(--depth-2); --ctx-parent-tint: var(--depth-1); }
 
@@ -3330,13 +3180,6 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-soft);
 }
 .tip-entry .own { color: var(--ink-faint); font-weight: 400; }
-/* An arc card's title is a position, not a name — set like the marker in the
-   column it came from rather than like every other card's title. */
-.tip-entry .tip-title.tip-step {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--depth-0);
-}
 
 /* ------------------------------------------------------------------ dock --
    The bottom bar and the drawer that rises out of it — Dock.tsx, and
@@ -3553,6 +3396,55 @@ td.text.has-hit[data-hues="8"] {
   cursor: pointer;
 }
 .install-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+/* ------------------------------------------------- the small-screen hint --
+   One banner, once, at the top of the reading view on a narrow touch screen —
+   SmallScreenHint.tsx, and docs/plans/260905e-a-small-screen-banner-on-a-phone.md
+   for why the message is "the band covers the article, press Plain" rather
+   than anything this stylesheet could fix.
+
+   **In flow, not fixed**, which is the whole difference from the install hint
+   above and the reason it needs no `--hint-h` of its own: it is read once on
+   arrival and then scrolls away with the masthead. Two fixed strips over the
+   same bar would have needed a second token and an ordering rule between two
+   sentences that have nothing to say to each other.
+
+   Sized like `.shared-notice`, which is its neighbour in the flow, and
+   coloured like `.install-hint`, which is its sibling in purpose. */
+.small-screen-hint {
+  margin: 0 auto 1rem;
+  max-width: 48rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.small-screen-hint-text { margin: 0; flex: 1; }
+.small-screen-hint-text b { color: var(--ink); font-weight: 600; }
+.small-screen-hint-close {
+  flex: none;
+  /* 32px, `.install-hint-close`'s number and its reason: pressed once, never
+     found again, and one the size of a mode button would read as an equal of
+     the things beside it. Past the 24px CSS minimum either way. */
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.small-screen-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
 
 .dock-btn {
   display: inline-flex;
@@ -7902,12 +7794,12 @@ td.text.note-open {
 .summ-entry.d1 > .summ-children { border-left-color: var(--depth-2); }
 .summ-entry.d0 > .summ-children { border-left-color: var(--depth-1); }
 
-/* The apparatus, in the same key it wears in the spine and the arc: present in
-   the structure, quieter than the argument, and carrying no number. It is a row
-   the reader can jump to and never a section of the piece — the same grammar
-   `.arc-step.arc-supplement` and `.spine-part.supplement` use, so a reader who
-   has learned it in one panel reads it in this one without being told.
-   docs/plans/260828o-footnotes.md. */
+/* The apparatus, in the same key it wears in the spine: present in the
+   structure, quieter than the argument, and carrying no number. It is a row the
+   reader can jump to and never a section of the piece — the same grammar
+   `.spine-part.supplement` uses (and `.arc-step.arc-supplement` used, until the
+   arc's column went), so a reader who has learned it in one panel reads it in
+   this one without being told. docs/plans/260828o-footnotes.md. */
 .summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
   color: var(--ink-faint);
   font-weight: 500;
@@ -9477,16 +9369,17 @@ line.diag-now {
 }
 .annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
 
-/* **The fourth `.linky`, and it had never been styled.** The class is scoped on
-   purpose — `.controls`, `.cmt-dialog`, `.chat-dialog` — and this panel's root
+/* **The fourth `.linky`, and it had never been styled.** The class was scoped on
+   purpose — `.controls`, `.cmt-dialog`, `.chat-dialog`, the first of those since
+   deleted with the controls bar on 2026-09-05 — and this panel's root
    is `.annotate-dialog`, so `AnnotateDialog`'s Cancel matched no rule at all
    and rendered as bare text beside `.annotate-save`'s bordered box. Found
    2026-09-04 by sweeping every `className="linky"` for an ancestor that styles
    it; the sharing card, `BillingSection` and `SettingsSection` had the same bug
-   and are fixed in their own files. `App.tsx`'s is inside `.controls` and was
-   always fine.
+   and are fixed in their own files. `App.tsx`'s was inside `.controls` and was
+   always fine; it has since been deleted along with that bar.
 
-   Written out in full here rather than by widening one of the other three,
+   Written out in full here rather than by widening one of the other two,
    which is the rule this file already states above `.cmt-dialog button.linky`:
    a shape, not a shared class. This one is `.cmt-dialog`'s, because Cancel in
    the comment panel and Cancel in this one are the same control in the same
@@ -12174,18 +12067,13 @@ td.text.kind-heading .blk-gutter[data-open] {
      deletion machine. Items keep their size and the row scrolls instead. */
   .controls > * { flex: none; }
 
-  /* The three things in the bar that a phone cannot use or does not need:
-     the section label above the pills (the pills say `L2`, which is the part
-     that matters), the ↑↓ hint (a phone has no arrow keys), and the `fit`/`auto`
-     and `reading`/`outline` chips. `.mode.on` is NOT in this list — in a mode
-     band it is the only thing on screen naming which mode you are in.
-
-     There were four: the tree version was the fourth, and hiding it here was
-     the first admission that it was not worth its space. It is gone from every
-     width now (2026-09-05) — see § the controls, where the rule was. */
-  .controls-label,
-  .keynav,
-  .controls .mode:not(.on) { display: none; }
+  /* **Four rules were here and there is nothing left for them to hide.** They
+     took the section label, the ↑↓ hint, the `fit`/`auto` and
+     `reading`/`outline` chips and the tree version off a phone — everything in
+     the bar this width could not use — while sparing `.mode.on`, the read-only
+     chip. On 2026-09-05 the desktop bar was cut down to what a phone was
+     already getting (App.tsx § the controls bar), so the two widths now agree
+     by construction rather than by a list somebody has to maintain. */
 
   /* The masthead's left padding follows `--logo-w` on its own (§ shell), but its
      generous vertical padding does not, and it is the first thing between the
@@ -12337,6 +12225,15 @@ td.text.kind-heading .blk-gutter[data-open] {
    title, and the chip in the controls bar is the half that was always meant
    to survive a scroll. src/web/PublicChrome.tsx § SharedNotice. */
 .reader.band-covers:has(.mode-band) .shared-notice { display: none; }
+/* **And the small-screen banner, for the first of those two reasons only.**
+   It sits in the same stretch of flow and would land under the fixed corner
+   logo the same way. There is no second argument here and none is needed: the
+   banner is one sentence about the layout, the layout has just put a panel
+   over the whole article, and a sentence nobody can read is not a sentence.
+
+   It is *hidden*, never dismissed — pressing Plain brings it back, which is
+   the state the banner is about. src/web/SmallScreenHint.tsx. */
+.reader.band-covers:has(.mode-band) .small-screen-hint { display: none; }
 
 /* ----------------------------------------------------- § a small device ----
    Where a centimetre in *either* direction is worth having.
@@ -13445,45 +13342,10 @@ table.only-prose thead { display: none; }
 .outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
 .outln-card-gist { margin: 0; font-family: var(--font-reading); }
 
-/* ── The arc, while it is being written ───────────────────────────────────────
-
-   Since 2026-08-29 the arc is not built before the article can be opened, so the
-   L0 column shows the root gist until one arrives (src/web/useArc.ts). The
-   fallback is good — which is the problem: without a mark, a reader cannot tell
-   "this is all there is" from "this is still coming", and Greg asked for a
-   loading state rather than a silent wait.
-
-   A breathing tint on the cell rather than a spinner: the cell already holds
-   text the reader can use, and a spinner over readable content says "wait" about
-   something they do not have to wait for. `::after` rather than a border, so
-   nothing in the table's own geometry moves — this column is measured
-   (layout.ts) and a width change here would shift every other column. */
-.gist.arc-pending {
-  position: relative;
-}
-
-.gist.arc-pending::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--accent-soft, currentColor);
-  opacity: 0.06;
-  animation: arc-pending-breathe 2.4s ease-in-out infinite;
-}
-
-@keyframes arc-pending-breathe {
-  0%, 100% { opacity: 0.04; }
-  50% { opacity: 0.12; }
-}
-
-/* A reader who has asked for less motion still gets the signal, held still. */
-@media (prefers-reduced-motion: reduce) {
-  .gist.arc-pending::after {
-    animation: none;
-    opacity: 0.08;
-  }
-}
+/* The L0 column's "arc still being written" tint went with the column on
+   2026-09-05. Outline mode simply omits the rung until the sentence exists, so
+   it needs no such mark; `UseArc.working` is still there for whatever wants to
+   say so next. */
 
 /* ---------------------------------------------------------- § quotes mode ----
    The tenth mode: the lines worth keeping, in the article's own words —

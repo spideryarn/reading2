@@ -136,7 +136,7 @@ interface Input {
   root: SummaryNode | null;
   /** Node id → the supplement it sits under. `Geometry.supplementOf`. */
   supplementOf: ReadonlyMap<NodeId, TreeNode>;
-  /** The arc column keyed by start row — `buildArcColumn`. Null without arc.json. */
+  /** The arc, keyed by the row each part starts on — `buildArcColumn`. Null without arc.json. */
   arcByRow: Map<number, ArcCell> | null;
   /**
    * Which row the reader is at — `LiveContext.focusRow`.

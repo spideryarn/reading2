@@ -463,6 +463,13 @@ room). That is the shape to aim for — a breakpoint disappears when the wide la
 extravagant or when somebody who knows the answer writes it down, not when the narrow one gets
 another rule.
 
+**And it happened again on 2026-09-05, in the first of those two ways.** § a narrow window carried
+four `display: none` rules taking the controls bar's labels, the `↑↓` readout, the `fit`/`auto` and
+`reading`/`outline` chips and the tree version off a phone. The wide bar was then cut down to the
+granularity pills and nothing else
+([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), so the two widths agree by
+construction and the four rules had nothing left to hide.
+
 Three things worth carrying to whatever is built next:
 
 - **The breakpoint is derived, not chosen.** `731px` is `GIST_MIN + PROSE_MIN + the spine`, minus

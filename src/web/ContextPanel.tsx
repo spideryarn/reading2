@@ -81,9 +81,13 @@ const TAIL = `${(1 - FOCUS_LINE) * 100}vh`;
 
 
 interface Props {
+  /**
+   * Which column this panel is laid over — and, since 2026-09-05, also what
+   * ↑ / ↓ step by over it. Those were two props until then, because the arc
+   * column tagged itself `data-nav-depth="1"` where its depth said 0: it
+   * borrowed the parts' stride (keynav.ts § navPlan). No column does that now.
+   */
   depth: number;
-  /** What ↑ / ↓ step by over this panel — the arc column says 1, not 0. */
-  navDepth: number;
   entries: ContextEntry[];
   rect: ColumnRect | null;
   /** Re-centre on a height-only resize, which changes no entry and no rect. */
@@ -107,7 +111,6 @@ interface Props {
 
 export function ContextPanel({
   depth,
-  navDepth,
   entries,
   rect,
   viewportH,
@@ -225,7 +228,7 @@ export function ContextPanel({
         } as React.CSSProperties
       }
       onMouseLeave={() => onHoverNode(null)}
-      {...{ [NAV_DEPTH_ATTR]: navDepth }}
+      {...{ [NAV_DEPTH_ATTR]: depth }}
       /* The line budget, on the DOM, so a browser check can assert what this
          column decided instead of counting lines in a screenshot. An estimate
          that overfills fails silently — the extra entries simply slide under

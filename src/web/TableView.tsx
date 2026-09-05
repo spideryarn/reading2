@@ -25,7 +25,7 @@ import {
 } from "react";
 import type { Article, BlockId, Comment, NodeId, TreeNode } from "../types.js";
 import { useRenderCount } from "./perf.js";
-import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
+import { columnLabel, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
 import {
   annotateHtml,
@@ -89,23 +89,12 @@ interface Props {
    * where the pointer is — see keynav.ts, and the `data-nav-depth` tags below.
    */
   navDepth: number;
-  /**
-   * What the L0 column renders: one sentence per part on where the argument
-   * stands there. Null when `arc.json` hasn't been generated, and then L0 falls
-   * back to the root node exactly as it used to. See tree.js § the arc.
-   */
-  arcCells: Map<number, ArcCell> | null;
-  /**
-   * An arc is being written right now, and there is none to draw yet.
-   *
-   * Since 2026-08-29 the arc is not built by every ingest — the article opens as
-   * soon as the tree is ready — so the L0 column can be the root gist *while a
-   * real arc is on its way*, which is a different thing from the root gist being
-   * all there will ever be. Without this the wait is invisible: the fallback is
-   * good enough that nothing looks like it is loading. Greg asked for a loading
-   * state here specifically (2026-08-29).
-   */
-  arcPending: boolean;
+  /* **No `arcCells` here since 2026-09-05.** The L0 column drew the arc — one
+     sentence per part, with a `3 / 7` step marker and a loading tint while the
+     stage was still running — and Greg took the column out: "let's get rid of
+     the 'Arg' button and functionality altogether". The arc itself is alive and
+     well; App.tsx hands it to `OutlinePanel` instead
+     (docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5). */
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
   /**
@@ -273,8 +262,6 @@ function TableViewInner({
   layout,
   showText,
   navDepth,
-  arcCells,
-  arcPending,
   onJump,
   notes,
   noteReturn,
@@ -347,45 +334,25 @@ function TableViewInner({
    */
   const swipeable = panels ? { [SWIPE_ATTR]: "" } : {};
 
-  // The items of each gist column, in document order, with the row each one
-  // starts on. The arc column's items carry the sentence and a step marker
-  // instead of a title. `text` is the empty string when the arc has no
-  // sentence for a part — never undefined, which would let the renderer fall
-  // back to the part's gist and quietly turn the column into a copy of L1.
+  /* The items of each gist column, in document order, with the row each one
+     starts on. Every column is now built the same way; until 2026-09-05 depth 0
+     was a special case that read the arc's cells instead, carrying a sentence
+     and a `3 / 7` marker where the others carry a title. `ContextItem` carried
+     a `text` and a `step` for it, and lost both the same day — context.ts. */
   const colKey = columns.join(",");
   const levels = useMemo(() => {
     const m = new Map<number, { items: ContextItem[]; starts: number[] }>();
     // `filter(Boolean)` before `Number`: an empty column set splits to [""],
-    // and Number("") is 0, which would conjure an arc level out of nothing.
+    // and Number("") is 0, which would conjure a level out of nothing.
     for (const d of colKey.split(",").filter(Boolean).map(Number)) {
       if (d === geometry.leafDepth) continue; // leaves have no gist to list
-      if (d === 0 && arcCells) {
-        const entries = [...arcCells.entries()].sort((a, b) => a[0] - b[0]);
-        m.set(0, {
-          items: entries.map(([, a]) => ({
-            node: a.node,
-            blockId: a.node.range[0],
-            /* The apparatus takes no `text`, so the list falls through to its
-               title. `""` on a part is deliberate — it stops the renderer
-               falling back to the part's gist and turning the arc column into a
-               copy of L1 — but on a supplement there is no gist to fall back to
-               and "Notes" is the content. */
-            ...(a.supplement ? { supplement: true } : { text: a.text ?? "" }),
-            ...(a.index !== undefined && a.total !== undefined
-              ? { step: { index: a.index, total: a.total } }
-              : {}),
-          })),
-          starts: entries.map(([row]) => row),
-        });
-        continue;
-      }
       m.set(
         d,
         itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
       );
     }
     return m;
-  }, [colKey, geometry, arcCells, blocks]);
+  }, [colKey, geometry, blocks]);
   const depths = useMemo(() => [...levels.keys()], [levels]);
   // The ancestor path of the hovered row — used to light up the chain across
   // every level at once, which is the whole point of seeing them side by side.
@@ -400,9 +367,9 @@ function TableViewInner({
     // A panel entry wins over a row, because pointing at one means leaving the
     // table: `tbody`'s mouseleave clears hoveredRow on the way. The chain is
     // the entry's ancestors, so pointing at a section still lights the part it
-    // belongs to and the arc above that — one entry per coarser column, which
-    // is what a row hover gives. Its own sections are not lit: a part holds
-    // many, and lighting all of them would be a different gesture.
+    // belongs to and whatever is coarser than that — one entry per coarser
+    // column, which is what a row hover gives. Its own sections are not lit:
+    // a part holds many, and lighting all of them would be a different gesture.
     if (hoveredNode) {
       const chain = new Set<NodeId>();
       for (let id: NodeId | null = hoveredNode; id; id = article.tree.nodes[id]?.parent ?? null) {
@@ -417,7 +384,6 @@ function TableViewInner({
   const crumbFor = (item: ContextItem): string | null => {
     const parent = item.node.parent === null ? undefined : article.tree.nodes[item.node.parent];
     if (parent && parent.depth >= 1) return parent.title;
-    if (item.step) return "The argument";
     const level = levels.get(item.node.depth);
     // By node, not by identity: a group heading's item is built fresh in
     // levelList and is never the same object as the one in `levels`.
@@ -743,15 +709,11 @@ function TableViewInner({
               className={[
                 d === pinLeft ? "pin-left" : "",
                 d === pinRight ? "pin-right" : "",
-                /* One column lights, and it is the one the aim names. The arc
-                   and Parts share a stride — the arc's cells are the parts'
-                   cells, tree.ts § the arc — but they are separate rungs on the
-                   ← / → ladder, so lighting both would leave the reader unable
-                   to see which of the two another → would leave. */
+                /* One column lights, and it is the one the aim names. */
                 d === navDepth ? "nav-aim" : "",
               ].filter(Boolean).join(" ")}
             >
-              {columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells)}
+              {columnLabel(d, geometry.leafDepth)}
               <span className="depth-tag">L{d}</span>
             </th>
           ))}
@@ -950,54 +912,6 @@ function TableViewInner({
             className={hoveredRow === row ? "row-active" : undefined}
           >
             {columns.map((depth) => {
-              /* The arc column. It is tagged with its own depth, not with the
-                 parts' — Greg wants ← to run all the way out to the argument
-                 (2026-08-26), so L0 is a rung of its own. It still *steps* by
-                 part, because its cells are the parts' cells; that borrowing
-                 happens once, in navPlan (keynav.ts). */
-              if (depth === 0 && arcCells) {
-                const arc = arcCells.get(row);
-                if (!arc) return null; // covered by a rowSpan above
-                return (
-                  <td
-                    key={depth}
-                    rowSpan={arc.rowSpan}
-                    data-nav-depth={depth}
-                    {...swipeable}
-                    className={[
-                      "gist arc depth-0",
-                      activeChain.has(arc.node.id) ? "active" : "",
-                      depth === pinLeft ? "pin-left" : "",
-                      depth === pinRight ? "pin-right" : "",
-                    ].filter(Boolean).join(" ")}
-                    onClick={() => onJump(arc.node.range[0])}
-                  >
-                    {/* Under a panel the cell is a boundary and a click target;
-                        its content is the panel's current entry. */}
-                    {!panels && (
-                      <div className="sticky">
-                        {/* A supplement sits outside the numbering — "3 / 7",
-                            not "3 / 9" — and its title is its content, so it
-                            gets the title where a part gets its marker. Never a
-                            hole: the arc has no sentence for the apparatus and
-                            never will. src/supplement.ts. */}
-                        {arc.supplement ? (
-                          <div className="arc-step arc-supplement">{arc.node.title}</div>
-                        ) : (
-                          <div className="arc-step">
-                            {arc.index} <span className="of">/ {arc.total}</span>
-                          </div>
-                        )}
-                        {/* No fallback if the sentence is missing: an empty cell
-                            is a failure the reader can see, and borrowing the
-                            part's own gist here would quietly turn this column
-                            back into a copy of the next one. */}
-                        <p className="gist-text">{arc.text}</p>
-                      </div>
-                    )}
-                  </td>
-                );
-              }
               const cell = geometry.cellAt.get(`${depth}:${row}`);
               if (!cell) return null; // covered by a rowSpan above
               const { node } = cell;
@@ -1017,11 +931,6 @@ function TableViewInner({
                     // nothing to do with inheritance — so `--tint` set on the
                     // <col> resolves on an element that nothing reads it from.
                     `depth-${depth}`,
-                    /* The root gist standing in for an arc that is coming. Only
-                       at depth 0, and only while there is genuinely no arc —
-                       `arcCells` being null is what makes this cell the L0 one
-                       rather than an ordinary gist. */
-                    depth === 0 && !arcCells && arcPending ? "arc-pending" : "",
                     active ? "active" : "",
                     cell.continuation ? "continuation" : "",
                     depth === geometry.leafDepth ? "leaf" : "",
@@ -1212,8 +1121,14 @@ function TableViewInner({
       </tbody>
     </table>
     {/* One panel per gist column, laid over it, following the focus line —
-        see useColumnContext.ts. */}
-    {panels && (
+        see useColumnContext.ts. `depths` and not `panels` alone: `columns` can
+        be the leaf column on its own (`?cols=3`, or Para with every gist pill
+        off), which passes `panels` and yields no levels at all — and then the
+        hook measures every row on every scroll to decide which entry of nothing
+        to highlight. Same waste `panels` was given its `columns.length` guard
+        for in 2026-08-27; that guard simply cannot see the leaf column, because
+        `levels` is what drops it. */}
+    {panels && depths.length > 0 && (
       <ColumnPanels
         sections={sections}
         depths={depths}
@@ -1312,7 +1227,6 @@ function ColumnPanels({
         <ContextPanel
           key={d}
           depth={d}
-          navDepth={d}
           entries={entries}
           rect={live.rects.get(d) ?? null}
           viewportH={live.viewportH}
