@@ -84,14 +84,7 @@ import {
   PRIORITY_GATE,
   visibleEntries,
 } from "./GlossaryPanel.js";
-import {
-  barStops,
-  effectiveRank,
-  QUOTE_BAR_DEFAULT,
-  QuotesPanel,
-  snapToStop,
-  visibleQuotes,
-} from "./QuotesPanel.js";
+import { effectiveRank, markedQuotes, QuotesPanel } from "./QuotesPanel.js";
 import { useQuotes } from "./useQuotes.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
@@ -121,8 +114,9 @@ import {
   findLiteral,
   hitMarks as buildHitMarks,
   orderFound,
+  quoteMarkKey,
   resolveIdea,
-  resolveQuote,
+  resolveQuotes,
   resolveTimelineEvent,
   keepAbove,
   PRIORITY_CONF,
@@ -462,7 +456,7 @@ export function App() {
   return (
     <>
       <SignedIn route={route} user={user} />
-      <FeedbackButton readerEmail={user.email ?? null} />
+      <FeedbackButton />
     </>
   );
 }
@@ -2265,9 +2259,15 @@ function Reader({
   /* **A third state rather than a third writer of `found`**, for the reason the
      comment above gives about the second: two modes sharing one state clear each
      other on the way out, and the mode arriving second wins by accident of
-     effect ordering. Quotes has no `openKey` of its own — a quote is exactly one
-     passage, so there is nothing to step between and nothing to leave open. */
+     effect ordering.
+
+     **And an `openKey` of its own since 2026-09-05.** This said quotes needed
+     none — *a quote is exactly one passage, so there is nothing to step between
+     and nothing to leave open* — which was true while the prose marked only the
+     selected quote. Now it marks every quote the panel is showing, and the ring
+     is the only thing on the page saying which of them the reader pressed. */
   const [quoteFound, setQuoteFound] = useState<Found[]>([]);
+  const [quoteOpenKey, setQuoteOpenKey] = useState<string | null>(null);
   /* **A fourth state, for the reason the second and third have their own**, and
      not because Timeline needs anything ideas do not: two modes sharing one
      `Found[]` clear each other on the way out, and which one wins is an
@@ -2319,7 +2319,7 @@ function Reader({
     mode === "ideas"
       ? openOccurrence
       : mode === "quotes"
-        ? null
+        ? quoteOpenKey
         : mode === "timeline"
           ? openTimelineKey
           : mode === "referee"
@@ -3404,7 +3404,13 @@ function Reader({
         />
       )}
       {owner && mode === "quotes" && (
-        <QuotesBand slug={slug} blocks={article.blocks} onJump={jumpTo} onFound={setQuoteFound} />
+        <QuotesBand
+          slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setQuoteFound}
+          onOpenKey={setQuoteOpenKey}
+        />
       )}
       {!owner && mode === "quotes" && artefacts?.quotes && (
         <VisitorQuotesBand
@@ -3412,6 +3418,7 @@ function Reader({
           blocks={article.blocks}
           onJump={jumpTo}
           onFound={setQuoteFound}
+          onOpenKey={setQuoteOpenKey}
         />
       )}
       {/* **The owner/visitor pair the ideas and the quotes have, since
@@ -4726,27 +4733,34 @@ function GlossaryBand({
  * `useQuotes` fetches on mount, and calling it up in `Reader` would charge every
  * reader of every article a request for a list almost none of them will open.
  *
- * What it pushes up is the **resolved** passage, not the stored quote. The panel
- * and the prose have to be showing the same thing, and the only way to
- * guarantee that is for one of them to compute it and hand it to the other —
- * the rule `SearchBand` and `IdeasBand` both follow. Resolution can drop a
- * quote whose block the article no longer has, which is exactly the case a
- * stale artefact produces here.
+ * What it pushes up is the **resolved** passages, not the stored quotes. The
+ * panel and the prose have to be choosing from the same list, and the only way
+ * to guarantee that is for one function to decide it — `markedQuotes`, called
+ * by both — which is the rule `SearchBand` and `IdeasBand` both follow.
+ *
+ * **Resolution can still drop one**, when the article no longer has the block a
+ * quote names, and that is the one place the list and the marks legitimately
+ * differ: the row stays in the panel with no wash beside it. Kept rather than
+ * hidden, because a list quietly shorter than the artefact is the failure
+ * docs/reusable/silent-success.md keeps catching, and the `stale` banner above
+ * it is already saying the article moved. GPT Sol's first finding, 2026-09-05.
  */
-function QuotesBand({
+export function QuotesBand({
   slug,
   blocks,
   onJump,
   onFound,
+  onOpenKey,
 }: {
   slug: string;
   blocks: Block[];
   onJump(id: BlockId): void;
   onFound(found: Found[]): void;
+  onOpenKey(key: string | null): void;
 }) {
   useRenderCount("QuotesBand");
   const quotes = useQuotes(slug);
-  const band = useQuotesMode({ quotes: quotes.quotes, blocks, onFound });
+  const band = useQuotesMode({ quotes: quotes.quotes, blocks, onFound, onOpenKey });
   return (
     <QuotesPanel
       access={{ kind: "owner", owner: quotes, quotes: quotes.quotes }}
@@ -4800,14 +4814,16 @@ function VisitorQuotesBand({
   blocks,
   onJump,
   onFound,
+  onOpenKey,
 }: {
   quotes: PublicQuotes;
   blocks: Block[];
   onJump(id: BlockId): void;
   onFound(found: Found[]): void;
+  onOpenKey(key: string | null): void;
 }) {
   useRenderCount("VisitorQuotesBand");
-  const band = useQuotesMode({ quotes, blocks, onFound });
+  const band = useQuotesMode({ quotes, blocks, onFound, onOpenKey });
   return <QuotesPanel access={{ kind: "visitor", quotes }} {...band} onJump={onJump} />;
 }
 
@@ -4815,22 +4831,50 @@ function VisitorQuotesBand({
  * Everything the quotes band does that is not a fetch: `?quote=`, `?rank=`,
  * `?bar=`, and the resolved passage it pushes up.
  *
+ * **Every quote the panel is showing is marked, not only the selected one** —
+ * since 2026-09-05, and it is the whole of one feedback report. The memo below
+ * returned `[]` unless a row was selected, so quotes mode drew nothing at all on
+ * the page until you pressed something and the `?bar=` slider changed the list
+ * without changing the article. Greg asked to be able to *"skim through it just
+ * reading the stuff that is marked"*, and search has always done exactly this
+ * through the identical pipe.
+ *
+ * **What is marked is `markedQuotes`, which is what the panel lists.** One
+ * function, called by both, so the rows and the washes cannot come apart — and
+ * so the bar doubles as the highlight-density control, which is what makes it
+ * the thing Greg described rather than a filter on a list. The one exception is
+ * a quote whose block the article has lost: `resolveQuotes` drops it and the
+ * row stays — see `QuotesBand` above.
+ *
  * **No colour slot to assign**, which is the one thing this hook does not share
- * with `useIdeasMode`. Ideas paint every idea a lane so a colour does not depend
- * on which one is open; only one quote can be selected at a time and there is
- * never a second one on screen, so slot `0` is the whole palette question. It is
- * still a *real* slot rather than `null`, because `blockHues` drops `null` slots
- * and a quote without one would paint the rail and leave the paragraph bar
- * blank — which looks like a rendering bug and is not one.
+ * with `useIdeasMode`. Ideas paint every idea its own lane so a colour does not
+ * depend on which one is open; the quotes are **one source** — the categorical
+ * palette answers *which search found this*, and there is one thing here that
+ * found anything — so they share a slot and a run id, and `resolveQuotes` owns
+ * both. It is still a *real* slot rather than `null`, because `blockHues` drops
+ * `null` slots and a quote without one would paint the rail and leave the
+ * paragraph bar blank, which looks like a rendering bug and is not one.
  */
 function useQuotesMode({
   quotes,
   blocks,
   onFound,
+  onOpenKey,
 }: {
   quotes: { quotes: Quote[] } | null;
   blocks: Block[];
   onFound(found: Found[]): void;
+  /**
+   * Which mark wears the ring — `mark.hit[data-hit-open]`, the thing search
+   * uses to say *this washed phrase is the row you pressed*.
+   *
+   * Quotes did without one until the whole list was marked, and the old comment
+   * in `Reader` said why: a quote is exactly one passage, so there was nothing
+   * to step between and nothing to leave open. With sixteen marks on the page
+   * the ring is the only thing that distinguishes the reader's own selection
+   * from the fifteen the mode drew for them.
+   */
+  onOpenKey(key: string | null): void;
 }) {
   const [quoteId, setQuoteId] = useQueryState("quote", quoteParam);
   const [rank, setRank] = useQueryState("rank", rankParam);
@@ -4848,18 +4892,29 @@ function useQuotesMode({
    * rail, and lowering the bar later silently reopened a selection the reader
    * had watched disappear. The same rule search holds at `SearchBand`.
    *
-   * Scoped to `prioritised`, because that is the only rank with a bar: a
+   * Scoped to `prioritised`, because that is the only rank with a bar. Two
+   * reasons, and the second is why the guard survived the rewrite below: a
    * `?bar=` sitting in a URL must not clear a selection in a list nobody is
-   * looking at a threshold for. `snapToStop` first, exactly as the panel does,
-   * or this and the panel would be asking about two different bars.
+   * looking at a threshold for — and while the artefact is still being fetched
+   * `listed` is empty, so an unguarded "is my quote in the visible list" would
+   * strip a shared `?quote=` link out of the URL before its own data arrived.
    */
   const all = quotes?.quotes ?? NO_QUOTES;
+  /**
+   * **The list the panel is drawing** — the rows, and now the marks.
+   *
+   * `markedQuotes` is the panel's own three lines (`snapToStop`,
+   * `effectiveRank`, `rankQuotes`), called here rather than repeated here. They
+   * *were* repeated, in `hiddenSelection` below, which was safe while all they
+   * decided was whether to clear a selection; it is not safe now that they
+   * decide what the article is wearing.
+   */
+  const listed = useMemo(() => markedQuotes(all, rank, bar), [all, rank, bar]);
   const hiddenSelection = useMemo(() => {
     if (quoteId === null) return false;
     if (effectiveRank([...all], rank) !== "prioritised") return false;
-    const at = snapToStop(barStops([...all]), bar ?? QUOTE_BAR_DEFAULT);
-    return !visibleQuotes(all, at).visible.some((q) => q.id === quoteId);
-  }, [all, rank, bar, quoteId]);
+    return !listed.some((q) => q.id === quoteId);
+  }, [all, rank, listed, quoteId]);
   useEffect(() => {
     if (hiddenSelection) void setQuoteId(null);
   }, [hiddenSelection, setQuoteId]);
@@ -4869,32 +4924,42 @@ function useQuotesMode({
     [all, quoteId, hiddenSelection],
   );
 
-  const found = useMemo(() => {
-    if (!selected) return [];
-    return resolveQuote(blocks, {
-      id: selected.id,
-      slot: 0,
-      blockId: selected.blockId,
-      text: selected.text,
-      /* **`start` is not passed on**, and `resolveQuote` no longer takes it —
-         the stored offset is measured in `block.text` and this resolution
-         happens in the rendered text. It is still on the artefact, because it
-         is what `inDocumentOrder` sorts two quotes from one paragraph by. */
-      ...(selected.reason !== undefined && { reason: selected.reason }),
-    });
-  }, [selected, blocks]);
+  /* **`start` is not passed on**, and `resolveQuotes` does not take it — the
+     stored offset is measured in `block.text` and this resolution happens in
+     the rendered text. It is still on the artefact, because it is what
+     `inDocumentOrder` sorts two quotes from one paragraph by. */
+  const found = useMemo(() => resolveQuotes(blocks, listed), [listed, blocks]);
+
+  /* The ring, computed from the selection rather than looked up in `found`: a
+     quote whose block the article has lost resolves to nothing, and the honest
+     answer then is a key that matches no mark rather than the *previous*
+     quote's. `quoteMarkKey` so the shape lives in one file. */
+  const openKey = useMemo(
+    () => (selected ? quoteMarkKey(selected.id, selected.blockId) : null),
+    [selected],
+  );
 
   /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
      paintable frame in which the panel shows the new quote and the prose still
      marks the old one. Same reasoning, and the same pairing with an
-     unmount-only clear below, as `SearchBand` and `IdeasBand`. */
+     unmount-only clear below, as `SearchBand` and `IdeasBand`.
+
+     **Both in one effect**, so no paint can ever show the ring on one quote and
+     the washes of another set. */
   useLayoutEffect(() => {
     onFound(found);
-  }, [found, onFound]);
+    onOpenKey(openKey);
+  }, [found, openKey, onFound, onOpenKey]);
 
-  /* Leaving quotes mode must take the mark out of the prose. On unmount only:
+  /* Leaving quotes mode must take the marks out of the prose. On unmount only:
      clearing on every change would race the layout effect above. */
-  useEffect(() => () => onFound([]), [onFound]);
+  useEffect(
+    () => () => {
+      onFound([]);
+      onOpenKey(null);
+    },
+    [onFound, onOpenKey],
+  );
 
   return { quoteId, onQuote: setQuoteId, rank, onRank: setRank, bar, onBar: setBar };
 }

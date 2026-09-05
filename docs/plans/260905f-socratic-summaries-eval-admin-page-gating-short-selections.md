@@ -444,6 +444,127 @@ question cannot see an arm's gist beside its own question, so it cannot settle t
 variant wins still needs the same block there. The harness says so in `arms.ts`, in every run file
 and in every results file, rather than letting a reader assume otherwise.
 
+## The harness, and the six ways it was lying before it was reviewed
+
+Built 2026-09-05, `evals/summaries/`, seven arms over seven real articles. GPT Sol reviewed the
+**built code** — the second review, which engineering-manager says to weight above the plan review,
+and which earned that here: *"a defensible cheap screen. I would not run the paid panel yet: several
+guards can go green without supporting the result they claim to support."*
+
+**Six P0s, all real, all fixed, each now held by a test that goes red under perturbation.** Every one
+of them is the same class — a check that passes while measuring something other than what it claims —
+which is the class [silent-success.md](../reusable/silent-success.md) exists for and the one this
+repo keeps paying for:
+
+1. **The calibration gate passed over a ranking with nothing real in it.** A judgement naming the
+   five anchors and none of the seven arms produced no inversions, no unranked anchors, and
+   `passed: true`. The ranking must now be a permutation of the lineup.
+2. **The judge saw the first 1,800 characters of a 30,187-character section**, and the material
+   anchors 3 and 5 quote is nowhere in that opening. So it could have rejected *the two anchors that
+   matter* for being unsupported by an excerpt it was never told was an excerpt — and the gate would
+   have passed while measuring excerpt coverage. It sees sampled windows now, and is told so.
+3. **Coverage came back clean over an arm that wrote no questions at all**, because a gist counted as
+   the whole ask. An arm answering only its easy sections was clean, ranked over fewer lineups, and
+   could still lead. The denominator is the plan now — gists *and* questions, read from `run.json` —
+   so a cell nobody wrote counts against its arm, and an unclean run cannot name a leader.
+4. **The instability figure compared different articles' roots**, `n0001` being every article's root
+   id. And the noise floor was `|mean(A) − mean(B)|` between two *exchangeable* recipes, which
+   cancels and trends to zero as the corpus grows — a floor that gets easier to clear the more
+   evidence you gather.
+5. **Stub and live results could be mixed** into a convincing fake report.
+6. **Judging materials — real article prose — were written under the committed `evals/results/`.**
+
+Two limits are **recorded rather than fixed**, and both print in the output: "axes before preference"
+is a request a single response cannot enforce, and the row-form question cannot show an arm's gist
+beside its own question — **so this eval cannot settle whether the question should replace the
+gist.** That was always Greg's read to make, and now the harness says so itself rather than leaving
+it to a plan nobody re-reads.
+
+### What the real corpus settled
+
+`npm run db:export` printed `Target: postgresql://postgres@127.0.0.1:54362/postgres` — read, per
+[database.md](../project/database.md), rather than trusting the success line — and returned **31
+articles with a current revision**. Ten are pinned by sha256 on **both** `blocks.json` and
+`tree.json`, because the tree is an *input* here: a re-carve is a different measurement wearing the
+same slug.
+
+- **The root-gist inversion holds on real articles, not just the fixture cut**: the root is the
+  longest median row in **nine of ten**, the exception being `openai-huggingface` at 27 = 27. The
+  worst is 49 words. This upgrades the measurement above from a fixture-cut caveat to a fact about
+  the product.
+- **`antikythera` carries ten of the current questions in the wild**, and they are the diagnosed
+  failure exactly: *"What physical pieces of the mechanism survive today?"* is a lookup, *"Was the
+  mechanism a unique invention?"* is yes/no, and *"How did the front dial track the calendar and
+  zodiac?"* is the gist, asked. Nobody had to construct an example of the problem — production is
+  already full of them.
+
+## Five more reports arrived mid-run, and one of them answered the open question
+
+The 3-hourly loop found five new reports at 19:30, all from Greg, all filed while reading
+`dhammapada`. They are folded into this plan rather than a new one, because one of them **is** this
+plan's central open question and the rest are small.
+
+| | report | outcome |
+|---|---|---|
+| **24** | show only the Socratic question, not both | shipped |
+| **23** | spinner on the feedback Send button | with an agent |
+| **22** | remove `greg@gregdetre.com` from the UI | with the same agent |
+| **1Z** | expand quotes mode: importance, ordering, highlight in prose | mostly already built |
+| **21** | quiz questions too hard | prompt half built, rest deferred |
+
+### 24 settled the argument this plan could not
+
+> I quite like some of these new Socratic questions in the summary mode, but the intent wasn't that
+> we would show both the gist and the Socratic question, the intent was that we would show only the
+> Socratic question when we have one.
+
+GPT Sol's P1-1 said *"make replace-the-gist an eval outcome, not a decision"*, and that was the right
+advice **to an agent guessing**. It stops applying the moment the person whose call it is makes the
+call. Note he also says he *likes some of them*, having read the version this plan was treating as
+too weak to stand alone — which softens P1-6 as well: he has seen the stored questions and wants
+them shown alone.
+
+**What the eval is still for** is unchanged and arguably more important now: the question is the only
+line on the row, so its wording carries the whole weight.
+
+### 1Z and 21 are mostly already built, which is the finding
+
+Recon before any building, and it changed both jobs:
+
+- **1Z's entire ordering paragraph shipped on 2026-08-31.** `Quote.importance` and `Quote.striking`,
+  `?rank=prioritised`, the `?bar=` threshold slider modelled on the glossary — all live, behind the
+  experimental-features switch. And *"the highlights should be a span rather than a block"* is
+  already true: a quote is `blockId` + verbatim text + `start`, and already draws through the same
+  mark machinery a search hit uses. **The real gap is one memo** — `src/web/App.tsx:4828` marks only
+  the *selected* quote, where search marks all its hits at once.
+- **21's metadata is already there too** — `band` and `value` on every question, already sorted
+  easy-first-then-central. What is missing is that the questions are too hard, which is a prompt
+  edit.
+
+**The one piece Greg names as the model is already shared**: `src/web/threshold.ts`, three pure
+functions, reused by glossary, quotes and search. What is duplicated is ~70 lines of JSX per site,
+and `threshold.ts:41-45` records the decision not to unify it — the track, the unit and the noun
+genuinely differ. **So neither report is blocked on an extraction, and grouping them buys nothing:
+they share close to zero lines.**
+
+### Report 21's slider is deferred, and here is what Greg has to decide
+
+He asked for *"thresholding by a combination of centrality and easiness"*. That collides with three
+decisions already on the record, and the first is fatal rather than awkward:
+
+1. **A blended `ease + value` score was proposed and killed on review** (`src/quiz.ts:39,54-59`):
+   hard-central `(1,5)` and easy-peripheral `(5,1)` both sum to 6, so the tie-break leads with the
+   hardest question — the exact complaint report 21 opens with.
+2. **The quiz panel deliberately never shows `band` or `value`** (`src/quiz.ts:344-351`), while the
+   glossary's condition for keeping model scores is that *the number you sorted by is shown on every
+   row*. Both rules cannot hold at once.
+3. **Quiz sorts on the server, once**, and `QuizPanel.tsx:18-20` says why: *"a panel that sorted
+   would be a second opinion about the same list, and two lists drift."* A reader-facing order
+   control reverses that.
+
+Half an hour of Greg's time on those three is worth more than a week building against a guess. The
+prompt half — make them easier — needs none of it and is being built.
+
 ## Decisions and assumptions taken without asking
 
 - **The eval lives at `evals/summaries/`, and `variants.md` is the source of the prompt text** rather

@@ -249,10 +249,36 @@ The prompt asks for a question on the root and on each depth-1 node only;
 article is noise, the default cut-off (`deep=1`) draws only these rows anyway, and a scope the code
 holds is a fact rather than a hope.
 
-**The gist stays.** *"A bit more"* is the brief, and a panel of nothing but questions would fail the
-first thing [vision.md](vision.md) asks of this feature — *scan before you commit*. A reader
-deciding whether to descend needs to know what the section says. The claim says it; the question is
-the door, which is the same job [§ A summary is a door](#a-summary-is-a-door) gives the block ids.
+### The gist stayed for one day
+
+It was drawn beside the question from the morning of 2026-09-05 until that evening, on this
+reasoning, which is kept because it was sound about the questions it was written for:
+
+> *"A bit more"* is the brief, and a panel of nothing but questions would fail the first thing
+> [vision.md](vision.md) asks of this feature — *scan before you commit*. A reader deciding whether
+> to descend needs to know what the section says.
+
+**Greg reversed it the same evening** ([SPIDERYARN-READING2-24](../user-feedback/260905_1803-only-the-socratic-question.md)),
+having read the shipped version on a real article:
+
+> I quite like some of these new Socratic questions in the summary mode, but the intent wasn't that
+> we would show both the gist and the Socratic question, the intent was that we would show only the
+> Socratic question when we have one.
+
+So the rule is now **`question ?? gist`**, and the panel draws one line. The reason the old argument
+stopped applying is worth keeping, because it is about the *questions* and not about the layout: the
+first prompt asked for the question *"this node's text answers and its gist does NOT"*, so the only
+honest output was a bare why-question that could not carry a row alone. A question that names its
+topic and presupposes where the section lands can. **The renderer does not know which kind it has,
+and does not need to** — that is the prompt's business, and which prompt is
+[`evals/summaries`](../../evals/summaries/variants.md).
+
+**Absence is ordinary, not a fault.** Every article whose hierarchy predates 2026-09-05 has no
+question on any row and shows its gists exactly as before; only a row with neither says so. And note
+what § Two places a part can end up with no question now means: a depth-1 node built by the
+deepening cascade has no question, because the expansion prompt has no such field, so **the panel
+can show a question on one part and a gist on its neighbour**. That was invisible while the question
+was a faint second line.
 
 ### Punctuation is normalised, never read for meaning
 

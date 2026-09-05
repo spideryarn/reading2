@@ -525,7 +525,23 @@ describe("the Socratic question in the panel", () => {
 
   const questions = () => [...host.querySelectorAll(".summ-question")].map((p) => p.textContent);
 
-  it("draws one under the article and one under each part, keeping every gist", () => {
+  /**
+   * **This case asserted the opposite until the evening of the same day.** It
+   * required the gist to survive beside the question, with the message *"a
+   * question replaced a gist instead of joining it — the panel stopped saying
+   * what the article says"*. That was a faithful reading of 1V, and it caught
+   * the change when the change came, which is what it was for.
+   *
+   * SPIDERYARN-READING2-24 reversed it, from Greg, having read the shipped
+   * version: *"the intent wasn't that we would show both the gist and the
+   * Socratic question, the intent was that we would show only the Socratic
+   * question when we have one."* The old assertion is not weakened here, it is
+   * inverted — the gists must be **gone** — because "either would do" is how a
+   * rule stops holding anything.
+   *
+   * The rest of the rule lives in tests/summary-question-replaces-gist.test.tsx.
+   */
+  it("draws one on the article and one on each part, INSTEAD of their gists", () => {
     act(() => {
       root.render(
         createElement(SummaryPanel, {
@@ -545,12 +561,8 @@ describe("the Socratic question in the panel", () => {
     ]);
     expect(
       [...host.querySelectorAll(".summ-text")].map((p) => p.textContent),
-      "a question replaced a gist instead of joining it — the panel stopped saying what the article says",
-    ).toEqual([
-      "The gist of the whole thing.",
-      "The gist of the first part.",
-      "The gist of the second part.",
-    ]);
+      "a gist was drawn beside a question — SPIDERYARN-READING2-24 asks for the question alone",
+    ).toEqual([]);
   });
 
   it("draws nothing at all for an article built before the field existed", () => {

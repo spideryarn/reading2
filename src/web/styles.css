@@ -8091,19 +8091,29 @@ td.text.note-open {
 
    It follows `.summ-text`'s indent so the two line up under the title, and it
    takes the same un-indenting on the root, where there is no title row. */
+/* **The question is the row's summary now, not a note under it** — it replaced
+   the gist rather than joining it on 2026-09-05 (SPIDERYARN-READING2-24), so it
+   takes `.summ-text`'s weight exactly: the same size, the same ink, the same
+   reading face. It was 0.87rem italic `--ink-faint` while it was the second
+   line, and leaving it there would have made every row's only sentence look
+   like a footnote to a claim that is no longer above it.
+
+   **The italic went with the demotion.** It marked the question as a different
+   kind of thing from the sentence above; there is no sentence above, and a
+   panel set entirely in italic is a panel that is harder to read for a
+   distinction nobody can see any more. The question mark does that job. */
 .summ-question {
-  margin: 0.2rem 0 0 1.25rem;
+  margin: 0.25rem 0 0 1.25rem;
   font-family: var(--font-reading);
-  font-size: 0.87rem;
-  line-height: 1.45;
-  font-style: italic;
-  color: var(--ink-faint);
+  font-size: 0.93rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
 }
 .summ-list > .summ-entry > .summ-body > .summ-question { margin-left: 0; }
-/* The current row lifts its claim to full ink (§ `.summ-entry.now`); the
-   question lifts with it, or it would read as the one dead line on the row the
-   reader is actually standing in. */
-.summ-entry.now > .summ-body > .summ-question { color: var(--ink-soft); }
+/* Lifts on the current row exactly as the gist does (§ `.summ-entry.now`), and
+   to the same `--ink` rather than the `--ink-soft` it lifted to as a second
+   line — it is the claim on that row now. */
+.summ-entry.now > .summ-body > .summ-question { color: var(--ink); }
 
 /* The citation chips inside a summary. Smaller than chat's, because a summary
    is denser than an answer and the chips are punctuation in it rather than
@@ -14727,7 +14737,9 @@ td.text.kind-heading .blk-gutter[data-open] {
   line-height: 1.5;
   color: var(--ink-soft);
 }
-.fb-email { color: var(--ink); font-family: var(--font-mono); font-size: 0.75rem; }
+/* `.fb-email` was here. It set the reader's own address in mono inside the
+   sentence above, and the sentence went on 2026-09-05 — FeedbackDialog.tsx
+   § Props. */
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-label { font-size: 0.78rem; font-weight: 600; }

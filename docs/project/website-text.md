@@ -21,6 +21,13 @@ Support, privacy requests, "delete my account" and anything else all land in the
 the person reading them is the same person and a `privacy@` alias would imply a department that does
 not exist.
 
+**And it is the only address in the UI**, since 2026-09-05 — the feedback dialog's failed-send
+fallback offered `ADMIN_EMAIL` until Greg found it, and its intro read the reader their own address
+back. Both went; [feedback.md § The dialog names no address](feedback.md#the-dialog-names-no-address-since-2026-09-05)
+has his words and what replaced them. `ADMIN_EMAIL` ([admin.md](admin.md)) is an identity for logs
+and for the seed and stays as it is; what changed is that nothing the browser loads imports it, which
+`tests/site-footer.test.tsx` now pins.
+
 Anything that needs it imports it. That includes the browser —
 `site-text.js` is on the shared-import allowlist in `tests/client-imports.test.ts`, which it
 qualifies for by importing nothing at all. The alternative is a second copy of the address that
