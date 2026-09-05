@@ -475,6 +475,36 @@ mode docs describe their band's head.
 Glossary's and Timeline's counts are still where they were, and Summary and Search have one fewer
 row.
 
+**Landed 2026-09-05**, and it needed one thing the stage had assumed rather than checked.
+
+**The Dock was not, in fact, naming the mode.** A band is 400px of the window, so opening one is
+itself what pushes the bar onto fit rung 1 — where every mode label but Plain's is hidden
+([`dock-fit.ts`](../../src/web/dock-fit.ts), `styles.css` § the bar's fit ladder). So after this
+stage, Summary at 1440×900 had no "Summary" in the band *and* none in the bar: a highlighted glyph
+and a tooltip were the whole of it. The premise the stage rests on was false at exactly the widths
+where it matters, and the browser pass could not see it — it was asked whether the nine bands looked
+right, and they did. **Found by reading a screenshot, not a report.**
+
+Fixed by keeping the active mode's label on rung 1. The ladder absorbs it because the ladder is
+*measured*: Summary, Timeline, Glossary and Chat all came back `scrollWidth === clientWidth === 1440`
+with the word shown, on the rung they were already on.
+
+**Rung 2 was tried and measured out.** At 390×844 in a band mode the bar already overflows —
+`scrollWidth` 617 against `clientWidth` 390 — and the word took it to 758. That is 141px more of a
+row the reader has to drag sideways, to reveal a word only legible after dragging. A bar that scrolls
+cannot tell you anything you have not scrolled to.
+
+Two things the pass found that are recorded rather than changed:
+
+- **Remember's default sub-view still shows a heading.** Recall reuses `ChatPanel`, whose `h2` is the
+  open thread's own title — so the table above is right about *Quiz* and over-claims about Remember.
+- **Diagram's row is empty** until a kind with point projections is chosen: `ScatterNote` renders
+  only for `drift` and `trail`. Pre-existing, and it leaves an 18px bordered strip in the other kinds.
+
+One design question the pass raised and I overruled after looking myself: it judged Timeline's lone
+`29 events` as reading "half-finished" beside Glossary's count-plus-pill. On the screenshot it reads
+as an ordinary quiet count above a divider and a list. Left as is for all four.
+
 ## The reviews
 
 **Round 1, on the plan** — [`…-plan-review-sol.md`](260905d-declutter-top-bars-plan-review-sol.md),

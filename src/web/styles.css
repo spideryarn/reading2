@@ -6098,6 +6098,42 @@ td.text.note-open {
 .dock.dock-fit-1 .dock-btn-label.always,
 .dock.dock-fit-2 .dock-btn-label.always { display: inline; }
 
+/* **And the mode you are actually in keeps its word, on every rung.**
+   Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
+   mode we're in, so for example 'Summary' mode doesn't need to say `Summary` at
+   the top."* Stage 5 of docs/plans/260905d-declutter-the-reading-view-top-bars.md
+   took him at his word and removed the name from every band's title row — and
+   that premise was **false at exactly the widths it matters**, which a
+   screenshot showed and no unit check could.
+
+   A band is 400px of the window, so opening one is itself what pushes the bar
+   onto rung 1 — where every mode label except Plain's is hidden. So in Summary
+   at 1440×900 the band no longer said "Summary" and the bar had never said it
+   either: the only thing naming the open mode was a highlighted glyph. The
+   sighted reader who wanted the word had to hover for a tooltip.
+
+   One word costs nothing the ladder cannot absorb, because the ladder is
+   *measured* rather than declared (dock-fit.ts) — it walks down until the row
+   fits, so a rung that no longer fits with this word simply steps to the next,
+   and past the last one § a coarse pointer scrolls rather than clips.
+
+   Higher specificity than the hides above (0,5,0) rather than tying with them,
+   deliberately, and it is the safe direction: the accident this file records
+   just above is a rule that was accidentally *longer* than the one meant to
+   win. This one is meant to win.
+
+   **Rung 1 only, and rung 2 was tried and measured first.** Past the last rung
+   the bar overflows and scrolls (§ a coarse pointer), and at 390×844 in a band
+   mode it already does: measured 2026-09-05, `scrollWidth` 617 against a
+   `clientWidth` of 390. Adding this word there took it to 758 — 141px more of a
+   row the reader already has to drag sideways, to reveal a word that is only
+   legible *after* they drag. A bar that scrolls cannot tell you anything you
+   have not scrolled to, so at rung 2 this rule is pure cost and no benefit, and
+   the reader on a phone has in any case just pressed the icon themselves. At
+   rung 1 it is free: all four band modes measured `scrollWidth === clientWidth
+   === 1440` with the word shown, on the same rung they were already on. */
+.dock.dock-fit-1 .dock-btn.on .dock-btn-label { display: inline; }
+
 
 /* --------------------------------------------------------- § search mode ----
    Finding a passage by the words it uses, or by what it says. The shell is
