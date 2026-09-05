@@ -24,6 +24,7 @@ import type { PoolClient } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
 import { UPLOAD_STATUSES } from "../src/source.js";
+import { CHECKPOINT_NAMESPACES } from "../src/store/checkpoints.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -662,6 +663,46 @@ describe("the schema keeps the promises the plan makes", () => {
       // And the shape that must still be accepted, so the two above are not
       // passing because every insert here fails.
       await bad("pending", "");
+    });
+  });
+
+  dbIt("the checkpoints namespace CHECK lists exactly the namespaces the type has", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      /**
+       * **Two hand-kept copies of one list, with nothing between them until
+       * now.** `CheckpointNamespace` (src/store/checkpoints.ts) is the union;
+       * the CHECK on this table is the other copy, and adding a name to the
+       * first without the second is a write Postgres refuses.
+       *
+       * That combination is worse than an ordinary constraint violation,
+       * because **both callers deliberately swallow a failed checkpoint write**
+       * — a write that throws is meant to cost one re-buy rather than the run,
+       * so it is logged at `warn` and the stage carries on. The only symptom of
+       * a namespace declared and never accepted is therefore a cache that never
+       * hits and a bill that goes up. docs/reusable/silent-success.md; and it
+       * came within one migration of happening when `hierarchy-deepen` was added
+       * on 2026-09-05.
+       *
+       * Asserted against `CHECKPOINT_NAMESPACES` itself rather than a list typed
+       * out again here, which would be a third copy with the same problem.
+       */
+      for (const namespace of CHECKPOINT_NAMESPACES) {
+        await c.query(
+          `insert into spideryarn.checkpoints (article_id, namespace, key, value)
+           values ($1, $2, $3, '{}'::jsonb)`,
+          [ART_1, namespace, `k${namespace.replace(/[^a-z0-9]/g, "")}`],
+        );
+      }
+      /* The control: a table that refused everything, or one whose CHECK had
+         been dropped in the way, could not pass both halves. */
+      await expectViolation(c, /checkpoints_namespace/, () =>
+        c.query(
+          `insert into spideryarn.checkpoints (article_id, namespace, key, value)
+           values ($1, 'hierarchy-invented', 'k0', '{}'::jsonb)`,
+          [ART_1],
+        ),
+      );
     });
   });
 

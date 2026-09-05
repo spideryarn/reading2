@@ -1,10 +1,11 @@
 # The tree goes as deep as each part of the article needs
 
-**Status: stages 1–3 done; stage 4 is next.** The measurements and the spikes are in
-`evals/results/hierarchy-waves-2026-09-04/`, and **stage 3 has landed in `src/`** — the pure half,
-reviewed across families, with no network call, no flag and nothing wired into `generateHierarchy`.
-The cascade is still called by nothing; what changed is that it now derives the same tiling the
-incumbent does, refuses what it should refuse, and can be planned from a tree that already exists.
+**Status: stages 1–4 done; stage 5 — the first live call — is next.** The measurements and the spikes
+are in `evals/results/hierarchy-waves-2026-09-04/`, and **stages 3 and 4 have landed in `src/`**, each
+reviewed across families. There is still no network call, no flag, and nothing wired into
+`generateHierarchy`: the cascade is called by nothing. What changed is that it now derives the same
+tiling the incumbent does, refuses what it should refuse, can be planned from a tree that already
+exists, and carries a prompt, a strict schema, a checkpoint and its instrumentation.
 Started 2026-09-04. Worktree `deepen-fat-sections`. **Supersedes
 [260904c-hierarchy-structure-in-waves.md](260904c-hierarchy-structure-in-waves.md)**, whose pure core
 this uses and whose framing — latency and the length ceiling — the measurements below have moved on
@@ -284,8 +285,15 @@ rules, then the frozen outline, then the per-call targets and slices.
 ### Concurrency is the thing that decides whether this ships
 
 `src/messages-stream.ts` imposes no limit; `src/labels.ts` uses `CONCURRENCY = 4` with the stated
-reason "politeness to the rate limiter" and no measurement behind it; `src/pdf-read.ts` runs 16
-against the same account and doubled it from 8 without incident.
+reason "politeness to the rate limiter" and no measurement behind it; `src/pdf-read.ts` runs
+**`CHUNK_CONCURRENCY = 100`** against the same account, with `WidthGate` (`src/concurrency.ts`)
+halving it on a 429.
+
+⟨Corrected 2026-09-05: this paragraph said 16, raised from 8. The code says 100, raised from 16 on
+2026-09-04. That materially loosens the arithmetic below — there is far more headroom than the
+figures here assume — but the number that should decide the cascade's width is the gate's own
+measured limit under three concurrent jobs, which is stage 5's measurement, not the PDF stage's
+constant borrowed a second time.⟩
 
 At 4, a 296-call cascade is about **1,450 s** — roughly twice the 740 s at which the job self-aborts
 (`LEASE_MS = 760_000` less `DEADLINE_MARGIN_MS`). At 16 it is about **480 s**, inside
@@ -982,6 +990,166 @@ normalised fan-out, model, effort and prompt version.
 
 **Done:** the whole protocol exercised end to end with a fake executor, including a poisoned row, a
 resumption against a different wave-1 answer, and an exhausted attempt budget.
+
+#### What the checkpoint has to hash, and the three calls that were open <a id="stage-4-checkpoint"></a>
+
+Surveyed on 2026-09-05 before writing any of it, because the rule here is to reuse the machinery
+rather than add a second way to do the same thing. **Almost all of it already exists.** The cascade
+takes the same bound `CheckpointStore` `generateHierarchy` already has, mints its key with the same
+`structureKey`, and copies the incumbent's read/write shape verbatim: read → cheap gate → *expensive*
+gate that asks whether the stored answer still builds → a failure treated as a miss → the call → and
+the write only after every check the answer can fail on its own. What is genuinely new is **one
+namespace, one canonical-request builder, one entry type and one entry gate**, and nothing else.
+
+The fingerprint is `messagesWireBody` — the bytes that actually go on the wire, so model address,
+effort, `thinking`, system prompt and every block of prose are covered by *being in the request*
+rather than by a hand-copied field list that goes stale silently — plus four things a scoped call no
+longer carries implicitly:
+
+| field | why it is not implicit |
+|---|---|
+| `bodyHash` = `hashBlocks(body)` | The whole-article call has every block id in its prose, so its key moves when a lost draft re-mints them. **A scoped call's does not.** This is the field whose omission lets a stale answer be reused against changed input. |
+| `seedHash` = `structureHash(the wave-1 tree)`, frozen | What makes "resumed against a different wave-1 answer" read as a miss. Not `renderOutline`'s text — two different cuts of an article can print identically. |
+| `recipe` — all of it | `terminalBlocks`, `forcedOpenWords` and `maxDepth` change what we do with a verdict without changing a byte of the prompt. Picking three of six fields costs a silent hole the day a seventh arrives; over-invalidating costs one call. |
+| `targets` — node id, ordinal, derived range | The difference between "this answer is for this parent" and "this answer is for a parent that happened to render the same". |
+
+**And the trap that would otherwise ship: no hash of the *current* tree.** Wave 2 expands several
+parents at once; if parent P's key depended on the tree as it stands, Q landing would move P's key
+and a resumed attempt would miss every row the previous attempt wrote — a checkpoint layer that
+provably never hits under exactly the load it exists for. Freeze the seed and let each parent's own
+range and ancestor chain carry the wave-to-wave dependency, which they already do because both are
+in the request.
+
+Three calls the survey left open, settled here:
+
+- **"Exhausted attempt budget" means a per-target redraw cap**, a named constant in the cascade's own
+  file — not the job layer's `REQUEUE_BUDGET = 2` (`src/jobs.ts`), which already exists for the
+  lease-window sense and must not be reinvented. A fake executor cannot exhaust a lease budget, and
+  stage 4's whole done-condition is against a fake executor. Whether the cascade *fits inside*
+  `REQUEUE_BUDGET` is a real question and it is stage 5's, measured rather than assumed.
+- **The scoped call reuses the `"hierarchy"` task** rather than minting its own. A new task means a
+  new `STAGE_EFFORT` row and a different wire model, which is right only if the effort should differ
+  — and nothing has shown that it should. Simplest version first; the lever is named, and stage 5's
+  numbers are what would move it.
+- **One checkpoint row per call, not per target.** It matches both incumbents and it is the unit
+  "exact-target coverage" is phrased against. The objection — that re-batching between attempts would
+  strand every row — is closed by `seedHash` and `recipe` being pinned, since `planExpansionBatches`
+  is deterministic over frontier, blocks and recipe.
+
+Two smaller things the survey found, both fixed rather than filed: the `CHUNK_CONCURRENCY` figure in
+§ Concurrency above, and `database.md`'s claim that the checkpoint key's *length* is pinned by a
+CHECK constraint. It is not — the regex allows 1 to 128 of `[a-z0-9_-]`, and 16 hex is the practice.
+Whoever adds this namespace would have been reading that line for the rule.
+
+#### What stage 4 landed <a id="stage-4-landed"></a>
+
+Two new modules — [`src/hierarchy-expand.ts`](../../src/hierarchy-expand.ts) (prompt, request
+assembly, strict parse, instrumentation) and
+[`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts) (namespace, canonical request, entry gate,
+executor seam, `runExpansionWave`) — plus the key minter hoisted into `src/source-hash.ts` as
+`checkpointKey`, the redraw cap, one migration and three test files. Still called by nothing.
+
+The canonical object is exactly the six fields the table above names. Three things about *how*, none
+of them a change to *what*:
+
+- **`recipe` is sorted before hashing, the one deliberate exception to "the order of the literals is
+  the key".** A `CascadeRecipe` is built at several sites — the constant, an eval arm's spread, a test
+  literal — and `JSON.stringify` writes insertion order, so two recipes with identical values could
+  hash differently depending on which literal built them. That is a permanent miss with nothing to
+  see. Sorting also keeps the field list total, so a seventh recipe field is in the key the day it is
+  added rather than the day somebody remembers.
+- **`bodyHash` is computed inside `runExpansionWave` from the blocks it was given**, not accepted as
+  an argument, so it cannot be a digest of something else. Likewise `frozenSeed(tree)` returns the
+  outline and the hash together, so a caller cannot freeze one and re-derive the other.
+- **`targets[i].node` is the ordinal path** (`root > child 2`), because that is the only id a cascade
+  node has, and it is derived from the tree's shape rather than from its prose — safe to hash and
+  safe to log.
+
+**Two findings from building it, each fixed at the point it was found rather than filed.** The
+`max_tokens` for a scoped call was sized from `predictedChildren`, which clamps at nine — but under
+the settled precedence a twenty-heading parent answers with twenty children, so a heading-dense call
+would have truncated and returned nothing usable, which is the one failure on this path that costs a
+whole paid call. It is now `max(predictedChildren, bodyHeadingsIn)`, and `bodyHeadingsIn` shares
+`isAuthoredBoundary` with `hasUnresolvedHeading` so the stopping rule and the arithmetic bound cannot
+drift into two opinions about what a heading is. And **the gist is required on every proposed child**:
+letting a gistless one through would fail the whole article at `assertTreeSound` *after the entire
+cascade had been paid for*, where re-asking one batch costs cents.
+
+**The recorded spike answers do not parse in the shipped format**, and the tests say so rather than
+smoothing it over. Two things moved — the `sections` wrapper and `needsDeeper: true` becoming
+`verdict: "needs-deeper"` — so the fixtures carry an adapter that changes exactly those and nothing
+else, and all three directions are asserted: translated parses, untranslated is refused, and the
+half-migration that re-wraps without re-spelling is caught as `missing-verdict`. That last is the one
+a careless migration would actually produce.
+
+**Three things stage 4 deliberately left for stage 5**, all named in the code rather than left to be
+discovered:
+
+1. **The verdict cannot yet be paired with the child that survived.** `normaliseExpansion` discards
+   `KeptChild.childIndex`, so `ExpandedTarget` carries `proposed` (every child the answer named, with
+   its verdict) beside `children` (what survived the drops) — two arrays of different lengths.
+   Nothing obeys a child's verdict before wave 3, so nothing is wrong today, and stage 6 cannot be
+   built until it is closed.
+2. **An import cycle is one edit away.** `hierarchy-expand.ts` takes `renderBlocks` and
+   `PROMPT_VERSION` from `hierarchy.ts` as *values*, so the moment stage 5 makes `hierarchy.ts` import
+   the cascade, `hierarchy → hierarchy-deepen → hierarchy-expand → hierarchy` closes and
+   `npm run cycles` — a gate at zero — goes red. Hoisting those two is stage 5's first job, not a
+   surprise at the end of it.
+3. **The wave is sequential.** A concurrency budget derived from the worker's job concurrency, and
+   counted 429s honouring `Retry-After`, are not decidable against a fake executor.
+
+**The migration needs regenerating after the merge.** `drizzle/20260905020601_checkpoints_hierarchy_deepen.sql`
+widens the `checkpoints_namespace` CHECK — purely additive, a drop-and-re-add because Postgres has no
+`ALTER` for a CHECK expression — but it and its snapshot were generated before `origin/dev`'s
+`20260904235116_ingest_events_article_id` was in the chain, so the next `drizzle-kit generate` would
+diff against a snapshot that does not know about it. `npm run db:migrate` refused to run for exactly
+this reason and was right to; the two statements were applied to the local database by hand and
+production was never touched.
+
+**And the two hand-kept copies of the namespace list are now checked against each other.**
+`CHECKPOINT_NAMESPACES` and the CHECK constraint were two lists with nothing between them, and
+because a failed checkpoint write is deliberately a `warn`, a name in the union that Postgres refused
+would have shown up only as a bill. `tests/db-schema.test.ts` now inserts a row under every name.
+
+#### What the second review changed, and the one that was my mistake <a id="stage-4-review"></a>
+
+⟨GPT Sol, 2026-09-05, reviewing stage 4's code. Refused on two established P1s; all five findings
+taken.⟩
+
+- **F2, P1 — the scoped-id gate exempted the first child, and that was my briefing error.** I told
+  stage 3 that the first child's pin to its parent's start must survive and only the later children's
+  clamp becomes a refusal. The pin is right — children must cover their parent and nothing else can
+  supply that block — but exempting it from the *check* is not, and `normaliseExpansion` pinned
+  before it range-checked. A first `start` naming a block in a **sibling** section passed all four
+  advertised gates, so that sibling's title, gist and verdict landed on this parent's prose.
+  Reproduced: parent 20–39, first child at block 0, returns cleanly. Now every claimed start is
+  checked and only an in-parent one is pinned. A consequence worth knowing: the head repair can no
+  longer be an `"overlap"`, because that required a claim below the parent's start, which is now
+  refused.
+- **F4, P1 — whitespace passed the strict schema.** `.length === 0` where it needed
+  `.trim().length === 0`, and the comment justified it by saying `buildTree` applies its own
+  truthiness afterwards — which is true of `""` and false of `"   "`. Three spaces reached the tree as
+  a real gist and rendered as a blank node a reader can navigate to. `sourceHeading` is deliberately
+  *not* trimmed: a blank claim is one `buildTree` counts into `droppedHeadings` on purpose.
+- **F1, P2 — the fingerprint omitted what the governor reads and what the model is shown.**
+  `hashBlocks` canonicalises `[id, text, role, treatment]`; it does not carry `words` (the ceiling),
+  `kind` (the heading rule), `tag` (which `renderBlocks` prints) or `gistable` (which `isStructural`
+  is built from, and therefore the floor *and* `predictedChildren`). Established on `words`: two
+  bodies with identical prose and different counts produced the same key while the decision moved
+  from `stop/verdict` to `expand/forced-open`. Now `expansionBodyHash`, this stage's own, composed
+  over `hashBlocks` plus those four — `hashBlocks` itself untouched, because its output is pinned by
+  a literal hex elsewhere and its canonical form has a collision history. **`gistable` was not on my
+  list of three**; the implementer found it by asking what else the governor reads.
+- **F3, P2 — the prompt never asked for children in document order**, while the derivation treats
+  array order as document order and silently drops anything behind its predecessor. Five otherwise
+  valid children ordered `0, 8, 4, 12, 16` lost a real section. The rule is now stated and
+  `EXPAND_PROMPT_VERSION` is `expand/2` — which is in the checkpoint key, so a prompt asking for
+  something different cannot resume onto answers written under the old one.
+- **F5, P3 — this plan's own header contradicted its stage-4 section.** Fixed above.
+
+Not fixed, and named rather than filed: `why` is unconstrained beyond its type, where the prompt asks
+for at most twelve words. It is telemetry, nothing structural reads it, and refusing a batch over a
+long reason would throw away every boundary in it.
 
 ### Stage 5 — one live wave, bounded, measured
 

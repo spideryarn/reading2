@@ -32,7 +32,6 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,7 +50,7 @@ import { blocksArtefact } from "./blocks.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
 import { COVERAGE_FLOOR, generateLabels, isHeading, mergeLabels, type LabelsFile } from "./labels.js";
-import { hashBlocks } from "./source-hash.js";
+import { checkpointKey, hashBlocks } from "./source-hash.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
@@ -239,8 +238,17 @@ export interface ModelNode {
  * and a block it cannot name is a block no node can cover. `NOT-GISTABLE` is
  * reused rather than a new marker invented: SYSTEM above already explains it,
  * and a word the prompt never defines is a word the model gets to interpret.
+ *
+ * **Exported for the scoped expansion call** (src/hierarchy-expand.ts), which
+ * renders one section's slice with the identical rule. A second renderer would
+ * be a second place for the withholding above to be forgotten, and
+ * `estimateEvidenceTokens` (src/hierarchy-cascade.ts) already sizes a batch by
+ * following *this* function's output — so a private copy would put the
+ * estimator and the builder one edit apart with nothing to say so. The index in
+ * `[i]` is a position within the array handed in, so a scoped call's slice is
+ * numbered from 0 and its prompt says so.
  */
-function renderBlocks(blocks: Block[]): string {
+export function renderBlocks(blocks: Block[]): string {
   return blocks
     .map((b, i) => {
       if (!isBodyEvidence(b)) return `[${i}] ${b.id} <${b.tag}> NOT-GISTABLE: (withheld)`;
@@ -531,17 +539,23 @@ export function canonicalStructureRequest(params: MessagesBody): Record<string, 
 }
 
 /**
- * The key itself: sixteen hex characters, which is what both existing
- * checkpoint callers mint and what `CHECKPOINT_KEY_RE` is happiest with.
+ * The key itself — **and it lives in [`source-hash.ts`](source-hash.ts) now**,
+ * under the name it always deserved: it has nothing to do with the structure
+ * call, and the scoped expansion checkpoint (src/hierarchy-deepen.ts) mints its
+ * key with the identical two lines.
  *
- * `JSON.stringify` over an object this module builds, so the key order is fixed
- * by the literals above rather than by chance. Re-ordering those literals would
- * change every key — which costs one call per article and nothing else, since a
- * key that does not match is simply a miss.
+ * Re-exported here under the old name so that nothing which already imported
+ * `structureKey` from this module had to change — the same move `structureHash`
+ * and `hashBlocks` each made, for the same reason. There is one implementation
+ * and two names; **new callers should say `checkpointKey`.**
+ *
+ * The hoist is not cosmetic. `src/hierarchy-deepen.ts` needs this function, and
+ * `src/hierarchy.ts` will import *it* when stage 5 wires the cascade into
+ * `generateHierarchy` — so a version of it that only existed here would be a
+ * value import closing `hierarchy → hierarchy-deepen → hierarchy`, and
+ * `npm run cycles` is a gate at zero rather than advice.
  */
-export function structureKey(canonical: unknown): string {
-  return createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex").slice(0, 16);
-}
+export { checkpointKey as structureKey } from "./source-hash.js";
 
 /**
  * One structure answer, kept so a later attempt does not buy it again.
@@ -2177,7 +2191,7 @@ export async function generateHierarchy(opts: {
    * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md
    * is what happens when the instrumentation covers only the throwing case.
    */
-  const structureFingerprint = structureKey(canonicalStructureRequest(params));
+  const structureFingerprint = checkpointKey(canonicalStructureRequest(params));
   let raw: string | null = null;
   try {
     const stored = await opts.checkpoints.read<unknown>(slug, "hierarchy-structure", [
