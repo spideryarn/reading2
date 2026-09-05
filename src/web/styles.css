@@ -9346,15 +9346,32 @@ line.diag-now {
   color: var(--ink-faint);
 }
 
-.annotate-close {
+/* Copy sits beside Close, so the header is label on the left and the two icon
+   buttons on the right. */
+.annotate-head-actions {
   display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+/* 24px is WCAG 2.2's minimum target, and the pair used to measure 19.8px with
+   2.4px between them — close enough that the spacing exception does not save
+   them either. The icons stay at 15px; the box around them grew. */
+.annotate-close,
+.annotate-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   padding: 0.15rem;
   border: 0;
   background: none;
   color: var(--ink-faint);
   cursor: pointer;
 }
-.annotate-close:hover { color: var(--ink); }
+.annotate-close:hover,
+.annotate-copy:hover { color: var(--ink); }
 
 .annotate-body { overflow-y: auto; }
 
