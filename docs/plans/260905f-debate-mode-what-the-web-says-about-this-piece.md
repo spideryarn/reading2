@@ -279,7 +279,7 @@ enough here:
    group**, and is counted as `selfSource`. Stage 0 already saw the article itself come back among
    its own annotations, and such a row passes every other defence here — real URL, real quote from
    that URL, real claim quote — while presenting the piece as a response to itself. Compare with the
-   **same request identity chat already uses**, [`sameTarget`](../../src/chat-tools.ts) — same scheme,
+   **same request identity chat already uses**, [`sameTarget`](../../src/urls.ts) — same scheme,
    host, port, path and query, fragments ignored, path decoded where it can be — which exists for the
    neighbouring case of the model fetching the open article by appending a block fragment. Do not
    reach for `urlKey`: the shelf's notion of sameness folds `http` into `https` and `www.` into the
@@ -580,6 +580,66 @@ slug. **Red-before-green test built from the Stage 0 sourdough probe**: an artic
 yields an empty group one, a group two in which every row carries `claimQuote` + `blockId` +
 `sourceQuote` + `applies`, and a visible drop count. `STEP_BUDGET_MS` starts at 120 s and is
 re-measured at the end of this stage rather than left a guess.
+
+#### As built — 2026-09-05, server side only, no live run yet
+
+Every table above landed as written. **One number in this plan is now known to be low**, and it is
+the one Greg was asked to look at:
+
+> **§ The spend ceiling's $0.13–0.27 is for two calls that carry no article.** Every figure in Stage 0
+> and 0b came from a bare probe — an identity, a system prompt, no article, no schema. Pass A is
+> still that. **Pass B sends the whole article** (`articleWithIds`), because a `claimQuote` has to be
+> locatable in a block the model was actually shown and a `blockId` has to be one the model was
+> offered. On a 4,000-word piece that is roughly 8–10k extra prompt tokens; on a long one, several
+> times that. So the real per-run cost is above the quoted range and rises with article length, which
+> none of the measured numbers did. **The first live runs are what should replace this paragraph.**
+
+Five further things the plan did not settle, decided here:
+
+- **The answer is a fenced JSON block, not `response_format: {type: "json_schema"}`.**
+  `AI_JOB_ROUTE.debate` sends `require_parameters: true`, which turns a parameter an upstream does
+  not support from a silent no-op into a **404 with no endpoints left** — what a `temperature: 0` did
+  to `env-proposal` ([research](../research/260902b-env-key-proposal-spike.md)). Neither Stage 0 nor
+  0b sent a schema alongside `openrouter:web_search`, so one here would be an unmeasured field in a
+  body whose failure mode the feature reports as *"the search did not run"*. `referee-candidates` is
+  the one existing caller that does web search *and* structured output, and it uses a fence.
+- **A seventh loss reason, `malformed`.** § What is counted names six *validation* losses, and a
+  *malformed answer* — the whole JSON document — fails the step. Neither covers one unreadable row
+  inside an otherwise readable list. `DroppedCandidates.malformed` keeps that separate for the same
+  reason and this follows it. It counts a row that is not an object, and a row with no `applies` —
+  which is required in **both** groups: § 2 makes it a group-two field and § 4 draws it on every row,
+  and a row with no sentence saying what the page does is a host and a quotation with nothing said
+  about either.
+- **Rows are not deduplicated by URL**, and `distinctSources` is what the foot line counts. One
+  review can answer two different claims, so two rows about one page is a real answer; the sentence
+  the plan specifies (*"N pages, M contribute"*) needs the distinct count either way.
+- **The stamp's `model` is `modelFor("debate")`, not `CAPABLE_MODEL`.** This is the only stamped
+  stage whose model an environment variable can override, and every neighbouring stage's stamp names
+  the constant — so copying one in is the obvious mistake, and it would report every run stale on a
+  machine with the override set and on no other.
+- **`sourceHash` is `articleWithIdsFingerprint`** — the blocks, the tree and the *cited* head, the
+  same question `ideas`, `sketch` and `quiz` are judged on. The plan said `sourceHash` without saying
+  which. The cited set because pass B sends `articleWithIds`, and because the `URL:` line does more
+  work here than in any of those three: it is what pass A asks the web about, and what every returned
+  citation is compared against. **Not** the dated set — no date appears in either prompt, so hashing
+  one would buy the search again every time a publisher re-dated a post.
+- **`searchedAt` is the artefact's only clock.** Its neighbours carry `generatedAt` beside it; here
+  the two would be one instant written twice, and two spellings of one fact is what these artefacts
+  keep getting wrong. `elapsedMs` stays, because it is a different fact.
+
+**`sameTarget` and `requestTarget` moved from `src/chat-tools.ts` to [`src/urls.ts`](../../src/urls.ts),
+unchanged.** § Attribution rule 2 names that function rather than describing one, and a second copy
+of a URL-identity rule is what `urls.ts` exists to prevent.
+
+`src/web/` was touched in exactly two places, both forced by a total table rather than by the mode:
+`STAGE_ICONS` in `Metadata.tsx` (a `Record<StepName, …>`) and `CACHEABLE` in `lib/api.ts`, which
+`tests/cacheable-covers-artefact-routes.test.ts` derives from the routes.
+
+Three test files: `tests/debate.test.ts` (the refusals and the counts, including the sourdough
+fixture), `tests/debate-passes.test.ts` (the wire, and the ten ways a pass fails the whole step), and
+`tests/debate-step-registration.test.ts` (the stamp, the skip, and that the step buys two searches
+rather than one). **`STEP_BUDGET_MS` is still the 120 s guess** — the re-measurement wants a live run,
+which has not happened.
 
 ### Stage 3 — the band
 

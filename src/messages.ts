@@ -319,6 +319,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "gl-ask-absent": "blocked",
   "gl-ask-part-word": "blocked",
   "gl-ask-no-prose": "blocked",
+  /* **Debate's own, and the only `db-`.** `retry` because the model choosing
+     not to search, and a provider falling back to one that dropped the tool,
+     both come out differently next time. See `DEBATE_SEARCH_DID_NOT_RUN` for
+     why a search that did not run is a *failure* rather than an empty result. */
+  "db-no-search": "retry",
   /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
      that is why there are four rather than one. The kind is what decides
      whether a Retry appears, and a single sentence would have had to either
@@ -1025,6 +1030,41 @@ export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
     "be made for somebody else's reading of it. Draw the Sketch again — it is the chip one to " +
     "the left — and then press this one. Until it is redrawn, this will come back the same " +
     "way. [jb-sketch-profile]",
+};
+
+/* ----------------------------------------------------- asking the web (debate) -- */
+
+/**
+ * **The search tool was offered and either did not run or would not account for
+ * itself** — src/debate.ts, and the one failure this mode has that no other
+ * stage can have.
+ *
+ * `retry`, and that is the right kind rather than the generous one: the model
+ * *chose* not to search, or a provider fell back to one that dropped the tool,
+ * and both come out differently on another attempt.
+ *
+ * **Why this is a failure at all**, which is the whole design of the mode in
+ * one sentence: a model that did not search still answers, plausibly, from
+ * memory — and what it produces is not an empty panel but a *full* one, of real
+ * URLs it happens to know. Every rule in `readGroup` then drops every row as
+ * uncited, and the reader sees "the search found nothing" over a search that
+ * never happened. Those are two different facts and the panel must not print one
+ * for the other. docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md
+ * § 2, where the three empty states are tabulated.
+ *
+ * It also covers the case where the count is simply not in the response.
+ * OpenRouter has renamed that field twice (`whereSearchCountCameFrom`,
+ * src/openrouter-stream.ts), and an unreadable count is indistinguishable from
+ * a model that chose not to search — so this fails rather than guessing, because
+ * the guess that costs nothing to make is the one that would publish a
+ * fabrication.
+ */
+export const DEBATE_SEARCH_DID_NOT_RUN: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This mode goes out to the web, and this time the search either did not run or did not report " +
+    "back — so anything the AI said would have come from memory rather than from pages we could " +
+    "show you. Nothing has been kept. Trying again usually works. [db-no-search]",
 };
 
 /* ------------------------------------------------------------- reading a PDF -- */

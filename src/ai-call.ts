@@ -459,6 +459,28 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Debate — what the rest of the web says about this piece** (src/debate.ts).
+     `referee-candidates`' policy, and its `require_parameters` argument holds
+     here with the volume turned up.
+
+     This is the only *pipeline step* that sends `openrouter:web_search`, and a
+     fallback that silently dropped it leaves a model answering from memory —
+     which is not an empty panel but a **full** one, of plausible pages with no
+     annotation behind any of them. Every rule in `readGroup` then drops every
+     row as `uncited`, so a reader sees "the search returned nothing it could
+     verify" and nothing anywhere says the tool was never offered. That is the
+     failure `referee-candidates` already wrote down; here it costs up to $0.27
+     rather than a turn of a conversation.
+
+     `order` is pinned for consistency with the rest of this wire rather than
+     for caching: neither pass sends `cache_control`, so there is no prefix here
+     to keep landing on. The two passes are one request each, minutes apart from
+     the next article's. */
+  debate: {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* The same policy as `explain` and for the same two reasons. The upstream is
      pinned so that a reader working through a batch of questions keeps hitting
      the cached article rather than paying for it once per answer; and

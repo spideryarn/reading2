@@ -354,6 +354,73 @@ export function hostOf(url: string): string {
 }
 
 /**
+ * What a GET would actually ask for, or `null` if this is not a web URL.
+ *
+ * **Everything but the fragment**, because the fragment is the one part of a URL
+ * that is never sent: `…/x#a` and `…/x` are the same request, and that is the
+ * whole reason this function exists.
+ *
+ * `urlKey` was used here first and a GPT Sol review was right that it is the
+ * wrong tool. It is the *shelf's* notion of sameness, and it is deliberately
+ * generous — it folds `http` into `https`, `www.` into the bare host and drops
+ * tracking parameters, because two spellings of one address should be one row on
+ * a bookshelf. Those are false positives here, and a false positive is a tool
+ * telling the model "that page is already open" about a page that is not.
+ * `normaliseUrl`'s own comments say `http` and `https` can serve different
+ * pages. So: same scheme, same host, same port, same path, same query.
+ *
+ * The path is decoded where it can be, so `/%78` and `/x` are one request, and
+ * a trailing dot is dropped from the host — two under-refusals the same review
+ * found. `new URL` has already lowercased the host and dropped a default port.
+ *
+ * **It lived in src/chat-tools.ts until 2026-09-05**, and moved here unchanged
+ * when a second feature needed the same identity rather than a second opinion
+ * about it. See `sameTarget` below for who asks and what each of them is asking.
+ */
+export function requestTarget(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const host = u.hostname.replace(/\.$/, "");
+    let path = u.pathname;
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      /* A stray percent. The raw path is still a fine identity; it just will not
+         match its own decoded spelling, which is the conservative direction. */
+    }
+    return `${u.protocol}//${host}${u.port ? `:${u.port}` : ""}${path}${u.search}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Would fetching these two ask a server for the same thing?
+ *
+ * **Three callers, all asking the same question about the article's own
+ * address**, and it is worth listing them because the shared implementation is
+ * the point:
+ *
+ * - `articleLinks` (src/chat-tools.ts) — a self-link written the long way round,
+ *   `href="https://this.article/#section"`, is still a self-link;
+ * - `read_web_page` (src/chat-tools.ts) — refusing to go and fetch the article
+ *   the model is already holding;
+ * - `admissible` (src/debate.ts) — a citation whose target is `meta.url` is the
+ *   article presented as a response to *itself*, and such a row passes every
+ *   other defence that mode has: real URL, real quote from that URL, real claim
+ *   quote. Stage 0 saw the article come back among its own annotations.
+ *
+ * **Not `urlKey`** in any of the three, for the reason `requestTarget` gives:
+ * the shelf's sameness folds `http` into `https` and `www.` into the bare host,
+ * which is generous in the wrong direction here.
+ */
+export function sameTarget(a: string, b: string): boolean {
+  const one = requestTarget(a);
+  return one !== null && one === requestTarget(b);
+}
+
+/**
  * One parenthesised group in a URL, itself allowed to hold one nested pair.
  *
  * Not pedantry: `…/wiki/Mercury_(planet)` is an ordinary Wikipedia title, and a

@@ -65,6 +65,11 @@ import {
   PROMPT_VERSION as QUIZ_PROMPT_VERSION,
 } from "../quiz.js";
 import {
+  inputFingerprint as debateFingerprint,
+  isStale as debateIsStale,
+  PROMPT_VERSION as DEBATE_PROMPT_VERSION,
+} from "../debate.js";
+import {
   inputFingerprint as sketchFingerprint,
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
@@ -78,7 +83,7 @@ import {
 import type { Illustrated } from "../illustrated-plate.js";
 import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "../library-scalars.js";
 import { log } from "../log.js";
-import { CAPABLE_MODEL } from "../models.js";
+import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
@@ -98,6 +103,8 @@ import type {
   ArticleMetadata,
   StageState,
   Block,
+  Debate,
+  DebateFound,
   Glossary,
   GlossaryFound,
   Quiz,
@@ -401,6 +408,7 @@ type RevisionReader =
   | "quiz"
   | "sketch"
   | "illustrated"
+  | "debate"
   | "arc"
   /**
    * **The raw document, and it is the only read that goes looking for it.**
@@ -435,7 +443,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
-    illustrated: "value",
+    illustrated: "value", debate: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -472,6 +480,9 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", timeline: "value", quiz: "value",
+    /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
+       exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
+    debate: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -482,6 +493,9 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", timeline: "value", quiz: "value",
+    /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
+       exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
+    debate: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -492,6 +506,9 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", timeline: "value", quiz: "value",
+    /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
+       exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
+    debate: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -533,6 +550,13 @@ const REVISION_READ_POLICY: Record<
        a fingerprint with an empty URL in it and report every quiz stale for
        ever, on every article that has one. */
     quiz: "value",
+    /* `debate` for that reason and for one more of its own: this is the stage
+       that sends the article's own address to a *web search*, so the URL is not
+       merely printed in its head — it is the thing pass A asks the web about,
+       and it is what `selfSource` compares every returned citation against. A
+       read that could not see the column would compute the same fingerprint
+       every other article has. */
+    debate: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -572,6 +596,12 @@ const REVISION_READ_POLICY: Record<
        fingerprint, which is the whole article. */
     arc: "value", sketch: "value", timeline: "value", quiz: "value",
     tweets: "value", glossary: "value",
+    /* Pass B renders the article from the tree's body blocks and its
+       `sourceHash` is `articleWithIdsFingerprint`, which hashes the outline as
+       well as the paragraphs — so a blocks-only comparison would call a
+       re-sectioned article's debate current while the filesystem store called
+       it stale. */
+    debate: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
        outline like its five neighbours — and this line had not caught up.
@@ -656,6 +686,16 @@ const REVISION_READ_POLICY: Record<
      call `quotes`, `timeline` and `sketch` make: a card shows four ticks and a
      fifth would not fit. */
   quiz: { metadata: "value", quiz: "value" },
+  /* Its own reader and the metadata page, and **not the library**, on the same
+     call `quotes`, `timeline`, `sketch` and `quiz` make: a card shows four ticks
+     and a fifth would not fit.
+
+     The `metadata` grant is not optional, for the reason spelled out on
+     `illustrated` above: `isCurrent` has to have an arm for every stamped step
+     (tests/store-revision-columns.test.ts), and it cannot answer without the
+     column. Falling to `default: true` is the failure that has caught `ideas`,
+     `sketch` and `timeline` in turn. */
+  debate: { metadata: "value", debate: "value" },
 
   /* **Read by nobody through here.** The two HTML columns are the whole article
      again, and they are pipeline artefacts reached through
@@ -882,6 +922,11 @@ export const REVISION_PROJECTIONS = {
        for `isCurrent`'s arm — see the policy entry, which has the argument
        about why this column could not be left off this read. */
     illustrated: articleRevisions.illustrated,
+    /* For `isCurrent`'s arm alone — this one carries no `profileHash`. Without
+       the column that arm falls to `default: true` and a debate written against
+       an article that has since moved reports itself current on the one page
+       whose job is to say otherwise. */
+    debate: articleRevisions.debate,
   },
   publish: {
     id: articleRevisions.id,
@@ -930,6 +975,16 @@ export const REVISION_PROJECTIONS = {
   sketch: {
     id: articleRevisions.id,
     sketch: articleRevisions.sketch,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* `CITED_FINGERPRINT_COLUMNS`, like `ideas`, `sketch` and `quiz`: pass B sends
+     `articleWithIds`, whose head prints a `URL:` line, so the cited set is what
+     its `sourceHash` covers. Not the dated set — no publication date appears in
+     either prompt, so hashing one would spend up to $0.27 every time a publisher
+     re-dated a post. */
+  debate: {
+    id: articleRevisions.id,
+    debate: articleRevisions.debate,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /**
@@ -1364,6 +1419,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
      in the `sources` bucket, which is not a table and so is not listed here —
      the same shape `assets` above has. */
   illustrated: ["article_revisions.illustrated"],
+  debate: ["article_revisions.debate"],
 };
 
 /**
@@ -2506,6 +2562,35 @@ const rawPgArticleReader: ArticleReader = {
            `sketchIsCurrent`. tests/store-revision-columns.test.ts now holds
            every stamped step to having an arm here, rather than naming the one
            that was missing. */
+        /* The same shape as `quiz` above, over the same three values and the
+           same **cited** head, because pass B sends `articleWithIds` too.
+           Written out rather than left to `default: true`, which is the arm that
+           has caught `ideas`, `sketch` and `timeline` in turn.
+
+           **`modelFor("debate")`, not `CAPABLE_MODEL`** — the one arm here of
+           which that is true. This step is on the chat wire, where
+           `SPIDERYARN_DEBATE_MODEL` can override the model, and comparing
+           against the constant would report every run of an overridden model
+           stale on this page while the step itself thought it was current.
+           `STEPS.debate.stamp` (src/pipeline.ts) resolves it the same way; two
+           spellings of one model is exactly the drift this switch exists to
+           refuse. */
+        case "debate": {
+          const debate = revision.debate as Debate | null;
+          if (!debate || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: debate.sourceHash,
+              promptVersion: debate.version,
+              model: debate.generator,
+            },
+            {
+              inputHash: debateFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: DEBATE_PROMPT_VERSION,
+              model: modelFor("debate"),
+            },
+          );
+        }
         case "sketch":
           return sketchIsCurrent(revision, blocks, citedFingerprint);
         /* **The only arm here that does not look at the article**, and the
@@ -2868,6 +2953,50 @@ const rawPgArticleReader: ArticleReader = {
       // Unknown counts as stale, the same way round as its neighbours.
       stale: !tree || quizIsStale(quiz, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: quiz.version !== QUIZ_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The debate on its own — the Postgres half of `loadDebate`.
+   *
+   * Three inputs like `loadQuiz` above and the same **cited** head, because
+   * pass B sends `articleWithIds`: the fingerprint covers the tree and the
+   * metadata as well as the blocks, so comparing only the blocks here would
+   * call a re-sectioned or re-addressed article's debate current while the
+   * filesystem store called it stale.
+   *
+   * **A 404 is the ordinary case**, like the quiz above: `debate` is off
+   * `DEFAULT_INGEST_STEPS`, so most articles have never had one.
+   *
+   * **But two EMPTY groups are a 200**, unlike the sketch's empty scene list
+   * below and like the timeline's empty event list: most pieces have no critical
+   * reception at all, so an artefact that honestly says so is the commonest
+   * correct answer and the panel has a sentence for it. A 404 here would send
+   * the reader to a POST that pays up to $0.27 for the same answer on every
+   * open. `SHAPE.debate` (src/store/artifacts.ts) makes the same call.
+   */
+  async loadDebate(slug: string): Promise<DebateFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "debate");
+    if (!found) throw notFound(slug);
+
+    const debate = found.revision.debate as Debate | null;
+    if (!debate) {
+      throw Object.assign(
+        new Error(
+          `No debate for "${slug}" yet. Build one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["debate"] }.`,
+        ),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      debate,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale: !tree || debateIsStale(debate, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: debate.version !== DEBATE_PROMPT_VERSION,
     };
   },
 

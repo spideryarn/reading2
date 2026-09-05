@@ -22,6 +22,7 @@ import {
   articleMetadata,
   assertOwnArticle,
   deleteGlossary,
+  loadDebate,
   listArticles,
   loadArticle,
   loadGlossary,
@@ -122,6 +123,7 @@ export const fsArticleReader: ArticleReader = {
   loadQuiz,
   loadSketch,
   loadIllustrated,
+  loadDebate,
   loadSource,
 };
 
