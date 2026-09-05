@@ -99,15 +99,41 @@ It arrived with `cbb903d0` *Stage E: the six stage CLIs go through the queue, ag
 the database-move work, not this one. A block was added to `tests/jobs.test.ts` and the registry
 record was not updated to match.
 
-**Deliberately not fixed here.** The two ways to make it green are to annotate the new block with a
-`**Mutation.**` or an honest `**No mutation.**` header, or to raise the allowance from 9 to 10. The
-second defeats the guard, and the first requires knowing whether that block deserves a mutation test
-and then writing one — which is precisely the work the registry exists to force onto the person who
-added the block. Guessing on their behalf would produce a green gate and a worse test.
+**Left deliberately unfixed here, and then fixed by somebody with better evidence.** The two ways to
+make it green are to annotate the new block with a `**Mutation.**` or an honest `**No mutation.**`
+header, or to raise the allowance from 9 to 10. The second defeats the guard, and the first seemed to
+require knowing whether that block deserves a mutation test — which is the work the registry exists to
+force onto the person who added it. So this batch left the red standing as the forcing function.
+
+**That was the wrong call, on facts this batch did not have.** The session in
+`worktree-deepen-fat-sections` hit the same red holding the missing test in its hands: the rule
+`unrunnableStepPlan` enforces is asserted only against the pure function, and **nothing asserts that
+`enqueue` throws**. It found that out the expensive way — `evals/deepen/`'s free `--dry-run` asks for
+`["fetch","extract","blocks"]`, so after merging `dev` every phase threw at `enqueue`, zero jobs were
+created, and `npm test` stayed green throughout. That dry run is the rehearsal before a £-scale paid
+run, so the gap had already cost something real.
+
+It annotated the block rather than raising the allowance, and the judgement — "no mutation involving
+the store: no store reaches this block" — is *readable off the four `it`s* rather than guessed, which
+is the distinction this batch got wrong. It then said plainly that this is a gap and not a clean bill,
+named the measured cost, and pointed at the shape `tests/enqueue-owns-the-article.test.ts` already
+uses. The evidence and the class — **a rule enforced at a seam, with a test only for the predicate
+behind it** — are in `260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md`
+§ `stage-e-unrunnable-untested`.
+
+The lesson worth keeping: *don't guess on the author's behalf* was sound, but a red left standing is
+only a forcing function if somebody is coming who will be forced. Meanwhile it hides the next
+regression from everyone, which is what it was doing.
 
 Every agent in this batch was told it is inherited, so nobody wastes time deciding whether it is
 theirs. It is listed here so it is not lost; it is not on
 [awaiting-approval.md](../user-feedback/awaiting-approval.md), which is for feedback reports.
+
+One thing in that registry entry *was* this batch's to fix, and is fixed: it read "eight of its ten
+blocks are pure functions", where ten was the total on 2026-09-04 and not a pure count. Stage E's
+block made the sentence parse as a current inventory that had already counted it. It is now dated,
+per [CLAUDE.md](../../CLAUDE.md) on inventories — record the scope and the run date, and treat the
+output as a dated example.
 
 Separately: `tests/admin-store` goes red under contention and passes alone. Three worktrees on one
 box is the documented limit for a reason.
