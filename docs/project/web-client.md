@@ -97,10 +97,11 @@ still true. It is not a promise the reader cannot put the rail away themselves: 
 exactly that, in every mode. There was a `Spine` pill in the controls bar until 2026-09-05, and it
 was the one granularity-bar control that stayed on screen in a mode; now the rail is simply on
 unless the URL says otherwise ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
-[url-state.md](url-state.md) for `?spine=`). The prose is the half with no off switch: `?text=0` hides it
-in the hierarchy mode and nowhere else, which is what `proseVisible` in
-[`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice. (Plain is not an
-exception: the prose is all it has, so `?text=0` there would leave nothing.)
+[url-state.md](url-state.md) for `?spine=`). The prose has no off switch at all any more: `?text=0`
+hid it in the hierarchy mode and nowhere else — which is what `proseVisible` in
+[`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice — and since 2026-09-05
+that address is rewritten to `?mode=outline` on arrival, because the pill that put the prose back
+went with the controls bar ([url-state.md](url-state.md#the-parameters)).
 
 Chat is the first mode that is not the hierarchy
 ([260826a-chat-mode.md](../plans/260826a-chat-mode.md)). Adding a second — the Glossary in Greg's example — is a
@@ -201,11 +202,16 @@ keys from the reader the moment focus lands inside it. Check before you reach fo
 
 ### Never delete a semantic class name
 
-Seven files read the DOM by selector — `.controls`, `thead th`, `tr[data-block]`, `td.text .prose`,
-`[data-nav-depth]`, `mark.cmt[data-comment]`. If `.controls` ever becomes a Tailwind-styled flex row,
-keep `className="controls tw:flex …"`. Losing `.controls` makes `stickyOffset()` return 0, and then
-every deep link and arrow jump lands *under* the sticky bar while `scrollY` confirms the scroll
-happened.
+Seven files read the DOM by selector — `.controls`, `thead th[data-col]`, `tr[data-block]`,
+`td.text .prose`, `[data-nav-depth]`, `mark.cmt[data-comment]`. If `.controls` ever becomes a
+Tailwind-styled flex row, keep `className="controls tw:flex …"`. Losing `.controls` makes
+`stickyOffset()` fall back to the safe-area inset alone, and then every deep link and arrow jump
+lands *under* the sticky bar while `scrollY` confirms the scroll happened.
+
+`thead th[data-col]` is the sharper case, because the row it reads is **invisible**: the table head
+has had no height since 2026-09-05 and exists for the fisheye panels' geometry and for a screen
+reader ([granularity-zoom.md § the header row](granularity-zoom.md#the-header-row)). A `display: none`
+on it renders identically and empties every panel.
 
 ### How the migration finished
 
@@ -673,8 +679,10 @@ loading half already and was missing the failed half.
   block html. See [comments.md](comments.md).
 - **The height of the sticky bars is measured, never written down.** Deep links, the `?at=` tracker
   and the arrow keys all offset by it, and it used to be the literal `84` in two places with a
-  comment asking you to keep it in step with `--bar-h` and `--head-h`. `stickyOffset()` measures
-  `.controls` and `thead th` instead: drift there is pure
+  comment asking you to keep it in step with `--bar-h` and the head's height. `stickyOffset()`
+  measures `.controls` instead — and only that, since 2026-09-05, when the table head gave up its
+  height and stopped being a term at all (a global `document.querySelector("thead th")` could also
+  have matched an *article's own* table). Drift there is pure
   [silent success](../reusable/silent-success.md) — nothing throws, every jump just lands slightly
   under the bar, and `scrollY` confirms the scroll happened. Since 2026-08-27 it measures how much
   of the bar a row arriving at the top will have to **clear** rather than how tall the bar is,

@@ -49,8 +49,13 @@ Then the residue, which is why this page exists:
 - **A read hook** shaped like [`useIdeas.ts`](../../src/web/useIdeas.ts) — ordering from
   [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts), the job from
   [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
-- **The band's chrome**: the header markup is `.band-head`, and the scroller under it is documented
-  in the same place — [`styles.css`](../../src/web/styles.css) § mode band. *Nothing.*
+- **The band's chrome**: the scroller is documented in
+  [`styles.css`](../../src/web/styles.css) § mode band. A `.band-head` title row is **optional, and
+  the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because
+  the Dock at the foot of the page is already saying it (Greg: *"I think we can rely on the bottom
+  bar to tell us what mode we're in"*). Add the row only if you have something else for it — a
+  count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
+  [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5. *Nothing.*
 - **`CACHEABLE`** in [`lib/api.ts`](../../src/web/lib/api.ts), if the mode has a GET.
   *[`tests/cacheable-covers-artefact-routes.test.ts`](../../tests/cacheable-covers-artefact-routes.test.ts)*,
   which derives the list rather than repeating it.

@@ -32,7 +32,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | Param | Meaning | History | Example |
 |---|---|---|---|
 | `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. **A `0` is dropped in silence** since 2026-09-05: there is no L0 column any more, and an old link is not an error (`offerableGists`, [layout.ts](../../src/web/layout.ts)). | push | `?cols=1,2`, or `?cols=none` |
-| `text` | `1` reading mode, `0` outline mode. **Read-only since 2026-09-05** — see below | push | `?text=0` |
+| `text` | `1` reading mode, `0` outline mode. **Nothing writes it and `0` does not survive arrival, since 2026-09-05** — an incoming `?mode=hierarchy&text=0` is rewritten to `?mode=outline` and the pair is dropped whatever the mode, because the pill that could put the prose back has gone; see below | push | `?text=0` |
 | `spine` | whether the bird's-eye rail is on screen. **Absent means on**, in every mode ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)); `0` is the only thing that takes it away. **Read-only since 2026-09-05** — see below | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
@@ -142,10 +142,33 @@ reader's question.
 the 'Spine' button (let's just default to always showing it)"* — so the rail is on wherever nobody
 has said otherwise, outline mode included, and nothing on screen writes `?spine=` or `?text=` any
 more ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)). Both are still honoured
-on arrival: `?spine=0` still hides the rail, and `?text=0` still collapses the rows — though only
-alongside `?mode=hierarchy`, since the default mode is Plain and Plain has no columns to collapse.
-**Stage 3 of that plan normalises a bare `?text=0` to `?mode=outline` at boot**, because the `Text`
-pill was the only way back to the prose and an old link would otherwise strand the reader. Deleting them would save little — `fitView` still needs a three-state answer, and App.tsx puts
+on arrival: `?spine=0` still hides the rail.
+
+**`?text=0` does not survive arrival, since stage 3 of that plan.** It was the one address the
+reader could not leave: the `Text` pill was the only way back to the prose and it went with the bar.
+So `settleAddress` rewrites it (`liftStrandedText` in [router.ts](../../src/web/router.ts)) —
+**`?mode=hierarchy&text=0` → `?mode=outline`, and the `text` pair is dropped whatever the mode was.**
+
+Three things about that rule are not the obvious ones, and each is why it is written as it is:
+
+- **It is the Hierarchy spelling that strands anybody**, not a bare `?text=0`. `inMode` is
+  `mode !== "hierarchy"` and `proseVisible` is `modeBand || showText`, so a mode band shows the
+  article whatever `?text=` says — `?mode=glossary&text=0` has always been a no-op.
+- **The pair is dropped anyway, in every mode**, and that is defusing rather than tidying: leave
+  `text=0` on a Plain address and the reader walks into the stranded state the moment they press
+  Hierarchy on the Dock, because the parameter is still in the URL.
+- **Outline, not Plain** — arbitrated by Fable, 2026-09-05. Neither restores the no-prose state, so
+  "honour what they asked for" cannot decide it. What does is that the reader who saved that link was
+  looking at a bar that said **OUTLINE**: the old `reading`/`outline` chip flipped whenever `text=0`
+  was on, and this file's neighbour calls the compact table "outline mode" throughout.
+
+The **server predicts the same rewrite** — `readMode` in [read-address.ts](../../src/read-address.ts)
+— or the tab would read Hierarchy and be replaced a second later
+([page-titles.md](page-titles.md)). It is also out of `REMEMBERED` in
+[last-view.ts](../../src/web/last-view.ts): a restore runs after the rewrite, so a stored `text=0`
+would walk straight past it.
+
+Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and App.tsx puts
 `?spine=` back to *absent* when Search or Ideas opens for a reader who had hidden the rail — and it
 is a URL-contract change, which is a different kind of change from taking a button off a bar. So
 this is now a parameter with no writer, which is a fair description of a **link format**.

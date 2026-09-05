@@ -593,6 +593,85 @@ export interface ExpansionAnswerChild extends ProposedChild {
   why?: string;
 }
 
+/**
+ * **What a refused answer looked like**, kept so that a refusal can be read
+ * afterwards instead of guessed at.
+ *
+ * A refused answer is never checkpointed — a stored refusal would be replayed
+ * for ever — and until 2026-09-05 it was not kept anywhere else either. So when
+ * the first paid run of stage 5b lost a wave to a target the model declined
+ * three times, nobody could tell **whether the model had declined on the merits
+ * or fumbled the schema**, which was the only question worth asking about it.
+ *
+ * ## What is in here, and where it may go
+ *
+ * The child count and the verdicts are shape. `why` is the model's own dozen
+ * words *about the article*, so this whole structure belongs in the deepening
+ * **records file** and never in a log line — docs/project/logging.md, and the
+ * same rule `describeShape` above keeps for error messages. The type carries no
+ * `title` or `gist` for that reason: they are the article's prose restated, and
+ * the shape of a refusal does not need them.
+ */
+export interface RefusedAnswerShape {
+  /** How many sections it carried, or `null` if it was not readable as an answer at all. */
+  sections: number | null;
+  perSection: {
+    /** The ordinal the answer claimed, or `null` where it gave none that made sense. */
+    section: number | null;
+    children: number;
+    /** One per child, `null` where the child gave none or gave nonsense. */
+    verdicts: (string | null)[];
+    /** The model's own reason per child, `null` where absent. Article-adjacent text. */
+    why: (string | null)[];
+  }[];
+}
+
+/**
+ * **Read whatever can be read out of an answer that was refused**, without
+ * refusing again.
+ *
+ * Deliberately the opposite of `parseExpansionAnswer`, which throws on the first
+ * thing that is wrong — the point here is that something has *already* gone
+ * wrong and the shape is the evidence. So every field is optional, every
+ * malformed value becomes a `null` rather than an error, and the whole thing
+ * comes back `sections: null` if the text is not even JSON.
+ *
+ * Pure, and it never throws.
+ */
+export function readRefusedShape(raw: string): RefusedAnswerShape {
+  const nothing: RefusedAnswerShape = { sections: null, perSection: [] };
+  let answer: unknown;
+  try {
+    answer = parseJsonAnswer<unknown>(raw, "the refused expansion");
+  } catch {
+    return nothing;
+  }
+  if (typeof answer !== "object" || answer === null || Array.isArray(answer)) return nothing;
+  const sections = (answer as { sections?: unknown }).sections;
+  if (!Array.isArray(sections)) return nothing;
+  return {
+    sections: sections.length,
+    perSection: sections.map((entry) => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        return { section: null, children: 0, verdicts: [], why: [] };
+      }
+      const { section, children } = entry as { section?: unknown; children?: unknown };
+      const list = Array.isArray(children) ? children : [];
+      const field = (child: unknown, key: "verdict" | "why"): string | null => {
+        if (typeof child !== "object" || child === null) return null;
+        const value = (child as Record<string, unknown>)[key];
+        return typeof value === "string" ? value : null;
+      };
+      return {
+        section: typeof section === "number" && Number.isInteger(section) ? section : null,
+        children: list.length,
+        verdicts: list.map((c) => field(c, "verdict")),
+        why: list.map((c) => field(c, "why")),
+      };
+    }),
+  };
+}
+
 /** One parent's complete child set, paired with the ordinal it was asked under. */
 export interface ExpansionAnswerSection {
   /** 1-based, and equal to this entry's position in the returned array. */
@@ -977,6 +1056,27 @@ export interface CandidateRecord {
   retries: number;
   /** Children `normaliseExpansion` kept, or `null` where the node was not expanded. */
   fanOut: number | null;
+  /**
+   * **Set where the call about this node was refused on every draw its budget
+   * allowed**, and absent otherwise.
+   *
+   * The third of three states that must never share a spelling: *finished by the
+   * model* is `effective: {decision: "stop", because: "verdict"}`, *stopped by a
+   * bound* is `stop` with the bound's name, and this keeps the governor's own
+   * `decision: "expand"` — true, it did force the node open — and says the
+   * expansion never happened. Reading a refusal as "finished" is the move
+   * `granularity-zoom.md` § The supplement node forbids one field over: never
+   * infer the role from a missing answer.
+   *
+   * `shape` carries the model's own `why`, which is article-adjacent text — so
+   * this whole field belongs in the deepening records file and never in a log.
+   */
+  refused?: {
+    reason: string;
+    /** Draws made, counting the first. */
+    draws: number;
+    shape: RefusedAnswerShape;
+  };
   model: string;
   effort: Effort;
   /** Both stamps: the wave-1 prompt this outline came from, and the scoped one. */

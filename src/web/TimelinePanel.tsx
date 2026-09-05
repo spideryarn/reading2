@@ -366,8 +366,9 @@ export function TimelinePanel({
   return (
     <aside className="mode-band gloss timeline" aria-label="Timeline">
       <div className="band-head">
-        <Clock size={14} className="band-head-icon" />
-        <h2>Timeline</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the event count below it. */}
         {timeline && (
           <span className="gloss-count">
             {events.length} {events.length === 1 ? "event" : "events"}

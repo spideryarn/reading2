@@ -352,6 +352,31 @@ describe("readMode, and the mode a shared address asked for", () => {
     }
   });
 
+  /**
+   * **The one mode the server is allowed to disagree with the address about.**
+   *
+   * `?mode=hierarchy&text=0` is a state the reader cannot get out of since the
+   * `Text` pill went (2026-09-05), so the client rewrites it to `?mode=outline`
+   * before React mounts (`liftStrandedText` in src/web/router.ts). This has to
+   * predict that, or the tab reads Hierarchy and is replaced a second later —
+   * the fault src/title-text.ts exists to close, for the eleventh time.
+   *
+   * Only in Hierarchy, and only for `text=0`: `proseVisible` ignores `showText`
+   * in every other mode, so nothing else is stranded and nothing else moves.
+   */
+  it("moves a stranded Hierarchy address to Outline, as the client is about to", () => {
+    expect(readMode("/read/some-article?mode=hierarchy&text=0")).toBe("outline");
+    expect(readMode("/read/some-article?text=0&mode=hierarchy")).toBe("outline");
+    // Decoded on both halves, the way `isMetadataPair` is, so the client's
+    // removal and this decision cannot answer differently.
+    expect(readMode("/read/some-article?mode=hierarchy&te%78t=%30")).toBe("outline");
+    // And the cases that are not stranded.
+    expect(readMode("/read/some-article?mode=hierarchy&text=1")).toBe("hierarchy");
+    expect(readMode("/read/some-article?mode=hierarchy")).toBe("hierarchy");
+    expect(readMode("/read/some-article?mode=glossary&text=0")).toBe("glossary");
+    expect(readMode("/read/some-article?text=0")).toBe(DEFAULT_MODE);
+  });
+
   it("and on the default when the address says nothing about it", () => {
     expect(readMode("/read/some-article")).toBe(DEFAULT_MODE);
     expect(readMode("/read/some-article?at=spya-k3m9qt")).toBe(DEFAULT_MODE);

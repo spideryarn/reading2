@@ -254,7 +254,11 @@ const SCALES: { name: string; tokens: string[]; note: string }[] = [
 /** The four type stacks, and what each is allowed to be used for. */
 const FACES: { token: string; used: string }[] = [
   { token: "--font-reading", used: "the article, and the reader's own words in a comment" },
-  { token: "--font-ui", used: "chrome: controls, masthead facts, column headers" },
+  /* The table's column headers wore this until 2026-09-05, when that row lost
+     its height and its labels became `.sr-only` spans — it is still in the DOM
+     for the fisheye panels' geometry and for a screen reader, and sets no type
+     at all now. docs/project/granularity-zoom.md § the header row. */
+  { token: "--font-ui", used: "chrome: controls, masthead facts" },
   { token: "--font-mono", used: "counts and anything that wants to line up" },
   { token: "--font-id", used: "block ids, and only block ids" },
   { token: "--font-brand", used: "the wordmark, and only the wordmark" },

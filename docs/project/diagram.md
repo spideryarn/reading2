@@ -1247,7 +1247,11 @@ can still get taller, because the flexible item inside it wraps its own text
 once it has been shrunk far enough. The only thing stopping that here was that
 `.band-head`'s heading is the single unbreakable word "Diagram" — a fact about
 today's copy, which would stop being true the moment the heading became two
-words. `.band-head h2` now declares `min-width: 0`, `overflow: hidden`,
+words. (**That heading has since gone**, on 2026-09-05, with every other band's
+name — the Dock says which mode you are in, so the row here holds only the
+scatter's caveat. The declarations below still stand and still matter: Chat's
+heading is a thread *title* and can run to sixty characters.
+[260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5.) `.band-head h2` now declares `min-width: 0`, `overflow: hidden`,
 `text-overflow: ellipsis` and `white-space: nowrap` — since 2026-09-02 for
 every band's head, not only this one, which is what the single `.band-head`
 family in `styles.css` § mode band is for — and

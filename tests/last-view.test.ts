@@ -151,6 +151,41 @@ describe("restoredHref", () => {
     );
   });
 
+  /**
+   * **What is already in a browser's storage is not covered by the policy that
+   * put it there.**
+   *
+   * `REMEMBERED` decides what gets *written*, so moving a parameter out of it
+   * stops tomorrow's writes and does nothing whatever about yesterday's. On
+   * 2026-09-05 `text` moved to `NEVER_REMEMBERED`, because the `Text` pill that
+   * turned the prose back on had gone and `?mode=hierarchy&text=0` became a
+   * state with no exit — `settleAddress` rewrites it to `?mode=outline` at boot
+   * for exactly that reason (router.ts § `liftStrandedText`).
+   *
+   * But a restore runs from a layout effect, *after* boot. So a browser holding
+   * the old value would put the reader straight back into the stranded state
+   * the rewrite exists to prevent, walking past it — and the passive save that
+   * would clean the storage up happens too late to help the address they are
+   * already looking at.
+   *
+   * Filtering on the way **out** as well as on the way in is the general fix
+   * rather than a patch for `text`: it makes the current policy authoritative
+   * over whatever any past version of this app wrote, so the next parameter to
+   * leave `REMEMBERED` is safe without anybody remembering this.
+   *
+   * GPT Sol, reviewing stage 3 of
+   * docs/plans/260905d-declutter-the-reading-view-top-bars.md, 2026-09-05.
+   */
+  it("filters stored state through today's policy, not the one that wrote it", () => {
+    expect(restoredHref("/read/x", "", "?mode=hierarchy&text=0")).toBe("/read/x?mode=hierarchy");
+    // Nothing left worth restoring is the same as nothing stored.
+    expect(restoredHref("/read/x", "", "?text=0")).toBe(null);
+    // And a parameter that is still remembered rides through untouched.
+    expect(restoredHref("/read/x", "", "?at=spya-a&text=0&cols=1,2")).toBe(
+      "/read/x?at=spya-a&cols=1,2",
+    );
+  });
+
   it("restores onto whichever of the article's pages the address names", () => {
     /* The path says which article and which page; only the query string is
        remembered. Stepping out to the metadata page carries the parameters
