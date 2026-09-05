@@ -348,8 +348,12 @@ parent. `planChildRanges` clamps it back inside and keeps the article — right 
 call, which names a boundary in an article it has all of. `normaliseExpansion` refuses it as
 `ExpansionRefused("outside-parent")` and the batch is re-asked, because a scoped call is shown its
 parent's blocks and nothing else, so a start outside them is an answer about a stretch of the article
-that call never saw. The first kept child is exempt either way: it is *pinned* to its parent's start,
-which is the rule that children cover their parent rather than a clamp of a claim.
+that call never saw. **Every claimed start is checked, the first child's included**, and only then is
+the first kept child *pinned* to its parent's start — the rule that children cover their parent
+rather than a clamp of a claim. The pin used to sit above the check, which exempted the opening claim
+from it, and a first `start` naming a block in a *sibling* section therefore passed all four gates
+with that sibling's title, gist and verdict attached to this parent's prose (GPT Sol's review of
+stage 4, 2026-09-05).
 
 #### A rung that restates its parent is spliced away <a id="restated-rung"></a>
 
@@ -920,58 +924,56 @@ stage 4 creates them itself from `blocks.json`. The model never chooses leaf ran
 the internal grouping and writes the `navLabel` text. That removes an entire class of partition
 error from the model's job.
 
-The prompt rules below inherit from
+The prompt's rules inherit from
 [granularity-zoom.md § Generation](granularity-zoom.md#generation) and
 [vision.md § Principles](vision.md#principles).
 
-````text
-You are building a nested table of contents for an article. It goes all the way
-down to individual paragraphs, and it will be rendered as a navigation sidebar.
+**The live prompt is [`SYSTEM`](../../src/hierarchy.ts) and it is not copied here.** A copy was, for
+a fortnight, and it went stale without a word: it still said *"Do not write a `gist` field — that is
+a later stage"* long after the gists moved back into this call, and it had never gained *"Go 3
+levels deep"*. `tests/hierarchy-structure-request-parity.test.ts` pins the real bytes, so that is
+the one to read and the one that fires when they move.
 
-You receive the article as a numbered list of blocks. Each block has an id
-(e.g. spya-k3m9qt), a tag, its text, and a NOT-GISTABLE marker on some.
+What it asks for, in one line each, so this page can be read without opening the source: internal
+nodes only, tiling their parent exactly; the article's own headings as hard boundaries; a proposed
+boundary inside any run of more than ~9 blocks; 5–9 children per node; three levels; a 2–6 word
+title, copied verbatim from the author's heading where there is one; and one gist sentence per
+internal node, a claim or a move rather than a topic label.
 
-STRUCTURE
+**A second prompt is being built beside it**, for the scoped call that deepens one section at a time
+— [`EXPAND_SYSTEM`](../../src/hierarchy-expand.ts). It is called by nothing yet;
+[260904d](../plans/260904d-deepen-fat-sections.md) is where it is going. The rule it states that
+`SYSTEM` does not is the precedence between the two that collide on a book: an authored heading
+always begins a child, and the 5–9 fan-out applies only where the model is inventing the boundaries
+itself. It also asks, since `expand/2`, for the children **in document order** — which
+`normaliseExpansion` had always required, dropping any start not strictly after the previous one, and
+which the prompt had never said, so five otherwise-valid children listed out of order lost a real
+section under a valid-looking tree.
 
-Produce a tree of INTERNAL nodes only. Every node covers a contiguous range of
-blocks, and a node's children exactly partition its range — no gaps, no
-overlaps, no reordering. The first child starts where its parent starts; the
-last child ends where its parent ends.
-
-- The article's own headings are HARD boundaries. A node must begin at a
-  heading block wherever one exists. Never merge across a heading.
-- Where a run between headings is longer than ~9 blocks, propose your own
-  boundaries inside it at genuine topic shifts, and give those nodes titles.
-- Aim for 5–9 children per node so each level is an even stride.
-- Do NOT emit leaf nodes for individual blocks. Stop at the level above.
-
-TITLES (internal nodes)
-
-- 2–6 words. A title is a landmark, scanned at a glance.
-- Where the author gave the section a heading, use that heading's text
-  UNCHANGED and repeat it in `sourceHeading`. Rewrite it ONLY if it shares no
-  content word with its section body, or is a stock label ("Introduction",
-  "Background", "Part Two"). Rewriting should be rare.
-- No trailing punctuation.
-
-OUTPUT
-
-JSON only:
-
-{"root": {"title": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
-          "sourceHeading": "...", "children": [ ... ]}}
-
-Use only block ids that appear in the input. Do not invent ids. Do not write a
-`gist` field — that is a later stage.
-````
+**And those scoped calls checkpoint**, in [`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts)
+(2026-09-05), under a namespace of their own — see
+[database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for). One row per call rather than per parent, keyed
+on a digest of the wire request plus four things a scoped call no longer carries implicitly: a hash
+of the whole body, a **frozen** hash of the wave-1 tree, the recipe, and the call's own targets.
+That body hash is `expansionBodyHash` and not `hashBlocks`: the article's shared fingerprint covers
+`[id, text, role, treatment]`, and this stage also reads `words` (the forced-open ceiling), `kind`
+(the heading rule, and `max_tokens` through it), `tag` and `gistable` (both printed to the model, and
+`gistable` is the unit the terminal-blocks floor counts in). A block reclassified `p` → `h2` with its
+text untouched kept its key while the model was shown a heading.
+Frozen is the load-bearing word — a key that carried the tree *as it stands* would move whenever a
+neighbouring parent's answer landed, so a resumed attempt would miss every row the previous one
+wrote, under exactly the load the checkpoint exists for. A stored answer is re-read through the same
+`readExpansion` a fresh one goes through, against the parent as it is now, and one that no longer
+derives is a miss the next answer overwrites. Still called by nothing: the wiring and the wave's
+concurrency are stage 5.
 
 **The nav labels are not in this response.** They were, and it is what took the stage over the
 128,000-token ceiling — one per gistable block is the only output in the pipeline that grows with the
 article without a bound. They are now a second pass with a prompt of its own, in
 [`src/labels.ts`](../../src/labels.ts): 6–20 words, a claim or a move rather than a topic label, the
 author's distinctive vocabulary verbatim, nothing for a NOT-GISTABLE block, and no meta-narration.
-See [Two passes](#two-passes) above; the live prompt is the one in the source, and this block is the
-structure half only.
+See [Two passes](#two-passes) above; the live prompt is the one in the source, and the summary above
+is the structure half only.
 
 ### Verify, always
 

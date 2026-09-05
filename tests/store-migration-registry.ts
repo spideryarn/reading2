@@ -585,6 +585,44 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "changes when the filesystem store goes.",
   },
   /**
+   * **The cascade's other half, and the same verdict for the same reason.**
+   * Landed 2026-09-05 with stage 4 of
+   * docs/plans/260904d-deepen-fat-sections.md, long after the witness ran, so
+   * `static-only` is the state of the evidence rather than a preference —
+   * re-running witness 2 is what upgrades it.
+   */
+  "tests/hierarchy-expand.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The scoped expansion call's protocol: the prompt's heading precedence, the request's " +
+      "cache order, the strict reading of an answer, and the record of what was decided about " +
+      "each candidate. It makes no model call and constructs no store; its only file read is " +
+      "three committed JSON fixtures under `evals/results/`, by an absolute path off " +
+      "`import.meta.url`. It reaches a condemned module only because `src/hierarchy.ts` imports " +
+      "the app to reach `generateHierarchy`. Nothing here changes when the filesystem store goes.",
+  },
+  /**
+   * **The third of the cascade's files, and the first that touches a store at
+   * all** — which is why the reason below says what kind. Landed 2026-09-05
+   * with the second half of stage 4 of
+   * docs/plans/260904d-deepen-fat-sections.md, after the witness ran, so
+   * `static-only` is the state of the evidence rather than a preference.
+   */
+  "tests/hierarchy-deepen.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The scoped expansion checkpoint: the canonical request the key is a digest of, the gate " +
+      "a stored answer has to pass, and a whole wave run against a fake executor. It does use a " +
+      "checkpoint store — `memoryCheckpoints`, the in-memory fake — and never a real one, so " +
+      "there is no database, no blobs and no filesystem here; `SPIDERYARN_STORE` changes nothing " +
+      "about it. It reaches a condemned module only because `src/hierarchy.ts` imports the app " +
+      "to reach `generateHierarchy`. Nothing here changes when the filesystem store goes.",
+  },
+  /**
    * **Arrived from `dev` after the registry was written, and the hole check
    * caught it** — which is the whole reason that check re-derives the import
    * graph live rather than reading a stored answer. Named, classified, kept.

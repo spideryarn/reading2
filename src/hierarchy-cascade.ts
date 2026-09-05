@@ -186,6 +186,49 @@ const MAX_PREDICTED_CHILDREN = 9;
 const MIN_EXPANSION_CHILDREN = 2;
 
 /**
+ * **How many more times a refused expansion call may be drawn**, and it is
+ * two — three draws in all.
+ *
+ * ## It is not the job layer's budget, and conflating them would be a bug
+ *
+ * `REQUEUE_BUDGET` in [`jobs.ts`](jobs.ts) is also 2 and means something else
+ * entirely: how many times a *job* may be handed back to the queue when its
+ * lease window runs out. That one is about wall-clock, it is spent by the
+ * platform rather than by the model, and a fake executor cannot exhaust it. This
+ * one is about a single call whose *answer* was refused —
+ * `ExpansionRefused` — and it is spent within one attempt, several times over if
+ * several calls each need a redraw. A cascade that reinvented the lease budget
+ * here would silently cap the whole article's redraws at two, which is the
+ * number for one call. ⟨docs/plans/260904d-deepen-fat-sections.md § stage 4.⟩
+ *
+ * ## Two, and why that is the number
+ *
+ * Every `ExpansionRefused` is a fault in what the model said rather than in what
+ * it was asked — a missing verdict, a truncated answer, three starts that
+ * collapse to one child — so the same request drawn again is a genuinely
+ * different question, and the spike's two runs over one 382-block section came
+ * back with 10 children and then 20, which is how much draw-to-draw variance
+ * there is on this path. One redraw would leave a single unlucky draw failing a
+ * whole wave. Beyond three the shape changes: a request the model refuses three
+ * times is not unlucky, it is a request this recipe cannot ask, and going on
+ * paying to find that out is exactly the failure `OversizedTarget` exists to
+ * make visible rather than expensive. Three draws also bounds the worst case at
+ * 3× the wave's bill, which is affordable where 6× is not.
+ *
+ * The plan calls this a **per-target** cap, to name the sense it is *not*. In
+ * practice it is counted per call, and the two coincide: a refusal fails the
+ * whole answer rather than one section of it, and `planExpansionBatches` never
+ * splits a parent across two calls, so a target is only ever redrawn as part of
+ * one call.
+ *
+ * It is a module constant rather than a `CascadeRecipe` field on purpose — the
+ * recipe's fields are the ones an eval arm varies to measure the *tree* it
+ * produces, and this one cannot change the tree, only how many draws it took to
+ * get there.
+ */
+export const MAX_EXPANSION_REDRAWS = 2;
+
+/**
  * **An expansion answer this module will not build a subtree from.**
  *
  * One class for every refusal, so stage 2's retry policy is written once and a
@@ -197,10 +240,30 @@ const MIN_EXPANSION_CHILDREN = 2;
  * deliberately **not** merged into the run's report (see `normaliseExpansion` §
  * "The caller's `report`"), and it travels here so that a retry can be logged
  * with the drops that provoked it rather than with nothing.
+ *
+ * ## Four of the reasons belong to the schema, not to this file
+ *
+ * `bad-verdict`, `malformed-answer`, `missing-verdict` and `target-mismatch`
+ * are raised by `parseExpansionAnswer` (src/hierarchy-expand.ts) **before**
+ * anything here has seen the answer, and they carry an empty `planned` because
+ * nothing was planned: an answer whose shape is wrong never reached the
+ * derivation. They live in this union rather than in a second error class for
+ * the reason the paragraph above gives — the retry policy is written once, and
+ * a refusal wearing a shape nobody catches is a scoped call silently becoming a
+ * stage failure. The split between the two files is deliberate and is stated in
+ * `normaliseExpansion`: the schema check is about the answer's *shape* and the
+ * normalisation is about its *ranges*.
  */
 export class ExpansionRefused extends Error {
   constructor(
-    readonly reason: "invented-start" | "not-an-expansion" | "outside-parent",
+    readonly reason:
+      | "bad-verdict"
+      | "invented-start"
+      | "malformed-answer"
+      | "missing-verdict"
+      | "not-an-expansion"
+      | "outside-parent"
+      | "target-mismatch",
     message: string,
     readonly planned: BuildReport,
   ) {
@@ -471,10 +534,50 @@ function hasUnresolvedHeading(
     if (at !== undefined) resolved.add(at);
   }
   for (let i = lo; i <= hi; i++) {
-    const block = blocks[i]!;
-    if (block.kind === "heading" && isBodyEvidence(block) && !resolved.has(i)) return true;
+    if (isAuthoredBoundary(blocks[i]!) && !resolved.has(i)) return true;
   }
   return false;
+}
+
+/**
+ * **A heading the model is shown, and therefore one it can be held to.**
+ *
+ * Extracted so the clause above and the count below cannot drift into two
+ * opinions about what a heading is — the same argument the comment above makes
+ * for using `kind === "heading"` rather than inventing a third test.
+ */
+function isAuthoredBoundary(block: Block): boolean {
+  return block.kind === "heading" && isBodyEvidence(block);
+}
+
+/**
+ * **How many of the author's own headings are inside this node's range**, the
+ * node's own first block included.
+ *
+ * Not a bound and not a decision: it is the number the *request builder* needs,
+ * because the expansion prompt's settled precedence is that an authored heading
+ * always begins a child and `predictedChildren` caps at nine
+ * (docs/plans/260904d-deepen-fat-sections.md § "Where the author's headings and
+ * the fan-out target collide"). A twenty-heading parent therefore answers with
+ * twenty children whatever the fan-out target says, and a `max_tokens` sized
+ * from `predictedChildren` alone would truncate it — the one failure on this
+ * path that costs a whole paid call and returns nothing usable.
+ *
+ * It counts *every* authored body heading in range where `hasUnresolvedHeading`
+ * asks only whether one is unaccounted for, and the difference is deliberate:
+ * one is a stopping rule, this is an arithmetic upper bound on the answer's
+ * size. They share `isAuthoredBoundary` so they cannot disagree about what
+ * they are counting.
+ */
+export function bodyHeadingsIn(
+  node: RangedNode,
+  blocks: readonly Block[],
+  index: BlockIndex = indexBlocks(blocks),
+): number {
+  const [lo, hi] = positions(node, index, "This node");
+  let found = 0;
+  for (let i = lo; i <= hi; i++) if (isAuthoredBoundary(blocks[i]!)) found++;
+  return found;
 }
 
 /**
@@ -1094,11 +1197,12 @@ export interface ProposedChild {
  * Read src/hierarchy.ts § `planChildRanges` for the reasoning; this is the
  * same algorithm with the ends deleted rather than a second one:
  *
- * - the first kept child starts at the parent's start, because children must
- *   cover their parent and nothing else can supply that block;
- * - every later child starts where the model said, **refused** if that is
- *   outside the parent and dropped if it is not strictly after the previous
- *   kept child's start;
+ * - **every** claimed start is checked against the parent first, and one
+ *   outside it is **refused** — the first child's included;
+ * - the first kept child then starts at the parent's start, because children
+ *   must cover their parent and nothing else can supply that block;
+ * - every later child starts where the model said, dropped if that is not
+ *   strictly after the previous kept child's start;
  * - a child that begins one block after the authored heading its own
  *   `sourceHeading` names is moved back onto it (src/heading-snap.ts — the one
  *   piece of the derivation the two files literally share, because it was the
@@ -1140,10 +1244,17 @@ export interface ProposedChild {
  * range that is wrong by 1,289 of them"*, and a clamp makes that sentence false
  * by quietly mending the one case that would have proved it — the answer is
  * about a stretch of the article this call was never shown, which is a
- * different fault from a boundary in the wrong place. **The first kept child is
- * exempt and is pinned to the parent's start**, because children must cover
- * their parent and nothing else can supply that block; how far out its claim
- * was is the head repair, and that pin is a rule rather than a clamp.
+ * different fault from a boundary in the wrong place.
+ *
+ * **And the first child is not exempt from the check**, though it is still
+ * pinned. The pin is right — children must cover their parent and nothing else
+ * can supply that block — but exempting the *claim* from the range check is a
+ * different thing entirely, and it was a hole: a first `start` naming a block in
+ * a sibling section passed every gate, and the sibling's title, gist and verdict
+ * were attached to this parent's prose. So the order is check, then pin, and
+ * only an in-parent first start is ever pinned; how far *inside* the parent it
+ * was is the head repair, and that pin is a rule rather than a clamp. ⟨GPT Sol's
+ * review of stage 4, F2 — an error in the brief rather than in the build.⟩
  *
  * **Fewer than two kept children is not an expansion.** One child inherits its
  * parent's entire range, so `shouldExpand` asks the identical question one level
@@ -1179,9 +1290,12 @@ export interface ProposedChild {
  * What is left is the head boundary, where the first child's ambition meets its
  * parent's fixed start — and, since the clamp became a refusal, that is now the
  * *only* boundary this can record, because every kept later start is believed
- * exactly as claimed. The snap's movements are recorded by the snap. Fewer
- * repairs here is a property of the response format and of what is refused, not
- * a quieter run.
+ * exactly as claimed. **And it can only ever record a `"gap"` there**, now that
+ * the first child's claim is range-checked before it is pinned: a claim below
+ * the parent's start is refused rather than pinned, so the pin can only ever
+ * pull a boundary backwards. The snap's movements are recorded by the snap.
+ * Fewer repairs here is a property of the response format and of what is
+ * refused, not a quieter run.
  *
  * @returns the children that were kept, in the model's own order, each with a
  * derived range. Dropped children are absent and are named in
@@ -1235,24 +1349,35 @@ export function normaliseExpansion(opts: {
   /** The split points, in the model's order: which children survive, and where. */
   const kept: KeptChild[] = [];
   for (const [i, at] of claimed.entries()) {
-    const previous = kept.at(-1);
-    if (previous === undefined) {
-      /* **Pinned, not clamped.** The first kept child takes its parent's start
-         whatever it claimed, because children must cover their parent and
-         nothing else can supply that block. How far out the claim was is not
-         lost: it is the head repair, which `recordBoundaryFaults` measures. */
-      kept.push({ childIndex: i, start: p0 });
-      continue;
-    }
+    /* **Every claim is range-checked, and the first one is not exempt.** The
+       check used to sit below the pin, so the opening claim never reached it —
+       and a first `start` naming a block in a *sibling* section therefore
+       passed all four gates, with that sibling's title, gist and verdict
+       attached to this parent's prose. Nothing distinguishes that from the
+       fault this refusal exists for: an answer about a stretch of the article
+       this call was never shown. The pin below is a rule about the parent's own
+       first block, not a licence to believe a claim from outside it. */
     if (at < p0 || at > p1) {
       throw new ExpansionRefused(
         "outside-parent",
         `The expansion of ${where} > child ${i + 1} starts at ${nameValue(children[i]!.start)}, ` +
-          `which is outside the parent's range — the parent runs to ` +
-          `${nameValue(opts.parent[1])}. A scoped call is shown its parent's blocks and nothing ` +
-          `else, so a start outside them is an answer about a different stretch of the article.`,
+          `which is outside the parent's range — the parent runs from ` +
+          `${nameValue(opts.parent[0])} to ${nameValue(opts.parent[1])}. A scoped call is shown ` +
+          `its parent's blocks and nothing else, so a start outside them is an answer about a ` +
+          `different stretch of the article.`,
         planned,
       );
+    }
+    const previous = kept.at(-1);
+    if (previous === undefined) {
+      /* **Pinned, not clamped.** The first kept child takes its parent's start
+         whatever it claimed — having first been checked to have claimed
+         *something inside the parent* — because children must cover their
+         parent and nothing else can supply that block. How far in the claim
+         was is not lost: it is the head repair, which `recordBoundaryFaults`
+         measures. */
+      kept.push({ childIndex: i, start: p0 });
+      continue;
     }
     if (at <= previous.start) {
       planned.droppedChildren.push(`${where} > child ${i + 1}`);
@@ -1380,8 +1505,10 @@ function recordBoundaryFaults(
   };
 
   /* The node's own start, against what its first child claimed. The first
-     child is pinned here whatever it said, so this is the boundary that
-     absorbs a wholly misplaced opening claim — and the size is how far. */
+     child is pinned here whatever it claimed *inside* the parent, so this is
+     the boundary that absorbs an opening claim which began too late — and the
+     size is how far. Always a `"gap"`, never an `"overlap"`: a claim below the
+     parent's start is refused rather than pinned. */
   const head = kept[0];
   if (head !== undefined) fault(head.childIndex, p0, claimed[head.childIndex]!);
 
