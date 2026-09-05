@@ -437,16 +437,13 @@ rebuilt for Postgres when the question came up. What it would take is written do
 [260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md).
 
 > [!WARNING]
-> **A stream can end by simply stopping, and that looks exactly like finishing.** `[DONE]` is the
-> only clean end an SSE response has, so a connection cut two paragraphs in would be stored as a
-> complete answer with no error anywhere. `finish_reason` counts as a second witness. This is
-> [silent-success.md](../reusable/silent-success.md) and the check is in `explainStream`.
->
-> **And an abort can end it cleanly too.** `sseChunks` cancels the reader on abort, and a cancelled
-> read resolves `{ done: true }` rather than throwing — so a 45-second silence exited the loop with
-> no error at all and was filed as "the answer stopped arriving before it was finished". Both
-> sentences end in "try again", so no reader would ever notice; the loss is the log line, which is
-> the only thing that says whether to blame the network or the provider.
+> **A stream can end by simply stopping, and that looks exactly like finishing** — and an abort can
+> end it cleanly too, because `sseChunks` cancels the reader and a cancelled read resolves
+> `{ done: true }` rather than throwing. Both are one shared judgement now, `classifyEnd` in
+> [`src/ai-call.ts`](../../src/ai-call.ts):
+> [ai-gateway.md § How a stream ends](ai-gateway.md#stream-end) is where it is written down, and
+> `explainStream` is one of its callers rather than the place the check lives. The sentence that
+> used to be here — *"`finish_reason` counts as a second witness"* — was the bug, not the rule.
 
 The `begin` frame carries the whole comment, and that is the point of it: `createComment` re-mints an
 id that is malformed or collides, and a stream has no response body to carry the real one back.

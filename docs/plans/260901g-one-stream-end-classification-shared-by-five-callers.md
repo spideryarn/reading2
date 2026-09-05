@@ -9,6 +9,13 @@ one sentence, written into `converse.ts` at 00:27 on 2026-08-26, corrected in pl
 found, and copied verbatim — comment included — into six more files over six days. Three of the six
 findings against quiz mode were that sentence.
 
+**Done, 2026-09-04.** All seven production callers and the eval go through
+[`classifyEnd`](../../src/ai-call.ts); no local re-implementation of the stream-end judgement
+survives anywhere. `grep -rn openRouterStream --include=*.ts` over the tree that day found eight call
+sites and no ninth. The contract now lives in
+[ai-gateway.md § How a stream ends](../project/ai-gateway.md#stream-end), which is where a reader
+should be sent rather than at any one caller.
+
 ## What is actually duplicated
 
 A survey of every caller, 2026-09-01. **Seven in production**, not the five the postmortem counted:
@@ -202,6 +209,157 @@ four requests per turn and a `length` on round 2 currently vanishes. `referee-mi
 `referee-claims-run` and `referee-criteria-run` are somebody else's open work this week; all three
 are byte-identical to what `search.ts` had, so each is a mechanical commit once the file is free.
 
+### Stage D — the three referee callers ✅
+
+All three are byte-identical to what `search.ts` had before Stage C, so this is the mechanical
+commit the Stage C note promised: same three post-loop guards, same broken conjunction, same
+`stopped` flag set in two places.
+
+- [x] `referee-mirror.ts`, `referee-claims-run.ts`, `referee-criteria-run.ts` each lose their local
+      `finishReason`, their in-loop scrape, their `stopped` flag and the three guards, and gain one
+      `switch (classifyEnd(end, …).kind)` with a `never` default.
+- [x] **The same deliberate behaviour change Stage C made in `explain` and `search`, for the same
+      reason:** `finish_reason: "error"` throws `providerFailedMidAnswer()`. All three already throw
+      exactly that for the same event arriving as `chunk.error` **data**; the field form reached the
+      old conjunction, where a non-null reason could only make it *less* likely to fire, so a
+      provider that said it had errored had its half-answer handed to `parseHits` and reported as a
+      finished run if it happened to parse. **The red-first test is one per file**: a complete,
+      parseable payload, `[DONE]`, and `finish_reason: "error"` — green today, and green is the bug.
+- [x] `truncated` and `filtered` stay with the strict parse, exactly as in `search`: the payload is
+      one JSON object, so a reply cut off anywhere fails `parseHits` and the referee is told about
+      the answer rather than about the stream, and a `length` that lands *after* the object closed
+      is a legitimately short result. `unknown-finish-reason` is accepted on quiz's deny-list
+      reasoning. Pinned with a test in each file, so the next reader finds a decision and not an
+      omission.
+- [x] The clean reader-abort log line moves out of the `catch` and into `case "abandoned"`, as in
+      `explain` and `search` — one event, one path, one sentence.
+- [x] **`evals/referee-claims.ts` has no copy to remove**, and the review is right that changing it
+      is an addition rather than an unforking. It is done anyway, because it is six lines and the
+      hole is the exact class this plan exists for: `ablated()` deliberately has no clocks and no
+      invariants, so an arm whose answer was truncated and still parsed moves the numbers the eval
+      exists to produce, silently, and looks like a model that found fewer claims. It gains a
+      `classifyEnd` that throws on anything but a clean end — its "deadline" is the
+      `AbortSignal.timeout` it already passes, there is no reader and no stall clock —
+      **and a `chunk.error` throw inside the loop**, which is the review's third finding and the
+      reason the classifier alone would not have established the invariant: an in-band error frame
+      is data, never reaches `StreamEnd`, and every production caller throws on it in the loop.
+
+**What landed, 2026-09-04.** All three, and the eval. **The red-first evidence is the part worth
+keeping**: in every one of the three the pre-fix failure was `expect(sawDone).toBe(false)` →
+`received true` — a complete payload plus `finish_reason: "error"` plus `[DONE]` produced a
+*successful result*. That is the bug, reproduced three times, and it is why "no existing assertion
+changed" was never going to find it: no assertion was pointed at it.
+
+Two things worth recording:
+
+- **Mirror had no home for these tests**, so it has one now:
+  `tests/referee-mirror-stream-end.test.ts`. None of the four candidates fitted —
+  `referee-mirror.test.ts` opens with *"Nothing here calls a model"*, `referee-mirror-route.test.ts`
+  stubs `fetch` to **throw** because its point is that some runs never reach the model,
+  `referee-mirror-stream.test.tsx` is the React hook, and `overflow-message-reaches-its-caller.ts`
+  exists for one property compared across four callers. Mirror is the only one of the four JSON
+  callers with no run-file of its own.
+- **`wants-tools` is not quite dead in `referee-criteria-run.ts`**, and its comment says so rather
+  than repeating the other two. A `literature` criterion *does* send a tool, but
+  `openrouter:web_search` is run server-side by the gateway, so there is nothing for this process to
+  call and the finished text arrives on the same stream. Still a `break`; the union needed no change.
+
+*Abandonable as:* six callers on the shared truth, one on its own. Which is where Stage C left us,
+minus three.
+
+### Stage E — `converse`, and the fold it needs ✅
+
+The one caller whose migration is not mechanical, for the reason the top of this plan gives: it makes
+**up to four requests per turn** and resets `end` at the top of each, so `classifyEnd` is called
+**once per round** and the turn's verdict is a fold over the rounds' verdicts.
+
+- [x] The three post-loop guards inside the round loop — the signal-only reader test, the clocks, and
+      the broken conjunction — become one `classifyEnd` per round and one `switch`. Precedence is
+      unchanged in fact as well as in intent: `readerAborted` already returns false the moment either
+      clock has fired, so converse's reader-then-clocks order and the classifier's clocks-then-reader
+      order agree on every input.
+- [x] `stopped` loses **three** of its five assignments — the one in the `catch` and the signal-only
+      test after the loop become one reading of the round's outcome (`abandoned`), and the
+      turn-scope `let` stays because every guard after it steps aside when it is true. **The two
+      inside the tool batch stay, and that is a correction from the review**: a reader can stop
+      *after* a round has already classified as `wants-tools`, while its tools are running, and no
+      verdict computed before the batch can know that. `tests/converse-stop.test.ts` pins it. The
+      classifier answers "how did this stream end", and a reader who leaves between streams is not
+      an answer to that question.
+- [x] **`truncated` gains a second disjunct rather than becoming a plain sticky fold**, and the
+      difference is the review's second finding. Today it is `finishReason === "length"` where
+      `finishReason` is whatever the *final* round reported, and the plan named the hole at the top:
+      a model cut off mid-tool-call reports `length`, has its partial calls reassembled — `wanted`
+      needs only an id and a name, and `parseToolArgs` turns truncated arguments into `{}` rather
+      than failing — goes round again, and the next round overwrites the reason. So the answer the
+      reader was shown stopped mid-sentence and the flag says it did not.
+
+      An unguarded "any round that ended `length`" over-fires, though, and the panel's sentence is
+      a **failure** with a retry offered — *"This answer ran out of room and stopped mid-sentence"*
+      (`src/web/ChatPanel.tsx`, `src/types.ts` § `truncated`). A round that wrote **no prose** and
+      was cut off inside its tool arguments left nothing mid-sentence in the stored answer. So the
+      addition is guarded on the round having written prose:
+
+      > `truncated = !stopped && text.trim() !== "" && (the last round ended "truncated" || some
+      > round ended "truncated" having written prose)`
+
+      The first disjunct is today's reading, unchanged, so the change is **strictly additive** — it
+      can turn a `false` into a `true` and never the other way. `!stopped` stays in front of both,
+      because a reader's stop must not also be reported as our failure.
+      **Red-first test**: a two-round turn whose first round writes prose, asks for a tool and ends
+      `length`, and whose second ends cleanly, reports `truncated: false` today.
+- [x] **`finish_reason: "error"` throws `providerFailedMidAnswer()`**, as in the four callers before
+      it and for the same reason — converse already throws exactly that for the same event arriving
+      as `chunk.error` data. Nothing is lost: `src/routes.ts` stores whatever text arrived and marks
+      the row `error`, so the reader sees the half-answer *and* is told it is not one.
+      **Red-first test**: a complete answer, `[DONE]`, `finish_reason: "error"` — a clean `done`
+      today.
+- [x] What is **not** changed, and each pinned: a reader's stop is still a `done` with `stopped:
+      true` and never a throw (`tests/converse-stop.test.ts` is the whole file about that);
+      `filtered` is still stored as an ordinary answer, because a `ConverseEvent` has nowhere to say
+      otherwise and that is a product decision about what a reader is shown;
+      `wants-tools` keeps its existing meaning, including the `TOOL_CALL_LOST` guard, which is now
+      `outcome.kind === "wants-tools"` rather than a string comparison.
+
+**What landed, 2026-09-04.** Both red-first tests were watched red on `tests/converse-stream-end.test.ts`
+— a new file, because `converse-stop.test.ts` is about the stop button and should stay about it.
+The provider-error one failed on `expect(failure).toContain("[ai-interrupted]")` with `failure` still
+`null`, converse having yielded a clean `done`; the fold one on
+`expect(last.truncated).toBe(true)` → `received false`. **The control was then mutation-tested**:
+dropping the `roundText.trim() !== ""` guard turns it red, so it really is holding the fix back from
+over-reaching rather than passing by luck.
+
+One thing not in the plan and worth recording: **`TOOL_CALL_LOST` lost its `!stopped`**, because an
+interrupted round classifies as `abandoned` rather than `wants-tools`, so the guard steps aside for
+exactly the reason it always did with the union saying so instead of a flag.
+`tests/converse-stop.test.ts` § *"does not call a stop a garbled tool call"* pins it.
+
+**Two things converse needs that `StreamOutcome` deliberately does not carry**, and both are the
+caller's rather than gaps in the union: a reader who leaves **between** streams, while the tool batch
+is running — no per-stream verdict computed before the batch can know that; and whether a truncated
+round had written prose, which needs `roundText` and is what keeps `truncated` from apologising for
+an answer that is whole.
+
+*Abandonable as:* the whole migration, done.
+
+### Stage F — the docs, and the pointer that still named the wrong file ✅
+
+- [x] `docs/project/ai-gateway.md` gains the shared contract: `classifyEnd`, what it reports, what it
+      refuses to decide, and the table of who does what with `length`. That doc owns the gateway, and
+      this is a fact about the gateway.
+- [x] `docs/project/comments.md` around line 443 currently tells a reader that "the check is in
+      `explainStream`" and quotes the broken sentence as the thing to follow. It becomes a one-line
+      citation of `ai-gateway.md`. **The `#streaming` and `#stall-clock` anchors stay**, because
+      other docs link to them.
+- [x] This plan updated with what actually landed.
+
+**The inventory is closed.** `grep -rn openRouterStream --include=*.ts` over the whole tree,
+2026-09-04, finds **eight** call sites and no ninth: the seven production callers this plan is about
+and `evals/referee-claims.ts`. `src/transcribe.ts` checks `finish_reason: "length"` and is not one —
+it goes through `openRouterJson` and has no stream to end. The Messages wire
+(`src/messages-stream.ts`) has no copy of this judgement either: the SDK hands it a whole `message`,
+so there is no terminator to be missing.
+
 ## What this is not
 
 **Not** the transport half of `§ 3.4` — key, endpoint, headers, clocks and accumulation stay where
@@ -220,6 +378,11 @@ twice; the classifier is what stops there being an eighth.
 
 ## The reviews
 
+- Stages D, E and F: [260901g-stages-def-review-sol.md](260901g-stages-def-review-sol.md) — reviewed
+  the plan **before it was built**, and three of its four findings changed the design: `stopped`
+  cannot be derived from the round's outcome alone, the `truncated` fold over-fired as first
+  written, and an in-band `chunk.error` never reaches `StreamEnd`, so the classifier alone would not
+  have given the eval the invariant it was promised.
 - Stage A and B: [260901g-…-review-sol.md](260901g-one-stream-end-classification-review-sol.md)
   — reviewed the plan, and its one correction (`unknown-finish-reason`, rather than folding an
   unrecognised reason into `finished`) is the member of the union that matters.

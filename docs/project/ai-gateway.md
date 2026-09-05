@@ -606,6 +606,53 @@ Both now ask whether the error **is** the abort: the signal's own `reason` by id
 `stoppedByReader` had been making the same distinction for the reader-facing message since before
 this; the bill was still using the weaker question.
 
+### How a stream ends, and who decides what that means <a id="stream-end"></a>
+
+**One classification, seven callers, and the callers still decide.**
+[`classifyEnd`](../../src/ai-call.ts) turns a finished `openRouterStream` run into a
+`StreamOutcome` — `finished`, `truncated`, `filtered`, `wants-tools`, `provider-failed`,
+`abandoned`, `timed-out`, `went-quiet`, `unterminated`, or `unknown-finish-reason` with the reason
+and the terminator beside it. Every streaming caller switches on it with a `never` default, so a
+tenth way for a stream to end is a compile error at every site rather than a branch somebody forgot.
+
+**Why it reports rather than decides.** The callers genuinely disagree, on evidence, about what
+`finish_reason: "length"` means: fatal to a quiz mark, success-with-a-flag to chat, left to the
+strict parse by the four JSON callers, and stored whole by explain. A shared classifier that threw
+on it would break six callers to fix one. So the module answers *what happened* and each caller
+answers *what to do*.
+
+**One per stream, not one per feature request.** Chat makes up to four provider requests in a turn
+for tool rounds and resets its `StreamEnd` between them, so a turn's verdict is a fold over its
+rounds' — see `src/converse.ts`.
+
+**Two edges worth knowing before you touch it:**
+
+- **Our own clocks come before the reader, and the reader comes before the provider.** A deadline or
+  a stall aborts the reader's signal too, so all three arrive as one aborted signal and only
+  `readerAborted` tells them apart; asking the provider first would file our own twenty-second
+  silence as whatever the model last happened to say. A consequence: a provider that said `error`
+  and *then* lost its reader classifies as `abandoned`, so the caller applies its abandonment policy
+  rather than its failure policy. Deliberate — the alternative tells off a reader who has gone, for
+  the provider's fault.
+- **An `error` arriving as `chunk.error` data never reaches here.** It is payload, not an ending, and
+  every caller throws on it inside its own loop. `StreamEnd` carries the finish reason and the
+  terminator, nothing else, so the union is exhaustive for streams that returned normally and not
+  for every way a provider can report a failure.
+
+> [!WARNING]
+> **A stream can end by simply stopping, and that looks exactly like finishing.** `[DONE]` is the
+> only clean end an SSE response has, so a connection cut two paragraphs in reads as a complete
+> answer with no error anywhere — `unterminated` is the member of the union that names it. The
+> guard this replaced was `!end.terminated && finishReason === null`, a conjunction that a non-null
+> finish reason could only make *less* likely to fire, with a comment beside it calling
+> `finish_reason` "a second witness" — a loosening described as a check. It was written once and
+> copied verbatim into six more files over six days, and three of the six findings against quiz mode
+> were that sentence.
+> [260901c-the-success-signal-that-outlived-its-witness.md](../postmortems/260901c-the-success-signal-that-outlived-its-witness.md)
+> is the postmortem;
+> [260901g](../plans/260901g-one-stream-end-classification-shared-by-five-callers.md) is the
+> migration that ended it.
+
 ## The three calls allowed round the outside, and the test that keeps them to three
 
 "One seam per wire" is what lets `npm run cost` claim it has seen everything. `evals/` broke that
