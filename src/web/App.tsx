@@ -58,6 +58,8 @@ import { IdeasPanel } from "./IdeasPanel.js";
 import { useIdeas } from "./useIdeas.js";
 import { TimelinePanel } from "./TimelinePanel.js";
 import { useTimeline } from "./useTimeline.js";
+import { DebatePanel } from "./DebatePanel.js";
+import { useDebate } from "./useDebate.js";
 import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
@@ -179,7 +181,7 @@ import {
   type Mode,
   type TermSort,
 } from "./params.js";
-import { ChevronDown, ChevronRight, ClipboardCheck } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -3436,6 +3438,16 @@ function Reader({
           onOpenKey={setOpenTimelineKey}
         />
       )}
+      {/* **`owner &&` alone, and there is deliberately no visitor twin yet.**
+          Debate is meant to be shared — it is the artefact whose whole value is
+          that somebody else can check it — but a visitor's row must pass
+          `publicCitationUrl` at the boundary, where a refusal drops the whole
+          row, and that contract is Stage 4. Building the branch first is what a
+          GPT Sol review (F23) refused. Until then `POLICY.debate` is
+          `owners-only`, so a visitor meets the boundary sentence rather than an
+          empty band.
+          docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */}
+      {owner && mode === "debate" && <DebateBand slug={slug} onJump={jumpTo} />}
       {/* **The owner/visitor pair, since 2026-09-04.** It was `owner &&` alone
           until then, because search is the one mode where the reader's own
           question is the artefact. Greg drew the line at *making* one: a
@@ -4745,6 +4757,32 @@ function QuotesBand({
 const NO_QUOTES: Quote[] = [];
 
 /**
+ * The debate, and the fetch that belongs to it.
+ *
+ * A component of its own for the reason `TimelineBand` and `IdeasBand` are:
+ * `useDebate` fetches on mount, so calling it up in `Reader` would charge every
+ * reader of every article a request for a web search almost none of them will
+ * open.
+ *
+ * **The shortest band in this file, and that is the design rather than a stub.**
+ * The five passage-mode effects its neighbours carry are about marks in the
+ * prose, and Debate has none: a row is a page on the web, not a passage in the
+ * article, so there is no `Found` to resolve, no `openKey` to keep in step and
+ * no colour slot to assign. What it does hand down is `onJump`, because a
+ * group-two row names the block whose claim it answers and has to offer the way
+ * there. Marks are the first thing to add — the plan's § Deliberately not in v1
+ * — and adding them is what would bring the five effects with it.
+ *
+ * **Owner-only, so there is one of these and not two**, until Stage 4 builds
+ * the public contract. See the branch above.
+ */
+function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
+  useRenderCount("DebateBand");
+  const debate = useDebate(slug);
+  return <DebatePanel access={{ kind: "owner", owner: debate }} onJump={onJump} />;
+}
+
+/**
  * **The same panel, for somebody who does not own the article.**
  *
  * No `useQuotes` and therefore no `useJobs`: the list came in the page's own
@@ -5682,8 +5720,9 @@ function RefereeBand({
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
       <div className="band-head">
-        <ClipboardCheck size={14} className="band-head-icon" />
-        <h2>Referee</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the "how this works" button beside it. */}
         <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
       </div>
 

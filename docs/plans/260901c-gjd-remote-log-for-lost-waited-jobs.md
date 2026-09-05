@@ -83,7 +83,7 @@ under the new name, and watching `--lost` stay quiet.
 
 **PIPE_BUF is a guarantee about pipes, not files.** The first version of the comment claimed a
 sub-4KB line appends atomically. This repo had already been told exactly that, by Sol, on
-2026-08-28 — see the header of [`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts). The
+2026-08-28 — see the header of `src/store/ai-calls-fs.ts` (deleted 2026-09-05). The
 ceiling stays as defence in depth, the record is now encoded once and written once with
 `flush: true`, and the real protection is that the reader validates every line and counts what it
 cannot read.

@@ -37,14 +37,19 @@ import {
   DIRECT_SYSTEM,
   distinctSources,
   emptyLosses,
+  isSubstantiveQuote,
   locate,
   MAX_CLAIM_ROWS,
   MAX_DIRECT_ROWS,
+  MIN_QUOTE_CHARS,
+  MIN_QUOTE_WORDS,
+  namesArticle,
   PROMPT_VERSION,
   blockTextById,
   readClaimGroup,
   readDirectGroup,
 } from "../src/debate.js";
+import { whyUnusable } from "../src/store/artifacts.js";
 import { findQuote } from "../src/quote-match.js";
 import { kindOfMessage, worthRetrying, DEBATE_SEARCH_DID_NOT_RUN } from "../src/messages.js";
 import type { Block, SearchEvidence } from "../src/types.js";
@@ -136,7 +141,18 @@ const evidenceMap = (rows: readonly SearchEvidence[]): Map<string, SearchEvidenc
 
 const admissible = evidenceMap(SOURDOUGH);
 
-const groupInput = { admissible, articleUrl: ARTICLE_URL };
+/**
+ * **The article's identity, and it is the whole of what `namesArticle` has to
+ * work with.** The title is long enough to be evidence on its own; the byline
+ * is only consulted for the short-title case further down.
+ */
+const ARTICLE = {
+  url: ARTICLE_URL,
+  title: "Notes on my sourdough starter, week 3",
+  byline: "Greg Detre",
+};
+
+const groupInput = { admissible, article: ARTICLE };
 
 const claimInput = { ...groupInput, blockText };
 
@@ -249,7 +265,7 @@ describe("an article nobody has written about", () => {
       {
         url: "https://myeclecticbites.com/sourdough-starter-notes",
         blockId: "spya-aaaaaa",
-        claimQuote: "fed twice a day",
+        claimQuote: "unless it is fed twice a day",
         sourceQuote: "Twice is the number that works",
         relation: "corroborates",
         valence: "positive",
@@ -276,7 +292,7 @@ describe("a row's identity is a URL the search returned", () => {
   const claimRow = (url: string) => ({
     url,
     blockId: "spya-aaaaaa",
-    claimQuote: "fed twice a day",
+    claimQuote: "unless it is fed twice a day",
     sourceQuote: "Twice is the number that works",
     relation: "corroborates",
     valence: "positive",
@@ -331,7 +347,7 @@ describe("the article cannot cite itself", () => {
   const asRow = (url: string) => ({
     url,
     blockId: "spya-aaaaaa",
-    claimQuote: "fed twice a day",
+    claimQuote: "unless it is fed twice a day",
     sourceQuote: "fall apart within a week",
     relation: "corroborates",
     valence: "positive",
@@ -350,7 +366,7 @@ describe("the article cannot cite itself", () => {
            article is not in it. So this case is asking the row rule, not the
            annotation rule — the row names an address the search never offered
            and is still refused as `selfSource` rather than as `uncited`. */
-        { admissible: evidenceMap(SOURDOUGH), articleUrl: ARTICLE_URL, blockText },
+        { admissible: evidenceMap(SOURDOUGH), article: ARTICLE, blockText },
         2,
       );
       expect(group.rows).toEqual([]);
@@ -388,7 +404,7 @@ describe("no row survives as an unchecked paraphrase", () => {
         {
           url: "https://gratzioso.net/warm-water-starters",
           blockId: "spya-aaaaaa",
-          claimQuote: "fed twice a day",
+          claimQuote: "unless it is fed twice a day",
           sourceQuote: "this article is wrong about everything",
           relation: "disputes",
           valence: "negative",
@@ -480,7 +496,7 @@ describe("no row survives as an unchecked paraphrase", () => {
         {
           url: "https://myeclecticbites.com/sourdough-starter-notes",
           blockId: "spya-zzzzzz",
-          claimQuote: "fed twice a day",
+          claimQuote: "unless it is fed twice a day",
           sourceQuote: "Twice is the number that works",
           relation: "corroborates",
           valence: "positive",
@@ -523,7 +539,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           applies: "It accepts the schedule only for cool kitchens.",
         },
       ],
-      { admissible: withReview, articleUrl: ARTICLE_URL },
+      { admissible: withReview, article: ARTICLE },
       2,
     );
     expect(group.counts.keptRows).toBe(1);
@@ -539,7 +555,7 @@ describe("what a cap and a bad row are counted as", () => {
   const goodRow = (url: string) => ({
     url,
     blockId: "spya-aaaaaa",
-    claimQuote: "fed twice a day",
+    claimQuote: "unless it is fed twice a day",
     sourceQuote: "Twice is the number that works",
     relation: "corroborates",
     valence: "positive",
@@ -597,7 +613,7 @@ describe("what a cap and a bad row are counted as", () => {
       valence: "negative",
       applies: "It accepts the schedule only for cool kitchens.",
     }));
-    const group = readDirectGroup(many, { admissible: evidenceMap([review]), articleUrl: ARTICLE_URL }, 2);
+    const group = readDirectGroup(many, { admissible: evidenceMap([review]), article: ARTICLE }, 2);
 
     expect(group.counts.keptRows).toBe(MAX_DIRECT_ROWS);
     expect(group.counts.reportedRows).toBe(MAX_DIRECT_ROWS + 3);
@@ -649,10 +665,369 @@ describe("what a cap and a bad row are counted as", () => {
     expect(Object.values(emptyLosses()).every((n) => n === 0)).toBe(true);
   });
 
-  /** The provider's own number, carried onto the artefact as the only alarm there is. */
-  it("stores the search count per group", () => {
-    expect(readClaimGroup([], claimInput, 7).counts.webSearches).toBe(7);
-    expect(readDirectGroup([], groupInput, 3).counts.webSearches).toBe(3);
+  /* **There is deliberately no case here for the search count.** One lived here
+     until 2026-09-05 — it passed 7 into `readClaimGroup` and read 7 back off the
+     counts — and GPT Sol's F32 is right that it could not fail: both sides of
+     the assertion are the test's own literal, and the number the artefact
+     actually needs comes off the *wire*, from `whereSearchCountCameFrom`. The
+     assertion that can go red is in tests/debate-passes.test.ts § *writes both
+     groups, stamped and dated*, where the two passes report 3 and 5 and the
+     artefact has to carry each to its own group. */
+});
+
+/* ------------------------------------ the witness has to name THIS article -- */
+
+/**
+ * **`articleReferenceQuote` proves the page names this piece, or it proves
+ * nothing** — GPT Sol's F24, reproduced here in the form he sent it.
+ *
+ * Locating the witness in the source's own extract was the whole of the old
+ * check, and locating it says only that the page contains those words. The
+ * docblock above `readDirectGroup` has always said the rule is "its exact
+ * title, its URL, or its title with the byline"; until 2026-09-05 the code did
+ * not compare the witness with the article at all, and `GroupInput` did not
+ * even carry the title.
+ */
+describe("a direct row must show the page naming this article", () => {
+  /**
+   * **Sol's reproduction.** Both quotations are genuine, copied out of a real
+   * page the search really returned, and neither has anything to do with this
+   * article. The row was kept in "About this piece", with every counter clean.
+   */
+  it("refuses two genuine quotations from a page that never mentions the article", () => {
+    const page = SOURDOUGH[2]!;
+    const group = readDirectGroup(
+      [
+        {
+          url: page.url,
+          sourceQuote: "Day-three starters want warmer water than most recipes suggest",
+          articleReferenceQuote: "the difference in activity is obvious within hours",
+          relation: "disputes",
+          valence: "negative",
+          applies: "It disproves the article's central claim.",
+        },
+      ],
+      groupInput,
+      2,
+    );
+    expect(group.rows).toEqual([]);
+    expect(group.counts.lost.directnessUnverified).toBe(1);
+    /* Everything else about the row was right, which is what made it dangerous. */
+    expect(group.counts.lost.uncited).toBe(0);
+    expect(group.counts.lost.unverifiedSource).toBe(0);
+  });
+
+  it("refuses a witness that names somebody else's article", () => {
+    const page: SearchEvidence = {
+      url: "https://bakingreview.example/on-martas-notes",
+      title: "On Marta's notes",
+      excerpt:
+        "Marta's Notes on my rye starter, week 9 argues for a colder kitchen, and it is right " +
+        "about that.",
+    };
+    const group = readDirectGroup(
+      [
+        {
+          url: page.url,
+          sourceQuote: "argues for a colder kitchen",
+          articleReferenceQuote: "Notes on my rye starter, week 9",
+          relation: "corroborates",
+          valence: "positive",
+          applies: "It agrees about the kitchen.",
+        },
+      ],
+      { admissible: evidenceMap([page]), article: ARTICLE },
+      2,
+    );
+    expect(group.rows).toEqual([]);
+    expect(group.counts.lost.directnessUnverified).toBe(1);
+  });
+
+  /**
+   * **A short title is not evidence on its own**, and this pair is why the rule
+   * has a length in it. *"On rye"* appears in prose about rye all day long; the
+   * byline is what turns it into a reference to one piece.
+   */
+  describe("a title too short to be evidence on its own", () => {
+    const SHORT = { url: "https://ryenotes.example/on-rye", title: "On rye", byline: "Marta Ek" };
+
+    const rowFor = (page: SearchEvidence, witness: string) => ({
+      url: page.url,
+      sourceQuote: "makes the same case, and it is worth a look",
+      articleReferenceQuote: witness,
+      relation: "corroborates",
+      valence: "positive",
+      applies: "It makes the same case.",
+    });
+
+    it("refuses it when the byline is absent", () => {
+      const page: SearchEvidence = {
+        url: "https://bakingreview.example/short-a",
+        title: "A reply",
+        excerpt: "There is a piece called On rye that makes the same case, and it is worth a look.",
+      };
+      const group = readDirectGroup(
+        [rowFor(page, "a piece called On rye that makes the same case")],
+        { admissible: evidenceMap([page]), article: SHORT },
+        2,
+      );
+      expect(group.rows).toEqual([]);
+      expect(group.counts.lost.directnessUnverified).toBe(1);
+    });
+
+    it("keeps it when the byline is there too", () => {
+      const page: SearchEvidence = {
+        url: "https://bakingreview.example/short-b",
+        title: "A reply",
+        excerpt: "Marta Ek's On rye makes the same case, and it is worth a look.",
+      };
+      const group = readDirectGroup(
+        [rowFor(page, "Marta Ek's On rye makes the same case")],
+        { admissible: evidenceMap([page]), article: SHORT },
+        2,
+      );
+      expect(group.counts.keptRows).toBe(1);
+      expect(group.rows[0]?.articleReferenceQuote).toBe("Marta Ek's On rye makes the same case");
+    });
+  });
+
+  /**
+   * **The address, compared as a request target rather than as a string** — the
+   * same `sameTarget` the self-citation rule uses, so there is one answer in
+   * this repo to "is that this article?" rather than two.
+   */
+  it("accepts the article's own address in the witness, fragment and all", () => {
+    const page: SearchEvidence = {
+      url: "https://bakingreview.example/link-with-fragment",
+      title: "A reply",
+      excerpt:
+        "The post at https://gregs-private-baking-notes.example/starter-week-3#spya-aaaaaa is " +
+        "wrong about feeding.",
+    };
+    const group = readDirectGroup(
+      [
+        {
+          url: page.url,
+          sourceQuote: "is wrong about feeding",
+          articleReferenceQuote:
+            "The post at https://gregs-private-baking-notes.example/starter-week-3#spya-aaaaaa",
+          relation: "disputes",
+          valence: "negative",
+          applies: "It rejects the feeding schedule.",
+        },
+      ],
+      { admissible: evidenceMap([page]), article: ARTICLE },
+      2,
+    );
+    expect(group.counts.keptRows).toBe(1);
+    expect(group.counts.lost.directnessUnverified).toBe(0);
+  });
+
+  it("accepts a percent-encoded spelling of that address", () => {
+    const page: SearchEvidence = {
+      url: "https://bakingreview.example/link-encoded",
+      title: "A reply",
+      excerpt:
+        "See https://gregs-private-baking-notes.example/starter%2Dweek%2D3 for the claim we are " +
+        "answering here.",
+    };
+    const group = readDirectGroup(
+      [
+        {
+          url: page.url,
+          sourceQuote: "for the claim we are answering here",
+          articleReferenceQuote:
+            "See https://gregs-private-baking-notes.example/starter%2Dweek%2D3 for the claim",
+          relation: "qualifies",
+          valence: "neutral",
+          applies: "It answers the claim.",
+        },
+      ],
+      { admissible: evidenceMap([page]), article: ARTICLE },
+      2,
+    );
+    expect(group.counts.keptRows).toBe(1);
+  });
+
+  /** The predicate on its own, so the rule can be read without a group around it. */
+  it("names the article by title, by address, or by a short title with the byline", () => {
+    expect(namesArticle("On   NOTES ON MY SOURDOUGH STARTER, WEEK 3 again", ARTICLE)).toBe(true);
+    expect(namesArticle("a recent essay about starters", ARTICLE)).toBe(false);
+    const short = { url: null, title: "On rye", byline: "Marta Ek" };
+    expect(namesArticle("the piece On rye says so", short)).toBe(false);
+    expect(namesArticle("Marta Ek in On rye says so", short)).toBe(true);
+  });
+});
+
+/* ---------------------------------------------- a quote too short to be one -- */
+
+/**
+ * **The floor under every quote check** — GPT Sol's F25. `locate` accepted any
+ * non-empty substring, so `"a"` passed, and Sol built a row claiming an
+ * unrelated page *"disproves the article's central claim"* whose entire stored
+ * evidence on both sides was the letter `a`. Every defence passed and every
+ * counter was clean; the reader's promised one-action check was a single
+ * character.
+ */
+describe("a quote too short to be evidence", () => {
+  const shortRow = (over: Record<string, unknown>) => ({
+    url: "https://myeclecticbites.com/sourdough-starter-notes",
+    blockId: "spya-aaaaaa",
+    claimQuote: "unless it is fed twice a day",
+    sourceQuote: "Twice is the number that works",
+    relation: "corroborates",
+    valence: "positive",
+    applies: "Same schedule.",
+    ...over,
+  });
+
+  it("refuses it before looking for it at all", () => {
+    expect(locate(blocks[0]!.text, "a")).toBeNull();
+    expect(isSubstantiveQuote("a")).toBe(false);
+    expect(isSubstantiveQuote("  fed  twice  ")).toBe(false);
+  });
+
+  /**
+   * The floor is deliberately low enough to admit a real short claim: three
+   * words and sixteen characters takes *"consciousness requires life"*.
+   */
+  it("admits a real short quotation", () => {
+    expect(isSubstantiveQuote("consciousness requires life")).toBe(true);
+    expect(MIN_QUOTE_WORDS).toBe(3);
+    expect(MIN_QUOTE_CHARS).toBe(16);
+
+    const group = readClaimGroup(
+      [shortRow({ blockId: "spya-bbbbbb", claimQuote: "Rye flour ferments" })],
+      claimInput,
+      2,
+    );
+    expect(group.counts.keptRows).toBe(1);
+    expect(group.rows[0]?.claimQuote).toBe("Rye flour ferments");
+  });
+
+  /**
+   * **Under the reason that check already had, not a seventh bucket.** The
+   * reader's sentence is the same either way — we could not verify this — and a
+   * new loss reason would put a second sentence on the foot line for a
+   * distinction only the validator cares about.
+   */
+  it("counts a one-character source quote as an unverified source", () => {
+    const group = readClaimGroup([shortRow({ sourceQuote: "a" })], claimInput, 2);
+    expect(group.rows).toEqual([]);
+    expect(group.counts.lost.unverifiedSource).toBe(1);
+  });
+
+  it("counts a one-character claim quote as not in the block", () => {
+    const group = readClaimGroup([shortRow({ claimQuote: "a" })], claimInput, 2);
+    expect(group.rows).toEqual([]);
+    expect(group.counts.lost.claimNotInBlock).toBe(1);
+  });
+
+  it("counts a one-character witness as unverified directness", () => {
+    const review: SearchEvidence = {
+      url: "https://bakingreview.example/on-gregs-notes",
+      title: "On Greg's starter notes",
+      excerpt:
+        "Greg's Notes on my sourdough starter, week 3 argues for twice-daily feeding. That is " +
+        "true in a cool kitchen and wrong in a warm one.",
+    };
+    const group = readDirectGroup(
+      [
+        {
+          url: review.url,
+          sourceQuote: "true in a cool kitchen and wrong in a warm one",
+          articleReferenceQuote: "a",
+          relation: "qualifies",
+          valence: "negative",
+          applies: "It accepts the schedule only for cool kitchens.",
+        },
+      ],
+      { admissible: evidenceMap([review]), article: ARTICLE },
+      2,
+    );
+    expect(group.rows).toEqual([]);
+    expect(group.counts.lost.directnessUnverified).toBe(1);
+  });
+
+  /**
+   * **Sol's whole row, kept as one case.** Every field is well formed, the URL
+   * really was returned, and the stored evidence on both sides is one letter.
+   */
+  it("refuses the row whose entire evidence is the letter a", () => {
+    const group = readClaimGroup(
+      [shortRow({ sourceQuote: "a", claimQuote: "a", applies: "It disproves the central claim." })],
+      claimInput,
+      2,
+    );
+    expect(group.rows).toEqual([]);
+    expect(anyLost(group.counts.lost)).toBe(true);
+  });
+});
+
+/* ---------------------------------------------------- a row with no address -- */
+
+/**
+ * **A missing URL is `uncited`, which is what `DebateLosses` has always said it
+ * is** (src/types.ts) — GPT Sol's F28. It was filed as `malformed` alongside a
+ * missing `applies`, so the panel's foot line named the wrong failure.
+ */
+describe("a row with no address", () => {
+  const noUrl = (url: unknown) => ({
+    url,
+    blockId: "spya-aaaaaa",
+    claimQuote: "unless it is fed twice a day",
+    sourceQuote: "Twice is the number that works",
+    relation: "corroborates",
+    valence: "positive",
+    applies: "Same schedule.",
+  });
+
+  for (const [name, url] of [
+    ["absent", undefined],
+    ["blank", "   "],
+    ["not a string", 42],
+  ] as const) {
+    it(`counts a ${name} url as uncited`, () => {
+      const group = readClaimGroup([noUrl(url)], claimInput, 2);
+      expect(group.rows).toEqual([]);
+      expect(group.counts.lost.uncited).toBe(1);
+      expect(group.counts.lost.malformed).toBe(0);
+    });
+  }
+
+  /** A row with no sentence about how it applies is still a shape failure. */
+  it("still counts a missing applies as malformed", () => {
+    const row = noUrl("https://myeclecticbites.com/sourdough-starter-notes") as Record<
+      string,
+      unknown
+    >;
+    delete row.applies;
+    const group = readClaimGroup([row], claimInput, 2);
+    expect(group.counts.lost.malformed).toBe(1);
+    expect(group.counts.lost.uncited).toBe(0);
+  });
+});
+
+/* ------------------------------------------- what counts as a whole artefact -- */
+
+/**
+ * **Both groups, or it is not a debate document** — GPT Sol's F29. The store's
+ * shape check asked only whether `direct` was an object, so `{"direct":{}}`
+ * passed it. On the filesystem `readDebate` asked the deeper question and
+ * Postgres served the JSONB unchecked, so the two stores disagreed about what a
+ * usable artefact is — which is the exact claim `SHAPE` exists to make.
+ */
+describe("what counts as a debate document", () => {
+  it("refuses half a document", () => {
+    expect(whyUnusable("debate", { direct: {} })).not.toBeNull();
+    expect(whyUnusable("debate", { direct: { rows: [] } })).not.toBeNull();
+    expect(whyUnusable("debate", { claims: { rows: [] } })).not.toBeNull();
+    expect(whyUnusable("debate", { direct: { rows: [] }, claims: { rows: "no" } })).not.toBeNull();
+  });
+
+  /** Two empty groups is the commonest CORRECT artefact and must stay usable. */
+  it("accepts two empty groups", () => {
+    expect(whyUnusable("debate", { direct: { rows: [] }, claims: { rows: [] } })).toBeNull();
   });
 });
 
@@ -662,7 +1037,7 @@ describe("relation and valence", () => {
   const row = {
     url: "https://myeclecticbites.com/sourdough-starter-notes",
     blockId: "spya-aaaaaa",
-    claimQuote: "fed twice a day",
+    claimQuote: "unless it is fed twice a day",
     sourceQuote: "Twice is the number that works",
     applies: "Same schedule.",
   };

@@ -39,6 +39,7 @@ import {
   toggleVariant,
   visibleModes,
 } from "../src/web/Dock.js";
+import { MODES } from "../src/modes.js";
 import {
   EXPERIMENTAL_OFF,
   EXPERIMENTAL_ON,
@@ -151,15 +152,21 @@ describe("who sees it at all", () => {
   });
 
   /**
-   * It is a toggle, not a mode: `aria-pressed`, and outside the radiogroup. A
-   * seventeenth `role="radio"` in there would break the group's one promise.
+   * It is a toggle, not a mode: `aria-pressed`, and outside the radiogroup. One
+   * more `role="radio"` in there would break the group's one promise.
+   *
+   * **The number is `MODES.length` rather than a literal**, and it stopped
+   * being a literal on 2026-09-05 when the fourteenth mode arrived: what this
+   * line is asserting is *every mode and nothing else*, and a hand-kept count
+   * fails on the day a mode is added for the one reason that has nothing to do
+   * with the switch.
    */
   it("is not one of the modes", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     expect(theSwitch().closest(".dock-modes")).toBeNull();
     expect(theSwitch().getAttribute("role")).toBeNull();
     expect(theSwitch().getAttribute("aria-checked")).toBeNull();
-    expect(host.querySelectorAll('.dock-modes [role="radio"]')).toHaveLength(13);
+    expect(host.querySelectorAll('.dock-modes [role="radio"]')).toHaveLength(MODES.length);
   });
 });
 
