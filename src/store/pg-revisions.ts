@@ -305,6 +305,19 @@ export const REVISION_CARRY_POLICY: Record<
      — so a re-ingest that moves the article leaves the picture carried, drawn,
      and honestly labelled until somebody redraws the Sketch. */
   illustrated: "carry",
+  /* Carries like the eight above, and here the argument for carrying is the
+     strongest in the table: **this artefact is not about the article, it is
+     about the web**, so a re-extraction is no reason at all to lose it. Every
+     other carried artefact is a paid reading of a text that has just changed;
+     this one is a record of what other people wrote, and that does not stop
+     being true when Readability re-cuts a paragraph.
+
+     What a re-extraction does cost is the group-two rows' anchors — a
+     `claimQuote` located in a block id that has moved — and `sourceHash` on the
+     artefact is what tells the panel so at read time. Carrying is not a claim
+     that it is current, and the honest degradation is a list still worth
+     reading with some of its jumps gone, at up to $0.27 a run to buy back. */
+  debate: "carry",
 };
 
 const MINTED = new Set(

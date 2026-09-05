@@ -110,6 +110,13 @@ const NOT_A_ROW: Record<string, string> = {
     "a tmux session uuid, shared by `gjd-remote-tmux.test.ts` and its script twin because they " +
     "describe the same `agents.json` fixture. It names a terminal session, not a row.",
   "49348111-df07-44ac-a204-f2e168f46de5": "the second session uuid in that same fixture pair.",
+  "11111111-1111-4000-8000-000000000001":
+    "the ordinary signed-in reader who mounts the real `App` in jsdom, in `not-found-route.test.ts" +
+    "x` and `admin-only-routes.test.tsx`. Both files stub `useSession` and replace `globalThis." +
+    "fetch` wholesale, so nothing reaches Postgres and there is no row to insert or delete. One " +
+    "id rather than two for the reason the `aaaaaaaa-…` entry below gives: it is the same reader " +
+    "being shown which page an address settles on, and a second uuid would say the two fixtures " +
+    "differ when they do not.",
   "aaaaaaaa-2222-4000-8000-000000000001":
     "`ALICE`, the signed-in reader on `/pricing`, in `pricing-page-current-plan.test.tsx` and " +
     "`site-nav-sign-in.test.tsx`. Both are jsdom component tests that render `PricingPage` with " +

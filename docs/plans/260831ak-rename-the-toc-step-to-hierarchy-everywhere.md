@@ -351,7 +351,7 @@ careful `sed`.** Every row verified here.
 | `checkpoints.namespace` | `'toc-labels'`, + the `checkpoints_namespace` CHECK | :2219, twin at [`checkpoints.ts`](../../src/store/checkpoints.ts):137 |
 | `jobs.steps` | `JobStep[]` — `{"name":"toc"}` | :1133. **And `jobs.work_key`, which hashes it** |
 | filesystem markers | `steps/toc.running` | [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts):431. **2 exist locally** |
-| filesystem ledger | `data/_ai-calls.jsonl` | both fields, [`ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts):70 |
+| filesystem ledger | `data/_ai-calls.jsonl` | both fields, `src/store/ai-calls-fs.ts:70` (deleted 2026-09-05) |
 | artefact metadata | `PROMPT_VERSION = "toc/2"` | [`hierarchy.ts`](../../src/hierarchy.ts):57 → `tree.json`, and `labels.structureVersion` |
 | thrown + reader-facing text | `"run the toc step first"`, `"re-run toc"` | correct **today**; flips with the value, not before |
 

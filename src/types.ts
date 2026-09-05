@@ -2256,7 +2256,20 @@ export type StepName =
      so it is last in `STEP_ORDER` and it *refuses* rather than pulls: a request
      for it alone arrives as `steps: ["illustrated"]` and nothing puts `sketch`
      in front of it. src/pipeline.ts § illustrated. */
-  | "illustrated";
+  | "illustrated"
+  /* **What the rest of the web says about this piece** — docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+     The only step whose content is not in the article at all: it runs two
+     metered web searches and returns pages that answer the piece, or the claims
+     it makes.
+
+     **It is deliberately NOT an `ArticleStage`** (src/models.ts). That type is
+     the subset of these names that share a byte-exact cached article prefix on
+     the Messages wire; this step is on chat/completions, shares no such prefix,
+     and therefore takes no row in `STAGE_EFFORT` or `ARTICLE_RENDERER` and none
+     in `cacheArticleForStep`. Stated here because new-mode.md lists both tables
+     among the ones the compiler asks for, and a reader will otherwise go
+     looking for the missing rows. */
+  | "debate";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -3255,6 +3268,410 @@ export interface QuizMarkBody {
  * of a limit is one copy that drifts.
  */
 export const MAX_QUIZ_ANSWER_CHARS = 4000;
+
+/* ----------------------------------------------------------------- debate --
+   What the rest of the web says about this piece — the `debate` column on
+   `article_revisions`, and the only artefact here whose content is **not in the
+   article at all**. docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+
+   ## Why these are here and not in src/debate.ts, where the stage lives
+
+   The same reason `Timeline` and `Quiz` are, above: `tests/client-imports.test.ts`
+   lets `src/web/` import only the pure leaves in its `SHARED` list, and
+   `src/debate.ts` is a stage with a CLI and two model calls in it. A panel that
+   cannot see a row cannot be written, so the shape both sides speak lives in
+   this file, which imports nothing, and src/debate.ts re-exports it.
+
+   ## The one thing to understand before reading any of it
+
+   **The web search never comes back empty.** Stage 0 asked for pages responding
+   to an invented blog post at a domain that does not exist; three searches ran
+   and nine annotations came back, every one a real, correctly-cited page about
+   sourdough starters and not one of them a response to anything
+   (docs/plans/260905f-debate-mode-stage-0-spike-results.md § 4). So *"nothing
+   found"* is not a state the wire produces — it is a state **we manufacture, by
+   refusing rows**, and every required field below is one of those refusals made
+   into a type.  */
+
+/**
+ * **What the outside page does to what it is answering** — the field that
+ * groups the list.
+ *
+ * Orthogonal to `DebateValence` below, and the two must stay that way. The
+ * first draft of the plan derived the icon from this field and a GPT Sol review
+ * (F9) refused it: an author's own later post can dispute, qualify, extend or
+ * corroborate their earlier piece, and *"the author later corrected this"* is
+ * among the most valuable rows this mode can produce — derived valence makes it
+ * neutral by construction and throws the useful part away.
+ *
+ * **`follow-up` is deliberately not a sixth value here**, and the next reader
+ * will reach for it: it is *provenance*, not relation, and a single field would
+ * force a choice between saying who wrote a page and saying what it does.
+ *
+ * `unclear` is not a failure state and must not be drawn as one. A model that
+ * cannot tell what a page is doing should say so and be believed — the same
+ * rule docs/project/timeline.md applies to an undated row.
+ */
+export type DebateRelation =
+  | "disputes"
+  | "qualifies"
+  | "extends"
+  | "corroborates"
+  | "unclear";
+
+/**
+ * **Which way the cited passage leans, toward the row's own target** — the
+ * field that draws the icon and the colour.
+ *
+ * A small closed set with an explicit unknown, and **never a score**. Greg,
+ * 2026-09-05: *"we could just have valence be (+1, -1, neutral, unknown), and
+ * include it?"* — and, on the thing we are not building: a *"62% negative"* line
+ * hands the reader a verdict on a piece they are in the middle of reading, which
+ * is the summary-shaped failure docs/project/vision.md exists to refuse. No
+ * numeric valence is computed or stored anywhere.
+ *
+ * **The target is stated because otherwise this means three things** (Sol's
+ * F19): it is the model's estimate of the cited passage's stance toward *the
+ * article itself* in group one, and toward *the `claimQuote`* in group two. Not
+ * the passage's tone, and not its stance toward some third subject.
+ *
+ * **`Comment.valence` is not a precedent.** That is the referee's own placement
+ * of a passage on their own criterion — a person's judgment, stored as such.
+ * This is a model's reading of a stranger's page: same shape, different
+ * instrument, and the panel labels it as such.
+ */
+export type DebateValence = "positive" | "negative" | "neutral" | "unknown";
+
+/**
+ * What both groups' rows share.
+ *
+ * Never constructed directly: the two groups are separate types below, so a
+ * group-one row **cannot be spelled** without the witness that it is about this
+ * article, and a group-two row cannot be spelled without the claim it answers.
+ * That is the compiler standing in for the two rules that a review found the
+ * first draft had no code for.
+ */
+interface DebateRowBase {
+  /**
+   * `mintId`, so it is a block id by construction and a future `?debate=` would
+   * validate for free.
+   *
+   * **Minted fresh on every run**, and there is deliberately no `BASELINE` row
+   * for this kind in src/store/artifacts.ts. Ids are inherited where a reader
+   * holds a link that must survive a regeneration (`?idea=`, `?event=`); marks
+   * in the prose are Deliberately not in v1, so inheritance here would be
+   * machinery serving nothing, and `readBaseline` throws for a kind with no row
+   * precisely so nobody can half-add it.
+   */
+  id: string;
+  /**
+   * **A URL the search returned in this run**, from OpenRouter's own
+   * `url_citation` annotations — never a URL the model typed that merely
+   * parses. `isWebUrl` is necessary and nowhere near sufficient: a plausible
+   * title beside a real-looking address is exactly what a model produces well.
+   */
+  url: string;
+  /** **The search result's own title**, never the model's. Absent where the wire had none. */
+  title?: string;
+  /**
+   * **The matched slice of that page's own extract** — located by
+   * `findQuote(extract, quote, undefined, "spaced")`, and stored as the
+   * *haystack's* characters rather than the model's spelling of them.
+   *
+   * Failure drops the whole row and counts `unverifiedSource`. It does not
+   * merely drop the quote: the first draft let a row survive as "a paraphrase,
+   * labelled as one", and Sol's F2 is right that this is precisely the hole — a
+   * model can attach an invented critique to an unrelated but real annotation
+   * URL, and a label saying "paraphrase" does not stop it being read as
+   * evidence. **No row survives as an unchecked paraphrase.**
+   */
+  sourceQuote: string;
+  relation: DebateRelation;
+  valence: DebateValence;
+  /** How the outside piece bears on this row's target. The model's reading, labelled as such. */
+  applies: string;
+  /**
+   * Where it does **not** bear on it.
+   *
+   * **Optional, and that is a correction.** The first draft required it on every
+   * row; Sol was right to cut that, because a mandatory caveat field
+   * manufactures caveats. The prompt is told to omit a row rather than invent a
+   * limitation.
+   */
+  limits?: string;
+}
+
+/**
+ * **Group one — a page that is about this piece.**
+ *
+ * `articleReferenceQuote` is the whole difference, and it is the finding that
+ * mattered most in the plan's second review (F15): two separately metered
+ * passes prove *a search ran*; they do not prove that anything it returned is a
+ * **response to this piece**. Stage 0 is the exact counterexample.
+ */
+export interface DirectDebateRow extends DebateRowBase {
+  /**
+   * **Words from the source's own extract in which that page names *this*
+   * article** — its exact title, its URL, or its title together with the
+   * byline — located by the same spaced matcher and stored as the extract's own
+   * characters.
+   *
+   * Required, so a row without one cannot exist in this group. Failure counts
+   * `directnessUnverified`.
+   *
+   * It is a strict rule and it costs real rows — a review that says only
+   * *"Seth's recent essay"* fails it. That is the right direction to fail in:
+   * **group one's whole claim is that these pages are about this piece**, and an
+   * unproved claim there is worse than a short list.
+   */
+  articleReferenceQuote: string;
+}
+
+/**
+ * **Group two — a page that answers a claim the piece makes**, whether or not
+ * it has ever heard of the piece.
+ *
+ * Greg asked for it by name, 2026-09-05: *"Perhaps also include searches for
+ * people who have written about these or very similar ideas, even if they
+ * haven't read this exact piece, and suggest how they might apply here."* Most
+ * articles have no critical reception at all, and a mode that is empty four
+ * times in five reads as broken rather than honest.
+ *
+ * The two required fields are the only thing standing between this mode and
+ * nine sourdough blogs presented as critical reception.
+ */
+export interface ClaimDebateRow extends DebateRowBase {
+  /**
+   * **The article's own words for the claim being answered**, located in
+   * `blockId` by the spaced matcher and stored as the *block's* characters.
+   * Failure counts `claimNotInBlock`.
+   */
+  claimQuote: string;
+  /** Where the article makes it. A block id this article actually has, or the row is dropped. */
+  blockId: BlockId;
+}
+
+/**
+ * **Every way a reported row can be refused, counted by reason and stored per
+ * group.**
+ *
+ * Per group, never only summed, or a foot line cannot say which of the two
+ * searches lost rows. A total may be derived for telemetry.
+ *
+ * **`sourceNotPublishable` is deliberately not here.** That loss is *created
+ * later*, when the public DTO re-judges every URL at the boundary, so it is
+ * computed there and never read off the artefact (Sol's F17). Putting it here
+ * and firing the foot line on `reportedRows !== keptRows` would leave the
+ * stored counts equal and the visitor looking at a shorter list with no sentence
+ * at all.
+ */
+export interface DebateLosses {
+  /** No URL, or a URL this run's own annotations never returned. */
+  uncited: number;
+  /** The article citing itself — same request target as `meta.url`. */
+  selfSource: number;
+  /** `sourceQuote` absent, or not in that page's own extract. */
+  unverifiedSource: number;
+  /** Group one only: no `articleReferenceQuote` we could locate in the extract. */
+  directnessUnverified: number;
+  /** Group two only: `claimQuote` absent, or not in the named block. */
+  claimNotInBlock: number;
+  /** Group two only: a block id this article does not have. */
+  unknownBlockId: number;
+  /**
+   * Not a readable row at all — not an object, or with no `applies` in it.
+   *
+   * **The seventh reason, and the plan names six.** Its § What is counted lists
+   * the *validation* losses; a row-shape failure is a different kind of thing
+   * and `DroppedCandidates.malformed` (src/referee-candidates.ts) already keeps
+   * it separate for that reason. A *malformed answer* — the whole JSON document
+   * — still fails the step and writes no artefact; this counts one bad row
+   * inside an otherwise readable list, which the plan did not consider.
+   */
+  malformed: number;
+}
+
+/**
+ * **What one pass returned, and what became of it.**
+ *
+ * `returnedSources` is the field to read first and the one the first draft did
+ * not have (Sol's F13). Annotations arrive **independently of what the model
+ * says** — Stage 0's probe answered with the single word `DONE` and Exa still
+ * returned ten source annotations — so a model can be handed evidence from ten
+ * pages, report three rows, have all three validate, and every other counter
+ * here reads clean while seven pages never entered the answer at all.
+ * `reportedRows` counts *the model's output* and must never be allowed to stand
+ * in for *what the search found*.
+ */
+export interface DebateCounts {
+  /**
+   * **Unique admissible annotation URLs this pass returned** — after the
+   * `isWebUrl` refusal and the `selfSource` one, and independent of what the
+   * model reported.
+   */
+  returnedSources: number;
+  /** Rows the model put in its answer, including the ones past the cap. */
+  reportedRows: number;
+  /** Rows that survived every rule. */
+  keptRows: number;
+  /**
+   * Rows beyond this group's cap, **counted before iteration stopped**. A cap
+   * that stopped silently would make position a ranking in a feature built to
+   * have none.
+   */
+  omittedOverCap: number;
+  lost: DebateLosses;
+  /**
+   * **The provider's own web-search count for this pass**, from
+   * `whereSearchCountCameFrom`. Always positive: zero, or accounting we could
+   * not read, fails the pass and therefore the whole step.
+   *
+   * Stored because it is the only alarm there is. No request parameter bounds
+   * spend here — Stage 0b watched a cap of 4 results cost 36 searches — so a run
+   * that went wrong shows up in this number and in the `ai_calls` ledger and
+   * nowhere else.
+   */
+  webSearches: number;
+}
+
+/** One group: its rows, in the order they are to be shown, and what it lost. */
+export interface DebateGroup<Row> {
+  rows: Row[];
+  counts: DebateCounts;
+}
+
+/**
+ * **Did this group lose anything at all?**
+ *
+ * Here rather than in src/debate.ts, where it started, for the reason the types
+ * above are here: the panel draws the foot line this answers, and
+ * tests/client-imports.test.ts will not let `src/web/` import a module with a
+ * CLI and two model calls in it. The stage re-exports it, so it still has one
+ * name on the server side.
+ *
+ * **A sum of every field rather than `Object.values`**, so a *fourth* group-two
+ * loss reason added to `DebateLosses` is a compile error at this line rather
+ * than a number silently folded into a sentence nobody re-read.
+ */
+export function anyLost(lost: DebateLosses): boolean {
+  return (
+    lost.uncited +
+      lost.selfSource +
+      lost.unverifiedSource +
+      lost.directnessUnverified +
+      lost.claimNotInBlock +
+      lost.unknownBlockId +
+      lost.malformed >
+    0
+  );
+}
+
+/**
+ * **How many distinct pages actually contribute to the rows shown.**
+ *
+ * The other half of the sentence `returnedSources` exists for: *"The search
+ * returned evidence from N pages; M contribute to the rows shown"*, which the
+ * foot line prints whenever the two differ. Rows are deliberately **not**
+ * deduplicated by URL — one review can answer two different claims, and two
+ * rows about one page is a real answer — so the count of rows and the count of
+ * pages are different numbers and the sentence needs this one.
+ */
+export function distinctSources(rows: readonly { url: string }[]): number {
+  return new Set(rows.map((r) => r.url)).size;
+}
+
+/**
+ * The artefact. The `debate` column on `article_revisions`.
+ *
+ * **Two groups, from two separately metered model calls** — not one call
+ * producing two lists (Sol's F1). OpenRouter reports a search *count* and never
+ * the *queries*, so from one blended call we could not tell *"nobody responded
+ * to this piece"* from *"the model only ever searched for the topic"*, and group
+ * one being empty is this mode's most common output. It must not be an
+ * inference.
+ *
+ * **The two passes are one atomic step**: a failure of either — zero or
+ * unreadable search accounting, malformed JSON, `finish_reason: "length"`,
+ * timeout, provider refusal — fails the whole step and writes none of this.
+ * Only a *successful* pass A that kept no direct rows may say the search found
+ * nothing.
+ */
+export interface Debate {
+  version: string;
+  generator: string;
+  slug: string;
+  /** `articleWithIdsFingerprint` — the blocks, the tree and the cited head. */
+  sourceHash: string;
+  /**
+   * **When the search ran, as displayed provenance rather than staleness.**
+   *
+   * Debate is time-sensitive research and a shared link outlives it, so this
+   * crosses both the owner and the public DTO deliberately and the panel says
+   * *"Searched on …"*. `stale` continues to mean *the article changed*: a
+   * visitor opening a year-old shared article must be able to see how old the
+   * search is without the artefact declaring itself invalid.
+   *
+   * **The only clock on this artefact.** Its neighbours carry `generatedAt` as
+   * well; here that would be a second copy of one instant, and two spellings of
+   * one fact is what this repo's artefacts keep getting wrong.
+   */
+  searchedAt: string;
+  /** About this piece. Empty is the commonest correct answer. */
+  direct: DebateGroup<DirectDebateRow>;
+  /** About what it claims. */
+  claims: DebateGroup<ClaimDebateRow>;
+  elapsedMs: number;
+}
+
+/**
+ * **Is this value a debate document at all?** — the one shallow shape check,
+ * asked by all three readers.
+ *
+ * `SHAPE.debate` (src/store/artifacts.ts) asked only whether `direct` was an
+ * object, so `{"direct":{}}` passed it; `readDebate` (src/debate.ts) required
+ * both groups' rows; and the Postgres reader served any non-null JSONB
+ * unchecked. Three answers to one question, which is the drift `SHAPE` exists
+ * to prevent — GPT Sol's F29.
+ *
+ * **Both row arrays, and nothing about their contents.** Two empty groups is a
+ * perfectly good artefact and the commonest one, so this cannot ask for rows;
+ * what it has to tell apart is a *half-written or hand-edited document*, and a
+ * missing `claims` is exactly that.
+ *
+ * Here rather than in src/debate.ts for the reason `anyLost` is: the store's
+ * shape table is reachable from the client, and it may not import a module with
+ * a CLI and two model calls in it (tests/client-imports.test.ts). The stage
+ * re-exports it, so the server side still has one name for it.
+ */
+export function isDebateDocument(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown } };
+  return Array.isArray(doc.direct?.rows) && Array.isArray(doc.claims?.rows);
+}
+
+/**
+ * `GET /api/debate/:slug`. Two staleness facts and no third, exactly as
+ * `TimelineResponse` and `QuizResponse` above: the reader profile is not in this
+ * stage's stamp, because who is reading does not change what the web said.
+ *
+ * **Neither of these is about the age of the search** — that is `searchedAt`,
+ * which the panel shows separately and which no comparison here consults.
+ */
+export interface DebateResponse {
+  debate: Debate;
+  /** The article moved underneath this — blocks, sections or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would ask the web differently now. */
+  outdated: boolean;
+}
+
+/**
+ * As `TimelineFound` and `QuizFound`, and here too it is the *same* type, for
+ * the same reason: there is no `profileChanged` for a store adapter to leave
+ * out. Named rather than skipped so both adapters agree with their neighbours
+ * by shape.
+ */
+export type DebateFound = DebateResponse;
 
 /* ------------------------------------------------------------- feedback -- */
 

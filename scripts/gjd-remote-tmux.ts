@@ -9,6 +9,18 @@
 import { REPO_UNKNOWN, isRepoValue } from "./gjd-remote-repo.js";
 
 export type Session = {
+  /**
+   * tmux's own handle for the session — `$0`, `$7`. Immutable: it survives the
+   * rename `ls` performs, and it survives a session being renamed by hand.
+   *
+   * **Every command that acts on a session addresses it by this, not by name.**
+   * A name is what a person types and what `ls` prints; it is not an address.
+   * Two reasons, both Sol's: a name has a window between being read and being
+   * used in which the session can die and another take the name — and `kill`
+   * acting on the wrong session is not recoverable — and a name made by hand
+   * can be any string tmux accepts, which is far more than `SLUG` allows.
+   */
+  id: string;
   name: string;
   created: Date;
   attached: boolean;
@@ -101,7 +113,13 @@ export type SessionMeta =
  *    not enough: once Claude exits the job `exec`s a login shell, and somebody
  *    typing `sleep 900` into it would otherwise be reported as a scheduled job
  *    that had never started.
- *  - **none** — neither. The pane has no Claude of ours in it.
+ *  - **busy** — neither of those, but SOMETHING is running: a process whose
+ *    ancestry reaches one of the panes. This is what tells a shell session
+ *    grinding through `npm test` from an abandoned prompt, which `ls` shows and
+ *    which is the difference between a session that is safe to kill and one
+ *    that is not. Ancestry rather than a direct child, because `npm test` is
+ *    several levels deep by the time it matters.
+ *  - **none** — none of those. Nothing is running in this session at all.
  *  - **unknown** — the box could not be asked. NOT folded into `none`: they are
  *    the same emptiness, and this whole file exists because that emptiness
  *    keeps getting read as an answer.
@@ -109,6 +127,7 @@ export type SessionMeta =
 export type SessionProc =
   | { kind: "claude" }
   | { kind: "wait"; secondsLeft: number }
+  | { kind: "busy" }
   | { kind: "none" }
   | { kind: "unknown" };
 
@@ -137,7 +156,18 @@ export type SessionState =
   | { kind: "idle" }
   | { kind: "waiting"; secondsLeft: number }
   | { kind: "no-claude" }
-  | { kind: "shell" }
+  /**
+   * No Claude in it at all — a `new-shell`, or a session somebody made by hand
+   * with `tmux new-session`.
+   *
+   * `busy` is whether anything is running in it: `true` for a shell part way
+   * through `npm test`, `false` for one sitting at a prompt, `null` when the
+   * box could not be asked. **`false` is "at rest now", not "finished"** — the
+   * probe is one snapshot, and a shell nobody has typed into yet looks exactly
+   * like one whose work is over. It is here so `ls` can say which sessions are
+   * doing something, not so anything can decide which to kill.
+   */
+  | { kind: "shell"; busy: boolean | null }
   | { kind: "unknown"; why: string };
 
 /**
@@ -315,6 +345,19 @@ export const ROW_COUNT = "GJDROWS";
  *    of our own job scripts (`/gjd-remote/jobs/`). Once Claude exits the job
  *    `exec`s a login shell, and somebody typing `sleep 900` into it would
  *    otherwise be reported as a scheduled job that had never started.
+ *  - **`busy` walks the ancestry, not one generation.** A direct-child test
+ *    happens to catch `npm test`, because npm itself is the shell's child — and
+ *    happens to miss the `node` doing the work if the shell ever `exec`s
+ *    through something. The walk is bounded (32 hops, and it stops at a pid the
+ *    snapshot does not carry) because a process table read a line at a time can
+ *    contain a cycle that a straight `while` would never leave.
+ *  - **The pane process itself counts when it is not a shell.** The walk skips
+ *    pane processes, so `tmux new-session -d -s x 'npm test'` — where the work
+ *    IS the pane — reported `none`, and `ls` called a session running the suite
+ *    idle. GPT Sol reproduced it. The test is on the command rather than on
+ *    having children, and it errs towards `busy`: an unrecognised shell is
+ *    called busy, which is the harmless direction. Calling live work `idle` is
+ *    the direction somebody kills a running suite over.
  *
  * The remaining wait comes from the sleep itself — its argument minus its
  * elapsed seconds. The alternative was to read the deadline out of this
@@ -380,9 +423,25 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
               split(A[q], w, " ")
               if (w[1] == "sleep" && w[2] ~ /^[0-9]+$/) { r = w[2] - E[q]; if (r > 0) { print "wait:" r; exit } }
             }
+            for (q in P) if (pane[q]) {
+              split(A[q], w, " "); c = w[1]
+              sub(/^-/, "", c)
+              nn = split(c, pp, "/"); c = pp[nn]
+              if (c != "sh" && c != "bash" && c != "zsh" && c != "ksh" && c != "dash" &&
+                  c != "ash" && c != "csh" && c != "tcsh" && c != "fish") { print "busy"; exit }
+            }
+            for (q in P) {
+              if (pane[q]) continue
+              d = P[q]
+              for (k = 0; k < 32 && d != "" && d != "0" && d != "1"; k++) {
+                if (pane[d]) { print "busy"; exit }
+                if (!(d in P)) break
+                d = P[d]
+              }
+            }
             print "none"
           }')
-        case "$proc" in claude|none|wait:[1-9]*) ;; *) proc='?' ;; esac
+        case "$proc" in claude|none|busy|wait:[1-9]*) ;; *) proc='?' ;; esac
       fi
       title=""
       if [ -n "$id" ]; then
@@ -543,8 +602,10 @@ export function parseSessionLine(line: string): ParsedSessionLine {
       string,
     ];
 
-  // tmux's own session handle: a dollar and digits. Nobody is shown it, but if
-  // it is not that shape then the record did not come from tmux.
+  // tmux's own session handle: a dollar and digits. Nobody is shown it, but it
+  // is what every command that acts on a session addresses it BY — see
+  // `Session.id` — so if it is not that shape then the record did not come from
+  // tmux and nothing may be done with it.
   if (!/^\$\d+$/.test(sid)) return NOT_A_RECORD;
 
   // A tmux timestamp is seconds since the epoch and is never 0 for a live
@@ -602,6 +663,7 @@ export function parseSessionLine(line: string): ParsedSessionLine {
       // A session that has never run Claude legitimately has no title, so an
       // empty one is information rather than damage.
       title: title.trim(),
+      id: sid,
       provisional: prov === "1",
       claudeId: claudeId === "" ? null : claudeId,
       proc,
@@ -672,7 +734,7 @@ export function sessionRepo(s: Session): { text: string; known: boolean } {
 }
 
 /**
- * The four shapes the process probe is allowed to have, and nothing else.
+ * The five shapes the process probe is allowed to have, and nothing else.
  *
  * A token this reader was not written against is a broken record, not a shrug:
  * it decides whether a session is reported as scheduled, running or gone, and
@@ -681,6 +743,7 @@ export function sessionRepo(s: Session): { text: string; known: boolean } {
  */
 function parseProc(field: string): SessionProc | null {
   if (field === "claude") return { kind: "claude" };
+  if (field === "busy") return { kind: "busy" };
   if (field === "none") return { kind: "none" };
   if (field === "?") return { kind: "unknown" };
   const m = /^wait:([1-9]\d{0,8})$/.exec(field);
@@ -762,7 +825,10 @@ export function parseAgents(json: string): Map<string, string> | null {
  *
  *  - **shell** first, because a session with no Claude in it was never going to
  *    appear in the agents list, and running it through the rest would report
- *    every `new-shell` as a Claude that had exited.
+ *    every `new-shell` as a Claude that had exited. It carries `busy` because a
+ *    shell is the one state where "is anything happening in there?" is the
+ *    whole question, and a bare `shell` said it about a session running the
+ *    test suite and about a prompt abandoned fifteen hours earlier alike.
  *  - **a hand-set id** cannot join to anything, and saying so is not the same
  *    as saying there is no Claude here.
  *  - **waiting** before the agents list is consulted, so `--wait` still reports
@@ -789,7 +855,12 @@ export function parseAgents(json: string): Map<string, string> | null {
  *    no-claude.
  */
 export function sessionState(s: Session, agents: Map<string, string> | null): SessionState {
-  if (s.claudeId === null) return { kind: "shell" };
+  if (s.claudeId === null) {
+    // `unknown` becomes null rather than false: "nothing is running in it" and
+    // "we could not look" are the same emptiness, and this file exists because
+    // that emptiness keeps getting read as an answer.
+    return { kind: "shell", busy: s.proc.kind === "unknown" ? null : s.proc.kind !== "none" };
+  }
   // Somebody set CLAUDE_SESSION_ID by hand to something that is not a session
   // id. It cannot join to anything, so there is nothing to say about this row —
   // but there IS a session, and reporting it as a shell would be a claim rather
@@ -820,6 +891,98 @@ export function sessionState(s: Session, agents: Map<string, string> | null): Se
     return { kind: "unknown", why: "the box could not look at what is running in it" };
   }
   return { kind: "no-claude" };
+}
+
+/**
+ * **Which session a typed name means — the ONLY way any command may act on one.**
+ *
+ * `ls` lists every tmux session on the box, not only the ones this tool made:
+ * an agent running `tmux new-session -d -s gateA` to hold a long `npm test` is
+ * a row like any other. So the set of names that can appear is the set tmux
+ * accepts, which is far wider than `SLUG` — and `SLUG` is a rule about names
+ * this tool is willing to MINT, not about names it is willing to ACT ON.
+ *
+ * Confusing the two is the bug this function exists to kill. Until 2026-09-05
+ * `kill` and `resume` tested the typed name against `SLUG`, so `gjd-remote kill
+ * gateA` answered with the usage string — which reads like "you forgot the
+ * argument" — and left the session running. Every name with a capital letter in
+ * it was listed by the tool and untouchable by it.
+ *
+ * **It returns the session, and callers address it by `.id`.** Resolving to a
+ * name and then using the name leaves a window in which the session can die and
+ * another take its name, and a `kill` landing on the wrong session is not an
+ * error you get to take back. Sol's point, and cheap to honour.
+ *
+ * One caveat on that id, also Sol's: `$N` is unique within a RUNNING tmux
+ * server, not for all time. If the last session on the box ends, the server
+ * exits and a new one starts, `$0` comes round again. Every command here reads
+ * the list and acts within the same second or two, and the box is never empty,
+ * so it is not worth a generation check — but it is worth knowing that the
+ * guarantee is server-lifetime rather than absolute.
+ */
+/** tmux's own session handle: a dollar and digits, and nothing else. */
+const TMUX_ID = /^\$\d+$/;
+
+export function resolveSession(
+  list: readonly Session[],
+  name: string,
+): { ok: true; session: Session } | { ok: false; why: string } {
+  const found = list.find((s) => s.name === name);
+  if (found) return { ok: true, session: found };
+  // A tmux id is accepted too, so `resume-all` can address the session it
+  // actually saw rather than re-resolving a name in a tab it opens seconds
+  // later. NAME FIRST, always: a session really called `$3` is somebody's
+  // session and answering with a different one because the string looks like an
+  // id would be the exact substitution this function exists to prevent.
+  if (TMUX_ID.test(name)) {
+    const byId = list.find((s) => s.id === name);
+    if (byId) return { ok: true, session: byId };
+  }
+  // Not a list of all of them: on this box that is two dozen names, and the
+  // recovery is `gjd-remote ls`, which is one word and formats them properly.
+  // A close match is worth printing because the usual cause is a typo.
+  const near = list.find((s) => s.name.toLowerCase() === name.toLowerCase());
+  return {
+    ok: false,
+    why:
+      `no live session named ${printableName(name)}` +
+      (near ? ` — did you mean ${printableName(near.name)}?` : "") +
+      `\n  'gjd-remote ls' lists what is live on the box.`,
+  };
+}
+
+/**
+ * A session name, safe to put in a terminal.
+ *
+ * Shell quoting is not the whole of it. A tmux session name may contain control
+ * characters, and printing one raw hands the reader's terminal an escape
+ * sequence off the box — so a name can move the cursor, repaint the table, or
+ * hide itself from the row it is on. Sol raised it; it costs one regex.
+ *
+ * Quoted as well as escaped, because a name may also be empty-looking, have
+ * leading spaces, or consist of them.
+ */
+// Matching control characters is the entire point of this regex.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: see above
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
+
+/**
+ * The escaping alone, with no quotes — for the `ls` table, where a column of
+ * quoted names would be noise and the padding has to be the width on screen.
+ *
+ * **Every place a name is printed needs one of these two.** The first version
+ * had only `printableName` and used it in error messages, leaving the table
+ * itself — the one thing that prints all two dozen names — writing them raw. A
+ * helper that is not called at the site that matters is not a defence. Sol's
+ * finding, in review.
+ */
+export function escapeName(name: string): string {
+  return name.replace(CONTROL, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
+}
+
+/** The same, quoted — for a name inside a sentence, where its bounds matter. */
+export function printableName(name: string): string {
+  return `'${escapeName(name)}'`;
 }
 
 /**

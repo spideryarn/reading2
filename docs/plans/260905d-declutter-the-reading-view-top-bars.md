@@ -116,6 +116,11 @@ Product calls arbitrated by Fable, 2026-09-05, except where marked as Greg's.
    error needs a home. That keeps both of those where they are rather than moving them into the
    Dock, which is the follow-up if the inconsistency turns out to grate.
 
+   **Revisited and reversed the same day**, after measuring it: see § Stage 4, abandoned. The
+   follow-up named in the last sentence turned out to be the *prerequisite* rather than the
+   follow-up, and is now [260905g](260905g-move-the-wordmark-and-feedback-button-into-the-dock.md).
+   Greg chose that over both keeping the strip and dropping it with the corners patched.
+
 ## Stages
 
 Each ends with `npm test`, `npm run typecheck` and `npm run check` green, a browser pass at 1440×900
@@ -154,8 +159,9 @@ One thing it found that is **not ours and not in scope**: at 390px `document.bod
 exactly the rail's 12px, so it predates this work — a table minimum-width constraint at narrow
 viewports.
 
-There is also **a red arriving from `dev`**, `tests/doc-links.test.ts`: `summaries.md` cites
-`types.ts` § `TreeNode.question`. Neither file is touched by this plan.
+There was also **a red arriving from `dev`**, `tests/doc-links.test.ts`: `summaries.md` cited
+`types.ts` § `TreeNode.question`. Neither file was touched by this plan, and it was fixed on `dev` by
+whoever owned it — green again here after the merge before stage 3.
 
 ### Stage 2 — the arc leaves Hierarchy
 
@@ -243,20 +249,138 @@ Also in this stage:
   `tests/prose-centred-in-its-cell.test.ts:123`.
 - **`?text=0` gets normalised away at boot** rather than left as a state with no exit. The `Text`
   pill was the only way back to the prose, so an old `?mode=hierarchy&text=0` link would strand the
-  reader. `main.tsx` already rewrites two superseded spellings of the metadata panel; this is a
-  third rewrite in the same place, to `?mode=outline` — which is what that link was asking for and
-  is the mode built to answer it. The parameter machinery stays for the `structure-mode` worktree
-  to delete.
+  reader. The place is **`settleAddress` in `router.ts`**, not `main.tsx` as this said until
+  2026-09-05: the four rewrites were consolidated into one pure function on 2026-08-30, after an
+  interaction between two of them sent a reader to the wrong page. The parameter machinery stays for
+  the `structure-mode` worktree to delete.
 
-Files: `TableView.tsx`, `tree.ts`, `scroll.ts`, `main.tsx`, `styles.css`,
-`tests/mobile-chrome.test.ts`, `tests/column-names.test.ts`, `tests/url-state.test.ts`. Docs:
-`granularity-zoom.md`, `keyboard.md`, `design-css-overview.md`, `url-state.md`.
+  **The destination is `?mode=outline`**, arbitrated by Fable, 2026-09-05. The deciding argument is
+  not the obvious one: the reader who saved that link was looking at a bar that said **OUTLINE** —
+  the old `reading`/`outline` chip flipped whenever `text=0` was on, `granularity-zoom.md` calls the
+  compact-table state "outline mode" throughout, and `TableView.tsx` still classes the table
+  `zoom outline` in it. Outline is the name that reader already associates with what they
+  bookmarked, so it is the *least* surprising landing, not a rename.
+
+  Two facts, checked in the code, that correct the obvious framing of the choice:
+
+  - **Neither destination restores the no-prose state**, so "which one honours what they asked for"
+    cannot decide it. `proseVisible` is `modeBand || showText` ([`layout.ts`](../../src/web/layout.ts)
+    § `proseVisible`) — a mode band never hides the article. Both options put the prose back, and
+    the tie-break is which shows a whole-article overview at a glance.
+  - **`text=0` bites only in Hierarchy**: `inMode = mode !== "hierarchy"`, and `proseVisible`
+    ignores `showText` everywhere else. A bare `?text=0` already lands harmlessly in Plain.
+
+  **So: `mode=hierarchy` + `text=0` → `mode=outline`, and the `text` pair is dropped in every case,
+  whatever the mode.** Dropping it unconditionally is not tidying an inert parameter — it defuses
+  one that arms itself later. Left in a Plain address, `text=0` strands the reader the moment they
+  press Hierarchy on the Dock.
+
+  Fable's own summary of the stakes, which is the right one: the `Text` pill only ever wrote this
+  inside Hierarchy, Hierarchy stopped being the default on 2026-08-31, paying readers arrived on
+  2026-09-03 and the pill went on 2026-09-05 — so the realistic population is Greg's own bookmarks.
+  Low stakes; pick it, write it, and do not spend a second review round on it.
+
+Files: `TableView.tsx`, `tree.ts`, `App.tsx`, `scroll.ts`, `router.ts`, `read-address.ts`,
+`last-view.ts`, `styles.css`, `tests/mobile-chrome.test.ts`, `tests/column-names.test.ts`,
+`tests/address-settling.test.ts`, `tests/public-read-rewrite.test.ts`,
+`tests/prose-centred-in-its-cell.test.ts`, and a new `tests/aimed-column.test.ts`. (**Not
+`main.tsx`**, which this said until 2026-09-05: it calls `settleAddress`, and the four rewrites were
+consolidated into that one pure function on 2026-08-30.) Docs: `granularity-zoom.md`, `keyboard.md`,
+`design-css-overview.md`, `url-state.md`, `web-client.md`, `column-context.md`, `page-titles.md`.
 
 **Done when** Hierarchy has one visible sticky row, the fisheye panels still draw their contents, a
 deep link lands with the target's top clear of the bar with an article-owned `<thead>` on the page,
 and pressing ← / → visibly moves the aim including onto the prose.
 
-### Stage 4 — the bar disappears when it has nothing in it
+**Built 2026-09-05.** Six things it settled that the plan had not:
+
+- **The `?text=0` rewrite is a title divergence, and the plan missed it.** The mode goes in the tab,
+  and the server composes a shared article's `<title>` from the raw address — so a client-only
+  rewrite makes the tab read Hierarchy and then Outline a second later, which is the exact fault
+  [page-titles.md](../project/page-titles.md) exists to close, for the eleventh time. `readMode` in
+  [read-address.ts](../../src/read-address.ts) predicts it now, through a shared `hidesProse`
+  predicate, the same shape as `redirectsToMetadata`. Removing the server half makes
+  `tests/address-settling.test.ts` report **sixteen** disagreements, checked rather than assumed.
+- **A restore would have walked straight past the rewrite.** `?text=` was in `REMEMBERED`
+  ([last-view.ts](../../src/web/last-view.ts)), and a restore runs from a React effect — *after*
+  `settleAddress`. So a browser that had stored `?mode=hierarchy&text=0` would put the reader back
+  into the stranded state the rewrite exists to prevent. It moved to `NEVER_REMEMBERED`. The
+  realistic population is one browser, since both that feature and the `Text` pill's removal landed
+  on the same day, but the hole is the same shape either way.
+- **The aim tint has to reach the *panels*, and the browser pass is what found that.** Every gist
+  column in Hierarchy is covered by an opaque `position: fixed` `.ctx-panel`, and the cell underneath
+  deliberately draws nothing — so the first version tinted the prose column correctly and did
+  *nothing whatever* for Parts and Sections, which are the columns ← reaches. Every unit check
+  passed. The fix moved `data-aim` from the `<table>` to `.reader`, the only ancestor of both
+  surfaces, and each rule now names the cell and the panel together with `:is()`. Two things came
+  with it: `TableView` **drops `navDepth` as a prop entirely**, so a pointer move no longer
+  re-renders a memoised table of ~2,200 cells to change one underline; and the cell half needs
+  `table.zoom:not(.only-prose)`, or Plain — where the prose is the only rung and the pointer rests
+  on it permanently — gets a standing orange wash over the whole article.
+- **The matrix is written over `[data-nav-depth]`, not `.depth-N`.** Both kinds of cell already
+  carry that attribute — it is what `keynav.ts` resolves a pointer with — so one line covers a gist
+  column and the prose column together, instead of a matrix plus a separate `td.text` rule that
+  somebody has to remember. It is bounded at depth 7 because CSS cannot compare two attribute
+  values; past that the tint does not draw, which is a missing hint rather than a broken key.
+  `tests/aimed-column.test.ts` pins the bound, the `background-image`, the panel and the prose cell.
+- **The spine is not tinted, deliberately.** An aim is a *depth*, and the spine is depth 1 drawn a
+  second way, so when depth 1 is aimed the Parts column already says so. The one case that shows
+  nothing is a pointer resting on the spine with Parts fitted away — which lit nothing before.
+- **§ the header over the article's column went too.** Forty lines added on 2026-09-04 to put
+  `Text verbatim` on the prose's left edge, plus its two nested spans in `TableView` and its case in
+  `tests/prose-centred-in-its-cell.test.ts`. There is no visible heading to align any more, so the
+  arithmetic was provably painting nothing. The three type tokens it needed (`--head-pad-x`,
+  `--head-type-size`, `--head-type-weight`) went with it.
+- **The browser pass measured it rather than eyeballing it.** `thead th`, `thead tr` and `thead` all
+  report a height of exactly `0`; the fisheye panels hold 9 and 49 entries and re-centre on scroll,
+  matching the pre-stage baseline exactly; `.controls`'s bottom edge and `.ctx-panel`'s top edge are
+  both `265.6875`, so the panels now sit flush under the bar; the pills read `Parts Sections
+  Paragraphs` and `.controls` measures `scrollWidth === clientWidth === 378` at 390px, so full words
+  did not reintroduce the overflow; and a deep link lands `44.45` against a bar bottom of `44`.
+  **The aim tint is real but invisible in a screenshot** at 7% alpha — it was confirmed by reading
+  `backgroundImage` off both the cell and the panel at each rung, which is the only honest way to
+  check it.
+- **A trap for the next test writer**, found by the browser pass and worth more than the check that
+  found it: on a cold load the `?text=0` rewrite takes 1.4–1.7s to land, because nothing runs until
+  the bundle does. No reader ever sees the unrewritten page, but a test with a fixed 800ms wait sees
+  the old URL and reports a failure that is not there. Wait on the condition, not on the clock.
+- **`--head-h` is `0px`, not `0`.** It feeds `calc(var(--bar-bottom) + var(--head-h))`, and a
+  unitless zero in a `calc` sum with a length makes the whole declaration invalid — which would have
+  dropped every gist's sticky `top` silently.
+
+### Stage 4 — the bar disappears when it has nothing in it — **abandoned**
+
+**Not built. Superseded by [260905g](260905g-move-the-wordmark-and-feedback-button-into-the-dock.md),
+Greg's call, 2026-09-05**, having measured what it would actually buy. This section is kept as
+written, below the reasoning, because the *next* attempt needs to know why the obvious version does
+not work.
+
+Decision 8 above records Greg choosing this over a blank strip. He chose it before anyone had
+measured it, and the measurement changed the answer, so it went back to him rather than being
+quietly kept or quietly dropped.
+
+**What killed it.** `.controls` is not only a bar: it is what holds the wordmark and the Feedback
+button off the article. Both are `position: fixed` in the top corners at `height: var(--bar-h)`, and
+neither reserves its own space — the bars reserve it for them, through padding
+([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) § The bars have to reserve the space).
+Remove the bar and prose scrolls up behind two controls with no background of their own.
+
+Where the 44px would have landed, worked through with Fable: **nothing** on a phone (the bar already
+leaves on scroll), **nothing** in Hierarchy (the pills keep it), **nothing** in a band mode (the band
+sits at `--bar-bottom` and you would pad it straight back), a genuine win in Plain above ~1080px, and
+**worse** between 732 and 1080px, where the centred column reaches the left edge and the wordmark
+lands on the top line of prose.
+
+And the cost nobody had priced: **`commentError` puts the bar back**, so a comment-transport hiccup
+would slide the spine, the band and every sticky gist 44px in a 180ms animation. A layout that jumps
+on an error path is worse than a strip that is always there.
+
+So the real answer is to move the two corner controls into the Dock, after which this stage is free
+and honest. That is 260905g.
+
+---
+
+*As originally written:*
 
 Render `.controls` only when it has content.
 
@@ -280,6 +404,106 @@ Files: `App.tsx`, `styles.css`, `scroll.ts`, `layout.ts`. Docs: `web-client.md`,
 
 **Done when** Plain, Summary, Chat and Glossary show no bar for an owner, a visitor still sees the
 read-only chip, and nothing on the page is positioned as though a bar were there.
+
+**Stage 4's premise is wrong, and a browser pass is what showed it.** The plan says `--bar-bottom`
+falls to `var(--safe-top)` under a bar-less reader. Measured at 390×844 on 2026-09-05, that is the
+wrong instruction twice over:
+
+- **In any mode with a band open it is already refused**, and deliberately. A rule added 2026-08-31,
+  `:root:has(.controls:focus-within, .mode-band)`, pins the offset back to full height whenever a
+  panel exists — Greg had complained about losing the way out of Search mode. Its `:has()`
+  specificity (0,3,0) beats the hide rule's (0,2,0). Setting the token on `.reader` instead, as the
+  obvious implementation would, is a *nearer ancestor* and would quietly win over that guard.
+- **In Plain mode it is actively harmful**, because `--bar-bottom` is not the bottom of the bar. It
+  is the bottom of the **top chrome**, and the top chrome includes two `position: fixed` corner
+  controls of height `--bar-h` — the wordmark and the Feedback button — which never go away and take
+  no part in the hide-on-scroll.
+
+**And that is a live bug on `dev` today**, found by measuring rather than by reading: at 390×844 in
+Plain mode, scrolled far enough that `data-bars="hidden"`, the spine moves to `top: 0` and its top
+44px is underneath the wordmark. `document.elementFromPoint` at the rail's centre, 10px below its
+top, returns `a.logo.logo-home` — so the top of a scrubber a reader presses to move through the
+article is unreachable. Not introduced here; stage 4 would have extended it to every width.
+
+The second consequence is the one that decides the stage: **the `.controls` bar is what stops article
+prose from scrolling underneath those two corner controls.** It is opaque, full width, and reserves
+horizontal room at both ends through its own padding
+([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) § The bars have to reserve the space).
+Remove it and, once the reader scrolls, prose passes behind a wordmark and a Feedback button that
+have no background of their own. So stage 4 is not "render it conditionally" — it is a question
+about global chrome, and it is out with Fable as a design call.
+
+### Stage 5 — a mode stops saying its own name
+
+**Added 2026-09-05, after looking at the stage-2 screenshots rather than at the code.** Greg's ask
+had a clause I read too narrowly:
+
+> I think we can rely on the bottom bar to tell us what mode we're in, so for example "Summary" mode
+> doesn't need to say `Summary` at the top, nor o any other modes.
+
+I took that as the `MODE SUMMARY` chip on the controls bar, which stage 1 deleted. But the screenshot
+of Summary mode still says **Summary** at the top — in `.band-head`, the band's own title row — while
+the Dock says Summary at the bottom at the same time. So the clause is not yet satisfied, and the
+duplication he objected to is still on screen. Outline mode, by contrast, has no head at all and
+reads perfectly well, which is the existence proof.
+
+`.band-head` is one shared family across nine bands (`styles.css` § the title row every band has),
+so this is one rule and nine call sites rather than nine designs. What each row actually holds
+decides what happens to it — inventoried by reading the call sites, 2026-09-05:
+
+| Band | The row holds | After |
+|---|---|---|
+| Summary, Search | the icon and the mode's name, nothing else | the row goes entirely — a whole row of vertical space back |
+| Glossary, Timeline | name + a live count (`40 terms`, `12 events`) | the name goes, the count stays and becomes the row |
+| Remember (Quiz) | name + the Recall/Quiz sub-mode switch | the name goes, the switch stays |
+| Diagram | name + the scatter's caveat, deliberately put in this row on 2026-08-30 because *this row cannot wrap* and the strip can | the name goes, the caveat stays — and check the row still cannot wrap without the `h2`'s `flex: 1` |
+| Chat | **its `h2` is the open thread's title**, not the mode's name, plus the delete actions | untouched — it is the one exception, and the reason is that it was never naming the mode |
+
+So the rule is: **the mode's own name goes; the row survives wherever it carries something else.**
+
+The trap is in `.band-head h2`'s own comment. The `h2` carries `flex: 1` and `min-width: 0`, and it
+is what lets the other children sit where they do — a count pushed to the right is pushed by the
+heading. Removing the heading without replacing that flex behaviour will re-pack Glossary's and
+Timeline's counts against the left edge. `flex: none` on `.band-head` is also load-bearing and must
+survive: `tests/referee-band-fits.test.ts` records a fault where the one child that could shrink
+went to 0px with 321px of content in it.
+
+Files: the nine panel components, `styles.css` § the title row every band has. Docs: whichever of the
+mode docs describe their band's head.
+
+**Done when** no band names the mode the Dock is already naming, Chat still shows its thread title,
+Glossary's and Timeline's counts are still where they were, and Summary and Search have one fewer
+row.
+
+**Landed 2026-09-05**, and it needed one thing the stage had assumed rather than checked.
+
+**The Dock was not, in fact, naming the mode.** A band is 400px of the window, so opening one is
+itself what pushes the bar onto fit rung 1 — where every mode label but Plain's is hidden
+([`dock-fit.ts`](../../src/web/dock-fit.ts), `styles.css` § the bar's fit ladder). So after this
+stage, Summary at 1440×900 had no "Summary" in the band *and* none in the bar: a highlighted glyph
+and a tooltip were the whole of it. The premise the stage rests on was false at exactly the widths
+where it matters, and the browser pass could not see it — it was asked whether the nine bands looked
+right, and they did. **Found by reading a screenshot, not a report.**
+
+Fixed by keeping the active mode's label on rung 1. The ladder absorbs it because the ladder is
+*measured*: Summary, Timeline, Glossary and Chat all came back `scrollWidth === clientWidth === 1440`
+with the word shown, on the rung they were already on.
+
+**Rung 2 was tried and measured out.** At 390×844 in a band mode the bar already overflows —
+`scrollWidth` 617 against `clientWidth` 390 — and the word took it to 758. That is 141px more of a
+row the reader has to drag sideways, to reveal a word only legible after dragging. A bar that scrolls
+cannot tell you anything you have not scrolled to.
+
+Two things the pass found that are recorded rather than changed:
+
+- **Remember's default sub-view still shows a heading.** Recall reuses `ChatPanel`, whose `h2` is the
+  open thread's own title — so the table above is right about *Quiz* and over-claims about Remember.
+- **Diagram's row is empty** until a kind with point projections is chosen: `ScatterNote` renders
+  only for `drift` and `trail`. Pre-existing, and it leaves an 18px bordered strip in the other kinds.
+
+One design question the pass raised and I overruled after looking myself: it judged Timeline's lone
+`29 events` as reading "half-finished" beside Glossary's count-plus-pill. On the screenshot it reads
+as an ordinary quiet count above a divider and a list. Left as is for all four.
 
 ## The reviews
 
@@ -307,6 +531,24 @@ already are and Greg asked for this now: `structure-mode` is mid-stage-1 and Str
 The rule instead is **whoever lands second merges `dev` and adapts** — and this plan states its new
 contracts explicitly (the rail's default, `stickyOffset`'s selector, `?text=0`'s rewrite, the
 zero-height head) so there is something to adapt *to*. Merge `dev` between every stage.
+
+**Round 3, on stage 3's code** — [`…-stage3-review-sol.md`](260905d-declutter-top-bars-stage3-review-sol.md),
+GPT Sol, 2026-09-05. **Refused**, two established P1s, no P0s. Both accepted, both fixed, each red
+first. What is worth noticing is *where* they were: not in the head, the offset, the aim tint or the
+pills — the parts this stage was planned around, which passed both static inspection and the browser
+pass — but in the **address** work, which the plan had not anticipated at all and which stage 3 grew
+into on discovering that `?text=0` had become a state with no exit. A stage that grows a second
+subject grows a second set of risks, and this plan named none of them.
+
+| | Finding | Disposition |
+|---|---|---|
+| F1 | Stale `localStorage` restores `?text=0` after boot, walking past the new rewrite | **Accepted.** `REMEMBERED` governs what gets *written*, and a browser's storage outlives any version of that list. Fixed in `restoredHref` rather than Sol's `readLastView` — the pure function, and general rather than a patch for `text`. |
+| F2 | A duplicate `text` pair decided strandedness, where `nuqs` reads only the first | **Accepted.** `liftStrandedText` already documents first-match semantics for `mode` in the same function; `text` had not been given it. Deciding and removing are now two questions. |
+
+Sol could not check the one thing I most wanted checked — whether a zero-height `<th>` really
+measures zero in a real engine — because Chrome would not start under its sandbox, and it said so
+rather than guessing. The browser pass answered it: `thead th`, `thead tr` and `thead` all measure
+**exactly 0**, and `.controls`'s bottom and `.ctx-panel`'s top are both `265.6875`.
 
 **Round 2, on stage 2's code** — [`…-stage2-review-sol.md`](260905d-declutter-top-bars-stage2-review-sol.md),
 GPT Sol, 2026-09-05. **Accept with changes**, seven findings, no P0 or P1: one reachable performance

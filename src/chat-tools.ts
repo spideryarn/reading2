@@ -64,11 +64,6 @@ import { termPattern } from "./term-match.js";
 import { librarySearch, loadArticle, loadGlossary } from "./store/index.js";
 import { errorFields, log, since } from "./log.js";
 import { isSlug } from "./ingest.js";
-/* `requestTarget` and `sameTarget` lived in this file until 2026-09-05 and moved
-   to src/urls.ts at their second caller — the link-preview cache, whose key has
-   to be the same "what did we ask the network for" this file already computes.
-   src/urls.ts § `requestTarget` has the whole argument, including why it is not
-   `urlKey`. */
 import { hostOf, isWebUrl, sameTarget } from "./urls.js";
 
 /* --------------------------------------------------------------- the caps --
@@ -664,6 +659,22 @@ interface Destination {
   fragment: string;
 }
 
+/* `requestTarget` and `sameTarget` were declared here until 2026-09-05 and moved
+   to src/urls.ts when Debate needed the same identity: a citation
+   whose request target is the article's own address is the article presenting
+   itself as a response to itself, and the plan for that mode
+   (docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md
+   § Attribution rule 2) names *this* function rather than describing one. A
+   second copy of a rule about URL identity is the failure src/urls.ts exists to
+   prevent — and it is the same argument `collectCitations` makes one file along
+   about chat and explain each holding their own copy of the annotation rules.
+   The link-preview cache (src/link-previews.ts) is the other caller that
+   arrived the same day, and it is why `requestTarget` did **not** survive the
+   move unchanged: it used to percent-decode the path, which made `/a%2Fb` and
+   `/a/b` one key, and that key is a cache and authorization key. The decoding
+   lives on in `sameTarget`, which is what the two callers below use and which
+   is allowed to over-match. GPT Sol, 2026-09-05, P1-1. */
+
 /**
  * One href, resolved — split out of `articleLinks` because it is the whole of
  * that function's branching and none of its bookkeeping.
@@ -855,8 +866,16 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
      the shelf's notion of sameness is generous on purpose — it folds `http` into
      `https` and `www.` into the bare host — and every one of those is a false
      positive here, which is this tool telling the model a page is already open
-     when it is not. `sameTarget` ignores the fragment and nothing else, which is
-     exactly the shape being defended against. Raised by a GPT Sol review on
+     when it is not.
+
+     `sameTarget` is `requestTarget` equality: the fragment ignored, the escapes
+     that are one spelling of one character folded (RFC 3986's unreserved set),
+     and nothing else. *It was briefly more generous than that — folding `%2F`
+     into `/` — on the argument that over-matching is safe here. It is not:
+     those are two different pages, and saying "already open" about one the
+     model has not got costs it the page rather than costing us a fetch.*
+
+     Raised by a GPT Sol review on
      2026-08-27, which made the point that the listing's wording could not
      enforce this, and again in the code pass, which found `urlKey` too loose for
      the job. */

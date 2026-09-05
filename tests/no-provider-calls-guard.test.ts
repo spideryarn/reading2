@@ -50,7 +50,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -188,7 +188,18 @@ describe("the no-provider-calls guard", () => {
         maxBuffer: 32 * 1024 * 1024,
       })
         .split("\0")
-        .filter((f) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(f));
+        .filter((f) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(f))
+        /* **The index and the working tree disagree while a deletion is
+           uncommitted**, and this asks git what exists but the filesystem for
+           the bytes. A file deleted and not yet committed is still `--cached`,
+           so the read below threw `ENOENT` and the guard went red for a reason
+           that had nothing to do with provider calls — once per deletion in
+           stage G of
+           docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+           Skipping it is safe in the direction that matters: a file that is not
+           there contains no URL. The floor below is what stops this filter
+           quietly swallowing everything. */
+        .filter((f) => existsSync(path.join(ROOT, f)));
     const files = [...ls(["--cached"]), ...ls(["--others", "--exclude-standard"])];
     expect(files.length, "git listed no source files, so this test proved nothing").toBeGreaterThan(
       50,

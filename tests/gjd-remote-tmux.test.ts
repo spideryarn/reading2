@@ -29,7 +29,10 @@ import {
   formatWait,
   parseAgents,
   parseSessionLine,
+  escapeName,
   parseSessions,
+  printableName,
+  resolveSession,
   sessionRepo,
   sessionState,
 } from "../scripts/gjd-remote-tmux.js";
@@ -128,6 +131,15 @@ describe("parseSessionLine", () => {
     expect(s?.windows).toBe(2);
     expect(s?.provisional).toBe(true);
     expect(s?.title).toBe("Fix the ToC ordering");
+  });
+
+  /**
+   * The id used to be validated and thrown away. It is now the ONLY thing
+   * `kill`, `resume` and `attach` address a session by, so losing it here would
+   * take every one of them out — see `Session.id`.
+   */
+  it("keeps tmux's session id, which is what every command addresses", () => {
+    expect(parsed(row({ sid: "$81" }))?.id).toBe("$81");
   });
 
   it("counts an attached session as attached", () => {
@@ -354,6 +366,7 @@ describe("parseAgents", () => {
  */
 describe("sessionState", () => {
   const session = (o: Partial<Session> = {}): Session => ({
+    id: "$7",
     name: "fix-the-toc",
     created: new Date(1788190336000),
     attached: false,
@@ -372,6 +385,28 @@ describe("sessionState", () => {
     // list, and running it through the rest would report it as a dead Claude.
     expect(sessionState(session({ claudeId: null }), null).kind).toBe("shell");
     expect(sessionState(session({ claudeId: null }), new Map()).kind).toBe("shell");
+  });
+
+  /**
+   * WHAT THE EIGHT GHOST SESSIONS NEEDED. On 2026-09-05 `gjd-remote ls` showed
+   * eight rows reading `shell`, and Greg could not tell which were husks. Seven
+   * were running `npm test` for other agents; one had been an abandoned prompt
+   * for fifteen hours. A bare `shell` said the same about both.
+   */
+  it("says whether anything is running in a shell", () => {
+    const shell = (proc: Session["proc"]) => sessionState(session({ claudeId: null, proc }), new Map());
+    expect(shell({ kind: "busy" })).toEqual({ kind: "shell", busy: true });
+    expect(shell({ kind: "none" })).toEqual({ kind: "shell", busy: false });
+  });
+
+  /**
+   * `null`, never `false`. "Nothing is running in it" and "the box could not be
+   * asked" are the same emptiness, and the whole file exists because that
+   * emptiness keeps getting read as an answer.
+   */
+  it("admits it does not know, rather than calling an unprobed shell idle", () => {
+    const state = sessionState(session({ claudeId: null, proc: { kind: "unknown" } }), new Map());
+    expect(state).toEqual({ kind: "shell", busy: null });
   });
 
   it("says unknown for a hand-set CLAUDE_SESSION_ID, rather than calling it a shell", () => {
@@ -710,7 +745,7 @@ describe("buildSessionScript", () => {
 
   /** A token awk did not mean to print must not become a state. */
   it("refuses to pass on a probe result it does not recognise", () => {
-    expect(script).toContain("case \"$proc\" in claude|none|wait:[1-9]*) ;; *) proc='?' ;; esac");
+    expect(script).toContain("case \"$proc\" in claude|none|busy|wait:[1-9]*) ;; *) proc='?' ;; esac");
   });
 
   /**
@@ -1134,5 +1169,126 @@ describe("session metadata", () => {
   it("reports a setup session's state as a shell, the same as new-shell", () => {
     const s = ok(row({ kind: "setup", id: "" }));
     expect(sessionState(s, new Map()).kind).toBe("shell");
+  });
+});
+
+/**
+ * **The bug Greg hit on 2026-09-05, and the rule that prevents its family.**
+ *
+ * `ls` lists every tmux session on the box, and agents make sessions by hand to
+ * hold long commands — so a listed name need only satisfy tmux. `kill` and
+ * `resume` tested it against `SLUG` instead, which is lower-case only, and
+ * `gjd-remote kill gateA` answered with the usage string while leaving the
+ * session running. A name this tool will not MINT is not a name it may refuse
+ * to ACT ON.
+ */
+describe("resolveSession", () => {
+  const s = (name: string, id: string): Session => ({
+    id,
+    name,
+    created: new Date(1788190336000),
+    attached: false,
+    windows: 1,
+    title: "",
+    provisional: false,
+    claudeId: null,
+    proc: { kind: "none" },
+    meta: { version: "legacy" },
+  });
+  const live = [s("gateA", "$1"), s("stageDbase", "$2"), s("spideryarn-ui-top-bar-cleanup", "$3")];
+
+  it("resolves a name with capitals in it, which SLUG rejected", () => {
+    const r = resolveSession(live, "gateA");
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.session.id).toBe("$1");
+  });
+
+  it("resolves an ordinary name too", () => {
+    const r = resolveSession(live, "spideryarn-ui-top-bar-cleanup");
+    expect(r.ok && r.session.id).toBe("$3");
+  });
+
+  /**
+   * EXACT, never a prefix. `tmux kill-session -t name` without the `=` prefix
+   * matches by prefix, so a bare `stage` would kill `stageDbase` — and a kill
+   * that lands on the wrong session is not an error you get to take back.
+   */
+  it("does not match a prefix of a live name", () => {
+    expect(resolveSession(live, "stage").ok).toBe(false);
+    expect(resolveSession(live, "gate").ok).toBe(false);
+  });
+
+  it("says nothing was killed, and where to look", () => {
+    const r = resolveSession(live, "nope");
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.why).toContain("no live session named 'nope'");
+    expect(r.ok === false && r.why).toContain("gjd-remote ls");
+  });
+
+  it("offers the close match when the only difference is case", () => {
+    const r = resolveSession(live, "stagedbase");
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.why).toContain("did you mean 'stageDbase'?");
+  });
+
+  /** Empty is a refusal, not a wildcard: `find` on `""` must not match `""`. */
+  it("refuses an empty name", () => {
+    expect(resolveSession(live, "").ok).toBe(false);
+  });
+
+  /**
+   * A tmux id resolves too, so `resume-all` can address the session it saw
+   * rather than re-resolving a name in a tab it opens seconds later.
+   */
+  it("resolves a tmux id", () => {
+    const r = resolveSession(live, "$2");
+    expect(r.ok && r.session.name).toBe("stageDbase");
+  });
+
+  it("refuses an id nothing on the box has", () => {
+    expect(resolveSession(live, "$99").ok).toBe(false);
+  });
+
+  /**
+   * NAME FIRST. A session really called `$1` is somebody's session, and handing
+   * back a different one because the string looks like an id is the exact
+   * substitution this function exists to prevent.
+   */
+  it("prefers a session named like an id over the session with that id", () => {
+    const odd = [...live, { ...live[0], id: "$9", name: "$1" } as Session];
+    const r = resolveSession(odd, "$1");
+    expect(r.ok && r.session.id).toBe("$9");
+  });
+});
+
+/**
+ * A name off the box is untrusted text, and shell quoting is not the whole of
+ * the defence: a tmux session name may hold control characters, and printing
+ * one raw hands the reader's terminal an escape sequence somebody else wrote.
+ */
+describe("printableName", () => {
+  it("quotes an ordinary name", () => {
+    expect(printableName("gateA")).toBe("'gateA'");
+  });
+
+  /**
+   * The unquoted half exists for the `ls` table, where the padding has to be
+   * the width on screen. Having only the quoted one is why the table — the one
+   * place that prints every name on the box — was still writing them raw.
+   */
+  it("has an unquoted twin for the table, escaping the same things", () => {
+    expect(escapeName("gateA")).toBe("gateA");
+    expect(escapeName("a\u001b[2Jb")).toBe("a\\x1b[2Jb");
+    expect(printableName("a\u001b[2Jb")).toBe(`'${escapeName("a\u001b[2Jb")}'`);
+  });
+
+  it("escapes a control character rather than sending it to the terminal", () => {
+    expect(printableName("a\u001b[2Jb")).toBe("'a\\x1b[2Jb'");
+    expect(printableName("a\rb")).toBe("'a\\x0db'");
+    expect(printableName("a\u0007b")).toBe("'a\\x07b'");
+  });
+
+  it("leaves a name that only looks alarming alone", () => {
+    expect(printableName("--wait")).toBe("'--wait'");
   });
 });

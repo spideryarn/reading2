@@ -29,7 +29,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CAPABLE_MODEL } from "../src/models.js";
+import { CAPABLE_MODEL, modelFor } from "../src/models.js";
 import { ASSETS_VERSION } from "../src/collect-assets.js";
 import {
   inputFingerprint as arcFingerprint,
@@ -57,6 +57,10 @@ import {
   inputFingerprint as quizFingerprint,
   PROMPT_VERSION as QUIZ_VERSION,
 } from "../src/quiz.js";
+import {
+  inputFingerprint as debateFingerprint,
+  PROMPT_VERSION as DEBATE_VERSION,
+} from "../src/debate.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -195,6 +199,10 @@ const SKETCH_SOURCE_HASH = sketchFingerprint(BLOCKS, TREE, META);
    because the day the two stop agreeing is the day a shared constant would hide
    it. */
 const QUIZ_SOURCE_HASH = quizFingerprint(BLOCKS, TREE, META);
+/* `debate` uses the same `articleWithIdsFingerprint` again — pass B sends
+   `articleWithIds` — so this is the same number a fourth time, and computed
+   through its own module for the same reason. */
+const DEBATE_SOURCE_HASH = debateFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
 /* **The one that is not `articleFingerprint` underneath.** `timeline` stamps
    `datedArticleFingerprint` — the blocks, the tree and a head that carries
@@ -448,7 +456,55 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
+  /* `ideas`' two reasons again — its own fingerprint function, and no
+     `profileHash` because this stage was never written for one — plus three
+     things of its own worth stating, because all three are decisions rather
+     than the shape of a fixture.
+
+     **Both groups are EMPTY**, like `timeline`'s events and unlike `quotes`,
+     `quiz`, `sketch` and `illustrated`. Most pieces have no critical reception
+     at all, so an artefact that honestly says so is the commonest correct
+     answer — `SHAPE.debate` in src/store/artifacts.ts accepts it, and this
+     fixture is what holds that decision to being true on both sides.
+
+     **`generator` is `modelFor("debate")`, not `CAPABLE_MODEL`.** Every other
+     artefact here stamps the constant; this is the one stage on the chat wire,
+     where `SPIDERYARN_DEBATE_MODEL` can override the model, and its `stamp`
+     resolves the same way. A `CAPABLE_MODEL` here would report the step
+     not-done on any machine with that variable set.
+
+     **`searchedAt` and no `generatedAt`** — the two would be one instant
+     written twice, so this artefact carries the one that means something to a
+     reader. */
+  await writeJson(pathFor(at, "debate", "debate"), {
+    generator: modelFor("debate"),
+    slug: SLUG,
+    sourceHash: DEBATE_SOURCE_HASH,
+    version: DEBATE_VERSION,
+    searchedAt: new Date().toISOString(),
+    direct: { rows: [], counts: EMPTY_DEBATE_COUNTS },
+    claims: { rows: [], counts: EMPTY_DEBATE_COUNTS },
+    elapsedMs: 1,
+  });
 }
+
+/** One group's counts for a pass that ran, found pages, and kept no row from them. */
+const EMPTY_DEBATE_COUNTS = {
+  returnedSources: 0,
+  reportedRows: 0,
+  keptRows: 0,
+  omittedOverCap: 0,
+  lost: {
+    uncited: 0,
+    selfSource: 0,
+    unverifiedSource: 0,
+    directnessUnverified: 0,
+    claimNotInBlock: 0,
+    unknownBlockId: 0,
+    malformed: 0,
+  },
+  webSearches: 3,
+};
 
 /**
  * The Sketch this fixture writes — a `const` rather than an object literal at

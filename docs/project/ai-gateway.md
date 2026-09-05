@@ -323,6 +323,18 @@ top-level key comes back `200` with no complaint. Only an observable difference 
 proves anything — the provider pin is believed here because the *named upstream changed*, not
 because the call succeeded.
 
+**And its dual, which is the one that costs money: OpenRouter honouring a field is not evidence that
+the field bounded the spend.** A result cap is not a spend cap. `openrouter:web_search`'s
+`max_total_results` is enforced exactly — a probe on 2026-09-05 asked for 4 and got 4 — and in the
+same call the provider ran **36 searches** to produce them, at $0.10. Nothing in the request bounds
+the number of searches, and the number of searches is what is billed; `max_uses` is no better, a
+probe asking for 2 got 6 ([`src/converse.ts`](../../src/converse.ts) § `webSearchTool`). What drove
+the 36 was a prompt ordering the model to *be thorough* — which bought no extra evidence, because the
+results were capped anyway. **So a prompt for a searching call is a cost control**, and the honest
+bounds are an abort deadline and `webSearches` on the ledger row as the alarm. Measured while
+planning Debate mode; the numbers and the method are in
+[260905f](../plans/260905f-debate-mode-stage-0-spike-results.md) § Stage 0b.
+
 ## What it cost
 
 **One vendor now sits in front of the whole app.** Before this, an OpenRouter outage cost the reader
@@ -390,14 +402,21 @@ CHECK (byok_upstream_nanos IS NULL
 `is_byok IS TRUE` and not a bare `is_byok`: the column is nullable, a Postgres CHECK passes on
 `UNKNOWN`, and "the provider did not say" is not "no". The same three conditions appear twice more —
 `normaliseByokUpstream` in [`src/ai-spend.ts`](../../src/ai-spend.ts), which is the only place a
-`SpendRecord`'s figure becomes this column, and the filesystem reader's validation. **They must not
-drift apart**: a row the database refuses is a call that lands in no ledger at all, because the sink
+`SpendRecord`'s figure becomes this column, and — until 2026-09-05 — the filesystem reader's
+validation. **The two that are left must not drift apart**: a row the database refuses is a call that lands in no ledger at all, because the sink
 warns rather than throws.
 
-**The JSONL ledger cannot be migrated**, being append-only, so every line ever written still says
-`upstreamInferenceNanos`. `translateByokUpstream` in
-[`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) converts it on read under the same
-condition — carried over on a BYOK line, nulled on any other, because there it *was* the duplicate.
+> **The JSONL ledger is gone.** `src/store/ai-calls-fs.ts` and the file at `data/_ai-calls.jsonl`
+> were deleted on 2026-09-05, stage G of
+> [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
+> `spideryarn.ai_calls` is the only ledger. The three paragraphs below are kept because the
+> *predicate* they are about is still live in two places — the CHECK above and `normaliseByokUpstream`
+> — and because the reason the third copy went wrong is the reason those two are named together.
+> Read them as history, in the past tense.
+
+**The JSONL ledger could not be migrated**, being append-only, so every line ever written still said
+`upstreamInferenceNanos`. `translateByokUpstream` in `src/store/ai-calls-fs.ts` converted it on read
+under the same condition — carried over on a BYOK line, nulled on any other, because there it *was* the duplicate.
 Without that the whole historical file would read as damage. **All three conditions, not just
 `isByok`**: it tested one of them until 2026-09-03, and a BYOK line for which no `cost` figure ever
 arrived backfills to `cost_source: 'none'`, kept its upstream value, failed the reader's own

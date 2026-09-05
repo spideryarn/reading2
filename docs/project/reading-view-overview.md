@@ -6,7 +6,7 @@ whichever mode is on. The first two are permanent; the band is the surface the m
 [the list is below](#the-modes-in-the-band), and naming them here as well only means one of the two
 goes stale.
 
-**Two of the thirteen modes open no band at all**, and the default is one of them. `plain` is the article
+**Two of the fourteen modes open no band at all**, and the default is one of them. `plain` is the article
 by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
 2026-08-31; `hierarchy` is the granularity columns beside the prose, which is what the default used
 to be. So *a mode is open* and *a band is open* are separate questions
@@ -27,9 +27,9 @@ of compression, down the page for position and across for detail. Read that firs
   invariants a stream needs and a single response does not.
 - **Never substitute generated text for the prose,** and render model output as text, not HTML.
 - **One payload, no network on zoom** — meta, blocks and tree arrive together.
-- **Pressing a mode with nothing in it runs it; arriving at one does not.** Five surfaces are backed
-  by a paid step — Glossary, Ideas, Quotes, Timeline, and the Sketch picture inside Diagram — and
-  since 2026-09-02 a press on the bar's button starts the job with no second click. A pasted link, a
+- **Pressing a mode with nothing in it runs it; arriving at one does not.** Six surfaces are backed
+  by a paid step — Glossary, Ideas, Quotes, Timeline, Debate, and the Sketch picture inside Diagram —
+  and since 2026-09-02 a press on the bar's button starts the job with no second click. A pasted link, a
   Back step and a link in from the metadata page all show the empty state and its button, and spend
   nothing: the press is recorded as data by the control that saw it
   ([`src/web/activation.ts`](../../src/web/activation.ts)), because a mount is not a click. One
@@ -56,8 +56,8 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The modes in the band
 
-**Four of the thirteen are behind the experimental-features switch** and are drawn only for a reader
-who asked for them — Quotes, Timeline, Referee and Remember. The other nine (Plain, Hierarchy,
+**Five of the fourteen are behind the experimental-features switch** and are drawn only for a reader
+who asked for them — Quotes, Timeline, Referee, Remember and Debate. The other nine (Plain, Hierarchy,
 Outline, Summary, Glossary, Ideas, Search, Chat, Diagram) are what everybody sees, a signed-out
 visitor included. Diagram was the fifth until 2026-09-04, when the gate moved a level down: the mode
 is in everybody's bar and four of its five pictures are behind the switch instead
@@ -94,10 +94,16 @@ readers never are.
   notice written in the past tense on purpose. Open it for how much of it is actually built.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
   cannot promise, the five that were cut, and why nothing was installed to draw them.
+- **Debate** — what the rest of the web says about this piece: replies to it, and the argument
+  around the claims it makes. **The only mode whose content is not in the article at all**, which is
+  why nearly everything the panel draws that is not a row is a disclosure. There is no `debate.md`
+  yet; the plan is the reference:
+  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md). Owner-only and
+  behind the switch for now.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
-That is eleven of the thirteen; `plain` and `hierarchy` are the two that open no band.
+That is twelve of the fourteen; `plain` and `hierarchy` are the two that open no band.
 
 ### Marking a passage, and asking about one
 

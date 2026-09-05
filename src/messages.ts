@@ -319,6 +319,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "gl-ask-absent": "blocked",
   "gl-ask-part-word": "blocked",
   "gl-ask-no-prose": "blocked",
+  /* **Debate's own, and the only `db-`.** `retry` because the model choosing
+     not to search, and a provider falling back to one that dropped the tool,
+     both come out differently next time. See `DEBATE_SEARCH_DID_NOT_RUN` for
+     why a search that did not run is a *failure* rather than an empty result. */
+  "db-no-search": "retry",
   /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
      that is why there are four rather than one. The kind is what decides
      whether a Retry appears, and a single sentence would have had to either
@@ -1025,6 +1030,41 @@ export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
     "be made for somebody else's reading of it. Draw the Sketch again — it is the chip one to " +
     "the left — and then press this one. Until it is redrawn, this will come back the same " +
     "way. [jb-sketch-profile]",
+};
+
+/* ----------------------------------------------------- asking the web (debate) -- */
+
+/**
+ * **The search tool was offered and either did not run or would not account for
+ * itself** — src/debate.ts, and the one failure this mode has that no other
+ * stage can have.
+ *
+ * `retry`, and that is the right kind rather than the generous one: the model
+ * *chose* not to search, or a provider fell back to one that dropped the tool,
+ * and both come out differently on another attempt.
+ *
+ * **Why this is a failure at all**, which is the whole design of the mode in
+ * one sentence: a model that did not search still answers, plausibly, from
+ * memory — and what it produces is not an empty panel but a *full* one, of real
+ * URLs it happens to know. Every rule in `readGroup` then drops every row as
+ * uncited, and the reader sees "the search found nothing" over a search that
+ * never happened. Those are two different facts and the panel must not print one
+ * for the other. docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md
+ * § 2, where the three empty states are tabulated.
+ *
+ * It also covers the case where the count is simply not in the response.
+ * OpenRouter has renamed that field twice (`whereSearchCountCameFrom`,
+ * src/openrouter-stream.ts), and an unreadable count is indistinguishable from
+ * a model that chose not to search — so this fails rather than guessing, because
+ * the guess that costs nothing to make is the one that would publish a
+ * fabrication.
+ */
+export const DEBATE_SEARCH_DID_NOT_RUN: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This mode goes out to the web, and this time the search either did not run or did not report " +
+    "back — so anything the AI said would have come from memory rather than from pages we could " +
+    "show you. Nothing has been kept. Trying again usually works. [db-no-search]",
 };
 
 /* ------------------------------------------------------------- reading a PDF -- */
@@ -3441,7 +3481,7 @@ export const NEVER_SHARED = [
  * **What each mode holds, in the owner's own vocabulary** — and nothing about
  * whether it is shared.
  *
- * A total `Record<Mode, string>` rather than a partial one, so a fourteenth mode
+ * A total `Record<Mode, string>` rather than a partial one, so a fifteenth mode
  * is a red compiler here rather than a blank row in a list an owner is reading
  * before publishing somebody else's article.
  *
@@ -3485,6 +3525,16 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   search: "The questions you have put to this piece, in your words, and the passages they found.",
   remember: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
+  /* **"went looking for", not "found"**, and the tense is the whole row. This
+     is the only mode whose content is not in the article, so an owner reading
+     this line has to be told what was searched rather than what exists — and
+     the commonest honest answer is that nobody has written about their piece
+     (src/debate.ts § the search never comes back empty). A row promising
+     *"what other people said about this"* would be a claim about the web that
+     an empty panel then contradicts. */
+  debate:
+    "What we went looking for on the open web: replies to this piece, and the argument around " +
+    "the claims it makes.",
 };
 
 /* ---------------------------------------------------------------- timeline --
@@ -3559,6 +3609,86 @@ export const TIMELINE_NO_CHRONOLOGY =
  */
 export const TIMELINE_THIN =
   "This piece is not really telling a story in time. Here is everything it puts in a sequence.";
+
+/* ------------------------------------------------------------------ debate --
+   What the reader is told when the open web had nothing for this piece — and
+   the two ways that can be true.
+
+   Here beside the timeline's pair, and for the same reason: these are sentences
+   about a **negative result rather than a failure**, and the mistake they exist
+   to prevent is the panel drawing them like an error or drawing two of them the
+   same. The difference matters more here than anywhere else in the app, because
+   the empty answer is this mode's **commonest correct output** — most pieces
+   have no critical reception at all — so it is the sentence a reader will meet
+   again and again, and one that overclaims is a lie repeated.
+
+   **Never *"No one has written about this."*** OpenRouter reports a search
+   *count* and never the *queries* (docs/project/chat-tools.md), so what we hold
+   is evidence of a bounded search, not a claim about the web. Every sentence
+   below is about *this search*, and the grammar is what carries that.
+   docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § 2.  */
+
+/**
+ * **The search came back with no pages to look at.** Group one.
+ *
+ * `returnedSources === 0`: the pass ran, it reported a positive search count —
+ * zero would have failed the whole step — and not one admissible page came back
+ * with it.
+ */
+export const DEBATE_RESPONSES_NONE = "This search did not find any responses to this piece.";
+
+/**
+ * **The search came back with pages, and not one of them could be checked.**
+ * Group one, and a different fact from the sentence above.
+ *
+ * Every quotation is located in the *extract the search engine returned*, which
+ * ran 236–4,945 characters in the Stage 0 measurements, of pages that may run to
+ * tens of thousands. So a real, apt quotation that simply falls outside that
+ * slice loses its row (Sol's F18). That is the right direction to fail in — we
+ * lose a true row rather than admit an unchecked one — and it is emphatically
+ * not the same news as *nothing came back*.
+ */
+export const DEBATE_RESPONSES_UNVERIFIED =
+  "The search returned possible responses, but the excerpts provided were not enough to verify " +
+  "them.";
+
+/** The same pair for group two, whose search asks about the claims rather than the piece. */
+export const DEBATE_CLAIMS_NONE =
+  "This search did not find anyone writing about what this piece claims.";
+
+/** …and the same distinction, which is why these are four strings and not two. */
+export const DEBATE_CLAIMS_UNVERIFIED =
+  "The search returned possible sources, but the excerpts provided were not enough to verify them.";
+
+/**
+ * **The order means nothing, said out loud.**
+ *
+ * Greg asked for *"ideally from authoritative sources"* and there is no honest
+ * way to rank authority: any list we maintain is wrong per domain, and on an ML
+ * paper the sharpest critique is routinely a pseudonymous blog. So the host
+ * leads every row — the one authority signal a reader can judge, free — and
+ * this says the position of a row carries no claim, because a reader looking at
+ * a list will otherwise assume it does.
+ */
+export const DEBATE_NO_RANKING =
+  "These are in the order the search returned them — no ranking by prominence or authority is " +
+  "applied, and the site each one is on is the thing to judge them by.";
+
+/**
+ * **What the quotation was checked against, which is not the page.**
+ *
+ * The survivor bias this discloses is real and is the reason it is on screen
+ * rather than in a doc: every quotation here had to be found in the slice a
+ * search engine chose, so what survives is biased toward passages a search
+ * engine surfaced — which is not the same as the passages that matter.
+ */
+/* **"here", not "below"**, and it is not a style preference: this sentence is
+   drawn twice, at the foot of the lists and on every ⓘ card, and in both places
+   the quotations it is about are *above* it. It said "below" while it sat in the
+   panel head, and moving it left the word pointing at nothing. */
+export const DEBATE_EXTRACTS_ONLY =
+  "Every quotation here was found in the extract the search returned for that page, not in the " +
+  "whole page.";
 
 /* ----------------------------------------------------------------- referee --
    What a peer reviewer is told in Referee mode, and what everybody is told at

@@ -354,6 +354,73 @@ export function hostOf(url: string): string {
 }
 
 /**
+ * What a GET would actually ask for, or `null` if this is not a web URL.
+ *
+ * **Everything but the fragment**, because the fragment is the one part of a URL
+ * that is never sent: `…/x#a` and `…/x` are the same request, and that is the
+ * whole reason this function exists.
+ *
+ * `urlKey` was used here first and a GPT Sol review was right that it is the
+ * wrong tool. It is the *shelf's* notion of sameness, and it is deliberately
+ * generous — it folds `http` into `https`, `www.` into the bare host and drops
+ * tracking parameters, because two spellings of one address should be one row on
+ * a bookshelf. Those are false positives here, and a false positive is a tool
+ * telling the model "that page is already open" about a page that is not.
+ * `normaliseUrl`'s own comments say `http` and `https` can serve different
+ * pages. So: same scheme, same host, same port, same path, same query.
+ *
+ * The path is normalised **only where percent-encoding is meaningless**, so
+ * `/%78` and `/x` are one request, and a trailing dot is dropped from the host —
+ * two under-refusals the same review found. `new URL` has already lowercased the
+ * host and dropped a default port.
+ *
+ * **Unreserved characters only, and that is the whole of the 2026-09-05 fix**
+ * (GPT Sol's F30). This decoded the entire pathname, which made
+ * `https://x.test/a%2Fb` and `https://x.test/a/b` the same target — and they are
+ * two different requests: one asks for a single path segment whose name contains
+ * a slash. RFC 3986 § 6.2.2.2 says an encoded *unreserved* character (`A-Z a-z
+ * 0-9 - . _ ~`) is equivalent to the character itself and nothing else is, so
+ * that is exactly what is folded here; `%2F`, `%3F`, `%23` and the rest of the
+ * delimiters stay encoded and stay distinct. Non-ASCII needs no case: `new URL`
+ * has already percent-encoded it, on both sides of every comparison.
+ *
+ * Wrong in the over-matching direction is what costs something. In chat it is
+ * `read_web_page` telling the model a page is "already open" when it is a
+ * different page; in Debate it drops a legitimate annotation from
+ * `returnedSources` and files its row under `selfSource`.
+ *
+ * **It lived in src/chat-tools.ts until 2026-09-05**, and moved here unchanged
+ * when a second feature needed the same identity rather than a second opinion
+ * about it. See `sameTarget` below for who asks and what each of them is asking.
+ */
+export function requestTarget(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const host = u.hostname.replace(/\.$/, "");
+    /* A stray percent is left alone rather than throwing — `decodeURIComponent`
+       on the whole path used to throw on one, and an unpaired `%` in an href is
+       an ordinary thing for a hand-written page to have. */
+    const path = u.pathname.replace(ESCAPE, (_whole, hex: string) => {
+      const ch = String.fromCharCode(Number.parseInt(hex, 16));
+      /* An escape we keep is upper-cased, RFC 3986 § 6.2.2.1: `%2f` and `%2F`
+         are one spelling of one byte, and leaving them apart would trade the
+         over-match this fix removes for a new under-match. */
+      return UNRESERVED.test(ch) ? ch : `%${hex.toUpperCase()}`;
+    });
+    return `${u.protocol}//${host}${u.port ? `:${u.port}` : ""}${path}${u.search}`;
+  } catch {
+    return null;
+  }
+}
+
+/** One percent-escape, whatever case its hex digits are written in. */
+const ESCAPE = /%([0-9A-Fa-f]{2})/g;
+/** RFC 3986's unreserved set — the only characters whose encoding means nothing. */
+const UNRESERVED = /[A-Za-z0-9\-._~]/;
+
+
+/**
  * One parenthesised group in a URL, itself allowed to hold one nested pair.
  *
  * Not pedantry: `…/wiki/Mercury_(planet)` is an ordinary Wikipedia title, and a
@@ -533,102 +600,31 @@ export function withoutWebLinks(text: string): string {
 
 /* ------------------------------------------------- what a GET asks for --- */
 
-/**
- * **What a GET would actually ask for, or `null` if this is not a web URL.**
- *
- * The WHATWG serialization with the fragment cleared, and **nothing else
- * touched**. The fragment is the one part of a URL that is never sent — `…/x#a`
- * and `…/x` are the same request — and that is the whole and only merge this
- * function is allowed to make.
- *
- * **This is not `urlKey`, and the two must never be conflated.** `urlKey`
- * (src/ingest.ts) is the *shelf's* notion of sameness and is deliberately
- * generous — it folds `http` into `https`, `www.` into the bare host and drops
- * tracking parameters, because two spellings of one address should be one row on
- * a bookshelf. Every one of those is a false positive when the question is *what
- * did we ask the network for*: `http` and `https` can serve different pages, and
- * a query parameter we chose to ignore is a parameter the far end may act on. So
- * there are **two identities**, and which one a caller wants is a real decision:
- *
- * - `urlKey` for reader-facing equivalence — shelf membership, the Add button;
- * - this one for the fetch cache, the single-flight claim, and — through
- *   `articlePointsAt` in src/link-previews.ts — **whether this reader is allowed
- *   to make us fetch that address at all**.
- *
- * ## It used to decode the path, and that was wrong for this job
- *
- * Until 2026-09-05 this percent-decoded the pathname and dropped a trailing dot
- * from the host, so that `/%78` and `/x` were one request. Both merges are
- * **false**: `/a%2Fb` is not `/a/b`, `/a%3Fb` is not `/a?b`, and a trailing dot
- * is a distinguishable virtual host. That was harmless while the only consumer
- * was `read_web_page` refusing to re-fetch the open article, where merging too
- * much is the *conservative* direction — and it stopped being harmless the
- * moment the same key became an **authorization** key and a **global cache**
- * key, where merging too much means an article that links `…/a%3Fb` authorises a
- * fetch of the different address `…/a?b`, and one page's content is served for
- * another's. GPT Sol, 2026-09-05, finding P1-1.
- *
- * The generous version still exists, because the chat tool still wants it, and
- * it is `sameTarget` below — named for what it is rather than shared with this.
- *
- * `new URL` has already lowercased the host, dropped a default port, and
- * normalised the escapes it is allowed to normalise.
- *
- * **It lived in src/chat-tools.ts until 2026-09-05** and moved here at its
- * second caller. Moved rather than copied, and that is the same rule
- * `articleLinks` states about its own HTML parse: a second implementation that
- * could disagree with this one about what counts as the same request is exactly
- * what a cache key must not be built on.
- */
-export function requestTarget(url: string): string | null {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    u.hash = "";
-    return u.href;
-  } catch {
-    return null;
-  }
-}
 
 /**
- * **Would fetching these two probably ask a server for the same thing?**
+ * **Would fetching these two ask a server for the same thing?**
  *
- * *Probably*, and the difference from `requestTarget` is the whole point of this
- * being a second function rather than an equality test on the first.
+ * `requestTarget` equality, and nothing more. It was a *generous* comparison for
+ * one day — 2026-09-05 — on the argument that its caller is `read_web_page`
+ * refusing to re-fetch the article the reader already has open, and that
+ * over-matching there costs only a fetch nobody needed.
  *
- * Its one caller is `read_web_page`'s refusal to fetch the article the reader
- * already has open (src/chat-tools.ts), and **there, merging too much is the
- * safe direction**: a false match costs the model one fetch it did not need of a
- * page it has already been given, and a false *miss* costs the reader ten
- * seconds and a request to their publisher saying somebody is reading this right
- * now. So this keeps the decoded path and the trailing-dot host that
- * `requestTarget` gave up on 2026-09-05 — `…/essays/%78` and `…/essays/x` are
- * one page as far as *that* refusal is concerned.
+ * **That argument was wrong and the test that killed it is in
+ * tests/chat-tools.test.ts.** `…/a%2Fb` and `…/a/b` are different request
+ * targets — one asks for a single segment whose name contains a slash — so
+ * folding them is this tool telling the model a page is already open when it is
+ * a *different page*, and the cost is not a wasted fetch but a page the model
+ * needed and did not get. `requestTarget` already folds the escapes that really
+ * are one spelling of one character (RFC 3986's unreserved set), which is the
+ * whole of what the generous version was reaching for.
  *
- * **Do not use it as a cache key or an authorization key.** Over-matching there
- * means serving one page's content for another's, which is the direction
- * `requestTarget` exists to refuse. GPT Sol, P1-1.
+ * Kept as a named function rather than inlined: the name is what the two call
+ * sites are asking, and `requestTarget(a) === requestTarget(b)` at each of them
+ * would be two places to get the null case wrong.
  */
 export function sameTarget(a: string, b: string): boolean {
-  const one = generousTarget(a);
-  return one !== null && one === generousTarget(b);
-}
-
-/** `sameTarget`'s key: `requestTarget`, then the two merges it will not make. */
-function generousTarget(url: string): string | null {
-  const exact = requestTarget(url);
-  if (exact === null) return null;
-  const u = new URL(exact);
-  const host = u.hostname.replace(/\.$/, "");
-  let path = u.pathname;
-  try {
-    path = decodeURIComponent(path);
-  } catch {
-    /* A stray percent. The raw path is still a fine key; it just will not match
-       its own decoded spelling, which is the conservative direction here. */
-  }
-  return `${u.protocol}//${host}${u.port ? `:${u.port}` : ""}${path}${u.search}`;
+  const one = requestTarget(a);
+  return one !== null && one === requestTarget(b);
 }
 
 /**

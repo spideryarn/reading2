@@ -45,6 +45,7 @@
 import type {
   Arc,
   Block,
+  Debate,
   Glossary,
   Ideas,
   Meta,
@@ -55,6 +56,7 @@ import type {
   Tree,
   TweetThread,
 } from "../types.js";
+import { isDebateDocument } from "../types.js";
 import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
 import type { Assets } from "../assets.js";
@@ -92,7 +94,8 @@ export type ArtifactKind =
   | "timeline"
   | "quiz"
   | "sketch"
-  | "illustrated";
+  | "illustrated"
+  | "debate";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -168,6 +171,17 @@ export interface ArtifactMap {
    * and for the same reason.
    */
   illustrated: Illustrated;
+  /**
+   * What the rest of the web says about this piece — `Debate`, src/types.ts,
+   * written by the `debate` step.
+   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+   *
+   * **The only artefact here whose content is not in the article**, and the
+   * only one built from two model calls that are one atomic step: two groups,
+   * each with its own rows and its own counts, and a failure of either pass
+   * writes none of it.
+   */
+  debate: Debate;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -240,6 +254,18 @@ export interface ShapeCheck {
   readonly field: string | null;
   /** Is that field (or, for `field: null`, the value itself) usable? */
   readonly ok: (value: unknown) => boolean;
+  /**
+   * Ask `ok` about the **whole document** rather than about `field`, which then
+   * names only what the failure message should say.
+   *
+   * One kind uses it, `debate`, and it is here rather than in a second table
+   * because its usability genuinely spans two fields: an artefact with a
+   * `direct` group and no `claims` group is half a document, and a check that
+   * reads one field cannot see that. Adding a second such kind is a fine reason
+   * to keep this; adding a fifth is a reason to give `ok` the document and the
+   * field name and be done with it.
+   */
+  readonly whole?: boolean;
 }
 
 const isArray = (v: unknown): boolean => Array.isArray(v);
@@ -312,6 +338,23 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      collapsing that into "no artefact" would make the reader press the button
      again and pay for the brief a second time. */
   illustrated: { field: "plates", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
+  /* **`direct`, the group-one container — and an empty `rows` inside it is not
+     merely usable, it is the commonest CORRECT answer.** Most articles have no
+     critical reception at all, and Greg asked for that state by name: *"If no
+     one (or few people) have written about this piece, let's just say so."* So
+     this is `timeline`'s call rather than `quotes`' or `quiz`'s, and for a
+     stronger reason than timeline has — refusing an empty group one would make
+     the expected outcome unstorable, so the step would re-run and pay up to
+     $0.27 for the same honest answer on every open.
+
+     What it checks is that the document has the two-group shape at all, which
+     is what tells a half-written or hand-edited file from an artefact — **both
+     groups' rows, which is why this is the one `whole` row in the table**. It
+     asked only whether `direct` was an object until 2026-09-05, so `{direct:{}}`
+     passed here while `readDebate` refused it and Postgres served it unchecked:
+     three answers to one question (Sol's F29). `isDebateDocument` (src/types.ts)
+     is now the only one, and all three readers ask it. */
+  debate: { field: "direct", ok: isDebateDocument, whole: true },
 };
 
 /**
@@ -325,9 +368,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
  * never quotes what was in it.
  */
 export function whyUnusable(kind: ArtifactKind, value: unknown): string | null {
-  const { field, ok } = SHAPE[kind];
+  const { field, ok, whole } = SHAPE[kind];
   if (field === null) return ok(value) ? null : "empty";
   if (!isObject(value)) return "not an object";
+  if (whole) return ok(value) ? null : `no usable "${field}"`;
   return ok((value as Record<string, unknown>)[field]) ? null : `no usable "${field}"`;
 }
 
@@ -732,6 +776,11 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   quiz: "quiz",
   sketch: "sketch",
   illustrated: "illustrated",
+  /* **And deliberately NO `BASELINE` row**, like `quiz` above and for the same
+     reason: there is no id inheritance across runs, marks in the prose are not
+     in v1, and `readBaseline` throws for a kind with no row precisely so that
+     nothing can half-inherit. */
+  debate: "debate",
 };
 
 /**

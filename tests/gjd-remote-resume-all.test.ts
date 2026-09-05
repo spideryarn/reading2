@@ -34,7 +34,9 @@ const UUID = "486E9CEB-9FBE-420F-8B7E-941FB35360DC";
 /** An iTerm tab with nothing in the way. */
 const ITERM = { TERM_PROGRAM: "iTerm.app", ITERM_SESSION_ID: `w5t11p0:${UUID}` } as NodeJS.ProcessEnv;
 
-const session = (name: string, attached: boolean, minutesAgo: number) => ({
+// The id is what the plan carries through to the tab; the name is only shown.
+const session = (name: string, attached: boolean, minutesAgo: number, id = `$${name.length}`) => ({
+  id,
   name,
   attached,
   created: new Date(Date.now() - minutesAgo * 60_000),
@@ -168,12 +170,57 @@ describe("isSessionUuid", () => {
   });
 });
 
+/**
+ * This string is TYPED INTO A SHELL in a fresh tab, and since 2026-09-05 the
+ * name in it is not necessarily a slug: `ls` lists every tmux session on the
+ * box, including the ones agents make by hand to hold a long `npm test`, and
+ * those names need only satisfy tmux. Sol's finding.
+ */
 describe("resumeCommand", () => {
-  it("is the command you would have typed", () => {
-    expect(resumeCommand("gjd-remote", "fix-the-toc")).toBe("gjd-remote resume fix-the-toc");
-    expect(resumeCommand("/Users/greg/bin/gjd-remote", "fix-the-toc", "ssh")).toBe(
-      "/Users/greg/bin/gjd-remote resume fix-the-toc --ssh",
+  const tab = { id: "$27", name: "fix-the-toc" };
+
+  it("is the command you would have typed, addressed by id", () => {
+    expect(resumeCommand("gjd-remote", tab)).toBe("gjd-remote resume -- '$27'   # fix-the-toc");
+    expect(resumeCommand("/Users/greg/bin/gjd-remote", tab, "ssh")).toBe(
+      "/Users/greg/bin/gjd-remote resume --ssh -- '$27'   # fix-the-toc",
     );
+  });
+
+  /**
+   * THE RACE. The tab is opened and typed into seconds after the list was read;
+   * `resume <name>` resolves the name again at that moment, so a session that
+   * ended and had its name taken hands the tab to the replacement. Sol found it
+   * in review — the first version carried only the name.
+   */
+  it("does not put the name where the command would resolve it", () => {
+    const cmd = resumeCommand("gjd-remote", tab);
+    expect(cmd.slice(0, cmd.indexOf("#"))).not.toContain("fix-the-toc");
+    expect(cmd).toContain("'$27'");
+  });
+
+  it("quotes an id, which a shell would otherwise expand as a parameter", () => {
+    // Unquoted, `$27` is positional parameter 2 followed by a 7 — empty, so
+    // `resume` would get no argument at all and attach to the newest session.
+    expect(resumeCommand("gjd-remote", tab)).toContain("'$27'");
+  });
+
+  /** The one that would run as a command rather than being read as a comment. */
+  it("neutralises a quote in the name it shows", () => {
+    const cmd = resumeCommand("gjd-remote", { id: "$1", name: "it's; rm -rf ~" });
+    expect(cmd).toBe("gjd-remote resume -- '$1'   # it's; rm -rf ~");
+    // Everything after `#` is a comment, so the apostrophe cannot open a quote
+    // and the semicolon cannot start a command.
+    expect(cmd.indexOf("#")).toBeLessThan(cmd.indexOf("rm -rf"));
+  });
+
+  /**
+   * A newline in the name would end the comment and make the rest of it a
+   * command line of its own, typed straight into the new tab.
+   */
+  it("does not let a newline in a name escape the comment", () => {
+    const cmd = resumeCommand("gjd-remote", { id: "$1", name: "a\nrm -rf ~" });
+    expect(cmd).not.toContain("\n");
+    expect(cmd).toBe("gjd-remote resume -- '$1'   # a rm -rf ~");
   });
 });
 
@@ -183,21 +230,27 @@ describe("planTabs", () => {
     // a tab for an attached session would quietly blank the tab you already
     // had it in.
     const plan = planTabs([session("live", true, 10), session("idle", false, 20)], { includeAttached: false });
-    expect(plan.open).toEqual(["idle"]);
+    expect(plan.open).toEqual([{ id: "$4", name: "idle" }]);
     expect(plan.skipped).toEqual([{ name: "live", why: expect.stringContaining("already attached") }]);
   });
 
   it("takes them when asked", () => {
     const plan = planTabs([session("live", true, 10), session("idle", false, 20)], { includeAttached: true });
-    expect(plan.open).toEqual(["idle", "live"]);
+    expect(plan.open).toEqual([
+      { id: "$4", name: "idle" },
+      { id: "$4", name: "live" },
+    ]);
     expect(plan.skipped).toEqual([]);
   });
 
   it("orders oldest first, whatever order tmux listed them in", () => {
-    const plan = planTabs([session("b", false, 5), session("c", false, 1), session("a", false, 99)], {
-      includeAttached: false,
-    });
-    expect(plan.open).toEqual(["a", "b", "c"]);
+    const plan = planTabs(
+      [session("b", false, 5, "$2"), session("c", false, 1, "$3"), session("a", false, 99, "$1")],
+      { includeAttached: false },
+    );
+    expect(plan.open.map((t) => t.name)).toEqual(["a", "b", "c"]);
+    // The ids travel with them — that is what the tab is opened against.
+    expect(plan.open.map((t) => t.id)).toEqual(["$1", "$2", "$3"]);
   });
 
   it("opens nothing from nothing", () => {

@@ -53,10 +53,19 @@ describe("requestTarget — what a GET actually asks for", () => {
     );
   });
 
-  it("keeps a trailing dot on the host", () => {
-    /* `example.com.` is a distinguishable virtual host, and the version of this
-       function that stripped the dot said otherwise. */
-    expect(requestTarget("https://a.example./x")).not.toBe(requestTarget("https://a.example/x"));
+  it("folds an encoded unreserved character, because it is the same character", () => {
+    /* RFC 3986 § 2.3: `%78` *is* `x`, and always was. Folding these is not
+       generosity, it is normalisation — and it is what lets the strict version
+       below stay strict about the escapes that genuinely change the request.
+
+       This case used to assert the opposite, and a trailing dot on the host
+       used to be kept. Both were written on 2026-09-05 against a `requestTarget`
+       that declined to decode anything at all, which closed the authorization
+       hole by refusing every merge rather than by making the right one. */
+    expect(requestTarget("https://a.example/essays/%78")).toBe(
+      requestTarget("https://a.example/essays/x"),
+    );
+    expect(requestTarget("https://a.example/%7Egreg")).toBe(requestTarget("https://a.example/~greg"));
   });
 
   it("keeps every distinction urlKey deliberately throws away", () => {
@@ -79,16 +88,16 @@ describe("requestTarget — what a GET actually asks for", () => {
   });
 });
 
-describe("sameTarget — the chat tool's generous version", () => {
-  it("still folds a percent-encoded path, which requestTarget will not", () => {
-    /* `read_web_page` refuses to re-fetch the article the reader already has
-       open, and a model holding `meta.url` can spell the same path either way.
-       Over-matching there is the safe direction; the assertion pairs the two
-       functions so that nobody can "fix" one into the other. */
+describe("sameTarget — the chat tool's question, which is the same question", () => {
+  it("is requestTarget equality, and was generous for exactly one day", () => {
+    /* It folded `%2F` into `/` when written, on the argument that its caller —
+       `read_web_page` refusing to re-fetch the open article — is safer
+       over-matching. tests/chat-tools.test.ts § "does NOT fold an encoded
+       delimiter into a real one" is the case that killed it: those are two
+       different pages, so folding them tells the model a page is open when it
+       is not, and the cost is a page it needed rather than a fetch it did not. */
     expect(sameTarget("https://a.example/essays/%78", "https://a.example/essays/x")).toBe(true);
-    expect(requestTarget("https://a.example/essays/%78")).not.toBe(
-      requestTarget("https://a.example/essays/x"),
-    );
+    expect(sameTarget("https://a.example/a%2Fb", "https://a.example/a/b")).toBe(false);
   });
 
   it("still refuses a www or http spelling, which urlKey would fold", () => {

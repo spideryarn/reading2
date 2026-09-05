@@ -70,7 +70,6 @@
  */
 import { useState } from "react";
 import {
-  BookA,
   ExternalLink,
   Globe,
   Info,
@@ -250,8 +249,10 @@ export function GlossaryPanel({
   return (
     <aside className="mode-band gloss" aria-label="Glossary">
       <div className="band-head">
-        <BookA size={14} className="band-head-icon" />
-        <h2>Glossary</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it, and saying it
+            twice was the clutter Greg asked us to clear (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays, because what follows is a count rather than a name. */}
         {glossary && (
           <span className="gloss-count">
             {glossary.entries.length} {glossary.entries.length === 1 ? "term" : "terms"}

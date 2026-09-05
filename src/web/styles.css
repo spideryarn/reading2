@@ -203,7 +203,27 @@
      silently wrong, and the way they go wrong is a control sitting on top of
      the one thing the page is for. */
   --feedback-w: 7.5rem;
-  --head-h: 2.5rem; /* thead */
+  /* **The table head's height, and it is zero on purpose since 2026-09-05.**
+     Greg: *"I'm even wondering if we can get rid of the row of
+     column-header-labels in Hierarchy mode … to save on vertical space"* — so
+     the row went, and the element stayed. It is still doing three jobs that
+     have nothing to do with being visible: the fisheye panels take every
+     column's rectangle from `thead th[data-col]` (useColumnContext.ts), a
+     `<th scope="col">` is what names a column for a screen reader, and the
+     head's sticky `top` is what a panel's `bottom` resolves to. Deleting it
+     would have emptied Hierarchy's Parts and Sections columns outright — the
+     gist cell under a panel deliberately draws nothing (TableView.tsx).
+
+     **Changed here rather than on `thead th` alone**, because `td.gist .sticky`
+     positions itself at `--bar-bottom + --head-h` (§ table): moving the token
+     keeps that consumer right for free, where a rule on the head would have
+     left every gist floating a head's height below the bar. Three consumers
+     and no more — this line, the head's own `height`, and that one.
+
+     `0px` and not `0`: it goes into a `calc()` sum with a length, and a
+     unitless zero there makes the whole declaration invalid.
+     docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 3. */
+  --head-h: 0px;
   /* The bottom bar — Dock.tsx. Read by the comment dialog and the overflow
      fade, both of which have to stop above it, so it is a token rather than a
      number written out three times. */
@@ -691,106 +711,38 @@ table.zoom {
   border-spacing: 0;
 }
 
+/* ------------------------------------------------- § the head with no row ----
+   **A row of column names that is not a row.** Greg asked for the vertical
+   space back (§ tokens, `--head-h`) and the element had to stay, so what is
+   left is a strip of zero height that is still exactly where the head was:
+   sticky under the controls bar, one cell per column, each one carrying its
+   name in an `.sr-only` span.
+
+   Three things read it, and none of them reads a pixel of it:
+
+    - `useColumnContext.ts` takes each column's `left`, `width` and `bottom`
+      from `thead th[data-col]`. With no height, `bottom === top`, which is the
+      bar's own bottom edge — so a fisheye panel now starts directly under the
+      bar instead of a head's height below it. Better, not merely unbroken.
+    - A screen reader reads `<th scope="col">` as the name of every cell in the
+      column. The pills in the controls bar are outside the table and can never
+      do this job, which is why the text is hidden rather than deleted.
+    - `--head-h` is what `td.gist .sticky` adds to `--bar-bottom` below.
+
+   **Everything visual went, and `overflow: hidden` is the belt to the
+   `.sr-only` braces**: a table cell treats `height` as a *minimum*, so this
+   collapses only because nothing inside it is in flow. The old type tokens
+   (`--head-pad-x` and the two `--head-type-*`) went with it, along with
+   § the header over the article's column — 40 lines that moved `Text verbatim`
+   onto the prose's left edge, added 2026-09-04 and inert the moment the word
+   stopped being drawn. */
 thead th {
   position: sticky;
   top: var(--bar-bottom);
   z-index: 25;
   height: var(--head-h);
-  background: var(--panel);
-  border-bottom: 1px solid var(--rule-strong);
-  /* **Three names for what used to be three literals**, because § the header
-     over the article's column has to state this bar's type and gutter a second
-     time — one element cannot both carry the head's 0.68rem and resolve `65ch`
-     in the article's face, so the prose column's heading is two boxes and the
-     inner one puts these back. Named rather than copied: a heading that
-     silently stopped matching its neighbours is exactly the drift a literal
-     invites. */
-  --head-pad-x: 1rem;
-  --head-type-size: 0.68rem;
-  --head-type-weight: 600;
-  padding: 0.5rem var(--head-pad-x);
-  text-align: left;
-  font-family: var(--font-ui);
-  font-size: var(--head-type-size);
-  font-weight: var(--head-type-weight);
-  line-height: 1.4;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-/* ------------------------------- § the header over the article's column ----
-   **`Text verbatim` follows the prose, for the reason the masthead does.**
-   § text centres the article in its cell, and in Hierarchy that leaves the one
-   heading in the row naming a column whose first word starts 180px to its
-   right, while `Parts` and `Sections` sit squarely over theirs. Greg looked at
-   it and called it a misalignment rather than whitespace, 2026-09-04. The
-   honest reading is that this heading was never aligned to the *text* — it was
-   aligned to the cell, and that only looked right while the text began at the
-   cell's edge.
-
-   **Only this heading.** The gist columns are not centred and are correct where
-   they are, so `th.text` is a class TableView puts on one cell.
-
-   **The offset is the same quantity as everywhere else in this change**, with
-   the percentage base written for where it lands: this is a block child, so
-   `100%` is the header cell's *content* box, and the head's own gutter has to
-   be added back before the body cell's is taken off. The two cells are the same
-   column — one `<col>`, `table-layout: fixed` — which is what makes the widths
-   comparable at all; only the padding differs, and that difference is the
-   `--head-pad-x` / `--text-pad-*` swap below.
-
-   **It could not be padding on the `<th>`, which is where this started.**
-   Percentage padding on a table cell does not resolve against the cell:
-   measured in Chrome, the heading landed 239px past the prose. So the geometry
-   is a margin on a block inside the cell, where `100%` is defined. */
-th.text .th-measure {
-  display: block;
-  /* The article's font, and *only* so that `--reading-measure` below counts the
-     same 65 zeroes the prose does — size and weight both, because Geist is
-     variable. Nothing is set at this size: `.th-name` below is the whole of the
-     visible heading. § the gutter carries the same two lines for the same
-     reason. */
-  font-size: var(--reading-size);
-  font-weight: var(--reading-weight);
-  margin-left: max(
-    0px,
-    calc(
-      (
-          100% + var(--head-pad-x) * 2 - var(--text-pad-l) - var(--text-pad-r) -
-            var(--reading-measure)
-        ) / 2 + var(--text-pad-l) - var(--head-pad-x)
-    )
-  );
-}
-/* And the head's own type back, so the heading looks exactly as it did. Both
-   values come from `thead th` above rather than being written again. */
-th.text .th-name {
-  font-size: var(--head-type-size);
-  font-weight: var(--head-type-weight);
-}
-
-.depth-tag {
-  margin-left: 0.45rem;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--ink-faint);
-  opacity: 0.7;
-}
-
-/* The column the arrow keys are aimed at. Deliberately quieter than a switched-on
-   granularity pill: this one follows the mouse, and a thing that changes
-   on every sideways twitch of the pointer must not shout. A bottom rule rather
-   than a background, so it cannot be mistaken for the pinned-column shading. */
-thead th.nav-aim {
-  color: var(--highlight);
-  box-shadow: inset 0 -2px 0 var(--highlight);
-}
-
-thead th.nav-aim .depth-tag {
-  color: var(--highlight);
-  opacity: 0.85;
+  padding: 0;
+  overflow: hidden;
 }
 
 td {
@@ -808,6 +760,85 @@ td {
    See src/web/App.tsx. */
 table.zoom { table-layout: fixed; }
 td.text { background: var(--page); }
+
+/* ------------------------------------------------------ § the aimed column ----
+   **Which column ← / → are pointed at, said by tinting the column itself.**
+
+   It used to be an underline on the `<th>` (`thead th.nav-aim`), and there used
+   to be an `↑↓ SECTIONS` readout in the controls bar beside it. The readout went
+   with the rest of the bar on 2026-09-05 and the header row lost its height in
+   the same pass, so both of the things that could name an aim went at once —
+   while the keys stayed, at Greg's asking. So the aim moved onto the one surface
+   that is left: the column.
+
+   Five constraints, and every one is a thing that was got wrong first — three
+   by reasoning, two by looking at the rendered page:
+
+    - **One attribute on `.reader`, never a class on the cells.** A deep article
+      renders thousands of `<td>`s and the aim changes on every sideways twitch
+      of the pointer, so re-classing them would defeat `memo(TableView)`. It
+      lives on `.reader` rather than on the table because **the panels are not
+      inside the table** — see below — and because that is the level where
+      `navDepth` already is: `TableView` no longer takes it as a prop at all, so
+      moving the pointer stops re-rendering the table entirely, which it did not
+      before this change.
+    - **The gist columns are tinted through their *panel*, not their cells.**
+      Every gist column in Hierarchy is covered by an opaque `position: fixed`
+      `.ctx-panel` (§ the column context), and the cell underneath deliberately
+      draws nothing while one is there — so a tint on `td.gist` is invisible in
+      exactly the case Greg reaches by pressing ←. Found in a browser; every
+      unit check passed. Both surfaces are named on each line below, and the
+      cell half is still doing work: the *leaf* gist column has no panel, and
+      neither does the prose.
+    - **`background-image`, not `box-shadow`.** `.pin-left` already owns
+      `box-shadow` for the overflow-layer cue below, and a second `box-shadow`
+      declaration *replaces* it rather than composing with it — so the aim would
+      silently delete the shadow that tells the reader a column is a layer. A
+      `background-color` is no good either: `td.text`, `td.gist.active`,
+      `td.gist.continuation` and `.ctx-panel` all set opaque backgrounds of
+      their own, which is also why the tint cannot ride on the `<col>`.
+    - **`[data-nav-depth]` and not `.depth-N`.** The prose `<td>` carries no
+      `depth-N` class, and it is the rung the reader reaches by pressing → all
+      the way — so a matrix written over the class silently does nothing on the
+      column Greg is most likely to be aiming at. Both kinds of cell already
+      carry `data-nav-depth`, which is what `keynav.ts` resolves a pointer with.
+    - **`:not(.only-prose)`, or Plain washes the whole page.** With no gist
+      columns the prose is the only rung there is, the pointer sits on it
+      permanently, and the tint would be a permanent orange cast over the
+      article rather than a choice between columns. An indicator that says
+      *which of several* means nothing when there is one.
+
+   **The spine is deliberately not in here.** An aim is a *depth*, and the spine
+   is depth 1 drawn a second way — so when depth 1 is aimed the Parts column
+   already says so, and tinting a fixed rail as well would say it twice on a
+   surface the arrows are not stepping through. The one case that shows nothing
+   is a pointer resting on the spine with the Parts column fitted away, which lit
+   nothing before this change either.
+
+   **The ladder is written out to depth 7**, which is well past anything
+   `buildGeometry` produces today (three, or five after
+   docs/plans/260904d-deepen-fat-sections.md). CSS cannot compare one element's
+   attribute with another's, so a matrix is the whole of the mechanism; past the
+   bound the tint simply does not draw, which is a missing hint rather than a
+   broken key. `tests/aimed-column.test.ts` pins the bound, the property, the
+   panel and the prose cell. */
+.reader[data-aim] {
+  /* Quieter than a switched-on granularity pill, because this one follows the
+     mouse and a thing that changes on every twitch must not shout. Faint enough
+     that it still reads over `--highlight-wash` on the active cell without
+     competing with it. */
+  --aim-wash: color-mix(in oklab, var(--highlight) 7%, transparent);
+}
+.reader[data-aim="0"] :is(table.zoom:not(.only-prose) td[data-nav-depth="0"], .ctx-panel.depth-0),
+.reader[data-aim="1"] :is(table.zoom:not(.only-prose) td[data-nav-depth="1"], .ctx-panel.depth-1),
+.reader[data-aim="2"] :is(table.zoom:not(.only-prose) td[data-nav-depth="2"], .ctx-panel.depth-2),
+.reader[data-aim="3"] :is(table.zoom:not(.only-prose) td[data-nav-depth="3"], .ctx-panel.depth-3),
+.reader[data-aim="4"] :is(table.zoom:not(.only-prose) td[data-nav-depth="4"], .ctx-panel.depth-4),
+.reader[data-aim="5"] :is(table.zoom:not(.only-prose) td[data-nav-depth="5"], .ctx-panel.depth-5),
+.reader[data-aim="6"] :is(table.zoom:not(.only-prose) td[data-nav-depth="6"], .ctx-panel.depth-6),
+.reader[data-aim="7"] :is(table.zoom:not(.only-prose) td[data-nav-depth="7"], .ctx-panel.depth-7) {
+  background-image: linear-gradient(var(--aim-wash), var(--aim-wash));
+}
 
 /* The pinned columns sit ON TOP of the scrolling ones, so they need to read as
    a layer rather than as a neighbour — otherwise a column half-hidden under the
@@ -921,7 +952,11 @@ td.gist {
 
 td.gist .sticky {
   position: sticky;
-  top: calc(var(--bar-bottom) + var(--head-h)); /* clears both bars */
+  /* Clears the controls bar and the table head. The second term has been `0`
+     since 2026-09-05 (§ the head with no row) and stays in the sum on purpose:
+     it is the token that says how tall that row is, and a head that grew again
+     would move this with it rather than leave it stranded. */
+  top: calc(var(--bar-bottom) + var(--head-h));
   padding: 0.85rem 1rem 1rem;
 }
 
@@ -4120,6 +4155,26 @@ td.text.has-hit[data-hues="8"] {
   flex: none;
 }
 .band-head-icon { color: var(--ink-faint); flex: none; }
+/* **Chat is the only band with an `h2` left, and that is not an exemption.**
+   Every other one held the mode's own name, which the Dock at the foot of the
+   page is already saying — Greg, 2026-09-05: *"I think we can rely on the bottom
+   bar to tell us what mode we're in, so for example 'Summary' mode doesn't need
+   to say `Summary` at the top, nor o any other modes."* Chat's heading is the
+   open **thread's** title, so it was never naming the mode; it is also the
+   reason every declaration below exists — a thread title is the reader's first
+   sentence and can run to sixty characters.
+
+   **What went with the names, and what it moved.** The `h2` carried `flex: 1`,
+   so it was the heading that pushed a row's other child — `.gloss-count`,
+   `.quotes-count`, Remember's sub-mode switch, Diagram's caveat — over to the
+   right-hand edge. With no heading there is nothing to push with, and each of
+   those now sits at the left where the name used to be. That is the intended
+   look and not a regression to fix by adding `margin-left: auto`: a lone count
+   pinned to the right of an otherwise empty row reads as something that has lost
+   its label, which is exactly what it would be.
+
+   Summary and Search kept nothing at all, so their rows are gone rather than
+   empty. docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */
 .band-head h2 {
   flex: 1;
   margin: 0;
@@ -6049,6 +6104,42 @@ td.text.note-open {
    it at rung 2. Caught in a browser pass, 2026-09-02. */
 .dock.dock-fit-1 .dock-btn-label.always,
 .dock.dock-fit-2 .dock-btn-label.always { display: inline; }
+
+/* **And the mode you are actually in keeps its word, on every rung.**
+   Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
+   mode we're in, so for example 'Summary' mode doesn't need to say `Summary` at
+   the top."* Stage 5 of docs/plans/260905d-declutter-the-reading-view-top-bars.md
+   took him at his word and removed the name from every band's title row — and
+   that premise was **false at exactly the widths it matters**, which a
+   screenshot showed and no unit check could.
+
+   A band is 400px of the window, so opening one is itself what pushes the bar
+   onto rung 1 — where every mode label except Plain's is hidden. So in Summary
+   at 1440×900 the band no longer said "Summary" and the bar had never said it
+   either: the only thing naming the open mode was a highlighted glyph. The
+   sighted reader who wanted the word had to hover for a tooltip.
+
+   One word costs nothing the ladder cannot absorb, because the ladder is
+   *measured* rather than declared (dock-fit.ts) — it walks down until the row
+   fits, so a rung that no longer fits with this word simply steps to the next,
+   and past the last one § a coarse pointer scrolls rather than clips.
+
+   Higher specificity than the hides above (0,5,0) rather than tying with them,
+   deliberately, and it is the safe direction: the accident this file records
+   just above is a rule that was accidentally *longer* than the one meant to
+   win. This one is meant to win.
+
+   **Rung 1 only, and rung 2 was tried and measured first.** Past the last rung
+   the bar overflows and scrolls (§ a coarse pointer), and at 390×844 in a band
+   mode it already does: measured 2026-09-05, `scrollWidth` 617 against a
+   `clientWidth` of 390. Adding this word there took it to 758 — 141px more of a
+   row the reader already has to drag sideways, to reveal a word that is only
+   legible *after* they drag. A bar that scrolls cannot tell you anything you
+   have not scrolled to, so at rung 2 this rule is pure cost and no benefit, and
+   the reader on a phone has in any case just pressed the icon themselves. At
+   rung 1 it is free: all four band modes measured `scrollWidth === clientWidth
+   === 1440` with the word shown, on the same rung they were already on. */
+.dock.dock-fit-1 .dock-btn.on .dock-btn-label { display: inline; }
 
 
 /* --------------------------------------------------------- § search mode ----
@@ -12670,14 +12761,20 @@ td.text.kind-heading .blk-gutter[data-open] {
 }
 
 
-/* The table head, when the article is the only column there is.
-   Set by TableView.tsx — read the comment there for why the condition is "no
-   gist columns and the prose is on" rather than "one column". Worth 40px in a
-   landscape phone, and it removes a row reading `Text verbatim` above a column
-   of the author's paragraphs, which is not a loss at any size. */
-table.only-prose thead { display: none; }
+/* **`table.only-prose thead { display: none }` was here, and it went on
+   2026-09-05.** It hid the head whenever the article was the only column —
+   worth 40px on a landscape phone, and a row reading `Text verbatim` over a
+   column of the author's paragraphs is no loss at any size. Both halves of that
+   are now true of every mode rather than this one: the head has no height
+   anywhere (§ the head with no row). And it could not have stayed, because
+   `display: none` takes the element out of the box tree entirely, which would
+   take every fisheye panel's geometry with it — `useColumnContext.ts` measures
+   `thead th[data-col]` and `ContextPanel` draws nothing without a rectangle.
 
-/* **And when it is the only column, it sits in the middle of the window.**
+   **The class itself stays**: the rule below uses it too, and
+   `tests/prose-centred-in-its-cell.test.ts` pins that one. */
+
+/* **When it is the only column, it sits in the middle of the window.**
    Greg, 2026-09-03: *"In Plain mode, can you centre the text on the page?"* —
    the article had the whole width and used the left 738px of it, which on a
    1600px screen is 850px of empty page down one side.
@@ -13857,6 +13954,366 @@ table.only-prose thead { display: none; }
   padding: 0.45rem 0.7rem;
   border-top: 1px solid var(--rule);
 }
+
+/* --------------------------------------------------------- § debate mode ----
+   The fourteenth mode, and the only band whose content is not in the article.
+   `.dbt` is `.gloss` with a class beside it, like `.timeline` and `.ideas`, so
+   the band shell, the head, the run button, the stale banner, the counts and
+   the two empty-state faces all come from § glossary mode unchanged.
+
+   What is here is only what a debate row has and an event does not: a **host**
+   that has to be the first thing the eye lands on, a quotation from a
+   stranger's page, and a fenced-off block of things a model guessed. Those
+   three are the design (DebatePanel.tsx), and the whole job of this section is
+   to make them look like three different kinds of claim.
+
+   **No bar, no meter, no number.** Greg asked for a positive/negative icon and
+   a red/green scheme *"but without a score"*, so there is deliberately nothing
+   here that draws a proportion — no width driven by a value, no gradient, no
+   `--heat-*`. Adding one is a change to the design rather than to this file. */
+
+/* The same three properties every band's scroller has, for the reason § timeline
+   mode records: `.mode-band` is a fixed column between the controls bar and the
+   dock, so without a scrolling child everything past the dock is unreachable —
+   and it looks perfectly fine on a tall window, which is how it shipped wrong
+   once already. */
+.dbt-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+/* The three disclosures over the list — when it was searched, that the order
+   means nothing, and what the quotations were checked against. Said once here
+   rather than on every row, like `.tl-frame` next door. */
+.dbt-frame {
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.45rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+/* The date is the half a reader actually looks for, so it keeps the ink the
+   two disclaimers beside it give up. */
+.dbt-searched { color: var(--ink-soft); font-weight: 600; }
+
+/* The two groups. A heavier rule between them than between two rows, because
+   "pages about this piece" and "pages about what it claims" are two different
+   questions rather than two parts of one list — the same call § timeline mode
+   makes between what happened and what is merely expected. */
+.dbt-group { margin: 0; padding: 0.5rem 0 0; }
+.dbt-group + .dbt-group {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--rule-strong);
+}
+.dbt-group > h3 {
+  /* Sticky, so *which of the two searches am I reading* survives scrolling —
+     docs/reusable/css-sticky-containing-block.md for the case where this
+     silently does nothing. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dbt-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
+.dbt-blurb {
+  margin: 0.15rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+/* **The empty sentence is drawn like an answer, not like a gap.** Group one
+   being empty is this mode's commonest correct output, so it gets the ordinary
+   quiet ink and ordinary padding — dimming it further, or setting it in italics
+   as an aside, would teach the reader that the honest answer is a failure. */
+.dbt-empty { padding: 0.2rem 0 0.6rem; font-size: 0.86rem; line-height: 1.45; }
+
+.dbt-list { margin: 0; padding: 0; list-style: none; }
+.dbt-item { padding: 0.55rem 0; border-top: 1px solid var(--rule); }
+.dbt-item:first-child { border-top: none; }
+
+.dbt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+/* **The row's headline, and the only authority signal a reader can judge.**
+   Larger and in the full ink than anything else on the row, because there is no
+   honest ranking to draw and this is what a reader ranks with instead
+   (`DEBATE_NO_RANKING`). It is `--highlight-ink` rather than plain `--ink` for
+   the reason every other outward link in this app is: leaving for somebody
+   else's page is the one thing on the row worth colouring. */
+.dbt-host {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+.dbt-host:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dbt-host svg { flex: none; align-self: center; opacity: 0.7; }
+
+/* The ⓘ. Pushed to the far end and quiet, because it is a reveal rather than
+   the thing to press — the row is already readable without it. It is a real
+   button so it is a tab stop and `useHoverCard`'s `focusable` gives a keyboard
+   reader the same card a pointer gets. */
+.dbt-info {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: help;
+}
+.dbt-info:hover { color: var(--ink); }
+.dbt-info:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
+/* The search result's own title, never the model's. Under the host and quieter
+   than it, because on a lot of pages it is the publication's boilerplate. */
+.dbt-title {
+  margin: 0.15rem 0 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  line-height: 1.35;
+}
+
+/* **Characters we located in that page's own extract.** The solid rule down the
+   left is the provenance mark this app already uses for "these are not our
+   words" (`.gloss-part-senseHere`, and § timeline mode reuses it for the same
+   reason) — a third way of drawing the same distinction would teach the reader
+   it means three things. */
+.dbt-quote {
+  margin: 0.35rem 0 0;
+  padding: 0 0 0 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* Group two only: the article's own words for the claim being answered. Same
+   rule down the left as the quotation above, because it is the same kind of
+   thing — a located quotation — from the other side of the row. */
+.dbt-claim {
+  margin: 0.35rem 0 0;
+  padding: 0 0 0 0.55rem;
+  border-left: 2px dotted var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.dbt-claim-label {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-right: 0.3rem;
+}
+
+/* **The fence.** Everything above it is the wire's or the article's; everything
+   inside it is a model's reading of a stranger's page. Tinted and inset rather
+   than merely labelled, because a label alone is read once and the boundary has
+   to survive a reader scanning twelve rows. */
+.dbt-ai {
+  margin: 0.45rem 0 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--surface-raised) 45%, transparent);
+}
+.dbt-ai-label {
+  margin: 0 0 0.25rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.dbt-ai-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+  margin: 0 0 0.3rem;
+}
+/* What the page does to what it answers. A word, not a badge with a colour of
+   its own: `relation` groups the list and `valence` draws the colour, and
+   colouring both would make the row look as though it carried two verdicts. */
+.dbt-relation {
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* **Which way it leans, and never how far.** Two directions off the diverging
+   red↔green scale Greg asked for (styles/colourscales.css § `--div-rg-*`), and
+   one quiet grey for the two that take no side.
+
+   Every one of the four gets the same chip: same size, same weight, an icon and
+   a word. `neutral` and `unknown` are not failure states, and drawing them
+   dimmer or smaller than their neighbours would be the panel disbelieving its
+   own model out loud — the rule docs/project/timeline.md applies to an undated
+   row.
+
+   **The scale's middle step is deliberately unused.** `--div-rg-4` is the
+   centre of a ramp, and putting `neutral` there would say *zero on a scale*,
+   which is the score this mode does not compute. */
+.dbt-valence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.dbt-valence svg { flex: none; }
+.dbt-valence-for { color: var(--div-rg-7); }
+.dbt-valence-against { color: var(--div-rg-1); }
+.dbt-valence-quiet { color: var(--ink-faint); }
+
+.dbt-applies {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+/* Where it does *not* bear on the claim. Optional on the row and drawn quieter,
+   because a caveat set as loudly as the claim reads as a retraction. */
+.dbt-limits {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.4;
+}
+
+/* The two foot lines under each group — what the model offered against what
+   survived, and what the search returned against what got into the answer.
+   Modelled on `.quotes-discarded`, and quiet for the same reason: this is
+   provenance, not an error. */
+.dbt-foot {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px dotted var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.dbt-foot p { margin: 0 0 0.25rem; }
+.dbt-foot p:last-child { margin-bottom: 0; }
+
+/* The third disclosure, at the foot of the scroller rather than in the head —
+   what the quotations were checked against is a question you ask *of a
+   quotation*, and all three sentences at the top were an eight-line wall over
+   the first row at `MODE_MIN`. It is on every ⓘ card as well, which is the other
+   point of use. */
+.dbt-verified {
+  margin: 0.9rem 0 0;
+  padding: 0.5rem 0 0;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+/* Pinned under the scroller rather than at the end of it, like `.tl-again`: the
+   control that spends two web searches must not be something you have to scroll
+   twelve rows to reach. */
+.dbt-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* The ⓘ card. Narrower than the prose card next door because it holds one
+   quotation and a link rather than a whole footnote, and the band it hangs off
+   is 288px at its narrowest (`MODE_MIN` in layout.ts). */
+.tooltip.dbt-card { max-width: 22rem; }
+.dbt-card-body { display: block; }
+.dbt-card-title {
+  margin: 0 0 0.2rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+/* The full address, which the row shows only the host of. Wrapping rather than
+   truncating: half a URL is not an address, and the reader is looking at this
+   card precisely to decide whether to follow it. */
+.dbt-card-url {
+  margin: 0 0 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.dbt-card-quote {
+  margin: 0 0 0.35rem;
+  padding: 0 0 0 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-size: 0.87rem;
+  line-height: 1.5;
+}
+/* Group one's witness that this page names *this* article — the check that is
+   the whole difference between the two groups, so it is on the card rather than
+   buried. */
+.dbt-card-ref {
+  margin: 0 0 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.81rem;
+  line-height: 1.45;
+}
+.dbt-card-note {
+  margin: 0 0 0.45rem;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+.dbt-card-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dbt-card-out:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dbt-card-out svg { flex: none; }
 
 /* ------------------------------------------------------------------ quiz --
    The Quiz sub-mode of Remember — docs/plans/260831al-review-quiz-sub-mode.md.

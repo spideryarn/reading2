@@ -173,9 +173,11 @@ import {
   formatQ2,
   formatQ3,
   formatQ4,
+  formatRefusedRates,
   formatDriving,
   formatQ5,
   q1Gate,
+  refusedRates,
   type RecordsPass,
   type StepClock,
   usablePasses,
@@ -335,6 +337,8 @@ interface JobRecord {
   byStep?: StepSpend[];
   byAiJob?: StepSpend[];
   unreadable?: number;
+  /** Calls that opened in this process and were never recorded. `LedgerRead.lateCalls`. */
+  lateCalls?: number;
   /**
    * **What each step's own spend collector saw**, from `AdvanceParts.onStepSpend`
    * — the only evidence that can notice a ledger row that was never inserted.
@@ -875,6 +879,11 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
       `the ledger read for ${spec.label} (job ${job.id})`,
     );
     record.unreadable = ledger.unreadable;
+    /* **The count no read can see.** A call that opened and never got a row is
+       invisible to `forJob` — `unreadable: 0` over it — so without this the bill
+       is a floor printed as a total, which is what happened on 2026-09-05.
+       Process-wide rather than per job; `LedgerRead.lateCalls` says why. */
+    record.lateCalls = ledger.lateCalls;
     record.money = totalMoney(ledger.rows);
     record.byStep = aggregateByStep(ledger.rows);
     record.byAiJob = aggregateByAiJob(ledger.rows);
@@ -1094,6 +1103,13 @@ function answerTheQuestions(opts: {
   );
   const q2 = yesRates(everyRecord);
   lines.push(formatQ2(q2));
+  /* **Beside the yes rate, because a refusal is the other way the answer can be
+     absent.** A target refused on every draw keeps the shape wave 1 gave it and
+     is not in any verdict tally at all — so without this the run would report a
+     healthy yes rate over exactly the nodes the model was willing to answer
+     about, which is the population the refusals removed. `refusedRates`. */
+  const refused = refusedRates(everyRecord);
+  lines.push(formatRefusedRates(refused));
   const q2Findings = verdictGate({ question: "Question 2", assessed: q2.overall.asked, failed: all.failed });
   findings.push(...q2Findings);
   if (q2Findings.length > 0) lines.push(formatFindings(q2Findings));
@@ -1115,6 +1131,7 @@ function answerTheQuestions(opts: {
       nanos: j.money == null ? null : moneyTotalNanos(j.money),
       unpriced: j.money?.unpriced ?? 0,
       unreadable: j.unreadable ?? 0,
+      lateCalls: j.lateCalls ?? 0,
       isBook: j.repeat !== null,
     })),
   );
@@ -1355,10 +1372,28 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
       ? await db.delete(articles).where(inArray(articles.slug, slugs)).returning({ id: articles.id })
       : [];
   if (jobIds.length > 0) await db.delete(jobsTable).where(inArray(jobsTable.id, jobIds));
+  /**
+   * **The second half of this line used to be false, and it was the half a
+   * reader would act on.** It said *"Ledger rows and checkpoint rows stay …
+   * the checkpoints are what would make a later attempt cheap."* Ledger rows do
+   * stay: `ai_calls.article_id` is `on delete set null`. **Checkpoint rows do
+   * not.** `checkpoints.article_id` is `on delete cascade`, and deliberately so
+   * — src/db/schema.ts says it is *"doing privacy work, not tidiness: a
+   * checkpoint holds a transcription of the reader's own document, and deleting
+   * the article has to take it with it"*.
+   *
+   * Measured rather than reasoned: after the failed paid run of 2026-09-05,
+   * whose wave banked 28 expansion answers, the database held **zero**
+   * `hierarchy-deepen` rows — not for that article, not for any. So the next
+   * attempt buys the whole wave again, and anybody sizing it off this line was
+   * sizing it wrong. Use `--keep` if the answers are what you are after.
+   */
   console.log(
     `\nCleaned up ${removed.length} article(s) and ${jobIds.length} job(s) this run created. ` +
-      "Ledger rows and checkpoint rows stay — the ledger is the product of the run, and the " +
-      "checkpoints are what would make a later attempt cheap.",
+      "Ledger rows STAY — the ledger is the product of the run. Its CHECKPOINT ROWS ARE GONE " +
+      "with it: `checkpoints.article_id` is `on delete cascade` and that is privacy work, not " +
+      "tidiness. So a re-run buys every answer this one bought all over again — `--keep` is what " +
+      "holds them.",
   );
 }
 

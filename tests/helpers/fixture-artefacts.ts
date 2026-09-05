@@ -175,6 +175,7 @@ const LAYOUT: {
   quiz: { quiz: (at) => path.join(at.dir, "quiz.json") },
   sketch: { sketch: (at) => path.join(at.dir, "sketch.json") },
   illustrated: { illustrated: (at) => path.join(at.dir, "illustrated.json") },
+  debate: { debate: (at) => path.join(at.dir, "debate.json") },
 };
 
 /** The two kinds that are text on disk rather than JSON. */

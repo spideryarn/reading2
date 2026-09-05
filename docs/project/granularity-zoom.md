@@ -262,7 +262,7 @@ The controls bar is a row of pills, one per column, coarse to fine — and since
 all it is:
 
 ```
-  L1   L2   Para
+  Parts   Sections   Paragraphs
   └─ the columns, coarse to fine ─┘
 ```
 
@@ -270,8 +270,11 @@ Greg, 2026-09-05: *"The top bars are really crowded and confusing … everything
 useful and understandable."* So the `Spine` toggle, the `GRANULARITY` label, `Text`, `fit`/`auto`,
 the `reading`/`outline` chip, the `↑↓` readout and the tree-version chip all went —
 [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) has what each one was for. The
-rail is simply on now, and the prose is simply there; `?spine=0` and `?text=0` still work and
-nothing on screen writes them ([url-state.md](url-state.md)).
+rail is simply on now, and the prose is simply there; `?spine=0` still works and nothing on screen
+writes it. **`?text=0` no longer survives arrival**: it was the one state the reader could not get
+out of once the pill that wrote it had gone, so `?mode=hierarchy&text=0` is rewritten to
+`?mode=outline` before anything is drawn and the pair is dropped whatever the mode
+([url-state.md](url-state.md)).
 
 **And so did `Arg`**, on the same day and by the same instruction:
 
@@ -282,16 +285,42 @@ nothing on screen writes them ([url-state.md](url-state.md)).
 That is the L0 column, and it is the *column* that went — see [the arc](#the-arc), which is still
 generated and still on screen elsewhere.
 
-- **`L1` and `L2`** keep their numbers, because *Parts* and *Sections* is exactly what those depths
-  mean here, and both the column header and the tooltip say so.
-- **`Para`** is the leaf column, one line per paragraph beside the prose
-  ([the paragraph outline](#both-at-once-the-paragraph-outline-beside-the-prose)), and it only
-  appears in reading mode. It was `L3` — a number that comes from the tree's depth, so it was the
-  one pill whose label was different on different articles.
+**And the pills took the full words on the same day**, `Parts` / `Sections` / `Paragraphs` where they
+read `L1` / `L2` / `Para`. The numbers had been defended on the grounds that *"`Parts` and
+`Sections` is exactly what those depths mean here, and both the column header and the tooltip say
+so"* — and stage 3 took the header row's height away, while a touch reader cannot open a tooltip. So
+both legs of the argument went at once and it inverted. The full words cost roughly 90px of a row
+that shed well over 300.
 
-The short names are `columnPill` in [`tree.ts`](../../src/web/tree.ts), the full names the column
-headers use are `columnLabel` beside it, and the tooltips are `columnHint`, built *from*
-`columnLabel` so that a column renamed once is renamed in all three places.
+- **`Paragraphs`** is the leaf column, one line per paragraph beside the prose
+  ([the paragraph outline](#both-at-once-the-paragraph-outline-beside-the-prose)), and it only
+  appears in reading mode. Named for what is in it rather than for its depth, which is the same
+  objection Greg raised against `L0` and `L3` on 2026-08-27: a leaf sits at depth 3 on one article
+  and depth 5 on another, so the number was the one label that read differently per article.
+
+There is now **one** name per column: `columnLabel` in [`tree.ts`](../../src/web/tree.ts), worn by
+the pill and by the `<th scope="col">` a screen reader hears. `columnHint` is the tooltip, built
+*from* `columnLabel` so a column renamed once is renamed in both. `columnPill` — the short second
+name — went on 2026-09-05; `tests/column-names.test.ts` exists because three different strings for
+one column meant a rename could land in two of them and look correct.
+
+#### The header row kept its element and gave up its height <a id="the-header-row"></a>
+
+Greg, 2026-09-05: *"I'm even wondering if we can get rid of the row of column-header-labels in
+Hierarchy mode … to save on vertical space."* It went — as a row. **The `<thead>` is still there**,
+one `<th>` per column, `height: 0`, no padding, no border, its label in an `.sr-only` span
+(`--head-h` in [styles.css](../../src/web/styles.css) § tokens). Deleting it was the first draft of
+this change and GPT Sol refused the plan over it, correctly: three things read that row and none of
+them reads a pixel of it.
+
+| What the `<thead>` is for | After |
+|---|---|
+| The visible column names | gone; the pills in the bar wear them |
+| Column geometry for the fisheye panels — [column-context.md](column-context.md) reads `thead th[data-col]` for every panel's `left`, `width` and `bottom` | unchanged, and *better*: `bottom` is now the bar's own edge, so a panel starts directly under the bar |
+| `<th scope="col">` naming cells for a screen reader | unchanged; the pills are buttons outside the table and can never do this |
+
+Delete it and Hierarchy's Parts and Sections columns become **empty boxes** — the gist cell under a
+panel deliberately draws only its boundary, so the panel is the only thing rendering the words.
 
 ### Two modes: reading and outline
 
@@ -326,8 +355,11 @@ because a navLabel beside the very paragraph it labels is noise, and — per
 [Node shape](#node-shape) — must never stand in for prose that could be shown. Hiding the prose
 deliberately, to navigate, is the one context where navigation chrome is the point.
 
-`?text=0` opens straight into outline mode, so a whole-article ToC is a shareable link rather than a
-button you have to find. `#<blockid>` opens at a paragraph.
+`?text=0` used to open straight into this, so a whole-article ToC was a shareable link rather than a
+button you had to find. **It does not any more** — the `Text` pill went on 2026-09-05 and left the
+address with no way out, so it is rewritten to `?mode=outline` on arrival
+([url-state.md](url-state.md)). Outline mode is where a whole-article overview lives now, and it has
+its own shareable address. `#<blockid>` still opens at a paragraph.
 
 ### Both at once: the paragraph outline beside the prose
 
@@ -337,7 +369,7 @@ button you have to find. `#<blockid>` opens at a paragraph.
 > — Greg, 2026-08-25
 
 The leaf column — one `navLabel` per paragraph — is no longer confined to outline mode. Turned on
-with the **`Para`** pill, it sits between the gists and the prose, so reading mode now contains
+with the **`Paragraphs`** pill, it sits between the gists and the prose, so reading mode now contains
 everything outline mode had *plus* the article, each label on the same row as the paragraph it
 labels. Opt-in, never chosen by auto-fit, because it costs a column's width and most reading doesn't
 want it.
