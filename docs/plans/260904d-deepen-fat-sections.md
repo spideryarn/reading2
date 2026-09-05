@@ -1,9 +1,11 @@
 # The tree goes as deep as each part of the article needs
 
-**Status: planned, reviewed twice, not yet built.** Stages 1 and 2 — the measurements and the
-spikes — are done and their evidence is in `evals/results/hierarchy-waves-2026-09-04/`; **nothing in
-`src/` has changed**, and stage 3 is the first thing that touches it. Started 2026-09-04. Worktree
-`deepen-fat-sections`. **Supersedes
+**Status: stages 1–3 done; stage 4 is next.** The measurements and the spikes are in
+`evals/results/hierarchy-waves-2026-09-04/`, and **stage 3 has landed in `src/`** — the pure half,
+reviewed across families, with no network call, no flag and nothing wired into `generateHierarchy`.
+The cascade is still called by nothing; what changed is that it now derives the same tiling the
+incumbent does, refuses what it should refuse, and can be planned from a tree that already exists.
+Started 2026-09-04. Worktree `deepen-fat-sections`. **Supersedes
 [260904c-hierarchy-structure-in-waves.md](260904c-hierarchy-structure-in-waves.md)**, whose pure core
 this uses and whose framing — latency and the length ceiling — the measurements below have moved on
 from.
@@ -162,17 +164,28 @@ exactly this reason. So the plan adopts the code's precedence rather than invent
 | | bound | rule | effect |
 |---|---|---|---|
 | 1 | **depth cap** | past it, nothing expands | refuses; records `capReached` |
-| 2 | **two-headings rule** | a node whose range holds **two or more authored heading blocks is never finished**, whatever it says — and this **beats the floor** | forces open |
+| 2 | **the heading rule** | a node holding an authored **body** heading that no boundary starts on is **never finished**, whatever it says — and this **beats the floor** | forces open |
 | 3 | **divisibility floor** | never expand a node under ~10 structural blocks | refuses |
 | 4 | **forced-open ceiling** | a node over ~2,000 words, above the floor, marked finished, is opened anyway and counted as `forcedOpen` | forces open |
 | 5 | **the model's verdict** | decides everything the four leave open | — |
 
-**The two-headings rule is the most valuable line in this plan.** It is purely mechanical, costs
-nothing, and on Moby-Dick's current tree it fires on **22 of 54 sections holding 69% of the body
-words** — which is the hundred lost chapter headings, caught by arithmetic rather than by judgment.
-On Darwin, which has 24 headings in 1,326 blocks, it fires on 3 sections and 1% of the words. It
-cannot be left to the model: the whole finding above is that the model resolves the
+**The heading rule is the most valuable line in this plan.** It is purely mechanical, costs nothing,
+and counted as *"two or more authored headings"* it fires on **22 of Moby-Dick's 54 sections, holding
+69% of the body words** — which is the hundred lost chapter headings, caught by arithmetic rather
+than by judgment. On Darwin, which has 24 headings in 1,326 blocks, it fires on 3 sections and 1% of
+the words. It cannot be left to the model: the whole finding above is that the model resolves the
 headings-versus-stride collision differently on different runs.
+
+**Two headings is how it was measured, and not the rule.** The rule already existed, in
+[`shouldExpand`](../../src/hierarchy-cascade.ts) as `hasUnresolvedHeading`, and it is strictly
+broader: *any* authored body heading in the node's range that no boundary already starts on. It
+subsumes the two-heading case and also settles three things the count does not mention — the node's
+own first block counts as resolved (a node created *from* a heading begins on one, and calling that
+unresolved would expand for ever), a **supplement** heading is excluded because `renderBlocks`
+withholds its text so the model cannot honour a boundary it is shown as `NOT-GISTABLE: (withheld)`,
+and a `gistable: false` **body** heading is included because its text *is* rendered. The plan's
+earlier table said "two or more"; the code's rule is the one that ships, and the 22-of-54 figure
+above is a lower bound on how often it fires. ⟨2026-09-05.⟩
 
 ### Where the author's headings and the fan-out target collide, the author wins
 
@@ -782,7 +795,7 @@ question ⟨GPT Sol, finding 5⟩:
 An earlier version of this line said "ten of ten", which conflated the two questions: run A returned
 ten children, all bearing a heading, while merging across eleven others. Scoped calls do much better
 than the whole-document call and **run A is still not good enough** — which is the argument for the
-mechanical two-headings rule below rather than for trusting the prompt.
+mechanical heading rule below rather than for trusting the prompt.
 
 #### Two things the spike found that no amount of design would have
 
@@ -817,12 +830,141 @@ and `sourceHeading` all survive, with **zero repairs and zero drops on the secon
 start-derivation rule shared by `planChildRanges` and `normaliseExpansion`, heading snap included,
 with heading-snap and outside-parent cases added to the differential test. A start outside its parent
 refused rather than clamped. The five-way precedence above, as code, with the eight-block
-two-heading node as its test. Origin-aware cascade state, so `assertCascadeComplete` can say
-something true about nodes this machinery did not produce — and a decision on whether its rejection
-of unary internal nodes, which `buildTree` accepts (35 across 133 saved eval trees), is a bug in the
-assertion or in `buildTree`.
+two-heading node as its test.
+
+#### The unary internal node was a bug in `buildTree`, and the corpus is unanimous <a id="unary"></a>
+
+The plan left this open — is `assertCascadeComplete`'s rejection of a one-child internal node a bug
+in the assertion or in `buildTree`? Measured on 2026-09-05 across every saved tree under `evals/`
+and `data/`:
+
+| | count | child covers the parent's whole range | child covers only part |
+|---|---|---|---|
+| unary internal, sole child internal — **the 35** | 35 | **35** | **0** |
+| unary internal, sole child a grown leaf | 208 | 208 | 0 |
+| unary supplements | 0 | — | — |
+
+**Not one partial case**, so the "there may be a legitimate reason a unary node survives" branch is
+empty and the assertion is right. Two further facts decide the shape of the fix: all 35 parents span
+1–8 blocks, which `shouldExpand` would call terminal, so **the cascade would never have asked about
+any of them** — they are artefacts of the un-floored whole-document call; and the parent's title is
+identical to its child's in 26 of 35.
+
+What the reader gets is not a blank cell or a lost column but **two adjacent gist columns of
+identical extent, neither marked `continuation`**, so both render in full and both are fisheye items.
+One rung finer buys a restatement of the same two paragraphs, against
+[granularity-zoom.md](../project/granularity-zoom.md)'s promise that level N is a compression of
+level N+1. Collapsing all 35 changes `maxDepth` in none of the ten trees that hold them, so it is a
+duplicated cell rather than a wasted column — real, and smaller than this plan first framed it.
+
+So: **the incumbent build collapses, `normaliseExpansion` goes on refusing**, and the disposition
+differs because the recourse does. A scoped call can be retried and a better answer is worth asking
+for; a whole-document answer cannot be retried mid-build, and refusing there is what cost four of
+thirteen articles the day that file learned to derive rather than reject.
+
+The collapse sits in `buildTree`'s `visit`, **not** in `planChildRanges` as this plan first said. That
+function derives *ranges*, one plan per proposed child of one node, and the splice needs the
+discarded rung's **own children** — which it is never shown. `visit` is the only place holding both.
+
+The rule is phrased as a **range** statement rather than a count — *no child may cover its parent's
+whole range, unless that child is a leaf* — and the exemption is the load-bearing half. In a built
+tree a leaf is always *grown*, minted by `buildTree` from a range and never proposed, so a leaf child
+covering the whole of its parent means the parent spans exactly one block: the ordinary shape of a
+one-block section (all 208 of those) and of a supplement holding one note
+([260829a § F6](260829a-footnotes-finish-upfront-sol.md)). The exemption this plan first proposed —
+*a node whose range is a single block* — would have been **wrong**, and the corpus says so: the
+`waves.fowler-phrenology.r1` rung `n0053` has a one-block range and an *internal* child, so it is one
+of the 35 and that exemption would have let it through.
+
+The collapse keeps the **parent's** title and gist and splices the grandchildren up. That is a
+product call and the evidence is one-sided: in the nine cases where the two titles differ, the parent
+is the coarser name every time — *"Writing at Work"* over *"The Pressure to Write"*, *"The
+Disappearing Writers"* over *"Few People Who Can Write"* — which is what that rung is for, and the
+child's name is a sub-section's. It adopts the child's `sourceHeading` where the parent has none:
+both nodes hold the same range, so a claim backed for one is backed for the other, and `buildTree`
+drops it anyway if nothing backs it.
+
+It is **counted** in `BuildReport` rather than done quietly — as its own `collapsedRungs`, not as a
+`PartitionRepair`, and that is arithmetic rather than taste. A repair is a boundary that *moved*,
+`size` is how many blocks changed hands, and `repairedBlockCount` sums them. A collapse moves **no**
+blocks: the two ranges are identical, which is the definition of the shape. It could only enter as a
+repair of size 0, inflating `repairedRanges` while contributing nothing to the two figures that say
+what a repair cost.
+
+`checkTree` ([`src/tree-invariants.ts`](../../src/tree-invariants.ts)) gains the rule, which it has
+never had — a pickaxe search of the history finds nobody ever adding, removing or arguing about one,
+so the silence is a gap rather than a decision. Over the 103 saved trees the new rule finds **exactly
+35 restated rungs across 10 trees and nothing else**: no false positive on any of the 208 benign
+one-block sections and none on any supplement. Rebuilt through the new `buildTree`, all 35 collapse,
+none survives, and no tree's leaf layer changes. ⟨Re-run independently, 2026-09-05.⟩
+
+**And it moves a baseline this plan leans on.** Faults recorded against a rung that is then discarded
+go with it, so `repairedRanges` and `repairedBlocks` now read materially lower: on the 3,000-case
+fuzz in [`tests/hierarchy-repairs.test.ts`](../../tests/hierarchy-repairs.test.ts) the repaired rate
+fell from ~37% to ~17%, with ~29% now reporting a collapse instead. `silent` stayed at 0, so nothing
+is derived unreported. But the plan names `repairedBlocks` as the trigger for a future re-ask, and
+**that trigger's numbers are not comparable across this change** — whoever calibrates it must take
+its baseline after 2026-09-05, not from an earlier run.
+
+**And this makes origin-aware cascade state unnecessary**, which is a moving part the plan can drop.
+It was only ever needed so `assertCascadeComplete` could say something true about nodes the cascade
+did not produce; with the collapse in `planChildRanges` and `proposalFromTree` fed the **built** tree
+rather than the raw wave-1 answer, a unary rung cannot reach the cascade at all, and stage 3's own
+round-trip assertion becomes true rather than accidentally true. That ordering is now load-bearing
+and is written here so nobody wires it the other way: **the cascade is seeded from the built tree.**
+⟨Investigated 2026-09-05; the terminal clause of `assertCascadeComplete` may still want
+origin-awareness one day, and that is a separate question.⟩
 
 **Done:** `npm test` green, and a test that fails on today's `normaliseExpansion` before it passes.
+
+#### What stage 3 landed <a id="stage-3-landed"></a>
+
+Five things, in `src/heading-snap.ts` (new), `src/hierarchy.ts`, `src/hierarchy-cascade.ts`,
+`src/tree-invariants.ts` and `src/pipeline.ts`:
+
+1. **The heading snap runs in exactly one place.** Its own module, because `hierarchy.ts` and
+   `hierarchy-cascade.ts` cannot import each other — the cascade already takes `BuildReport` and
+   `ModelNode` from the incumbent, and `npm run cycles` is a gate at zero. It returns its repairs
+   rather than pushing into a caller's array, so it needs nothing back from either. The two
+   *start-collision* rules stay separate, honouring the earlier ruling against threading an optional
+   `ends` parameter through one merged helper: the snap was the whole of the divergence, so the snap
+   is what is shared.
+2. **`ExpansionRefused("outside-parent")`**, replacing a clamp. The first kept child keeps its
+   **pin** to the parent's start, which is a rule and not a clamp of a claim — how far out its claim
+   was is the head repair, and that is still measured.
+3. **`decideExpansion`**, returning `{decision, because}` rather than a boolean, because every number
+   the eval is asked to report is a tally of `because` and none of them survives a boolean. An
+   absent verdict is a third state: it stops as `"no-verdict"`, and where the ceiling opens it anyway
+   it says `"unassessed-ceiling"` rather than `"forced-open"`.
+4. **`proposalFromTree`**, dropping the leaf layer — which is what makes it lossless, since
+   `buildTree` grows leaves from the range alone and regrows exactly the same ones.
+5. **`collapseRestatedRungs`** and the matching `checkTree` rule, above.
+
+**The cross-family review found two, and both were taken.** ⟨GPT Sol, 2026-09-05, first review of
+code rather than plan.⟩
+
+- **F1, P1 — the collapse counter never reached the eval.** `evals/hierarchy-structure`'s result
+  schema and its "NOT valid as written" line both omitted `collapsedRungs`, so an arm whose every
+  boundary was believed, whose sections were all stored and whose heading claims all held up, and
+  which still handed the reader a rung that compressed nothing, scored `ok` with an empty `repaired`
+  block and no warning. That is the silent-success class the counter was added to prevent, and
+  `hierarchy.md` already claimed the number reached the eval. Fixed in `run.ts` and `floor.ts`, both
+  reading the field as optional so a run file written before 2026-09-05 still parses.
+- **F2, P2 — the ceiling's number counted two different events.** Confirmed a doubt of my own:
+  `because: "forced-open"` fired whether or not there was a verdict to overrule, which would have
+  made "how often the ceiling overrode a model that said finished" read high on precisely the wave
+  where no verdict exists for any node. Split into `"unassessed-ceiling"`.
+
+Sol found nothing able to defeat the differential property — *"once `normaliseExpansion` emits
+canonical ranges, `buildTree` sees strictly increasing starts, computed adjacent ends, and
+already-snapped heading boundaries, so its second derivation is stable"* — and ran
+`tests/hierarchy-cascade.test.ts` itself, 55/55.
+
+**Checks at the end of the stage:** `npm test` 661 files passed, 0 failed, 1 skipped; 11,856 tests
+passed. `npm run typecheck` green over 1,279 files. `npm run cycles` clean. An earlier red on the
+`check` gate's test step was the box at load average 74 with `REQUIRE_POSTGRES=1` turning ~70
+normally-skipping suites live, and it went away at load 9 — worth writing down, because it looks
+exactly like a real regression.
 
 ### Stage 4 — the protocol: request, response, checkpoint — against a fake executor
 

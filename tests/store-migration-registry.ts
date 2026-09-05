@@ -186,6 +186,29 @@ export type StoreEntry =
  */
 export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   /**
+   * **Written on 2026-09-05, after the witness ran**, so it is here for the
+   * ordinary reason the header gives: re-running witness 2 is what upgrades it.
+   *
+   * It is not resting on the import graph alone, though. The ad-hoc witness was
+   * pointed at it —
+   * `npx tsx scripts/store-migration-witness.ts --files tests/tree-redundant-rung.test.ts` —
+   * and reported "ran, touched nothing" under full instrumentation. `evidence`
+   * still says `static-only` because that is what the field means: the stored
+   * `touched` map does not name this file, and the guard holds the two apart so
+   * the field cannot become decorative.
+   */
+  "tests/tree-redundant-rung.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Pure-function tests of `buildTree` and `checkTree`: a model proposal in, a tree out, with " +
+      "block fixtures written in the file. It imports src/hierarchy.js, which is how the import " +
+      "graph reaches a condemned module — that file also holds stage 4's CLI and its checkpoint " +
+      "plumbing — but nothing here selects a store, reads a path or writes a byte, and the " +
+      "instrumented run confirms it executes no condemned function.",
+  },
+  /**
    * **Arrived from `dev` on 2026-09-04 and the hole check caught it**, which is
    * why that check walks the import graph live instead of reading a stored
    * answer. It reaches a condemned module through `src/jobs.js`; it never runs
