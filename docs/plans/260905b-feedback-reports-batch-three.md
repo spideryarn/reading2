@@ -179,3 +179,34 @@ output as a dated example.
 
 Separately: `tests/admin-store` goes red under contention and passes alone. Three worktrees on one
 box is the documented limit for a reason.
+
+## Two findings routed into this batch's territory
+
+From the sweep behind
+[260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md](../postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md),
+**reported rather than fixed** so they did not land in a worktree mid-flight. Both verified here by
+reading the code, not taken on report — which is the whole lesson of the section above.
+
+1. **`evals/dictation/bench-models.ts` announces a clean bill over an arm that never answered.**
+   `clean` starts `true`; an arm whose every call was lost has an empty `seen` map, so `odd` is empty,
+   nothing sets it false, and the run prints *"every call named the model it was sent to"*. The detail
+   worth the trip: the comment immediately above the check describes the **previous** version of this
+   same bug — "a clean bill of health from a test that had not run", GPT Sol's review, item 4. The fix
+   and its recurrence are adjacent in the file.
+2. **`evals/dictation/bench-vocabulary-sources.ts` writes a planned count as if it were an outcome.**
+   `calls: CONDITIONS.length * utterances.length * RUNS` is what was *intended*; `lost` sits two lines
+   below, so a careful reader can subtract, but the field named `calls` says what happened and does
+   not know.
+
+Neither is urgent and nothing in this batch depends on them. They matter because dictation shipped
+today (`e4533a71`) and a follow-up benchmark is the obvious next move — these are exactly the two
+harnesses that would be re-run, and both would report a clean run over a broken one.
+
+**The pattern to copy is one directory away**, which is why this is a small job rather than a design
+question: `evals/quiz.ts` counts `marked` against `CASES.length` attempted, says *"Nothing was
+measured … not the same thing as clean"* in as many words, and sets `exitCode = 1` on total failure —
+its header records that this bug shipped there first. `evals/cost/run.ts` returns early from
+`summarise` on zero draws.
+
+Queued behind 1P and 1V: the feedback reports are the job Greg set, and these are not reports, so
+they get no Sentry write and no note in `docs/user-feedback/`.
