@@ -702,6 +702,177 @@ async function stopFrameProbe(cdp: Cdp): Promise<FrameStats> {
   return r.result.value;
 }
 
+/**
+ * What one **click** costs — the gesture the scroll work above never measured.
+ *
+ * Every number on docs/project/performance.md before 2026-09-05 describes a
+ * scroll, because a scroll is what the first three complaints were about. This
+ * one is for *"the interface feels kind of sluggish when clicking around,
+ * changing modes"* (Sentry `SPIDERYARN-READING2-1M`), which is a different
+ * gesture with a different budget: a scroll is judged by its worst frame over
+ * thirty seconds, a click by how long it takes for anything to happen at all.
+ *
+ * So the unit here is **click to next painted frame**, per switch, not a
+ * percentage over a window. `ms` is the wall time from `btn.click()` returning
+ * to the second `requestAnimationFrame` after it — React flushes a discrete
+ * event synchronously, so the handler's own work is inside `click()`, and the
+ * two frames are what makes it "and the reader saw it".
+ *
+ * ## Three ways this could report a good number for a bad page
+ *
+ * 1. **`longtask` only sees tasks over 50ms.** A switch built of eight 30ms
+ *    tasks reports `longest: 0`, which reads as "nothing blocked". That is why
+ *    `ms` is the headline and `longest` is the annotation, never the reverse.
+ * 2. **A button that is not there is not slow.** A mode behind the
+ *    experimental switch has no button in the bar, and `querySelector` returning
+ *    null would otherwise make the fastest run in the table. Every miss is
+ *    recorded as `error` and the caller shouts.
+ * 3. **The click that changes nothing.** Clicking the mode you are already in
+ *    is close to free and looks like a fast switch, so the sequence must never
+ *    repeat a mode back to back — the caller's list is walked in order and the
+ *    settle between them is what stops the previous switch's async work being
+ *    charged to the next one.
+ *
+ * Render counts come from the `?perf=1` probe, reset immediately before each
+ * click, so they are per-switch rather than cumulative — the same reasoning as
+ * the `renders:` line on a scroll run, and the thing that turns "it is slow"
+ * into "this component re-rendered".
+ */
+interface ModeClick {
+  rep: number;
+  mode: string;
+  /** Click to second rAF, in ms. The headline. */
+  ms: number;
+  /** Longest `longtask` overlapping the click, or 0 when none reached 50ms. */
+  longest: number;
+  /** Sum of (duration - 50) over those tasks — Total Blocking Time, per click. */
+  blocking: number;
+  tasks: number;
+  /** `Component=count` from the in-page probe, this click only. */
+  renders: string;
+  error?: string;
+}
+
+async function clickModes(cdp: Cdp, modes: string[], repeats: number): Promise<ModeClick[]> {
+  const r = await cdp.send<{ result: { value: string } }>("Runtime.evaluate", {
+    expression: `(async () => {
+      const MODES = ${JSON.stringify(modes)};
+      const REPEATS = ${repeats};
+      const button = (label) => Array.from(document.querySelectorAll('.dock-modes button'))
+        .find(b => (b.getAttribute('aria-label') || '').trim().toLowerCase() === label.toLowerCase());
+      const out = [];
+      let long = [];
+      let observing = false;
+      const po = new PerformanceObserver(list => {
+        for (const e of list.getEntries()) long.push({ s: e.startTime, d: e.duration });
+      });
+      try { po.observe({ type: 'longtask', buffered: false }); observing = true; } catch (e) {}
+      const raf = () => new Promise(r => requestAnimationFrame(() => r()));
+      /* Two frames, not one: the first callback runs *before* the paint it
+         belongs to, so a single rAF times the work and not the reader seeing it. */
+      const nextPaint = async () => { await raf(); await raf(); };
+      const idle = (ms) => new Promise(r => setTimeout(r, ms));
+      for (let rep = 0; rep < REPEATS; rep++) {
+        for (const mode of MODES) {
+          const btn = button(mode);
+          if (!btn) { out.push({ rep, mode, ms: 0, longest: 0, blocking: 0, tasks: 0, renders: '', error: 'no button in .dock-modes' }); continue; }
+          /* Let the previous switch's effects, fetches and layout finish, or
+             they are charged to this one. */
+          await idle(700);
+          await nextPaint();
+          if (window.__perf) window.__perf.reset();
+          long = [];
+          const t0 = performance.now();
+          btn.click();
+          await nextPaint();
+          const t1 = performance.now();
+          /* **Do not read \`long\` here.** A PerformanceObserver delivers its
+             entries in a later task, so reading immediately after the paint
+             catches whichever ones happened to arrive — which is why the same
+             Hierarchy switch first reported \`tasks: 0\` on one repeat and a
+             2878ms task on the next. Zero tasks then reads as "nothing blocked
+             the main thread", the most flattering possible wrong answer, on a
+             switch that blocked it for five seconds.
+             docs/reusable/silent-success.md. The wait is after \`t1\`, so it
+             costs the headline number nothing. */
+          await idle(150);
+          /* And drain synchronously as well: cross-task-source ordering is not
+             guaranteed, so a wait alone is a heuristic. GPT Sol, 2026-09-05. */
+          try { for (const e of po.takeRecords()) long.push({ s: e.startTime, d: e.duration }); } catch (e) {}
+          const mine = long.filter(e => e.s + e.d > t0 && e.s < t1);
+          /* **Did the mode actually change?** Without this a detached or broken
+             button records a fast success, which would be the fastest row in
+             the table — the house failure pattern with a stopwatch on it
+             (docs/reusable/silent-success.md). GPT Sol, 2026-09-05. */
+          const active = (document.querySelector('.dock-modes button[aria-checked="true"]')
+            || document.querySelector('.dock-modes button[aria-pressed="true"]'));
+          const landed = active ? (active.getAttribute('aria-label') || '').trim().toLowerCase() : null;
+          const wrongMode = landed !== null && landed !== mode.toLowerCase()
+            ? 'clicked ' + mode + ' but the bar says ' + landed + ' — this click measured nothing'
+            : undefined;
+          const rep$ = window.__perf ? window.__perf.report() : null;
+          out.push({
+            rep, mode,
+            ms: Math.round((t1 - t0) * 10) / 10,
+            longest: mine.length ? Math.round(Math.max.apply(null, mine.map(e => e.d)) * 10) / 10 : 0,
+            blocking: Math.round(mine.reduce((a, e) => a + Math.max(0, e.d - 50), 0) * 10) / 10,
+            tasks: mine.length,
+            renders: rep$ ? (rep$.topRenders || []).slice(0, 5).map(x => x[0] + '=' + x[1]).join(' ') : '',
+            error: wrongMode
+              ?? (observing ? undefined : 'no longtask observer — longest/blocking are meaningless'),
+          });
+        }
+      }
+      po.disconnect();
+      return JSON.stringify(out);
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  return JSON.parse(r.result.value) as ModeClick[];
+}
+
+/**
+ * One line per click, then a summary per mode.
+ *
+ * **The first switch into a mode and the fourth are different events** — the
+ * first mounts the panel and may fetch, the rest do not — so `first` and
+ * `later mean` are printed apart. A mean over both hides whichever of the two
+ * is the complaint, and on a run that starts in `mode=hierarchy` the first
+ * "Hierarchy" click is a click on the mode you are already in: 20-30ms, and the
+ * fastest-looking number in the table.
+ */
+function reportModeClicks(clicks: ModeClick[], modeList: string[]): void {
+  const missing = clicks.filter((c) => c.error);
+  for (const c of clicks) {
+    console.log(
+      `  ${c.error ? "⚠ " : ""}rep${c.rep} ${c.mode.padEnd(10)} ${String(c.ms).padStart(7)}ms` +
+        `  longest ${String(c.longest).padStart(6)}ms  blocking ${String(c.blocking).padStart(6)}ms` +
+        `  tasks ${String(c.tasks).padStart(2)}  ${c.error ?? c.renders}`,
+    );
+  }
+  console.log("mode switch, click to next painted frame:");
+  const mean = (a: number[]): number =>
+    a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 10) / 10 : 0;
+  for (const mode of modeList) {
+    const ms = clicks.filter((c) => c.mode === mode && !c.error).map((c) => c.ms);
+    if (ms.length === 0) continue;
+    console.log(
+      `  ${mode.padEnd(10)} first ${String(ms[0] ?? 0).padStart(7)}ms   ` +
+        `later mean ${String(mean(ms.slice(1))).padStart(7)}ms   ` +
+        `worst ${String(Math.max(...ms)).padStart(7)}ms`,
+    );
+  }
+  /* Shouted rather than left as a zero: a mode whose button is not in the bar
+     measures nothing and would otherwise be the fastest row here. */
+  if (missing.length > 0) {
+    console.log(
+      `  ⚠ ${missing.length} click(s) measured nothing — ` +
+        [...new Set(missing.map((m) => m.error))].join("; "),
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const url = flag("url", "http://localhost:5273/");
   const seconds = Number(flag("seconds", "60"));
@@ -930,8 +1101,20 @@ async function main(): Promise<void> {
     const before = first.total;
     const t0 = Date.now();
     const scrolling = has("scroll");
+    /* `--modes plain,hierarchy,outline` clicks each in turn, `--repeats` times
+       round. Mutually exclusive with `--scroll`: a run that did both would
+       charge each gesture's cost to the other. */
+    const modeList = flag("modes", "")
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean);
+    const clickingModes = has("modes") && modeList.length > 0;
+    if (scrolling && clickingModes) {
+      throw new Error("--scroll and --modes measure different gestures; run them separately");
+    }
     console.log(
-      `measuring ${seconds}s${has("hidden") ? " (tab hidden)" : ""}${scrolling ? " while scrolling" : ""}…`,
+      `measuring ${clickingModes ? `${modeList.length} modes x ${flag("repeats", "3")}` : `${seconds}s`}` +
+        `${has("hidden") ? " (tab hidden)" : ""}${scrolling ? " while scrolling" : ""}…`,
     );
     /* A sampling profile of the measured window, when asked for.
 
@@ -977,10 +1160,13 @@ async function main(): Promise<void> {
     }
     let wheelStats: WheelStats | null = null;
     let frameStats: FrameStats | null = null;
+    let modeClicks: ModeClick[] | null = null;
     if (scrolling) {
       await startFrameProbe(cdp);
       wheelStats = await wheel(cdp, seconds * 1000);
       frameStats = await stopFrameProbe(cdp);
+    } else if (clickingModes) {
+      modeClicks = await clickModes(cdp, modeList, Number(flag("repeats", "3")));
     } else await sleep(seconds * 1000);
     if (profiling) {
       const prof = await cdp.send<{ profile: CpuProfile }>("Profiler.stop");
@@ -1000,6 +1186,8 @@ async function main(): Promise<void> {
       returnByValue: true,
     });
     if (renders.result.value) console.log(`renders: ${renders.result.value}`);
+
+    if (modeClicks) reportModeClicks(modeClicks, modeList);
 
     const second = await read();
     const after = second.total;
@@ -1058,6 +1246,10 @@ async function main(): Promise<void> {
          a count of long rAF intervals and not of missed refreshes. */
       wheel: wheelStats,
       frames: frameStats,
+      /* Null unless `--modes`. One row per click, in the order they happened,
+         because the first switch into a mode and the fourth are different
+         events and a mean over both hides whichever one is the complaint. */
+      modes: modeClicks,
     };
 
     console.log(JSON.stringify(result, null, 2));
