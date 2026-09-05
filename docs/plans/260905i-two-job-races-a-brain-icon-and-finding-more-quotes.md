@@ -51,9 +51,6 @@ so the diagnosis cannot be read off the issue — it has to come from the code a
 - **C** — report 27, finding more quotes.
 - **D** — the fix that comes out of A, with a postmortem under `docs/postmortems/`.
 
-## Decisions and assumptions recorded here rather than asked
-
-*(The loop runs autonomously; anything that would have been a question goes here.)*
 
 ## Stage B — report 25, the brain icon. Done.
 
@@ -276,3 +273,28 @@ Its answer to *what would have caught this* is one sentence, and it is now the f
 
 > Publish an unrelated draft copied from a currently served revision whose tree violates the newly
 > added invariant.
+
+## Decisions and assumptions taken without asking
+
+- **The exemption is narrow, and widening it is a decision rather than a default.** Only `checkTree`'s
+  problems, only when the blocks *and* the tree are exactly the base's. Everything else in
+  `reasonsNotToPublish` stays unconditional. The one Sol names as dangerous to exempt is the
+  `hierarchy` run's status: *"a hierarchy attempt can fail while leaving the copied tree byte-for-byte
+  unchanged"*, and exempting it would publish the residue of a failed tree-owning operation.
+- **No backfill.** Sol calls one *"worth doing after the gate fix"*, and it would stop the warnings
+  repeating — but it does not fix the class, and re-running `hierarchy` on an affected article does it
+  by hand today. Greg's instruction on the previous batch was *"Don't worry about backfill"*; a sweep
+  is easy to add later and easy to get wrong now.
+- **Production could not be queried.** The Supabase MCP on this box is `http://127.0.0.1:54361`, the
+  local stack — which is why `nagel-bat` was not in it, and why the blast-radius number is local.
+  Production *runtime logs* were reachable through the Vercel MCP, and that is where the refusal text
+  came from.
+- **Reports 28 and 29 are one note, not two.** Same cause, same fix, ninety seconds apart, and
+  splitting it would have meant writing the diagnosis twice and inviting the reader to believe there
+  were two bugs.
+- **Report 29's first sentence is not a request.** *"These were written before entries said where each
+  half came from…"* is Greg explaining why he pressed retry, not asking for anything. Taken at face
+  value; the glossary's two-part format already exists and the retry is what failed.
+- **The `warn` names the repair.** *"re-run hierarchy to repair it"* — because the whole cost of this
+  incident was that the person looking at it could not find out what to do, and a log line that
+  reports a problem without its remedy is the same failure one layer up.
