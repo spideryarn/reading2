@@ -23,7 +23,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Article, BlockId, Comment, NodeId, TreeNode } from "../types.js";
+import type { Article, Block, BlockId, Comment, NodeId, TreeNode } from "../types.js";
 import { useRenderCount } from "./perf.js";
 import { columnLabel, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
@@ -75,6 +75,193 @@ import {
  * the reader waits on — the tick has already appeared.
  */
 const ANNOUNCE_GAP_MS = 60;
+
+/**
+ * The empty list handed to every block that has no marks of a given kind.
+ *
+ * **A shared constant rather than a `[]` literal, and it is load-bearing.**
+ * `proseHtml` decides a block can reuse last render's html by comparing its
+ * three mark arrays **by identity**, and a fresh `[]` per block per render is a
+ * different array every time — so a literal would miss on the ~455 unmarked
+ * blocks of a 551-block article, which are exactly the blocks the reuse exists
+ * for. Never mutated: everything here spreads it into a new array.
+ */
+const NO_MARKS: Mark[] = [];
+
+/**
+ * What one block's prose was built from, beside the `{ __html }` built from it.
+ *
+ * The inputs are kept so the next render can ask "is any of this different?"
+ * before parsing anything — see `proseHtml`, which is where the fields are
+ * compared and where each one earns its place.
+ */
+interface ProseEntry {
+  /**
+   * The block's own html. **Stable identity is not immutable content**: a
+   * re-extraction can change a block's html under the same id, so the content
+   * is part of the key and the id alone never is (block-ids.md).
+   */
+  html: string;
+  /** `marksByBlock`'s array for this block — comments and anchored chats. */
+  cmts: Mark[];
+  /** `termMarksByBlock`'s array for this block — every glossary occurrence. */
+  terms: Mark[];
+  /** The `hitMarks` prop's array for this block — the search's marks. */
+  hits: Mark[];
+  /**
+   * `openTerm`, but **only when this block carries that term** — otherwise
+   * null.
+   *
+   * The pressed term is global, so keying on it directly would invalidate every
+   * block in the article on every press and buy nothing. What actually changes
+   * a block's html is whether the term the reader just pressed, or the one they
+   * pressed before, is in *this* block. The other three selections need no such
+   * field: `open` is already folded into the arrays above, per block.
+   */
+  openTerm: string | null;
+  /** What React is handed, and the object identity it compares. */
+  out: { __html: string };
+}
+
+/**
+ * The term the reader has pressed, **but only in the blocks it is actually
+ * in** — null everywhere else.
+ *
+ * `openTerm` is one id for the whole article, so it is the wrong key for a
+ * per-block cache: it changes on every press and would invalidate every block.
+ * What changes a block's html is whether the newly or previously pressed term
+ * has an occurrence in *this* block. See `ProseEntry.openTerm`.
+ */
+function pressedIn(terms: Mark[], openTerm: string | null | undefined): string | null {
+  if (!openTerm) return null;
+  return terms.some((m) => m.id === openTerm) ? openTerm : null;
+}
+
+/**
+ * Whether this block is drawn from exactly what last render's entry was drawn
+ * from — the equality contract `proseHtml` reuses on, in one place.
+ *
+ * **Identity for the arrays, value for the html.** The arrays come from memos
+ * and from `hitMarks`, all three of which now hand back the same array when
+ * nothing about that block's marks has changed, so `===` is both cheap and
+ * exact; comparing their contents would be a second pass over every mark in the
+ * article to save a pass over one block. The html is compared by value because
+ * a re-extraction produces an equal string in a new `Block`, and rebuilding
+ * 551 unchanged paragraphs on a refetch would give back what this exists to
+ * save. `ProseEntry` says what each field is for.
+ */
+function sameInputs(
+  had: ProseEntry,
+  block: Block,
+  cmts: Mark[],
+  terms: Mark[],
+  hits: Mark[],
+  openTerm: string | null,
+): boolean {
+  return (
+    had.html === block.html &&
+    had.cmts === cmts &&
+    had.terms === terms &&
+    had.hits === hits &&
+    had.openTerm === openTerm
+  );
+}
+
+/**
+ * Every comment's and every chat's **anchor**, as one string.
+ *
+ * The key `marksByBlock` reuses its resolution on, and the whole point is what
+ * it leaves out: the body, the answer, the status, the object and the array.
+ * Those change on every streamed token; where the words sit does not.
+ *
+ * The quote's length goes in ahead of the quote so no arrangement of separators
+ * inside a quote can spell another record, and each entry says whether it is a
+ * comment or a chat, so a comment and a conversation sharing one anchor cannot
+ * trade places unnoticed.
+ */
+function anchorKey(comments: Comment[], chats: AnchoredThread[]): string {
+  const parts: string[] = [];
+  for (const c of comments) {
+    parts.push(`c\n${c.id}\n${c.blockId}\n${c.start}\n${c.quote.length}\n${c.quote}`);
+  }
+  for (const t of chats) {
+    const a = t.anchor;
+    parts.push(`t\n${t.id}\n${a.blockId}\n${a.start}\n${a.quote.length}\n${a.quote}`);
+  }
+  return parts.join("\n");
+}
+
+/**
+ * Where each comment and chat's words actually are, grouped by block.
+ *
+ * The expensive half of `marksByBlock`: a `renderedText` parse and a search per
+ * anchor. Resolution can fail — the paragraph was edited and the quote is gone
+ * — and then that comment simply draws no mark. It is still in the list and
+ * still openable; what it must never do is underline whatever text now happens
+ * to sit at that offset. See annotate.ts § Why the offsets are DOM offsets.
+ *
+ * Nothing here knows which comment is open: `applyOpen` puts that on top.
+ */
+function resolveAnchors(
+  comments: Comment[],
+  chats: AnchoredThread[],
+  byId: Map<BlockId, Block>,
+): Map<BlockId, Mark[]> {
+  const byBlock = new Map<BlockId, Mark[]>();
+  const push = (blockId: BlockId, mark: Mark) => {
+    const list = byBlock.get(blockId) ?? [];
+    list.push(mark);
+    byBlock.set(blockId, list);
+  };
+  for (const c of comments) {
+    const block = byId.get(c.blockId);
+    if (!block) continue;
+    const found = resolveMark(renderedText(block.html), c);
+    if (!found) continue;
+    push(c.blockId, { id: c.id, ...found });
+  }
+  for (const t of chats) {
+    const block = byId.get(t.anchor.blockId);
+    if (!block) continue;
+    const found = resolveMark(renderedText(block.html), t.anchor);
+    if (!found) continue;
+    push(t.anchor.blockId, { id: t.id, ...found, kind: "chat" });
+  }
+  return byBlock;
+}
+
+/**
+ * The same marks with the open comment's and open chat's flagged — **and every
+ * other block's array handed back unchanged, by identity.**
+ *
+ * That last clause is the entire reason this is a second pass rather than an
+ * `open:` written in the loop above. `proseHtml` compares these arrays by
+ * identity to decide whether a block's html can be reused, so a pass that
+ * rebuilt them all would make every selection change cost an article's worth of
+ * `annotateHtml`. Only the block losing the ring and the block gaining it get a
+ * new array; a block that was never involved gets the array it already had.
+ *
+ * `open` is omitted rather than set to `false` on the marks that are not
+ * pressed, because annotate.ts only ever reads it for truth — and because a
+ * `false` here would be a second spelling of the same mark.
+ */
+function applyOpen(
+  base: Map<BlockId, Mark[]>,
+  openComment: string | null,
+  openChat: string | null,
+): Map<BlockId, Mark[]> {
+  if (openComment === null && openChat === null) return base;
+  const isOpen = (m: Mark) => (m.kind === "chat" ? m.id === openChat : m.id === openComment);
+  const out = new Map(base);
+  for (const [blockId, marks] of base) {
+    if (!marks.some(isOpen)) continue;
+    out.set(
+      blockId,
+      marks.map((m): Mark => (isOpen(m) ? { ...m, open: true } : m)),
+    );
+  }
+  return out;
+}
 
 interface Props {
   article: Article;
@@ -395,12 +582,9 @@ function TableViewInner({
   };
 
   /**
-   * Comments, resolved against the prose they were made on and grouped by block.
-   *
-   * Resolution can fail — the paragraph was edited and the quote is gone — and
-   * then the comment simply draws no mark. It is still in the list and still
-   * openable; what it must never do is underline whatever text now happens to
-   * sit at that offset. See annotate.ts § Why the offsets are DOM offsets.
+   * The article's blocks by id, for `resolveAnchors` above — which is where
+   * comments and chats are resolved against the prose they were made on, and
+   * what happens when a quote is gone.
    */
   /* Indexed once. The loop below used to do `blocks.find` per comment, which is
      O(comments x blocks) plus a DOM parse each time — and folding every anchored
@@ -455,39 +639,82 @@ function TableViewInner({
     }, ANNOUNCE_GAP_MS);
   }, []);
 
+  /**
+   * Last render's anchor resolution, and the two things it depended on.
+   *
+   * A cache keyed on value equality, which is what makes writing to it during
+   * render safe — the same argument `proseCache` below makes. What is stored is
+   * a pure function of `anchorKey(comments, chats)` and the block map, so a
+   * double-invoked or abandoned render can only ever hand back something a
+   * fresh computation would have produced.
+   */
+  const marksCache = useRef<{
+    /** The semantic anchors, as a string — see `anchorKey`. */
+    key: string;
+    /** The block map those anchors were resolved against. */
+    blocks: Map<BlockId, Block>;
+    /** The resolution, with nothing marked open. */
+    base: Map<BlockId, Mark[]>;
+    /** Which comment and chat were open when `out` was built. */
+    open: string;
+    /** `base` with `open` applied — what the memo actually returned. */
+    out: Map<BlockId, Mark[]>;
+  } | null>(null);
+
+  /**
+   * Where every comment and every anchored chat sits in the prose, as marks.
+   *
+   * ## Resolution is keyed on the anchors, not on the comments
+   *
+   * `useComments.ts` § the `delta` branch calls
+   * `put({ ...rest, id, status: "pending", answer: text })` on **every streamed
+   * token**, so the comment object and the whole `comments` array are replaced
+   * while `blockId`, `quote` and `start` are untouched. A memo keyed on either
+   * identity therefore re-resolves the article's anchors dozens of times per
+   * answer. So the key is `anchorKey` — the semantic anchor inputs — plus the
+   * block map, which stands in for the block content: `byId` is rebuilt only
+   * when `article.blocks` is, and nothing on the client mutates a blocks array
+   * in place (search-hits.ts § `pages` has the long version of that argument).
+   *
+   * ## And `open` is applied afterwards, per block
+   *
+   * **The value of this is not the handful of parses it saves.** Five comments
+   * on a 551-block article cost five `renderedText` calls; the measurement in
+   * docs/plans/260905i-… says so plainly. It is that the **per-block arrays
+   * survive a selection change by identity**, which is the precondition for
+   * `proseHtml` below reusing anything at all. Before this, opening one dialog
+   * gave every block in the article a new marks array, so every marked block
+   * re-annotated — 96 `annotateHtml` calls to move one ring. A future reader
+   * looking at the parse count alone will conclude this is elaborate machinery
+   * for nothing; the win is one memo further down.
+   *
+   * So: the resolution is reused when the anchors have not moved, the
+   * open-applied map is reused when the selection has not moved either, and
+   * only the blocks holding the previously or newly open id get a new array.
+   *
+   * Chats and comments share one map rather than living in two, because they
+   * are resolved the same way against the same prose and change on the same
+   * clock — a reader asking a question. The glossary's marks are a second map
+   * precisely because they change on a different one.
+   */
   const marksByBlock = useMemo(() => {
     /* Off by default; see src/web/annotation-cost.ts, including why this ms
        *contains* the `renderedText` and `resolveMark` ms and must not be added
        to them. Timed whenever the probe is on at all: this is one of the two
-       numbers the decision rule is applied to. */
+       numbers the decision rule is applied to, and it is charged on the reuse
+       path too — a memo body that ran and decided to do nothing is still this
+       memo's time. */
     const timing = costOn();
     const t0 = timing ? performance.now() : NO_CLOCK;
-    const byBlock = new Map<BlockId, Mark[]>();
-    const push = (blockId: BlockId, mark: Mark) => {
-      const list = byBlock.get(blockId) ?? [];
-      list.push(mark);
-      byBlock.set(blockId, list);
-    };
-    for (const c of comments) {
-      const block = byId.get(c.blockId);
-      if (!block) continue;
-      const found = resolveMark(renderedText(block.html), c);
-      if (!found) continue;
-      push(c.blockId, { id: c.id, ...found, open: c.id === openComment });
-    }
-    /* Chats and comments share one map rather than living in two, because they
-       are resolved the same way against the same prose and change on the same
-       clock — a reader asking a question. The glossary's marks are a second map
-       precisely because they change on a different one. */
-    for (const t of chats) {
-      const block = byId.get(t.anchor.blockId);
-      if (!block) continue;
-      const found = resolveMark(renderedText(block.html), t.anchor);
-      if (!found) continue;
-      push(t.anchor.blockId, { id: t.id, ...found, kind: "chat", open: t.id === openChat });
-    }
+    const key = anchorKey(comments, chats);
+    const had = marksCache.current;
+    const kept = had !== null && had.key === key && had.blocks === byId;
+    const base = kept ? had.base : resolveAnchors(comments, chats, byId);
+    const open = `${openComment ?? ""}\n${openChat ?? ""}`;
+    const out = kept && had.open === open ? had.out : applyOpen(base, openComment, openChat);
+    marksCache.current = { key, blocks: byId, base, open, out };
     if (timing) noteCost("marksByBlock", t0);
-    return byBlock;
+    return out;
   }, [comments, chats, byId, openComment, openChat]);
 
   /**
@@ -507,16 +734,16 @@ function TableViewInner({
   const termMarksByBlock = useMemo(() => termMarks(blocks, terms ?? []), [blocks, terms]);
 
   /**
-   * Last render's `{ __html }` objects, so an unchanged block can be handed
-   * back the one React has already seen — see `proseHtml` below for why that
-   * is the whole point.
+   * Last render's `{ __html }` objects **and what each was built from**, so an
+   * unchanged block can be handed back the one React has already seen without
+   * being computed again — see `proseHtml` below for why each half matters.
    *
    * A cache keyed on value equality, which is what makes writing to it during
-   * render safe: every reuse is an object whose `__html` is `===` the string
-   * we just computed, so a double-invoked or abandoned render can only ever
-   * hand back something identical. Nothing reads it for correctness.
+   * render safe: an entry is a pure function of the inputs stored beside it, so
+   * a double-invoked or abandoned render can only ever hand back something a
+   * fresh computation would have produced. Nothing reads it for correctness.
    */
-  const proseCache = useRef<Map<BlockId, { __html: string }>>(new Map());
+  const proseCache = useRef<Map<BlockId, ProseEntry>>(new Map());
 
   /**
    * The verbatim column's HTML, annotated once per change rather than once per
@@ -572,6 +799,37 @@ function TableViewInner({
    *   re-runs for all 551 blocks, but only the blocks whose html actually
    *   changed get new objects — so a streaming answer rewrites the paragraphs
    *   it touches instead of the article.
+   *
+   * ## Why the entry keeps the inputs as well — the 2026-09-06 half
+   *
+   * Not rewriting the DOM is not the same as not *computing* the html, and the
+   * measurement in docs/plans/260905i-… is about the second. A glossary press
+   * on a 551-block article ran `addZoomHandles` **551 times** — including on
+   * the ~455 blocks with no mark at all, whose html cannot have changed — and
+   * `annotateHtml` **96 times**, to alter one block. ~40% and ~55% of a memo
+   * that costs ~30ms against an 8ms budget.
+   *
+   * So each entry keeps the inputs it was built from, and a block whose inputs
+   * are all unchanged is skipped entirely: neither call happens and the entry
+   * is passed straight through. The equality contract is `ProseEntry` above,
+   * and four parts of it are easy to get subtly wrong:
+   *
+   * - **The key is the source arrays, by identity**, not the composite `marks`
+   *   array built below — that one is freshly allocated every pass and can
+   *   never equal itself. `NO_MARKS` is what makes the unmarked majority
+   *   compare equal at all.
+   * - **`openTerm` is stored per block, not globally.** It is one id for the
+   *   whole article, so keying on it directly would invalidate every block on
+   *   every press.
+   * - **`hitMarks` had to be split first.** `hitMarks()` in search-hits.ts used
+   *   to bake `open` into fresh arrays for every block whenever the pressed
+   *   result changed, so this key would have missed everywhere; § `unpressed`
+   *   there is the other half of this change.
+   * - **A block is always rebuilt from all its kinds at once**, which is what
+   *   keeps a comment and a term over the same words in one shared `<mark>`.
+   *
+   * The map is rebuilt fresh every run, exactly as it was before, so a block
+   * that leaves the article evicts itself and nothing here is unbounded.
    */
   const proseHtml = useMemo(() => {
     /* Off by default; see src/web/annotation-cost.ts, including why this ms
@@ -581,23 +839,32 @@ function TableViewInner({
     const timing = costOn();
     const t0 = timing ? performance.now() : NO_CLOCK;
     const was = proseCache.current;
-    const byBlock = new Map<BlockId, { __html: string }>();
+    const byBlock = new Map<BlockId, ProseEntry>();
     for (const block of blocks) {
       /* Both kinds in one call. `annotateHtml` cuts each text node at every
          mark boundary in one pass, so a comment and a term over the same words
          produce one <mark> carrying both classes — two nested ones would read
          as a rendering bug. Concatenating here is what gives it the chance. */
-      const found = termMarksByBlock.get(block.id) ?? [];
+      const found = termMarksByBlock.get(block.id) ?? NO_MARKS;
+      const cmts = marksByBlock.get(block.id) ?? NO_MARKS;
+      const hits = hitMarks?.get(block.id) ?? NO_MARKS;
+      const pressed = pressedIn(found, openTerm);
+      const had = was.get(block.id);
+      if (had && sameInputs(had, block, cmts, found, hits, pressed)) {
+        /* Nothing this block is drawn from has changed, so neither has its
+           html. The entry — and with it the `{ __html }` object React compares
+           — is passed through untouched. */
+        byBlock.set(block.id, had);
+        continue;
+      }
       const marks = [
-        ...(marksByBlock.get(block.id) ?? []),
+        ...cmts,
         /* The pressed term's `open`, applied here rather than carried through
            the scan — see the `openTerm` prop. A plain `.map` over marks that
            have already been found, so a press costs no regex and no reparse of
            anything except the blocks it actually appears in. */
-        ...(openTerm
-          ? found.map((m) => (m.id === openTerm ? { ...m, open: true } : m))
-          : found),
-        ...(hitMarks?.get(block.id) ?? []),
+        ...(pressed ? found.map((m) => (m.id === pressed ? { ...m, open: true } : m)) : found),
+        ...hits,
       ];
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
@@ -615,12 +882,18 @@ function TableViewInner({
          claiming the old shape, 2026-09-03. */
       const withHandles = addZoomHandles(marked);
       /* **Every block, and the same object when the html has not changed.**
-         Both halves of that are load-bearing; see the docstring above. */
-      const had = was.get(block.id);
-      byBlock.set(
-        block.id,
-        had && had.__html === withHandles ? had : { __html: withHandles },
-      );
+         Both halves of that are load-bearing; see the docstring above. The
+         inputs changed and the output still can be identical — a comment
+         resolving to the same span in a re-extracted paragraph, say — and then
+         React must still be handed the object it already has. */
+      byBlock.set(block.id, {
+        html: block.html,
+        cmts,
+        terms: found,
+        hits,
+        openTerm: pressed,
+        out: had && had.out.__html === withHandles ? had.out : { __html: withHandles },
+      });
     }
     proseCache.current = byBlock;
     if (timing) noteCost("proseHtml", t0);
@@ -1146,7 +1419,7 @@ function TableViewInner({
                      is unreachable — it is here so that a block that somehow
                      escaped the memo still renders its own prose rather than
                      an empty paragraph. */
-                  dangerouslySetInnerHTML={proseHtml.get(block.id) ?? { __html: block.html }}
+                  dangerouslySetInnerHTML={proseHtml.get(block.id)?.out ?? { __html: block.html }}
                 />
               </td>
             )}
