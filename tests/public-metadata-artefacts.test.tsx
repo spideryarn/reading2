@@ -24,6 +24,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/types.js";
 import type { PublicArtefacts } from "../src/public-types.js";
+import { TAKEDOWN_LINK } from "../src/messages.js";
+import { TAKEDOWN_HREF } from "../src/web/router.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -199,5 +201,69 @@ describe("what a visitor is told a shared link carries", () => {
     /* The owner's second person, on a page no owner is reading. */
     expect(text).not.toContain("your comments");
     expect(text).not.toContain("your conversations");
+  });
+});
+
+/**
+ * **Whose article this is, and what to do if the answer is "mine, and I did not
+ * agree to this".**
+ *
+ * Two separate facts on the same page, tested together because they are the two
+ * halves of one decision Greg took on 2026-09-04: a public article says who
+ * wrote it, and a public article offers a way to complain about being here.
+ *
+ * `meta.byline` is **the original publication's author**, extracted from
+ * somebody else's page by stage 2 and carried through `PublicMeta.byline`
+ * (src/public/dto.ts § `publicMeta`). It is never the Spideryarn reader who
+ * added the article: that person's identity is not on the public wire at all,
+ * and there is no field here that could put it there.
+ *
+ * **The byline assertion was green when it was written**, which is unusual
+ * enough to say out loud — the page has drawn it since it existed. It is pinned
+ * now because it stopped being incidental and became something we told Greg the
+ * product does; deleting the facts line was watched failing it.
+ */
+describe("whose article a visitor is looking at", () => {
+  it("names the author the piece was published under", async () => {
+    await act(async () => {
+      root.render(
+        createElement(PublicMetadataPage, {
+          slug: SLUG,
+          article: { ...ARTICLE, meta: { ...ARTICLE.meta, byline: "Richard P. Feynman" } },
+          available: NONE,
+          signedIn: false,
+          sessionUnconfirmed: false,
+        }),
+      );
+    });
+    expect(host.textContent).toContain("Richard P. Feynman");
+  });
+
+  /**
+   * **Most articles have no byline**, so the absent case is the ordinary one:
+   * nothing drawn, no stranded separator, no "null".
+   */
+  it("and says nothing at all when the piece has none", async () => {
+    await visitor(NONE);
+    expect(host.textContent).not.toContain("null");
+    expect(host.textContent).not.toContain("undefined");
+  });
+
+  /**
+   * The takedown link, which is the counterweight to the tick-box the owner
+   * ticked: sharing asks an owner to confirm they hold the rights, and nothing
+   * checks that, so the protection is that plus a way for the wronged party to
+   * say so. docs/project/privacy.md § If something here is yours.
+   *
+   * On this page rather than in the reading view: this is the page about where
+   * the article came from, it is one press of the bottom bar away from the
+   * article itself, and the reading chrome is measured — anything added to it
+   * moves every deep link (src/web/scroll.ts).
+   */
+  it("and offers a way to ask for it to be taken down", async () => {
+    await visitor(NONE);
+    const hrefs = [...host.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain(TAKEDOWN_HREF);
+    expect(host.textContent).toContain(TAKEDOWN_LINK);
   });
 });

@@ -37,6 +37,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { SHARED_WITH_YOU } from "../src/messages.js";
 import { SharedNotice } from "../src/web/PublicChrome.js";
 
 const CSS = readFileSync(path.join(process.cwd(), "src/web/styles.css"), "utf8");
@@ -66,7 +67,14 @@ describe("a visitor's notice, in the strip the band takes over", () => {
     expect(html).toMatch(/class="[^"]*\bshared-notice\b/);
     /* And it really is the notice, so a component that rendered nothing but the
        right class could not pass. */
-    expect(html).toContain("shared this article with you");
+    /* The constant rather than a literal. This asserted the fragment
+       "shared this article with you", which was a substring of
+       `SHARED_WITH_YOU` until 2026-09-04 and is a substring of nothing
+       now: the sentence had to stop saying somebody sent this reader a
+       link, because the public shelf brings readers nobody sent
+       anything. A grep for the whole old sentence does not find a
+       fragment of it, which is how this went red on `dev`. */
+    expect(html).toContain(SHARED_WITH_YOU);
   });
 
   it("is hidden under the same condition, beside the masthead's rule", () => {

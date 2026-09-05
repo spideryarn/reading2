@@ -258,7 +258,15 @@ describe("finding out who can read this", () => {
  */
 it("tells the owner a shared article is listed, not merely reachable by link", () => {
   for (const copy of [SHARING_ON, sharingConfirmBody("A piece")]) {
-    expect(copy).toMatch(/\blist(?:s|ed)\b/);
+    expect(copy).toMatch(/\banyone can read\b/i);
+    /* **`publicly` is load-bearing, and the first version of this left it
+       out.** GPT Sol asked the opposite question of this guard — what rewrite
+       stays green while telling an owner the wrong thing — and answered it:
+       *"Anyone can read this without signing in, and it's listed only in your
+       private library."* matched an inflection of *list* and passed. The
+       material consent change is public discoverability, so that is the word
+       the assertion has to hold. */
+    expect(copy).toMatch(/\blist(?:s|ed)(?: it)? publicly\b/i);
     expect(copy).not.toMatch(/with the link can read/);
   }
 });
@@ -848,6 +856,28 @@ describe("what a shared link carries", () => {
 
     expect(host.textContent).toContain("Anyone who opens it gets these");
     expect(host.textContent).toContain("These stay with you");
-    expect(host.textContent).toContain("never your own work on it");
+  });
+
+  /**
+   * **And the one-line summary under that third column is gone**, because it
+   * was a hand-written claim about a derived list and the list outgrew it.
+   *
+   * It said *"A shared link carries the piece and what the model wrote about
+   * it, never your own work on it"* — on a card whose first column, since
+   * 2026-09-04, lists *Your comments and notes* and *Search*. GPT Sol found it
+   * reviewing the other half of the same day's work.
+   *
+   * Asserted as a *phrase that must not appear* rather than as a missing
+   * element, because the failure this guards against is somebody writing the
+   * summary back in a slightly different place. src/messages.ts, at
+   * `NOT_SHARED_HEADING`, is where the argument lives.
+   */
+  it("and no longer summarises that column with a claim the list contradicts", async () => {
+    await mount(SHARED);
+
+    expect(host.textContent).not.toContain("never your own work on it");
+    /* The positive control for the negative above: the column it was under is
+       still on the card, so this is not passing because nothing rendered. */
+    expect(host.textContent).toContain("These stay with you");
   });
 });

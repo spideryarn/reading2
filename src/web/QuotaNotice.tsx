@@ -33,32 +33,34 @@
  * at a page with prices and nothing to press, which is a worse place to be sent
  * than nowhere:
  *
- * - **`pay-free`** — never subscribed, `canCheckout` is true, and `/pricing` is
- *   exactly the page that answers *what would I have to pay to add this?*
+ * - **`pay-free`** — never subscribed, so every tier is on sale to them, and
+ *   `/pricing` is exactly the page that answers *what would I have to pay to add
+ *   this?*
  * - **`pay-limit`** — a subscription that is working, at its monthly ceiling.
- *   There is nothing on `/pricing` to press: `canCheckout` is false while any
- *   non-terminal subscription exists (src/billing/summary.ts), so that page
- *   draws this reader no button. What they need instead is the date it resets
- *   and the subscription they already have, and both are on `/profile` — where a
- *   renewing plan's *"the allowance starts again on…"* is always drawn, while
- *   `/pricing` deliberately omits it (PricingPage.tsx § `CurrentPlan`).
+ *   What they need is the date it resets and the subscription they already have,
+ *   and both are on `/profile` — where a renewing plan's *"the allowance starts
+ *   again on…"* is always drawn, while `/pricing` deliberately omits it
+ *   (PricingPage.tsx § `CurrentPlan`).
  *
- *   **This destination is under review, and the reason it is under review is
- *   that one of the three arguments for it has expired.** Until 2026-09-04 the
- *   hosted Portal could not move Reader → Researcher either, so a subscriber at
- *   their ceiling genuinely had nowhere to go. It can now; the dead end is
- *   `canCheckout` not being tier-aware, which is ours to fix — see
- *   docs/project/billing.md § *Reader → Researcher: open at Stripe, closed in
- *   our own UI*. Do not re-point this link on the strength of the corrected
- *   fact: Greg is deciding where a capped subscriber should land separately.
+ *   **Two of the three arguments for that destination have now expired, and the
+ *   destination has deliberately not moved.** Until 2026-09-04 the hosted Portal
+ *   could not move Reader → Researcher, and until later that day `canCheckout`
+ *   drew a subscriber no button anywhere, so a reader at their ceiling genuinely
+ *   had nowhere to go. Both are fixed: Stripe takes the switch, and
+ *   `summary.purchase` (src/billing/summary.ts) now offers a Reader the tier
+ *   above on **both** pages — so `/pricing` is no longer a dead end for a
+ *   subscriber, and `/profile` is not the only page that is not one. Do not
+ *   re-point this link on the strength of that: Greg is deciding where a capped
+ *   subscriber should land separately, and the reset date is still only here.
  * - **`pay-lapsed`** — and **the client cannot tell which kind of lapse this
  *   is.** `hasLapsed` (src/store/pg-billing.ts) covers a cancelled subscription,
  *   which is terminal and may check out again, *and* `unpaid` / `incomplete`,
  *   which are not terminal and may not. One code, two remedies, and the message
  *   carries nothing that separates them. So this takes the destination that is
- *   never a dead end: `/profile` draws the plan cards when `canCheckout` allows
- *   it **and** the Portal button when there is a customer to manage, so it works
- *   for both halves, where `/pricing` works for only one.
+ *   never a dead end: `/profile` draws the plan cards when there is something to
+ *   sell **and** the Portal button when there is a customer to manage, so it
+ *   works for both halves, where `/pricing` works for only one — an `unpaid`
+ *   subscription is `purchase: { kind: "none" }` there, with nothing to press.
  *
  * `src/messages.ts`'s sentences name these pages and no others — the prose and
  * the link under it have to agree, or the reader is choosing between them.

@@ -113,6 +113,14 @@ summary that the database suites were free to skip and that this is not the real
 `check.ts` counts their output rather than trusting their exit code. It printed "✓ clean" over
 seventeen findings before it did, which is the house bug in its purest form.
 
+**Read its summary line, not the exit code you were handed.** `check.ts` exits 1 on a failed gate
+and says *"A gate failed"* in words, and on 2026-09-05 two agents were nonetheless told the run
+exited 0. Neither cause was the script. A backgrounded run reports its wrapper's status rather than
+the command's, and `npm run check | tee log` reports **tee's** exit code, which is 0 whatever
+happened — so both spellings print the failure and hand back success. Redirect rather than pipe
+(`npm run check > log 2>&1`), and treat the printed summary as the verdict. The same applies to
+every gate here.
+
 ## The tools that look right and are not
 
 Written down because each cost real time to disprove, and each will look attractive again.

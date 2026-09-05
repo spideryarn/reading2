@@ -176,7 +176,7 @@ export interface ChoiceRules {
    * `isTerminalStatus` in ./tiers.ts.
    *
    * Used only for the anomaly count, and it is the *same* allowlist that
-   * `hasOpenSubscription` (./checkout.ts) uses to refuse a second checkout. So
+   * `subscriptionState` (./tiers.ts) uses to refuse a second checkout. So
    * the anomaly fires on exactly the thing checkout would have refused to sell
    * beside, which is the property that makes it worth logging at `error`.
    */

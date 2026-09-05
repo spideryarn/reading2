@@ -113,7 +113,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 
-import { describePlan } from "../billing-plan.js";
+import { describePlan, noHigherPlan, purchasableTiers, switchingPlan } from "../billing-plan.js";
 import type { BillingSummary } from "../billing-plan.js";
 import { Link } from "./Link.js";
 import { RECOMMENDED_TIER, WebsitePlans } from "./PlanCards.js";
@@ -251,14 +251,18 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
  * against a doc about it**, because three of these answers are the kind that is
  * easy to state backwards — a slot is reserved only where the request carries a
  * URL or an upload, and settled only on a `done` ending
- * (src/billing/admission.ts, src/store/pg-session.ts § settleJob). In
- * particular: **this page offers a subscriber no route from Reader to
- * Researcher**, so the answer about reaching your limit must not promise one.
- * The hosted Portal *can* switch tiers, since 2026-09-04; what stops it being
- * offered here is that `canCheckout` (src/billing/summary.ts) asks whether an
- * open subscription exists and not whether this tier is a place to go, so every
- * plan button below is hidden from a paying reader — docs/project/billing.md
- * § *Reader → Researcher: open at Stripe, closed in our own UI*.
+ * (src/billing/admission.ts, src/store/pg-session.ts § settleJob).
+ *
+ * **The answer about reaching your limit said a subscriber had nowhere to go,
+ * and that stopped being true on 2026-09-04.** It was true twice over before
+ * that: the hosted Portal could not switch between two Products, and then
+ * `canCheckout` asked whether an open subscription existed rather than whether
+ * this tier was a place to go, so every plan button was hidden from a paying
+ * reader. Both are fixed — `summary.purchase` (src/billing/summary.ts) offers a
+ * Reader the tier above, through the Portal — so the answer names the larger
+ * plan, and says the one thing that is still true of it: a switch takes effect
+ * now, and the allowance it adds is prorated
+ * (docs/project/billing.md § *Reader → Researcher*).
  */
 function Faq() {
   return (
@@ -295,8 +299,12 @@ function Faq() {
 
         <Answer q="What happens when I reach my limit?">
           {/* [tissue] *Reading is never gated* is Greg's, 2026-09-02. The
-              second sentence deliberately offers a subscriber no upgrade: there
-              is not one to offer while a subscription is live.
+              second sentence offered a subscriber no upgrade until 2026-09-04,
+              because there was not one to offer; the third now does, and it says
+              *for the rest of the month* rather than promising the whole
+              allowance, because a mid-period switch is prorated
+              (`nextQuotaAdjustment`: day 27 of 30 takes a Reader to 33, not to
+              150).
 
               **"until your allowance starts again" was false for a subscription
               that is ending**, and that is the case a reader at their limit is
@@ -313,7 +321,9 @@ function Faq() {
           You can still read — every article you have, and every public one. Only adding stops: on a
           paid plan until the next month of your subscription begins — unless the plan is ending
           rather than renewing, in which case what you go back to is the lifetime free allowance —
-          and on the free allowance until you subscribe.
+          and on the free allowance until you subscribe. If a month is not enough on a paid plan,
+          moving up to the larger one takes effect straight away, and adds its allowance for the
+          part of the month that is left.
         </Answer>
 
         <Answer q="Do unused articles roll over?">
@@ -529,26 +539,37 @@ function PlansForAReader() {
   /**
    * What may be bought, asked of the **server's** answer rather than of the plan.
    *
-   * `canCheckout`, not `plan.kind !== "paid"`: the first version of `/profile`
-   * asked the plan, which hides the cards from a subscriber and shows them to
-   * three kinds of account whose press only ever opens the Portal — an `unpaid`
-   * or `incomplete` subscription, and a live one whose dates we cannot read.
-   * `startCheckout` refuses while any *non-terminal* subscription exists, and
-   * that is a shorter list than unentitled, so the server answers the question
-   * rather than the page guessing at it. BillingSection.tsx carries the same
-   * comment because it is the same rule. GPT Sol, 2026-09-03.
+   * `summary.purchase`, not `plan.kind !== "paid"`: the first version of
+   * `/profile` asked the plan, which hides the cards from a subscriber and shows
+   * them to three kinds of account whose press only ever opens the Portal — an
+   * `unpaid` or `incomplete` subscription, and a live one whose dates we cannot
+   * read. GPT Sol, 2026-09-03. It asked `canCheckout` after that, which drew a
+   * paying Reader no button at all while the Portal would have taken the switch.
+   * Both are the same rule: the server says what may be bought, because the page
+   * cannot work it out. BillingSection.tsx carries the same comment.
    *
-   * And the tier has to be in `offers`, which is what keeps this honest when the
-   * copy in PlanCards.tsx and the rows in `billing_tiers` disagree: a plan
-   * nobody sells gets no button rather than a button that 400s.
+   * **The website's three cards are drawn either way**, so the filtering happens
+   * here, one card at a time: a tier that is not in `purchase.tiers` gets no
+   * button rather than disappearing off the page. That also keeps this honest
+   * when the copy in PlanCards.tsx and the rows in `billing_tiers` disagree — a
+   * plan nobody sells gets no button rather than a button that 400s — and it is
+   * why nothing here reorders anything.
    */
   const buyPlan = (plan: PlanCard): PlanCardAction | null => {
     const tierId = plan.id;
-    if (tierId === null || !summary || !summary.canCheckout) return null;
-    if (!summary.offers.some((offer) => offer.id === tierId)) return null;
+    if (tierId === null || !summary) return null;
+    const buying = summary.purchase;
+    if (buying.kind !== "checkout" && buying.kind !== "switch") return null;
+    if (!buying.tiers.some((offer) => offer.id === tierId)) return null;
     const pressed = billing.busy?.kind === "upgrade" && billing.busy.tierId === tierId;
+    /* **The verb is the door, and this page has room to say the plan in it.**
+       A subscriber's press opens the hosted Portal, where the plan is chosen
+       again and confirmed — so *Get Researcher*, which reads as a purchase
+       completed by pressing, would be the wrong promise. `switchingPlan` under
+       the cards says the rest. */
+    const label = buying.kind === "switch" ? `Switch to ${plan.name}` : `Get ${plan.name}`;
     return {
-      label: pressed ? "Opening Stripe…" : `Get ${plan.name}`,
+      label: pressed ? "Opening Stripe…" : label,
       /* Every button off while any one of them is mid-request: two Checkout
          Sessions is two Stripe customers' worth of confusion for a reader who
          double-clicked. */
@@ -560,24 +581,47 @@ function PlansForAReader() {
   return (
     <>
       {/* **Recommended only to somebody who could take the recommendation**,
-          which is the same pair of questions `buyPlan` asks one card at a time:
-          may this reader check out at all, and is the tier we point at one the
-          database actually offers them. A Researcher subscriber has
-          `canCheckout` false, so the row goes flat rather than labelling the
-          downgrade they cannot buy as Recommended — GPT Sol, stage 2 code
-          review, finding 3. Before the summary lands it is `false`, which is
-          the right answer to *don't know yet*: the row has no buttons then
-          either. */}
+          which is the question `buyPlan` asks one card at a time: is the tier we
+          point at one this reader may actually buy. A subscriber never can — the
+          step up from Free is either the plan they are on or one below it — so
+          the row goes flat rather than labelling a purchase they cannot make as
+          Recommended (GPT Sol, stage 2 code review, finding 3). Before the
+          summary lands it is `false`, which is the right answer to *don't know
+          yet*: the row has no buttons then either. */}
       <WebsitePlans
         action={buyPlan}
         recommend={
-          summary?.canCheckout === true &&
-          summary.offers.some((offer) => offer.id === RECOMMENDED_TIER)
+          summary !== null &&
+          summary.purchase.kind === "checkout" &&
+          summary.purchase.tiers.some((offer) => offer.id === RECOMMENDED_TIER)
         }
       />
+      {/* **The one thing a Researcher's page would otherwise not say.** Every
+          card above is one they may not buy, so without a sentence they get
+          three prices, no button, and no reason — which is the page this whole
+          feature exists to stop existing. `noHigherPlan` is `/profile`'s
+          sentence too. */}
+      {summary?.purchase.kind === "top" && (
+        <p className="tw:mt-4 tw:m-0 tw:text-sm tw:text-muted-foreground">
+          {noHigherPlan(summary.plan.kind === "paid" ? summary.plan.tierName : null)}
+        </p>
+      )}
+      {/* And a subscriber who *does* have somewhere to go is told what pressing
+          the button does before they press it: it opens Stripe's own page, where
+          the plan is chosen again and confirmed. */}
+      {summary?.purchase.kind === "switch" && (
+        <p className="tw:mt-4 tw:m-0 tw:text-sm tw:text-muted-foreground">
+          {/* **The sentence is `purchase.from`'s, not this page's.** A switch out
+              of a free trial ends the trial, bills in full and hands over the
+              whole new allowance — so all three clauses of the paid wording are
+              false for it, and the arm carries which one this is precisely so
+              that neither page has to guess. GPT Sol, 2026-09-04. */}
+          {switchingPlan(summary.purchase.from)}
+        </p>
+      )}
       {/* **The plan, or the reason there is no plan on screen — never neither.**
           Until the read lands there are no buttons, because `buyPlan` needs
-          `offers` and `canCheckout` to know what may be pressed; so a read that
+          `summary.purchase` to know what may be pressed; so a read that
           *failed* left a signed-in reader looking at prices with nothing to
           press and nothing said, which is precisely the page this feature was
           built to stop existing. GPT Sol found it in the stage 1 review
@@ -705,8 +749,10 @@ function useBuyIntent(billing: UseBilling): void {
        took, the window is measured to this line — the moment something is
        actually bought. See the header. */
     if (!buyIntentIsFresh(intent)) return;
-    if (!summary.canCheckout) return;
-    if (!summary.offers.some((offer) => offer.id === intent.tierId)) return;
+    /* **The same list the cards are drawn from**, so a marker can never buy
+       something the page would not have offered — including, since the gate
+       became tier-aware, the tier the reader is already on. */
+    if (!purchasableTiers(summary.purchase).some((offer) => offer.id === intent.tierId)) return;
     billing.upgrade(intent.tierId);
   }, [billing]);
 }

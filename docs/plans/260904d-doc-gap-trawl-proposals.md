@@ -1,11 +1,15 @@
 # Doc gaps — a trawl, and what it found
 
-**Status, 2026-09-04: the trawl is finished and reviewed; none of the edits it proposes are made.**
-The register below is the deliverable and it is complete. What is left is Greg picking tiers, and
-then a few hours of small edits to existing docs plus at most two new ones. Nothing is half-done and
-nothing is blocked — see § [Where this stands](#where-this-stands).
+**Status, 2026-09-04: done enough to stop here.** The trawl is finished and reviewed, and everything
+it recommended has landed except two items, both of which are Greg's to call rather than mine:
+**Tier 4** (needs an entry-point edit, and has a trap — see that section) and **the PDF question**
+(whether the unbuilt half of Greg's 2026-08-30 call gets built). Tier 1.2 belongs to the background
+agent finishing the `classifyEnd` migration, since the doc fix and the code fix are one job.
 
-**Nothing here is built.** This is a register of findings for Greg to approve or drop, in tiers.
+Stages 1 and 2 are `36a38c3b` and `f309c10e`, 17 files. § [Progress log](#progress-log) says what
+each was and what changed my mind; § [Where this stands](#where-this-stands) has the cost of
+stopping.
+
 Greg asked for the trawl on 2026-09-04, with the method delegated to Fable and the bulk reading to
 GPT Luna, "because it's 10x cheaper than Sonnet".
 

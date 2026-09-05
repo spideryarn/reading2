@@ -100,13 +100,13 @@ export type Route =
    * the two have to agree or one of them serves a 404 for a page the other
    * renders. docs/plans/260904b-pricing-page-and-public-showcase.md § 3.
    *
-   * **There is no page behind it yet**, and this variant is honest about that
-   * rather than papering over it: App.tsx draws the 404 page and the edge
-   * answers 404, which is what an address with nothing at it should do. Stage 3b
-   * of the plan builds `PublicLibraryPage` and flips both — two lines, in two
-   * files that already have the branch. The data and the route it will read are
-   * built: `GET /api/public/library`, and `loadPublicLibrary` in
-   * src/web/public-api.ts.
+   * **The page is src/web/PublicLibraryPage.tsx**, since 2026-09-04, and it
+   * reads `GET /api/public/library` through `loadPublicLibrary`
+   * (src/web/public-api.ts). App.tsx mounts it on both arms — a visitor and an
+   * owner get the same page, which is the rule the whole public namespace
+   * follows — and the edge answers 200 with the default head. Both said 404 for
+   * the day between the route landing and the page landing, deliberately: an
+   * address with nothing at it should say so. docs/project/public-shelf.md.
    */
   | { kind: "public-library" }
   /**
@@ -501,6 +501,26 @@ export const PROFILE_HREF = "/profile";
  * `/profile`, so both a stranger and a reader can find it.
  */
 export const PRIVACY_HREF = "/privacy";
+/**
+ * **The takedown route, which is a section on that page rather than a page.**
+ *
+ * Spideryarn republishes the extracted text of somebody else's article, and
+ * since `/read/public` those articles are findable rather than merely
+ * reachable. The owner's tick-box is a promise they make, not a check we run, so
+ * the other half of the protection is a way for the wronged party to complain —
+ * docs/project/privacy.md § If something here is yours, and the argument for a
+ * section over a route is beside the section in PrivacyPage.tsx.
+ *
+ * **The id and the address are one constant**, deliberately: two string
+ * literals in two files is a link that lands at the top of a long policy and
+ * tells nobody it missed. `PrivacyPage` puts this on the section and scrolls it
+ * into view when the fragment names it, because `navigate` below scrolls to the
+ * top on every navigation and a client-rendered page has nothing for a browser
+ * to find on a cold load either. tests/takedown-privacy-section.test.tsx.
+ */
+export const TAKEDOWN_SECTION_ID = "if-something-here-is-yours";
+/** Where the two visitor surfaces send somebody who needs it. */
+export const TAKEDOWN_HREF = `${PRIVACY_HREF}#${TAKEDOWN_SECTION_ID}`;
 /**
  * The features page. Linked from the landing page, where the short list ends
  * with "everything it does, with pictures".

@@ -180,7 +180,12 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
   and the footnotes opt out as a block, both for reasons given in place. All four are self-limiting:
   below about 900px the measure is wider than the cell and none of them does anything. The separate
   mechanism that centres the whole *table* when the article is the only thing on the page is
-  § plain, centred, and `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts).
+  § plain, centred, and `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) — **its
+  masthead follows the prose too, and learning that it did not was the expensive part.** Two correct
+  changes landing on two branches, one moving the prose within its cell and one widening the cell,
+  each left that rule re-centring a box it no longer described; the errors added rather than
+  cancelling and the title ended up 22.5px out. Neither branch's tests could see it, because neither
+  branch was wrong. [260904b-gutter-help-button-and-detached-streaming-chat.md § the merge](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md#the-merge).
 - **Space above a heading exceeds space below it** — `mt-6` against `mb-4` in their document
   viewer. We had lost this; every block here is a table row and every row had the same padding, so
   a heading sat exactly halfway between the section it ended and the one it introduced. It is back,
@@ -437,8 +442,10 @@ the **columns**, and the fix is not CSS at all — it is arithmetic in
 fit beside the prose. `styles.css` § **a narrow window** and § **a short viewport** at the end of the
 file are only what is left over after that: the wordmark and the two bars that were silently clipping
 their own controls. **Two more used to be on that list and are not any more**, and both left for the
-better reason. Since 2026-08-31 the prose gutter is 2.1rem of icons at every width, so there is
-nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)); and
+better reason. Since 2026-08-31 the prose gutter is icons at every width, so there is
+nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)) —
+3.7rem of them since 2026-09-04, when they became a 2 × 2 pad of 24px targets
+([260904b-gutter-help-button-and-detached-streaming-chat.md](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md)); and
 since 2026-09-03 the mode band going full-screen is a *class*, not a query — `App.tsx` writes
 `band-covers` on `.reader` from `fit.modeW === 0`. That one could never have been a width: the
 crossover is the window minus the rail, so it moves with `?spine=0`, and the `@media (max-width:
