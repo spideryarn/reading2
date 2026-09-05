@@ -15,7 +15,6 @@ import {
   NEVER_SEEDED,
   planSlug,
   unopenable,
-  storeVerdict,
 } from "../scripts/seed-dev-rules.js";
 
 const US = ADMIN_USER_ID_LOCAL;
@@ -121,41 +120,8 @@ describe("unopenable", () => {
   });
 });
 
-describe("storeVerdict", () => {
-  it("is happy only when the dev server will read what this wrote", () => {
-    expect(storeVerdict("postgres").ok).toBe(true);
-  });
-
-  it("warns when the store is unset, because unset means files", () => {
-    /* The trap the whole command falls into silently: the seed works, the rows
-       are in Postgres, and the browser reads data/ and shows an empty shelf. */
-    const verdict = storeVerdict(undefined);
-    expect(verdict.ok).toBe(false);
-    expect(verdict.lines[0]).toMatch(/unset/);
-    expect(verdict.lines.join(" ")).toContain("SPIDERYARN_STORE=postgres");
-  });
-
-  it("warns when the store is explicitly files", () => {
-    expect(storeVerdict("files").ok).toBe(false);
-  });
-
-  it("does not tell the reader to put the store in .env.local", () => {
-    /* It did until 2026-09-02, and following that advice turned 40 test files
-       and 146 tests red: `.env.local` is applied over `process.env`
-       (src/env.ts), so a value there overrides every test that sets
-       SPIDERYARN_STORE itself, and the shadowing warning is suppressed under
-       NODE_ENV=test so it happens in silence. The remedy is `npm run dev`.
-       This asserts the advice, because the advice is the thing that broke. */
-    for (const store of [undefined, "files"]) {
-      const advice = storeVerdict(store).lines.join(" ");
-      /* Every mention of .env.local must be a prohibition. Matching on "put …
-         .env.local" alone is not enough — it catches "DO NOT put … .env.local"
-         too, which is the sentence we want. */
-      for (const m of advice.matchAll(/[^.]*\.env\.local/gi)) {
-        expect(m[0]).toMatch(/DO NOT/);
-      }
-      expect(advice).toMatch(/\.env\.local/);
-      expect(advice).toContain("npm run dev");
-    }
-  });
-});
+/* A `storeVerdict` block stood here until 2026-09-05: four cases about the last
+   line `npm run db:seed-dev` printed, which warned that a dev server on the
+   filesystem store would show an empty shelf over rows the seed had really
+   written. Its subject went with the flag in the hinge, and so did it.
+   docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § F. */

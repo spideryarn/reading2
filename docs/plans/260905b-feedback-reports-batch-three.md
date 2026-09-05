@@ -41,6 +41,9 @@ Not one agent per report — **one agent per set of files**, because three workt
 - **Wave 1**
   - **1Q + 1R + 1S** — all three are the gutter's ? button and the comment it makes. 1Q is where you
     land, 1R is what gets stored, 1S is what comes back. One agent, one story.
+    → [260905c-gutter-comment-chip-explanation-metadata-and-prompt.md](260905c-gutter-comment-chip-explanation-metadata-and-prompt.md).
+    The chip in 1Q turned out to be the **chat** button, not the comment bookmark, and each press of
+    it was minting a fresh conversation rather than opening the ones it counted.
   - **1J + 1K** — both dictation, both `src/web/useDictation*.ts` and the transcription route.
   - **1H + 1N** — a new page and a dialog's copy. Unrelated to each other, but small, and neither
     collides with anything else in the wave.
@@ -82,9 +85,76 @@ Recorded here because there is nobody in the chat to ask.
 
 ## What actually happened
 
-Filled in per agent as each lands. Each agent works in its own worktree, runs
-[engineering-manager.md](../reusable/engineering-manager.md), gets a GPT Sol review of its code, and
-pushes to `dev` itself.
+**All thirteen shipped and resolved**, in five agents over one afternoon; the queue and
+[awaiting-approval.md](../user-feedback/awaiting-approval.md) are both empty, and there are thirteen
+notes in `docs/user-feedback/` dated `260905_`. Nothing was declined and nothing is waiting on Greg
+as a report — the decisions left for him are listed at the end.
+
+**Four reports turned out not to be the thing they described.** That is the pattern of the batch, and
+it is an argument for reproducing before fixing rather than for readers writing better reports:
+
+- **1Q named the wrong chip.** The orange bookmark was innocent; the blue one is the chat button —
+  and the fault was worse than reported. On a chip advertising "3 already", three presses took the
+  count 1→2→3: every attempt to *reach* a conversation was creating another.
+- **1K's `[mic-offline]` was one code over two different sentences** — the recogniser dropping
+  mid-speech, and the upload failing afterwards — which is exactly why the report had an "if" in
+  front of each half. It could not pick a branch because the four characters could not.
+- **1N's "delay" was not slowness.** Close cleared the form and shut the dialog in the same React
+  commit, so the browser painted an empty feedback box for one frame in place of the thank-you.
+- **1M's cost was script, not layout** — 60.4% against 3.0%, the *opposite* of the 2026-09-03 scroll
+  finding, which would have sent anyone following the existing precedent to the wrong place.
+
+**And two of the three assumptions taken up front were wrong in the same direction** — the work was
+in a different place than the brief guessed:
+
+1. **1S was a prompt change, as assumed.** Right.
+2. **1X's brief pointed at [`src/explain.ts`](../../src/explain.ts). That file is not on the chat
+   path.** The header this batch read so confidently is about a different surface. What was actually
+   wrong: the tool did reach the wire, production logged the turn as `searches:0`, and **the model
+   was offered the search and declined — because chat's prompt discourages what explain's
+   encourages.** Two prompts pulling opposite ways, which no amount of staring at `explain.ts` would
+   have shown.
+3. **1V could not be done as asked at all.** *There is no prompt that generates Summary mode.* The
+   panel draws the stage-4 `gist`, which is rendered in ten other places and fed back into later
+   structure waves as context. Editing it would have turned shelf blurbs into questions and degraded
+   the trees the cascade builds. So the question became a separate field on the node, drawn in
+   Summary mode alone — built differently on purpose, and the reasoning is in that report's note.
+
+**The cross-family reviews paid for themselves four times**, each catching something a plan-stage
+review could not have:
+
+- a restore that would have **fired a paid model call** when a reader reopened an article (1W);
+- `proposalFromTree` not carrying `question`, so deepening one section **wiped every question in the
+  article** — reproduced, four before and zero after (1V);
+- "Try again" silently losing the teaching prompt (1R);
+- and on dictation, *do not ship* with four findings, three reproduced by calling the code — `100 Ah`
+  and `Er` deleted as fillers, `--help` becoming `-help`.
+
+**Greg's mid-run offer of `GOOGLE_API_KEY` or `OPENAI_API_KEY` was investigated and declined**, which
+is the outcome worth recording because it stops the next agent reopening it: Google's `mode: "smart"`
+strips fillers but bundles that with restructuring speech into lists and resolving self-corrections;
+OpenAI has no filler parameter at all; and neither gives zero data retention on an ordinary paid key,
+which would break the promise printed on the button. `ai-gateway.md` is untouched because nothing
+switched.
+
+### What is left for Greg
+
+Nothing here blocks anything, and none of it is a report:
+
+1. **Existing articles show no Socratic question until their hierarchy is re-run**
+   (`npm run hierarchy -- <slug> --force`). Nothing backfills. Whether to sweep the library is his.
+2. **Whether those questions pull their weight at all**, once seen on screen — several are tight
+   paraphrases of their own gist in interrogative form, and the agent that built them said so rather
+   than hiding it. They have never been rendered in a real browser; the panel tests are jsdom.
+3. **The backfill of existing "?" presses** is a heuristic `UPDATE` over real readers' words, so it
+   is deliberately his to run and not an agent's.
+4. **`/design` stays open to any signed-in reader.** The link moved to `/admin`; drawing a link was
+   never a gate, and the page reads no data. Gating it is a separate decision.
+5. **Mode switching is faster, not fast** — Hierarchy still costs ~2.8s on a 2,046-block article, and
+   the remainder is forced synchronous layout. Measured and written up, deliberately unbuilt: the
+   tempting fix caches row offsets, and a stale cache points the reader at the wrong section.
+6. Two smaller things the agents surfaced: `MIN_SELECTION_CHARS = 8` drops short selections with no
+   feedback, and two plan docs share the letter `260905c`, which `plan-name.ts` cannot detect.
 
 ## A red on `dev` that is not this batch's
 
@@ -95,9 +165,10 @@ box:
 tests/jobs.test.ts: 10 of its top-level blocks account for no mutation, and the record allows 9
 ```
 
-It arrived with `cbb903d0` *Stage E: the six stage CLIs go through the queue, against Postgres* —
-the database-move work, not this one. A block was added to `tests/jobs.test.ts` and the registry
-record was not updated to match.
+A block — `describe("unrunnableStepPlan")` — was added to `tests/jobs.test.ts` and the registry record
+was not updated to match. **It arrived with `aa941484`, Stage A**, not with Stage E's `cbb903d0` as
+this doc first said; the correction is below, and it is the second time on this one red that an
+attribution was reached for rather than derived.
 
 **Left deliberately unfixed here, and then fixed by somebody with better evidence.** The two ways to
 make it green are to annotate the new block with a `**Mutation.**` or an honest `**No mutation.**`
@@ -105,21 +176,44 @@ header, or to raise the allowance from 9 to 10. The second defeats the guard, an
 require knowing whether that block deserves a mutation test — which is the work the registry exists to
 force onto the person who added it. So this batch left the red standing as the forcing function.
 
-**That was the wrong call, on facts this batch did not have.** The session in
-`worktree-deepen-fat-sections` hit the same red holding the missing test in its hands: the rule
-`unrunnableStepPlan` enforces is asserted only against the pure function, and **nothing asserts that
-`enqueue` throws**. It found that out the expensive way — `evals/deepen/`'s free `--dry-run` asks for
-`["fetch","extract","blocks"]`, so after merging `dev` every phase threw at `enqueue`, zero jobs were
-created, and `npm test` stayed green throughout. That dry run is the rehearsal before a £-scale paid
-run, so the gap had already cost something real.
+**That was the wrong call, and the annotation the other session wrote is right.** It annotated the
+block rather than raising the allowance, and the judgement — "no mutation involving the store: no
+store reaches this block" — is *readable off the four `it`s* rather than guessed, which is the
+distinction this batch got wrong.
 
-It annotated the block rather than raising the allowance, and the judgement — "no mutation involving
-the store: no store reaches this block" — is *readable off the four `it`s* rather than guessed, which
-is the distinction this batch got wrong. It then said plainly that this is a gap and not a clean bill,
-named the measured cost, and pointed at the shape `tests/enqueue-owns-the-article.test.ts` already
-uses. The evidence and the class — **a rule enforced at a seam, with a test only for the predicate
-behind it** — are in `260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md`
-§ `stage-e-unrunnable-untested`.
+### The reason first given for that, and retracted
+
+~~The session in `worktree-deepen-fat-sections` hit the same red holding the missing test in its
+hands: the rule `unrunnableStepPlan` enforces is asserted only against the pure function, and nothing
+asserts that `enqueue` throws — found out the expensive way, because `evals/deepen/`'s free
+`--dry-run` asks for `["fetch","extract","blocks"]`, so every phase threw at `enqueue`, zero jobs
+were created, and `npm test` stayed green throughout.~~
+
+**None of that was true of the repo, and it is struck rather than deleted so the correction is
+legible.** `tests/jobs.test.ts:1260` — *"refuses a blocks-only job at the door rather than stranding
+the article"* — drives `enqueue` and asserts both the throw and the 400, and its comment already
+names the trap it exists to close. Verified here, not taken on report: `git log -S` puts the
+predicate, the `enqueue` call, the pure-function block and that wiring test all in **`aa941484`**
+alone, one commit. The dry-run breakage was real but the bug was in its caller;
+`["fetch","extract","blocks"]` is refused correctly and by design.
+
+The retraction is `626cead3`, on `dev`; the `stage-e-unrunnable-untested` anchor is kept so existing
+links still land.
+
+**How the false claim was reached is worth more than the claim was**, and there are two instances of
+one shape here:
+
+- The other session's grep across `tests/` **excluded `tests/jobs.test.ts` — the file it was
+  annotating** — on the assumption that the block it had read was all that file had to say. The
+  wiring test does not name `unrunnableStepPlan` in its title, so nothing surfaced it, and a clean
+  grep was read as evidence of absence.
+- The attribution to `cbb903d0` was reached for because its subject line sounded right, rather than
+  derived with `git log -S`. `cbb903d0` touched that file, but with 26 lines and no new `describe`.
+
+**And this batch's own share of it:** the evidence was written into this doc as fact and repeated to
+Greg without being checked, when the three commands that falsify it take a few seconds. Verifying the
+parts that were easy to verify — the block count, whether the fix had landed — is not the same as
+verifying the claim the decision rested on.
 
 The lesson worth keeping: *don't guess on the author's behalf* was sound, but a red left standing is
 only a forcing function if somebody is coming who will be forced. Meanwhile it hides the next
@@ -133,6 +227,11 @@ destroys:
   able to ask the question again. Caution was right there, and would still be right.
 - Correcting a sentence that misleads its next reader **destroys nothing**. There, caution was only
   delay dressed up as respect — and working out whose the sentence was cost more than fixing it.
+
+The stale-inventory fix in that entry turned out to be the smaller instance of the same shape that
+then produced a false attribution and a false gap on the very same red — three times in one
+afternoon, all of them *a fact reached for rather than re-derived*. That is the thing to take away
+from this section, more than the red itself.
 
 Resolved on `dev` at `0e89d69f`: the two halves landed in different files and did not collide, and
 `tests/store-migration-registry.test.ts` is green again — 13 tests, verified here rather than taken
@@ -150,3 +249,34 @@ output as a dated example.
 
 Separately: `tests/admin-store` goes red under contention and passes alone. Three worktrees on one
 box is the documented limit for a reason.
+
+## Two findings routed into this batch's territory
+
+From the sweep behind
+[260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md](../postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md),
+**reported rather than fixed** so they did not land in a worktree mid-flight. Both verified here by
+reading the code, not taken on report — which is the whole lesson of the section above.
+
+1. **`evals/dictation/bench-models.ts` announces a clean bill over an arm that never answered.**
+   `clean` starts `true`; an arm whose every call was lost has an empty `seen` map, so `odd` is empty,
+   nothing sets it false, and the run prints *"every call named the model it was sent to"*. The detail
+   worth the trip: the comment immediately above the check describes the **previous** version of this
+   same bug — "a clean bill of health from a test that had not run", GPT Sol's review, item 4. The fix
+   and its recurrence are adjacent in the file.
+2. **`evals/dictation/bench-vocabulary-sources.ts` writes a planned count as if it were an outcome.**
+   `calls: CONDITIONS.length * utterances.length * RUNS` is what was *intended*; `lost` sits two lines
+   below, so a careful reader can subtract, but the field named `calls` says what happened and does
+   not know.
+
+Neither is urgent and nothing in this batch depends on them. They matter because dictation shipped
+today (`e4533a71`) and a follow-up benchmark is the obvious next move — these are exactly the two
+harnesses that would be re-run, and both would report a clean run over a broken one.
+
+**The pattern to copy is one directory away**, which is why this is a small job rather than a design
+question: `evals/quiz.ts` counts `marked` against `CASES.length` attempted, says *"Nothing was
+measured … not the same thing as clean"* in as many words, and sets `exitCode = 1` on total failure —
+its header records that this bug shipped there first. `evals/cost/run.ts` returns early from
+`summarise` on zero draws.
+
+Queued behind 1P and 1V: the feedback reports are the job Greg set, and these are not reports, so
+they get no Sentry write and no note in `docs/user-feedback/`.

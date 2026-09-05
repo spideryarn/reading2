@@ -19,7 +19,6 @@
  * their exported functions, never by reimplementing what they do.
  */
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { readArticle, tryReadArticle } from "./article-input.js";
@@ -123,10 +122,9 @@ import {
 } from "./store/artifacts.js";
 import { generateHierarchy } from "./hierarchy.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
-import type { Block, JobUpload, Meta, StepName } from "./types.js";
+import type { Block, JobUpload, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
-import { STORE } from "./store/live.js";
 import { ownedSlug } from "./store/owned-slug.js";
 
 /**
@@ -1108,29 +1106,15 @@ export async function assertProduced(
  * published. A slug with a row under it is spoken for, and saying otherwise is
  * the failure this function exists to prevent.
  *
- * ## The filesystem branch asks `fsLocations`, and must go on doing so
- *
- * It used to resolve `data/` from a module-scope
- * `path.resolve(import.meta.dirname, "..")`, which is the constant
- * src/store/data-root.ts exists to end — the repository root on a laptop,
- * `/var` inside the Vercel bundle, and deaf to `SPIDERYARN_DATA_ROOT`.
- *
- * **So this function and `contextPaths` disagreed about where `data/` is**, and
- * they are called one line apart: `slugIsSpokenFor` (src/jobs.ts) asks
- * `articleExists` and then reads `raw.json` from `contextPaths(candidate).dir`.
- * With the override set, that read `meta.json` out of one tree and `raw.json`
- * out of another and had no way to notice. Nothing had tripped over it yet;
- * both now go through `dataRoot()`, and putting the constant back would
- * reintroduce it silently.
+ * **There was a filesystem branch here until 2026-09-05**, reading `meta.json`
+ * out of `fsLocations(slug).dir`. It is gone with the flag, and with it the one
+ * way this function and `contextPaths` could disagree about where `data/` is:
+ * they were called one line apart in `slugIsSpokenFor` (src/jobs.ts), and with
+ * `SPIDERYARN_DATA_ROOT` set, one read `meta.json` out of one tree and the other
+ * `raw.json` out of another with no way to notice.
  */
 export async function articleExists(slug: string): Promise<boolean> {
-  if (STORE === "postgres") return (await ownedArticle(slug)) !== undefined;
-  try {
-    await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8");
-    return true;
-  } catch {
-    return false;
-  }
+  return (await ownedArticle(slug)) !== undefined;
 }
 
 /**
@@ -1181,22 +1165,15 @@ export function stepLabel(name: StepName, upload: boolean): string {
  * branch is owner-scoped, and for the cross-owner case this deliberately does
  * not fix.
  *
- * Under Postgres this is the **published** revision's `final_url`, which is the
- * same column every other reader treats as `Meta.url` (src/store/pg.ts §
- * `metaFrom`). A run still in flight has no published revision and so no answer
- * here; `activeFor` is what covers that, and `onShelfOrInFlight` already asks
- * it second.
+ * This is the **published** revision's `final_url`, which is the same column
+ * every other reader treats as `Meta.url` (src/store/pg.ts § `metaFrom`). A run
+ * still in flight has no published revision and so no answer here; `activeFor`
+ * is what covers that, and `onShelfOrInFlight` already asks it second.
+ *
+ * The `meta.json` branch beside it went with the flag on 2026-09-05.
  */
 export async function urlForSlug(slug: string): Promise<string | undefined> {
-  if (STORE === "postgres") return (await ownedArticle(slug))?.url ?? undefined;
-  try {
-    const meta = JSON.parse(
-      await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8"),
-    ) as Meta;
-    return meta.url;
-  } catch {
-    return undefined;
-  }
+  return (await ownedArticle(slug))?.url ?? undefined;
 }
 
 /**
@@ -2138,6 +2115,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/hierarchy.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
           droppedHeadings: run.droppedHeadings,
+          /* **Socratic questions written but not kept.** Nothing on screen
+             distinguishes a question the model chose not to write from one
+             this stage threw away, so this is the only place a prompt that
+             had drifted into writing unusable ones would show up.
+             src/hierarchy.ts § `questionFor`. */
+          droppedQuestions: run.droppedQuestions,
           /* **Rungs that restated their parent**, spliced away rather than
              stored — two gist columns of identical extent is a duplicated cell
              the reader sees, not a wasted column. Nothing about it moves a

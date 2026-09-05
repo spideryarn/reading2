@@ -25,9 +25,13 @@
  *   at an **untracked** file and break that eval for everybody else.
  *
  * So: a new eval, self-contained, owning its own ingress — but reusing the cost
- * eval's three proved mechanisms verbatim (`evalRegistry`, `fixtureFetch`,
- * `withoutTheInProcessPump`) and its gates. Nothing in `src/` changes for this
- * to work.
+ * eval's proved mechanisms verbatim (`evalRegistry`, `fixtureFetch`) and its
+ * gates. ⟨There were three: the third was `withoutTheInProcessPump`, and it is
+ * gone. `enqueue` takes `pump: false` on the request now — src/jobs.ts § `pump`
+ * — so the hazard is per-request rather than a global two `enqueue`s could race
+ * on. 2026-09-05.⟩ Nothing in `src/` changes for this to work, except that
+ * `saveDeepenRecords` publishes its file atomically because this eval reads that
+ * directory from three jobs at once.
  *
  * ## The four phases
  *
@@ -99,13 +103,13 @@ import {
   REQUEUE_BUDGET,
   STEP_BUDGET_MS,
   type StepRegistry,
+  unrunnableStepPlan,
 } from "../../src/jobs.js";
 import { modelFor } from "../../src/models.js";
 import { environmentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../../src/owner.js";
 import { DEFAULT_INGEST_STEPS, STEPS } from "../../src/pipeline.js";
 import { costStore } from "../../src/store/ai-calls.js";
 import { loadArticle } from "../../src/store/index.js";
-import { STORE } from "../../src/store/live.js";
 import type { Block, Job, StepName, Tree } from "../../src/types.js";
 import type { CostFixture } from "../cost/fixtures.js";
 import {
@@ -130,7 +134,9 @@ import {
 import {
   assertReaskNames,
   assertSeamProof,
+  assertStepPlansRunnable,
   checkpointWriter,
+  startBarrier,
   type CostEstimate,
   estimate,
   fileFixture,
@@ -140,6 +146,7 @@ import {
   recordingCheckpoints,
   requeueVerdict,
   type SeamProof,
+  type StepPlans,
   treeDigest,
 } from "./harness.js";
 import {
@@ -170,6 +177,17 @@ import {
 
 /** Nothing here should take longer than this. A hung claim is a bug, not patience. */
 const JOB_TIMEOUT_MS = 40 * 60_000;
+
+/**
+ * **How long phase D holds the book back waiting for the two load jobs to reach
+ * the measured step**, before giving up and driving it anyway.
+ *
+ * Generous on purpose — it is not a budget, it is a refusal to hang. A load job
+ * that fails before its measured step never announces anything, and the wait
+ * ends on the jobs settling rather than on this. What this covers is the one
+ * that neither announces nor settles. `startBarrier`.
+ */
+const LOAD_BARRIER_TIMEOUT_MS = 15 * 60_000;
 const BUSY_BACKOFF_MS = 500;
 
 /** The deadline a claimant works to, which is what question 5 is measured against. */
@@ -183,7 +201,6 @@ interface RunMeta {
   gitDirty: boolean;
   /** sha256 of `git diff HEAD -- src evals`, so a dirty tree is identifiable rather than flagged. */
   srcPatchSha256: string | null;
-  store: string;
   databaseTarget: string;
   evalOwnerId: string;
   environmentOwnerId: string;
@@ -386,6 +403,18 @@ interface RunContext {
   checkpoint: () => Promise<void>;
   /** Free mode: a step list with no model call in it, for proving the shape. */
   dryRun: boolean;
+  /**
+   * **Why this run's articles and jobs must NOT be cleaned up**, one reason per
+   * entry, empty when there are none.
+   *
+   * A re-asking pass that hands its claim back is left `queued` on purpose, so
+   * the paid answers behind it stay resumable — and ordinary cleanup then
+   * deleted the article, which cascades to the checkpoint rows and throws the
+   * work away under a comment promising it had been kept. ⟨GPT Sol, DPN-07.⟩
+   */
+  retain: string[];
+  /** Why the run stopped before its remaining phases, if it did. */
+  stopped: string | null;
 }
 
 /** What a job is asked for, before the queue has given it a name. */
@@ -398,6 +427,13 @@ interface JobSpec {
   ingress: Ingress | null;
   steps: readonly StepName[];
   force: readonly StepName[];
+  /**
+   * **Say so when this step begins**, so phase D can hold the book back until
+   * the two load jobs have their measured step under way — `startBarrier`. The
+   * hook wraps the step in this job's own registry, so it sees the real start
+   * rather than a guess made from outside. Absent on every other job.
+   */
+  announce?: { step: StepName; began: (slug: string) => void };
 }
 
 /** A job the queue has taken, and the registry that must drive it. */
@@ -448,6 +484,31 @@ async function withLevers<T>(
 }
 
 /**
+ * **One step that says when it began**, and nothing else about it changed.
+ *
+ * The overlay is on this job's own registry rather than on the shared `STEPS`,
+ * so it cannot reach a job that did not ask for it — including one another agent
+ * happens to be running against the same queue. `evalRegistry` wraps this in
+ * turn, so the spend overlay still applies.
+ */
+function announcing(
+  base: StepRegistry,
+  announce: NonNullable<JobSpec["announce"]>,
+): StepRegistry {
+  const step = base[announce.step];
+  return {
+    ...base,
+    [announce.step]: {
+      ...step,
+      run: (ctx: Parameters<typeof step.run>[0], store: Parameters<typeof step.run>[1], checkpoints: Parameters<typeof step.run>[2]) => {
+        announce.began(ctx.slug);
+        return step.run(ctx, store, checkpoints);
+      },
+    },
+  } as StepRegistry;
+}
+
+/**
  * **Queue one job, with the production pump switched off on the request.**
  *
  * `enqueue` ends with `pump()`, which drives the job with the **production**
@@ -472,11 +533,10 @@ async function withLevers<T>(
  */
 async function enqueueJob(ctx: RunContext, spec: JobSpec): Promise<QueuedJob> {
   const before = await listRecordsDir(ctx.recordsDir);
-  const registry = evalRegistry(
-    spec.ingress
-      ? { ...STEPS, fetch: fixtureFetch(spec.ingress.fixture, spec.ingress.bytes, spec.url ?? "") }
-      : STEPS,
-  );
+  const base: StepRegistry = spec.ingress
+    ? { ...STEPS, fetch: fixtureFetch(spec.ingress.fixture, spec.ingress.bytes, spec.url ?? "") }
+    : STEPS;
+  const registry = evalRegistry(spec.announce ? announcing(base, spec.announce) : base);
   const job: Job = await enqueue({
     slug: spec.slug,
     ...(spec.url !== null ? { url: spec.url } : {}),
@@ -561,6 +621,17 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
   record.observedSpend = observedSpend;
 
   if (driven.requeuedAt !== null) {
+    /* **Retained, and the run stops.** "Left queued and resumable" was a claim
+       the harness then undid: ordinary cleanup deleted the article, which
+       cascades to its expansion checkpoint rows, so the paid answers this pass
+       had written were thrown away under a comment promising they were kept —
+       and the next repeat would have published over the base revision the queued
+       job is holding. Retaining is half the fix; `stopIfCompromised` in
+       `runPhases` is the other half. ⟨GPT Sol, DPN-07-R.⟩ */
+    ctx.retain.push(
+      `${spec.label} (${job.slug}, job ${job.id}) is queued at requeue window ${driven.requeuedAt} ` +
+        "with paid answers in its checkpoint rows",
+    );
     findings.push({
       kind: "requeued",
       fatal: true,
@@ -569,8 +640,9 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
         `${driven.requeuedAt} of ${REQUEUE_BUDGET + 1}) while ${REASK_ENV} still named ${job.slug}. ` +
         "This run STOPPED rather than re-claiming it: the next claim would ignore the checkpoint " +
         "rows this one just wrote and buy the whole wave again, and the budget permits three such " +
-        "windows. The job is left `queued` and resumable; this pass is partial and must not be " +
-        "quoted as a repeat.",
+        "windows. The job is left `queued`, the article and the job are RETAINED rather than " +
+        "cleaned up, and no later job in this run can publish over that slug — the run goes no " +
+        "further. This pass is partial and must not be quoted as a repeat.",
     });
   }
 
@@ -804,7 +876,11 @@ function answerTheQuestions(opts: {
         status: step?.status ?? null,
         startedAt: step?.startedAt ?? null,
         finishedAt: step?.finishedAt ?? null,
-        hasStats: j.stats != null,
+        /* **Not merely "stats exist".** A wave that exhausted its redraws
+           writes stats, is caught, falls back to wave 1 and lets the step finish
+           `done` — so `j.stats != null` counted three failures as three
+           measurements of the deepened path. ⟨GPT Sol, DPN-03-R.⟩ */
+        hasSuccessfulStats: j.stats != null && j.waveFailed === false,
         outOfTime: j.stats?.outOfTime ?? null,
         withheld: j.stats?.withheld ?? null,
         resumed: j.stats?.resumed ?? null,
@@ -962,7 +1038,6 @@ function currentMeta(databaseTarget: string): RunMeta {
     commit: git(["rev-parse", "HEAD"]),
     gitDirty: git(["status", "--porcelain"]).length > 0,
     srcPatchSha256: patch,
-    store: STORE,
     databaseTarget,
     evalOwnerId: EVAL_OWNER_ID,
     environmentOwnerId: environmentOwnerId(),
@@ -1027,33 +1102,51 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
   );
 }
 
-/** The step lists, which are the whole of what `--dry-run` changes. */
-function stepsFor(dryRun: boolean): {
-  ingest: readonly StepName[];
-  rerun: readonly StepName[];
-  force: readonly StepName[];
-} {
+/**
+ * **The step lists, which are the whole of what `--dry-run` changes.**
+ *
+ * `--dry-run` asks for `extract` rather than `blocks`, and that is not a
+ * preference: `unrunnableStepPlan` (src/jobs.ts) refuses a job that runs
+ * `blocks` without `hierarchy`, since the tree is checked against the blocks it
+ * was built from and the article could never publish. Forcing `blocks` alone is
+ * a 400 at `enqueue`, so the free rehearsal died before it created a single job
+ * — while printing a clean report on the way down —
+ * docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md.
+ * (`evals/cost/run.ts` proves its own sweep with `--modes blocks`; that pattern
+ * is refused now too, so it is no longer a precedent to copy.)
+ * `assertStepPlansRunnable` is what stops this being rediscovered by a person.
+ *
+ * **There is deliberately no split-ingest list here, and a dry run is why.**
+ * Phase D's three measured windows have to intersect, and the obvious way to
+ * arrange it was to take the two load articles as far as the measured step in
+ * one job and run the measured step in a second — Sol's first suggestion for
+ * DPN-15. It cannot work: a job that stops short of a publishable article
+ * **fails**, and a failed job's draft revision is rolled back, so the second job
+ * opens on an article with no fetched document at all. The `--dry-run` of
+ * 2026-09-05 showed exactly that, four jobs deep, for free. `startBarrier` is
+ * Sol's other suggestion and the one that survives contact.
+ */
+export function stepsFor(dryRun: boolean): StepPlans {
   if (!dryRun) {
     return { ingest: DEFAULT_INGEST_STEPS, rerun: ["hierarchy"], force: ["hierarchy"] };
   }
-  /* **The identical shape with no model call in it.** `blocks` re-runs the
-     splitter, which is free, and forcing it drives the same enqueue → force →
-     serial-repeat → concurrent-phase machinery the paid run drives. It proves
-     the driving; it proves nothing about the wave, and the seam probe is what
-     covers that half. Exactly how evals/cost/run.ts proves its sweep with
-     `--modes blocks`. */
-  return { ingest: ["fetch", "extract", "blocks"], rerun: ["blocks"], force: ["blocks"] };
+  /* **The identical shape with no model call in it.** `extract` re-runs stage 2,
+     which buys nothing, and driving it exercises the same enqueue → force →
+     serial-repeat → concurrent-load machinery the paid run drives. It proves the
+     driving; it proves nothing about the wave, and the seam probe is what covers
+     that half. */
+  return { ingest: ["fetch", "extract"], rerun: ["extract"], force: ["extract"] };
 }
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const databaseTarget = localTarget(STORE, process.env.DATABASE_URL);
+  const databaseTarget = localTarget(process.env.DATABASE_URL);
   const meta = currentMeta(databaseTarget);
   const paid = args.spend;
 
   console.log(`Target: ${databaseTarget}`);
   console.log(
-    `Store:  ${meta.store}   commit ${meta.commit.slice(0, 8)}` +
+    `Commit: ${meta.commit.slice(0, 8)}` +
       (meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""),
   );
   console.log(`Ledger: ${costStore.describe()}`);
@@ -1066,6 +1159,12 @@ async function main(): Promise<void> {
   );
 
   assertJobConcurrency(meta.jobConcurrencyRuntime, meta.jobConcurrency);
+  /* **Before the first `enqueue`, on every path.** A step list the queue refuses
+     takes every phase down at its first call and leaves a run with no jobs in
+     it; the free rehearsal did exactly that and reported itself clean.
+     `assertStepPlansRunnable`. */
+  const plans = stepsFor(args.dryRun);
+  assertStepPlansRunnable(plans, unrunnableStepPlan);
   await assertEvalOwnerReady();
   await assertLedgerUsable(() => costStore.forJob("spya-deepen-probe"));
 
@@ -1114,7 +1213,9 @@ async function main(): Promise<void> {
         bytes: a.bytes.byteLength,
       })),
     ],
-    notes: STANDING_NOTES,
+    /* Copied, not shared: phase D appends to this when its start barrier does
+       not open, and `STANDING_NOTES` is a module constant. */
+    notes: [...STANDING_NOTES],
     seamProof: null,
     estimate: bill,
     jobs: [],
@@ -1128,7 +1229,7 @@ async function main(): Promise<void> {
 
   console.log("\nThe plan");
   console.log("─".repeat(70));
-  const { ingest, rerun, force } = stepsFor(args.dryRun);
+  const { ingest, rerun } = plans;
   console.log(`  A  ${bookSlug}   ingest ${ingest.join(",")}   deepen ON     (repeat 1)`);
   for (let r = 2; r <= args.repeats; r++) {
     console.log(
@@ -1138,8 +1239,9 @@ async function main(): Promise<void> {
   console.log(`  C  ${articleSlugs[0]}   ingest ${ingest.join(",")}   deepen OFF`);
   console.log(`  C  ${articleSlugs[0]}   ${rerun.join(",")} forced   deepen ON    (must be inert)`);
   console.log(
-    `  D  three at once: ${bookSlug} forced (repeat ${args.repeats + 1}), ` +
-      `${articleSlugs[1]} ingest, ${articleSlugs[2]} ingest`,
+    `  D  three at once: ${articleSlugs[1]} and ${articleSlugs[2]} ingest, and — once BOTH have ` +
+      `reached \`${rerun[0] ?? "hierarchy"}\` — ${bookSlug} ${rerun.join(",")} forced ` +
+      `(repeat ${args.repeats + 1})`,
   );
 
   console.log("\nWhat it will check");
@@ -1154,7 +1256,8 @@ async function main(): Promise<void> {
     "every ledger row carries scopeKind \"eval\", so nothing here is billed to Product",
     "every call each step's own collector saw has a ledger row, and the ledger is re-read at the end to say whether the numbers stood still",
     "phase C: the published tree is unchanged, the flag-off pass wrote no records file, and deepen.targets is 0 — an eligible section makes it an invalid control, not a note",
-    "phase D: the hierarchy STEPS' own windows reach concurrency 3, and three of them completed with stats — a step that started and failed carries a clock and is not a measurement",
+    "phase D: the two load jobs are driven first and the book only once BOTH have reached the measured step, so the three windows can intersect at all",
+    "phase D: the hierarchy STEPS' own windows reach concurrency 3, and three of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement",
     "a re-asking pass that hands its claim back at its own deadline is STOPPED, not re-driven: re-claiming it buys the whole wave again",
     "candidates paired across repeats on parent-plus-range, never on `where` — refused outright if the range is missing",
     "question 1 over phases A and B only, over passes whose wave did not throw, and refused outright if it matched nothing",
@@ -1198,8 +1301,29 @@ async function main(): Promise<void> {
 
   /* ------------------------------------------------------------ the phases -- */
 
-  const ctx: RunContext = { runTag, runFile, recordsDir, checkpoint, dryRun: args.dryRun };
+  const ctx: RunContext = {
+    runTag,
+    runFile,
+    recordsDir,
+    checkpoint,
+    dryRun: args.dryRun,
+    retain: [],
+    stopped: null,
+  };
 
+  /**
+   * **Both errors, or neither replaced by the other.**
+   *
+   * `reportRun` has to run whatever killed the phases — a run that died three
+   * jobs in still paid for three jobs and must say what they bought. In a bare
+   * `finally` that is a trap: a throw from the reporting **replaces** the
+   * original, so the thing that actually stopped the run is lost and the
+   * message a reader gets is about a records file. ⟨GPT Sol, DPN-17.⟩
+   *
+   * And the reporting is told *that* the run died, so its own output can say so
+   * at the top rather than reading as the report of a run that finished.
+   */
+  let primary: unknown = null;
   try {
     await runPhases({
       ctx,
@@ -1209,11 +1333,37 @@ async function main(): Promise<void> {
       articleFiles,
       bookSlug,
       articleSlugs,
-      steps: { ingest, rerun, force },
+      steps: plans,
     });
-  } finally {
-    await reportRun({ ctx, args, bookSlug, runDir, measuredStep: rerun[0] ?? "hierarchy" });
+  } catch (err) {
+    primary = err;
   }
+  let reporting: unknown = null;
+  try {
+    await reportRun({
+      ctx,
+      args,
+      bookSlug,
+      runDir,
+      measuredStep: rerun[0] ?? "hierarchy",
+      /* A (1) + B (`repeats - 1`) + C (2) + D (3). The plan printed above is
+         the same arithmetic said in words. */
+      expectedJobs: args.repeats + 5,
+      died: primary,
+    });
+  } catch (err) {
+    reporting = err;
+  }
+  const asError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
+  if (primary !== null && reporting !== null) {
+    throw new AggregateError(
+      [asError(primary), asError(reporting)],
+      "The run threw and then the reporting threw as well. Both are below; the first is what " +
+        "stopped the run.",
+    );
+  }
+  if (primary !== null) throw asError(primary);
+  if (reporting !== null) throw asError(reporting);
 }
 
 
@@ -1278,7 +1428,7 @@ export async function proveTheSeam(slug: string): Promise<SeamProof> {
   const blocks = probeBlocks();
   const first = blocks[0]!.id;
   const last = blocks.at(-1)!.id;
-  const empty = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  const empty = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
   const proposal: ModelNode = {
     title: "The Whole Probe",
     gist: "It argues one thing at length, in two parts.",
@@ -1353,6 +1503,43 @@ export async function proveTheSeam(slug: string): Promise<SeamProof> {
 /* -------------------------------------------------------------- the phases -- */
 
 /**
+ * **Every fatal finding the run has already recorded against a job that has
+ * stopped**, which is the question "can this run still answer the five
+ * questions" asked cheaply.
+ *
+ * `driveJob` converts a ledger read that rejected, a records parse that failed
+ * and a wave that threw into findings rather than throwing — it has to, because
+ * a throw takes the levers down under two jobs that are still running
+ * (DPN-06). But nothing then *acted* on them: an unreadable phase A, whose
+ * records are the whole of question 1, went on to buy phases B, C and D
+ * anyway. ⟨GPT Sol, DPN-06-R.⟩
+ */
+function fatalSoFar(records: readonly JobRecord[]): DeepenFinding[] {
+  return records.flatMap((r) => (r.findings ?? []).filter((f) => f.fatal));
+}
+
+/**
+ * **Stop before buying the next phase, if the last one cannot be believed.**
+ *
+ * Returns `true` when the run must go no further. The remaining phases are named
+ * out loud, because "the run stopped" and "the run finished and found nothing"
+ * are the two facts this whole harness exists to keep apart.
+ */
+function stopIfCompromised(ctx: RunContext, records: readonly JobRecord[], next: string): boolean {
+  const fatal = fatalSoFar(records);
+  if (fatal.length === 0) return false;
+  ctx.stopped =
+    `${fatal.length} fatal finding(s) on a job that has already stopped, so the run did not go on ` +
+    `to ${next}. What is below covers what was really driven and really bought; the phases named ` +
+    "are absent, not zero.";
+  console.log(`\n${"!".repeat(70)}`);
+  console.log(`STOPPING before ${next}.`);
+  console.log(formatFindings(fatal));
+  console.log("!".repeat(70));
+  return true;
+}
+
+/**
  * **The four phases, in order**, extracted from `main` so that the driving and
  * the reporting are two things a reader can hold separately — the same split
  * `evals/cost/run.ts` makes with `runDraws`.
@@ -1360,6 +1547,10 @@ export async function proveTheSeam(slug: string): Promise<SeamProof> {
  * It returns nothing: every job it drives has already been appended to
  * `ctx.runFile.jobs` and checkpointed by `enqueueJob`, which is what makes a
  * crash leave a cleanup manifest rather than orphans.
+ *
+ * **It can also stop early rather than run to the end.** Between phases it asks
+ * whether anything already driven carries a fatal finding, and goes no further
+ * if it does — see `stopIfCompromised`.
  */
 async function runPhases(opts: {
   ctx: RunContext;
@@ -1369,80 +1560,46 @@ async function runPhases(opts: {
   articleFiles: readonly Ingress[];
   bookSlug: string;
   articleSlugs: readonly string[];
-  steps: { ingest: readonly StepName[]; rerun: readonly StepName[]; force: readonly StepName[] };
+  steps: StepPlans;
 }): Promise<void> {
   const { ctx, args, runTag, book, articleFiles, bookSlug, articleSlugs } = opts;
   const { ingest, rerun, force } = opts.steps;
   const deepen = !args.dryRun;
 
-    /* A — the book, ingested. Repeat 1. */
-    const a = await withLevers({ deepen, reask: [] }, async () =>
-      driveJob(
-        ctx,
-        await enqueueJob(ctx, {
-          phase: "A",
-          label: "book ingest, deepening on (repeat 1)",
-          repeat: 1,
-          slug: bookSlug,
-          url: `https://deepen-eval.invalid/${runTag}/book`,
-          ingress: book,
-          steps: ingest,
-          force: [],
-        }),
-      ),
-    );
-    const liveBookSlug = a.slug;
-    /* The queue can move a minted slug. Everything downstream names the slug it
-       handed back, and the lever is re-checked against it before a repeat can
-       be free and silent. */
-    assertReaskNames({ envValue: liveBookSlug, mustName: [liveBookSlug], mustNotName: articleSlugs });
+  /* A — the book, ingested. Repeat 1. */
+  const a = await withLevers({ deepen, reask: [] }, async () =>
+    driveJob(
+      ctx,
+      await enqueueJob(ctx, {
+        phase: "A",
+        label: "book ingest, deepening on (repeat 1)",
+        repeat: 1,
+        slug: bookSlug,
+        url: `https://deepen-eval.invalid/${runTag}/book`,
+        ingress: book,
+        steps: ingest,
+        force: [],
+      }),
+    ),
+  );
+  const liveBookSlug = a.slug;
+  /* The queue can move a minted slug. Everything downstream names the slug it
+     handed back, and the lever is re-checked against it before a repeat can
+     be free and silent. */
+  assertReaskNames({ envValue: liveBookSlug, mustName: [liveBookSlug], mustNotName: articleSlugs });
+  if (stopIfCompromised(ctx, [a], "the repeats (phase B), the control (C) or the load (D)")) return;
 
-    /* B — the repeats, **serial**. A contended repeat would confound question 1,
-       which is the one the rest of the plan leans on. */
-    for (let r = 2; r <= args.repeats; r++) {
-      await withLevers({ deepen, reask: [liveBookSlug] }, async () =>
-        driveJob(
-          ctx,
-          await enqueueJob(ctx, {
-            phase: "B",
-            label: `book hierarchy forced (repeat ${r})`,
-            repeat: r,
-            slug: liveBookSlug,
-            url: null,
-            ingress: null,
-            steps: rerun,
-            force,
-          }),
-        ),
-      );
-    }
-
-    /* C — inertness on an ordinary article. */
-    const inertIngress = articleFiles[0]!;
-    const off = await withLevers({ deepen: false, reask: [] }, async () =>
+  /* B — the repeats, **serial**. A contended repeat would confound question 1,
+     which is the one the rest of the plan leans on. */
+  for (let r = 2; r <= args.repeats; r++) {
+    const b = await withLevers({ deepen, reask: [liveBookSlug] }, async () =>
       driveJob(
         ctx,
         await enqueueJob(ctx, {
-          phase: "C",
-          label: "ordinary article ingest, deepening OFF",
-          repeat: null,
-          slug: articleSlugs[0]!,
-          url: `https://deepen-eval.invalid/${runTag}/inert`,
-          ingress: inertIngress,
-          steps: ingest,
-          force: [],
-        }),
-      ),
-    );
-    const treeBefore = args.dryRun ? "dry-run" : treeDigest((await loadArticle(off.slug)).tree);
-    const on = await withLevers({ deepen, reask: [] }, async () =>
-      driveJob(
-        ctx,
-        await enqueueJob(ctx, {
-          phase: "C",
-          label: "the same article, hierarchy forced, deepening ON",
-          repeat: null,
-          slug: off.slug,
+          phase: "B",
+          label: `book hierarchy forced (repeat ${r})`,
+          repeat: r,
+          slug: liveBookSlug,
           url: null,
           ingress: null,
           steps: rerun,
@@ -1450,8 +1607,50 @@ async function runPhases(opts: {
         }),
       ),
     );
-    const treeAfter = args.dryRun ? "dry-run" : treeDigest((await loadArticle(off.slug)).tree);
-    const inertness = args.dryRun
+    /* **The requeue refusal is only a refusal if the run then stops.** The pass
+       is left `queued` so its paid answers stay resumable, and the very next
+       repeat would force `hierarchy` on the same slug and publish over the base
+       revision that queued job is holding. ⟨GPT Sol, DPN-07-R.⟩ */
+    if (stopIfCompromised(ctx, [b], `repeat ${r + 1} and phases C and D`)) return;
+  }
+
+  /* C — inertness on an ordinary article. */
+  const inertIngress = articleFiles[0]!;
+  const off = await withLevers({ deepen: false, reask: [] }, async () =>
+    driveJob(
+      ctx,
+      await enqueueJob(ctx, {
+        phase: "C",
+        label: "ordinary article ingest, deepening OFF",
+        repeat: null,
+        slug: articleSlugs[0]!,
+        url: `https://deepen-eval.invalid/${runTag}/inert`,
+        ingress: inertIngress,
+        steps: ingest,
+        force: [],
+      }),
+    ),
+  );
+  if (stopIfCompromised(ctx, [off], "the flag-on half of phase C, or phase D")) return;
+  const treeBefore = args.dryRun ? null : treeDigest((await loadArticle(off.slug)).tree);
+  const on = await withLevers({ deepen, reask: [] }, async () =>
+    driveJob(
+      ctx,
+      await enqueueJob(ctx, {
+        phase: "C",
+        label: "the same article, hierarchy forced, deepening ON",
+        repeat: null,
+        slug: off.slug,
+        url: null,
+        ingress: null,
+        steps: rerun,
+        force,
+      }),
+    ),
+  );
+  const treeAfter = args.dryRun ? null : treeDigest((await loadArticle(off.slug)).tree);
+  const inertness =
+    treeBefore === null || treeAfter === null
       ? []
       : checkInertness({
           offWroteRecords: (off.recordsFiles ?? []).length > 0,
@@ -1461,93 +1660,216 @@ async function runPhases(opts: {
           treeBefore,
           treeAfter,
         });
-    on.findings = inertness;
-    console.log("\nPhase C — inertness");
-    console.log("─".repeat(70));
+  /* **Appended, not assigned.** `driveJob` has already put this job's ledger,
+     scope and records findings on the record, and overwriting the array dropped
+     every one of them — a fatal `scope` or `ledger-short` finding recorded
+     moments earlier vanished, and nothing downstream recomputes those checks.
+     ⟨GPT Sol, DPN-01/02-R.⟩ */
+  on.findings = [...(on.findings ?? []), ...inertness];
+  console.log("\nPhase C — inertness");
+  console.log("─".repeat(70));
+  /* **A dry run has no tree to compare, and must not print one.** Both digests
+     used to be the literal string `"dry-run"`, so the line read `identical` —
+     a comparison of nothing with nothing, printed in the words of a passing
+     check. docs/reusable/silent-success.md. */
+  console.log(
+    treeBefore === null || treeAfter === null
+      ? "  tree NOT COMPARED: --dry-run publishes no tree, so inertness was not measured at all."
+      : `  tree ${treeBefore.slice(0, 16)} → ${treeAfter.slice(0, 16)}   ` +
+        `${treeBefore === treeAfter ? "identical" : "CHANGED"}`,
+  );
+  console.log(
+    `  flag off wrote ${(off.recordsFiles ?? []).length} records file(s) (must be 0); ` +
+      `flag on wrote ${(on.recordsFiles ?? []).length} (must be 1), targets ${on.stats?.targets ?? "—"}`,
+  );
+  if (inertness.length > 0) console.log(formatFindings(inertness));
+  await ctx.checkpoint();
+  if (stopIfCompromised(ctx, [on], "the load phase (D)")) return;
+
+  /* D — three at once, and lined up so that "at once" is true of the STEP.
+     Its own function because it is the only phase with machinery of its own:
+     the start barrier, and the drain that has to finish before the levers can
+     be restored. */
+  await runPhaseD({ ctx, args, runTag, articleFiles, articleSlugs, liveBookSlug, steps: opts.steps, deepen });
+}
+
+/**
+ * **Phase D — three jobs at once, and the barrier that makes "at once" true of
+ * the measured STEP rather than only of the three promises.**
+ *
+ * Separated from the other three because it is the only one with machinery of
+ * its own, and because both of its hazards live here: the windows that have to
+ * intersect (`startBarrier`, DPN-15) and the drain that has to finish before
+ * the levers are restored (DPN-06).
+ */
+async function runPhaseD(opts: {
+  ctx: RunContext;
+  args: Args;
+  runTag: string;
+  articleFiles: readonly Ingress[];
+  articleSlugs: readonly string[];
+  liveBookSlug: string;
+  steps: StepPlans;
+  deepen: boolean;
+}): Promise<void> {
+  const { ctx, args, runTag, articleFiles, articleSlugs, liveBookSlug, deepen } = opts;
+  const { ingest, rerun, force } = opts.steps;
+  console.log(`\n[D] three jobs at once, at DEFAULT_JOB_CONCURRENCY=${DEFAULT_JOB_CONCURRENCY}`);
+  console.log("─".repeat(70));
+  /* **Two more articles, from two more files if they were given and from the
+     first one twice if they were not.** Two ingests of identical bytes under
+     two different slugs are still two independent jobs — different articles,
+     different checkpoint rows, nothing shared — so the load is real either
+     way. What is lost is variety, and the run says so rather than letting a
+     reader assume three different documents. */
+  const loadIngress = [articleFiles[1] ?? articleFiles[0]!, articleFiles[2] ?? articleFiles[0]!];
+  if (articleFiles.length < 3) {
     console.log(
-      `  tree ${treeBefore.slice(0, 16)} → ${treeAfter.slice(0, 16)}   ` +
-        `${treeBefore === treeAfter ? "identical" : "CHANGED"}\n` +
-        `  flag off wrote ${(off.recordsFiles ?? []).length} records file(s) (must be 0); ` +
-        `flag on wrote ${(on.recordsFiles ?? []).length} (must be 1), targets ${on.stats?.targets ?? "—"}`,
+      `  (only ${articleFiles.length} article file(s) given, so phase D ingests the same bytes ` +
+        "under fresh slugs — two independent jobs sharing nothing, but not two different documents)",
     );
-    if (inertness.length > 0) console.log(formatFindings(inertness));
-    await ctx.checkpoint();
+  }
 
-    /* D — three at once. */
-    console.log(`\n[D] three jobs at once, at DEFAULT_JOB_CONCURRENCY=${DEFAULT_JOB_CONCURRENCY}`);
-    console.log("─".repeat(70));
-    /* **Two more articles, from two more files if they were given and from the
-       first one twice if they were not.** Two ingests of identical bytes under
-       two different slugs are still two independent jobs — different articles,
-       different checkpoint rows, nothing shared — so the load is real either
-       way. What is lost is variety, and the run says so rather than letting a
-       reader assume three different documents. */
-    const loadIngress = [articleFiles[1] ?? articleFiles[0]!, articleFiles[2] ?? articleFiles[0]!];
-    if (articleFiles.length < 3) {
-      console.log(
-        `  (only ${articleFiles.length} article file(s) given, so phase D ingests the same bytes ` +
-          "under fresh slugs — two independent jobs sharing nothing, but not two different documents)",
-      );
-    }
-    /* **Queued one at a time, driven all at once.** The pump silencer round
-       `enqueue` is a single global variable, so overlapping `enqueue`s let one
-       job's pump start under the production registry and go to the real network
-       — see `enqueueJob`. Only the driving is the measurement, and only the
-       driving is concurrent.
+  /**
+   * **The barrier, and which way round it goes.**
+   *
+   * The two load jobs start at `fetch` and reach the measured step only after
+   * stages 1-3; the book's job is a forced `hierarchy` and is there at once. So
+   * the book is **driven last**, when both load jobs have announced that their
+   * measured step has begun — and it waits outside a claim, because its own
+   * step needs 658-778 s against a 740 s deadline and has no seconds to spare.
+   * `startBarrier` says what it saw; a phase that did not line up is a finding.
+   * ⟨GPT Sol, DPN-15.⟩
+   */
+  const barrier = startBarrier({ expected: 2, timeoutMs: LOAD_BARRIER_TIMEOUT_MS });
+  const measuredStep = rerun[0] ?? "hierarchy";
 
-       **One set of levers for the whole phase**, which is what the re-ask list
-       naming slugs makes possible: the book is re-bought and the two articles
-       beside it are not, from one environment. */
-    const queued: QueuedJob[] = [];
-    queued.push(
+  const loadQueued: QueuedJob[] = [];
+  for (const [i, slug] of [articleSlugs[1]!, articleSlugs[2]!].entries()) {
+    loadQueued.push(
       await enqueueJob(ctx, {
         phase: "D",
-        label: `book hierarchy forced under load (repeat ${args.repeats + 1})`,
-        repeat: args.repeats + 1,
-        slug: liveBookSlug,
-        url: null,
-        ingress: null,
-        steps: rerun,
-        force,
+        label: `ordinary article ${i + 1} ingest, under load`,
+        repeat: null,
+        slug,
+        url: `https://deepen-eval.invalid/${runTag}/load${i + 1}`,
+        ingress: loadIngress[i]!,
+        steps: ingest,
+        force: [],
+        announce: { step: measuredStep, began: barrier.announce },
       }),
     );
-    for (const [i, slug] of [articleSlugs[1]!, articleSlugs[2]!].entries()) {
-      queued.push(
-        await enqueueJob(ctx, {
-          phase: "D",
-          label: `ordinary article ${i + 1} ingest, under load`,
-          repeat: null,
-          slug,
-          url: `https://deepen-eval.invalid/${runTag}/load${i + 1}`,
-          ingress: loadIngress[i]!,
-          steps: ingest,
-          force: [],
-        }),
-      );
-    }
-    /* **`allSettled`, not `all`.** `Promise.all` rejects the moment one job
-       does, and the rejection travels straight out through `withLevers` —
-       which restores `SPIDERYARN_DEEPEN_HIERARCHY` and `SPIDERYARN_DEEPEN_REASK`
-       while the other two jobs are still running under them, and lets
-       `reportRun` start reading half-written ledgers and deleting articles
-       underneath live tasks. Draining first costs nothing and is the only way
-       the levers mean what they say for the whole phase.
-       ⟨GPT Sol, DPN-06.⟩ */
-    const settled = await withLevers({ deepen, reask: [liveBookSlug] }, async () =>
-      Promise.allSettled(queued.map((q) => driveJob(ctx, q))),
+  }
+  const bookQueued = await enqueueJob(ctx, {
+    phase: "D",
+    label: `book hierarchy forced under load (repeat ${args.repeats + 1})`,
+    repeat: args.repeats + 1,
+    slug: liveBookSlug,
+    url: null,
+    ingress: null,
+    steps: rerun,
+    force,
+  });
+
+  /* **`allSettled`, not `all`.** `Promise.all` rejects the moment one job
+     does, and the rejection travels straight out through `withLevers` —
+     which restores `SPIDERYARN_DEEPEN_HIERARCHY` and `SPIDERYARN_DEEPEN_REASK`
+     while the other two jobs are still running under them, and lets
+     `reportRun` start reading half-written ledgers and deleting articles
+     underneath live tasks. Draining first costs nothing and is the only way
+     the levers mean what they say for the whole phase.
+     ⟨GPT Sol, DPN-06.⟩
+
+     **One set of levers for the whole phase**, which is what the re-ask list
+     naming slugs makes possible: the book is re-bought and the two articles
+     beside it are not, from one environment. */
+  const settled = await withLevers({ deepen, reask: [liveBookSlug] }, async () => {
+    const loadDriving = loadQueued.map((q) => driveJob(ctx, q));
+    /* Attached now, so a load job that rejects while the book is still being
+       waited for cannot surface as an unhandled rejection. `allSettled` below
+       still sees the rejection itself. */
+    for (const p of loadDriving) void p.catch(() => undefined);
+    const lined = await barrier.wait(Promise.allSettled(loadDriving));
+    console.log(
+      `  barrier: ${lined.arrived.length}/${lined.expected} load job(s) reached \`${measuredStep}\`` +
+        ` after ${(lined.ms / 1000).toFixed(1)}s — ${lined.why}. Driving the book now.`,
     );
-    const broke = settled.flatMap((s) => (s.status === "rejected" ? [s.reason as unknown] : []));
-    if (broke.length > 0) {
-      throw new AggregateError(
-        broke.map((r) => (r instanceof Error ? r : new Error(String(r)))),
-        `${broke.length} of phase D's ${queued.length} jobs threw. Every one of them was drained ` +
-          "before the levers were restored; the report below covers what the run really did.",
+    if (lined.why !== "all") {
+      /* **Not fatal on its own.** `budgetReport`'s peak-concurrency gate is what
+         decides whether question 5 was measured; this says why it was not, at
+         the moment it happened, rather than leaving a reader to infer it from
+         three wall clocks an hour later. */
+      ctx.runFile.notes.push(
+        `Phase D's start barrier ended "${lined.why}" after ${(lined.ms / 1000).toFixed(1)}s with ` +
+          `${lined.arrived.length} of ${lined.expected} load job(s) at \`${measuredStep}\`, so the ` +
+          "book's measured step was not held back to meet them.",
+      );
+      console.log(
+        "  WARNING: the phase did not line up. The three windows may not intersect, and question " +
+          "5 is answerable only if `peakConcurrency` says they did.",
       );
     }
+    return Promise.allSettled([driveJob(ctx, bookQueued), ...loadDriving]);
+  });
+  const broke = settled.flatMap((s) => (s.status === "rejected" ? [s.reason as unknown] : []));
+  if (broke.length > 0) {
+    throw new AggregateError(
+      broke.map((r) => (r instanceof Error ? r : new Error(String(r)))),
+      `${broke.length} of phase D's 3 jobs threw. Every one of them was drained ` +
+        "before the levers were restored; the report below covers what the run really did.",
+    );
+  }
+  /* **Phase D is last, so there is nothing to stop before.** Its fatal findings
+     reach the reader through the findings block like everyone else's — all three
+     jobs were drained first, which is the part that mattered. */
 }
 
 
+
 /* -------------------------------------------------------------- the report -- */
+
+/**
+ * **How long the end-of-run reconciliation may spend on the database before it
+ * gives up and says so.**
+ *
+ * Eight reads of a local Postgres are milliseconds. The number is not a
+ * performance budget: it is what stops a database fault from delaying, for ever,
+ * the exception that actually killed the run — reconciliation is on the path
+ * between a thrown phase and the reader being told about it. ⟨GPT Sol, DPN-17.⟩
+ */
+const LEDGER_REREAD_DEADLINE_MS = 60_000;
+
+/**
+ * **A promise with a deadline, and a rejection that names what it was waiting
+ * for** — the shape `Promise.race` gives you without the two traps: the timer is
+ * always cleared, and the loser's rejection cannot become an unhandled one.
+ *
+ * ⟨Where I disagreed with Sol: he asked for a *database-side* statement
+ * deadline. `costStore.forJob` takes its connection from the shared pool
+ * (`src/store/client.ts`), so a `SET statement_timeout` here would land on
+ * whichever of the five connections the statement happened to get and would
+ * outlive this function on it — a change to every later query in the process,
+ * including the ones a paid job is making. `PGOPTIONS` is worse: it is read at
+ * pool creation and would cap every statement the run makes. Both are `src/`
+ * changes this round may not make, and neither is *safer* than a client-side
+ * deadline for the thing the deadline is for, which is making sure the original
+ * error still arrives. What is genuinely lost is the query being cancelled at
+ * the server rather than merely abandoned here, and it is written down as owed.⟩
+ */
+async function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const alarm = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms / 1000}s`)), ms);
+  });
+  try {
+    return await Promise.race([work, alarm]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    /* The loser keeps running; swallow its rejection so it cannot surface later
+       as an unhandled one on top of whatever really went wrong. */
+    void work.catch(() => undefined);
+  }
+}
 
 /**
  * **Read every job's ledger a second time, once nothing is still writing.**
@@ -1560,14 +1882,37 @@ async function runPhases(opts: {
  * has stopped, and says whether anything moved. A difference is a finding
  * rather than a correction: the question is not "what is the number" but
  * "did the number the run reported stand still". ⟨GPT Sol, DPN-02.⟩
+ *
+ * **The scope and completeness checks are applied to this read too**, and that
+ * is not belt-and-braces: where the first read failed there has never been a
+ * `checkScope` over those rows at all, so a job billed to Product would have
+ * gone unreported — the first read's failure was recorded and the checks it
+ * would have run were simply skipped. ⟨GPT Sol, DPN-01/02-R.⟩
+ *
+ * **Concurrent, and under a deadline.** Eight sequential reads with no timeout
+ * sat between a thrown phase and the reader being told what threw. ⟨DPN-17.⟩
  */
 async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenFinding[]> {
   const findings: DeepenFinding[] = [];
-  for (const j of jobs) {
-    let now: Awaited<ReturnType<typeof costStore.forJob>>;
-    try {
-      now = await costStore.forJob(j.jobId);
-    } catch (err) {
+  const reads = await Promise.all(
+    jobs.map(async (j) => {
+      try {
+        return {
+          j,
+          now: await withDeadline(
+            costStore.forJob(j.jobId),
+            LEDGER_REREAD_DEADLINE_MS,
+            `the ledger re-read for ${j.phase} ${j.label}`,
+          ),
+          err: null as unknown,
+        };
+      } catch (err) {
+        return { j, now: null, err };
+      }
+    }),
+  );
+  for (const { j, now, err } of reads) {
+    if (now === null) {
       findings.push({
         kind: "not-answerable",
         fatal: true,
@@ -1580,6 +1925,18 @@ async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenF
     }
     const then = j.money;
     const nowMoney = totalMoney(now.rows);
+    /* **Over the rows that are really there now**, whatever happened during the
+       run. `asDeepenFinding` carries the fatality and the message across. */
+    const late = [
+      ...checkScope(now.rows, "eval").map(asDeepenFinding),
+      ...checkLedgerComplete(now.rows, j.observedSpend ?? []).map(asDeepenFinding),
+    ];
+    for (const f of late) {
+      findings.push({
+        ...f,
+        message: `${j.phase} ${j.label}, on the end-of-run ledger read: ${f.message}`,
+      });
+    }
     if (then == null) {
       /* The first read failed, this one worked: record what is really there
          rather than leaving the row `NOT READ` on evidence we now have. */
@@ -1592,7 +1949,8 @@ async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenF
         fatal: false,
         message:
           `${j.phase} ${j.label}: the ledger read failed during the run and succeeded at the end. ` +
-          `The bill below is the second read: $${(moneyTotalNanos(nowMoney) / 1e9).toFixed(4)}.`,
+          `The bill below is the second read: $${(moneyTotalNanos(nowMoney) / 1e9).toFixed(4)}. ` +
+          "Its scope and completeness were checked here rather than during the run.",
       });
       continue;
     }
@@ -1616,14 +1974,93 @@ async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenF
 }
 
 /**
- * **Everything the run has to say once the jobs have stopped**, in a `finally`
- * so a run that died three jobs in still reports the three it paid for.
+ * **The three ways this run can have nothing to report, said loudly and first.**
  *
- * The order is deliberate: the per-repeat checks first (was this a repeat at
- * all, was the seed held), then the driving, then the five questions, then the
- * findings — because a fatal finding above changes what the numbers below mean,
- * and a reader who stops after the first block has read the part that decides
- * whether to believe the rest.
+ * Every judgement the report makes below is a loop or a filter over
+ * `runFile.jobs`, so at zero jobs every one of them returns `[]` — not by
+ * accident but *because* the failure emptied the collection the checks are
+ * computed over. The healthiest possible answer and the worst possible outcome
+ * are then the same bytes, and on 2026-09-05 they were: an empty driving table
+ * under a paragraph explaining why the emptiness was expected, `Findings: none`,
+ * and a written `run.json`, with the error on the last line of all.
+ * docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md.
+ *
+ * A banner rather than a finding alone, because a reader who stops at the top of
+ * the output has read the part that decides whether to believe the rest.
+ */
+function reportAbsences(ctx: RunContext, died: unknown, expectedJobs: number): DeepenFinding[] {
+  const findings: DeepenFinding[] = [];
+  const banner = (heading: string, body: string): void => {
+    console.log(`\n${"!".repeat(70)}`);
+    console.log(heading);
+    console.log(body);
+    console.log("!".repeat(70));
+  };
+  if (died !== null) {
+    const message = died instanceof Error ? died.message : String(died);
+    banner("THE RUN DIED. What follows is what it had done by then, not a finished run.", `  ${message}`);
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message: `The run threw and did not finish its phases: ${message}`,
+    });
+  }
+  if (ctx.stopped !== null) {
+    banner("THE RUN STOPPED EARLY.", `  ${ctx.stopped}`);
+    findings.push({ kind: "not-answerable", fatal: true, message: ctx.stopped });
+  }
+  if (ctx.runFile.jobs.length === 0) {
+    banner(
+      "NO JOBS WERE CREATED AT ALL.",
+      "  Nothing below is a result. Every table is empty because nothing ran, which is not the\n" +
+        "  same fact as nothing being wrong — and a `Findings: none` over an empty run is the\n" +
+        "  most believable wrong answer this harness can give. docs/reusable/silent-success.md.",
+    );
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        "This run created no jobs. Nothing was driven, nothing was bought, and every question " +
+        "below is unasked rather than answered.",
+    });
+    return findings;
+  }
+  /* **Zero is the loud shape; short is the likelier one.** The run knows how many
+     jobs it set out to create — one ingest, `repeats - 1` repeats, two control
+     passes, three under load — and a driving report over fewer of them is not the
+     report it says it is. The discipline `expectedBookPasses` already applies to
+     passes and `budgetReport`'s `expected` to clocks. A deliberate early stop is
+     not this, and has said so above. */
+  if (ctx.runFile.jobs.length < expectedJobs && ctx.stopped === null && died === null) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `This run created ${ctx.runFile.jobs.length} of the ${expectedJobs} jobs it planned, and ` +
+        "neither stopped on purpose nor threw. Something skipped a phase without saying so, and " +
+        "the tables below are over whatever did run.",
+    });
+  }
+  return findings;
+}
+
+/**
+ * **Everything the run has to say once the jobs have stopped**, and it runs
+ * whether or not the phases finished — a run that died three jobs in still paid
+ * for three jobs and must say what they bought.
+ *
+ * The order is deliberate: what stopped the run first, then the per-repeat
+ * checks (was this a repeat at all, was the seed held), then the driving, then
+ * the five questions, then the findings — because a fatal finding above changes
+ * what the numbers below mean, and a reader who stops after the first block has
+ * read the part that decides whether to believe the rest.
+ *
+ * **Two absences it now refuses to print over.** A run that created **no jobs**
+ * used to print the whole of this — the phase summaries, `Findings: none`, a
+ * written `run.json` — and then throw on its last line: the free rehearsal did
+ * exactly that for a whole morning, and a rehearsal exists to be believed.
+ * A run that **died** was reported in the words of one that finished.
+ * docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md.
  */
 async function reportRun(opts: {
   ctx: RunContext;
@@ -1631,11 +2068,20 @@ async function reportRun(opts: {
   bookSlug: string;
   runDir: string;
   measuredStep: string;
+  /** How many jobs the plan above said this run would create. */
+  expectedJobs: number;
+  /** What killed the phases, or `null` where they ran to the end. */
+  died: unknown;
 }): Promise<void> {
-  const { ctx, args, runDir, measuredStep } = opts;
+  const { ctx, args, runDir, measuredStep, died } = opts;
   await ctx.checkpoint();
 
   const findings: DeepenFinding[] = [];
+
+  /* **Said before anything else, because everything else is read in its
+     light.** ⟨`reportAbsences`.⟩ */
+  findings.push(...reportAbsences(ctx, died, opts.expectedJobs));
+
   findings.push(...(await reconcileLedgerAgain(ctx.runFile.jobs)));
 
   const bookRepeats = ctx.runFile.jobs.filter((j) => j.repeat !== null);
@@ -1723,13 +2169,16 @@ async function reportRun(opts: {
     ];
   };
 
-  /* **Phase A and phase B, and nothing else.** The declared controlled
+  /* **Read once, filtered twice.** `passesOf` records a finding when a job wrote
+     more than one records file, so calling it for the book's passes and again
+     for everyone's reported that job twice. Phases A and B are the book and
+     nobody else, which makes the filter exact.
+
+     **Phase A and phase B, and nothing else**: the declared controlled
      population is the serial passes; phase D's book pass ran with two other
      jobs against it and is reported with question 5. */
-  const bookPasses = bookRepeats
-    .filter((j) => j.phase === "A" || j.phase === "B")
-    .flatMap(passesOf);
   const allRecords: RecordsPass[] = ctx.runFile.jobs.flatMap(passesOf);
+  const bookPasses = allRecords.filter((p) => p.phase === "A" || p.phase === "B");
 
   /* **The driving is checked on every run, paid or free** — the network
      escape, the serial repeats, the concurrent load phase, the forces that
@@ -1782,9 +2231,19 @@ async function reportRun(opts: {
     console.log(printed);
   }
 
-  console.log("\nFindings");
+  /* **"None" is a statement about a population, so the population is printed
+     with it.** `Findings: none` over a run with no jobs in it is the most
+     believable wrong answer this harness can give, and it gave it. */
+  console.log(`\nFindings   (over ${ctx.runFile.jobs.length} job(s) that this run created)`);
   console.log("─".repeat(70));
-  console.log(findings.length === 0 ? "  none" : formatFindings(findings));
+  console.log(
+    findings.length > 0
+      ? formatFindings(findings)
+      : ctx.runFile.jobs.length === 0
+      ? "  NONE OBSERVED, over nothing: no job was created, so there was nothing to find anything\n" +
+        "  wrong with. This is not a clean run."
+      : "  none",
+  );
   const fatal = findings.filter((f) => f.fatal);
   if (fatal.length > 0) {
     console.log(
@@ -1794,7 +2253,21 @@ async function reportRun(opts: {
     process.exitCode = 1;
   }
 
-  if (args.keep) {
+  if (ctx.retain.length > 0) {
+    /* **Retention beats cleanup, and it is not a flag the caller chose.** A
+       queued re-asking pass has paid answers in checkpoint rows that deleting
+       the article would cascade away — the work the run said it was preserving.
+       ⟨GPT Sol, DPN-07-R.⟩ */
+    console.log(
+      `\nRETAINED rather than cleaned up: ${ctx.runFile.jobs.length} job(s) and their articles ` +
+        "stay, because partial paid work is resumable only while its article exists.",
+    );
+    for (const why of ctx.retain) console.log(`  - ${why}`);
+    console.log(
+      "  Resume it, or delete the articles by hand once you have decided the answers are not " +
+        "worth keeping.",
+    );
+  } else if (args.keep) {
     console.log(`\n--keep: leaving ${ctx.runFile.jobs.length} job(s) and their articles behind.`);
   } else {
     await cleanup(ctx.runFile.jobs);
@@ -1808,7 +2281,15 @@ async function reportRun(opts: {
 if (isMain(import.meta.url)) {
   loadEnvLocal();
   await withLedger("eval", () => runAsOwner(EVAL_OWNER_ID, main)).catch((err: unknown) => {
-    console.error(`\n${err instanceof Error ? err.message : String(err)}`);
+    /* **Every error, not the outermost one.** `main` throws an `AggregateError`
+       when the run died and the reporting died after it, and printing only
+       `err.message` there would say "the run threw and then the reporting threw
+       as well" and name neither. ⟨GPT Sol, DPN-17.⟩ */
+    const say = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+    console.error(`\n${say(err)}`);
+    if (err instanceof AggregateError) {
+      for (const inner of err.errors) console.error(`  - ${say(inner)}`);
+    }
     process.exitCode = 1;
   });
 }

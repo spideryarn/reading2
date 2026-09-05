@@ -32,11 +32,9 @@ loadEnvLocal();
 
 /* No table named: this suite wants a live connection and nothing else, and
    `pgReady` runs `select 1` before it asks about anything. */
-const { reachable } = await pgReady({ suite: "tests/db-transaction-errors.test.ts" });
+await pgReady({ suite: "tests/db-transaction-errors.test.ts" });
 
-const when = reachable ? describe : describe.skip;
-
-when("a domain error thrown inside a transaction", () => {
+describe("a domain error thrown inside a transaction", () => {
   afterAll(async () => {
     await closeDb();
   });

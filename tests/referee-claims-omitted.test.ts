@@ -53,17 +53,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Same
- * block, same reason, as tests/referee-routes-postgres.test.ts.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
@@ -115,27 +104,14 @@ vi.mock("../src/referee-claims-run.js", async () => ({
 
 const SLUG = "test-referee-claims-omitted";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/referee-claims-omitted.test.ts",
   tables: ["spideryarn.referee_claims", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { refereeClaimsStore, STORE } = await import("../src/store/index.js");
+const { refereeClaimsStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  /* The positive control. A flag that failed to take looks exactly like this
-     file working: the filesystem store carries every key of the run object it
-     is handed, so the bug this file is about cannot exist there. */
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
 
 async function post(url: string): Promise<{ status: number; text: string }> {
   const req = Object.assign(
@@ -177,7 +153,7 @@ async function post(url: string): Promise<{ status: number; text: string }> {
   return { status, text };
 }
 
-when("what the route stores about its own cap", { timeout: 60_000 }, () => {
+describe("what the route stores about its own cap", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
 
   beforeAll(async () => {

@@ -80,12 +80,10 @@ const BLOCK_ID = "spya-qwm234";
  */
 const OUTSIDER = "00000000-0000-4000-8000-0000000000f4" as OwnerId;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-pg-referee-claims.test.ts",
   tables: ["spideryarn.referee_claims"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **A census of `ClaimsRun`, so a new field cannot arrive unnoticed.**
@@ -155,7 +153,7 @@ async function ageRunBy(ms: number): Promise<void> {
     .where(eq(refereeClaims.articleId, ARTICLE_ID));
 }
 
-when("the Postgres claims store", { timeout: 20_000 }, () => {
+describe("the Postgres claims store", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     await clean();
     const db = getDb();

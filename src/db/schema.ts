@@ -3046,6 +3046,26 @@ export const chatMessages = spideryarn.table(
      * two byte for byte, which is how `tools` was caught going missing.
      */
     stance: text("stance"),
+    /**
+     * **The reader pressed the "?" beside a paragraph rather than typing.**
+     * User rows only.
+     *
+     * Report 1R's metadata, and a column of its own rather than a fourth
+     * `chat_threads.kind` — the refusal that keeps a help conversation an
+     * ordinary anchored chat, and therefore keeps every mark the reading view
+     * draws a chat. See `ChatMessage.help` in src/types.ts for why it is on the
+     * message rather than on the thread; the short version is that a retry has
+     * to inherit it, and a thread-level flag would have had to be refused.
+     *
+     * `notNull().default(false)`, shaped like `stopped` and `interrupted` beside
+     * it, so every existing row reads as "not a help press" — which is true of
+     * all of them except the "?" presses of 2026-09-04..05. Those are **not**
+     * backfilled: the only way to find them is to match stored question text
+     * against two historical wordings, and that is a heuristic rewrite of real
+     * readers' rows. The preflight `SELECT` and the exact `UPDATE` are Greg's to
+     * run or refuse. docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md.
+     */
+    help: boolean("help").notNull().default(false),
     createdAt: createdAt(),
 
     /**
@@ -3091,6 +3111,11 @@ export const chatMessages = spideryarn.table(
       "chat_messages_stance_assistant_only",
       sql`${t.stance} is null or ${t.role} = 'assistant'`,
     ),
+    /* The mirror of the rule above it, and there for the same reason: `help`
+       describes the reader's own request, so only the reader's rows may carry
+       one. Without this a bug that wrote it onto the answer would be invisible —
+       nothing reads it there, and the transcript would look right. */
+    check("chat_messages_help_user_only", sql`${t.help} = false or ${t.role} = 'user'`),
     foreignKey({
       name: "chat_messages_thread_fk",
       columns: [t.articleId, t.threadId],

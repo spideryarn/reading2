@@ -133,9 +133,10 @@ vi.mock("../src/web/lib/api.js", () => {
     failure: async (res: Response) => new Error(String(res.status)),
     /* **A whole-module mock, so anything `useGlossary` imports and this omits is
        `undefined` at the moment it is called** — which TypeScript cannot see
-       through a `vi.mock` factory, and no test here reaches. `reset()` calls
-       `fetchOk`; nothing below presses reset, so leaving it out would have been a
-       landmine set for whoever writes that test.
+       through a `vi.mock` factory, and no test here reaches. `fetchOk` was
+       included for `reset()`, which no longer exists (2026-09-05); it stays
+       because the hazard is the omission itself, and the next thing this hook
+       reaches for should find it here rather than `undefined`.
        `tests/refused-writes-are-reported.test.tsx` is the one that exercises the
        real `fetchOk`, and it mocks none of this module for that reason. */
     fetchOk: async (input: string) => {
@@ -199,7 +200,12 @@ function Band({ slug, read }: { slug: string; read: GlossaryRead }): ReactElemen
   );
 }
 
-/** The live read, so a test can drive `clear()` the way `reset()` does. */
+/**
+ * The live read, held at module scope so `Reading` can hand it to `Band`.
+ *
+ * It was also how a test drove `clear()` the way `reset()` did; both went on
+ * 2026-09-05 with the *Start again* button, and no test reaches in here now.
+ */
 let read: GlossaryRead | null = null;
 
 /** What `Reader` does: one read, always, and the band over it when open. */
@@ -312,33 +318,22 @@ describe("opening the glossary band", () => {
 });
 
 describe("a reply that arrives too late", () => {
-  it("does not undo a reset that happened while it was in flight", async () => {
-    await render(createElement(Reading, { slug: "constitution", open: true }));
-    // One GET outstanding, unanswered.
-    expect(glossaryAsks()).toBe(1);
+  /* **The same-slug case went on 2026-09-05, with the operation it described.**
+     It drove `read.clear()` — the generation bump behind the panel's *Start
+     again* — and asserted that a GET issued before the DELETE could not put the
+     deleted list back on screen. `live` cannot catch that one, because the slug
+     never changes; the generation counter is what does, and this was its only
+     client-side exercise.
 
-    /* The reader presses "start over" before that reply lands. `clear()` bumps
-       the generation, so the older reply is news about a list that no longer
-       exists and must be dropped — `live` cannot see this, because the slug
-       never changed. That is the bug the generation counter replaced the
-       `pushed` ref for.
+     The button, `reset()` and `clear()` all went together (`Foot` in
+     src/web/GlossaryPanel.tsx). **Nothing removes a glossary from the client
+     any more**, so there is no operation left for a late reply to undo on one
+     slug, and a test that reached past the hook's surface to bump the counter
+     by hand would be asserting about a path a reader cannot reach.
 
-       NOTE: the DELETE is not exercised here, and since 2026-09-03 that is a
-       choice rather than a limitation — `deleteGlossary` has a Postgres
-       implementation now (src/store/pg-glossary.ts), so a test that drove it
-       *would* describe production. This one deliberately does not: it is about
-       the ordering of two replies, not about the button, and the round trip
-       belongs to the tests that own it — tests/store-glossary-delete-pg.test.ts
-       for the store and tests/glossary-delete-then-rebuild.test.ts for the
-       reader's whole sentence. */
-    await act(async () => {
-      read?.clear();
-    });
-    expect(host.querySelector("aside")?.textContent).toBe("none:0:false,false,false");
-
-    await settle();
-    expect(host.querySelector("aside")?.textContent).toBe("none:0:false,false,false");
-  });
+     What survives is the case below, which is the *other* guard — `live`, on a
+     slug change — and it is untouched. If the reset ever comes back, so does
+     the case above: it is worth having, and it caught a real bug. */
 
   it("does not underline the previous article after switching", async () => {
     await render(createElement(Reading, { slug: "constitution", open: false }));

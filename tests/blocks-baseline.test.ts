@@ -65,7 +65,7 @@ import { mintAttempt } from "../src/store/jobs.js";
 import { STEPS } from "../src/pipeline.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { type MemoryArtifactStore, memoryArtefacts } from "./helpers/memory-artefacts.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 import type { Block, OwnerId } from "../src/types.js";
@@ -964,98 +964,24 @@ loadEnvLocal();
  * "0 failures" because it never ran is the thing this project keeps writing
  * postmortems about, so the console line is not optional decoration.
  */
-let reachable = false;
-let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
-/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
-let kind: MissingKind = "no-url";
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  kind = "migration";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.revision_blocks') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-    if (reachable) {
-      /* The column, not the table. `readBlocks` selects it, so without it every
-         read fails for a reason that has nothing to do with the baseline. */
-      const migrated = await pool.query(
-        "select 1 from information_schema.columns where table_schema = 'spideryarn' " +
-          "and table_name = 'revision_blocks' and column_name = 'role'",
-      );
-      reachable = migrated.rowCount === 1;
-      if (!reachable) {
-        why =
-          "drizzle/0027_block_roles.sql is not applied — revision_blocks has no `role` column, " +
-          "and src/store/artifacts-pg.ts selects it, so every block read fails. " +
-          "Run `npm run db:migrate` (check its Target: line first) and these will run.";
-      }
-    }
-  } catch (err) {
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-}
 /**
- * **Say, under the reporter `npm test` actually uses, that these did not run.**
+ * **The column, not merely the table.** `readBlocks` selects `role`, so a
+ * database that has `revision_blocks` and not that column fails every assertion
+ * below for a reason that has nothing to do with the baseline — which is exactly
+ * what `pgReady`'s `columns` is for.
  *
- * `process.stderr.write`, and the reason it is not `console.warn` is the whole
- * content of this comment — three attempts got it wrong before a measurement got
- * it right.
- *
- * | mechanism | shown by vitest 4.1.11's default reporter |
- * |---|---|
- * | `it.skip("reason in the name")` | no |
- * | `it.todo("reason in the name")` | no |
- * | `console.warn` at module level | no |
- * | `console.warn` **inside a passing test** | no |
- * | `ctx.annotate(msg, "warning" / "notice")` | no |
- * | **`process.stderr.write(…)`** | **yes** |
- *
- * All six were measured in a throwaway suite, not reasoned about, and the five
- * negatives are the useful part: they are what stops the next person re-running
- * the same probes.
- *
- * **The rule they add up to**, which is not the one this file claimed twice:
- * it is *not* that the reporter swallows collection-time output. Vitest's
- * default reporter swallows **intercepted `console` output from anything that is
- * not failing, wherever it happens**. The interception is the mechanism, not the
- * timing. That is why moving the warning into a test body did not help, and why
- * putting the reason in a test name was never going to work — the default
- * reporter prints counts, not names. `process.stderr.write` is not intercepted,
- * so it goes straight out, from module scope, and survives a multi-file run
- * (checked against this file and `tests/blocks.test.ts` together).
- *
- * **Unconditional, and it took a run to notice why.** The first version warned
- * only inside `if (process.env.DATABASE_URL)`, so the one case that printed
- * nothing at all was a missing `DATABASE_URL` — a silent skip, inside the block
- * written to prevent silent skips. Every road to `reachable === false` now says
- * why.
- *
- * Not a failing test, deliberately: a missing database is a fact about a laptop
- * rather than a defect, and reddening `npm test` for everyone without a local
- * Postgres is not what a skip is for. **Unless the run has said otherwise** —
- * `REQUIRE_POSTGRES=1` is for a run whose whole point is to prove a machine has
- * a working database, and there a skip is the wrong answer.
+ * This was forty lines of hand-rolled probe until 2026-09-05, written before the
+ * helper could ask for a column and kept because it had to *skip loudly*. It
+ * does not skip any more: there is one store, so a database this suite cannot
+ * use is a failure. tests/helpers/pg-ready.ts.
  */
-if (!reachable) {
-  process.stderr.write(
-    `\n  ⚠ the Postgres half of tests/blocks-baseline.test.ts is NOT RUNNING.\n` +
-      `    These four assertions have not executed: ${why}\n\n`,
-  );
-  failIfPostgresRequired("tests/blocks-baseline.test.ts", why, kind);
-}
-const when = reachable ? describe : describe.skip;
+await pgReady({
+  suite: "tests/blocks-baseline.test.ts",
+  tables: ["spideryarn.revision_blocks"],
+  columns: [{ table: "spideryarn.revision_blocks", column: "role" }],
+});
 
-when("the baseline, over the Postgres store", () => {
+describe("the baseline, over the Postgres store", () => {
   const SLUG = "test-blocks-baseline";
   const FRESH_SLUG = "test-blocks-baseline-new";
 

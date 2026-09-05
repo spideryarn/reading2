@@ -66,27 +66,11 @@
  * grant without rewriting the record* is a claim about a `GET` not writing, and
  * no mutation of the adapter's read path was run against it.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/upload-records.ts` picks its adapter **once, at module load** — `const
- * store: UploadStore = STORE === "postgres" ? pgUploadStore : fsUploadStore` —
- * and imports are hoisted above every statement in a module, so a plain
- * assignment here would leave every case below on the filesystem records with
- * nothing saying so.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { GRANT_TTL_MS, stagingKey } from "../src/source.js";
-import { STORE } from "../src/store/live.js";
 import {
   asOf,
   claimUpload,
@@ -100,28 +84,11 @@ import {
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/upload-records.test.ts",
   tables: ["spideryarn.uploads"],
-});
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on `reachable`: a control that vanishes when the database is
-       missing vanishes exactly when it matters. The filesystem records answer
-       every call below perfectly happily, and every claim this file makes would
-       then be a claim about the adapter being deleted. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 const made: string[] = [];
@@ -130,7 +97,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  if (reachable) await closeDb();
+  await closeDb();
 });
 
 /** A stand-in issuer. The real one is Supabase; nothing here is about Supabase. */
@@ -157,7 +124,6 @@ const READER = "11111111-1111-4111-8111-111111111111";
 const SOMEBODY_ELSE = "22222222-2222-4222-8222-222222222222";
 
 beforeAll(async () => {
-  if (!reachable) return;
   await seedAuthUser(getDb(), {
     id: READER,
     email: "upload-records-reader@spideryarn.local",
@@ -175,7 +141,7 @@ async function mint(filename = "paper.pdf", ttlMs = GRANT_TTL_MS) {
   return minted;
 }
 
-when("minting an upload", () => {
+describe("minting an upload", () => {
   it("gives it an id of ours and a grant for a key derived from that id", async () => {
     const minted = await mint();
     expect(isUploadId(minted.record.id)).toBe(true);
@@ -213,7 +179,7 @@ when("minting an upload", () => {
   });
 });
 
-when("claiming", () => {
+describe("claiming", () => {
   /**
    * The one that costs money if it is wrong. Two callers, no awaits between
    * them, and exactly one may win — which is why the decision is a single
@@ -273,7 +239,7 @@ when("claiming", () => {
   });
 });
 
-when("what a reader is told about an upload", () => {
+describe("what a reader is told about an upload", () => {
   /**
    * A record nobody has touched is still `pending` on disk long after its token
    * stopped working. `asOf` answers about the *grant* — and writes nothing, so
@@ -291,7 +257,7 @@ when("what a reader is told about an upload", () => {
   });
 });
 
-when("settling", () => {
+describe("settling", () => {
   it("refuses a transition the state machine does not allow", async () => {
     const { record } = await mint();
     await expect(settleUpload(record.id, "verified")).rejects.toThrow(/cannot go from pending/);

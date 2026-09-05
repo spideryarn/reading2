@@ -49,7 +49,6 @@ import {
 } from "../store/pg-billing.js";
 import type { BillingRow, Stale } from "../store/pg-billing.js";
 import { allTiers } from "../store/pg-tiers.js";
-import { STORE } from "../store/live.js";
 import { planEndsAt } from "../billing-plan.js";
 import type { BillingSummary, Purchase, ReaderPlan, TierOffer } from "../billing-plan.js";
 import { budgetFor, privateHeadroom } from "./half-units.js";
@@ -133,23 +132,22 @@ export function standingFor(
  * The order of the answers below is the order they rule each other out, and it
  * is not arbitrary:
  *
- * 1. **No Postgres, no quota at all** — `off`. Nothing else would mean anything,
- *    because there is no ledger to count (docs/project/billing.md § *Billing is
- *    a Postgres feature*).
- * 2. **An administrator** — `exempt`, via `isAdmin`: the same hardcoded pair of
+ * 1. **An administrator** — `exempt`, via `isAdmin`: the same hardcoded pair of
  *    uuids the wall uses, so this page and the wall cannot disagree about who is
  *    exempt. They still get the offers and the Portal button, because being
  *    exempt from the *quota* is not being unable to buy or to look at a
  *    subscription they already have.
- * 3. **The stored period does not contain now** — `unknown`. See the header.
- * 4. Otherwise the entitlement decides, and `hasLapsed` separates a reader who
+ * 2. **The stored period does not contain now** — `unknown`. See the header.
+ * 3. Otherwise the entitlement decides, and `hasLapsed` separates a reader who
  *    has never subscribed from one whose plan is over.
+ *
+ * **There was a fourth, and it was first**: with no Postgres the answer was
+ * `off`, because there was no ledger to count. There is one store since
+ * 2026-09-05, so that state cannot arise and `off` is now reachable only from
+ * `BILLING_OFF` — src/billing/config.ts, which is the deliberate switch rather
+ * than the absent database.
  */
 export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSummary> {
-  if (STORE !== "postgres") {
-    return { plan: { kind: "off" }, manageable: false, purchase: { kind: "none" } };
-  }
-
   /* Cached for thirty seconds, which is right here for the same reason it is
      right for admission and wrong for `tierToSell`: this is a read-out, not a
      sale. Nothing chargeable is minted from it. */

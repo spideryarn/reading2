@@ -474,6 +474,12 @@ export interface SummaryNode {
   supplement?: true;
   /** One sentence, from the tree. Present on every internal node stage 4 wrote. */
   gist?: string;
+  /**
+   * The Socratic question under it, on the root and depth-1 nodes only, and
+   * only on trees built after 2026-09-05 — types.ts § `TreeNode.question`.
+   * Absent everywhere else, and the panel simply draws no second line.
+   */
+  question?: string;
   children: SummaryNode[];
 }
 
@@ -534,6 +540,7 @@ export function buildSummaryTree(
       blocks: endRow - startRow + 1,
       ...(apparatus && { supplement: true as const }),
       ...(node.gist !== undefined && { gist: node.gist }),
+      ...(node.question !== undefined && { question: node.question }),
       children,
     };
   };

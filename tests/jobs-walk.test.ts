@@ -132,21 +132,6 @@
  */
 import { vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/jobs.ts` picks its store **once, at module load** — `const store:
- * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
- * hoisted above every statement in a module, so a plain assignment here would
- * leave the whole file on the filesystem queue with nothing saying so.
- * `claimSession` branches on the same constant.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
-
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
@@ -167,53 +152,24 @@ import { STEPS, type PipelineStep, type StepContext, type StepProduct } from "..
 import type { ArtifactParts, ArtifactReads } from "../src/store/artifacts.js";
 import { readsPgArtifacts } from "../src/store/artifacts-pg.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { StoreSession } from "../src/store/session.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
-/**
- * **The flag stays set for the whole file**, and that is a deliberate departure
- * from the other converted suites, which put it back straight after their
- * imports because vitest reuses a worker across files.
- *
- * Two cases below are about a dev-server restart and reach it with
- * `vi.resetModules()` — which gives `src/store/live.ts` a **fresh module load**,
- * and a fresh load re-reads `process.env.SPIDERYARN_STORE`. Restored here, the
- * reloaded copy would pick the filesystem queue, look for the job in
- * `data/_jobs/`, find nothing, and report that Stop reached nobody — a failure
- * that says nothing about Stop. So it is restored in `afterAll` instead, which
- * is late enough for the reload and early enough for the next file.
- */
-const restoreStore = () => {
-  if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-  else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-};
+/* A `restoreStore` closure stood here until 2026-09-05, put back in `afterAll`
+   rather than after the imports because two cases below reload `src/store/live.ts`
+   with `vi.resetModules()` and a fresh load re-read the flag. There is one store,
+   so a reload picks the same one and there is nothing to restore. */
 
 loadEnvLocal();
 
 const OWNER = DEV_OWNER_ID;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/jobs-walk.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
-});
-
-/* At the top level, not inside the gated describe below: a `describe.skip` skips
-   its hooks too, so a run with no database would leave the flag set behind it. */
-afterAll(restoreStore);
-
-describe("the store this walk is actually running on", () => {
-  it("is the Postgres one", () => {
-    /* **Not gated on `reachable`**, deliberately. A flag that failed to take
-       would run every case below against the filesystem queue, which answers
-       all of them happily — and none of the SQL predicates this file exists to
-       constrain would ever be consulted. A control that vanishes when the
-       database is missing vanishes exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /**
@@ -553,9 +509,7 @@ async function fixture(
 
 /* --------------------------------------------------------------- the cases -- */
 
-const when = reachable ? describe : describe.skip;
-
-when("one claim walks the whole job", () => {
+describe("one claim walks the whole job", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -578,18 +532,10 @@ when("one claim walks the whole job", () => {
    * delete-by-slug would hide a case that left one behind.
    */
   afterAll(async () => {
-    try {
-      if (!reachable) return;
-      if (MADE.length) await getDb().delete(jobsTable).where(inArray(jobsTable.id, MADE));
-      for (const article of SEEDED) await article.remove();
-      for (const close of RELOADED) await close().catch(() => undefined);
-      await closeDb();
-    } finally {
-      /* Belt and braces with the top-level `afterAll(restoreStore)` above: this
-         one runs first and puts the flag back before anything else in the
-         worker, and that one runs even when this whole describe is skipped. */
-      restoreStore();
-    }
+    if (MADE.length) await getDb().delete(jobsTable).where(inArray(jobsTable.id, MADE));
+    for (const article of SEEDED) await article.remove();
+    for (const close of RELOADED) await close().catch(() => undefined);
+    await closeDb();
   }, 60_000);
 
   it("runs every step in one call, on one claim and one attempt", async () => {

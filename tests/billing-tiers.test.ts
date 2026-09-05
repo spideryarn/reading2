@@ -498,12 +498,10 @@ describe("currenciesOffered", () => {
 
 /* -------------------------------------------------------------------------- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/billing-tiers.test.ts",
   tables: ["spideryarn.billing_tiers", "spideryarn.billing_tier_prices"],
 });
-const dbIt = reachable ? it : it.skip;
-
 /**
  * **The invariants that used to be compile-time, against the real rows.**
  *
@@ -513,7 +511,7 @@ const dbIt = reachable ? it : it.skip;
  * claim. What is left here is what a CHECK cannot say.
  */
 describe("the seeded tiers", () => {
-  dbIt("has tiers at all, and each is priced in at least one currency", async () => {
+  it("has tiers at all, and each is priced in at least one currency", async () => {
     const tiers = await readTiers();
     expect(tiers.length).toBeGreaterThan(0);
     for (const t of tiers) {
@@ -526,7 +524,7 @@ describe("the seeded tiers", () => {
    * CHECK.** A dearer tier that allowed fewer ingests would be a pricing page
    * nobody could read, and it is exactly the mistake an editable table invites.
    */
-  dbIt("charges more for more", async () => {
+  it("charges more for more", async () => {
     const tiers = (await readTiers()).filter((t) => t.active && t.amounts.usd !== undefined);
     const byPrice = [...tiers].sort((a, b) => (a.amounts.usd ?? 0) - (b.amounts.usd ?? 0));
     for (let i = 1; i < byPrice.length; i++) {
@@ -544,7 +542,7 @@ describe("the seeded tiers", () => {
    * to the base currency — so a customer somewhere would be shown somebody
    * else's price, and nothing but this would say so.
    */
-  dbIt("prices every active tier in every currency we offer", async () => {
+  it("prices every active tier in every currency we offer", async () => {
     const tiers = (await readTiers()).filter((t) => t.active);
     const currencies = currenciesOffered(tiers);
     for (const t of tiers) {
@@ -556,7 +554,7 @@ describe("the seeded tiers", () => {
 
   /* Whole units. A price ending in 37 pence is a converted number that escaped
      rather than a chosen one — see billing.md on why amounts are chosen. */
-  dbIt("prices in round numbers", async () => {
+  it("prices in round numbers", async () => {
     for (const t of await readTiers()) {
       for (const [currency, amount] of Object.entries(t.amounts)) {
         expect(amount % 50, `${t.id} in ${currency} is ${amount}`).toBe(0);

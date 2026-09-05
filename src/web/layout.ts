@@ -134,14 +134,22 @@ export const BLK_SLOT_REM = 1.5;
  * `PROSE_ALONE_MAX_REM * root` would be the whole answer if every term scaled
  * with the root. Two of the gutter's do not: `--blk-slot` is `max(1.5rem, 24px)`,
  * so below a 16px root the gutter stops shrinking and the *rem* width of the
- * cell's left padding goes **up** — 3.7rem at 16, 4.7rem at 12. A single rem
+ * cell's left padding goes **up** — 2.2rem at 16, 2.7rem at 12. A single rem
  * constant therefore cannot be right at every root, and the one that was here
  * under-reserved by 1.2px at 12px and by 12.9px at 9px, silently clipping the
  * measure it exists to protect. GPT Sol's stage 1 review, 2026-09-04.
  *
- * Adding the gutter as its own term instead is exact at every root **and does
- * not move the common ones**: 832px at 16 and 1040 at 20, both unchanged, with
- * only the 12px case widening (624 → 636) — which is the case that was wrong.
+ * Adding the gutter as its own term instead is exact at every root, and when it
+ * landed on 2026-09-04 it did not move the common ones: 832px at 16 and 1040 at
+ * 20, both unchanged, with only the 12px case widening (624 → 636) — which is
+ * the case that was wrong.
+ *
+ * **One slot, not two, since 2026-09-05.** The gutter had a second column for
+ * the reader's bookmark and the bookmark is now in the line, so `--blk-gutter-w`
+ * is `var(--blk-slot)` and this term halves with it: 808px at a 16px root, 1010
+ * at 20, 612 at 12. Greg asked for the margin back — *"especially on mobile we
+ * want the margins either side of the text to be minimal"* — and this is the
+ * half of that a stylesheet cannot state.
  *
  * `Math.round` because a fractional CSS pixel in a table width is a hairline
  * seam, and because every number derived from this is asserted by hand in
@@ -149,7 +157,7 @@ export const BLK_SLOT_REM = 1.5;
  */
 export function proseAloneMaxPx(rootFontPx: number): number {
   const slot = Math.max(BLK_SLOT_REM * rootFontPx, BLK_SLOT_MIN_PX);
-  return Math.round(PROSE_ALONE_MAX_REM * rootFontPx + slot * 2);
+  return Math.round(PROSE_ALONE_MAX_REM * rootFontPx + slot);
 }
 
 /** The root font size everything not told otherwise assumes. */

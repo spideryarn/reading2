@@ -53,9 +53,6 @@ const WATCH_IGNORED = devWatchIgnored(fileURLToPath(new URL(".", import.meta.url
  * nothing for it.
  */
 async function assertStoreReachable(): Promise<void> {
-  const { STORE } = await import("./src/store/live.js");
-  if (STORE !== "postgres") return;
-
   const [{ getDb }, { sql }] = await Promise.all([
     import("./src/db/client.js"),
     import("drizzle-orm"),
@@ -80,12 +77,11 @@ async function assertStoreReachable(): Promise<void> {
   } catch (err) {
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
     throw new Error(
-      `SPIDERYARN_STORE is "postgres", but the database did not answer: ${
+      `The database did not answer: ${
         cause instanceof Error ? cause.message : String(cause)
-      }. Locally: npm run db:start, and check DATABASE_URL in .env.local. To work off the ` +
-        "filesystem instead, put SPIDERYARN_STORE=files in .env.local — that file beats both this " +
-        "script's default and anything you type on the command line (src/env.ts). " +
-        "See docs/project/supabase-local.md.",
+      }. Locally: npm run db:start, and check DATABASE_URL in .env.local — that file beats ` +
+        "anything you type on the command line (src/env.ts). There is one store and it is " +
+        "Postgres, so there is nothing to fall back to. See docs/project/supabase-local.md.",
     );
   } finally {
     clearTimeout(timer);

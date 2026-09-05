@@ -91,7 +91,6 @@ import {
 } from "../store/pg-billing.js";
 import type { Admission, Refused } from "../store/pg-billing.js";
 import { ingestProvenanceOf } from "../store/pg-jobs.js";
-import { STORE } from "../store/live.js";
 import { syncSubscriptionFromStripe } from "./sync.js";
 
 const logger = log("store");
@@ -205,7 +204,6 @@ async function admitIngest(
   slug: string | undefined,
   deps: AdmissionDeps,
 ): Promise<string | null> {
-  if (STORE !== "postgres") return null;
   if (isAdmin(ownerId)) return null;
 
   let admission = await reserveIngest(ownerId, slug);
@@ -290,7 +288,6 @@ export async function withRetrySlot<T>(
   body: (slot: IngestSlot) => Promise<T>,
   deps: AdmissionDeps = {},
 ): Promise<T> {
-  if (STORE !== "postgres") return await body({});
   const previous = await ingestProvenanceOf(intent.jobId, intent.ownerId);
   if (!previous?.ingestEventId) return await body({});
   return await withIngestSlot({ ownerId: intent.ownerId, slug: previous.slug }, body, deps);
@@ -311,7 +308,6 @@ export async function withRetrySlot<T>(
  * built out of a maybe.
  */
 export async function refuseUploadWithoutQuota(ownerId: OwnerId): Promise<void> {
-  if (STORE !== "postgres") return;
   if (isAdmin(ownerId)) return;
   const answer = await ingestEligibility(ownerId);
   if (answer.kind === "refused") throw quotaRefusal(ownerId, answer);

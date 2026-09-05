@@ -49,7 +49,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { throttle, useQueryState } from "nuqs";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
-import { ChevronRight, Palette, Search, Shield, Undo2, User, X } from "lucide-react";
+import { ChevronRight, Search, Shield, Undo2, User, X } from "lucide-react";
 import { isAdmin } from "../admin.js";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
@@ -66,7 +66,7 @@ import {
   sortDirParam,
 } from "./params.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { ADMIN_HREF, DESIGN_HREF, PROFILE_HREF } from "./router.js";
+import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -280,18 +280,19 @@ export function Library({
   return (
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-8">
-        {/* The design reference sits on the masthead line rather than under the
-            strapline, and is deliberately the quietest thing on the page: it is
-            developer furniture, and a reader arriving at their shelf should not
-            have to step over it. Same faint-until-hovered treatment as the
-            back-link in Masthead.tsx, so the two read as one convention. */}
-        {/* Wraps rather than letting the two links crush the wordmark in a
-            narrow window. They keep `justify-between` when they fit and drop to
-            their own line when they do not — and `gap-y-1` keeps that second
-            line off the strapline below. */}
+        {/* The masthead links are deliberately the quietest thing on the page —
+            same faint-until-hovered treatment as the back-link in Masthead.tsx,
+            so the two read as one convention. This paragraph used to argue that
+            the design reference in particular should not be stepped over by a
+            reader arriving at their shelf; it is on /admin since 2026-09-05,
+            which is that argument taken to its conclusion. */}
+        {/* Wraps rather than letting the links crush the wordmark in a narrow
+            window. They keep `justify-between` when they fit and drop to their
+            own line when they do not — and `gap-y-1` keeps that second line off
+            the strapline below. */}
         <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1">
           <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
-          {/* One group, so that once the first card is up the other two open
+          {/* One group, so that once the first card is up its neighbour opens
               instantly as the pointer runs along the row — Tooltip.tsx. The
               delays are the ones the dock and the metadata cards use, because
               this is the same kind of thing: a short row of quiet chrome whose
@@ -302,8 +303,10 @@ export function Library({
               {/* Home is where a global thing gets a way in. The profile page
                   holds what is true of the reader on every article, so a link to
                   it from inside one article would be a link nobody finds —
-                  docs/project/reader-profile.md. Before Design because it is for
-                  the reader and Design is developer furniture. */}
+                  docs/project/reader-profile.md. It used to be ordered before
+                  Design on the grounds that this one is for the reader and that
+                  one was developer furniture; Design left for /admin on
+                  2026-09-05, which settled the argument. */}
               <Tooltip
                 placement="bottom"
                 keepSide
@@ -355,24 +358,17 @@ export function Library({
                   </Link>
                 </Tooltip>
               )}
-              <Tooltip
-                placement="bottom"
-                keepSide
-                content={
-                  <Tip>
-                    Every token, face and component variant on one page — look here after changing
-                    tokens.css.
-                  </Tip>
-                }
-              >
-                <Link
-                  href={DESIGN_HREF}
-                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-                >
-                  <Palette size={13} />
-                  Design
-                </Link>
-              </Tooltip>
+              {/* **Design is not here any more**, since 2026-09-05:
+                  > Move the Design link on the logged-in Homepage into /admin
+                  > — Greg, 2026-09-05 (SPIDERYARN-READING2-1T)
+
+                  It is an `Entry` on the /admin index now (AdminPage.tsx). The
+                  masthead is for things a reader does — their profile, their
+                  shelf — and a page of colour tokens is developer furniture that
+                  every signed-in reader was being shown. Note that moving the
+                  *link* gates nothing: `/design` is still open to anybody signed
+                  in, deliberately, for the reason admin.md gives about the Admin
+                  link beside this one. */}
             </div>
           </TooltipGroup>
         </div>

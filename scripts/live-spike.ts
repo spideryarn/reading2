@@ -26,7 +26,16 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { loadArticle } from "../src/api.js";
+/* **The store's reader, not `src/api.ts`'s.** That one is the *filesystem*
+   reader, and this file used it at both `/session` and `/tool` while its
+   vocabulary and its tools went to Postgres seams — so a slug that exists only
+   in the database could not start a live session, and a stale `data/<slug>/`
+   with the same name fed the model filesystem prose while its tools answered
+   from the Postgres article. Two sources of truth inside one conversation, and
+   nothing to say so. It was invisible while `SPIDERYARN_STORE` chose the
+   default; the hinge of 2026-09-05 made it the only reader left pointing at
+   `data/`. GPT Sol's review of that stage. */
+import { loadArticle } from "../src/store/index.js";
 import { runTool } from "../src/chat-tools.js";
 import { loadEnvLocal } from "../src/env.js";
 import { liveSession, mintLiveToken } from "../src/live.js";

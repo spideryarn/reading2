@@ -111,20 +111,22 @@
  * have to sit behind*, not of a line anybody is keeping. Same in
  * `./corpus-lock.ts` § "Polling is not a queue, and this is not FIFO".
  *
- * ## Call it AFTER `pgReady`, and only when reachable
+ * ## Call it AFTER `pgReady`
  *
- * `pgReady` is probed at module scope with a top-level `await` and gates a real
- * `describe.skip`. A file that is about to skip must not sit holding the lock:
- * it would serialise every other run for no reason, and on a machine with no
- * database at all it would spend the deadline finding that out. So the order is
- * probe, then — only if reachable — lock:
+ * `pgReady` is awaited at module scope and **throws** when this database cannot
+ * serve this suite, so probing first is what stops a file that is going nowhere
+ * sitting on the lock and serialising every other run for no reason. On a
+ * machine with no database at all it would otherwise spend the whole deadline
+ * finding that out. So the order is probe, then lock:
  *
  * ```ts
- * const { reachable } = await pgReady({ suite: "…", tables: ["spideryarn.jobs"] });
- * const lock = reachable ? await takeRunLock("tests/my-suite.test.ts") : undefined;
- * const when = reachable ? describe : describe.skip;
+ * await pgReady({ suite: "…", tables: ["spideryarn.jobs"] });
+ * const lock = await takeRunLock("tests/my-suite.test.ts");
  * afterAll(async () => { await lock?.release(); });
  * ```
+ *
+ * The `reachable` ternary that used to sit between those two lines went with the
+ * boolean, 2026-09-05.
  *
  * ## One take per file
  *

@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."chat_messages" ADD COLUMN "help" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_messages" ADD CONSTRAINT "chat_messages_help_user_only" CHECK ("spideryarn"."chat_messages"."help" = false or "spideryarn"."chat_messages"."role" = 'user');

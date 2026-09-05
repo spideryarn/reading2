@@ -242,6 +242,9 @@ function publicTree(tree: Tree): Tree {
       range: [node.range[0], node.range[1]],
       title: node.title,
       ...opt(node, "gist"),
+      /* Summary mode is a signed-in and a public surface alike, so the question
+         crosses with the gist it sits under. SPIDERYARN-READING2-1V. */
+      ...opt(node, "question"),
       ...opt(node, "navLabel"),
       ...opt(node, "summary"),
       ...opt(node, "sourceHeading"),

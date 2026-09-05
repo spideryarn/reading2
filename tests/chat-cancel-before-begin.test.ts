@@ -149,7 +149,7 @@ async function sendAndCancel(): Promise<{ threadId: string; provisional: string 
   await mount();
   let threadId = "";
   act(() => {
-    threadId = api().send(null, "why?", null, false);
+    threadId = api().send(null, "why?", null, { useProfile: false });
   });
   const provisional = threadIn(threadId)?.messages.find((m) => m.role === "assistant")?.id;
   expect(provisional, "the optimistic answer row is missing").toBeTruthy();
