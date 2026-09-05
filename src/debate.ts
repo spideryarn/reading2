@@ -145,7 +145,15 @@ import type {
   Tree,
 } from "./types.js";
 import { sameTarget } from "./urls.js";
+/* **The two counting helpers live in `types.ts` and are re-exported here**, for
+   the reason the debate *types* do (types.ts § Why these are here and not in
+   src/debate.ts): the panel has to draw the foot line these answer, and
+   tests/client-imports.test.ts will not let `src/web/` import this file — it is
+   a stage with a CLI and two model calls in it. Re-exported rather than
+   imported by every server caller so the stage still has one name for them. */
+import { anyLost, distinctSources } from "./types.js";
 
+export { anyLost, distinctSources };
 export type {
   ClaimDebateRow,
   Debate,
@@ -307,34 +315,6 @@ export function emptyLosses(): DebateLosses {
     unknownBlockId: 0,
     malformed: 0,
   };
-}
-
-/** Did this group lose anything at all? */
-export function anyLost(lost: DebateLosses): boolean {
-  return (
-    lost.uncited +
-      lost.selfSource +
-      lost.unverifiedSource +
-      lost.directnessUnverified +
-      lost.claimNotInBlock +
-      lost.unknownBlockId +
-      lost.malformed >
-    0
-  );
-}
-
-/**
- * **How many distinct pages actually contribute to the rows shown.**
- *
- * The other half of the sentence `returnedSources` exists for: *"The search
- * returned evidence from N pages; M contribute to the rows shown"*, which the
- * foot line prints whenever the two differ. Rows are deliberately **not**
- * deduplicated by URL — one review can answer two different claims, and two
- * rows about one page is a real answer — so the count of rows and the count of
- * pages are different numbers and the sentence needs this one.
- */
-export function distinctSources(rows: readonly { url: string }[]): number {
-  return new Set(rows.map((r) => r.url)).size;
 }
 
 /* --------------------------------------------------------------- the fence -- */

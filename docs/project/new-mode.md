@@ -27,7 +27,7 @@ a hand-kept list falling behind a growing set.
 ## The client
 
 **The vocabulary is `MODES` in [`src/modes.ts`](../../src/modes.ts), and the compiler asks for the
-rest.** A fourteenth word there is red until it has a row in each of these totals:
+rest.** A fifteenth word there is red until it has a row in each of these totals:
 
 | Table | Where |
 |---|---|

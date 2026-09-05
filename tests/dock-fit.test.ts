@@ -244,7 +244,7 @@ describe("the stylesheet backs the ladder", () => {
 
   /**
    * The bar has two shapes — one `.dock-modes` segment on the reading view,
-   * thirteen loose `.dock-mode` links on the metadata and tweets pages. Rung 1
+   * fourteen loose `.dock-mode` links on the metadata and tweets pages. Rung 1
    * knew only the first until GPT Sol found it, so on those pages it did nothing
    * and the ladder went straight to rung 2, taking every label with it.
    */
