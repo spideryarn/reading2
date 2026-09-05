@@ -634,9 +634,7 @@ export function QuotesPanel({
             </ol>
           </div>
 
-          {owner?.quotes && (
-            <Foot quotes={owner.quotes} rerun={rerun} />
-          )}
+          {owner?.quotes && <Foot rerun={rerun} />}
         </>
       )}
     </aside>
@@ -927,27 +925,31 @@ const LABEL: Record<RowScore["key"], string> = {
 };
 
 /**
- * Under the list: who chose these and when, and the one verb.
+ * Under the list: the one verb.
  *
- * The provenance a visitor never sees — `owner.quotes` is the artefact, where
- * the list above is the projection, and that distinction is the same one
- * `GlossaryPanel`'s `Foot` keeps.
+ * **It printed `generator · version` above the button until 2026-09-05**, and
+ * that line went for the reason the glossary's did, on the same day and by the
+ * same instruction — Greg, having read both feet:
+ *
+ * > we can probably get rid of Start again button and the "claude-sonnet-5 ·
+ * > glossary/3 · one pass" at the bottom, those are all confusing and
+ * > unnecessary.
+ *
+ * > also do the same for Quotes (and any other modes as needed)
+ *
+ * Which model wrote a list and which prompt version it used are pipeline facts:
+ * the public projection already drops them for a visitor
+ * (src/public-types.ts), they are still on the artefact and in the export, and
+ * `Metadata` is where an owner can see them
+ * (src/web/Metadata.tsx § `StageRow`). A reader deciding whether to press
+ * *Choose them again* is not helped by either. `Foot` in
+ * src/web/GlossaryPanel.tsx carries the longer version of the argument.
+ *
+ * So this takes no artefact at all now, and `owner.quotes` is read at the call
+ * site only as the *is there a list yet* test for whether to draw the foot.
  */
-function Foot({
-  quotes,
-  rerun,
-}: {
-  quotes: { generator: string; version: string };
-  rerun(label: string, again?: boolean): ReactElement;
-}) {
-  return (
-    <div className="quotes-foot">
-      <p className="quotes-provenance">
-        {quotes.generator} · {quotes.version}
-      </p>
-      {rerun("Choose them again", true)}
-    </div>
-  );
+function Foot({ rerun }: { rerun(label: string, again?: boolean): ReactElement }) {
+  return <div className="quotes-foot">{rerun("Choose them again", true)}</div>;
 }
 
 function Progress(props: {

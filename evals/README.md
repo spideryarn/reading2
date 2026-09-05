@@ -527,7 +527,8 @@ prints the bill, and buys nothing. `--spend` is the only way to spend.
 Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
 `{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
 the flag off and then on, which must come out byte-identical; and three jobs at once at
-`DEFAULT_JOB_CONCURRENCY` for the wall clocks.
+`DEFAULT_JOB_CONCURRENCY` for the wall clocks, with a start barrier so that "at once" is true of the
+measured *step* and not merely of the three promises.
 
 **A pre-spend review refused the first version of it**, and the thirteen findings are worth
 reading before touching any of this — GPT Sol, 2026-09-05. Two of them decide whether the run is
@@ -540,12 +541,16 @@ worth making at all:
   `structure-rebought` fatally. `checkRepeatBoughtItsWave` now takes `structure: "bought" |
   "resumed"`, and a test pins the real token count so the guard can never again fire on the phase
   that is supposed to buy.
-- **$40.90 was never a bound.** A re-asking pass that hands its claim back at its own 740 s deadline
-  is requeued, and the driver re-claimed it immediately — with the slug still named in the re-ask
-  lever, so the next claim ignored the checkpoint rows just written and bought the wave again;
-  `REQUEUE_BUDGET = 2` permits three windows. The run now **stops** a re-asking pass on its first
-  requeue and reports it fatally (`requeueVerdict`), and the estimate prints the $85.30 worst case it
-  is enforcing against rather than leaving it to be discovered.
+- **$40.90 was never a bound, and it still is not one.** A re-asking pass that hands its claim back
+  at its own 740 s deadline is requeued, and the driver re-claimed it immediately — with the slug
+  still named in the re-ask lever, so the next claim ignored the checkpoint rows just written and
+  bought the wave again; `REQUEUE_BUDGET = 2` permits three windows. The run **stops** a re-asking
+  pass on its first requeue, reports it fatally (`requeueVerdict`), goes no further, and **retains**
+  that article and job rather than cleaning them up — deleting the article cascades to the
+  checkpoint rows, which is the paid work the refusal exists to keep. The estimate prints $40.90 as
+  the **nominal estimate** and $85.30 as the **three-window requeue exposure**, and says plainly
+  that neither is a bound: nothing here enforces a spend cap, an ordinary pass can re-buy work whose
+  best-effort checkpoint write failed, and a redraw buys a second answer.
 
 The rest were the same disease in five more places: **an answer computed over evidence that is
 absent, partial or failed, printed as though it were a result.** Every one of Q1–Q5 now has an
@@ -560,7 +565,14 @@ Four things in it are worth copying:
   nothing. `SPIDERYARN_DEEPEN_REASK` names the slugs to re-buy, the run refuses to start unless it
   names the book and neither article, and afterwards `checkRepeatBoughtItsWave` asks the ledger
   whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
-- **Concurrency is measured over the STEPS' windows, never the jobs'.** All three phase-D promises
+- **The load phase is lined up before it is measured, and concurrency is measured over the STEPS'
+  windows, never the jobs'.** The arithmetic demanding three overlapping `hierarchy` windows was
+  right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
+  measured step at once, while the two load articles start at `fetch` and get there only after
+  stages 1-3. The two load jobs are driven first and announce their measured step as it begins; the
+  book is driven only once both have (`startBarrier`), and it waits **outside** a claim, because its
+  own step needs 658-778 s against a 740 s deadline. A barrier that does not open is reported, not
+  waited on for ever. All three phase-D promises
   stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
   agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the
@@ -576,25 +588,38 @@ Four things in it are worth copying:
   overlap deliberately, because one parent can do both and making them disjoint would discard valid
   same-range verdict evidence. The overlap is counted and printed.
 - **The dry run found a real bug on its first pass, and the check written for it was wrong twice
-  over.** `enqueue` ends with `pump()`, which drives the job with the *production* registry;
-  `withoutTheInProcessPump` silences it with one global variable, so two overlapping `enqueue`s race
-  on it and one job goes to the real network with no eval overlay. Queueing is serial now. The
-  check that catches it reads the fixture step's own `detail` — `"1382 KB (fixture book)"` — because
-  the first version matched the DNS error text, and the queue replaces a failed step's message with
-  a reader-facing sentence: that version was watched printing "none" over a run where **every fetch
-  had gone to the network**.
+  over.** `enqueue` ends with `pump()`, which drives the job with the *production* registry; the
+  silencer of the day was `withoutTheInProcessPump`, one global variable, so two overlapping
+  `enqueue`s raced on it and one job went to the real network with no eval overlay. **That silencer
+  is gone** — `enqueue` takes `pump: false` on the request now (`src/jobs.ts` § `pump`, 2026-09-05),
+  so the hazard is per-request and there is no global left to race on; the queueing here is
+  sequential because it reads better, not because anything depends on it. What the episode left
+  behind is the check, and it is kept because it outlived its bug: it reads the fixture step's own
+  `detail` — `"1382 KB (fixture book)"` — because the first version matched the DNS error text, and
+  the queue replaces a failed step's message with a reader-facing sentence, so that version was
+  watched printing "none" over a run where **every fetch had gone to the network**.
 
 `report.ts` is the arithmetic and has no IO; `harness.ts` owns the ingress, the levers and the free
 seam probe; `run.ts` only drives and prints. Everything the cost eval already proved — the eval
-spend overlay, the fixture stage-1 step, the pump silencer, the local-database gate — is imported
-from `cost/harness.ts` rather than copied. The book and the article are named on the command line
+spend overlay, the fixture stage-1 step, the local-database gate — is imported from `cost/harness.ts`
+rather than copied. The book and the article are named on the command line
 and hashed at run time, because `output/` is gitignored and a checked-in manifest pointing at a file
 nobody else has would break the cost eval for everybody.
 
 **What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
-a model call, so every dry-run job stops at its last free step and fails. It proves the driving —
-the fixture ingress, the force, the serial repeats, the concurrent load phase — and says so rather
-than printing a table of zeroes.
+a model call, so every dry-run job stops at its last free step and fails — and because a failed job's
+draft revision is rolled back, every job *after* the first on the same slug fails at once too. It
+proves the driving — the fixture ingress, the force, the serial repeats, the start barrier, the
+concurrent load phase, the cleanup — and says so rather than printing a table of zeroes.
+
+**Run it before you run anything that spends**, and read the last line as well as the first. On
+2026-09-05 it died at its very first `enqueue` — `dev` had merged in a rule refusing `blocks`
+without `hierarchy`, which is exactly what the free step list asked for — created nothing, and
+printed its entire closing report on the way down: an empty driving table, `Findings: none`, a
+written `run.json`. Three things came out of that and are the reason to trust it now: the step lists
+are checked against the queue's own rule before anything is enqueued, the summaries can say *there
+was nothing here*, and a run that died says so at the top rather than in its last line.
+[260905b](../docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md).
 
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 
