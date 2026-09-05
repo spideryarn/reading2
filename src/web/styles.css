@@ -9623,8 +9623,14 @@ line.diag-now {
   white-space: nowrap;
 }
 
-.chat-dialog-close,
-.chat-dialog-stop {
+/* **`.chat-dialog-stop` was here until 2026-09-05 and nothing writes it now.**
+   It dressed the header's ✕ while it meant "cancel and throw this away", which
+   the "?" in the gutter turned into a trap — see the long note on `stopControl`
+   in ChatDialog.tsx. The discard moved to the footer and wears
+   `.chat-dialog-delete` below, which already paints destructive on hover, so
+   this rule went with the markup rather than being left for the next reader to
+   prove is dead (design-css-overview.md makes that the rule). */
+.chat-dialog-close {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -9639,11 +9645,6 @@ line.diag-now {
   cursor: pointer;
 }
 .chat-dialog-close:hover { color: var(--highlight); }
-/* The destructive one, and it is deliberately not called "Stop": chat's stop
-   keeps what arrived, on purpose. Two controls a word apart, one of which
-   destroys a conversation, is how a reader loses one. */
-.chat-dialog-stop.cancel { color: var(--ink-soft); }
-.chat-dialog-stop.cancel:hover { color: var(--destructive); }
 
 .chat-dialog-body {
   flex: 1 1 auto;

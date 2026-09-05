@@ -422,15 +422,21 @@ export function BlockGutter({
           — Greg asked for it *"underneath the comment one"* and the pad is what
           that became once four 24px targets would not stack.
 
-          **What it says is what it does, and today that is less than it will
-          be.** It opens the composer with the paragraph's *opening* shown above
-          it — `chatAboutBlock` passes `opening`, and the composer itself is
-          empty; the anchor carries only the `blockId`, no quote — and it sends
-          nothing. So "Ask for help with this paragraph" is the whole promise; "Explain this" would be a button reporting an answer nobody
-          has bought yet, which is the shape of failure
-          docs/reusable/silent-success.md is about. GPT Sol made this the
-          condition on stage 2 being coherent on its own, and the sentence
-          changes when the behaviour does.
+          **What it says is what it does, and as of stage 3 that includes
+          spending money.** One press sends — no composer, no confirmation —
+          so the label has to say so before the finger lands. "Explain this
+          paragraph" would be the button reporting an answer, which is the shape
+          of failure docs/reusable/silent-success.md is about; "Ask the AI" says
+          who pays and what happens. Through stage 2 it read *"Ask for help with
+          this paragraph"*, which promised a question and delivered a composer,
+          and an exact-string test pinned it precisely so that this sentence
+          could not change behind the behaviour. GPT Sol's condition on stage 2
+          being coherent on its own.
+
+          **`title` and `aria-label` diverge here, as they do for the permalink
+          above.** The tooltip has room to name the cost; the accessible name is
+          read out on focus, in a gutter where four of them go past in a row, so
+          it stays to the verb.
 
           Same `CircleHelp` at `size={12}` as the other three glyphs: stage 1
           grew the hit box to 24px and deliberately left the ink alone, because
@@ -445,8 +451,8 @@ export function BlockGutter({
             e.stopPropagation();
             onHelp(id);
           }}
-          title="Ask for help with this paragraph"
-          aria-label="Ask for help with this paragraph"
+          title="Ask the AI for help with this paragraph"
+          aria-label="Ask the AI for help"
         >
           <CircleHelp size={12} aria-hidden="true" />
         </button>

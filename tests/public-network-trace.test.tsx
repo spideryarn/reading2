@@ -670,7 +670,7 @@ const chatButtons = () =>
  */
 const helpButtons = () =>
   [...host.querySelectorAll("button")].filter(
-    (b) => b.getAttribute("aria-label") === "Ask for help with this paragraph",
+    (b) => b.getAttribute("aria-label") === "Ask the AI for help",
   );
 
 /**
@@ -2392,6 +2392,54 @@ describe("the same address, as the owner", () => {
     const gutters = host.querySelectorAll("a.blk-permalink").length;
     expect(gutters, "the prose must have rendered").toBeGreaterThan(0);
     expect(helpButtons().length).toBe(gutters);
+  });
+
+  /**
+   * **A double-tap on the "?" buys one answer, and this is the only test that
+   * counts actual requests to say so.**
+   *
+   * The unit tests next door reason about `helpThreadFor` and about the
+   * dialog's own latch; neither can see what the reader is charged for. GPT Sol
+   * asked for this one because the App-side guard he was shown had no test at
+   * all — finding 3 of the stage 3 review, and exactly the class this file
+   * already exists to catch for `onHelp` itself.
+   *
+   * ## What it does not do is name a mechanism, and that is deliberate
+   *
+   * Writing it turned up something better than a passing assertion. Three
+   * things could stop the second press spending — the reopen in
+   * `helpAboutBlock`, the dialog's `sentHelpFor` ref, and a `helpArming` ref in
+   * App — and **deleting any one of them leaves this green**, because any two
+   * cover it. That is what retired `helpArming`: a guard whose absence cannot
+   * be observed is one nobody can maintain. The remaining two are each reddened
+   * by a test in `tests/help-sends-once.test.tsx`, and this asserts the
+   * consequence they exist for.
+   *
+   * The structural reason it holds, which is worth knowing before anyone adds a
+   * fourth guard: `helpAboutBlock` only sets a draft. The **send** is an effect
+   * in `ChatDialog`, which mounts once — so two taps before that mount collapse
+   * into one draft and one send, with nothing having to notice.
+   */
+  it("spends once when the '?' is double-tapped", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open();
+
+    const before = trace.filter((r) => r.method === "POST").length;
+    const help = helpButtons()[0] as HTMLButtonElement;
+    expect(help, "there must be a '?' to press").toBeTruthy();
+
+    /* **Both clicks inside one `act`, which is what makes this a double-tap
+       rather than two presses.** Split across two `act` calls React commits in
+       between, the draft is already set, and the second press would be caught by
+       rendered state instead — which is the guard that was never in doubt. */
+    await act(async () => {
+      help.click();
+      help.click();
+    });
+
+    const posts = trace.filter((r) => r.method === "POST");
+    expect(posts.length - before, `POSTs: ${posts.map((p) => p.url).join(", ")}`).toBe(1);
+    expect(posts[posts.length - 1]?.url).toContain("/api/chat/");
   });
 
   /**
