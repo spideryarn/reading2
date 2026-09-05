@@ -132,12 +132,10 @@ const SLUG = "comment-sweep-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000c1";
 const BLOCK_ID = "spya-aaa222";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/comment-sweep.test.ts",
   tables: ["spideryarn.comments"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * Create, fail, retry — the only path that still produces a `pending` comment.
@@ -174,7 +172,7 @@ const expire = (id: string) =>
     .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
     .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, id)));
 
-when("the Postgres comment sweep", () => {
+describe("the Postgres comment sweep", () => {
   beforeAll(async () => {
     const db = getDb();
     await db

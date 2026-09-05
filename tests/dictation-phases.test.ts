@@ -162,8 +162,15 @@ class SafariRecognition extends FakeRecognition {
   }
 }
 
+/**
+ * Every track the fake `getUserMedia` has handed out, so that a test can pose
+ * the device going away — `r.onerror` consults `readyState` to decide whether a
+ * recogniser failure is the end of the dictation or the end of the decoration.
+ */
+let tracksHandedOut: MediaStreamTrack[] = [];
+
 function fakeTrack() {
-  return {
+  const track = {
     readyState: "live",
     muted: false,
     addEventListener: (name: string, fn: () => void) => {
@@ -174,6 +181,8 @@ function fakeTrack() {
       tracksStopped++;
     },
   } as unknown as MediaStreamTrack;
+  tracksHandedOut.push(track);
+  return track;
 }
 
 /**
@@ -203,14 +212,41 @@ function talkFor(ms: number) {
 }
 let transcribeCalls = 0;
 let transcribeFails = false;
+/**
+ * What a failing transcription answers with.
+ *
+ * A number rather than a boolean, because *which* failure it is decides whether
+ * a Retry is offered at all — `retryable` in `dictation-upload.ts`. 502 is a
+ * service that broke and is worth another go; 503 from this endpoint is only
+ * ever a server with no API key, which no amount of pressing will fix.
+ */
+let transcribeStatus = 502;
+/**
+ * Hold the *next* transcription request open until the test lets it go.
+ *
+ * Needed for one property only, and that property cannot be tested without it:
+ * a stale retry must lose to a newer dictation **that has already finished**.
+ * Without a gate the fake `fetch` resolves on the next microtask, so the retry
+ * always answered while the second dictation was still armed — and was dropped
+ * by a different guard than the one under test. The test passed and proved
+ * nothing, which is the shape docs/reusable/silent-success.md is about.
+ */
+let heldRequest: (() => void) | null = null;
+let holdNext = false;
 
 function install(Ctor: typeof FakeRecognition) {
   vi.stubGlobal("MediaRecorder", FakeRecorder);
   vi.stubGlobal("fetch", async (url: string) => {
     if (!String(url).includes("/api/transcribe")) throw new Error(`unexpected fetch: ${url}`);
     transcribeCalls++;
+    if (holdNext) {
+      holdNext = false;
+      await new Promise<void>((release) => {
+        heldRequest = release;
+      });
+    }
     if (transcribeFails) {
-      return new Response(JSON.stringify({ error: "nope" }), { status: 502 });
+      return new Response(JSON.stringify({ error: "nope" }), { status: transcribeStatus });
     }
     return new Response(JSON.stringify({ text: transcriptReply, ms: 1 }), {
       status: 200,
@@ -355,12 +391,16 @@ beforeEach(() => {
   gumRejects = false;
   transcribeCalls = 0;
   transcribeFails = false;
+  transcribeStatus = 502;
+  heldRequest = null;
+  holdNext = false;
   clock = 0;
   const realNow = Date.now.bind(Date);
   const base = realNow();
   vi.spyOn(Date, "now").mockImplementation(() => base + clock);
   transcriptReply = "THE SERVER SAID THIS";
   tracksStopped = 0;
+  tracksHandedOut = [];
   endedListeners = [];
   vi.stubGlobal("requestAnimationFrame", () => 1);
   vi.stubGlobal("cancelAnimationFrame", () => {});
@@ -541,6 +581,278 @@ describe("one microphone, shared or not at all", () => {
     h.unmount();
   });
 
+  /**
+   * **A Retry that sends the same recording again.** Greg, 2026-09-05: *"If the
+   * error appears afterwards, we should add a Retry button."*
+   *
+   * Feasible because the audio is already kept for the download offer, so this
+   * is a button over a `Blob` that is in memory anyway rather than a second
+   * recording path. Offered only where that `Blob` is kept — when nothing
+   * landed in the box at all — which is also the only case where the reader has
+   * lost something. See the plan for why the other case is deferred.
+   */
+  it("offers a retry after a failed transcription, and sends the same audio", async () => {
+    transcribeFails = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().error).not.toBeNull();
+    expect(h.get().recording).not.toBeNull();
+    expect(h.get().canRetry).toBe(true);
+    expect(transcribeCalls).toBe(1);
+
+    transcribeFails = false;
+    act(() => h.get().retry());
+    await drain();
+    expect(transcribeCalls).toBe(2);
+    expect(h.transcripts).toEqual(["THE SERVER SAID THIS"]);
+    /* The failure is cleared along with the offer: leaving either up beside a
+       transcript that did arrive tells the reader something untrue. */
+    expect(h.get().error).toBeNull();
+    expect(h.get().recording).toBeNull();
+    expect(h.get().canRetry).toBe(false);
+    expect(h.get().phase).toBe("idle");
+    h.unmount();
+  });
+
+  it("puts the failure and the audio back when a retry fails too", async () => {
+    transcribeFails = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    act(() => h.get().retry());
+    await drain();
+    expect(transcribeCalls).toBe(2);
+    expect(h.transcripts).toEqual([]);
+    expect(h.get().error).not.toBeNull();
+    expect(h.get().recording).not.toBeNull();
+    /* Still offered. A second blip is not evidence that a third try is
+       hopeless, and the audio is right there. */
+    expect(h.get().canRetry).toBe(true);
+    expect(h.get().phase).toBe("idle");
+    h.unmount();
+  });
+
+  it("does not offer a retry when the transcription worked and heard nothing", async () => {
+    /* `[mic-silent]` is a *success* with an empty transcript — the model heard
+       no speech. The audio is offered back so the reader can hear what we
+       heard, but sending the same silence again would spend a model call to
+       produce the same nothing. */
+    transcriptReply = "";
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().error).toMatch(/didn't catch any words/i);
+    expect(h.get().recording).not.toBeNull();
+    expect(h.get().canRetry).toBe(false);
+    h.unmount();
+  });
+
+  it("closes the box while a retry is in flight", async () => {
+    /* `transcribing` is what makes the text box `readOnly` and the microphone
+       button dead. A retry is the same two seconds as the first attempt and
+       needs the same protection: an edit landing mid-flight is the problem the
+       closed box exists to delete. */
+    transcribeFails = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    transcribeFails = false;
+    act(() => h.get().retry());
+    expect(h.get().phase).toBe("transcribing");
+    expect(h.get().transcribing).toBe(true);
+    await drain();
+    expect(h.get().phase).toBe("idle");
+    h.unmount();
+  });
+
+  it("offers no retry for a failure that pressing a button cannot fix", async () => {
+    /* A 503 here is `[mic-not-set-up]` — this server has no API key. copy.md
+       calls that the `ours` kind: nothing the reader can do, and offering a
+       Retry is the mistake that file singles out, because they press it five
+       times and conclude the app is broken. The audio is still kept and still
+       downloadable; it is the button that is wrong, not the keeping. */
+    transcribeFails = true;
+    transcribeStatus = 503;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().error).not.toBeNull();
+    expect(h.get().recording).not.toBeNull();
+    expect(h.get().canRetry).toBe(false);
+    h.unmount();
+  });
+
+  it("ends rather than listening to nothing when the recogniser dies and no tape can be made", async () => {
+    /* **The dead end the degradation opened.** Once a recogniser error stops
+       ending the dictation, the tape is the only source of words left — and
+       `recordTrack` returns null when every container this browser offers
+       refuses to start. Carrying on there leaves the microphone armed with no
+       live words, no recording and no five-minute cap, under a strip promising
+       words when the reader stops. GPT Sol's code review, D2. */
+    vi.stubGlobal(
+      "MediaRecorder",
+      Object.assign(
+        class {
+          constructor() {
+            throw new Error("this browser will not record anything");
+          }
+        },
+        { isTypeSupported: () => true },
+      ),
+    );
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onerror?.({ error: "network" }));
+    await drain();
+    expect(h.get().armed).toBe(false);
+    expect(h.get().phase).toBe("idle");
+    expect(h.get().error).toMatch(/\[mic-no-tape\]/);
+    expect(h.ends).toHaveLength(1);
+    h.unmount();
+  });
+
+  it("does not offer a second dictation the first one's audio", async () => {
+    /* **The one that would have put the wrong words in the box.** `start()` used
+       to clear the *displayed* recording and leave `retryable` holding the
+       previous dictation's audio — so a second dictation that failed showed a
+       Retry button which cheerfully re-transcribed the first one. Nothing on
+       screen distinguishes the two. GPT Sol's code review, D1. */
+    transcribeFails = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().canRetry).toBe(true);
+
+    /* A second dictation, which the reader abandons before anything is
+       recorded — so there is nothing new to retry. */
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(h.get().canRetry).toBe(false);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().canRetry).toBe(false);
+    /* And pressing it anyway does nothing, rather than sending the first
+       dictation's audio. */
+    const before = transcribeCalls;
+    act(() => h.get().retry());
+    await drain();
+    expect(transcribeCalls).toBe(before);
+    h.unmount();
+  });
+
+  it("lets a retry lose to a newer dictation that has already stopped", async () => {
+    /* The window `session.current` alone did not close: `finish()` clears that
+       ref *before* the new dictation's own upload resolves, so a stale retry
+       landing in the gap passed the guard, published its transcript and set the
+       phase to idle underneath the newer one. `retryGeneration` is what closes
+       it. GPT Sol's code review, D1, second half. */
+    transcribeFails = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().canRetry).toBe(true);
+
+    transcribeFails = false;
+    /* The retry's request is held open, so that the second dictation can run
+       all the way to its end while the first one's answer is still in flight —
+       which is the window, and the only way to stand in it. */
+    holdNext = true;
+    act(() => h.get().retry());
+    await drain();
+    expect(heldRequest).not.toBeNull();
+
+    transcriptReply = "THE SECOND DICTATION";
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.transcripts).toEqual(["THE SECOND DICTATION"]);
+
+    /* Now let the retry answer. `session.current` is null by this point —
+       `finish()` cleared it — so the session check alone would let it through. */
+    transcriptReply = "THE STALE RETRY";
+    act(() => heldRequest?.());
+    await drain();
+    expect(h.transcripts).toEqual(["THE SECOND DICTATION"]);
+    expect(h.get().phase).toBe("idle");
+    h.unmount();
+  });
+
+  it("lets a new dictation started mid-retry win", async () => {
+    /* **The retry runs with no `Session`**, so nothing else stops its answer
+       landing on top of one. A reader who gives up waiting and presses the
+       microphone again would otherwise have the microphone switched off under
+       them when the retry resolved — `setPhase("idle")` on a dictation that is
+       genuinely open — and a stale transcript spliced into it. */
+    transcribeFails = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().canRetry).toBe(true);
+
+    transcribeFails = false;
+    act(() => h.get().retry());
+    /* And now, before the retry can answer, they start again. */
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    await drain();
+    expect(h.get().armed).toBe(true);
+    expect(h.transcripts).toEqual([]);
+    talkFor(4000);
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.transcripts).toEqual(["THE SERVER SAID THIS"]);
+    h.unmount();
+  });
+
   it("says so, and keeps the audio, when the transcription fails", async () => {
     /* On Chromium the live words are still in the box, so this is the reader
        having the worse version rather than nothing. Elsewhere it is the whole
@@ -682,18 +994,123 @@ describe("ending, and the promise that it saves", () => {
     h.unmount();
   });
 
-  it("fires onEnd on a `network` error, which is the case that used to lose text", async () => {
+  it("fires onEnd on a recogniser error with no live track, which is the case that used to lose text", async () => {
     /* Before this, dictated words were committed by the stop button and by
        nothing else. An error ended the session with the confirmed text sitting
-       unsaved in a box the reader believed had taken it. */
+       unsaved in a box the reader believed had taken it.
+
+       **The premise moved on 2026-09-05 and the invariant did not.** It used to
+       be enough that the recogniser had failed; now a recogniser failure ends
+       the dictation only when our own track has gone too, because otherwise
+       there is still a microphone open and a tape to make. What is unchanged,
+       and is what this test is for, is that **an ending always fires `onEnd`** —
+       the change narrows what counts as an ending rather than loosening that. */
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    /* The device walked out of the room a moment before the recogniser noticed
+       anything. `readyState` is what `r.onerror` consults. */
+    for (const t of tracksHandedOut) Object.assign(t, { readyState: "ended" });
+    act(() => latest().onerror?.({ error: "network" }));
+    expect(h.ends).toHaveLength(1);
+    expect(h.get().phase).toBe("idle");
+    /* **The microphone, not the connection.** Both events fire on an unplugged
+       headset and they race; whichever wins used to decide what the reader was
+       told, so the same hardware failure sent them either to reconnect a device
+       or to check their wifi. The track is the authority on the track.
+       GPT Sol's code review, E1. */
+    expect(h.get().error).toMatch(/disconnected/i);
+    expect(h.get().error).not.toMatch(/internet/i);
+    h.unmount();
+  });
+
+  it("takes over the timer and the tape when the recogniser dies before it ever opened", async () => {
+    /* **The case GPT Sol's plan review caught (F6).** `audiostart` is the zero
+       for the timer, for the word "listening" and for the recorder — so a
+       version that merely declined to end the session would have left it armed
+       in `opening`, recording nothing, for as long as the reader kept talking.
+       That is worse than the ending it replaced. Our track is open; the
+       recogniser is simply not part of this dictation any more, which is
+       exactly Firefox's situation, and this is Firefox's code path. */
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
     act(() => latest().onerror?.({ error: "network" }));
-    expect(h.ends).toHaveLength(1);
-    expect(h.get().phase).toBe("idle");
-    expect(h.get().error).toMatch(/connection/i);
+    expect(h.get().phase).toBe("listening");
+    expect(h.get().startedAt).not.toBeNull();
+    expect(h.get().error).toBeNull();
+    talkFor(4000);
+    act(() => h.get().toggle());
+    await drain();
+    expect(h.transcripts).toEqual(["THE SERVER SAID THIS"]);
     h.unmount();
+  });
+
+  /**
+   * **The recogniser is decoration, so its dying is not the dictation dying.**
+   *
+   * Greg, 2026-09-05: *"I tried using the microphone input in Feedback and got
+   * a [mic-offline] error."* That code came from here — Chrome's Web Speech
+   * API ships its audio to a server, and a captive portal or a VPN blip makes
+   * it fail. Until this, that ended the recording **mid-sentence**, showed a
+   * message about the reader's internet connection, and told them to press the
+   * microphone again — about a path that had usually worked perfectly, because
+   * the words that get saved come from the tape and not from the recogniser.
+   *
+   * Safari and Firefox have run the whole feature with no recogniser at all
+   * since day one, so this is not a new state: it is the state they are always
+   * in, reached from a different direction.
+   */
+  it("keeps recording when the recogniser dies mid-sentence", async () => {
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    act(() => latest().onresult?.(result([["the words so far", true]])));
+    talkFor(4000);
+
+    act(() => latest().onerror?.({ error: "network" }));
+    expect(h.get().armed).toBe(true);
+    expect(h.ends).toHaveLength(0);
+    /* **Nothing is said**, because nothing has gone wrong for the reader. The
+       strip's own sentence changes from "Listening" to "Listening — the words
+       appear when you stop", which is Safari's sentence and is now true here. */
+    expect(h.get().error).toBeNull();
+    expect(h.get().liveText).toBe(false);
+
+    /* A recogniser fires `end` after it errors. That must not restart it into
+       the same failure, and must not end the dictation either. */
+    act(() => latest().onend?.());
+    expect(h.get().armed).toBe(true);
+    expect(h.get().error).toBeNull();
+
+    /* And the dictation still delivers, which is the whole point. */
+    act(() => h.get().toggle());
+    await drain();
+    expect(h.transcripts).toEqual(["THE SERVER SAID THIS"]);
+    expect(h.ends).toHaveLength(1);
+    h.unmount();
+  });
+
+  it("keeps recording through a recogniser error of any kind, while the track is live", async () => {
+    /* `not-allowed` and `audio-capture` read like microphone failures and are
+       not: this app owns the track itself, the recogniser is merely running on
+       it, and a track that has genuinely gone fires its own `ended` listener
+       (which raises `[mic-unplugged]`). So the gate is *"is the tape still
+       running"*, not a list of codes to trust. */
+    for (const code of ["not-allowed", "audio-capture", "service-not-allowed", "aborted"]) {
+      const h = drive();
+      act(() => h.get().toggle());
+      await settleCapture();
+      act(() => latest().onaudiostart?.());
+      talkFor(4000);
+      act(() => latest().onerror?.({ error: code }));
+      expect(h.get().armed, code).toBe(true);
+      expect(h.get().error, code).toBeNull();
+      act(() => h.get().toggle());
+      await drain();
+      h.unmount();
+    }
   });
 
   it("does not fire onEnd on `no-speech`, which is not an ending", async () => {
@@ -707,12 +1124,16 @@ describe("ending, and the promise that it saves", () => {
     h.unmount();
   });
 
-  it("reports an `aborted` nobody asked for", async () => {
-    // Ours are swallowed by the identity check; this one arrives while the
-    // reader still has the button armed, so it is a real termination.
+  it("reports an `aborted` nobody asked for, once there is no track left either", async () => {
+    /* Ours are swallowed by the identity check; this one arrives while the
+       reader still has the button armed, so it is a real termination — of the
+       *recogniser*. Since 2026-09-05 that ends the dictation only when the
+       microphone has gone as well, which is what this poses. While the track is
+       live it is a decoration failing, and the test above covers that. */
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
+    for (const t of tracksHandedOut) Object.assign(t, { readyState: "ended" });
     act(() => latest().onerror?.({ error: "aborted" }));
     expect(h.get().phase).toBe("idle");
     expect(h.get().error).not.toBeNull();

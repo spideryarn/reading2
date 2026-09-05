@@ -163,27 +163,38 @@
  * written as `process.exitCode = 1` gave `EXIT=1` with the drop still running.
  * So: set the exit code, finish the teardown, and do not throw.
  *
- * ## When there is no local stack
+ * ## When there is no local stack — the preflight, and it fails the command once
  *
- * An unreachable stack is fatal under `REQUIRE_POSTGRES=1` (which `npm run
- * check` sets). Otherwise this provides `null`, and the per-file setup poisons
- * `DATABASE_URL` so that a suite skips loudly instead of quietly finding the
- * shared database. Making the database mandatory is the hinge's job,
- * docs/plans/260903f… § *Making the database required*.
+ * **Fatal, unconditionally, since 2026-09-05.** It used to be fatal only under
+ * `REQUIRE_POSTGRES=1` and otherwise to provide `null`, leaving the per-file
+ * setup to poison `DATABASE_URL` so that ninety suites skipped one at a time.
+ * There is one store since the hinge
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F), so a machine with no database cannot run this application at all, and a
+ * run that reports ninety skips over that is reporting a configuration that does
+ * not exist.
  *
- * **This used to say that `npm test` with Docker off "skips the Postgres suites
- * and says so", and that was not true when it was written.** Measured
- * 2026-09-04 with `DATABASE_URL` on a dead port: twelve private-lane files fail
- * rather than skip, because their fixtures reach the database outside any
- * `pgReady` gate — and nine of the same ten sampled fail identically under the
- * single-project config from *before* the lanes existed. So the lanes did not
- * cause it and this stage cannot claim to have preserved it. `health.test.ts`
- * was the one file that could have been laid at the lanes' door, and it has a
- * gate now. docs/project/testing.md § *With Docker off*.
+ * So this is **the** database check: once, before a single file is collected,
+ * with one message naming what is missing and what to run. The per-file half is
+ * `pgReady`, which asks whether *this* database is migrated far enough for *this*
+ * suite and throws if it is not — neither of them skips any more.
  *
- * ## Only "the stack is not running" may become a skip
+ * **The `REQUIRE_POSTGRES=1` flag is gone from the decision** and stays in
+ * `scripts/check.ts`'s environment harmlessly; nothing reads it.
  *
- * See the `catch` below. Every other failure is a broken factory and is fatal.
+ * **The old note here said `npm test` with Docker off "skips the Postgres suites
+ * and says so", and that was not true when it was written.** Measured 2026-09-04
+ * with `DATABASE_URL` on a dead port: twelve private-lane files failed rather
+ * than skipped, because their fixtures reach the database outside any `pgReady`
+ * gate. That was the argument for making this unconditional rather than the
+ * objection to it. docs/project/testing.md § *With Docker off*.
+ *
+ * ## The message has to name Storage too
+ *
+ * After the hinge every importer of `src/store/index.ts` also needs
+ * `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, because the boot check calls
+ * `postgresBlobStore(...)`, which throws without them. That failure reads as a
+ * database fault unless somebody says otherwise, so the refusal below says it.
  */
 import { Client } from "pg";
 import type { TestProject } from "vitest/node";
@@ -203,7 +214,6 @@ import {
   type Queryable,
   sessionsIn,
 } from "../helpers/db-sessions.js";
-import { postgresRequired } from "../helpers/pg-ready.js";
 import { seedLocalAccounts } from "../helpers/seed-local-accounts.js";
 import { seedPrivateBillingPrices } from "../helpers/seed-private-billing-prices.js";
 
@@ -232,8 +242,11 @@ export interface PrivateDatabase {
 
 declare module "vitest" {
   interface ProvidedContext {
-    /** `null` when there was no reachable stack and none was required. */
-    privateDatabase: PrivateDatabase | null;
+    /**
+     * Never `null`: since 2026-09-05 an unreachable stack fails the command in
+     * `setup` below rather than letting ninety suites skip one at a time.
+     */
+    privateDatabase: PrivateDatabase;
   }
 }
 
@@ -490,26 +503,34 @@ export default async function setup({ provide }: TestProject): Promise<() => Pro
     db = await createTestDatabase();
   } catch (err) {
     /**
-     * **Only "the stack is not running" may become a skip**, and it has to say
-     * so itself — `StackUnreachable`, raised by the three places in the factory
-     * that can mean nothing else.
+     * **Every failure here is fatal, and only one of them gets an explanation.**
      *
-     * This was `catch (err)` until 2026-09-04, which is to say *every* failure
-     * was reported as Docker being off: a failed dump, a failed restore, a
-     * cluster-identity mismatch, a failed migration. Each of those is a broken
-     * factory, and each one silently skipped ninety Postgres suites while
-     * printing a sentence that was not true. GPT Sol found it reviewing T-D,
-     * and it is the same shape as everything in
-     * docs/reusable/silent-success.md: the check shares an assumption with the
-     * bug, because "it threw" was being read as "the machine has no Docker".
+     * `StackUnreachable` — raised by the three places in the factory that can
+     * mean nothing else — is the laptop with Docker off, and it is worth a
+     * sentence saying what to run. Everything else (a failed dump, a failed
+     * restore, a cluster-identity mismatch, a failed migration) is a broken
+     * factory and goes up as it is.
+     *
+     * Until 2026-09-04 the second kind was reported as the first: `catch (err)`
+     * turned a broken factory into "the machine has no Docker" and silently
+     * skipped ninety Postgres suites while printing a sentence that was not
+     * true. GPT Sol found it reviewing T-D. Until 2026-09-05 the first kind was
+     * a skip unless `REQUIRE_POSTGRES=1` said otherwise; there is one store now,
+     * so it is a refusal.
      */
-    if (postgresRequired() || !(err instanceof StackUnreachable)) throw err;
-    /* The laptop-with-Docker-off case. Say it once, loudly, rather than 89
-       times: the per-file setup's poisoned URL is what each suite then reports. */
-    say(`no private database (${(err as Error).message.split("\n")[0]})`);
-    say("the Postgres suites will skip. REQUIRE_POSTGRES=1 makes this a failure.");
-    provide("privateDatabase", null);
-    return async () => {};
+    if (!(err instanceof StackUnreachable)) throw err;
+    const first = (err as Error).message.split("\n")[0];
+    throw new Error(
+      `No database, and every test that touches the store needs one.\n\n` +
+        `  ${first}\n\n` +
+        `  Run: npm run db:start   (docs/project/supabase-local.md)\n\n` +
+        `  This fails the command rather than skipping ninety suites, because there\n` +
+        `  is one store and it is Postgres — a run that skipped over this would be\n` +
+        `  reporting green about a configuration this application does not have.\n` +
+        `  The same applies to Supabase Storage: SUPABASE_URL and\n` +
+        `  SUPABASE_SERVICE_ROLE_KEY are needed by src/store/index.ts at import,\n` +
+        `  and their absence is not a database fault.`,
+    );
   }
 
   const lease = new Client({ connectionString: db.url, application_name: leaseName() });

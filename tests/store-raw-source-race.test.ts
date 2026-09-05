@@ -60,12 +60,10 @@ import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-raw-source-race.test.ts",
   tables: ["spideryarn.raw_sources", "spideryarn.article_revisions"],
 });
-const when = reachable ? describe : describe.skip;
-
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
@@ -78,29 +76,27 @@ const JOB_STEPS: JobStep[] = [{ name: "fetch", label: "Fetching", status: "pendi
 const mine = { slugs: [] as string[], shas: [] as string[] };
 
 afterAll(async () => {
-  if (reachable) {
-    const db = getDb();
-    if (mine.slugs.length) {
-      await db.delete(jobs).where(inArray(jobs.slug, mine.slugs));
-      const rows = await db
-        .select({ id: articles.id })
-        .from(articles)
-        .where(inArray(articles.slug, mine.slugs));
-      const ids = rows.map((r) => r.id);
-      if (ids.length) {
-        await db
-          .update(articles)
-          .set({ currentRevisionId: null })
-          .where(inArray(articles.id, ids));
-        await db.delete(articleRevisions).where(inArray(articleRevisions.articleId, ids));
-        await db.delete(articles).where(inArray(articles.id, ids));
-      }
+  const db = getDb();
+  if (mine.slugs.length) {
+    await db.delete(jobs).where(inArray(jobs.slug, mine.slugs));
+    const rows = await db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(inArray(articles.slug, mine.slugs));
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      await db
+        .update(articles)
+        .set({ currentRevisionId: null })
+        .where(inArray(articles.id, ids));
+      await db.delete(articleRevisions).where(inArray(articleRevisions.articleId, ids));
+      await db.delete(articles).where(inArray(articles.id, ids));
     }
-    for (const sha of mine.shas) {
-      await db.delete(rawSources).where(eq(rawSources.sha256, sha));
-    }
-    await closeDb();
   }
+  for (const sha of mine.shas) {
+    await db.delete(rawSources).where(eq(rawSources.sha256, sha));
+  }
+  await closeDb();
 });
 
 /** A digest nothing in the database can already be holding. */
@@ -199,7 +195,7 @@ async function rowsFor(sha: string): Promise<{ bytes: number; contentType: strin
     .where(and(eq(rawSources.sha256, sha), eq(rawSources.kind, "html")));
 }
 
-when("two writers of one raw document", () => {
+describe("two writers of one raw document", () => {
   it("lets the second one through while the first still holds the row uncommitted", async () => {
     /* **The interleaving, made to happen rather than waited for.** A holds an
        uncommitted `raw_sources` row for a digest Postgres has never seen; B

@@ -505,6 +505,97 @@ the reader sends no breakpoint, so it reads nothing —
 Nothing was red, every artefact was correct and the whole suite passed. It was found by measuring
 money and by nothing else.
 
+## `deepen/` — is the deepening verdict worth obeying, and what does it cost?
+
+```
+npm run eval:deepen -- --book output/2701-h.html --article output/noema-mythology-of-conscious-ai.html
+npm run eval:deepen -- --book … --article … --dry-run           # the same shape, no model call
+npm run eval:deepen -- --book … --article … --repeats 3 --spend # the paid draw, ~$41
+```
+
+**No numbers yet — the harness is built and the paid draw is Greg's to run.** It exists to answer
+the five questions
+[260904d § What the live run must answer](../docs/plans/260904d-deepen-fat-sections.md#stage-5-questions)
+wrote down *before* the money moved, so that a paid run cannot quietly succeed at nothing: is the
+verdict stable across repeats, does the model always say yes, how often does a mechanical bound
+overrule it, what does it cost against the incumbent's $1.00 a book, and does the hierarchy step
+still fit its budget under load.
+
+**Preflight is the default posture**: with no flag it runs every gate, proves the seam for free and
+prints the bill, and buys nothing. `--spend` is the only way to spend.
+
+Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
+`{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
+the flag off and then on, which must come out byte-identical; and three jobs at once at
+`DEFAULT_JOB_CONCURRENCY` for the wall clocks.
+
+**A pre-spend review refused the first version of it**, and the thirteen findings are worth
+reading before touching any of this — GPT Sol, 2026-09-05. Two of them decide whether the run is
+worth making at all:
+
+- **The structure-rebought guard was applied to phase A, where buying the structure call is the
+  whole point.** Moby-Dick's measured structure call is 453,832 input tokens
+  ([the artefact](results/hierarchy-waves-2026-09-04/2701-h.tree.json) § `usage`) against a computed
+  floor of 256,900, so a **successful** $40.90 run would have spent the money and then reported
+  `structure-rebought` fatally. `checkRepeatBoughtItsWave` now takes `structure: "bought" |
+  "resumed"`, and a test pins the real token count so the guard can never again fire on the phase
+  that is supposed to buy.
+- **$40.90 was never a bound.** A re-asking pass that hands its claim back at its own 740 s deadline
+  is requeued, and the driver re-claimed it immediately — with the slug still named in the re-ask
+  lever, so the next claim ignored the checkpoint rows just written and bought the wave again;
+  `REQUEUE_BUDGET = 2` permits three windows. The run now **stops** a re-asking pass on its first
+  requeue and reports it fatally (`requeueVerdict`), and the estimate prints the $85.30 worst case it
+  is enforcing against rather than leaving it to be discovered.
+
+The rest were the same disease in five more places: **an answer computed over evidence that is
+absent, partial or failed, printed as though it were a result.** Every one of Q1–Q5 now has an
+explicit answerability gate, and "not measured" is visibly different from "measured zero" —
+[silent-success.md](../docs/reusable/silent-success.md).
+
+Four things in it are worth copying:
+
+- **The repeat has to buy something, and this is the one that would look fine.** The scoped calls
+  are content-addressed, so a second wave over one article reads its own rows back, makes no call,
+  and reports verdicts identical to the first **by construction** — a perfect stability figure worth
+  nothing. `SPIDERYARN_DEEPEN_REASK` names the slugs to re-buy, the run refuses to start unless it
+  names the book and neither article, and afterwards `checkRepeatBoughtItsWave` asks the ledger
+  whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
+- **Concurrency is measured over the STEPS' windows, never the jobs'.** All three phase-D promises
+  stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
+  phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
+  agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the
+  hierarchy steps' own windows, three of them have to have finished `done` with a wave's stats
+  behind them, and the runtime `jobConcurrency()` is asserted before anything is enqueued.
+- **Repeats are paired on parent-plus-range, never on `where`.** `where` is an ordinal path derived
+  from the answer's own fan-out, so two repeats that split a parent in different places both emit
+  `root > child 1` and a boundary that moved reads as a verdict that held — wrong in the direction
+  that makes the signal look *better* than it is. A record with no range is refused outright rather
+  than paired approximately. Verdict flips, changed fan-out and moved boundaries at equal fan-out
+  are three separate rows that must not be added together — and only **one** of the three pairs is
+  disjoint. A changed fan-out is counted alone; a moved boundary and a surviving child's verdict flip
+  overlap deliberately, because one parent can do both and making them disjoint would discard valid
+  same-range verdict evidence. The overlap is counted and printed.
+- **The dry run found a real bug on its first pass, and the check written for it was wrong twice
+  over.** `enqueue` ends with `pump()`, which drives the job with the *production* registry;
+  `withoutTheInProcessPump` silences it with one global variable, so two overlapping `enqueue`s race
+  on it and one job goes to the real network with no eval overlay. Queueing is serial now. The
+  check that catches it reads the fixture step's own `detail` — `"1382 KB (fixture book)"` — because
+  the first version matched the DNS error text, and the queue replaces a failed step's message with
+  a reader-facing sentence: that version was watched printing "none" over a run where **every fetch
+  had gone to the network**.
+
+`report.ts` is the arithmetic and has no IO; `harness.ts` owns the ingress, the levers and the free
+seam probe; `run.ts` only drives and prints. Everything the cost eval already proved — the eval
+spend overlay, the fixture stage-1 step, the pump silencer, the local-database gate — is imported
+from `cost/harness.ts` rather than copied. The book and the article are named on the command line
+and hashed at run time, because `output/` is gitignored and a checked-in manifest pointing at a file
+nobody else has would break the cost eval for everybody.
+
+**What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
+a model call, so every dry-run job stops at its last free step and fails. It proves the driving —
+the fixture ingress, the force, the serial repeats, the concurrent load phase — and says so rather
+than printing a table of zeroes.
+
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 
 ```

@@ -33,6 +33,40 @@
  * in production.
  */
 
+/**
+ * **The `SPIDERYARN_STORE` tombstone, imported for effect, and this is the
+ * narrowest boundary it could sit at.**
+ *
+ * [`../store/live.ts`](../store/live.ts) refuses `files` — or a typo — at module
+ * load, so it has to be *loaded*, and this file is the one thing everything that
+ * reaches Postgres must cross: `getDb` is exported from here and nowhere else,
+ * `new Pool` / `pg` / `drizzle-orm/node-postgres` appear in this file and no
+ * other, and every module in `src/` that talks to the database imports `getDb`
+ * from here.
+ *
+ * **It was in `src/store/index.ts` for about a day and that was not enough.**
+ * That is the reader wiring hub — the obvious front door, and only one door:
+ * `src/jobs.ts` binds `pgJobStore` without going near it (deliberately, to avoid
+ * an import cycle), `src/upload-records.ts` and `src/store/ai-calls.ts` do the
+ * same for their seams, and `scripts/stage.ts` and `evals/cost/run.ts` reach
+ * Postgres through those instead. Measured 2026-09-05 with the flag set to
+ * `files`: `store/index.js` refused, and `jobs.js`, `pg.js`, `db/client.js`,
+ * `upload-records.js` and `ai-calls.js` all booted clean — as did
+ * `evals/cost/run.ts --list`, which is a command that spends money.
+ *
+ * **The rule that generalises, and stage G needs it**: a side-effecting import
+ * belongs at the narrowest boundary everything must cross, not at the most
+ * obvious front door. A front door is whichever door you happened to walk
+ * through. docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F.
+ *
+ * **First, above every other import**, so the refusal precedes anything that
+ * might fail for a duller reason.
+ * `tests/store-flag-refused-at-boot.test.ts` is what goes red if this line moves
+ * — it imports each root in a child process and requires the child to die.
+ */
+import "../store/live.js";
+
 import { basename } from "node:path";
 
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";

@@ -13,15 +13,21 @@
  * refusing for entirely the wrong reason. The byte-level checks — magic and
  * checksum — belong to the acquisition step and are tested with it.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleApi, parseJobRequest } from "../src/routes.js";
 import { slugFromFilename, slugWithShortId } from "../src/ingest.js";
 import { forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
-import { forgetForTests, fsJobStore } from "../src/store/jobs-fs.js";
+import { eq, inArray } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { jobs as jobsTable } from "../src/db/schema.js";
+import { bareArticles, removeBareArticles } from "./helpers/bare-article.js";
+import { mintAttempt } from "../src/store/jobs.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
 import { stagingKey } from "../src/source.js";
-import type { OwnerId } from "../src/owner.js";
+import { runAsOwner, type OwnerId } from "../src/owner.js";
 import type { JobStep } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
 
@@ -44,9 +50,32 @@ const OWNER = TEST_SUB as OwnerId;
 const minted: string[] = [];
 /** Staging objects this file wrote, so `land` can be undone. */
 const landed: string[] = [];
+/** Job ids this file's requests queued. See the note on the delete below. */
+const queued: string[] = [];
+/** Article rows this file seeded so that `enqueue` would accept a mode job. */
+const seededSlugs: string[] = [];
 afterEach(async () => {
+  /* **Jobs first, and by SQL rather than through `forgetJob`.**
+     `jobs.upload_id` is a foreign key into `uploads`, so an upload cannot go
+     while a job names it — and `pgJobStore.forget` only deletes a **terminal**
+     job. Every job here is left `queued`, on purpose: `VERCEL=1` stops the pump
+     so that the second request in each case is not racing an ingest. So the
+     polite route cannot clean up after these and a direct delete has to.
+     Only ids this file's own responses named. */
+  if (queued.length > 0) {
+    await getDb()
+      .delete(jobsTable)
+      .where(inArray(jobsTable.id, queued.splice(0)));
+  }
   for (const id of minted.splice(0)) await forgetUpload(id);
   for (const key of landed.splice(0)) await blobStore().remove(key);
+  if (seededSlugs.length > 0) {
+    await runAsOwner(OWNER, () => removeBareArticles(seededSlugs.splice(0), OWNER));
+  }
+});
+
+afterAll(async () => {
+  await closeDb();
 });
 
 /**
@@ -168,32 +197,38 @@ describe("what POST /api/jobs will accept as an origin", () => {
  * this fail quietly.
  */
 describe("whether this installation can take an upload at all", () => {
-  it("refuses where a record would not survive to the next request", async () => {
+  /**
+   * **It always can, since 2026-09-05, and this is the case that used to say
+   * otherwise.**
+   *
+   * `recordsSurviveTheRequest` was `STORE === "postgres" || !process.env.VERCEL`
+   * and this block asserted both arms: `VERCEL=1` on the filesystem store
+   * answered `false`, and `POST /api/uploads` refused with 503 — because a
+   * serverless function's disk is neither durable nor shared, so the second
+   * request answers "no such upload" for a file that uploaded perfectly.
+   *
+   * There is one store and it is durable wherever it runs, so the `false` arm
+   * cannot be reached and the 503 is unreachable with it. The refusal itself is
+   * still in `src/routes.ts` and still right — the question *"can a record
+   * written by one request be read by the next"* is a real precondition — so
+   * what is asserted is the answer, on Vercel too, which is the half that used
+   * to be the control.
+   */
+  it("takes one on a serverless host too, because the store outlives the request", async () => {
     const was = process.env.VERCEL;
     process.env.VERCEL = "1";
     try {
-      expect(recordsSurviveTheRequest()).toBe(false);
-      const { status, body } = await call("POST", "/api/uploads", {
+      expect(recordsSurviveTheRequest()).toBe(true);
+      const { status } = await call("POST", "/api/uploads", {
         filename: "a.pdf",
         bytes: 100,
         sha256: "a".repeat(64),
       });
-      expect(status).toBe(503);
-      expect(String(body.error)).toMatch(/isn't set up to take a file/);
-      /* **Nothing was minted**, asserted about this request rather than about
-         the size of the whole store — which another test file running beside
-         this one can change between the call and the count. */
-      expect(minted).toHaveLength(0);
+      expect(status).toBe(201);
     } finally {
       if (was === undefined) delete process.env.VERCEL;
       else process.env.VERCEL = was;
     }
-  });
-
-  /* And the control: without it, the same request is accepted. A refusal test
-     with no positive case passes just as well when everything is refused. */
-  it("takes one where it would", async () => {
-    expect(recordsSurviveTheRequest()).toBe(true);
   });
 });
 
@@ -392,6 +427,17 @@ describe("the job a repeat claim finds", () => {
       const ingest = String(first.body.id);
       const slug = String(first.body.slug);
       made.push(ingest);
+      queued.push(ingest);
+
+      /* **The article row, because the ingest is not going to make one.**
+         `VERCEL=1` keeps the pump from running, so the slug the mint reserved
+         has no `articles` row behind it — and `enqueue` refuses a request that
+         names a slug and nothing else unless one exists ("No such article.",
+         src/jobs.ts). That check used to be gated on the store flag and this
+         file ran with it unset, so the fixture never had to be honest about it;
+         since 2026-09-05 it does. */
+      seededSlugs.push(slug);
+      await runAsOwner(OWNER, () => bareArticles([slug], OWNER));
 
       /* A mode job on the article the upload became, **queued afterwards** — so
          it is the newer of the two and sorts first in the list the route reads.
@@ -404,6 +450,7 @@ describe("the job a repeat claim finds", () => {
       });
       expect(later.status, `refused with: ${String(later.body.error)}`).toBe(202);
       made.push(String(later.body.id));
+      queued.push(String(later.body.id));
       expect(later.body.id).not.toBe(ingest);
 
       /* The reload. The claim is already taken, so this is the recovery path. */
@@ -415,7 +462,7 @@ describe("the job a repeat claim finds", () => {
     } finally {
       if (was === undefined) delete process.env.VERCEL;
       else process.env.VERCEL = was;
-      await forgetForTests(made);
+      await getDb().delete(jobsTable).where(inArray(jobsTable.id, made));
     }
   });
 
@@ -454,14 +501,22 @@ describe("the job a repeat claim finds", () => {
       expect(first.status, `refused with: ${String(first.body.error)}`).toBe(202);
       const ingest = String(first.body.id);
       made.push(ingest);
+      queued.push(ingest);
 
       /* Ended the way a real one ends — claimed, then finished under its own
          token — rather than by writing `done` into the record, so the job is
          terminal in every account the store keeps of it. */
-      const attempt = "attempt-finished-claim";
-      const claimed = await fsJobStore.claim(ingest, OWNER, attempt, 600_000, 4);
+      /* **A uuid, because `jobs.attempt_id` is one in the database.** Drizzle
+         declares it `text` (src/db/schema.ts) and a custom migration made the
+         column `uuid`, so a readable string is a `22P02` rather than a row —
+         which the store scrubs to "this app asked its database for something it
+         would not do". It was a readable string until 2026-09-05, when this
+         claim went from `fsJobStore` (a Map, which took anything) to
+         `pgJobStore`. `mintAttempt` is what production uses. */
+      const attempt = mintAttempt();
+      const claimed = await pgJobStore.claim(ingest, OWNER, attempt, 600_000, 4);
       expect(claimed.kind).toBe("claimed");
-      await fsJobStore.finish(ingest, attempt, {
+      await pgJobStore.finish(ingest, attempt, {
         status: "done",
         steps: (first.body.steps as JobStep[]).map((step) => ({ ...step, status: "done" })),
       });
@@ -473,7 +528,7 @@ describe("the job a repeat claim finds", () => {
     } finally {
       if (was === undefined) delete process.env.VERCEL;
       else process.env.VERCEL = was;
-      await forgetForTests(made);
+      await getDb().delete(jobsTable).where(inArray(jobsTable.id, made));
     }
   });
 
@@ -519,7 +574,7 @@ describe("the job a repeat claim finds", () => {
       const slug = String(first.body.slug);
 
       // Retention, arriving.
-      await forgetForTests([String(first.body.id)]);
+      await getDb().delete(jobsTable).where(eq(jobsTable.id, String(first.body.id)));
 
       const again = await call("POST", "/api/jobs", { uploadId });
       expect(again.status, "the reader was refused their own article").toBe(200);

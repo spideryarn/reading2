@@ -5916,17 +5916,11 @@ td.text.note-open {
   padding: 0.5rem 0.7rem;
   border-top: 1px solid var(--rule);
 }
-.gloss-actions, .gloss-confirm {
+.gloss-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
-}
-.gloss-confirm p {
-  width: 100%;
-  margin: 0 0 0.35rem;
-  color: var(--ink-soft);
-  font-size: 0.86rem;
 }
 .gloss-btn {
   display: inline-flex;
@@ -5945,7 +5939,10 @@ td.text.note-open {
 .gloss-btn:disabled { opacity: 0.45; cursor: default; }
 .gloss-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 .gloss-btn.primary { color: var(--ink); border-color: var(--highlight); }
-.gloss-btn.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+
+/* `.gloss-btn.danger` was here, and `.gloss-confirm` above it. Both belonged to
+   the foot's *Start again* — the one destructive thing this band could do — and
+   went with it on 2026-09-05. `Foot` in GlossaryPanel.tsx says why. */
 
 /* `.gloss-spin` was here. The panel uses `.cmt-spinner` now, which is the one
    recipe docs/project/icons.md describes — 0.7s rather than 1s, and it pulses
@@ -6004,11 +6001,9 @@ td.text.note-open {
 }
 .gloss-ask-found strong { font-weight: 600; }
 
-.gloss-provenance {
-  margin: 0.45rem 0 0;
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-}
+/* `.gloss-provenance` was here — the `generator · version · N passes` line under
+   the foot's buttons, gone on 2026-09-05 with the line itself. `Foot` in
+   GlossaryPanel.tsx says why the pass count stopped being worth the row. */
 
 /* ------------------------------------------------------- the mode switch --
    The three things the middle band can be — Hierarchy, Chat, Glossary — drawn
@@ -8602,6 +8597,7 @@ td.text.note-open {
   line-height: 1.4;
 }
 .prof-recording-what { min-width: 0; color: var(--ink-faint); }
+.prof-recording-retry,
 .prof-recording-save,
 .prof-recording-drop {
   display: inline-flex;
@@ -8616,12 +8612,17 @@ td.text.note-open {
   font: inherit;
   cursor: pointer;
 }
+.prof-recording-retry:hover:not(:disabled),
 .prof-recording-save:hover,
 .prof-recording-drop:hover {
   border-color: var(--highlight);
   color: var(--highlight-ink, var(--highlight));
 }
 .prof-recording-drop { padding: 0.15rem 0.25rem; }
+/* The one the reader actually wants — the words, rather than a file to keep or
+   a thing to throw away — so it carries the ink the others do not. */
+.prof-recording-retry { color: var(--ink); }
+.prof-recording-retry:disabled { opacity: 0.5; cursor: default; }
 
 .prof-mic {
   display: inline-flex;
@@ -8864,11 +8865,12 @@ td.text.note-open {
   align-items: center;
   gap: 0.5rem 0.75rem;
 }
-/* And in the foot, where "Find more" and "Start again" already sit. The
-   checkbox goes on its own line above them rather than in the row: two buttons
-   plus a label is more than 400px holds, and the checkbox describes what the
-   left-hand button would do rather than being a third thing to press.
-   `.gloss-actions` is already `flex-wrap: wrap`, so the basis is all it takes. */
+/* And in the foot, where "Find more" sits. The checkbox goes on its own line
+   above it rather than in the row, and it still should now that "Start again"
+   has gone from beside it (2026-09-05): the checkbox describes what the button
+   below would do rather than being a second thing to press, and a full-width
+   label reads that way. `.gloss-actions` is already `flex-wrap: wrap`, so the
+   basis is all it takes. */
 .gloss-actions .prof-row { flex-basis: 100%; }
 
 /* In the chat composer the checkbox sits on its own line under the input. The

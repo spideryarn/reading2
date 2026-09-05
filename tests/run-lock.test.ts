@@ -51,9 +51,7 @@ loadEnvLocal();
 
 /* No table of its own: this file locks and unlocks and never writes a row, so
    a live connection is all "ready enough" means here. */
-const { reachable } = await pgReady({ suite: "tests/run-lock.test.ts" });
-
-const when = reachable ? describe : describe.skip;
+await pgReady({ suite: "tests/run-lock.test.ts" });
 
 /**
  * **This file must NOT take the run lock**, which is why it has no
@@ -80,9 +78,7 @@ const WAITING_SUITE = "tests/fake-run-suite.test.ts";
 const WAITING_APP = `run-lock ${WAITING_SUITE}`;
 
 /** A connection that never holds the lock, kept for asking about other people's. */
-const observer = reachable
-  ? new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })
-  : undefined;
+const observer = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 
 afterAll(async () => {
   /* Belt as well as braces: a case that somehow ended holding this run's key
@@ -189,7 +185,7 @@ async function stallingProxy(): Promise<{ url: string; close(): Promise<void> }>
   };
 }
 
-when("the run lock", () => {
+describe("the run lock", () => {
   it("is held, according to Postgres, between take and release", async () => {
     /* The precondition is part of the case. If something else were already
        holding the key, "held" would read true no matter what `takeRunLock`

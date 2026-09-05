@@ -47,7 +47,6 @@ import {
   type PublicCollectionRouteName,
   type PublicSlugRouteName,
 } from "./route-names.js";
-import { STORE } from "../store/live.js";
 import { pgPublicLibraryReader } from "../store/public-library.js";
 import { pgPublicReader } from "../store/public-reader.js";
 
@@ -289,29 +288,6 @@ function slugFrom(match: RegExpExecArray): string {
 }
 
 /**
- * **Public reading needs Postgres**, and says so rather than pretending.
- *
- * The filesystem store has no `visibility` column and nowhere to put one — it
- * is one directory per slug under `data/`, which is why src/store/index.ts
- * refuses to boot on it in production at all. So under `files` there is no
- * honest answer to "is this shared": every article would be either all public
- * or all private, and both of those are wrong.
- *
- * Refused loudly, with its own sentence, for the reason `adminOnFiles` in
- * src/store/index.ts gives: the alternative — a 404 — is a page that says *this
- * document is not shared* and looks exactly like a page that works.
- * docs/reusable/silent-success.md.
- */
-function requirePostgres(): void {
-  if (STORE === "postgres") return;
-  throw httpError(
-    501,
-    "Public reading needs Postgres — the filesystem store has no visibility column. " +
-      "Run with SPIDERYARN_STORE=postgres. See docs/plans/260827ai-public-read-only-access.md.",
-  );
-}
-
-/**
  * Answer one request in the public namespace, whatever it turns out to be.
  *
  * Every path out of here writes a response. It returns `void` rather than a
@@ -364,12 +340,10 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
     switch (route.kind) {
       case "slug": {
         const slug = slugFrom(matched);
-        requirePostgres();
         send(res, 200, await route.read(slug), method);
         return;
       }
       case "collection": {
-        requirePostgres();
         send(res, 200, await route.read(), method);
         return;
       }

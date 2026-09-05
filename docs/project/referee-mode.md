@@ -23,7 +23,7 @@ prose. `GET`/`POST /api/referee/claims/:slug`,
 [`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) for what a referee sees.
 
 **Claims runs in the store that deploys, as of 2026-09-01.** It was files-only for a day: under
-`SPIDERYARN_STORE=postgres` every method refused with a 501, so on a deployed server *"Pull the
+Postgres — which is what deploys — every method refused with a 501, so on a deployed server *"Pull the
 paper's claims"* could not load, start or persist a run — which is how the cross-family review found
 it ([260831an-referee-mode-submodes-review-sol.md](../plans/260831an-referee-mode-submodes-review-sol.md),
 finding 4). Both adapters are real now and [`src/store/index.ts`](../../src/store/index.ts) picks

@@ -96,12 +96,10 @@ const DIR = path.join(ROOT, "data", SLUG);
 
 /* ---------------------------------------------------- is there a database -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-carry-forward.test.ts",
   tables: ["spideryarn.article_revisions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /* ------------------------------------------------------------ the article -- */
 
@@ -410,7 +408,7 @@ let articleId = "";
 let firstRevision = "";
 let secondRevision = "";
 
-when("a re-extraction, through beginRevision and publishRevision", () => {
+describe("a re-extraction, through beginRevision and publishRevision", () => {
   beforeAll(async () => {
     await writeTheFiles();
 
@@ -662,7 +660,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
 
 /* ------------------------------------------------------- the fixture's own -- */
 
-when("the fixture itself", () => {
+describe("the fixture itself", () => {
   it("really is a re-extraction: same ids, different text", () => {
     expect(B2.map((b) => b.id)).toEqual([B1[0]?.id, KEPT]);
     expect(B2[1]?.text).not.toBe(B1[1]?.text);

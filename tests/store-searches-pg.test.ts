@@ -55,12 +55,10 @@ const FIXTURE_IDS = [
   "spya-zzz002",
 ] as const;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-searches-pg.test.ts",
   tables: ["spideryarn.search_runs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** A clock the test drives, so `createdAt` is a fact rather than a race. */
 function clockFrom(startMs: number, stepMs = 1000): () => string {
@@ -68,7 +66,7 @@ function clockFrom(startMs: number, stepMs = 1000): () => string {
   return () => new Date(startMs + stepMs * n++).toISOString();
 }
 
-when("the Postgres searches store", () => {
+describe("the Postgres searches store", () => {
   it("uses fixture ids the store will actually accept", () => {
     for (const id of FIXTURE_IDS) {
       expect(isSpideryarnId(id), `${id} is not a valid id, so the store would mint another`).toBe(

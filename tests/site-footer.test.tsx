@@ -3,7 +3,7 @@
  * **The footer row, and the things about it that are decisions rather than
  * markup.**
  *
- * The row itself is three links and an address, and a test that only counted
+ * The row itself is five links and an address, and a test that only counted
  * them would be a test of JSX. What is worth pinning is:
  *
  *  - **It drops the link for the page it is on.** That is the whole reason the
@@ -67,7 +67,10 @@ afterEach(() => {
  * are standing on, the exact failure the filter exists to prevent. The `→` is
  * only so a mismatch prints legibly.
  */
-function footerAt(pathname: string, here?: "library" | "features" | "privacy"): string[] {
+function footerAt(
+  pathname: string,
+  here?: "library" | "features" | "privacy" | "contact",
+): string[] {
   history.replaceState(null, "", pathname);
   act(() => root.render(<SiteFooter {...(here ? { here } : {})} />));
   return [...host.querySelectorAll("footer a")].map(
@@ -79,32 +82,41 @@ const HOME = "Home → /";
 const FEATURES = "Features → /features";
 const PRICING = "Pricing → /pricing";
 const PRIVACY = "Privacy → /privacy";
+const CONTACT = "Contact → /contact";
 const MAIL = `${CONTACT_EMAIL} → mailto:${CONTACT_EMAIL}`;
 
 describe("the site footer", () => {
   it("carries the whole row on a page that is not one of its own", () => {
     // The control: if this ever stops holding, every "is missing" assertion
     // below would pass over a footer that rendered nothing at all.
-    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, MAIL]);
+    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
   });
 
   it("drops Home on the shelf, which is also the landing page", () => {
-    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, MAIL]);
+    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
   });
 
   it("drops Features on the features page", () => {
-    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, MAIL]);
+    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, MAIL]);
   });
 
   it("drops Privacy on the privacy page", () => {
-    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, MAIL]);
+    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, MAIL]);
+  });
+
+  it("drops Contact on the contact page, and keeps the address there", () => {
+    /* The one page where the two halves of this row say nearly the same thing,
+       and they still behave differently: the link drops itself, the `mailto:`
+       does not. That is the decision in SiteFooter.tsx § `LINKS`, and this is
+       what would go red if somebody later folded the address into the link. */
+    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, MAIL]);
   });
 
   it("keeps the contact address on every one of them", () => {
     // Said separately from the four above because it is a different rule with a
     // different reason: the address is the only thing in the row that is not a
     // page, and the only thing a reader who is stuck can actually use.
-    for (const at of ["/", "/features", "/pricing", "/privacy", "/profile"]) {
+    for (const at of ["/", "/features", "/pricing", "/privacy", "/contact", "/profile"]) {
       expect(footerAt(at)).toContain(MAIL);
     }
   });
@@ -122,7 +134,7 @@ describe("the site footer", () => {
    * ways, which is precisely the distinction `here` was added to make.
    */
   it("believes the page over the address when the caller says which it is", () => {
-    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRICING, PRIVACY, MAIL]);
+    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
   });
 
   it("takes a sentence of its own above the links", () => {
@@ -170,8 +182,10 @@ describe("the pages that mount it", () => {
       .sort(),
   );
 
-  it("is exactly the seven pages that have a bottom, once each", () => {
+  it("is exactly the eight pages that have a bottom, once each", () => {
     expect(Object.fromEntries(mounts)).toEqual({
+      /* `/contact`, since 2026-09-05 — docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
+      "ContactPage.tsx": 1,
       "FeaturesPage.tsx": 1,
       "LandingPage.tsx": 1,
       "Library.tsx": 1,

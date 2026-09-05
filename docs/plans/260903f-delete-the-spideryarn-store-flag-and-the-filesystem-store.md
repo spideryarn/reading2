@@ -4408,6 +4408,38 @@ now stated properly in `architecture.md` § Conventions (**ten of the fourteen i
 the predicate *the step declares a `stamp()` that `stepIsDone` compares*), and the rules file is
 Greg's to edit.
 
+##### Retracted: the step-plan rule is not Stage E's, and it is not untested <a id="stage-e-unrunnable-untested"></a>
+
+**This section claimed, on 2026-09-05, that `unrunnableStepPlan`'s refusal at `enqueue` had no test,
+and that a broken `evals/deepen/ --dry-run` was the measured cost of the hole. Every load-bearing
+part of that was wrong, and the anchor is kept so links to it still land.**
+
+- **It is not Stage E's rule.** A `-S` search of the history over `src/jobs.ts` returns `aa941484`
+  alone -- stage A of
+  [260904e](260904e-extraction-repair-evals-and-llm-post-processing.md), 03:00, which added the
+  predicate *and* its `enqueue` call. Stage E (`cbb903d0`, 06:14) is a same-morning sibling that also
+  tightened `enqueue`'s refusals, which is how the misattribution survived three agents.
+- **The door is tested.** `tests/jobs.test.ts` "refuses a blocks-only job at the door rather than
+  stranding the article" drives `enqueue` and expects a 400, about 980 lines below the pure-function
+  block. 260904e says so in its own text -- *"The pure rule and its wiring are asserted separately in
+  `tests/jobs.test.ts`, the second because a guard nothing calls is the shape of half the bugs in
+  this repo"* -- and it is true.
+- **The dry run was not evidence of anything but its own bug.** It asked for
+  `["fetch","extract","blocks"]`; the queue refuses that, correctly and by design. The fault was
+  entirely in the caller.
+
+**How three agents got it wrong is the part worth keeping.** The search that "established" the gap
+was a grep across `tests/` that *excluded `tests/jobs.test.ts`* -- the file being annotated, on the
+assumption that the block already read was all it had to say. The wiring test does not name
+`unrunnableStepPlan` in its title, so nothing else surfaced it. A grep that excludes the file you are
+writing about cannot return the thing that would change your mind, and the confidence that follows
+from a clean result is unearned. Retracted by the agent that wrote it, 2026-09-05.
+
+What survives is the *other* class, which is real and is written up in
+[260905b](../postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md): a report
+computed over the collection the failure emptied, printing `Findings: none` and a clean bill over a
+run in which nothing happened.
+
 ##### What Sol's review of the built code changed, and the one thing it overturned
 
 Five findings, four fixed in `scripts/stage.ts` and one that is a decision for Greg. Every one was
@@ -4484,6 +4516,489 @@ does anything.
 **Moved out of the hinge on review:** the self-guarding exports (→ D′1), the glossary (→ D′3), the
 readiness infrastructure (→ **T-D**), and the `attempt` types (→ H).
 
+#### F is built — 2026-09-05
+
+**27 comparison sites removed, and the predicate matters**: occurrences of
+`STORE === "…"` or `STORE !== "…"` in *executable* positions under `src/` and `vite.config.ts`,
+counted off the diff (`git diff -U0 -- src/ vite.config.ts | grep '^-' | grep -E 'STORE\s*[=!]==\s*"(files|postgres)"'`
+is 28, of which one is a line of prose). The plan's estimate was 19; it counted comparisons and this
+counts the same thing, so the estimate was simply low. `STORE` and `StoreName` are gone with them, and
+so is `storeFromEnv`.
+
+**The tombstone is `refuseTheStoreFlag` in [`src/store/live.ts`](../../src/store/live.ts)**, called
+once at module load, returning `void`: unset, `""` and `postgres` pass in silence; `files` and every
+other value throw *"the filesystem store was removed on 2026-09-05; there is one store; unset this"*.
+`tests/store-selection.test.ts` asserts the **date** rather than the wording, because the date is the
+part somebody holding a deployment needs.
+
+##### The safety net was dead on arrival, and its own tests were green
+
+**This is the most instructive thing the job produced and it must not be summarised as "added a
+missing import".** Read it before stage G.
+
+The hinge removed the last `STORE === "postgres"` comparison from `src/store/index.ts`. That
+comparison was also **the last `import` of `src/store/live.ts`** — the module the tombstone lives in.
+The tombstone throws at module load, and a module nothing loads throws nothing. So the commit that
+existed to make `SPIDERYARN_STORE=files` refuse **took the refusal out of the program**, and left
+behind a build that boots clean on exactly the environment Vercel Preview and Production have right
+now, logs *"serving article reads from Postgres"*, and serves Postgres under the other store's name.
+The one failure the flag was kept alive for.
+
+Measured, not argued — a child with `NODE_ENV=production`, coherent dummy credentials, `VITEST`
+unset and `SPIDERYARN_STORE=files`, importing `src/store/index.ts`:
+
+```
+{"level":"info", …,"component":"store","msg":"serving article reads from Postgres"}
+EXIT=0
+```
+
+**Three things about how it was found and how it hid, and each generalises.**
+
+1. **It hid behind its own tests.** `store-selection.test.ts` and `one-store-only.test.ts` both
+   `import { refuseTheStoreFlag }` and call it. Loading a module by hand and asking whether the
+   function works cannot see whether anything else loads it — the check shares an assumption with the
+   bug, and the assumption is *that the guard is reachable at all*. Textbook
+   [silent-success.md](../reusable/silent-success.md), arriving inside the one piece of code written
+   to stop that family. Two green tests over a guard that was not in the program.
+2. **It was found by running the import, not by reading it.** A cross-family review built a
+   production-shaped process and imported the module. Nothing in the diff looks wrong: every line
+   deleted was a dead comparison, and the surviving file is correct in isolation. The compiler had
+   nothing to say either — an unused import is *removed*, never demanded.
+3. **The tell was available and nobody looked for it.** `grep -rn 'store/live.js' src/ scripts/
+   evals/ api/` returns **one** line, and it is `src/routes.ts` importing `./live.js` — which is
+   `src/live.ts`, the live-conversation module, a different file with the same basename. A near-miss
+   that reads as confirmation. *"Which files import this?"* is the question a deletion should always
+   ask, and it is not the question *"does anything still reference the symbol I removed?"*.
+
+**The class**, named, because stage G deletes eight more modules: **removing the last consumer of a
+symbol removes the module, and a module whose value is a side effect loses that side effect
+silently.** It is not specific to flags. Anything that registers, validates or refuses at import —
+a boot check, a schema registration, a signal handler — is deleted by deleting the last thing that
+imported it for its *value*. Stage G should ask, of every module it stops referencing, whether the
+module did anything at load time.
+
+**The regression matters more than the fix.**
+[`tests/store-flag-refused-at-boot.test.ts`](../../tests/store-flag-refused-at-boot.test.ts) imports
+**the module a server imports, in a child process, and requires the child to die**, with the sentence
+and the date in its output and *without* the "serving article reads" line — because printing that
+means the refusal came too late to be one. It was **watched red before the fix**, and it carries a
+positive control (the same child with the flag unset must exit 0), since *"the child died"* is
+otherwise satisfied by a wrong path or a missing credential — plus a second control that the child is
+in a *deployment's* environment and not the runner's, because the blob boot check is off under
+`VITEST` and the flag is refused before it either way, so nothing else in the file would notice.
+
+`tests/store-selection.test.ts` keeps the *behaviour* and says in its header that it cannot see the
+wiring. Neither file replaces the other, and that division is the lesson: **a rule and its
+reachability are two claims, and a test that calls the function can only make the first.**
+
+##### The second half: the fix looked complete because the reported symptom went away
+
+**The same story, one level up, and it is the half worth reading twice.** The first fix put
+`import "./live.js"` in `src/store/index.ts` — the reader wiring hub, and the obvious front door. It
+closed the reported instance and **not the class**. Measured the next round,
+production-shaped, `SPIDERYARN_STORE=files`:
+
+```
+src/store/index.js  -> exit 1  "the filesystem store was removed"
+src/jobs.js         -> exit 0  BYPASSED_THE_TOMBSTONE
+src/store/pg.js     -> exit 0  BYPASSED_THE_TOMBSTONE
+src/db/client.js    -> exit 0  BYPASSED_THE_TOMBSTONE
+src/upload-records.js -> exit 0  BYPASSED_THE_TOMBSTONE
+src/store/ai-calls.js -> exit 0  BYPASSED_THE_TOMBSTONE
+
+SPIDERYARN_STORE=files … tsx evals/cost/run.ts --list  -> exit 0, printed the corpus
+SPIDERYARN_STORE=files … tsx scripts/stage.ts blocks … -> exit 0
+```
+
+Not toy paths: `scripts/stage.ts` runs pipeline steps against a reader's real articles and
+`evals/cost/run.ts` spends money. And the reason the hub was not enough is written down in this plan
+already, three times over: `src/jobs.ts`, `src/upload-records.ts` and `src/store/ai-calls.ts` each
+bind their Postgres adapter **outside** `store/index.ts` *specifically to avoid an import cycle*. The
+architecture that made the hub the obvious place is the same architecture that made it insufficient.
+
+**The rule, and it is what stage G should take:** a side-effecting import belongs at the **narrowest
+boundary everything must cross**, not at the most obvious front door. *A front door is whichever door
+you happened to walk through.*
+
+Here that boundary is [`src/db/client.ts`](../../src/db/client.ts), and the claim was checked rather
+than assumed — `getDb` is exported from exactly one place, `new Pool` / `pg` /
+`drizzle-orm/node-postgres` appear in exactly one file, and every module under `src/` that reaches
+the database imports `getDb` from it. **That claim is now a test too**
+(`one-store-only.test.ts` § *db/client.ts is the only place a Postgres connection is built*), because
+a second connection built anywhere else would put the tombstone back to guarding one path of several
+— which is precisely how this looked finished the first time.
+
+`store-flag-refused-at-boot.test.ts` asserts the refusal for **six independent roots** and for
+`evals/cost/run.ts --list` as a typed command. All six went red before the move and green after; the
+`store/index.ts` case was green throughout, which is the whole point of the other five.
+
+##### And the file could erase what the shell asked for
+
+Second finding from the same review, reachable the moment the first was fixed. `live.ts` called
+`loadEnvLocal()` and then read `process.env.SPIDERYARN_STORE` — but `.env.local` is applied **over**
+an inherited value (`src/env.ts` § the precedence rule, which is right and stays). Measured:
+inherited `files` with a `.env.local` saying `postgres` gave
+`{"requested":"files","validated":"postgres","threw":false}`, and `src/env.ts`'s own "overrode"
+warning is suppressed under `NODE_ENV=test`. An operator who typed the thing this whole stage exists
+to refuse was silently overruled by a file.
+
+`refuseTheStoreFlag` now takes **both** values — `{ inherited, applied }` — and checks the shell
+first, so the message names the source the person has to change (*"in the shell environment"* vs
+*"in `.env.local`"*). `src/env.ts` exports `inheritedEnv(name)` for the snapshot it already kept. In
+production there is no `.env.local` at all, so the two values are one string and it costs nothing.
+
+The case is proved by composing the two real functions — `applyEnvFile` produces the override, the
+refusal is handed its answer — rather than by a hand-made pair, and deliberately **not** by editing
+this repo's `.env.local`, which is a real developer's file.
+
+##### The sharper invariant held, and a grep enforces it
+
+[`tests/one-store-only.test.ts`](../../tests/one-store-only.test.ts) is new and is the stage's static
+guard. It reads `src/`, `scripts/`, `evals/`, `tests/`, `api/` and four root files with comments
+stripped, and asserts three absences and two presences — plus a control that it read >600 files at
+all, because emptiness is this guard's entire output.
+
+**Its first version did not scan what it claimed to**, which the review caught: the extension test
+was `/\.tsx?$/`, so **`api/index.js` — the production shim Vercel actually invokes — was not read at
+all**, nor any `.mts` under `evals/`. A guard reporting clean about the one file whose
+misconfiguration reaches readers. The reader regex was one shape wide, too: it missed
+`process.env["SPIDERYARN_STORE"]` and `const { SPIDERYARN_STORE } = process.env`, which are the two
+spellings a rewrite reaches for.
+
+It is now `/\.[cm]?[jt]sx?$/` and four reader shapes, the anti-empty control names `api/index.js` and
+`evals/extraction/probe.mts` **by name**, and the exemptions are an allowlist with a reason each,
+policed for staleness the way `LANES_BEYOND_THE_SCAN` polices its own.
+
+| the mutation | what went red |
+| --- | --- |
+| a `process.env.SPIDERYARN_STORE` read appended to `tests/arc.test.ts` | *is read by src/store/live.ts and by nothing else* |
+| a `STORE === "postgres"` comparison appended to it | the same |
+| `const when = reachable ? describe : describe.skip` appended | *has no /reachable\s*\?\s*describe…/* |
+| `describe.skipIf(!reachable)` appended | *has no /describe\.skipIf…/* |
+| `it.skipIf(!reachable)` appended | *has no /it\.skipIf…/* |
+| `reachable: boolean` put back on `PgReady` | *cannot be given a boolean to gate on* |
+| `process.env["SPIDERYARN_STORE"]` appended to **`api/index.js`** | *is read by … and by nothing else* → `[ "api/index.js" ]` |
+| `const { SPIDERYARN_STORE } = process.env` appended to `api/index.js` | the same |
+| `process.env.SPIDERYARN_STORE` appended to `evals/extraction/probe.mts` | the same → `[ "evals/extraction/probe.mts" ]` |
+
+All nine watched failing before the guard was believed, and the four names on the deletions in
+`scripts/` the plan called out — `db-seed-dev`'s `storeVerdict`, `ai-cost`'s `--owners` refusal,
+`stage.ts`'s die, `share-local-articles`' refusal — are gone in this commit rather than in I.
+
+##### The database is required, and the five criteria were proved by run
+
+1. **One failure, before collection.** `tests/setup/private-db-global.ts` no longer asks
+   `postgresRequired()`; an unreachable stack throws. `DATABASE_URL='postgresql://…@127.0.0.1:1/postgres'
+   npx vitest run --project private-postgres tests/store-comments.test.ts` gives `EXIT=1`, exactly one
+   `Unhandled Error`, and **the diagnostic names the deliberately bad target** — *"expected exactly one
+   Docker container publishing port 1 to 5432, found 0"*. Zero skips in the output.
+2. **The alias is gone**, from 103 files, along with `describe.skipIf(!reachable)` and
+   `it.skipIf(!reachable)`. `pgReady` throws instead of returning `{ reachable }`, so the boolean the
+   pattern needs does not exist.
+3. **The guard above**, with its nine mutations.
+4. **The positive run** — see the lanes below.
+5. **Stage B's mutation evidence is untouched**: nothing in this commit edits a `**Mutation.**`
+   header, and `tests/store-migration-registry.test.ts`'s arrears check is green.
+
+**The shell-`DATABASE_URL` trap the plan warns about does not bite here, and it is worth knowing
+why.** `.env.local` beats the shell for most of this repo, but the private lane's factory asks
+`resolveTargetUrl({ shellWins: true })` ([`scripts/db-test-create.ts`](../../scripts/db-test-create.ts)
+§ `baseUrl`), so a value on the command line does reach it. That makes the control one command and
+needs no stopping of the shared Supabase.
+
+##### `contextPaths` and `outputs(ctx)`: measured, and both belong to G
+
+The plan asked for this to be measured rather than assumed. It was, two ways.
+
+**Statically**, `outputs(ctx)` has exactly one caller in `src/`: `articleMetadata` in
+[`src/api.ts`](../../src/api.ts), which is the **filesystem** `ArticleReader`. After the hinge
+`src/store/index.ts` binds `pgArticleReader.articleMetadata`, so no route reaches it; the only
+importers of `src/api.js` left are `src/store/fs.ts` (the adapter itself), `src/store/pg.ts` (which
+takes `describeArticle` and `titleFor` only) and tests. `stepIsDone` and `assertProduced` stopped
+reading `outputs` in 2026-08-26 — both go through `store.read` and `step.produces`.
+
+**By experiment**, because a static argument about a required field is the kind that is wrong.
+`contextPaths(job.slug)` in `runStep` was replaced with
+`{ dir: "/dev/null/POISONED-CTX-DIR", htmlFile: "/dev/null/POISONED-CTX.html" }` and eight suites run:
+`pg-session-real-step`, `jobs-walk`, `article-cache-call-site`, `claim-session-postgres`,
+`acquire-extract-blocks-end-to-end`, `step-failure-seam`, `jobs-commit-path`,
+`retry-keeps-the-checkpoints` — **50 tests, all green**. Nothing in the run path reads either field.
+
+So: **`outputs` is read only by the filesystem adapter and goes with it in G**, and `contextPaths` in
+`runStep` goes with `StepContext.dir` / `htmlFile`, which is a contract change and therefore H's or
+G's rather than the hinge's. `tests/jobs-fs-adapter.test.ts`'s surviving block is the one that dies
+with those two fields, and its header says so.
+
+##### The suites the flag was quietly deciding for, which is the stage's real cost
+
+Nine files were reaching a filesystem adapter **because the flag was unset**, not because they asked
+for one. Every one of them had to be dealt with here, since this commit removes the route:
+
+- **Deleted**, subject and test in one commit, as stage G's pairing rule asks:
+  `tests/claim-session-files.test.ts` and `tests/pipeline-slug-claim-files.test.ts` (the registry
+  already said both go with the `STORE !== "postgres"` lines they guard), and
+  `tests/billing-admission-files.test.ts` (whose `filesIt` would have skipped for ever). **One of
+  those three deletions lost a claim** — see § *Three more the review found* — and the registry
+  entry that licensed it did not and could not say so.
+- **Converted to Postgres**: `tests/store-wiring.test.ts` (the substrate really was interchangeable,
+  as its registry entry claimed — an article row instead of a copied `example/` directory),
+  `tests/request-spend.test.ts` (its child wrote a JSONL ledger through `fsCostStore`; it reads
+  `spideryarn.ai_calls` now, and the child reaches the private database because
+  `SPIDERYARN_ENV_PINNED` is inherited), `tests/uploads-api.test.ts` and
+  `tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts` (`fsJobStore`/`fsUploadStore` →
+  the Postgres pair), and `tests/upload-acquire.test.ts` (whose owner uuid now needs a real
+  `auth.users` row, because a directory has no foreign keys).
+- **Cases deleted with the refusal they were about**: the filesystem 501s in
+  `tests/feedback-store.test.ts` and `tests/admin-feedback-store.test.ts`, and two runner-driven
+  cases in `tests/jobs-fs-adapter.test.ts` — the second of which is a **real loss**, enumerated in
+  that file's header: `writeOnce`'s temp-file-then-rename has no Postgres counterpart and should not
+  have one, and the interrupted marker *seen through the real runner* is covered nowhere until
+  `tests/jobs.test.ts` § *running a job* grows it.
+- **Re-expressed, twice, and the first attempt was wrong**: `tests/public-dispatch.test.ts`'s five
+  dispatch cases read a 501 from the filesystem store as *"the handler ran"*. The first replacement
+  was a 500 from the poisoned unit-lane database — which is **not a witness at all**, because
+  `handleApi` gives any unexpected throw a 500. They now spy on the route's own `read`, and assert
+  both that it ran and what it was handed. See § *Three more the review found*.
+
+##### One weakening, and it is deliberate: the blob-store boot check
+
+`postgresBlobStore(...)` at the top of `src/store/index.ts` refuses when `DATABASE_URL` and
+`SUPABASE_URL` name different Supabase projects. It sat under `if (STORE === "postgres")`, which was
+false in the unit lane — and with the flag gone it ran on every import, so **around thirty unit-lane
+files stopped collecting at all**, on a message about Supabase ports. The lane poisons those two
+variables to two *different* loopback ports on purpose
+([`tests/helpers/unit-lane-poison.ts`](../../tests/helpers/unit-lane-poison.ts) says why each), which
+is exactly the shape the check refuses.
+
+It is now `if (!process.env.VITEST && process.env.NODE_ENV !== "test")`. **Both halves are
+load-bearing**, and the `NODE_ENV`-only version was written first and measured wrong: four suites
+spawn a child with `NODE_ENV=development` deliberately, because `src/log.ts` is silent under `test`
+and the child's stdout is their evidence — those children inherit the poison and nine cases died on
+the port message. `VITEST=true` does survive into a child (measured).
+
+What it costs is that **nothing under the runner executes that line any more**. `tests/blobs.test.ts`
+owns both refusals directly, and `tests/one-store-only.test.ts` asserts the line and its exact
+condition still exist, because a check nobody runs is a check somebody deletes.
+
+**The review built a production-shaped process with a mismatched project pair and the check refused
+correctly**, so switching it off under the runner is a decision rather than a hole. Cleared.
+
+##### Three more the review found, and the shape of two of them is the running theme
+
+**A witness that had become a constant.** The five re-expressed `public-dispatch` cases read a **500**
+as *"the public handler ran"* — a status that used to be a **501** only the reader could produce.
+`handleApi` maps *any* unexpected throw in that namespace to 500 with `handled: true`, so all five
+passed **with the reader never running**: replace `route.read(...)` in `servePublicApi` with
+`throw new Error("anything")` and every one stays green. Re-expressed once more, and this time on the
+reader itself: `PUBLIC_ROUTES` is the array the dispatcher walks, so the route's own `read` is spied
+on, made to reject with a sentinel string nothing else can produce, and asserted to have been
+**called with the right argument** — which is what separates *the pattern matched* from *the pattern
+matched too loosely and passed `example?at=spya-k3m9qt&zoom=2`*, a distinction no status can make.
+Watched red: with the reader replaced by a bare throw, all five fail.
+
+That is the second finding in this stage whose whole content is *the check had stopped being able to
+fail*, and the first is the tombstone above. **Stage G inherits both.** A stage that deletes an
+adapter will be deleting the thing that made half these suites' answers distinguishable from
+nothing, and the question to ask of every case left standing is not *"is it green"* but *"what is
+still capable of making it red"*.
+
+**`npm run live:spike` was reading the filesystem store**, at `/session` and `/tool`, through
+`loadArticle` from `src/api.ts` — while its vocabulary and its tools went to Postgres seams. A slug
+that exists only in the database could not start a live conversation, and a stale `data/<slug>/` of
+the same name fed the model filesystem prose while its tools answered from the Postgres article: two
+sources of truth inside one conversation, with nothing to say so. Invisible while the flag chose the
+default; the hinge made it the last reader in the tree still pointing at `data/`. Now
+`src/store/index.js`.
+
+**A claim was lost with a deleted suite, and only one of the two deletions was safe.**
+`tests/pipeline-slug-claim-files.test.ts` and `tests/claim-session-files.test.ts` both went in this
+commit on the registry's own instruction. But the first uniquely asserted that **an uploaded article
+exists even though `urlForSlug` returns `undefined`** — the disagreement the left join in
+`ownedArticle` exists to produce — and the surviving Postgres half seeds only `finalUrl: URL`.
+Production is right today; nothing protected it. Restored as one case in
+`tests/pipeline-slug-claim.test.ts`, asserting **both answers together**, and the mutation is the
+proof it was really missing: `articleExists` derived from the URL
+(`return (await ownedArticle(slug))?.url != null`) reddens **only the new case** and leaves the other
+six green.
+
+The general form, for stage G: *"the registry says this file's subject dies here"* licenses the
+deletion and says nothing about whether **every claim in it** has a home. `port or enumerate` is
+already the rule; what this adds is that a suite named for one store can carry a claim that is about
+neither.
+
+##### And two more of the same shape, found in the round after that
+
+**The reader spy still could not catch an over-broad route.** `readerRan` proves a canonical path
+matches and supplies the right argument; it says nothing about non-canonical paths *failing* to
+match. Measured: delete the trailing `$` from `publicRoute()` in
+[`src/public/route-names.ts`](../../src/public/route-names.ts) and **all 26 cases stay green** while
+`/api/public/article/example/extra` reaches the article reader with `"example"`. The collection route
+had suffix cases from the day it arrived; the slug route had none, so its anchor was pinned by
+nothing. Three near misses are in the unknown-path 404 table now, and the `$` mutation reddens it.
+
+**The leading `^` is still pinned by nothing, and that is said in the file rather than implied.**
+Removing it also leaves all 26 green — because `isPublicNamespace` is a `startsWith` on
+`/api/public/`, so a path with anything in front never reaches the dispatcher at all. The first
+version of that comment claimed the case covered both anchors; it was corrected after the mutation
+disagreed with it, which is the same lesson one turn smaller.
+
+**The allowlist staleness check was self-validating.** `one-store-only.test.ts` accepted an exemption
+whenever the stripped source merely *contained* the string `SPIDERYARN_STORE` — a weaker predicate
+than the one that makes an exemption necessary, and one the check's **own source satisfies**, so its
+own entry could never be reported stale. An exemption must now match the same `READS_THE_FLAG`
+shapes; watched red by doctoring a copy of `store-selection.test.ts` to keep a plain mention and no
+reader shape. The file's self-exemption is gone with it: it is **skipped from the scan** by `SELF`,
+which is a different statement from *"allowed to read the flag"*, and conflating the two is what
+produced the hole. The one-file blind spot that leaves is now written on the constant rather than
+hidden in the list.
+
+**That is five in this stage** — the tombstone that was never loaded, the tombstone loaded on one
+path of several, the 500 that any throw produces, the route anchor nothing pinned, and the exemption
+that vouched for itself. They are one shape: **the check had stopped being able to fail, and nothing
+about its output said so.** Every one was found by *running* something rather than reading it, and
+four of the five were green at the moment somebody would have called the work finished. Stage G
+deletes eight modules and the suites that watch them; the question to ask of every case left standing
+is not *"is it green"* but *"what is still capable of making it red"*.
+
+##### Round three: one accepted, one overruled, and a sensor better than either
+
+**Accepted: the guard's claim was wider than its scan.** The new assertion said *"`db/client.ts` is
+the only place a Postgres connection is built"* while filtering to `src/`, so it could not establish
+that. Five scripts build their own — `db-migrate.ts`, `db-check.ts`, `db-corpus-readiness.ts`,
+`db-repair-migration-ledger.ts` and `deploy.ts` — **by design**: they are operator tools addressed by
+their own `Target:` line
+([database.md](../project/database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)),
+not stores a reader is served through, so nothing there was ever the flag's to decide. The case is
+now *"…the only place **under `src/`** a Postgres connection is built"*, and the assertion says on
+itself that a claim broader than the thing it scans is the same failure this stage has now hit five
+times over. Sixth of the shape, and the cheapest to fix: nothing was wrong with the code, only with
+the sentence describing it.
+
+**Overruled: the tombstone does not go on Storage, the model gateway, or the migration and deploy
+scripts.** Written out in full because the reasoning is the point, not the conclusion —
+coordinator, 2026-09-05:
+
+> **Sol still objects that the class is not closed; overruled.** The objection is that with
+> `SPIDERYARN_STORE=files` a Supabase Storage PUT and a paid OpenRouter call both still proceed
+> without crossing the tombstone. Both facts are true. Neither is the harm this tombstone exists to
+> prevent.
+>
+> The tombstone's sentence is *"silently ignoring `files` would do the opposite of what the operator
+> asked."* **That only means anything on a path where `files` used to ask for something.** Before the
+> hinge, with Supabase credentials present, `supabaseBlobs().putIfAbsent()` performed exactly the
+> Storage POST it performs today — `src/store/blobs.ts` § *Why selection does not read
+> `SPIDERYARN_STORE`* says so and says why. `openRouterJson` made exactly the same paid call;
+> `src/ai-spend.ts` is an in-memory `AsyncLocalStorage` ledger that imports nothing from `store/`, so
+> the dictation evals never touched a store under either value. **On those paths the flag was inert
+> env noise before and is inert env noise now.** Nobody who sets `files` is worse off there than
+> somebody who unsets it — which is the test the objection has to pass and cannot.
+>
+> The class the tombstone closes is **code that acts on the flag**, and that class is already closed
+> exhaustively rather than door by door: `tests/one-store-only.test.ts` § *is read by
+> `src/store/live.ts` and by nothing else* scans `src`, `scripts`, `evals`, `tests`, `api`,
+> `vite.config.ts`, `package.json` and `api/index.js`. If nothing but the tombstone reads the flag,
+> no path can serve the wrong store; the only remaining job is that the tombstone be **loaded**
+> wherever a store could be served, which `db/client.ts` achieves. The objection redefines the class
+> as *any outbound I/O while a stale variable is set* — an unbounded invariant the repo holds for no
+> other variable.
+>
+> **And it would cost two things.** `src/store/live.ts` is deliberately a **leaf** — its header
+> explains the import cycle that shape avoids — so importing it from the model gateway and the
+> Storage adapter adds edges for one deployment that stage I then deletes. Worse,
+> `scripts/store-migration-candidates.ts` treats *"imports `src/store/live.ts`"* as the signal that a
+> module **does store selection**, so adding that import to `ai-call.ts` would make the migration
+> tooling misreport the AI gateway as a store-selecting module.
+>
+> Same reasoning declines `db:migrate` and `deploy`: `files` never stopped a migration — a laptop on
+> the filesystem store ran `db:migrate` against local Postgres routinely — and the script's target has
+> always been its `DATABASE_URL`, not the store. Adding a refusal there makes the tool you reach for
+> in an incident fail for a reason unrelated to the incident.
+>
+> One residual was checked rather than waved away: could a Storage POST land before the refusal,
+> orphaning an object? The only caller of `putIfAbsent` outside the adapters is `scripts/stage.ts`,
+> which top-level `await import`s `db/client.js` well before it, so the refusal fires first — and the
+> bucket is content-addressed and create-only, so an orphan would be harmless anyway.
+
+That quote names the guard case as *"is read by `src/store/live.ts` and by nothing else"*. It is now
+called *"…and nowhere the list above does not name"*, for the reason the next section gives: the
+allowlist stopped being empty, and a title that says *nothing else* while the code permits three
+files is the sixth instance again in miniature. The quote is left as it was written.
+
+##### The sensor that retires the tombstone, which is worth more than the argument
+
+The tombstone is a **proxy**. The real condition is *"the variable is still set in Vercel Preview and
+Production, and only Greg can remove it"* — and until now nothing watched that, so stage I waited on
+somebody remembering to run `vercel env ls production`. That is how a one-line chore becomes a stage
+that never starts.
+
+[`src/vercel-health.ts`](../../src/vercel-health.ts) now carries `RETIRED`, the mirror of `EXPECTED`:
+`EXPECTED` says *absence may be a problem*, `RETIRED` says *presence is*. A deployment that still has
+`SPIDERYARN_STORE` reports it in a `retired` field naming the variable, the `vercel env rm` command
+and stage I of this plan. `scripts/deploy-checks.ts` § `retiredNotes` turns that into a printed line
+in `npm run deploy`'s post-deploy verify — **the machine that has the Vercel credential is the one
+that sees the nag**, which no health page an agent can curl would achieve.
+
+Three design decisions, each of which the obvious version gets wrong:
+
+- **Reported, never warned about.** `warnings` is not a list, it is a verdict: `src/vercel-health.ts`
+  computes `ok = !failed && warnings.length === 0` and answers **503**, and
+  `scripts/deploy-checks.ts` § `judgeHealth` turns every warning into a deploy-blocking problem. The
+  tidy-looking version of this feature would have made production unhealthy and blocked every deploy
+  over a variable that decides nothing. **A red that is not a fault is a red people learn to force
+  past** — and this one would have had to be forced past on every deploy until Greg happened to be
+  free. `tests/deploy-checks.test.ts` § *is not a deploy-blocking problem* pins it.
+- **Absent is silent, and that is what makes it a sensor.** The field is omitted entirely rather than
+  reported empty — the convention `schema` and `migrations` already follow — so the day the variable
+  goes, the line goes, and **its disappearance is the signal that stage I can start**. A nag that
+  outlives the thing it nags about is furniture. Watched red: report the field unconditionally and
+  `tests/health.test.ts` § *says nothing at all once it is gone* fails while the other 34 cases in
+  that file stay green. A blank value counts as gone, because `value()` trims.
+- **It is a second reader of the flag, so it is in the allowlist by name.** `RETIRED` is a record
+  keyed by the variable — `{ SPIDERYARN_STORE: "…" }` — specifically so that
+  `one-store-only.test.ts`'s `SPIDERYARN_STORE\s*[:=]` shape **sees** it and reports the file; the
+  exemption then grants it in writing, with the reason. Written the obvious way, as
+  `name: "SPIDERYARN_STORE"`, it falls through all four shapes and the guard stays green over a new
+  reader — the seventh instance of the running shape, avoided by making the code visible to the check
+  rather than by widening the check. The widening was tried and rejected on measurement: a
+  quoted-literal shape catches four files, and one of them
+  ([`tests/store-migration-registry.ts:613`](../../tests/store-migration-registry.ts)) is naming the
+  flag inside an English sentence. A regex cannot tell a lookup key from prose, and pretending it can
+  is the failure this stage is a catalogue of.
+
+Mutation evidence, all three targets watched red before being fixed green: drop the `retired` field
+(2 red in `health.test.ts`), report it unconditionally (2 red, the two absence cases), add a spurious
+name to `RETIRED` (5 red), stub out `retiredNotes` and move the reporting into `judgeHealth` (2 red in
+`deploy-checks.test.ts`).
+
+##### And an eighth, found while checking the fourth criterion held
+
+Criterion 4 asks for a positive run with **no database-related skips**. The full run has 36 skipped
+tests in 8 files; reading them found the skip guard's own name doing what piece 1 had just been
+corrected for. The `describe` was called *"no suite decides for itself whether the database is
+required"*, and its three regexes all key on the identifier `reachable` — so two files that write
+`x ? describe : describe.skip` against something database-shaped were outside a claim that sounded
+like it covered them:
+
+- **`tests/db-test-create.test.ts`** (14 of the 36) gates on the opt-in
+  `SPIDERYARN_TEST_DB_FACTORY=1`, because those cases create and drop real databases on the cluster
+  every agent on this box shares. It writes a line to stderr saying which reason applied, so it is
+  loud rather than silent — the property that matters. Its probe does also fold in reachability, so
+  an opted-in machine with no container skips quietly; that residual belongs to the factory.
+- **`tests/migration-reconciliations.test.ts`** (0 skipped in this run) gates on `isLocalDatabaseUrl`
+  because it asserts things about *the schema this laptop actually has*; pointed at production it
+  would be asking the wrong database. Its first case asserts the connection happened, so an empty
+  block cannot read as a verified one.
+
+The other 22 skips are `gjd-remote*` platform gates — macOS-only and GNU-only — and are not about the
+database at all. **Widening the regex to the structural form was measured and rejected** precisely
+because it catches those: a guard scanning wider than its claim is the same fault as one claiming
+wider than it scans. The name is now *"no suite gates itself on `reachable`, the alias 103 of them
+shared"*, and what it does not cover is written on the guard rather than left in a skip count.
+
+**That makes eight in this stage**, and the last three were all the cheap half of the shape: the
+sentence, not the code. Nothing was broken in any of them; each one just promised something its code
+could not fail on, and the fix each time was to say the true thing.
+
 ### G — delete the adapters, in reviewable groups
 
 uploads → ai-calls → jobs → the reader-state modules and `fs.ts` → `artifacts-fs.ts` → `data-root.ts`
@@ -4515,6 +5030,16 @@ first**, because `appendSpoken` legitimately has no attempt.
 **A separate, post-deployment stage**, once Greg has removed the variable from Preview and
 Production. The first draft said "keep it about a week" and also declared completion only when the
 identifier is gone; those cannot both be true in one stage.
+
+**What tells us I can start is the sensor stage F added, not a calendar.** While the variable is
+still set on a deployment, `/api/health` carries a `retired` field naming it and `npm run deploy`
+prints a *"still to remove"* line on the machine that holds the Vercel credential (§ *The sensor that
+retires the tombstone*). **When that line stops appearing, the gate is open** — the field is omitted
+rather than emptied precisely so its absence is the answer, and no agent on this box needs a Vercel
+credential to read it. Stage I then deletes `RETIRED` and `retiredNotes` along with the tombstone,
+and the guard's exemption for `src/vercel-health.ts` with them; the staleness case in
+`one-store-only.test.ts` reddens if an exemption is left behind, so that cleanup cannot be forgotten
+quietly.
 
 Final grep must cover `src/`, `tests/`, `scripts/`, **`evals/`, `vite.config.ts`, `package.json`,
 `.env.example` and `AGENTS.md`** — not only the source paths.

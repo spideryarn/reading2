@@ -19,7 +19,6 @@
  * their exported functions, never by reimplementing what they do.
  */
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { readArticle, tryReadArticle } from "./article-input.js";
@@ -123,10 +122,9 @@ import {
 } from "./store/artifacts.js";
 import { generateHierarchy } from "./hierarchy.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
-import type { Block, JobUpload, Meta, StepName } from "./types.js";
+import type { Block, JobUpload, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
-import { STORE } from "./store/live.js";
 import { ownedSlug } from "./store/owned-slug.js";
 
 /**
@@ -430,6 +428,22 @@ export interface StepContext {
   /** Say something short about how this step is going. Shown live; not persisted. */
   report(detail: string): void;
   signal: AbortSignal;
+  /**
+   * **When this claimant stops** — `Date.now()`'s clock, and `undefined` where
+   * nobody imposed one (a command line, a test).
+   *
+   * The signal above says *"stop now"*; this says *when* that will be, which is
+   * a different and occasionally more useful thing: a step that fans out over
+   * several paid calls can decline to **start** one it cannot finish, and hand
+   * back with what it has bought already banked, rather than being aborted in
+   * the middle of a call nobody will ever read. The hierarchy step's deepening
+   * wave is the only reader today (src/hierarchy-deepen.ts § `runExpansionWave`).
+   *
+   * It is `LEASE_MS - DEADLINE_MARGIN_MS` after the claim, which is the same
+   * instant `src/jobs.ts` sets its own timer for — one number, passed, rather
+   * than two computed in two places.
+   */
+  deadlineAt?: number;
   /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
@@ -1092,29 +1106,15 @@ export async function assertProduced(
  * published. A slug with a row under it is spoken for, and saying otherwise is
  * the failure this function exists to prevent.
  *
- * ## The filesystem branch asks `fsLocations`, and must go on doing so
- *
- * It used to resolve `data/` from a module-scope
- * `path.resolve(import.meta.dirname, "..")`, which is the constant
- * src/store/data-root.ts exists to end — the repository root on a laptop,
- * `/var` inside the Vercel bundle, and deaf to `SPIDERYARN_DATA_ROOT`.
- *
- * **So this function and `contextPaths` disagreed about where `data/` is**, and
- * they are called one line apart: `slugIsSpokenFor` (src/jobs.ts) asks
- * `articleExists` and then reads `raw.json` from `contextPaths(candidate).dir`.
- * With the override set, that read `meta.json` out of one tree and `raw.json`
- * out of another and had no way to notice. Nothing had tripped over it yet;
- * both now go through `dataRoot()`, and putting the constant back would
- * reintroduce it silently.
+ * **There was a filesystem branch here until 2026-09-05**, reading `meta.json`
+ * out of `fsLocations(slug).dir`. It is gone with the flag, and with it the one
+ * way this function and `contextPaths` could disagree about where `data/` is:
+ * they were called one line apart in `slugIsSpokenFor` (src/jobs.ts), and with
+ * `SPIDERYARN_DATA_ROOT` set, one read `meta.json` out of one tree and the other
+ * `raw.json` out of another with no way to notice.
  */
 export async function articleExists(slug: string): Promise<boolean> {
-  if (STORE === "postgres") return (await ownedArticle(slug)) !== undefined;
-  try {
-    await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8");
-    return true;
-  } catch {
-    return false;
-  }
+  return (await ownedArticle(slug)) !== undefined;
 }
 
 /**
@@ -1165,22 +1165,15 @@ export function stepLabel(name: StepName, upload: boolean): string {
  * branch is owner-scoped, and for the cross-owner case this deliberately does
  * not fix.
  *
- * Under Postgres this is the **published** revision's `final_url`, which is the
- * same column every other reader treats as `Meta.url` (src/store/pg.ts §
- * `metaFrom`). A run still in flight has no published revision and so no answer
- * here; `activeFor` is what covers that, and `onShelfOrInFlight` already asks
- * it second.
+ * This is the **published** revision's `final_url`, which is the same column
+ * every other reader treats as `Meta.url` (src/store/pg.ts § `metaFrom`). A run
+ * still in flight has no published revision and so no answer here; `activeFor`
+ * is what covers that, and `onShelfOrInFlight` already asks it second.
+ *
+ * The `meta.json` branch beside it went with the flag on 2026-09-05.
  */
 export async function urlForSlug(slug: string): Promise<string | undefined> {
-  if (STORE === "postgres") return (await ownedArticle(slug))?.url ?? undefined;
-  try {
-    const meta = JSON.parse(
-      await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8"),
-    ) as Meta;
-    return meta.url;
-  } catch {
-    return undefined;
-  }
+  return (await ownedArticle(slug))?.url ?? undefined;
 }
 
 /**
@@ -2080,6 +2073,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         checkpoints,
         onProgress: ctx.report,
         signal: ctx.signal,
+        /* Only the deepening wave reads it, and only to decide whether to start
+           another scoped call — see `StepContext.deadlineAt`. With the flag off
+           it changes nothing at all. */
+        ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -2143,6 +2140,29 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              recommendation 2. */
           labelBatches: run.labelBatches,
           labelsResumed: run.labelsResumed,
+          /* What the label pass actually paid for, beside what it resumed. */
+          labelCalls: run.labelCalls,
+          /* **Was the tree bought or replayed?** Until 2026-09-05 this was
+             printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
+             docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+             deleted that CLI — so taking the deletion whole would have dropped
+             the one signal that says which. It belongs here anyway: it is the
+             field that says why a forced re-run was cheap, and without it the
+             only way to tell is to infer it from a token count, which is what
+             evals/deepen/ was reduced to doing. */
+          structureResumed: run.structureResumed,
+          /* **What the deepening wave did**, and `null` where nobody asked for
+             one — which is every article until stage 8 moves the flag
+             (src/hierarchy-deepen.ts § `DEEPEN_ENV`). Nested rather than eight
+             flat fields, because it is one feature's story and it is read as
+             one: how many sections were eligible, how many came back, what the
+             verdicts said, and what the wave could not do — a section too large
+             to ask about, a call the deadline would not admit, a 429. Every one
+             of those leaves a correct article and a shallower tree, which is
+             precisely the shape that needs a number rather than a symptom.
+             docs/reusable/silent-success.md. */
+          deepen: run.deepen,
+          deepenFailed: run.deepenFailed,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,
@@ -2189,6 +2209,32 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * (`scripts/checkpoints-sweep.ts`, `sweepPgCheckpoints`), which is where a
        * cache's lifetime belongs. src/store/checkpoints.ts § Retention.
        */
+      /**
+       * **The deepening clause is reader-scale, and the operator's numbers are
+       * deliberately not here.**
+       *
+       * `detail` is persisted with the step and rendered on the reader's
+       * progress card (`src/web/AddArticle.tsx`), so it takes the same shape as
+       * the `labelsDropped` clause above: a sentence for the one moment somebody
+       * is already watching. `withheld` and `uncheckpointed` are operator
+       * telemetry about checkpoint rows — "0 saved for retry, 0 not saved" is
+       * noise on a card — and they are in the log line above, which is where
+       * `src/jobs.ts` says a step's real numbers belong.
+       *
+       * **Silent when the flag is off**, because a clause about a feature nobody
+       * asked for reads, at zero, as "tried and found nothing" — the distinction
+       * `deepen: null` exists to keep. Silent at `targets === 0` for the same
+       * reason. A failure is *not* silent: the step succeeds and the reader gets
+       * a shallower tree than the article was going to get, and that should not
+       * be something only a log knows. ⟨Fable and GPT Sol, 2026-09-05, arbitrating
+       * where the counters went when the CLI that printed them was deleted.⟩
+       */
+      const deepened =
+        run.deepenFailed
+          ? ", deepening failed (tree kept)"
+          : run.deepen && run.deepen.targets > 0
+            ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
+            : "";
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
@@ -2196,7 +2242,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           `${run.internal} sections over ${run.blocks} blocks` +
           (run.labelsDropped > 0
             ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
-            : ""),
+            : "") +
+          deepened,
       };
     },
   },

@@ -120,18 +120,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. `vi.hoisted`
- * runs ahead of the `vi.mock` factory below as well, so the `importActual` in it
- * gets the Postgres wiring rather than a second copy of the filesystem one.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
-/**
  * **A hook in the gap between the two reads**, and the only way to test the
  * gap at all.
  *
@@ -186,29 +174,13 @@ const SLUG = "test-quiz-mark-route-fixture";
 const STALE_SLUG = "test-quiz-mark-route-stale";
 const MOVES_SLUG = "test-quiz-mark-route-moves";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/quiz-mark-route.test.ts",
   tables: ["spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { STORE } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this suite working — the filesystem
-       store answers `loadQuiz` out of a JSON file, and *a revision landing
-       between the two reads* would go back to being a `writeFile`. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * A real quiz over a real article's real blocks, built by the real `buildQuiz`.
@@ -296,7 +268,6 @@ let moves: Seeded | undefined;
 const realFetch = globalThis.fetch;
 
 beforeAll(async () => {
-  if (!reachable) return;
   current = await seed(SLUG);
   stale = await seed(STALE_SLUG, { stale: true });
   moves = await seed(MOVES_SLUG);
@@ -404,7 +375,7 @@ beforeEach(() => {
     Promise.reject(new Error("no model in tests"))) as unknown as typeof fetch;
 });
 
-when("marking one answer", () => {
+describe("marking one answer", () => {
   it("refuses a batchId that is not the current one, with a 409", async () => {
     const answered = await mark(SLUG, {
       /* The shape of the real failure: the client is holding a batch id from
@@ -499,7 +470,7 @@ when("marking one answer", () => {
   });
 });
 
-when("the article can move between the two reads", () => {
+describe("the article can move between the two reads", () => {
   it("refuses when a revision lands after the quiz was checked and before the article was read", async () => {
     /* **Publish, in the gap.** The quiz was current when it was validated and
        the article is a different one by the time it is read — so the model
@@ -579,7 +550,7 @@ when("the article can move between the two reads", () => {
   });
 });
 
-when("the reader leaving stops the paid call", () => {
+describe("the reader leaving stops the paid call", () => {
   it("aborts the provider request, not just the writing of frames", async () => {
     /* A provider that has started talking and has not finished, so there is
        something in flight to cancel. `release` ends it from the test's side

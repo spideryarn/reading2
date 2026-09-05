@@ -671,7 +671,7 @@ describe("the filesystem ledger", () => {
    A probe that names only the columns a suite *asserts on* is therefore too
    narrow: what it has to cover is every column the code under test will touch.
    See tests/helpers/pg-ready.ts. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-ai-calls.test.ts",
   tables: ["spideryarn.ai_calls"],
   columns: [
@@ -681,9 +681,7 @@ const { reachable } = await pgReady({
   max: 4,
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the Postgres ledger", () => {
+describe("the Postgres ledger", () => {
   const RUN = "00000000-0000-4000-8000-00000000c001";
   /**
    * A second run id for the money tests, so the sum below counts its own four

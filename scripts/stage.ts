@@ -116,7 +116,6 @@ const { claimUpload, mintUpload, noteSlug, readUpload } = await import(
   "../src/upload-records.js"
 );
 const { MAX_UPLOAD_BYTES } = await import("../src/uploads.js");
-const { STORE } = await import("../src/store/live.js");
 
 type Job = Awaited<ReturnType<typeof enqueue>>;
 
@@ -462,14 +461,6 @@ const force = args.includes("--force");
 const [first, second] = args.filter((a) => !a.startsWith("--"));
 
 if (!first) die(USAGE.trim());
-
-if (STORE !== "postgres") {
-  die(
-    `This command runs the pipeline against Postgres and SPIDERYARN_STORE is "${STORE}".\n` +
-      "  The npm scripts set it; the flag is read once at module load (src/store/live.ts),\n" +
-      "  so setting it inside this process would be too late.",
-  );
-}
 
 if (first === "ingest") {
   if (!second) die(`\`ingest\` wants a URL or a path to a PDF.\n\n${USAGE}`);

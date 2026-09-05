@@ -93,7 +93,7 @@
  * cannot file the same bug twice there either. Mint it per opening and the
  * property holds; mint it per click and there is no idempotency at all.
  */
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bug, Check, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
 
 import { ADMIN_EMAIL } from "../admin.js";
@@ -140,8 +140,51 @@ interface Props {
 type Stage =
   | { kind: "editing" }
   | { kind: "sending" }
-  | { kind: "sent" }
+  /**
+   * **`said` is what the reader called it, as filed** — and it is on the stage
+   * rather than read out of the live `kind` state on purpose.
+   *
+   * The thank-you differs by kind (see `THANKS`), and `kind` is form state that
+   * `discard()` clears. Reading it here would make the sentence a fact about the
+   * *form* rather than about the *report*, which is one careless re-render away
+   * from answering a problem with the generic thanks. The same reasoning as
+   * `reportId`, one field along: what was sent is not what is on screen.
+   */
+  | { kind: "sent"; said: FeedbackKind | null; sentBody: string }
   | { kind: "failed"; message: string };
+
+/**
+ * **What we say once it is filed, and it follows what they called it.**
+ *
+ * Greg, 2026-09-05, having filed one:
+ *
+ * > Can we make that slightly more appreciative? If they marked it as a problem,
+ * > maybe something say something like okay, sorry to hear you've been having a
+ * > problem, we'll look into it. If it's a suggestion, something like thank you
+ * > for the suggestion. We really appreciate it, or yeah thanks for the feedback.
+ *
+ * It said *"Thank you — that is filed."* to all three until then, which is the
+ * same sentence for somebody who has just told us something is broken and for
+ * somebody who has had an idea.
+ *
+ * **Three, not two**: the toggle may be left alone, and *"don't default to
+ * Problem"* is the decision that makes the third case the common one
+ * (docs/project/feedback.md).
+ *
+ * **No bracketed code**, unlike everything in src/messages.ts: a code exists so
+ * somebody can quote four characters when reporting a problem, and none of these
+ * is a problem — the same argument the import-state sentences make
+ * (docs/project/copy.md § The bracketed code). They live here rather than in
+ * `src/messages.ts` for the other half of that reason: that file is about
+ * failures a model call can return, and a thank-you is not a failure.
+ *
+ * *"We will look into it"* is a promise, and it is Greg's own sentence, kept.
+ */
+const THANKS: Record<"problem" | "suggestion" | "none", string> = {
+  problem: "Sorry to hear you have been having a problem — thank you for telling us. It is filed, and we will look into it.",
+  suggestion: "Thank you for the suggestion — we really appreciate it. It is filed.",
+  none: "Thank you for the feedback — we really appreciate it. It is filed.",
+};
 
 interface Shot {
   base64: string;
@@ -332,7 +375,36 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   const reportIdRef = useRef(reportId);
   reportIdRef.current = reportId;
 
-  useEffect(() => {
+  /**
+   * **`useLayoutEffect`, not `useEffect`, and that is Greg's "it should happen
+   * instantly".**
+   *
+   * A passive effect runs *after* the browser has painted. So pressing Close on
+   * the thank-you panel used to do this: the click commits `open=false` in
+   * FeedbackButton and, through `discard()`, `stage="editing"` here — one commit,
+   * which renders the emptied form back into a `<dialog>` whose `open` attribute
+   * nothing has touched yet. The browser paints that. Only then does the effect
+   * fire and shut it. The reader sees a blank feedback form flash up in place of
+   * the thank-you they were dismissing, which reads as a lag.
+   *
+   * A layout effect runs in the same commit, before paint, so the shutting and
+   * the emptying land in one frame and neither is seen. The same reason
+   * follow.ts gives for its own: a correction that is painted is not a
+   * correction. Greg, 2026-09-05; tests/feedback-dialog.test.tsx § shuts in the
+   * same frame.
+   *
+   * **jsdom cannot tell this apart from a `useEffect`**, and the test file says
+   * so rather than pretending otherwise: there is no paint in jsdom, and React
+   * flushes both kinds of effect within the same microtask there. What *is*
+   * pinned is the ordering below — that the dialog is shut before the panel is
+   * emptied — and this line is the other half, checked in a browser.
+   *
+   * **Lightbox.tsx has the same `useEffect` and has been left alone**: its panel
+   * does not change on the way out, so the lag is one frame of an unchanged
+   * picture rather than a flash of something else. Worth knowing about, not
+   * worth changing on a hunch.
+   */
+  useLayoutEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
@@ -369,6 +441,24 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   }, [open]);
 
   /**
+   * **The newest paste wins, whenever it happens to finish.**
+   *
+   * Decoding and re-encoding an image is asynchronous, so two pastes in quick
+   * succession can finish in either order and the slower one would otherwise
+   * overwrite the newer. A generation counter is the smallest thing that fixes
+   * it: each call takes the next number, and a result whose number is no longer
+   * current is dropped on the floor.
+   *
+   * **Declared above `discard` because `discard` bumps it**, which is the whole
+   * of a P1 GPT Sol established on 2026-09-05: a paste begun during one report
+   * and still being re-encoded when that report was filed and dismissed passed
+   * its generation check afterwards, and put the old report's picture into the
+   * *next* one. Clearing `shot` was not enough, because the work that would
+   * overwrite it had not finished yet.
+   */
+  const shotGeneration = useRef(0);
+
+  /**
    * **Start a new, empty report** — and this is the only thing that ever clears
    * the boxes.
    *
@@ -382,12 +472,16 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
    * So a draft survives being dismissed, and is cleared only here — after a
    * report is filed, on the reader's way out of the thank-you panel.
    */
-  const discard = useCallback(() => {
-    setBody("");
-    setKind(null);
-    setConsented(false);
-    setShot(null);
-    setShotProblem(null);
+  const discard = useCallback((keepDraft: boolean) => {
+    /* Invalidates any paste still being re-encoded — see `shotGeneration`. */
+    shotGeneration.current += 1;
+    if (!keepDraft) {
+      setBody("");
+      setKind(null);
+      setConsented(false);
+      setShot(null);
+      setShotProblem(null);
+    }
     setStage({ kind: "editing" });
     setCopied(false);
     setCopyFailed(false);
@@ -397,15 +491,70 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   }, []);
 
   /**
-   * **The newest paste wins, whenever it happens to finish.**
+   * **The report is cleared on the way out, and only once the dialog is shut.**
    *
-   * Decoding and re-encoding an image is asynchronous, so two pastes in quick
-   * succession can finish in either order and the slower one would otherwise
-   * overwrite the newer. A generation counter is the smallest thing that fixes
-   * it: each call takes the next number, and a result whose number is no longer
-   * current is dropped on the floor.
+   * Greg, 2026-09-05: *"when I click close on the thank you that is filed, there
+   * shouldn't be a delay, it should happen instantly."*
+   *
+   * The Close button used to call `discard()` and `onClose()` together. Both
+   * land in one commit, so React rendered the **emptied form** back into a
+   * dialog that was still open, and that is the frame the browser painted:
+   * a blank feedback form flashing up in place of the thank-you being
+   * dismissed. Nothing was slow — something extra was drawn.
+   *
+   * So the button only closes, and this puts the next report on its feet
+   * afterwards. A passive effect, deliberately: it must run **after** the layout
+   * effect above has shut the dialog, which is exactly the order React runs them
+   * in. tests/feedback-dialog.test.tsx pins the ordering by recording what is on
+   * screen at the moment `close()` is called.
+   *
+   * **It fires for every way out of the thank-you, not just the button**, and
+   * that fixes a second thing nobody had reported: Escape, the ✕ and the
+   * backdrop left `stage` at `sent`, so the next press of Feedback opened on a
+   * stale thank-you for a report filed some time ago, with the old draft still
+   * behind it.
+   *
+   * **Only from `sent`.** A draft the reader dismissed — mid-edit, or after a
+   * failed send — survives being shut and must: that is the accident `discard`'s
+   * own comment is about.
+   *
+   * ## The two guards, and the bug each one is
+   *
+   * **`thanksSeen`: a report filed while nobody was looking is not dismissed.**
+   * Close the dialog while a send is in the air and the request goes on; when it
+   * lands, `stage` becomes `sent` with `open` already false. Without this the
+   * reader would reopen onto an empty box with no way to tell whether their
+   * report went. With it, they reopen onto the thank-you — which is what this
+   * panel is for.
+   *
+   * **`sentBody`: words typed after Send are not somebody else's report.** The
+   * box stays editable while a request is in flight, so a reader can add a
+   * sentence between pressing Send and the answer arriving — and that sentence
+   * was never in the POST. Clearing it would delete writing that was never
+   * filed. So the draft survives, and the new `reportId` makes pressing Send
+   * again file it as the second report it is. GPT Sol established this as a P0
+   * on 2026-09-05; it predates this change, which merely widened the ways of
+   * reaching it from the Close button to every dismissal.
+   *
+   * **What is deliberately not fixed here** is the other half Sol names: after a
+   * *failed* send, an edit and a retry carry the same `reportId`, and
+   * `src/store/pg-feedback.ts` answers `duplicate` with the row it already has,
+   * so the edit is dropped server-side. That is the same lost-update class and
+   * it is older than this change; closing it wants a payload snapshot and a form
+   * that stops being editable, which is a redesign of this dialog rather than a
+   * guard. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md.
    */
-  const shotGeneration = useRef(0);
+  const thanksSeen = useRef(false);
+  useEffect(() => {
+    if (stage.kind !== "sent") return;
+    if (open) {
+      thanksSeen.current = true;
+      return;
+    }
+    if (!thanksSeen.current) return;
+    thanksSeen.current = false;
+    discard(body !== stage.sentBody);
+  }, [open, stage, discard, body]);
 
   const takeFile = useCallback(async (file: File) => {
     const mine = ++shotGeneration.current;
@@ -573,7 +722,7 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
          after a lost response looks like, and telling them about it would be
          explaining our idempotency to somebody reporting a bug. */
       if (!stillMine()) return;
-      setStage({ kind: "sent" });
+      setStage({ kind: "sent", said: kind, sentBody: body });
     } catch {
       /* The network, or a request that never left. `failure()` needs a
          `Response` and there is not one — this is the correlated-failure case
@@ -670,18 +819,13 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
       {stage.kind === "sent" ? (
         <div className="fb-panel fb-done">
           <Check size={20} />
-          <p>Thank you — that is filed.</p>
-          {/* **The one place the boxes are emptied**, and it is on the far side
-              of a filed report. `discard` also mints the next report's id — see
-              its comment for why that is the only moment the id may change. */}
-          <button
-            type="button"
-            className="fb-send"
-            onClick={() => {
-              discard();
-              onClose();
-            }}
-          >
+          <p>{THANKS[stage.said ?? "none"]}</p>
+          {/* **Close, and nothing else** — the emptying happens once the
+              dialog is shut, in the effect above `discard`. Doing both here is
+              what made Greg's *"there shouldn't be a delay"*: the click emptied
+              the form and shut the dialog in one commit, and the emptied form
+              is what got painted. */}
+          <button type="button" className="fb-send" onClick={onClose}>
             Close
           </button>
         </div>

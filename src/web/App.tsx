@@ -30,6 +30,7 @@ import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
+import { ContactPage } from "./ContactPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
@@ -200,6 +201,7 @@ import {
 } from "./position.js";
 import { DEFAULT_ROOT_PX, fitView, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
+import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
@@ -400,6 +402,16 @@ export function App() {
        this is — a 401 on the one page a stranger is most likely to be sent, for
        a line that is not about them. PricingPage.tsx § which plan. */
     if (route.kind === "pricing") return <PricingPage readerId={null} />;
+    /* Since 2026-09-05, and the least arguable exception of all of them: a page
+       whose whole subject is how to reach us is no use to somebody who cannot
+       reach it. Bare, like `PrivacyPage` above — signed out there is no shelf
+       for a corner logo to link at. ContactPage.tsx.
+
+       Deliberately not numbered: the two comments below say "sixth" and
+       "seventh", and they mean the order those branches were *written* rather
+       than their order in this list. Renumbering them for an insertion would
+       make three comments say something none of them was claiming. */
+    if (route.kind === "contact") return <ContactPage />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -524,6 +536,13 @@ function SignedIn({
             docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
             this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
         <FeaturesPage signedIn />
+      </>
+    );
+  if (route.kind === "contact")
+    return (
+      <>
+        <HomeLogo />
+        <ContactPage />
       </>
     );
   if (route.kind === "pricing")
@@ -955,6 +974,17 @@ function ArticlePage({
   readerId: string | null;
 }) {
   useRenderCount("ArticlePage");
+  /* **Reopen this article where the reader left it.** Above the fetch, and
+     first, because its restore is a layout effect that settles the address
+     before anything paints — `useReadingPosition` then reads the `?at=` it put
+     back exactly as it reads a pasted one, and needs to know nothing about it.
+
+     Here rather than in main.tsx, which is where every other address rewrite
+     lives, because those run once per page load and the commonest way to reopen
+     an article is a click on the shelf — a client-side navigation that never
+     re-runs that file. src/web/last-view.ts has the whole of it, including why
+     a shared link always beats the memory. */
+  useLastView(slug);
   const access = useArticleAccess(slug, readerId);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");

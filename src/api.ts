@@ -886,13 +886,16 @@ export async function assertOwnArticle(slug: string, verb: string): Promise<void
  * reader who dislikes what the model found could otherwise only fix it by
  * changing the article underneath it.
  *
- * So: delete, then ask for the step. Two explicit acts rather than one flag
- * that means different things on different days, and the panel puts a confirm
- * in front of it.
+ * So: delete, then ask for the step. Two explicit acts rather than one flag that
+ * means different things on different days.
+ *
+ * **The panel's *Start again* was the only caller, and it went on 2026-09-05** —
+ * `Foot` in src/web/GlossaryPanel.tsx says why, docs/project/glossary.md
+ * § Finding more why this was kept. It is API-only now: still routed, still
+ * owner-authenticated, reachable by a `curl` and by whatever calls it next.
  *
  * A missing file is a success. The caller asked for the glossary to be gone and
- * it is gone; reporting 404 would make the panel show an error for the outcome
- * it wanted.
+ * it is gone; reporting 404 would make an error out of the outcome it wanted.
  */
 export async function deleteGlossary(slug: string): Promise<{ deleted: boolean }> {
   requireSlug(slug);
