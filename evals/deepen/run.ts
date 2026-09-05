@@ -132,18 +132,27 @@ import {
   formatStepTable,
 } from "../cost/report.js";
 import {
+  abandonStep,
+  ABANDONED_MARKER,
   assertReaskNames,
   assertSeamProof,
   assertStepPlansRunnable,
   checkpointWriter,
-  startBarrier,
+  startPhaseFate,
+  type PhaseFate,
+  startRendezvous,
+  type GateVerdict,
   type CostEstimate,
   estimate,
+  fateReason,
   fileFixture,
   formatEstimate,
+  jobIntegrityFindings,
   listRecordsDir,
+  loadReadiness,
   readRecordsDir,
   recordingCheckpoints,
+  requeueFinding,
   requeueVerdict,
   type SeamProof,
   type StepPlans,
@@ -179,15 +188,72 @@ import {
 const JOB_TIMEOUT_MS = 40 * 60_000;
 
 /**
- * **How long phase D holds the book back waiting for the two load jobs to reach
- * the measured step**, before giving up and driving it anyway.
+ * **How long phase D's rendezvous may hold anybody at the entry** before it
+ * gives up, lets go, and drives the book anyway.
  *
- * Generous on purpose — it is not a budget, it is a refusal to hang. A load job
- * that fails before its measured step never announces anything, and the wait
- * ends on the jobs settling rather than on this. What this covers is the one
- * that neither announces nor settles. `startBarrier`.
+ * The old number was 15 minutes and "generous on purpose", which was safe while
+ * the barrier was a latch and nobody was actually held. It is not safe now. A
+ * held load step is holding **its own claim**, whose effective deadline is
+ * `EFFECTIVE_DEADLINE_MS` (740 s), and it is holding it *after* its step's clock
+ * has started — so every second here is a second off that job's lease and a
+ * second added to the `hierarchy` window question 5 reads.
+ *
+ * Three minutes is chosen against the thing being waited for rather than against
+ * patience: both load jobs start from `fetch` on the same bytes at the same
+ * instant, so they reach `hierarchy` within seconds of each other unless
+ * something is already wrong — a shared box serialising them on a claim slot,
+ * most likely (`STANDING_NOTES`). Waiting longer than this would not rescue that
+ * case; it would only spend the survivor's lease on it. `startRendezvous`.
  */
-const LOAD_BARRIER_TIMEOUT_MS = 15 * 60_000;
+const LOAD_RENDEZVOUS_TIMEOUT_MS = 3 * 60_000;
+
+/**
+ * **A hold long enough to be worth saying out loud**, in the run's notes.
+ *
+ * Below this, the wait is the ordinary jitter of two jobs reaching the same step;
+ * above it, a reader comparing the load jobs' `hierarchy` clocks against
+ * `STEP_BUDGET_MS.hierarchy` is reading a number with idle waiting inside it.
+ */
+const NOTABLE_HOLD_MS = 5_000;
+
+/**
+ * **How long all three measured steps must be in flight *together* before
+ * question 5 may be quoted as an answer about load.**
+ *
+ * Declared here, printed in preflight, and passed into `budgetReport` — so the
+ * number the report holds itself to is one chosen **before** the run spent
+ * rather than after the figure was seen. ⟨Greg, 2026-09-05.⟩
+ *
+ * **Why a floor at all.** `peakConcurrency` used to be the load check and is now
+ * arranged by construction: the rendezvous releases all three within one turn of
+ * the event loop, so an instant of triple overlap is guaranteed to any run that
+ * gets that far. What is *not* guaranteed is duration, and duration is bounded by
+ * the **shortest** of the three — the load articles' `hierarchy`, which is far
+ * shorter than a book's 658-778 s.
+ *
+ * **Why sixty seconds.** Against a 700 s budget it is under a tenth of the
+ * book's step: below that, whatever the book's clock says is a clock for a step
+ * that was contended at its beginning and alone for the rest, and calling it
+ * "under load" would be the kind of overclaim this harness keeps having to
+ * retract. It is a floor on what is worth quoting, **not** a prediction that the
+ * run will clear it — and if you think it will not, that is an argument for not
+ * buying phase D rather than for lowering the number afterwards.
+ */
+const FULL_CONCURRENCY_FLOOR_MS = 60_000;
+
+/**
+ * **How long any one read of the ledger may take before it gives up and says
+ * so** — both the one `driveJob` makes the instant a job stops and the eight the
+ * end-of-run reconciliation makes.
+ *
+ * A read of a local Postgres is milliseconds. The number is not a performance
+ * budget: it is what stops a database fault from delaying, for ever, the thing
+ * the reader is actually waiting for. Reconciliation sits between a thrown phase
+ * and the exception that killed the run ⟨GPT Sol, DPN-17⟩; `driveJob`'s read
+ * sits inside phase D's `allSettled`, so one read that never answers is a phase
+ * that never reaches reporting at all ⟨DPN-21⟩.
+ */
+const LEDGER_READ_DEADLINE_MS = 60_000;
 const BUSY_BACKOFF_MS = 500;
 
 /** The deadline a claimant works to, which is what question 5 is measured against. */
@@ -357,8 +423,12 @@ async function driveToDone(
     onStepSpend: NonNullable<AdvanceParts["onStepSpend"]>;
     /** Is this slug named in the re-ask lever right now? Then a requeue re-buys. */
     reasking: boolean;
+    /** Is question 5 timing this job's measured step? Then a requeue is a lie. */
+    measured: boolean;
+    /** The fate this job shares with its siblings, where it has any. */
+    fate?: PhaseFate;
   },
-): Promise<{ job: Job; elapsedMs: number; requeuedAt: number | null }> {
+): Promise<{ job: Job; elapsedMs: number; requeuedAt: number | null; abandoned: string | null }> {
   let job = start;
   const startedAt = Date.now();
   const requeuesBefore = job.requeues ?? 0;
@@ -366,16 +436,35 @@ async function driveToDone(
     if (Date.now() - startedAt > JOB_TIMEOUT_MS) {
       throw new Error(`${job.slug}: still not done after ${JOB_TIMEOUT_MS / 60_000} minutes`);
     }
+    /* **Asked before every claim, which is half the invariant** (DPN-26). The
+       three measured jobs share one fate, and once any of them has lost it none
+       of the others begins another step or a re-drive. The other half is inside
+       a claim that is already running, where this check cannot reach: the fate's
+       abort signal, combined into the measured step's own `ctx.signal` by
+       `announcing`, which is what stops a running step buying the calls it has
+       not made yet (DPN-30). `startPhaseFate`. */
+    const lost = opts.fate?.lost() ?? null;
+    if (lost !== null) {
+      return { job, elapsedMs: Date.now() - startedAt, requeuedAt: null, abandoned: lost };
+    }
     const advanced = await withSpendAttribution(
       { jobId: job.id, articleSlug: job.slug, ownerId: EVAL_OWNER_ID },
       () => advanceJobWith(job.id, { session: claimSession, steps, onStepSpend: opts.onStepSpend }),
     );
     if (!advanced) throw new Error(`${job.slug}: job ${job.id} vanished mid-run`);
     job = advanced.job;
-    if (advanced.done) return { job, elapsedMs: Date.now() - startedAt, requeuedAt: null };
+    if (advanced.done) {
+      return { job, elapsedMs: Date.now() - startedAt, requeuedAt: null, abandoned: null };
+    }
     const requeues = job.requeues ?? 0;
-    if (requeueVerdict({ reasking: opts.reasking, requeuesBefore, requeuesNow: requeues }) === "stop") {
-      return { job, elapsedMs: Date.now() - startedAt, requeuedAt: requeues };
+    const verdict = requeueVerdict({
+      reasking: opts.reasking,
+      measured: opts.measured,
+      requeuesBefore,
+      requeuesNow: requeues,
+    });
+    if (verdict === "stop") {
+      return { job, elapsedMs: Date.now() - startedAt, requeuedAt: requeues, abandoned: null };
     }
     /* `busy` means somebody else holds a running slot — another agent's dev
        server, most likely, since this box is shared. Back off and ask again,
@@ -428,12 +517,28 @@ interface JobSpec {
   steps: readonly StepName[];
   force: readonly StepName[];
   /**
-   * **Say so when this step begins**, so phase D can hold the book back until
-   * the two load jobs have their measured step under way — `startBarrier`. The
-   * hook wraps the step in this job's own registry, so it sees the real start
+   * **Hold this step at its entry until phase D says go** — `startRendezvous`.
+   *
+   * Not "say so when it begins", which is what this was and which was only half
+   * of what phase D needs: a step that announces and then runs to completion
+   * before its neighbour announces has told the truth and lined nothing up
+   * (DPN-20). So the hook is *awaited*, and the step does not start until every
+   * party is at the same entry.
+   *
+   * It wraps the step in this job's own registry, so it holds the real start
    * rather than a guess made from outside. Absent on every other job.
+   *
+   * **And the hold can end in a refusal.** A gate that gave up releases its
+   * steps with `"abandoned"`, and the step then throws before it runs rather
+   * than buying a measurement that cannot be quoted — `abandonStep`.
    */
-  announce?: { step: StepName; began: (slug: string) => void };
+  announce?: { step: StepName; arrive: (slug: string) => Promise<GateVerdict> };
+  /**
+   * **The fate this job shares with its siblings** — phase D's three, and nobody
+   * else. Once any of them has lost the ability to answer question 5, none of
+   * them claims again. `startPhaseFate`, DPN-26.
+   */
+  fate?: PhaseFate;
 }
 
 /** A job the queue has taken, and the registry that must drive it. */
@@ -484,7 +589,24 @@ async function withLevers<T>(
 }
 
 /**
- * **One step that says when it began**, and nothing else about it changed.
+ * **One step held at its entry, and refused if the wait was for nothing.**
+ *
+ * The `await` is the whole of DPN-20: this used to call the hook and carry
+ * straight on into the step, which records an arrival and lines nothing up.
+ * Held, the step genuinely does not start until the rendezvous opens — and the
+ * hold is inside the claim, which is what `LOAD_RENDEZVOUS_TIMEOUT_MS` is
+ * measured against.
+ *
+ * **The throw is the other half**, and it is the one place this eval fails a
+ * step on purpose. A gate that gave up has already lost question 5; running the
+ * measured step anyway buys an answer the report will refuse to quote, which on
+ * the book is $7.40. `abandonStep` holds both guards — never on `"go"`, never
+ * under `--dry-run` — and the throw lands before `step.run`, so nothing is
+ * bought. What you recognise it by afterwards is the finding `runPhaseD` puts on
+ * the job's record, **not** the thrown error: the queue rewrites a failed step's
+ * message before storing it, so `ABANDONED_MARKER` is already gone from
+ * `stepOutcomes[].error` by the time anybody reads it — measured on a forced
+ * `--dry-run`, not assumed.
  *
  * The overlay is on this job's own registry rather than on the shared `STEPS`,
  * so it cannot reach a job that did not ask for it — including one another agent
@@ -494,15 +616,34 @@ async function withLevers<T>(
 function announcing(
   base: StepRegistry,
   announce: NonNullable<JobSpec["announce"]>,
+  dryRun: boolean,
+  fate: PhaseFate | undefined,
 ): StepRegistry {
   const step = base[announce.step];
   return {
     ...base,
     [announce.step]: {
       ...step,
-      run: (ctx: Parameters<typeof step.run>[0], store: Parameters<typeof step.run>[1], checkpoints: Parameters<typeof step.run>[2]) => {
-        announce.began(ctx.slug);
-        return step.run(ctx, store, checkpoints);
+      run: async (ctx: Parameters<typeof step.run>[0], store: Parameters<typeof step.run>[1], checkpoints: Parameters<typeof step.run>[2]) => {
+        const verdict = await announce.arrive(ctx.slug);
+        const refuse = abandonStep({ verdict, dryRun, slug: ctx.slug, step: announce.step });
+        if (refuse !== null) throw refuse;
+        /* **The step runs under its own signal AND the phase's** — DPN-30, and
+           the only lever this eval has that reaches inside a claim. The claim's
+           own `AbortController` is private to `advanceJobWith`, so the phase
+           cannot cancel the *claim*; it does not need to. `ctx` is a plain data
+           object whose `report` is an arrow closing over the step (src/jobs.ts §
+           the `StepContext` literal), so a shallow spread carries `dir`,
+           `htmlFile`, `deadlineAt`, `cacheArticle` and the rest across intact,
+           and only `signal` is replaced.
+
+           `AbortSignal.any` rather than a replacement: **`ctx.signal` keeps
+           doing its own job**, and only a *lost fate* adds a second reason to
+           stop. The same composition `src/labels.ts` and
+           `src/hierarchy-deepen.ts` already make. */
+        if (fate === undefined) return step.run(ctx, store, checkpoints);
+        const under = { ...ctx, signal: AbortSignal.any([ctx.signal, fate.signal]) };
+        return step.run(under, store, checkpoints);
       },
     },
   } as StepRegistry;
@@ -536,7 +677,7 @@ async function enqueueJob(ctx: RunContext, spec: JobSpec): Promise<QueuedJob> {
   const base: StepRegistry = spec.ingress
     ? { ...STEPS, fetch: fixtureFetch(spec.ingress.fixture, spec.ingress.bytes, spec.url ?? "") }
     : STEPS;
-  const registry = evalRegistry(spec.announce ? announcing(base, spec.announce) : base);
+  const registry = evalRegistry(spec.announce ? announcing(base, spec.announce, ctx.dryRun, spec.fate) : base);
   const job: Job = await enqueue({
     slug: spec.slug,
     ...(spec.url !== null ? { url: spec.url } : {}),
@@ -600,7 +741,17 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
   };
 
   const reasking = (process.env[REASK_ENV] ?? "").split(",").includes(job.slug);
-  const driven = await driveToDone(job, registry, { onStepSpend, reasking });
+  /* **"Measured" is `announce`, not a second flag to keep in step with it.** Only
+     phase D's three jobs carry the rendezvous hook, and they are exactly the
+     jobs whose step question 5 times — so the one fact has one source and the
+     two cannot drift apart. */
+  const measured = spec.announce !== undefined;
+  const driven = await driveToDone(job, registry, {
+    onStepSpend,
+    reasking,
+    measured,
+    ...(spec.fate !== undefined ? { fate: spec.fate } : {}),
+  });
   record.finishedAt = new Date().toISOString();
   record.elapsedMs = driven.elapsedMs;
   record.jobStatus = driven.job.status;
@@ -620,6 +771,66 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
   record.reaskEnv = process.env[REASK_ENV] ?? null;
   record.observedSpend = observedSpend;
 
+  /**
+   * **Tell the siblings, and tell them at the instant this job stopped** — not
+   * after its ledger and its records have been read, which takes seconds the
+   * other two spend. `fateReason` decides *whether* this ending counts, and it
+   * is where the rehearsal earns its faithfulness: a dry run's job failing at
+   * its **last** free step is the expected ending and loses nothing, while a
+   * failure earlier in the list, a requeue or a fallen-back wave lose the phase
+   * in the rehearsal exactly as they would in the paid run. ⟨DPN-26, DPN-30.⟩
+   *
+   * `fateBefore` is read first, so a job can tell "I lost it" from "it was
+   * already lost when I stopped" — the second is a casualty and says so.
+   */
+  const fateBefore = spec.fate?.lost() ?? null;
+  const loseTheFate = (waveFailed: boolean): void => {
+    if (!measured) return;
+    const why = fateReason({
+      label: spec.label,
+      dryRun: ctx.dryRun,
+      status: driven.job.status,
+      requeued: driven.requeuedAt !== null,
+      waveFailed,
+      failedStep: driven.job.steps.find((st) => st.status === "error")?.name ?? null,
+      steps: spec.steps,
+    });
+    if (why !== null) spec.fate?.lose(why);
+  };
+  loseTheFate(false);
+
+  /* **A step this phase cancelled**, rather than one that broke. The fate was
+     already lost when this job stopped, and its `ctx.signal` was aborted with
+     it — so whatever it was in the middle of was cut short and whatever it had
+     not started was never started. ⟨DPN-30.⟩ */
+  if (fateBefore !== null && driven.job.status !== "done" && driven.abandoned === null) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${spec.label}: this job's measured step was CANCELLED, not broken — the phase had already ` +
+        `lost the ability to answer (${fateBefore}) and the fate's abort signal is combined into ` +
+        "this step's own. Calls it had not yet made were never made; at most the one request in " +
+        "flight was paid for. Its clock is not a measurement.",
+    });
+  }
+
+  /* **The sibling gave up before this job could claim again.** Not a failure of
+     this job at all: `driveToDone` returned without claiming because the phase
+     had already lost the ability to answer. Said as its own finding so it is not
+     read as this job having broken. ⟨DPN-26.⟩ */
+  if (driven.abandoned !== null) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${spec.label}: this job stopped without claiming again because its phase had already lost ` +
+        `the ability to answer — ${driven.abandoned}. The three measured jobs share one fate, so ` +
+        "none of them starts more paid work once any of them has lost it. Whatever call was " +
+        "already in flight finished and was paid for; nothing further was started.",
+    });
+  }
+
   if (driven.requeuedAt !== null) {
     /* **Retained, and the run stops.** "Left queued and resumable" was a claim
        the harness then undid: ordinary cleanup deleted the article, which
@@ -630,29 +841,39 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
        `runPhases` is the other half. ⟨GPT Sol, DPN-07-R.⟩ */
     ctx.retain.push(
       `${spec.label} (${job.slug}, job ${job.id}) is queued at requeue window ${driven.requeuedAt} ` +
-        "with paid answers in its checkpoint rows",
+        (reasking ? "with paid answers in its checkpoint rows" : "and is not re-driven"),
     );
-    findings.push({
-      kind: "requeued",
-      fatal: true,
-      message:
-        `${spec.label}: the claimant handed this job back at its own deadline (requeue window ` +
-        `${driven.requeuedAt} of ${REQUEUE_BUDGET + 1}) while ${REASK_ENV} still named ${job.slug}. ` +
-        "This run STOPPED rather than re-claiming it: the next claim would ignore the checkpoint " +
-        "rows this one just wrote and buy the whole wave again, and the budget permits three such " +
-        "windows. The job is left `queued`, the article and the job are RETAINED rather than " +
-        "cleaned up, and no later job in this run can publish over that slug — the run goes no " +
-        "further. This pass is partial and must not be quoted as a repeat.",
-    });
+    findings.push(
+      requeueFinding({
+        label: spec.label,
+        slug: job.slug,
+        window: driven.requeuedAt,
+        windows: REQUEUE_BUDGET + 1,
+        reasking,
+        measured,
+      }),
+    );
   }
 
   /* **The ledger, and both ways it can be short.** `forJob` is the money that
      landed; `checkScope` asks whether it landed in the eval's bucket at all
      (this eval drives jobs with no `fetch` step, so the fixture check cannot
      stand in for it — DPN-01); `checkLedgerComplete` asks whether every call the
-     collectors saw has a row (DPN-02). Both are the cost eval's, imported. */
+     collectors saw has a row (DPN-02). Both are the cost eval's, imported.
+
+     **Under a deadline, and for the same reason the end-of-run re-read is**
+     (`withDeadline`, DPN-17). This read is on phase D's path: three jobs finish
+     into three of these, and one that never answers is one `allSettled` never
+     settles, so the phase — and every finding and every number after it —
+     waits for ever on a database that has gone away. A read that gives up says
+     the spend is UNKNOWN, which is a fact the run can print.
+     ⟨GPT Sol, DPN-21.⟩ */
   try {
-    const ledger = await costStore.forJob(job.id);
+    const ledger = await withDeadline(
+      costStore.forJob(job.id),
+      LEDGER_READ_DEADLINE_MS,
+      `the ledger read for ${spec.label} (job ${job.id})`,
+    );
     record.unreadable = ledger.unreadable;
     record.money = totalMoney(ledger.rows);
     record.byStep = aggregateByStep(ledger.rows);
@@ -708,7 +929,30 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
         "article kept the tree wave 1 produced; the records are the governor's decisions and " +
         "the bill, and this pass expanded nothing. It is excluded from questions 1-3.",
     });
+    /* The third way to lose the phase, and the one that needs the records file
+       to be readable before it can be known. `budgetReport` wants three
+       completions with a wave's stats and **no failure**, so a fallback wave
+       puts three out of reach exactly as an error does. ⟨DPN-26.⟩ */
+    loseTheFate(true);
   }
+
+  /* **Did this job stop having lost what it was bought for?** Two facts that
+     were nowhere in the findings and so, to `stopIfCompromised`, looked exactly
+     like a clean job: a terminal status that is not `done` (DPN-18), and
+     deepening on with no records file at all — LOST, not "nobody asked"
+     (DPN-19). Both are pure and both are exercised in
+     tests/deepen-eval.test.ts; `jobIntegrityFindings` is where they are stated.
+     ⟨GPT Sol.⟩ */
+  findings.push(
+    ...jobIntegrityFindings({
+      label: spec.label,
+      dryRun: ctx.dryRun,
+      requeued: driven.requeuedAt !== null,
+      status: record.jobStatus,
+      deepenFlag: record.deepenFlag === true,
+      hasRecords: record.stats != null,
+    }),
+  );
   record.findings = findings;
 
   console.log(
@@ -721,18 +965,33 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
       `   hierarchy step ${record.hierarchyMs === null || record.hierarchyMs === undefined ? "—" : `${(record.hierarchyMs / 1000).toFixed(1)}s`}`,
   );
   if (record.byAiJob?.length) console.log(formatStepTable(record.byAiJob));
-  console.log(
-    `  deepening ${
-      record.stats === null
-        ? "no records file — nobody asked"
-        : `${record.stats.expanded}/${record.stats.targets} section(s), ${record.stats.calls} call(s) ` +
-          `(${record.stats.resumed} resumed, ${record.stats.withheld} withheld, ${record.stats.outOfTime} out of time), ` +
-          `yes ${record.stats.verdicts.rawYes}/${record.stats.verdicts.rawYes + record.stats.verdicts.rawNo}`
-    }`,
-  );
+  console.log(`  deepening ${deepeningLine(record)}`);
   if (findings.length > 0) console.log(formatFindings(findings));
   await ctx.checkpoint();
   return record;
+}
+
+/**
+ * **What one job's deepening pass did**, in a line — and *which* nothing, where
+ * it did nothing.
+ *
+ * "No records file — nobody asked" was printed for both of the two facts DPN-19
+ * is about: deepening off and nothing asked for (true, and phase C's whole
+ * point), and deepening on with the file lost (false, and fatal). The finding
+ * says so properly; this says so where a reader is watching the run.
+ */
+function deepeningLine(record: JobRecord): string {
+  const s = record.stats;
+  if (s != null) {
+    return (
+      `${s.expanded}/${s.targets} section(s), ${s.calls} call(s) ` +
+      `(${s.resumed} resumed, ${s.withheld} withheld, ${s.outOfTime} out of time), ` +
+      `yes ${s.verdicts.rawYes}/${s.verdicts.rawYes + s.verdicts.rawNo}`
+    );
+  }
+  return record.deepenFlag === true
+    ? "NO RECORDS FILE, and deepening was ON — this pass's records were LOST"
+    : "no records file — deepening was off, so nobody asked";
 }
 
 /* -------------------------------------------------------------- the answers -- */
@@ -891,6 +1150,7 @@ function answerTheQuestions(opts: {
     clocks,
     budgetMs: STEP_BUDGET_MS.hierarchy,
     deadlineMs: EFFECTIVE_DEADLINE_MS,
+    fullConcurrencyFloorMs: FULL_CONCURRENCY_FLOOR_MS,
     expected: opts.expectedLoadSteps,
   });
   lines.push(formatQ5(q5));
@@ -1123,7 +1383,7 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
  * DPN-15. It cannot work: a job that stops short of a publishable article
  * **fails**, and a failed job's draft revision is rolled back, so the second job
  * opens on an article with no fetched document at all. The `--dry-run` of
- * 2026-09-05 showed exactly that, four jobs deep, for free. `startBarrier` is
+ * 2026-09-05 showed exactly that, four jobs deep, for free. `startRendezvous` is
  * Sol's other suggestion and the one that survives contact.
  */
 export function stepsFor(dryRun: boolean): StepPlans {
@@ -1213,8 +1473,9 @@ async function main(): Promise<void> {
         bytes: a.bytes.byteLength,
       })),
     ],
-    /* Copied, not shared: phase D appends to this when its start barrier does
-       not open, and `STANDING_NOTES` is a module constant. */
+    /* Copied, not shared: phase D appends to this when its start rendezvous
+       holds somebody or does not open, and `STANDING_NOTES` is a module
+       constant. */
     notes: [...STANDING_NOTES],
     seamProof: null,
     estimate: bill,
@@ -1239,9 +1500,9 @@ async function main(): Promise<void> {
   console.log(`  C  ${articleSlugs[0]}   ingest ${ingest.join(",")}   deepen OFF`);
   console.log(`  C  ${articleSlugs[0]}   ${rerun.join(",")} forced   deepen ON    (must be inert)`);
   console.log(
-    `  D  three at once: ${articleSlugs[1]} and ${articleSlugs[2]} ingest, and — once BOTH have ` +
-      `reached \`${rerun[0] ?? "hierarchy"}\` — ${bookSlug} ${rerun.join(",")} forced ` +
-      `(repeat ${args.repeats + 1})`,
+    `  D  three at once: ${articleSlugs[1]} and ${articleSlugs[2]} ingest, HELD at the entry to ` +
+      `\`${rerun[0] ?? "hierarchy"}\` until ${bookSlug} ${rerun.join(",")} forced ` +
+      `(repeat ${args.repeats + 1}) is there too, then all three released together`,
   );
 
   console.log("\nWhat it will check");
@@ -1256,8 +1517,13 @@ async function main(): Promise<void> {
     "every ledger row carries scopeKind \"eval\", so nothing here is billed to Product",
     "every call each step's own collector saw has a ledger row, and the ledger is re-read at the end to say whether the numbers stood still",
     "phase C: the published tree is unchanged, the flag-off pass wrote no records file, and deepen.targets is 0 — an eligible section makes it an invalid control, not a note",
-    "phase D: the two load jobs are driven first and the book only once BOTH have reached the measured step, so the three windows can intersect at all",
+    "phase D: the two load steps are HELD at their entry, and only once both are there is the book driven at all — it reaches the same entry, and all three are released together. A shared START is what the run can arrange; whether the three windows then stay open together is `peakConcurrency`'s to measure, below",
+    "phase D: if the load steps do not both reach the entry, the book's pass under load is NOT DRIVEN and NOT BOUGHT — it answers question 5 and nothing else, and question 5 is then unanswerable at any price",
+    "phase D: if the gate gives up with all three driven, every measured step it releases is ABANDONED and throws before it runs, so a phase that cannot answer question 5 buys nothing trying to. Those jobs end `error` by this eval's doing and each says so in a finding of its own",
+    "phase D: the three measured jobs share one fate — a failed step, a wave that fell back, or a claim handed back, and the other two stop before their next claim AND cancel the calls their running step has not made yet. One claim runs the whole hierarchy step (structure call, wave, AND a full label pass, which starts even after the wave failed), so stopping at the claim alone left up to ~$10.80 still to be bought; the fate's abort signal is combined into the measured step's own. What is left is the single request already in flight, which may still be billed",
+    "phase D: a measured job STOPS on its first requeue rather than being re-driven — a re-drive takes the rendezvous's latched verdict, runs outside the gate, and lets the queue overwrite the first attempt's clock",
     "phase D: the hierarchy STEPS' own windows reach concurrency 3, and three of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement",
+    `phase D: all three measured steps are in flight TOGETHER for at least ${(FULL_CONCURRENCY_FLOOR_MS / 1000).toFixed(0)}s — declared here, before anything is bought, so it cannot be chosen after the figure is seen. Peak concurrency 3 is ARRANGED by the rendezvous and is only a wiring check; this is the load measurement, and below the floor question 5 reports latency after a synchronised start rather than sustained three-job load`,
     "a re-asking pass that hands its claim back at its own deadline is STOPPED, not re-driven: re-claiming it buys the whole wave again",
     "candidates paired across repeats on parent-plus-range, never on `where` — refused outright if the range is missing",
     "question 1 over phases A and B only, over passes whose wave did not throw, and refused outright if it matched nothing",
@@ -1686,21 +1952,108 @@ async function runPhases(opts: {
   await ctx.checkpoint();
   if (stopIfCompromised(ctx, [on], "the load phase (D)")) return;
 
-  /* D — three at once, and lined up so that "at once" is true of the STEP.
-     Its own function because it is the only phase with machinery of its own:
-     the start barrier, and the drain that has to finish before the levers can
-     be restored. */
+  /* D — three at once, and started together so that "at once" is true of the
+     STEP. Its own function because it is the only phase with machinery of its
+     own: the start rendezvous, and the drain that has to finish before the
+     levers can be restored. */
   await runPhaseD({ ctx, args, runTag, articleFiles, articleSlugs, liveBookSlug, steps: opts.steps, deepen });
 }
 
 /**
- * **Phase D — three jobs at once, and the barrier that makes "at once" true of
- * the measured STEP rather than only of the three promises.**
+ * **Phase D — three jobs at once, and the rendezvous that makes the three
+ * measured steps START together rather than merely the three promises.**
  *
  * Separated from the other three because it is the only one with machinery of
  * its own, and because both of its hazards live here: the windows that have to
- * intersect (`startBarrier`, DPN-15) and the drain that has to finish before
- * the levers are restored (DPN-06).
+ * intersect (`startRendezvous`, DPN-15/DPN-20/DPN-20-R) and the drain that has
+ * to finish before the levers are restored (DPN-06).
+ *
+ * ## The shape, in three beats
+ *
+ * 1. **Drive the two load jobs**, whose measured step is held at its entry.
+ * 2. **The readiness wait** — both of them there, gate still shut. Nothing of
+ *    the book has been driven, so nothing of it has been bought, and if this
+ *    wait does not end `"all"` the run **stops here**: the book's pass exists to
+ *    answer question 5 and nothing else, and with the load steps gone question 5
+ *    is not answerable at any price (`loadReadiness`, DPN-23).
+ * 3. **Drive the book**, which reaches the same entry through the same hook and
+ *    is the third arrival. The gate opens and all three go together — or it
+ *    gives up, and then **none of them runs**: every step it releases is
+ *    released `"abandoned"` and throws before `step.run` (`abandonStep`).
+ *
+ * ## What this phase guarantees, exactly
+ *
+ * **The one-line version, and it is deliberately narrow:** *it no longer starts
+ * paid measured work when the rendezvous already knows question 5 is impossible.*
+ * ⟨GPT Sol, DPN-29, replacing a wider claim of mine that was not true.⟩
+ *
+ * Then four statements, meant to be quoted as they stand.
+ *
+ * 1. **The three measured steps are released together, and after DPN-25 nothing
+ *    re-runs one of them outside that release.** When the gate ends `"all"` all
+ *    three are released within one turn of the event loop of each other, so all
+ *    three windows open at the same instant and neither load step can have
+ *    finished before the book began. The qualification matters and used to be
+ *    missing: a job that requeued was **re-driven**, its second arrival took the
+ *    gate's latched verdict and ran outside it, and the queue replaced the first
+ *    attempt's clock — so a retry falsified this claim while leaving a
+ *    plausible-looking pass behind. A measured job now stops on its first
+ *    requeue instead (`requeueVerdict`).
+ * 2. **On a paid run, if they did not start together, none of them ran and none
+ *    of them was bought.** The load steps never both reach the entry, so the
+ *    book is never driven (`loadReadiness`); or the gate gives up with the book
+ *    already driven, and every step it releases throws at the entry having
+ *    bought nothing (`abandonStep`). Those jobs end `error` **by this eval's
+ *    doing** and say so in a finding on their own records. *On a paid run*
+ *    because `abandonStep` deliberately stands down under `--dry-run`, whose
+ *    jobs are expected to fail at their last free step anyway.
+ * 3. **Once any of the three has lost the phase, the other two stop before their
+ *    next claim AND cancel the calls their running step has not yet made.** A
+ *    measured step that failed, a wave that fell back, a claim handed back: any
+ *    of them, and `startPhaseFate` both refuses the next claim and aborts a
+ *    signal that `announcing` has combined into the measured step's own
+ *    `ctx.signal`.
+ *
+ *    **The first half alone was not enough, and the sentence that said it was is
+ *    the one DPN-29's standard let through** (DPN-30). One claim runs the *whole*
+ *    `hierarchy` step, and that step buys a structure call, an expansion wave and
+ *    a whole pass of labels — `generateHierarchy` catches a failed wave and falls
+ *    straight through to `generateLabels` regardless. So "a call already in
+ *    flight finishes" did not cover the calls a *running* step had not started
+ *    yet, and up to about **$10.80** of phase D's $14.20 could still be bought
+ *    after question 5 was known unanswerable: the book's $7.40 pass, plus
+ *    whatever of the other load article's ~$3.40 remained.
+ *
+ *    What the abort really buys, read out of `src/` rather than assumed: label
+ *    batches are queued *with* the signal (`src/labels.ts` §
+ *    `queue.add(…, { signal })`), so **the ones that have not started are
+ *    dropped**; the wave's calls carry it through `liveExpansionExecutor`; and
+ *    `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+ *    wait, never a call in flight"*. So the honest bound is now **the single
+ *    request already in flight**, which may still be billed, rather than a whole
+ *    label pass. The claim itself cannot be aborted — its `AbortController` is
+ *    private to `advanceJobWith` — and does not need to be.
+ * 4. **Whether the three windows stayed open together long enough to measure is
+ *    NOT guaranteed, and is measured.** Two things can end the overlap, and the
+ *    one I kept repeating is not one of them: **another agent's job cannot
+ *    serialise these three after a successful gate**, because the gate only opens
+ *    when all three hold claims, which is all three of
+ *    `DEFAULT_JOB_CONCURRENCY`'s slots. ⟨DPN-29 — I asserted the contrary three
+ *    times.⟩ What really remains is runtime failure, which statement 3 now stops,
+ *    and **duration**: the load articles' `hierarchy` is far shorter than the
+ *    book's 658-778 s, so the two of them close long before it does.
+ *
+ * That last point is worth reading twice before quoting question 5, because it
+ * is the limit of what this phase can measure rather than a fault in it: the
+ * book's step is genuinely contended only for as long as the shortest sibling
+ * runs. `peakConcurrency` asks whether all three were ever open at one instant,
+ * and after the rendezvous that instant is arranged by construction — so it now
+ * confirms the phase ran rather than discovering that it overlapped.
+ *
+ * The one cost the arrangement imposes is on the load steps' clocks: they hold
+ * inside their own claims, bounded by `LOAD_RENDEZVOUS_TIMEOUT_MS`, and the hold
+ * is inside the measured step's own window, reported as a note when it is more
+ * than a moment.
  */
 async function runPhaseD(opts: {
   ctx: RunContext;
@@ -1731,21 +2084,41 @@ async function runPhaseD(opts: {
   }
 
   /**
-   * **The barrier, and which way round it goes.**
+   * **The rendezvous, and which way round it goes.**
    *
    * The two load jobs start at `fetch` and reach the measured step only after
    * stages 1-3; the book's job is a forced `hierarchy` and is there at once. So
-   * the book is **driven last**, when both load jobs have announced that their
-   * measured step has begun — and it waits outside a claim, because its own
-   * step needs 658-778 s against a 740 s deadline and has no seconds to spare.
-   * `startBarrier` says what it saw; a phase that did not line up is a finding.
-   * ⟨GPT Sol, DPN-15.⟩
+   * the book is **driven last** — but *all three* are held at the entry, and the
+   * three-ness is the point.
+   *
+   * Holding only the loads and releasing them before driving the book left the
+   * hole one party over: the loads waited for each other, nothing waited for the
+   * book, and with the third queue slot taken both released load steps could
+   * finish before the book ever reached `hierarchy` — while the outcome said
+   * `"all"`. ⟨GPT Sol, DPN-20-R.⟩
+   *
+   * **The book does hold, inside its claim, and it costs nothing.** Its step
+   * needs 658-778 s against a 740 s deadline and can give up none of it; by the
+   * time it is driven both loads are already waiting *for it*, so its own wait
+   * is one microtask. The loads are the ones that really hold, bounded by
+   * `LOAD_RENDEZVOUS_TIMEOUT_MS`, and what that cost them is reported.
+   *
+   * `startRendezvous` says what it saw; a phase that did not line up is a note
+   * here and a refusal in `budgetReport`. ⟨GPT Sol, DPN-15, DPN-20, DPN-20-R.⟩
    */
-  const barrier = startBarrier({ expected: 2, timeoutMs: LOAD_BARRIER_TIMEOUT_MS });
+  const loadSlugs = [articleSlugs[1]!, articleSlugs[2]!];
+  const rendezvous = startRendezvous({
+    /* Three parties, not two: the book is one of them. */
+    expected: loadSlugs.length + 1,
+    timeoutMs: LOAD_RENDEZVOUS_TIMEOUT_MS,
+  });
   const measuredStep = rerun[0] ?? "hierarchy";
+  /* **One fate for the three of them** — the invariant behind DPN-26, and behind
+     the four separate guards that preceded it. `startPhaseFate`. */
+  const fate = startPhaseFate();
 
   const loadQueued: QueuedJob[] = [];
-  for (const [i, slug] of [articleSlugs[1]!, articleSlugs[2]!].entries()) {
+  for (const [i, slug] of loadSlugs.entries()) {
     loadQueued.push(
       await enqueueJob(ctx, {
         phase: "D",
@@ -1756,10 +2129,17 @@ async function runPhaseD(opts: {
         ingress: loadIngress[i]!,
         steps: ingest,
         force: [],
-        announce: { step: measuredStep, began: barrier.announce },
+        announce: { step: measuredStep, arrive: rendezvous.arrive },
+        fate,
       }),
     );
   }
+  /* **Queued now even though it may never be driven** (DPN-23). The record is
+     what makes the absence visible: `budgetReport`'s `expected` counts phase-D
+     jobs, so a book that was queued and refused still demands a third clock and
+     question 5 still refuses — where a book that was never queued would have
+     quietly lowered the bar to two. `loadReadiness`'s fatal finding rides on
+     this record. */
   const bookQueued = await enqueueJob(ctx, {
     phase: "D",
     label: `book hierarchy forced under load (repeat ${args.repeats + 1})`,
@@ -1769,6 +2149,8 @@ async function runPhaseD(opts: {
     ingress: null,
     steps: rerun,
     force,
+    announce: { step: measuredStep, arrive: rendezvous.arrive },
+    fate,
   });
 
   /* **`allSettled`, not `all`.** `Promise.all` rejects the moment one job
@@ -1789,34 +2171,135 @@ async function runPhaseD(opts: {
        waited for cannot surface as an unhandled rejection. `allSettled` below
        still sees the rejection itself. */
     for (const p of loadDriving) void p.catch(() => undefined);
-    const lined = await barrier.wait(Promise.allSettled(loadDriving));
-    console.log(
-      `  barrier: ${lined.arrived.length}/${lined.expected} load job(s) reached \`${measuredStep}\`` +
-        ` after ${(lined.ms / 1000).toFixed(1)}s — ${lined.why}. Driving the book now.`,
+    const loadsDrained = Promise.allSettled(loadDriving);
+    /* **The first load job to STOP is a load job that will never arrive**, and
+       that is the signal to give up on the readiness wait — not `allSettled`,
+       which cannot resolve while its sibling is *held at the entry* waiting for
+       a gate this wait has not opened yet. Waiting on all of them meant sitting
+       out the whole timeout to learn something that was true in the first
+       second. */
+    const someLoadStopped = Promise.race(
+      loadDriving.map((p) => p.then(() => undefined, () => undefined)),
     );
-    if (lined.why !== "all") {
-      /* **Not fatal on its own.** `budgetReport`'s peak-concurrency gate is what
-         decides whether question 5 was measured; this says why it was not, at
-         the moment it happened, rather than leaving a reader to infer it from
-         three wall clocks an hour later. */
-      ctx.runFile.notes.push(
-        `Phase D's start barrier ended "${lined.why}" after ${(lined.ms / 1000).toFixed(1)}s with ` +
-          `${lined.arrived.length} of ${lined.expected} load job(s) at \`${measuredStep}\`, so the ` +
-          "book's measured step was not held back to meet them.",
-      );
+    try {
+      /* **The readiness wait: both load steps at the entry, gate still shut.**
+         Nothing of the book has been driven, so nothing of it has been bought.
+         ⟨GPT Sol, DPN-20-R.⟩ */
+      const ready = await rendezvous.waitFor(loadQueued.length, someLoadStopped);
       console.log(
-        "  WARNING: the phase did not line up. The three windows may not intersect, and question " +
-          "5 is answerable only if `peakConcurrency` says they did.",
+        `  rendezvous: ${ready.arrived.length}/${ready.needed} load step(s) HELD at ` +
+          `\`${measuredStep}\` after ${(ready.ms / 1000).toFixed(1)}s — ${ready.why}.`,
       );
+
+      /* **DPN-23 — do not buy the book into a phase that cannot answer.** */
+      const verdict = loadReadiness(ready);
+      if (!verdict.go) {
+        rendezvous.release();
+        bookQueued.record.findings = [...(bookQueued.record.findings ?? []), ...verdict.findings];
+        ctx.stopped =
+          "Phase D's load steps never lined up, so the book's pass under load was NOT DRIVEN and " +
+          "NOT BOUGHT. It exists only to answer question 5, and question 5 needs all three " +
+          "measured windows open at one instant. Question 5 is absent, not zero.";
+        console.log(`\n${"!".repeat(70)}`);
+        console.log("NOT DRIVING THE BOOK under load.");
+        console.log(formatFindings(verdict.findings));
+        console.log("!".repeat(70));
+        await ctx.checkpoint();
+        return loadsDrained;
+      }
+
+      console.log("  Driving the book now; it is the third party and opens the gate.");
+      const bookDriving = driveJob(ctx, bookQueued);
+      void bookDriving.catch(() => undefined);
+      /* **The book alone is the abandon signal here**, for the same reason: the
+         two loads are held and cannot settle until the gate opens. If the book
+         dies before it reaches the entry, this is what lets them go. */
+      const lined = await rendezvous.wait(Promise.allSettled([bookDriving]));
+      console.log(
+        `  gate: ${lined.arrived.length}/${lined.needed} measured step(s) at \`${measuredStep}\` ` +
+          `after ${(lined.ms / 1000).toFixed(1)}s — ${lined.why}. Released together.`,
+      );
+      /* **What the hold cost**, which is not nothing: it was spent inside each
+         job's claim and inside its measured step's own clock. A reader comparing
+         those clocks against `STEP_BUDGET_MS.hierarchy` has to know. The book's
+         own hold is a microtask, because everyone was already waiting for it. */
+      const notable = lined.held.filter((h) => h.ms >= NOTABLE_HOLD_MS);
+      if (notable.length > 0) {
+        const said = notable.map((h) => `${h.slug} ${(h.ms / 1000).toFixed(1)}s`).join(", ");
+        console.log(`  held at the entry: ${said}`);
+        ctx.runFile.notes.push(
+          `Phase D held ${said} at the entry to \`${measuredStep}\` waiting for the others. That ` +
+            "wait is INSIDE each job's claim and inside its measured step's clock, so those " +
+            "jobs' `hierarchy` times are that much longer than the work took and their claims had " +
+            "that much less of the 740 s deadline left.",
+        );
+      }
+      if (lined.why !== "all") {
+        /* **The gate gave up, so every step it just released was released
+           `"abandoned"` and threw before it ran** — `abandonStep`. Not a warning
+           any more: nothing was bought, and the jobs that were about to buy it
+           are `error` on this eval's say-so rather than the pipeline's. */
+        ctx.runFile.notes.push(
+          `Phase D's start rendezvous ended "${lined.why}" after ${(lined.ms / 1000).toFixed(1)}s ` +
+            `with ${lined.arrived.length} of ${lined.needed} measured step(s) at ` +
+            `\`${measuredStep}\`, so the three were not started together and none of them ran.`,
+        );
+        console.log(
+          "  WARNING: the phase did not line up, so every measured step it released was ABANDONED " +
+            "before it ran. Question 5 is unanswerable and nothing was bought for it.",
+        );
+      }
+      return Promise.allSettled([bookDriving, ...loadDriving]);
+    } finally {
+      /* **The failure release**, and it wraps the whole body rather than one
+         wait. `wait` opens the gate on every ending it has, but a throw anywhere
+         between the load jobs starting and it returning has no ending at all —
+         and steps held at the entry would then sit there holding their claims
+         until the leases ran out. The verdict is **latched** at the first
+         opening, so this call cannot turn a gate that opened on all three into
+         an abandonment under three running steps. */
+      rendezvous.release();
     }
-    return Promise.allSettled([driveJob(ctx, bookQueued), ...loadDriving]);
   });
+
+  /* **The half of "abandoned" that the queue cannot rewrite.** The thrown error
+     carries `ABANDONED_MARKER` and the queue replaces it with a reader-facing
+     sentence; this finding is on the job's own record, so it reaches `run.json`
+     and the closing findings block whatever the step's `error` ends up saying.
+     Attached after the drain, because `driveJob` assigns `record.findings` and
+     would otherwise overwrite it. Never under `--dry-run`, where `abandonStep`
+     refuses to fire at all and nothing was abandoned.
+
+     **Whom to attach it to is the gate's answer, not a snapshot's.** This used
+     to read the slugs off `wait`'s `held` list, which is taken as the outcome is
+     built — so a step that reached the entry *after* the gate closed was turned
+     away and left with a bare `error` and no explanation. ⟨GPT Sol, DPN-28.⟩ */
+  const abandoned = rendezvous.turnedAway();
+  if (!ctx.dryRun) {
+    for (const q of [...loadQueued, bookQueued]) {
+      if (!abandoned.includes(q.record.slug)) continue;
+      q.record.findings = [
+        ...(q.record.findings ?? []),
+        {
+          kind: "not-answerable",
+          fatal: true,
+          message:
+            `${q.spec.label}: ${ABANDONED_MARKER}. Its \`${measuredStep}\` was held at the entry, ` +
+            "the rendezvous then gave up rather than opening on all three, and this eval threw " +
+            "before the step ran. The job is `error` BY THIS EVAL'S DOING, not the pipeline's, " +
+            "and it bought nothing — question 5 was already unanswerable, so running it would " +
+            "have spent money on an answer the report would refuse to quote.",
+        },
+      ];
+    }
+  }
+
   const broke = settled.flatMap((s) => (s.status === "rejected" ? [s.reason as unknown] : []));
   if (broke.length > 0) {
     throw new AggregateError(
       broke.map((r) => (r instanceof Error ? r : new Error(String(r)))),
-      `${broke.length} of phase D's 3 jobs threw. Every one of them was drained ` +
-        "before the levers were restored; the report below covers what the run really did.",
+      `${broke.length} of phase D's ${settled.length} driven job(s) threw. Every one of them was ` +
+        "drained before the levers were restored; the report below covers what the run really did.",
     );
   }
   /* **Phase D is last, so there is nothing to stop before.** Its fatal findings
@@ -1828,16 +2311,6 @@ async function runPhaseD(opts: {
 
 /* -------------------------------------------------------------- the report -- */
 
-/**
- * **How long the end-of-run reconciliation may spend on the database before it
- * gives up and says so.**
- *
- * Eight reads of a local Postgres are milliseconds. The number is not a
- * performance budget: it is what stops a database fault from delaying, for ever,
- * the exception that actually killed the run — reconciliation is on the path
- * between a thrown phase and the reader being told about it. ⟨GPT Sol, DPN-17.⟩
- */
-const LEDGER_REREAD_DEADLINE_MS = 60_000;
 
 /**
  * **A promise with a deadline, and a rejection that names what it was waiting
@@ -1901,7 +2374,7 @@ async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenF
           j,
           now: await withDeadline(
             costStore.forJob(j.jobId),
-            LEDGER_REREAD_DEADLINE_MS,
+            LEDGER_READ_DEADLINE_MS,
             `the ledger re-read for ${j.phase} ${j.label}`,
           ),
           err: null as unknown,
@@ -1944,13 +2417,25 @@ async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenF
       j.unreadable = now.unreadable;
       j.byStep = aggregateByStep(now.rows);
       j.byAiJob = aggregateByAiJob(now.rows);
+      /* **"Never driven" and "the read failed" both leave `money` unset**, and
+         saying the second over the first is the mistake DPN-19 was about one
+         seam over. `startedAt` is what tells them apart: `driveJob` stamps it
+         before anything else, so a record without one was queued and refused —
+         `loadReadiness`, DPN-23 — and has no bill of its own to have failed to
+         read. */
       findings.push({
         kind: "note",
         fatal: false,
         message:
-          `${j.phase} ${j.label}: the ledger read failed during the run and succeeded at the end. ` +
-          `The bill below is the second read: $${(moneyTotalNanos(nowMoney) / 1e9).toFixed(4)}. ` +
-          "Its scope and completeness were checked here rather than during the run.",
+          j.startedAt === undefined
+            ? `${j.phase} ${j.label}: this job was QUEUED AND NEVER DRIVEN, so it has no bill of ` +
+              `its own. The ledger holds $${(moneyTotalNanos(nowMoney) / 1e9).toFixed(4)} against ` +
+              "it, which should be nothing; the run stopped before this job for a reason stated " +
+              "above."
+            : `${j.phase} ${j.label}: the ledger read failed during the run and succeeded at the ` +
+              `end. The bill below is the second read: ` +
+              `$${(moneyTotalNanos(nowMoney) / 1e9).toFixed(4)}. Its scope and completeness were ` +
+              "checked here rather than during the run.",
       });
       continue;
     }
