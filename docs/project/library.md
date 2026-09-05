@@ -142,6 +142,10 @@ The plan, the decisions and what was deliberately left out are in
 Since 2026-09-05 each of the five carries a [`ControlTip`](tooltips.md#controltip-which-is-what-most-of-them-are-now)
 card rather than a `title`, the whole row in one `TooltipGroup`.
 
+**On a finger the first tap reads a control and the second presses it**, because otherwise the tap
+that opens the card is also the tap that archives the article — [touch.md](touch.md), which lists
+this alongside the three other places that reveal before they act.
+
 ### When a button cannot do its job
 
 Two of the five need a source URL, and until 2026-09-05 they were simply **not drawn** without one —

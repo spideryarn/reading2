@@ -38,7 +38,7 @@ property of the region rather than of the gesture. A table too wide for the wind
 panned by hand; you do it from a gist column rather than from the middle of a sentence. See
 [260827t-mobile-reading-view.md § One axis at a time](../plans/260827t-mobile-reading-view.md).
 
-A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Three places reveal
+A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Four places reveal
 first and act second**, and all for the same reason: they carry a hover card, and a surface with
 no hover has to let the first press mean *show me* or the reader commits blind.
 
@@ -104,6 +104,23 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   finding is worth anything: Chrome at 834×1194 with `hasTouch`, driven through CDP
   `Input.dispatchTouchEvent` so the browser generates the pointer stream itself. Synthetic events
   would have agreed with a broken build, and once did.
+- **The shelf card's five action buttons**, since 2026-09-05 — first tap reads the control, second
+  presses it. They are visible on a touch screen (`hover-none:opacity-100`, so that a control you
+  cannot see is not also one you can hit by accident), and once
+  [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md) gave each of them a card
+  saying what it does, the tap that opens the card was also the tap that archived the article.
+  [260905i](../plans/260905i-reveal-then-commit-for-the-shelf-action-row-on-touch.md).
+
+  **The gesture is one `onClickCapture` on the row, not five handlers on five controls**, and that
+  is the one thing worth copying. Capture runs before any control's own click, so a reveal cancels
+  the press outright — which is what makes a single handler cover controls that are not alike: an
+  `<a>` whose default is to navigate, and two `IconButton`s that **refuse their own click** when
+  drawn unavailable and so would never run an injected one. The button goes on refusing; the row
+  has already stopped the event.
+
+  It also puts five *controlled* tooltips inside one `<TooltipGroup>`, which is the shape
+  [260828g](../postmortems/260828g-spine-hover-cards.md) ends by warning about — nine of that
+  change's eleven tests go red if the identity guard on the close is removed.
 
 ## Why the prose is untouched
 
@@ -213,6 +230,14 @@ repeating, is in [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touc
   a finger does — and `touch-action` constrains it too. Accepting only `touch` would have left every
   gist column dead under the Pencil: native scrolling gone, and nothing put back. A mouse is still
   excluded, by that check and by the media query on the CSS.
+
+  **This is a rule for every gesture here, and two of them do not follow it.** `swipe.ts` and the
+  shelf's action row take `touch` and `pen`; [`Spine.tsx`](../../src/web/Spine.tsx) § `bandPress`
+  takes only `touch`, so a Pencil on a spine band jumps on the first press rather than revealing —
+  and Floating UI classes `pen` as mouse-like, so no hover card opens for it either. Found by GPT
+  Sol reviewing the shelf row on 2026-09-05 and **not fixed then**, because changing what a Pencil
+  does in the reading view wants an iPad in front of it rather than a shelf change. Whoever has one:
+  it is a two-word edit and the test beside it.
 - **The ends of the article move a screenful**, rather than doing nothing. This is the one place the
   swipe cannot copy the keyboard: at the ends, a key simply declines to handle itself and the browser
   scrolls the last screenful into view
