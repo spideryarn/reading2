@@ -626,15 +626,15 @@ both would apply to any future schema change here.
 
 ### Stage: Cut secondary-route startup cost
 
-- [ ] Record an emitted import graph and a production network trace for signed-out landing,
+- [x] Record an emitted import graph and a production network trace for signed-out landing,
   signed-in shelf, Plain reader and direct Admin/Design routes. Use the same source/config/device.
-- [ ] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
+- [x] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
   heavy graph, move only that shared constant/type to a small existing home and verify again.
-- [ ] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
+- [x] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
   cached-mode activation before accepting a bundle reduction.
-- [ ] Test a failed chunk load with a usable escape; session engines survive pending/rejected
+- [x] Test a failed chunk load with a usable escape; session engines survive pending/rejected
   imports, and loading a module emits zero generation requests.
-- [ ] Record before/after initial requested JS and time-to-readable-prose, not just the largest
+- [x] Record before/after initial requested JS and time-to-readable-prose, not just the largest
   emitted chunk. Update [performance](../project/performance.md). Stop if no meaningful gain.
 
 ### Stage: Make the common mode surface fit and behave consistently

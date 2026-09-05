@@ -190,8 +190,9 @@ export const ARTICLE_TABLE_COVERAGE = {
       exported: false,
       why:
         "A cache of a model's line on where a hovered link goes, keyed by the reader, " +
-        "the article and the address, and validated against four fingerprints of its " +
-        "own inputs — src/db/schema.ts § linkSummaries. Every one of those inputs is " +
+        "the article, the address and the block it is linked from, and validated " +
+        "against four fingerprints of its own inputs — src/db/schema.ts § " +
+        "linkSummaries. Every one of those inputs is " +
         "exported or is somebody else's public page, so the row can be rebuilt for " +
         "about a hundredth of a penny, and nothing here is anything the reader wrote.",
     },

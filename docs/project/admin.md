@@ -32,9 +32,10 @@ One route. One prefix. One address.
 | [`src/web/App.tsx`](../../src/web/App.tsx) | renders the shelf instead, at any address on `ADMIN_ONLY` | No — a courtesy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | draws the Admin link, or does not | No — a courtesy |
 
-The two courtesies are worth having and worth being honest about. The admin components are in the
-JavaScript bundle every signed-in reader downloads; hiding a link hides nothing. If the client half
-were deleted tomorrow the server would refuse exactly the same requests.
+The two courtesies are worth having and worth being honest about. The admin components are public
+assets served to anybody who requests them — since 2026-09-05 on demand rather than in every
+reader's first download ([`LazyPage.tsx`](../../src/web/LazyPage.tsx)) — so hiding a link hides
+nothing. If the client half were deleted tomorrow the server would refuse exactly the same requests.
 
 ### The client's list of addresses, and why it is a map of every route
 
@@ -67,10 +68,20 @@ neither a router test nor a page test touches.
 
 **The shelf, and deliberately not the 404 page** that arrived on 2026-09-03 for every address nobody
 minted ([library.md](library.md#an-address-nobody-minted)). It is the same argument as *403, not
-404* below, applied to the client: `/admin` exists and its code is in everybody's bundle, so a page
-saying there is nothing at this address would be pretending about something anyone can see is there.
+404* below, applied to the client: `/admin` exists and its code is served to anybody who asks for it,
+so a page saying there is nothing at this address would be pretending about something anyone can see
+is there.
 `/admin/nonsense` *is* the 404 page, matching the server's own split — `/api/admin/anything` is a
 403 and `/api/administer` is a 404.
+
+**Since 2026-09-05 this code is not in every reader's first download.** `App.tsx` fetches the admin
+pages and `/design` when somebody asks for the address
+([`LazyPage.tsx`](../../src/web/LazyPage.tsx),
+[260905i](../plans/260905i-lazy-load-admin-and-design-routes.md)). **That changed the startup cost
+and nothing else.** The chunk is a public asset with no auth in front of it, the addresses still
+answer 200 to whoever asks, and the only refusal that counts is still the server's on
+`/api/admin/`. An unloaded chunk is not a boundary, and nothing in this file's reasoning rests on
+one.
 
 **The gate guards the namespace rather than the route.** It sits above the route table, so an admin
 endpoint added later is behind it whether or not whoever adds it remembers — which is the only
@@ -94,7 +105,7 @@ one is a check a `?` can be hidden behind. `serveApi` has already refused anythi
 
 **403, not 404**, against the house rule that a thing you may not see does not exist. That rule is
 right for another reader's article — a 404 refuses even to confirm it is there — and buys nothing
-here, where the page's existence is in everybody's bundle already. What it would cost is a real
+here, where the page's existence is visible to anybody who looks. What it would cost is a real
 refusal that reads as a missing route in a log.
 
 ## Who the administrator is
@@ -591,8 +602,8 @@ rather than somewhere to be remembered.
 masthead on 2026-09-05 — *"Move the Design link on the logged-in Homepage into /admin"* — because a
 page of colour tokens is developer furniture that every signed-in reader was being shown. The page
 itself is unchanged, and it is on `ADMIN_ONLY` since later the same day, so a reader who types the
-address gets their shelf. **That is a courtesy and not a gate**: the page is in everybody's bundle
-and the address answers 200 whoever asks (§ [The client's list of
+address gets their shelf. **That is a courtesy and not a gate**: the page's code is served to
+anybody who asks and the address answers 200 whoever asks (§ [The client's list of
 addresses](#the-clients-list-of-addresses-and-why-it-is-a-map-of-every-route) above). It needs no
 more than that, because it reads no data at all.
 [design-css-overview.md](design-css-overview.md) is its written counterpart.
