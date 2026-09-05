@@ -182,6 +182,7 @@ async function waveOne(): Promise<Tree> {
     droppedChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    droppedQuestions: [],
   });
 }
 
@@ -196,6 +197,7 @@ async function rebuild(root: import("../src/hierarchy.js").ModelNode): Promise<T
     droppedChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    droppedQuestions: [],
   });
 }
 
@@ -349,7 +351,7 @@ describe("which sections a wave asks about", () => {
         {},
         plain,
         SLUG,
-        { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] },
+        { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
       );
     })();
     const fake = fakeExecutor();
@@ -986,7 +988,7 @@ describe("what the width gate did while the wave ran", () => {
       {},
       plain,
       SLUG,
-      { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] },
+      { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
     );
     const out = await deepenTree({
       tree,

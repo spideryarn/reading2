@@ -119,7 +119,7 @@ const OUTLINE = renderFrozenOutline({
 } satisfies ModelNode);
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 }
 
 /** `{"sections": [{"section": 1, "children": [...]}]}`, for the cases that need one. */

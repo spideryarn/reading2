@@ -156,6 +156,23 @@ export interface TreeNode {
    * paragraph could be. Never fall back to navLabel when this is missing.
    */
   gist?: string;
+  /**
+   * **One Socratic question the node's prose answers**, on the root and depth-1
+   * nodes only, and only where the tree was built after 2026-09-05.
+   *
+   * Shown in **Summary mode alone**, under the gist — see
+   * docs/project/summaries.md § Socratic questions. It is a second field rather
+   * than a change to `gist` because the gist is rendered in ten places and is
+   * also fed back to the later structure waves as context; the argument is in
+   * `questionFor` (src/hierarchy.ts) and the plan doc.
+   *
+   * **Absence is ordinary**, unlike a missing `gist`: every tree built before
+   * this existed has none, and nothing renders a gap. Do not add it to
+   * `checkTree` — the gist rule is stated in both directions precisely because
+   * a missing gist must not pass as deliberate, and that argument does not
+   * apply to a line the model is free not to write.
+   */
+  question?: string;
   /** Leaves only. Navigation chrome for the ToC and spine; never reading content. */
   navLabel?: string;
   summary?: string;

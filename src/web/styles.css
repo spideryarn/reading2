@@ -8045,6 +8045,31 @@ td.text.note-open {
 }
 .summ-text.missing { color: var(--ink-faint); font-style: italic; }
 
+/* **The Socratic question, under the claim it leaves open.**
+   SPIDERYARN-READING2-1V.
+
+   Deliberately a *different kind of line* rather than a second sentence in the
+   same voice: italic, a step down, and fainter, so the eye reading the panel
+   for what the article says can skip the whole column of them, and the reader
+   looking for a way in finds one on every part. No label and no "?" glyph —
+   the question mark it ends with is the only marker it needs.
+
+   It follows `.summ-text`'s indent so the two line up under the title, and it
+   takes the same un-indenting on the root, where there is no title row. */
+.summ-question {
+  margin: 0.2rem 0 0 1.25rem;
+  font-family: var(--font-reading);
+  font-size: 0.87rem;
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--ink-faint);
+}
+.summ-list > .summ-entry > .summ-body > .summ-question { margin-left: 0; }
+/* The current row lifts its claim to full ink (§ `.summ-entry.now`); the
+   question lifts with it, or it would read as the one dead line on the row the
+   reader is actually standing in. */
+.summ-entry.now > .summ-body > .summ-question { color: var(--ink-soft); }
+
 /* The citation chips inside a summary. Smaller than chat's, because a summary
    is denser than an answer and the chips are punctuation in it rather than
    claims of their own. `white-space: normal` undoes `.summ-text`'s `pre-wrap`
@@ -11321,6 +11346,18 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
      scrolling a picture instead of seeing one. At 720 it is 1080 tall, which
      fits a laptop with the list beginning just below the fold. */
   width: min(94vw, 720px);
+  /* **`flex: none`, or the `width` above is decoration.** This div also carries
+     `.ill`, which is `flex: 1` — and a non-`auto` `flex-basis` beats `width` for
+     the main-axis size, so inside the dialog's flex row the panel grew to fill
+     whatever space was left instead of stopping at 720. Measured in Chrome on
+     2026-09-05: 1280px of viewport gave a 1280px panel, and the 720 the comment
+     above reasons about had never once applied.
+
+     It went unnoticed because `.ill-in-full .ill-plate` caps the picture at
+     78vh, so the extra width was empty space around a correctly-sized plate
+     rather than the 1920-tall plate the comment warns of. It became visible
+     when the brief moved into a column beside it (SPIDERYARN-READING2-1P). */
+  flex: none;
   height: 100dvh;
   background: var(--page);
   border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
@@ -11335,6 +11372,54 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    the article behind it — Lightbox.tsx § two things `<dialog>` does not do. */
 .ill-in-full .ill-scroll { padding: 0 0.9rem 1.2rem; overscroll-behavior: contain; }
 .ill-in-full .ill-says, .ill-in-full .ill-depicts, .ill-in-full .ill-quote { font-size: 0.86rem; }
+
+/* ---- the brief, as a column beside the plate ---- */
+
+/* SPIDERYARN-READING2-1P. A sibling of `.ill-in-full` inside the same dialog,
+   which is already a centred flex row, so the two columns sit side by side and
+   scroll independently without either knowing about the other.
+
+   **Hidden is the default, and the wide case is the exception.** Below the
+   breakpoint the band's own `<details>` is the prompt and this is not drawn;
+   above it, the two swap. One media query rather than two, so there is no
+   width at which both are on screen or neither is. */
+.ill-aside { display: none; }
+
+/* 720 for the plate column + 340 for this + the gutters. Under that, 94vw is
+   what bounds the plate and there is no room to put anything beside it. */
+@media (min-width: 1080px) {
+  .ill-aside {
+    display: flex; flex-direction: column;
+    width: 340px; height: 100dvh;
+    background: var(--page);
+    border-right: 1px solid var(--rule);
+    font-family: var(--font-ui);
+  }
+  .ill-aside-head {
+    margin: 0; padding: 0.62rem 0.9rem;
+    font-size: 0.79rem; font-weight: 600; color: var(--ink-faint);
+    border-bottom: 1px solid var(--rule);
+  }
+  /* The scroll this report asked for. `overscroll-behavior` for the same
+     reason `.ill-scroll` has it — a trackpad flick at the end of the prompt
+     must not scroll the article behind the overlay (Lightbox.tsx § two things
+     `<dialog>` does not do). */
+  .ill-aside-scroll {
+    flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    padding: 0.7rem 0.9rem 1.2rem;
+  }
+  .ill-aside-prompt {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem; line-height: 1.62; color: var(--ink-soft);
+    /* One paragraph of prose, shown as one — `.ill-brief p`'s reasoning, which
+       is about the JSON's line breaks rather than the brief's. */
+    white-space: normal;
+  }
+  /* The band's copy stands down while this one is up, so the prompt is on
+     screen exactly once. `display: none` also takes the `<summary>` out of the
+     tab order, which a visually-hidden rule would not. */
+  .ill-in-full .ill-brief { display: none; }
+}
 
 /* What the band says while the overlay has the picture. */
 .ill.away { justify-content: flex-start; }

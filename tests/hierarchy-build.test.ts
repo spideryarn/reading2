@@ -495,3 +495,134 @@ describe("errors never carry article prose out of the stage", () => {
     });
   });
 });
+
+/**
+ * **The Socratic question, and the two things that bound it.**
+ * SPIDERYARN-READING2-1V — Greg, 2026-09-05:
+ *
+ * > Tweak the prompt that generates the Summary mode to be a bit more in the
+ * > form of Socratic questions that encourage the reader to read the actual
+ * > text to get the full answers
+ *
+ * The prompt asks for one on the root and on each depth-1 node. The prompt is a
+ * request, so `buildTree` enforces it: a model that writes one on every section
+ * of a fifty-section article would otherwise fill the Summary panel with them,
+ * which is the noise this feature is deliberately scoped away from
+ * (src/hierarchy.ts § `questionFor`).
+ *
+ * Both losses are counted rather than quiet. A question that never appears
+ * looks exactly like a model that chose not to write one, so the only thing
+ * that could say a prompt had drifted into writing unusable ones is the
+ * number.
+ */
+describe("the Socratic question", () => {
+  const deep: ModelNode = {
+    ...ROOT,
+    question: "Why should a controlled guess count as perception?",
+    children: [
+      {
+        title: "Opening",
+        gist: "It opens by claiming something.",
+        question: "How does the opening earn its claim?",
+        range: ["spya-aaaaaa", "spya-bbbbbb"],
+        /* Two children, and neither restates the parent's range: a lone child
+           covering exactly its parent's extent is a restated rung and is
+           spliced away (`collapseRestatedRungs`), which took the node this
+           test is about out of the tree before it could be examined. */
+        children: [
+          {
+            title: "Deeper",
+            gist: "A section under a part.",
+            question: "What does this section say?",
+            range: ["spya-aaaaaa", "spya-aaaaaa"],
+          },
+          {
+            title: "Deeper Two",
+            gist: "The second section under a part.",
+            range: ["spya-bbbbbb", "spya-bbbbbb"],
+          },
+        ],
+      },
+      {
+        title: "Closing",
+        gist: "It closes by concluding something.",
+        question: "It closes by concluding something.",
+        range: ["spya-cccccc", "spya-dddddd"],
+      },
+    ],
+  };
+
+  const report = {
+    repairs: [],
+    droppedChildren: [],
+    droppedHeadings: [],
+    collapsedRungs: [],
+    droppedQuestions: [],
+  };
+  const tree = buildTree(deep, NAV, BLOCKS, "test", report);
+  const by = (title: string) => Object.values(tree.nodes).find((n) => n.title === title);
+
+  it("keeps the question on the root and on a depth-1 part", () => {
+    expect(tree.nodes[tree.rootId]?.question).toBe(
+      "Why should a controlled guess count as perception?",
+    );
+    expect(by("Opening")?.question).toBe("How does the opening earn its claim?");
+  });
+
+  it("drops one written deeper than a part, so a long article is not all questions", () => {
+    const deeper = by("Deeper");
+    expect(deeper?.depth, "the fixture stopped being a depth-2 node").toBe(2);
+    expect(deeper?.question).toBeUndefined();
+  });
+
+  it("drops a statement, rather than showing the gist twice on one row", () => {
+    /* The failure the prompt names — "never the gist with a question mark on
+       it" — arriving without even the mark. Two declarative sentences in a row
+       is the duplication this feature exists to avoid. */
+    expect(by("Closing")?.question).toBeUndefined();
+  });
+
+  it("drops a blank one", () => {
+    /* Blank-and-truthy is the shape that got a gist of three spaces rendered as
+       an empty node once already — src/hierarchy-expand.ts § `gist` is required. */
+    const blank = buildTree(
+      { ...deep, question: "   ", children: [] },
+      NAV,
+      BLOCKS,
+      "test",
+    );
+    expect(blank.nodes[blank.rootId]?.question).toBeUndefined();
+  });
+
+  /**
+   * **Measured, not imagined.** The first real toc/5 run — noema, 141 blocks,
+   * 2026-09-05 — wrote six questions and one of them ended without the mark:
+   * *"What should conscious AI mean for how we see ourselves"*. Requiring the
+   * `?` would have discarded a good question over punctuation, and discarded it
+   * invisibly. src/hierarchy.ts § `questionFor`.
+   */
+  it("adds the mark to a question that came back without one", () => {
+    const unmarked = buildTree(
+      {
+        ...deep,
+        question: "What should conscious AI mean for how we see ourselves",
+        children: [],
+      },
+      NAV,
+      BLOCKS,
+      "test",
+    );
+    expect(unmarked.nodes[unmarked.rootId]?.question).toBe(
+      "What should conscious AI mean for how we see ourselves?",
+    );
+  });
+
+  it("counts both losses, because neither is visible on screen", () => {
+    expect(report.droppedQuestions).toHaveLength(2);
+  });
+
+  it("leaves a tree that was never asked for questions exactly as it was", () => {
+    const plain = buildTree(ROOT, NAV, BLOCKS, "test");
+    for (const n of Object.values(plain.nodes)) expect(n.question).toBeUndefined();
+  });
+});

@@ -1377,7 +1377,7 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
 
   /* Planned into a report of its own and merged into the caller's only once the
      answer has survived every refusal below — see § "The caller's `report`". */
-  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 
   if (children.length === 0) {
     throw new ExpansionRefused(
@@ -1526,6 +1526,11 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
   report.repairs.push(...planned.repairs);
   report.droppedChildren.push(...planned.droppedChildren);
   report.droppedHeadings.push(...planned.droppedHeadings);
+  /* An expansion writes depth-2 and deeper nodes, where `questionFor` keeps
+     none — so this is normally empty. It is carried anyway, because a count
+     that is only summed on some paths is a count that means one thing here
+     and another there. */
+  report.droppedQuestions.push(...planned.droppedQuestions);
   return built;
 }
 

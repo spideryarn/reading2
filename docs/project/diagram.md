@@ -1878,6 +1878,38 @@ open: it is 200–500 words of composition plus the register the model chose, wh
 open by default pushed the *what it depicts* list off the bottom of a 1280-tall
 screen. The one that must be readable without a gesture is the label.
 
+#### At full screen the brief is a column, not a `<details>`
+
+Greg, 2026-09-05 (SPIDERYARN-READING2-1P):
+
+> For the Illustrated diagram, if I have clicked Enlarge, show the prompt text in
+> a column to one side so I can scroll up down independently through that text
+> while looking at the image it refers to.
+
+Which names the one thing a `<details>` under the picture cannot do. It sits
+*below* the plate in a single scrolling column, so reading the brief against the
+picture means scrolling the picture off the screen — and reading it against the
+picture is the entire reason the brief is shown at all.
+
+So above 1080px the overlay has two columns: the plate with its list, and the
+brief with its own scroller, `.ill-aside`. They are siblings inside the same
+`<dialog>`, which was already a centred flex row, so neither knows about the
+other and each scrolls alone.
+
+**The prompt is on screen exactly once at any width.** One media query flips both
+copies together — below the breakpoint there is no room for a column, so the
+column is not drawn and the band's `<details>` stays; above it, they swap. Two
+queries would leave a width where both showed or neither did.
+
+Stacking was the alternative for narrow screens and is worse: `.ill-in-full` is
+`height: 100dvh`, so a column stacked under it begins one whole screen down,
+which is the scrolling this report was about.
+
+The measured lengths that make a column worth having, across the 15 stored plates
+on 2026-09-05: **1400–2200 characters, 240–345 words** — squarely inside the
+200–500 the brief model is asked for, and enough that a reader really does lose
+their place in it.
+
 What *is* checked is the brief. Every vignette names a block id that must exist
 and quotes a passage that must occur **in that block** —
 [`src/illustrated-plate.ts`](../../src/illustrated-plate.ts), through
