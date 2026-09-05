@@ -1,6 +1,6 @@
 # Measure annotation computation before optimising it
 
-Status as of 2026-09-05: plan revised after GPT Sol rounds 1 and 2; instrument being built.
+Status as of 2026-09-06: Stage 1a measured and it convicts; Stage 1b skipped; Stage 2 under way.
 Source baseline
 `6eecb377f24d92446086a006d5b3103daae40aef` (branch `worktree-a7-annotation-measure`).
 
@@ -220,6 +220,81 @@ Timing the whole `proseHtml` loop slightly over-attributes figure-handle scannin
 That is deliberate: it is work annotation invalidation causally re-runs, and Stage 2 would avoid it,
 so it is part of A7's preventable cost.
 
+### Stage 1a result, 2026-09-06 — **optimise**, and Stage 1b is not needed
+
+Production build (`npm run build`, bundle `index-YNLoFL5N.js`, hash checked against the served
+page), `vite preview` on port 5290, `SPIDERYARN_STORE=postgres`, Playwright against system Chrome on
+the Hetzner box. Five repeats per gesture, first discarded, mode `"counts"`. Population confirmed
+first: 551 `tr[data-block]`, 177 raw term marks (20 distinct), 8 raw comment marks (5 distinct),
+20,346 nodes.
+
+| gesture, 551 blocks | end-to-end med | **attributable** med | verdict at 8ms |
+|---|---:|---:|---|
+| press a glossary term | 285 ms | **29.9 ms** | over by 3.7× |
+| open a comment | 232 ms | **30.4 ms** | over by 3.8× |
+| close a comment | 211 ms | **24.9 ms** | over by 3.1× |
+| one keystroke in the find box | 33 ms | 0.00 ms | — |
+| hover across two rows | 67 ms | 0.00 ms | — |
+
+Length control, `scaling-hypothesis` at 186 blocks: comment open **5.4 ms** attributable against
+30.4 ms — 3.0× the blocks for ~5.6× the cost.
+
+**Stage 1a convicts, so Stage 1b is skipped**, exactly as the asymmetry rule allows: an *optimise*
+verdict may land on 1a alone because the cost has been demonstrated, where a *defer* could not.
+
+**And the honest proportion, which is not what a keen reader would want it to be.** Annotation is
+only **10–14% of the gesture** — 30ms of 285ms, 30ms of 232ms. The other ~86% is commit, layout and
+the geometry reads, which is **A8's ground and not this job's**. A7 is real, it is over budget, and
+it is not the reason the interface feels sluggish on its own. Both halves of that go in
+performance.md, because a plan that quietly implies it fixed the 948ms would mislead the next person
+into thinking the problem was solved.
+
+The production numbers are also ~3× below the dev-server baseline in § The baseline gesture cost
+(285ms against 927ms), which is what `<StrictMode>` and unbundled modules are worth here, and why
+the plan refused to decide on a dev-server number.
+
+#### Where the time actually goes, and how it reshapes Stage 2
+
+Diagnostic run, `"full"` mode, glossary press, **numbers perturbed upward by the leaf clocks and
+therefore not decisive** — but the *split* is what matters and it is stable across samples:
+
+| inside `proseHtml` | calls | ~ms | share |
+|---|---:|---:|---:|
+| `annotateHtml` | 96 | 20.6 | ~55% |
+| `addZoomHandles` | **551** | 15.3 | ~40% |
+| `renderedText` / `resolveMark` | 0 / 0 | 0 | — |
+
+On comment open the leaves are `renderedText` **5**, `resolveMark` **5**, `annotateHtml` 96,
+`addZoomHandles` **551**.
+
+Three things follow, and they change the plan:
+
+1. **`addZoomHandles` runs on all 551 blocks and is ~40% of the cost**, including the ~455 blocks
+   that carry no mark at all and whose html cannot have changed. That is pure waste and per-block
+   reuse deletes all of it.
+2. **`annotateHtml` runs on all 96 marked blocks** when a term press changes the marks of one or
+   two. Per-block reuse deletes almost all of that too.
+3. **Anchor resolution is not the cost here** — five parses and five searches. So the shared
+   rendered-text cache that was Stage 2 step 1 **is cut**: it would save five parses on the workload
+   that decided this, and the anchor-stability work below removes even those. Cutting it also leaves
+   `search-hits.ts` § `pages` alone, which is one fewer file touched in a tree a dozen agents are
+   working in. If a future workload with a hundred comments says otherwise, the citation is here.
+
+**Streaming was not measured on the path the plan named as the worst case.** `useComments`' own
+`send()` streaming is reachable only by retrying or deepening an already-answered comment, and no
+comment on this article had an answer. What was measured instead is the path a fresh "ask" gesture
+actually takes today — a chat thread — and it is cheap: one render, 37.3ms attributable over a
+23,008ms wall interval, **0.2% duty cycle**, because chat deltas do not touch `marksByBlock`'s
+dependencies at all. So the comment-streaming worst case is still **unmeasured**, not disproved. It
+does not change the verdict, which A and B already settled, and the Stage 2 work removes it by
+construction: a body-only delta changes no block's marks, so every block reuses its output.
+
+**A side effect to disclose.** Exercising the streaming gesture created real comments in the *local*
+database: `replication-crisis-spya-hrjamq` went from 5 comments to **17**, and gained 2 chat threads.
+Local only, additive, nothing overwritten — but it means the Stage 1a numbers above and any later
+run are no longer over the same workload, which is why Stage 3 measures before and after in one
+session rather than against this table.
+
 ### Stage 1b — only if Stage 1a would otherwise defer
 
 **Conditional, and skipped entirely if Stage 1a decides.** This is where the earlier draft's
@@ -284,45 +359,52 @@ and a nonzero control taken before any zero is believed.
 **Done when:** the numbers exist, are appended to [performance.md](../project/performance.md) — that
 file is shared with the A4 job, so append, do not restructure — and the decision rule has been
 applied in writing.
-### Stage 2 — optimise, only if stage 1 says so
+### Stage 2 — optimise
 
-Conditional. If stage 1 says defer, this stage is written up as deferred with its evidence and
-skipped, and stage 3 is docs alone.
+**Reached**: Stage 1a convicted. Two steps, not the three the plan had before — the shared
+rendered-text cache is cut for the reason in § Where the time actually goes.
 
-1. **One shared, lazy rendered-text cache** (Sol F6). Move ownership of the per-block
-   `renderedText` result into [`annotate.ts`](../../src/web/annotate.ts), under a `WeakMap` keyed on
-   the `blocks` array identity, **filled lazily per block**. `page()` in `search-hits.ts` may fill
-   every entry, because search needs them all; comment resolution and `termMarks` ask only for the
-   blocks they name, and keep their current sparseness. Search's `index`, `scale` and fold caches
-   stay in `search-hits.ts`. This deletes a duplicated parse; it does not add a cache.
-2. **Resolution keyed on semantic anchor inputs, not on object identity** (Sol F1 — the finding
-   that matters most). Splitting `openComment` out of `marksByBlock` fixes *selection* and does
-   nothing for *streaming*, because a delta replaces the comment object and the array while the
-   anchor is untouched. So the resolution cache is keyed on `(id, blockId, quote, start)` plus the
-   block-content generation, and the previous grouped map **and its per-block arrays** are returned
-   unchanged when no anchor was added, removed or altered. **Acceptance: a body-only delta must
-   produce zero `resolveMark`, zero `renderedText`, zero `annotateHtml`, zero zoom parses and zero
-   prose mutations.**
-3. **Per-block reuse in `proseHtml`, with a stated equality contract** (Sol F7). Naive keys miss:
-   `openTerm` is global, so treating it as a block input invalidates every block; `hitMarks` hands
-   over fresh maps and arrays when the open result changes; and the composite `marks` array is
-   freshly allocated inside the loop and cannot be its own key. So the key is the **source**
-   per-block arrays (comment/chat marks, term marks, hit marks) plus **only the selected flags that
-   are relevant to that block** — whether this block contains the previously or newly open term,
-   comment, chat or hit. A block is always recomputed from **all** its mark kinds together, so
-   overlapping ranges keep their shared `<mark>`. Stored beside the output in the existing
-   `proseCache` ref and rebuilt into a fresh map each run, so removed blocks evict themselves.
+1. **Stable anchor resolution, so that step 2 can hit.** `marksByBlock` today takes `openComment`
+   and `openChat`, and rebuilds its map and every per-block array whenever either changes — so
+   *every* block's marks change identity when the reader opens one dialog. Split it: resolution
+   depends on the comments and chats alone, keyed on the **semantic anchor inputs**
+   `(id, blockId, quote, start)` plus the block-content generation — **not** on the comment object
+   or the array, because [`useComments.ts`](../../src/web/useComments.ts) § the `delta` branch
+   replaces both on every streamed token while the anchor is untouched (Sol F1). When no anchor was
+   added, removed or altered, hand back **the previous map and the previous per-block arrays**,
+   unchanged, by identity. Then apply `open` in a second cheap pass that touches only the blocks
+   holding the previously and newly open ids.
 
-   **And the source arrays have to be made stable first, or the key buys nothing** (Sol F7,
-   re-raised in round 2). [`hitMarks()`](../../src/web/search-hits.ts) today rebuilds every
-   per-block array and bakes `open` into freshly created marks whenever `openKey` changes, so an
-   identity key over those arrays would miss every hit-bearing block, not just the two that
-   changed. Of the two ways out, take the one the codebase already uses: **make the base hit-mark
-   arrays independent of `openKey`** and apply the selected flag per relevant block afterwards —
-   exactly the split `openTerm` already has from `termMarksByBlock`, and its docstring already
-   explains why. The same separation applies to comments and chats and is stated in step 2.
+   **Its value is not the five parses it saves.** It is that per-block array identity survives a
+   selection change, which is the precondition for step 2 hitting at all.
 
-**Tests before code, red first.** The stage-1 bench becomes the regression test, tightened from
+   **Acceptance:** a body-only streamed delta produces zero `resolveMark`, zero `renderedText`,
+   zero `annotateHtml`, zero `addZoomHandles` and zero prose mutations.
+
+2. **Per-block input reuse in `proseHtml`** — where the measured cost is: 551 `addZoomHandles` calls
+   and 96 `annotateHtml` calls to service a change that touches one or two blocks. Keep each
+   block's inputs beside its `{ __html }` output in the existing `proseCache` ref, and when they are
+   all unchanged, reuse the output and call neither `annotateHtml` nor `addZoomHandles`.
+
+   **The equality contract, because the naive version misses everywhere** (Sol F7):
+
+   - The key is the **source** per-block arrays — comment/chat marks, term marks, hit marks — plus
+     **only the selected flags relevant to that block**: whether it holds the previously or newly
+     open term, comment, chat or hit. `openTerm` is global, so keying on it directly would
+     invalidate every block on every press and buy nothing.
+   - The composite `marks` array built inside the loop is freshly allocated every pass and **cannot
+     be its own key**.
+   - [`hitMarks()`](../../src/web/search-hits.ts) rebuilds every per-block array and bakes `open`
+     into fresh marks whenever `openKey` changes, so its arrays must first be made **independent of
+     `openKey`**, with the selected flag applied per block afterwards — the same split `openTerm`
+     already has from `termMarksByBlock`, whose docstring gives the argument.
+   - A block is always recomputed from **all** its mark kinds together, so overlapping comment,
+     term and hit ranges keep their one shared `<mark>` rather than nesting.
+   - Rebuilt into a fresh map each run, exactly as `proseCache` already is, so a removed block
+     evicts itself and nothing is unbounded. **Never keyed on `BlockId` alone** — stable identity is
+     not immutable content.
+
+**Tests before code, red first.** Stage 1c's bench becomes the regression test, tightened from
 "this many parses" to "no parses for an unchanged anchor". Plus the correctness set: changed content
 under the same block id; **a changed glossary entry — new forms and new occurrence blocks while
 `article.blocks` is unchanged — where the old underline goes, the new one appears, an overlapping
@@ -331,11 +413,20 @@ removed blocks; article and access changes; overlapping marks; figures; note-ret
 
 ### Stage 3 — verify in a browser, document, land
 
-**Re-run Stage 1a's exact workload and compare** (Sol F12) — the same production build, the same
-slug, the same gestures, the same number of warmed repetitions — reporting attributable and
-end-to-end timings before and after side by side. Without that, Stage 2 can satisfy every count
-regression in the bench and still deliver a reader nothing, which is the failure mode this whole
-page is about.
+**Measure before and after in one session, back to back** (Sol F12), rather than comparing against
+the Stage 1a table. Build the pre-Stage-2 commit, measure; build the post-Stage-2 commit, measure;
+same slug, same gestures, same warmed repetitions, same browser session, both populations reported.
+
+**A/B in one session rather than against the recorded numbers, for a specific reason**: exercising
+the streaming gesture in Stage 1a wrote real comments into the local database, so that article now
+carries 17 comments where the Stage 1a numbers were taken over 5. The workload moved under the
+measurement. Comparing today's build against yesterday's table would be comparing two different
+articles and calling the difference a fix — and on a box a dozen agents share, the workload can move
+again between now and then. Two builds, one session, one workload is the only version of this
+comparison that cannot be quietly wrong.
+
+Without it, Stage 2 can satisfy every count regression in the bench and still deliver a reader
+nothing, which is the failure mode this whole page is about.
 
 Then a browser subagent on the built app: comment open/close, a search, a glossary press, a
 streaming answer, note navigation and figure enlarge all still work; prose text selection still
@@ -409,7 +500,13 @@ suspected worst case — exactly as slow as before.
   comment-open is ~948ms end-to-end on 551 blocks and scales with length. Plan restructured around
   Sol's cheaper decisive experiment: Stage 1a attributes the real article, Stage 1b is conditional
   on 1a not convicting. A third, scoped check of F4 found the restructure still permitted a defer on
-  a light workload; fixed. The instrument is being built.
+  a light workload; fixed. Plan committed at `89955db2`.
+- 2026-09-06 — the instrument landed (`src/web/annotation-cost.ts`, three modes, six sites). Stage 1a
+  measured on a production build: **attributable annotation is ~30ms median per gesture on 551
+  blocks, 3–4× over the 8ms threshold — optimise.** Stage 1b skipped. The breakdown cut Stage 2 from
+  three steps to two: `addZoomHandles` over all 551 blocks is ~40% of the cost and anchor resolution
+  is five parses, so the shared rendered-text cache is not worth its file. Also recorded plainly:
+  annotation is only 10–14% of the gesture, and the rest is A8's ground.
 
 ### The cleanest probe available, and why
 

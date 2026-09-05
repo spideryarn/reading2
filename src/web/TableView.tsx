@@ -54,6 +54,7 @@ import { useColumnContext } from "./useColumnContext.js";
 import { BlockRange } from "./BlockRef.js";
 import { BlockGutter } from "./BlockGutter.js";
 import { commentsByBlock } from "./comment-nav.js";
+import { costOn, NO_CLOCK, noteCost } from "./annotation-cost.js";
 import { SWIPE_ATTR } from "./swipe.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
 import { Lightbox } from "./Lightbox.js";
@@ -455,6 +456,12 @@ function TableViewInner({
   }, []);
 
   const marksByBlock = useMemo(() => {
+    /* Off by default; see src/web/annotation-cost.ts, including why this ms
+       *contains* the `renderedText` and `resolveMark` ms and must not be added
+       to them. Timed whenever the probe is on at all: this is one of the two
+       numbers the decision rule is applied to. */
+    const timing = costOn();
+    const t0 = timing ? performance.now() : NO_CLOCK;
     const byBlock = new Map<BlockId, Mark[]>();
     const push = (blockId: BlockId, mark: Mark) => {
       const list = byBlock.get(blockId) ?? [];
@@ -479,6 +486,7 @@ function TableViewInner({
       if (!found) continue;
       push(t.anchor.blockId, { id: t.id, ...found, kind: "chat", open: t.id === openChat });
     }
+    if (timing) noteCost("marksByBlock", t0);
     return byBlock;
   }, [comments, chats, byId, openComment, openChat]);
 
@@ -566,6 +574,12 @@ function TableViewInner({
    *   it touches instead of the article.
    */
   const proseHtml = useMemo(() => {
+    /* Off by default; see src/web/annotation-cost.ts, including why this ms
+       *contains* the `annotateHtml` and `addZoomHandles` ms and must not be
+       added to them. Timed whenever the probe is on at all: this is the other
+       number the decision rule is applied to. */
+    const timing = costOn();
+    const t0 = timing ? performance.now() : NO_CLOCK;
     const was = proseCache.current;
     const byBlock = new Map<BlockId, { __html: string }>();
     for (const block of blocks) {
@@ -609,6 +623,7 @@ function TableViewInner({
       );
     }
     proseCache.current = byBlock;
+    if (timing) noteCost("proseHtml", t0);
     return byBlock;
   }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
 
