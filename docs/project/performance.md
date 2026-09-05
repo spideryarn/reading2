@@ -1118,8 +1118,12 @@ That is the right trade and it belongs in the record beside the win.
 
 **This was not landed as a speed improvement and should not be cited as one.** It was landed as a
 boundary: [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) walks the
-static import closure from `boot.tsx`/`main.tsx` and fails if admin or design code is in it, so the
-next thing added to the administrator's table cannot arrive in every reader's startup unnoticed.
+static import closure from `boot.tsx`/`main.tsx` and fails if admin or design code is in it, **or if
+the two sides start sharing a module nobody has signed off** — so the next thing added to the
+administrator's table cannot arrive in every reader's startup unnoticed. That second clause is the
+one that makes the sentence true: a fixed list of six file names would have passed a *new* admin
+module imported eagerly, which is exactly how the guard was attacked and exactly how it would have
+failed in six months' time.
 Two incidental results worth knowing: the `[INEFFECTIVE_DYNAMIC_IMPORT] src/web/lib/supabase.ts`
 line is gone from the build, and the Supabase SDK is now a separately cacheable chunk.
 

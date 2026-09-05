@@ -419,10 +419,13 @@ const ROUTE_PRIVATE = [
  *    `router.ts` importing a new helper. The helper lands in both closures at
  *    once, so it arrives here without anybody having touched an admin file.
  *
- * Both are a one-line edit and both are worth a glance, so this is deliberately
- * not narrowed to catch only the first: narrowing it would mean deciding in
- * advance which new module in a reader's startup is interesting, which is the
- * judgement the list exists to take away from whoever is in a hurry.
+ * Both of those are a one-line edit and both are worth a glance, so this is
+ * deliberately not narrowed to Sol's case alone: narrowing it would mean
+ * deciding in advance which new module in a reader's startup is interesting,
+ * which is the judgement the list exists to take away from whoever is in a
+ * hurry. All three were watched go red on 2026-09-06: Sol's case with his own
+ * `review-admin-chart.ts`, the first of these by adding `HomeLogo.js` to
+ * `AdminPage`, the second by giving `pill.ts` an import of its own.
  *
  * Bare packages are not here. Only local files are walked, so `react` and
  * `lucide-react` are recorded as external and never enter either closure — this
