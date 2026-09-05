@@ -142,7 +142,7 @@ self-hosted from `@fontsource-variable/geist`, imported at the top of
 |---|---|
 | `--font-sans` | Geist — the family itself. Nothing should name this directly; use one of the two below |
 | `--font-reading` | the article, and the reader's own words in a comment |
-| `--font-ui` | chrome: controls, masthead facts, column headers |
+| `--font-ui` | chrome: controls, masthead facts. The table's column headers wore it until 2026-09-05, when that row lost its height — it is still in the DOM for the fisheye panels' geometry and for a screen reader, and sets no type at all |
 | `--font-mono` | Geist Mono — counts, and anything that wants to line up |
 | `--font-id` | Courier — block ids, and only block ids (Greg's ask) |
 | `--font-brand` | Trebuchet MS — the wordmark, and only the wordmark |
@@ -170,14 +170,15 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
 - **65ch**, the reading measure — which the previous app really did ship, as `max-w-[65ch]`. Since
   2026-09-04 it also **sits in the middle of whatever cell it is given**, in every mode and at every
   width — Greg: *"Always centre the Text view within its column when visible, no matter which mode
-  is active."* Four rules carry it and each is commented where it lives, in
+  is active."* Three rules carry it and each is commented where it lives, in
   [`styles.css`](../../src/web/styles.css): § text centres `.prose`; § the gutter moves the reader's
-  icon column the same distance; § the title over the column puts the masthead on the prose's own
-  left edge wherever the two share a box; and § the header over the article's column does the same
-  for `Text verbatim`, which is the only column heading that moves — the gist columns are not
-  centred and theirs are right where they are. **Everything that names the text follows it; nothing
+  icon column the same distance; and § the title over the column puts the masthead on the prose's own
+  left edge wherever the two share a box. (There was a fourth, § the header over the article's
+  column, which did the same for `Text verbatim`. The column-header row lost its height on
+  2026-09-05 and its labels became `.sr-only` spans, so there is no heading left to align and the
+  rule went with it.) **Everything that names the text follows it; nothing
   that names the row does** — the search bar and `row-active` stay at the cell's edge on purpose,
-  and the footnotes opt out as a block, both for reasons given in place. All four are self-limiting:
+  and the footnotes opt out as a block, both for reasons given in place. All three are self-limiting:
   below about 900px the measure is wider than the cell and none of them does anything. The separate
   mechanism that centres the whole *table* when the article is the only thing on the page is
   § plain, centred, and `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) — **its

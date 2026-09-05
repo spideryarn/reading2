@@ -509,6 +509,15 @@ Two things changed, and the second is the more important:
    rewrite is exempt from the auth callback *by construction* rather than by the person adding it
    remembering.
 
+**The fifth arrived on 2026-09-05**, `liftStrandedText`, and it is the first that changes the *mode*
+rather than the page: `?mode=hierarchy&text=0` became a state with no exit when the `Text` pill left
+the controls bar, so it is rewritten to `?mode=outline`
+([url-state.md](url-state.md#the-parameters)). The mode is in the tab, so this is a title divergence
+by construction and `readMode` in [read-address.ts](../../src/read-address.ts) predicts it — the same
+shape as `redirectsToMetadata`, one function deciding for both sides. The cross-product below caught
+it: with the server half removed it reports sixteen disagreements, which is the reason to believe
+the corpus rather than the reasoning.
+
 ### Eight fixed one at a time is not a fix
 
 **The count, since it keeps moving:** ten findings in all — the eight title divergences listed above,

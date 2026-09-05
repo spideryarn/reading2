@@ -275,13 +275,73 @@ Also in this stage:
   2026-09-03 and the pill went on 2026-09-05 — so the realistic population is Greg's own bookmarks.
   Low stakes; pick it, write it, and do not spend a second review round on it.
 
-Files: `TableView.tsx`, `tree.ts`, `scroll.ts`, `main.tsx`, `styles.css`,
-`tests/mobile-chrome.test.ts`, `tests/column-names.test.ts`, `tests/url-state.test.ts`. Docs:
-`granularity-zoom.md`, `keyboard.md`, `design-css-overview.md`, `url-state.md`.
+Files: `TableView.tsx`, `tree.ts`, `App.tsx`, `scroll.ts`, `router.ts`, `read-address.ts`,
+`last-view.ts`, `styles.css`, `tests/mobile-chrome.test.ts`, `tests/column-names.test.ts`,
+`tests/address-settling.test.ts`, `tests/public-read-rewrite.test.ts`,
+`tests/prose-centred-in-its-cell.test.ts`, and a new `tests/aimed-column.test.ts`. (**Not
+`main.tsx`**, which this said until 2026-09-05: it calls `settleAddress`, and the four rewrites were
+consolidated into that one pure function on 2026-08-30.) Docs: `granularity-zoom.md`, `keyboard.md`,
+`design-css-overview.md`, `url-state.md`, `web-client.md`, `column-context.md`, `page-titles.md`.
 
 **Done when** Hierarchy has one visible sticky row, the fisheye panels still draw their contents, a
 deep link lands with the target's top clear of the bar with an article-owned `<thead>` on the page,
 and pressing ← / → visibly moves the aim including onto the prose.
+
+**Built 2026-09-05.** Six things it settled that the plan had not:
+
+- **The `?text=0` rewrite is a title divergence, and the plan missed it.** The mode goes in the tab,
+  and the server composes a shared article's `<title>` from the raw address — so a client-only
+  rewrite makes the tab read Hierarchy and then Outline a second later, which is the exact fault
+  [page-titles.md](../project/page-titles.md) exists to close, for the eleventh time. `readMode` in
+  [read-address.ts](../../src/read-address.ts) predicts it now, through a shared `hidesProse`
+  predicate, the same shape as `redirectsToMetadata`. Removing the server half makes
+  `tests/address-settling.test.ts` report **sixteen** disagreements, checked rather than assumed.
+- **A restore would have walked straight past the rewrite.** `?text=` was in `REMEMBERED`
+  ([last-view.ts](../../src/web/last-view.ts)), and a restore runs from a React effect — *after*
+  `settleAddress`. So a browser that had stored `?mode=hierarchy&text=0` would put the reader back
+  into the stranded state the rewrite exists to prevent. It moved to `NEVER_REMEMBERED`. The
+  realistic population is one browser, since both that feature and the `Text` pill's removal landed
+  on the same day, but the hole is the same shape either way.
+- **The aim tint has to reach the *panels*, and the browser pass is what found that.** Every gist
+  column in Hierarchy is covered by an opaque `position: fixed` `.ctx-panel`, and the cell underneath
+  deliberately draws nothing — so the first version tinted the prose column correctly and did
+  *nothing whatever* for Parts and Sections, which are the columns ← reaches. Every unit check
+  passed. The fix moved `data-aim` from the `<table>` to `.reader`, the only ancestor of both
+  surfaces, and each rule now names the cell and the panel together with `:is()`. Two things came
+  with it: `TableView` **drops `navDepth` as a prop entirely**, so a pointer move no longer
+  re-renders a memoised table of ~2,200 cells to change one underline; and the cell half needs
+  `table.zoom:not(.only-prose)`, or Plain — where the prose is the only rung and the pointer rests
+  on it permanently — gets a standing orange wash over the whole article.
+- **The matrix is written over `[data-nav-depth]`, not `.depth-N`.** Both kinds of cell already
+  carry that attribute — it is what `keynav.ts` resolves a pointer with — so one line covers a gist
+  column and the prose column together, instead of a matrix plus a separate `td.text` rule that
+  somebody has to remember. It is bounded at depth 7 because CSS cannot compare two attribute
+  values; past that the tint does not draw, which is a missing hint rather than a broken key.
+  `tests/aimed-column.test.ts` pins the bound, the `background-image`, the panel and the prose cell.
+- **The spine is not tinted, deliberately.** An aim is a *depth*, and the spine is depth 1 drawn a
+  second way, so when depth 1 is aimed the Parts column already says so. The one case that shows
+  nothing is a pointer resting on the spine with Parts fitted away — which lit nothing before.
+- **§ the header over the article's column went too.** Forty lines added on 2026-09-04 to put
+  `Text verbatim` on the prose's left edge, plus its two nested spans in `TableView` and its case in
+  `tests/prose-centred-in-its-cell.test.ts`. There is no visible heading to align any more, so the
+  arithmetic was provably painting nothing. The three type tokens it needed (`--head-pad-x`,
+  `--head-type-size`, `--head-type-weight`) went with it.
+- **The browser pass measured it rather than eyeballing it.** `thead th`, `thead tr` and `thead` all
+  report a height of exactly `0`; the fisheye panels hold 9 and 49 entries and re-centre on scroll,
+  matching the pre-stage baseline exactly; `.controls`'s bottom edge and `.ctx-panel`'s top edge are
+  both `265.6875`, so the panels now sit flush under the bar; the pills read `Parts Sections
+  Paragraphs` and `.controls` measures `scrollWidth === clientWidth === 378` at 390px, so full words
+  did not reintroduce the overflow; and a deep link lands `44.45` against a bar bottom of `44`.
+  **The aim tint is real but invisible in a screenshot** at 7% alpha — it was confirmed by reading
+  `backgroundImage` off both the cell and the panel at each rung, which is the only honest way to
+  check it.
+- **A trap for the next test writer**, found by the browser pass and worth more than the check that
+  found it: on a cold load the `?text=0` rewrite takes 1.4–1.7s to land, because nothing runs until
+  the bundle does. No reader ever sees the unrewritten page, but a test with a fixed 800ms wait sees
+  the old URL and reports a failure that is not there. Wait on the condition, not on the clock.
+- **`--head-h` is `0px`, not `0`.** It feeds `calc(var(--bar-bottom) + var(--head-h))`, and a
+  unitless zero in a `calc` sum with a length makes the whole declaration invalid — which would have
+  dropped every gist's sticky `top` silently.
 
 ### Stage 4 — the bar disappears when it has nothing in it
 
@@ -376,6 +436,24 @@ already are and Greg asked for this now: `structure-mode` is mid-stage-1 and Str
 The rule instead is **whoever lands second merges `dev` and adapts** — and this plan states its new
 contracts explicitly (the rail's default, `stickyOffset`'s selector, `?text=0`'s rewrite, the
 zero-height head) so there is something to adapt *to*. Merge `dev` between every stage.
+
+**Round 3, on stage 3's code** — [`…-stage3-review-sol.md`](260905d-declutter-top-bars-stage3-review-sol.md),
+GPT Sol, 2026-09-05. **Refused**, two established P1s, no P0s. Both accepted, both fixed, each red
+first. What is worth noticing is *where* they were: not in the head, the offset, the aim tint or the
+pills — the parts this stage was planned around, which passed both static inspection and the browser
+pass — but in the **address** work, which the plan had not anticipated at all and which stage 3 grew
+into on discovering that `?text=0` had become a state with no exit. A stage that grows a second
+subject grows a second set of risks, and this plan named none of them.
+
+| | Finding | Disposition |
+|---|---|---|
+| F1 | Stale `localStorage` restores `?text=0` after boot, walking past the new rewrite | **Accepted.** `REMEMBERED` governs what gets *written*, and a browser's storage outlives any version of that list. Fixed in `restoredHref` rather than Sol's `readLastView` — the pure function, and general rather than a patch for `text`. |
+| F2 | A duplicate `text` pair decided strandedness, where `nuqs` reads only the first | **Accepted.** `liftStrandedText` already documents first-match semantics for `mode` in the same function; `text` had not been given it. Deciding and removing are now two questions. |
+
+Sol could not check the one thing I most wanted checked — whether a zero-height `<th>` really
+measures zero in a real engine — because Chrome would not start under its sandbox, and it said so
+rather than guessing. The browser pass answered it: `thead th`, `thead tr` and `thead` all measure
+**exactly 0**, and `.controls`'s bottom and `.ctx-panel`'s top are both `265.6875`.
 
 **Round 2, on stage 2's code** — [`…-stage2-review-sol.md`](260905d-declutter-top-bars-stage2-review-sol.md),
 GPT Sol, 2026-09-05. **Accept with changes**, seven findings, no P0 or P1: one reachable performance

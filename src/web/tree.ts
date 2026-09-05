@@ -208,7 +208,26 @@ export function navigableItems(
 }
 
 /**
- * Human label for a column.
+ * **Human label for a column — the only one there is, since 2026-09-05.**
+ *
+ * There were two of these. `columnPill` wore `L1`, `L2` and `Para` in the
+ * controls bar and this one wore `Parts`, `Sections` and `Paragraphs` over the
+ * columns themselves, and the numbers were defended on the grounds that
+ * *"`Parts` and `Sections` are exactly what a depth of 1 and 2 mean here, and
+ * both the column header and the tooltip say so"*. Stage 3 of
+ * docs/plans/260905d-declutter-the-reading-view-top-bars.md took the header
+ * row's height away, and a touch reader cannot open a tooltip — so both legs of
+ * that argument went at once and the pills took the full words instead. It cost
+ * roughly 90px of a row that shed well over 300.
+ *
+ * A depth number said where a column sits in the tree rather than what is in
+ * it, which is the objection Greg raised against `L0` and `L3` on 2026-08-27
+ * and which applied to the middle rungs all along.
+ *
+ * **`Paragraphs` is tested before the depth**, so it is right at whatever depth
+ * the leaves happen to be — a two-deep article's leaves are at 2 and a
+ * five-deep article's at 5, and the pill this replaced read `L{leafDepth}` and
+ * so said something different on each.
  *
  * **Depth 0 kept its name and lost its column.** It read "Argument" whenever
  * the arc had been generated and "Article" otherwise, which is the `hasArc`
@@ -227,33 +246,6 @@ export function columnLabel(depth: number, leafDepth: number): string {
     case 2: return "Sections";
     default: return `Level ${depth}`;
   }
-}
-
-/**
- * The short label the controls bar's pill wears — the same column
- * `columnLabel` names in full, in the two or four characters a pill has room
- * for.
- *
- * Two of these were depth numbers until 2026-08-27, and a depth number says
- * where a column sits in the tree rather than what is in it. Greg: rename `L0`
- * to `Arg`, and the paragraph pill to anything short that explains itself. So
- * the ends of the ladder got names and the middle rungs kept their numbers,
- * because `Parts` and `Sections` are exactly what a depth of 1 and 2 mean here
- * and the tooltip says so anyway. One of those two ends has since gone, below,
- * which leaves `Para` and the numbers.
- *
- * **`Arg` went on 2026-09-05** with the column it opened — Greg: "let's get rid
- * of the 'Arg' button and functionality altogether". The pill was deliberately
- * fixed furniture, named for the arc even on an article whose arc had never
- * been generated, so that it did not move under a reader because of a pipeline
- * stage they never ran; there is simply no L0 column to name now
- * (layout.ts § `offerableGists`). Stage 3 of
- * docs/plans/260905d-declutter-the-reading-view-top-bars.md folds what is left
- * of this back into `columnLabel`.
- */
-export function columnPill(depth: number, leafDepth: number): string {
-  if (depth === leafDepth) return "Para";
-  return `L${depth}`;
 }
 
 /**

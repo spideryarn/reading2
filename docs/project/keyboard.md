@@ -53,8 +53,9 @@ what your hand is doing.
 **We have since bought a small piece of exactly that**, and it is worth being clear about the price.
 ← / → set a level and it stays set, which is a state you can be wrong about. Three things keep it
 cheap: any mouse movement clears it, so it cannot outlive the moment you stop thinking about it; the
-lit column header says what it is, the indicator the pointer already had; and it can only ever hold
-a level that is on screen. (The controls bar said it too, in words, until 2026-09-05 —
+tinted column says what it is, the indicator the pointer already had; and it can only ever hold
+a level that is on screen. (The controls bar said it in words and the header row lit the `<th>`, both
+until 2026-09-05 —
 [§ The aim is visible before you press anything](#the-aim-is-visible-before-you-press-anything).) It is a mode you leave by accident rather
 than one you have to remember to leave, which is the only kind this view can afford.
 
@@ -149,10 +150,9 @@ The blur on click survives all of that, and still earns its place: nothing eats 
 focused button still takes Enter and Space, and leaving focus on it after a mouse click is not what
 the reader asked for.
 
-The aimed column header lights up — exactly one column, even where the arc and Parts share a
-stride, because the reader has to be able to see which of the two another → would leave. That
-matters more for the keys than it did for the pointer — with the pointer, where you are aiming is
-where your hand is. There was a second indicator beside it until 2026-09-05; see below.
+The aimed column is tinted — exactly one column, because the reader has to be able to see which one
+another → would leave. That matters more for the keys than it did for the pointer: with the pointer,
+where you are aiming is where your hand is.
 
 At the ends of the ladder the key is handed back to the browser rather than swallowed, the same
 concession ↑ / ↓ make at the ends of the article. So → at the finest column still pans an
@@ -167,18 +167,41 @@ the table by adding one attribute, and why a new panel would too.
 An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
 running it. So the aim is drawn:
 
-- **The column header lights up** as the pointer crosses into it (`thead th.nav-aim`). Quieter than
-  an `.on` button in the controls bar, deliberately: it follows the mouse, and something that changes
-  on every sideways twitch must not shout.
+- **The aimed column is tinted**, faintly, as the pointer crosses into it. Quieter than an `.on`
+  button in the controls bar, deliberately: it follows the mouse, and something that changes on every
+  sideways twitch must not shout.
 
-**Two places said it until 2026-09-05, and one of them has gone.** The controls bar carried an
-`↑↓ Sections` readout, and it was the half that still worked when the aimed zone is the spine —
-which has no header — or is nothing at all. It went with the rest of the bar
-([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), leaving the lit header as the
-only indicator and the spine's aim unnamed. **The header goes too, in stage 3 of that plan**, which
-owes the aim a replacement: a tint on the aimed column's cells, which can name the spine and the
-prose column as well as a gist. Until it lands, this section describes one indicator with a known
-hole rather than two that covered each other.
+**It said this in two other places until 2026-09-05, and both went that day.** The controls bar
+carried an `↑↓ Sections` readout and the table's header row lit the aimed `<th>`; the bar was emptied
+and the header row gave up its height, both in
+[260905d](../plans/260905d-declutter-the-reading-view-top-bars.md). Greg confirmed he still uses
+← / →, so the aim moved onto the one surface left — the column itself.
+
+**The mechanism, and every part of it is a thing that was got wrong first**
+([styles.css § the aimed column](../../src/web/styles.css), `tests/aimed-column.test.ts`):
+
+- **One `data-aim` attribute on `.reader`**, never a class on the cells: a deep article renders
+  thousands of `<td>`s and `memo(TableView)` is what keeps a pointer move cheap. It went on `.reader`
+  rather than on the `<table>` because the fisheye panels are `position: fixed` *siblings* of the
+  table — see the next point — and the move let `TableView` drop `navDepth` as a prop entirely, so a
+  pointer move now re-renders nothing at all.
+- **The gist columns are tinted through their panel, not their cells.** In Hierarchy every gist
+  column is covered by an opaque `.ctx-panel` and the cell underneath draws nothing, so a rule that
+  named only the cells did nothing in exactly the case ← reaches. Found by looking at the rendered
+  page; every unit check had passed.
+- A `background-image: linear-gradient`, never a `box-shadow` — `.pin-left` owns `box-shadow` for the
+  overflow-layer cue and a second declaration replaces it — and never a `background-color`, because
+  `td.text`, `td.gist.active` and `.ctx-panel` set opaque backgrounds of their own.
+- Matched on `[data-nav-depth]`, not `.depth-N`: the **prose** cell carries no `depth-N` class, and it
+  is the rung you reach by pressing → all the way.
+- **Nothing is tinted when the prose is the only column** (`table.only-prose`, which is Plain and
+  every mode band). One rung is not a choice between columns, and the pointer sits on it permanently,
+  so the tint would be a standing cast over the article.
+
+**The spine is deliberately not tinted.** An aim is a *depth*, and the spine is depth 1 drawn a second
+way — when depth 1 is aimed the Parts column already says so. The one case that shows nothing is a
+pointer resting on the spine with the Parts column fitted away, which lit nothing before this change
+either.
 
 ## Five rules, each with a reason
 
