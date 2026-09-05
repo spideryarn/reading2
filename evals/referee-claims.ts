@@ -120,7 +120,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { openRouterStream } from "../src/ai-call.js";
+import { classifyEnd, openRouterStream } from "../src/ai-call.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { loadEnvLocal } from "../src/env.js";
 import {
@@ -141,6 +141,7 @@ import {
   defaultModel,
   runClaims,
 } from "../src/referee-claims-run.js";
+import type { StreamEnd } from "../src/openrouter-stream.js";
 import { parseHits } from "../src/search.js";
 import type { Block, BlockId, Meta } from "../src/types.js";
 
@@ -909,18 +910,46 @@ async function ablated(
 
   let text = "";
   let used = model;
+  /* **The one invariant an eval with no invariants needs.** Everything else here
+     is deliberately absent — no stall clock, no reader, no streaming — because
+     none of it is under test. This is not in that category: an ablated answer
+     that was cut off and still happened to parse moves the very numbers this
+     eval exists to produce, and on the report it looks exactly like a model
+     that found fewer claims. So the stream has to have ended cleanly before its
+     text counts as an answer.
+     docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md.
+
+     Hoisted so the same signal is both the request's deadline and the one
+     `classifyEnd` is asked about — two `AbortSignal.timeout` calls would be two
+     different clocks, and the classifier would be reading one that never
+     fired. */
+  const deadline = AbortSignal.timeout(CLAIMS_TIMEOUT_MS);
+  const end: StreamEnd = { terminated: false };
   for await (const chunk of openRouterStream(
     "referee-claims",
     { model, max_tokens: 12000, messages },
-    {
-      signal: AbortSignal.timeout(CLAIMS_TIMEOUT_MS),
-      onActivity: () => {},
-      end: { terminated: false },
-    },
+    { signal: deadline, onActivity: () => {}, end },
   )) {
+    /* A 200 carrying an error in the stream. It arrives as **data** and never
+       reaches `StreamEnd`, which is why the classifier below is not enough on
+       its own — every production caller throws on this inside the loop. */
+    if (chunk.error) throw new Error("the provider failed mid-stream");
     if (chunk.model) used = chunk.model;
     const piece = chunk.choices?.[0]?.delta?.content;
     if (typeof piece === "string") text += piece;
+  }
+  /* There is no reader here and no stall clock, so the deadline is the only one
+     of the three signals that can fire. Anything but a clean end is refused —
+     `unknown-finish-reason` included in the acceptance on the same deny-list
+     reasoning quiz-mark spells out, so a gateway spelling `stop` differently
+     does not fail the whole run. */
+  const outcome = classifyEnd(end, {
+    signal: undefined,
+    deadline,
+    stalled: new AbortController().signal,
+  });
+  if (outcome.kind !== "finished" && outcome.kind !== "unknown-finish-reason") {
+    throw new Error(`the ablated stream did not finish cleanly: ${outcome.kind}`);
   }
   const { claims, withheld } = validateClaims(parseHits(text), [...c.blocks]);
   return { claims, model: used, removed, withheld };

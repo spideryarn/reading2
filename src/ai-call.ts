@@ -190,11 +190,31 @@ export function classifyEnd(
   signals: { signal: AbortSignal | undefined; deadline: AbortSignal; stalled: AbortSignal },
 ): StreamOutcome {
   const { signal, deadline, stalled } = signals;
-  /* **Our own clocks, then the reader, then what the provider said.** The first
-     two are the order every caller already had, and they have to come first
-     because a deadline or a stall aborts the reader's signal too — so all three
-     arrive as one aborted signal and only `readerAborted` tells them apart.
-     Mutating this order turns three tests in tests/openrouter-stream.test.ts red.
+  /* **The terminator beats everything, then our own clocks, then the reader,
+     then what the provider said.**
+
+     `[DONE]` is set only when `data: [DONE]` literally arrives
+     (src/openrouter-stream.ts), so `terminated` is not "something the provider
+     said" — it is proof that **the complete SSE response was received**. Nothing
+     that happens afterwards can make it less complete, and a signal that fired
+     in the gap between the terminator arriving and this function being called is
+     exactly that: afterwards. The three checks below used to run first, and a
+     deadline landing in that gap threw away a whole answer the reader had
+     already watched appear, with *"the AI service did not finish within…"*.
+     Reproduced end to end in tests/converse-stream-end.test.ts § "a terminator
+     that had already arrived when our own clock fired"; found by GPT Sol,
+     finding F5, 2026-09-05.
+
+     **This does not weaken the mid-stream cases**, which are the ones the order
+     below exists for. A deadline or a stall that fires while the stream is
+     running aborts the reader, `sseChunks` cancels, and the loop ends *without*
+     `[DONE]` — so `terminated` is false and the three checks run exactly as they
+     did. The gate only lets through a stream that genuinely finished.
+
+     **Our own clocks before the reader**, because a deadline or a stall aborts
+     the reader's signal too — all three arrive as one aborted signal and only
+     `readerAborted` tells them apart. Mutating that order turns three tests in
+     tests/openrouter-stream.test.ts red.
 
      **The reader beats a `finish_reason` that has already arrived**, and that
      is a real edge worth knowing: a provider that said `error` and *then* lost
@@ -205,9 +225,11 @@ export function classifyEnd(
      differs from an `error` arriving as `chunk.error` *data*, which every caller
      throws on inside the loop and which therefore never reaches here.
      GPT Sol's review of Stage C, 2026-09-01. */
-  if (deadline.aborted) return { kind: "timed-out" };
-  if (stalled.aborted) return { kind: "went-quiet" };
-  if (readerAborted(signal, deadline, stalled)) return { kind: "abandoned" };
+  if (!end.terminated) {
+    if (deadline.aborted) return { kind: "timed-out" };
+    if (stalled.aborted) return { kind: "went-quiet" };
+    if (readerAborted(signal, deadline, stalled)) return { kind: "abandoned" };
+  }
   switch (end.finishReason) {
     case "length":
       return { kind: "truncated" };
@@ -1190,17 +1212,34 @@ export async function* openRouterStream(
    */
   let ranToEnd = false;
   try {
+    /* **Reset, so a reused `end` cannot carry a stale verdict into a new
+       attempt.** `converse` runs up to four requests in a turn; it builds a
+       fresh object for each, so nothing depends on this today — which is exactly
+       when to write it, because the next caller to loop will not know it had to.
+
+       **Before `send`, not after the body arrives**, and the difference is the
+       whole point of an out-parameter: this says "here is how *this attempt*
+       ended", so it has to be cleared when the attempt starts rather than when
+       it starts going well. Placed after the response was validated, a retry
+       that aborted, was refused, or came back with no body left the previous
+       stream's verdict standing — so the caller classified a call that never
+       reached a byte using the last one's terminator. GPT Sol, finding F8.
+
+       **`terminated` was missing from the list entirely until 2026-09-05**,
+       which made the sentence above false in the one way that matters most: a
+       reused object whose first stream ended on `[DONE]` and whose second ended
+       at EOF with nothing to say why classified as `finished`, and — since F5 —
+       the stale `true` would also suppress the clock checks. A promise in a
+       comment that the code does not keep is worse than no promise, because the
+       next caller reads the comment. GPT Sol, finding F7. */
+    options.end.terminated = false;
+    options.end.finishReason = null;
+    options.end.answered = false;
     const response = await send(prepared, options.signal);
     meter.generationId = generationIdOf(response);
     if (!response.ok || !response.body) await refuse(response);
     /* Non-null: `refuse` throws, but TypeScript cannot see through the `await`. */
     const stream = response.body as ReadableStream<Uint8Array>;
-    /* **Reset, so a reused `end` cannot carry a stale verdict into a new
-       stream.** `converse` runs up to four requests in a turn; it builds a fresh
-       object for each, so nothing depends on this today — which is exactly when
-       to write it, because the next caller to loop will not know it had to. */
-    options.end.finishReason = null;
-    options.end.answered = false;
     for await (const chunk of sseChunks(
       stream,
       options.signal,
