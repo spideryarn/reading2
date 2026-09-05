@@ -39,7 +39,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SHARED_WITH_YOU } from "../src/messages.js";
 import { SharedNotice } from "../src/web/PublicChrome.js";
-import { SHARED_WITH_YOU } from "../src/messages.js";
 
 const CSS = readFileSync(path.join(process.cwd(), "src/web/styles.css"), "utf8");
 
