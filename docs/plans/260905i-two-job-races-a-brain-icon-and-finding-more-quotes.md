@@ -67,7 +67,8 @@ The button exists (`Foot` in `QuotesPanel.tsx`, **Choose them again**, offered u
 
 He meant *more*, not *again*. That shipped ninety minutes before he filed this, in `260905g`:
 `MAX_QUOTES` 16 → 32 and the suggestion doubled to one per 300 words. He was on production
-`6f563997`, which does not have it. `PROMPT_VERSION` → `quotes/3` means every existing list will wear
+`6f563997`, which did not have it — and it deployed forty-five minutes later, at 21:37 UTC in
+`6eecb377`, so it is live. `PROMPT_VERSION` → `quotes/3` means every existing list will wear
 the *"chosen by an earlier version of the prompt"* banner with the button under it, and pressing it
 returns roughly double.
 

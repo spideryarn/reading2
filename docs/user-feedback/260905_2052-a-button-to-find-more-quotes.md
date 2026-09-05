@@ -24,8 +24,9 @@ That is the whole report, and it was answered earlier the same evening, in
 16 → **32**, and the suggestion from one per 600 words (4–16) to one per 300 (**8–32**). A 4,000-word
 piece now asks for ~14 rather than ~7.
 
-He filed this from production build `6f563997`, which does not have that change yet. `PROMPT_VERSION`
-went to `quotes/3` with it, so once it deploys **every existing list wears the quiet banner** —
+He filed this at 20:52 from production build `6f563997`, which did not have that change.
+**It deployed forty-five minutes later**, at 21:37 UTC, in `6eecb377` — so it is live now.
+`PROMPT_VERSION` went to `quotes/3` with it, so **every existing list now wears the quiet banner** —
 *"These were chosen by an earlier version of the prompt"* — with **Choose them again** directly
 beneath it. Pressing it returns roughly double.
 

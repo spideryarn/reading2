@@ -1,7 +1,8 @@
 # A tightened tree rule wedged every article that already broke it
 
-**2026-09-05.** For about eleven hours, an article whose already-published tree had one particular
-shape could not publish **anything at all** — no glossary, no quotes, no debate, no mode of any kind
+**2026-09-05.** From **09:33 UTC at the latest** — the earliest production deploy that carries the
+rule; it may have been live from the small hours, since the commit is 00:48 — an article whose
+already-published tree had one particular shape could not publish **anything at all** — no glossary, no quotes, no debate, no mode of any kind
 — and every attempt completed and paid for its model call before being refused. Roughly one article
 in twenty. Reported by Greg as two separate feature failures
 ([SPIDERYARN-READING2-28](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-28) and
@@ -84,7 +85,11 @@ noise rather than one article permanently off the air.
 `jobs.ts:1502` attaches `reasons` to the log line on the storage-failure door only; the door that
 actually fired is `runStep`'s catch, which logs `errorFields(err)`.
 
-## The fix
+## The fix, which is not deployed
+
+**Production is on `6eecb377` (deployed 21:37 UTC) and the fix is not in it.** It is on `dev`; a
+production deploy is Greg's, and until he runs one every affected article is still wedged — and the
+workaround above is still the only thing that unwedges one.
 
 Tracked in [260905i](../plans/260905i-two-job-races-a-brain-icon-and-finding-more-quotes.md).
 Reproduced first, in `tests/store-publish-guards.test.ts`, and watched red for the right sentence:
@@ -102,7 +107,8 @@ PublishRefused: Refusing to publish "test-publish-guards": n0 → n1: covers its
    rows in the same commit, or state in the commit why not. `c8e2cc7e` knew it applied "for the ones
    already stored" and stopped there.
 3. **Reason codes on `PublishRefused`.** Enough of a bracketed code to survive `sanitise` and reach
-   Sentry, without the prose. Eleven hours of this were invisibility, not breakage.
+   Sentry, without the prose. Most of this outage was invisibility rather than breakage: the fault
+   was live for at least eleven hours before anybody could say what it was.
 4. **A permanent-versus-transient distinction on step failure.** `[jb-step-again]` should not be
    reachable from a refusal that cannot come out differently. This is the one that stops the *next*
    permanent failure charging a reader four times to learn nothing.
