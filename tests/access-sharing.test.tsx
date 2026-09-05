@@ -26,7 +26,13 @@ import type { ArticleSharing, PublicArtefacts, Visibility } from "../src/types.j
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SHARING_ON, sharingConfirmBody } from "../src/messages.js";
+import {
+  SHARING_NOT_PERSONALISED,
+  SHARING_ON,
+  SHARING_PERSONALISED,
+  SHARING_RIGHTS_CONFIRM,
+  sharingConfirmBody,
+} from "../src/messages.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -281,7 +287,10 @@ describe("turning it on", () => {
     );
     expect(share?.disabled).toBe(true);
     // And the reason is on the page rather than in a tooltip.
-    expect(host.textContent).toContain("I have the right to share this article's text");
+    expect(host.textContent).toContain(SHARING_RIGHTS_CONFIRM);
+    /* And the reason is an affirmation of a right to share, which is what
+       makes the disabled button legitimate rather than merely explained. */
+    expect(SHARING_RIGHTS_CONFIRM).toContain("I have the right to share");
     expect(calls.filter((c) => c.method === "PUT")).toEqual([]);
   });
 
@@ -356,13 +365,22 @@ describe("what the dialog says about the reader's profile", () => {
        exists with the field somehow missing — defensive, and the branch has to
        be total. */
     await openDialog(withKinds(undefined as unknown as ArticleSharing["personalised"]));
-    expect(host.textContent).toContain("may have been written for your reader profile");
+    expect(host.textContent).toContain(SHARING_PERSONALISED);
+    /* And the constant still hedges. The line above proves the component
+       reached for the right sentence and cannot go stale on a re-word; it
+       cannot notice the sentence being re-worded into a claim, because the
+       component and this file would import the same new value and both
+       move together. This one holds the requirement. */
+    expect(SHARING_PERSONALISED).toContain("may have been written");
   });
 
   it("says plainly when none were", async () => {
     await openDialog(withKinds([]));
 
-    expect(host.textContent).toContain("Nothing here was written for your reader profile");
+    expect(host.textContent).toContain(SHARING_NOT_PERSONALISED);
+    /* Definite, not hedged — the requirement this case exists for, and the
+       half an imported constant cannot check on its own. */
+    expect(SHARING_NOT_PERSONALISED).toContain("Nothing here was written");
     // And NOT the hedge, which would leave the owner assuming the general case.
     expect(host.textContent).not.toContain("may have been written");
   });

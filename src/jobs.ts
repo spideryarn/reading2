@@ -720,6 +720,38 @@ export function cascadeForce(steps: StepName[], forced: Set<StepName>): Set<Step
   );
 }
 
+/**
+ * **A step list that would leave the article unpublishable — refused here, where
+ * it is still free.**
+ *
+ * `blocks` without `hierarchy` is the one such combination, and it is reachable:
+ * `POST /api/jobs` takes any subset of `STEP_ORDER`, so `{ steps: ["blocks"] }`
+ * is a request anybody with a session can make. It runs, it succeeds, and then
+ * `reasonsNotToPublish` (src/store/pg-revisions.ts) refuses the publication,
+ * because the `hierarchy` step-run's `input_hash` no longer equals `hashBlocks`
+ * of the blocks it is being published beside. The article is stuck until
+ * somebody works out that the fix is to re-run a step they never named.
+ * `cascadeForce` cannot rescue it: it only names steps **already in the job**.
+ *
+ * **Refused rather than repaired**, which was the choice. Quietly adding
+ * `hierarchy` would spend a model call — the slowest one in the pipeline, 228
+ * seconds measured — on behalf of a caller who did not ask for it and is not
+ * being billed for it, and it would make the job that ran different from the job
+ * that was requested. A 400 naming the missing step is the whole fix.
+ *
+ * A separate function rather than four lines inside `enqueue`, so it can be
+ * asserted without a store under it. GPT Sol found the trap reviewing stage A of
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md,
+ * 2026-09-05; it is production-reachable but not on any first-party UI path, so
+ * nothing had hit it.
+ */
+export function unrunnableStepPlan(steps: readonly StepName[]): string | undefined {
+  if (steps.includes("blocks") && !steps.includes("hierarchy")) {
+    return 'A job that runs "blocks" must run "hierarchy" too, or the article cannot be published: the tree is checked against the blocks it was built from, and hierarchy has no freshness check of its own to notice.';
+  }
+  return undefined;
+}
+
 /* ------------------------------------------------------------------ running -- */
 
 /**
@@ -2786,6 +2818,11 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   if (names.length === 0) {
     throw Object.assign(new Error("A job needs at least one step."), { status: 400 });
   }
+  /* Before the owner check and before anything is reserved, because this is a
+     property of the request alone. `unrunnableStepPlan` says why it refuses
+     rather than quietly adding the missing step. */
+  const unrunnable = unrunnableStepPlan(names);
+  if (unrunnable) throw Object.assign(new Error(unrunnable), { status: 400 });
   const owner = currentOwnerId();
   const forced = cascadeForce(names, new Set(request.force ?? []));
   /* **`request.url`, not the URL the loop reads off disk below.** They differ

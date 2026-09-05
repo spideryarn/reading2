@@ -26,12 +26,15 @@
  *    has since landed, and its contract lives in [jobs.ts](jobs.ts), not here:
  *    a second `JobStore` was declared in this file and never implemented, so it
  *    drifted into declaring a different `claim`, `get` and expiry sweep from the
- *    real one, and it has been deleted. Chat and searches belong to this
- *    group and have **no interface here yet**: they still write straight to the
- *    filesystem, which is why `postgres` mode currently serves them from files.
- *    That is item 10 of docs/plans/260826e-postgres-storage-implementation.md, not an
- *    oversight — but this list said `ChatStore` and `SearchStore` were declared
- *    here when they were not, which is worse than saying nothing.
+ *    real one, and it has been deleted. Chat and searches belong to this group
+ *    and their interfaces are `ChatStore` and `SearchStore`, below.
+ *
+ *    **Which of these is wired to Postgres is not recorded here**, because that
+ *    sentence has already been wrong in both directions — first claiming the two
+ *    were declared here when they were not, then saying they had no interface
+ *    here four hours before `05b9983a` added both. [index.ts](index.ts) is where
+ *    the wiring is decided and the only place that can answer it.
+ *    docs/plans/260905b-improve-the-codebase-third-sweep.md has the history.
  *
  * ## What is deliberately NOT in here
  *

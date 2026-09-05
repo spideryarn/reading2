@@ -2950,15 +2950,23 @@ function Reader({
         /* The gate, and only the gate — the body is `chatAboutBlock` above,
            which explains why it is `undefined` rather than a no-op here. */
         onChatAbout={owner ? chatAboutBlock : undefined}
-        /* **The same body, deliberately, and only until stage 3.** Pressing "?"
-           opens the same pre-filled draft and spends nothing, which is why the
-           button's own copy promises a question rather than an answer. What
-           replaces this is a launcher that sends once — the seam is a
-           `ChatTarget` variant, not a handler hoisted up here, because a token
-           arriving in this component re-renders the whole article:
-           docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md
-           § Stage 3. Gated on `owner` for the reason above; the two doors are
-           one capability. */
+        /* **One press, and it spends.** `helpAboutBlock` above either reopens
+           the conversation this block already has or mints a draft carrying
+           `help: true`, and `ChatDialog` sends that on mount — no composer, no
+           confirmation. The button's own copy names the AI for exactly this
+           reason (BlockGutter.tsx), and the accidental tap is a cost Greg
+           accepted on 2026-09-04 because one press was the point.
+
+           **This comment said the opposite until 2026-09-05**, describing the
+           stage-2 behaviour — "opens the same pre-filled draft and spends
+           nothing" — for a day after stage 3 landed and made it send. A comment
+           saying a button is free when it is not is the one direction this
+           particular mistake must never run. Found by GPT Sol.
+
+           The seam is a `ChatTarget` variant rather than a handler hoisted up
+           here, because a token arriving in this component re-renders the whole
+           article. Gated on `owner` for the reason above; the two doors are one
+           capability. */
         onHelp={owner ? helpAboutBlock : undefined}
         terms={termSelections}
         openTerm={term?.id ?? null}

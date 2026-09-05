@@ -73,6 +73,22 @@ export const RESERVED_ATTRS = {
   wasId: "data-spya-was-id",
   /** src/blocks.ts — the same, for `<a name>`. See `wasId`. */
   wasName: "data-spya-was-name",
+  /**
+   * src/extract.ts — **which source element this was**, before Readability.
+   *
+   * A counter in document order, stamped on every element of the *source*
+   * document so that Readability's `serializer` option can hand back a DOM whose
+   * nodes still say where they came from. That is what lets an instrument answer
+   * "what did extraction drop?" by identity rather than by matching text, which
+   * 260827ab measured getting wrong eight different ways.
+   *
+   * **Instrumentation only, and it must stay that way.** Nothing in the shipping
+   * pipeline stamps this: `runExtract` calls `readArticle`, which does not, and
+   * `readArticleWithProvenance` is called by evals and tests alone. So unlike
+   * the others in this list, no artefact has ever carried it — and like `wasId`
+   * it has a lifetime rather than a life, ending when the eval does.
+   */
+  sourceRef: "data-spya-src",
 } as const;
 
 export type ReservedAttr = (typeof RESERVED_ATTRS)[keyof typeof RESERVED_ATTRS];

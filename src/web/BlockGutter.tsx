@@ -1,7 +1,9 @@
 /**
- * The reader's own pad beside every paragraph — see docs/plans/prose-gutter-icons.md
- * for how it began and docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md
- * for why it is now two columns wide.
+ * The reader's own column beside every paragraph — see docs/plans/prose-gutter-icons.md
+ * for how it began, docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md
+ * for why it is two columns wide, and
+ * docs/plans/260905b-gutter-back-to-a-vertical-line-and-a-help-prompt-that-admits-nearby-blocks.md
+ * for why only one of them is the line.
  *
  * Greg, 2026-08-31: *"a very narrow vertical gutter alongside the text …
  * instead of showing the block-id, show a permalink icon (with tooltip showing
@@ -19,36 +21,54 @@
  * *state*, on hover it shows *affordances*.** On an article you have never
  * marked it is empty all the way down until the pointer lands on a row.
  *
- * **A 2 × 2 pad rather than a column**, since 2026-09-04:
+ * **A line of three, with the reader's mark beside it** — since 2026-09-05:
  *
- *     permalink   every block, on hover     |  chat   on hover; always with chats
- *     comment mark  only when commented     |  "?"    on hover
+ *     comment mark  only when commented  |  permalink   every block, on hover
+ *                                        |  chat        on hover; always with chats
+ *                                        |  "?"         on hover
  *
- * It was a single column of three ~15px slots until Greg asked for targets a
- * finger can hit: *"they're quite hard to click on on an iPad."* WCAG 2.5.8 asks
- * for 24 × 24, and four of those stacked come to ~100px against a 39px one-line
- * paragraph row — so the arrangement had to change, not just the size. The cost
- * is 1.6rem of horizontal padding and a taller short row; the arithmetic is in
- * styles.css § the gutter, and the call is Greg's, in
- * docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
+ * **The three in the right-hand column are the three Greg counts**, and their
+ * being in a line is the ask. It was a single column of three ~15px slots until
+ * 2026-09-04, when Greg asked for targets a finger can hit — *"they're quite
+ * hard to click on on an iPad"* — and since WCAG 2.5.8 wants 24 × 24 and four
+ * of those stacked come to ~100px against a 39px one-line paragraph row, the
+ * arrangement was changed instead of the height: a 2 × 2 pad. Greg looked at it
+ * the next day:
  *
- * **The "?" fills the fourth cell, and today it spends nothing.** It opens the
- * same pre-filled draft the chat button does — *"Nothing is asked until you
- * send"* — so what it says has to promise a question rather than an answer;
- * stage 3 of that plan is what makes one press send one. It is the second
- * door into the same conversation on purpose: the chat button is free text
- * about this paragraph, and this one is *"I don't understand this"*, which
- * Greg asked for as one press. Fable argued for one door rather than two and
+ * > They are no longer in a vertical line. The three are arranged in an
+ * > L-shape.
+ *
+ * So the line came back and **the height is paid after all** — a floored row
+ * goes 63.1px → 87.1px, and this one stretches two-line paragraphs as well as
+ * one-line ones, which the pad did not. That is the trade, and it is Greg's, made by asking
+ * for the targets and then for the line: styles.css § the gutter has the table,
+ * and docs/plans/260905b-gutter-back-to-a-vertical-line-and-a-help-prompt-that-admits-nearby-blocks.md
+ * has the options that were weighed against it.
+ *
+ * **The bookmark is beside the line rather than in it**, which is what keeps
+ * the floor at three slots instead of four, and what stops the mark drifting
+ * 48px below the words it marks on a short row. It is also the honest shape: it
+ * is *state*, and the other three are affordances, so standing it at a
+ * different x says so. Fable's arbitration, 2026-09-05.
+ *
+ * **The "?" is the foot of the line, and one press of it spends.** It mints a
+ * draft carrying `help: true`, and `ChatDialog` sends that on mount — no
+ * composer, no confirmation — which is why its copy names the AI rather than
+ * promising an explanation. (This paragraph said it "spends nothing" for a day
+ * after stage 3 landed and made it send; GPT Sol caught it, 2026-09-05.) It is
+ * the second door into the same conversation on purpose: the chat button is
+ * free text about this paragraph, and this one is *"I don't understand this"*,
+ * which Greg asked for as one press. Fable argued for one door rather than two and
  * lost on Greg's call — the argument is in the plan § Rejected, because
  * anybody looking at four icons will have it again.
  *
- * **A visitor's gutter is the permalink and nothing else** — one element in the
- * top-left cell, not four with three of them blank, because none of these is a
- * placeholder. Their rows keep the article's old height, too: the stylesheet
- * floors a row at two slots only where the second row can be drawn. The chat
- * button is absent rather than dead: opening a conversation
- * costs a model call, which is not theirs to spend, so `onChatAbout` is
- * optional and the button exists only where the callback does. The bookmark
+ * **A visitor's gutter is the permalink and nothing else** — one element at the
+ * head of the line, not four with three of them blank, because none of these is
+ * a placeholder. Their rows keep the article's old height, too: the stylesheet
+ * floors a row at three slots only where the rows below the first can be drawn.
+ * The chat button is absent rather than dead: opening a conversation costs a
+ * model call, which is not theirs to spend, so `onChatAbout` is optional and the
+ * button exists only where the callback does. The bookmark
  * never draws for them either, for a different reason — the marks in it are the
  * reader's own, and a visitor has none. The "?" is gated on the same callback
  * pattern as the chat button and for the same reason. The callback *is* the capability, the
@@ -58,14 +78,16 @@
  * review of the built code caught this paragraph claiming two.
  * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C1.
  *
- * **Every position is fixed, and as of 2026-09-04 that is finally true without
- * a caveat.** The permalink, and the chat button and "?" wherever there are
- * any, are rendered on every block whether or not they are visible, so *hovering* has
- * never moved anything. But under the flex column this replaced, adding or
+ * **Every position is fixed, and since 2026-09-04 that is true without a
+ * caveat.** The permalink, and the chat button and "?" wherever there are any,
+ * are rendered on every block whether or not they are visible, so *hovering*
+ * has never moved anything. But under the original flex column, adding or
  * deleting a comment moved the chat button between the second slot and the
  * third — an honest caveat GPT Sol made this file admit on 2026-08-31, and one
- * the pad simply deletes: each slot names its own `grid-area`, so the one
- * conditional child has a cell nothing else can fall into.
+ * the grid deletes: each slot names its own `grid-area`, so the one conditional
+ * child has a cell nothing else can fall into. **Nor does it change the row's
+ * height any more**, which the pad could not manage: the bookmark's cell is in
+ * the first row, so a comment costs nothing at all.
  *
  * **This is also where the chat button finally arrives in the gutter.** Until
  * today `.block-chat` had no `position` at all, so it was an in-flow box
@@ -356,9 +378,15 @@ export function BlockGutter({
           A `Bookmark` rather than the flag or speech bubble Greg offered,
           because comments.md is explicit that a comment *is* a bookmark — the
           words and the AI answer are both optional — and because a second
-          message-square in the cell diagonally under the chat button would read
-          as a second chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
-          uses in the prose, so the gutter and the passage read as one thing. */}
+          message-square a slot away from the chat button would read as a second
+          chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
+          uses in the prose, so the gutter and the passage read as one thing.
+
+          **It stands in the column of its own, level with the permalink**, and
+          both halves of that are load-bearing — it is the reader's mark rather
+          than a button, and a mark that is not beside its own words is not a
+          mark. Under the line it would sit 48px below them on a short row, and
+          cost that row 24px of height for the privilege. § the gutter. */}
       {first && (
         <button
           type="button"
@@ -385,16 +413,16 @@ export function BlockGutter({
         </button>
       )}
 
-      {/* Top-right of the pad, and only for a reader who can use it — see the
+      {/* The middle of the line, and only for a reader who can use it — see the
           header. Everything else about it is unchanged: same class, same count,
           same reveal rules; the stylesheet moved it, not this file.
 
-          **Rendered after the bookmark and drawn above it**, which is only not a
-          contradiction because the pad places every slot by `grid-area` rather
-          than by source order. Keeping the order is what keeps the tab order
-          reading down the article's own logic — address, then mark, then
-          conversation — and it is the reason those rules are written against the
-          classes instead of `:nth-child`. */}
+          **Rendered after the bookmark and drawn beside rather than below it**,
+          which is only not a contradiction because the grid places every slot by
+          `grid-area` rather than by source order. Keeping the order is what
+          keeps the tab order reading down the article's own logic — address,
+          then mark, then conversation — and it is the reason those rules are
+          written against the classes instead of `:nth-child`. */}
       {onChatAbout && (
         <button
           type="button"
@@ -418,9 +446,9 @@ export function BlockGutter({
         </button>
       )}
 
-      {/* Bottom-right, under the chat button and beside the reader's own mark
-          — Greg asked for it *"underneath the comment one"* and the pad is what
-          that became once four 24px targets would not stack.
+      {/* The foot of the line, under the chat button — which is where Greg
+          asked for it, *"underneath the comment one"*, and where it has ended up
+          after a day as the fourth cell of a pad.
 
           **What it says is what it does, and as of stage 3 that includes
           spending money.** One press sends — no composer, no confirmation —

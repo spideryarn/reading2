@@ -5,13 +5,17 @@
  *   npm run eval:cost -- --fixture long-html --fixture pdf --repeat 3
  *   npm run eval:cost -- --list                               (the corpus)
  *   npm run eval:cost -- --preflight                          (the gate only; spends nothing)
- *   npm run eval:cost -- --steps fetch,extract,blocks         (free: stops before the paid step)
+ *   npm run eval:cost -- --steps fetch,extract               (free: stops before the paid step)
  *   npm run eval:cost -- --steps fetch,extract,blocks,hierarchy,arc --keep
  *   npm run eval:cost -- --fixture short-html --all-modes     (ingest, then 8 mode jobs)
  *   npm run eval:cost -- --against <slug> --steps arc,tweets --batched-modes
  *
  * `--steps` names the steps the job runs, so a mode step has to be named after
  * the ingest steps it depends on — a fresh slug has no blocks for `arc` to read.
+ * **`blocks` has to be named with `hierarchy`** (`unrunnableStepPlan`,
+ * src/jobs.ts): a job that rebuilds the blocks and not the tree produces an
+ * article that cannot be published, so `enqueue` refuses it rather than letting
+ * the run get all the way to a publication failure.
  * `--keep` leaves the article and job behind for inspection instead of deleting
  * them; the ids are in the run's `run.json` either way. `--batched-modes` and
  * `--allow-unpriced` each disable one refusal below, deliberately, and both are
