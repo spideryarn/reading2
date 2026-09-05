@@ -527,8 +527,8 @@ prints the bill, and buys nothing. `--spend` is the only way to spend.
 Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
 `{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
 the flag off and then on, which must come out byte-identical; and three jobs at once at
-`DEFAULT_JOB_CONCURRENCY` for the wall clocks, with a start barrier so that "at once" is true of the
-measured *step* and not merely of the three promises.
+`DEFAULT_JOB_CONCURRENCY` for the wall clocks, with a start rendezvous so that "at once" is true of
+the measured *step* and not merely of the three promises.
 
 **A pre-spend review refused the first version of it**, and the thirteen findings are worth
 reading before touching any of this — GPT Sol, 2026-09-05. Two of them decide whether the run is
@@ -565,14 +565,44 @@ Four things in it are worth copying:
   nothing. `SPIDERYARN_DEEPEN_REASK` names the slugs to re-buy, the run refuses to start unless it
   names the book and neither article, and afterwards `checkRepeatBoughtItsWave` asks the ledger
   whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
-- **The load phase is lined up before it is measured, and concurrency is measured over the STEPS'
-  windows, never the jobs'.** The arithmetic demanding three overlapping `hierarchy` windows was
-  right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
+- **The load phase is started together before it is measured, and concurrency is measured over the
+  STEPS' windows, never the jobs'.** The arithmetic demanding three overlapping `hierarchy` windows
+  was right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
   measured step at once, while the two load articles start at `fetch` and get there only after
-  stages 1-3. The two load jobs are driven first and announce their measured step as it begins; the
-  book is driven only once both have (`startBarrier`), and it waits **outside** a claim, because its
-  own step needs 658-778 s against a 740 s deadline. A barrier that does not open is reported, not
-  waited on for ever. All three phase-D promises
+  stages 1-3. The two load jobs are driven first and are **held at the entry** to their measured
+  step; a **readiness wait** ends when both are there, with the gate still shut and nothing of the
+  book driven or bought; then the book is driven, reaches the same entry through the same hook, and
+  **all three are released together** (`startRendezvous`). Two earlier versions of this were wrong in
+  instructive ways. Merely *announcing* an arrival held nobody, so load1 could announce, run its
+  whole step and finish before load2 announced. Holding only the loads and releasing them before
+  driving the book moved the same hole one party over: with the third queue slot taken, both released
+  loads could finish before the book reached `hierarchy` — and the outcome still said "all". The book
+  therefore *does* wait inside its own claim, and it costs nothing, because by then everybody else is
+  waiting for it; the two load steps are the ones that really hold, bounded, and what it cost them is
+  reported. **A phase that cannot line up buys nothing trying to.** A readiness wait that does not end
+  `"all"` stops the run rather than driving the book at all; and if the *gate* gives up with all three
+  already driven, every step it releases is released "abandoned" and throws before it runs. Those jobs
+  end `error` by this eval's doing and each carries a finding saying so. **And the three share one
+  fate**: once any of them has failed its measured step, fallen back to wave 1, or handed its claim
+  back, the other two stop before their next claim **and cancel the calls their running step has not
+  yet made**. Stopping before the next claim was not enough on its own, because one claim runs the
+  whole `hierarchy` step — structure call, expansion wave *and* a whole pass of labels, which
+  `generateHierarchy` starts even after the wave failed. So the fate carries an `AbortSignal` that
+  `announcing` combines into the measured step's own `ctx.signal`; label batches are queued with that
+  signal, and `tests/labels-batching.test.ts` already pins the property that matters — *"the callback
+  must never run either, or the 'stop paying' half of fail-fast buys nothing"*. The remaining bound is
+  the single request already in flight, which may still be billed. A measured job also stops on its
+  first requeue rather than being re-driven, because a re-drive takes the gate's latched verdict, runs
+  outside it, and lets the queue overwrite the first attempt's clock. In one line: **it no longer
+  starts paid measured work when the rendezvous already knows question 5 is impossible.**
+  **What a successful gate guarantees is a shared start, not a shared window.** Another job **cannot**
+  serialise the three afterwards — by then all three hold claims, which is all three of the cap's
+  slots — so `peakConcurrency` reaching 3 is *arranged* and confirms the wiring rather than measuring
+  anything. The load measurement is **`fullConcurrencyMs`**, the longest interval with all three
+  genuinely in flight, held to a floor **declared in preflight before anything is bought**. It is
+  bounded by the shortest of the three, and the load articles' `hierarchy` is far shorter than a
+  book's 658-778 s — so below the floor, question 5 reports latency after a synchronised start rather
+  than sustained three-job load, and says so. All three phase-D promises
   stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
   agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the
@@ -609,7 +639,7 @@ nobody else has would break the cost eval for everybody.
 **What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
 a model call, so every dry-run job stops at its last free step and fails — and because a failed job's
 draft revision is rolled back, every job *after* the first on the same slug fails at once too. It
-proves the driving — the fixture ingress, the force, the serial repeats, the start barrier, the
+proves the driving — the fixture ingress, the force, the serial repeats, the start rendezvous, the
 concurrent load phase, the cleanup — and says so rather than printing a table of zeroes.
 
 **Run it before you run anything that spends**, and read the last line as well as the first. On

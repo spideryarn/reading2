@@ -21,7 +21,13 @@
  * platform quirk in them, and none of which a component can be tested for.
  * `shouldOfferInstall` takes them all as arguments so a test can state the
  * machine it means; `readEnvironment` is the one place that asks the browser.
+ *
+ * **`media` used to live here** and moved to src/web/media.ts on 2026-09-05,
+ * when `small-screen-hint.ts` wanted the identical question asked the identical
+ * way. Nothing about it changed; its docstring still carries the jsdom accident
+ * that is the reason it is guarded at all.
  */
+import { media } from "./media.js";
 
 /** The four facts, as a value a test can write down. */
 export interface InstallEnvironment {
@@ -48,23 +54,6 @@ export function shouldOfferInstall(env: InstallEnvironment): boolean {
 }
 
 const KEY = "spya.installHint.dismissed";
-
-/**
- * `matchMedia`, for a caller that must not care whether it exists.
- *
- * **jsdom does not implement it**, so an unguarded call here threw inside
- * `useState`'s initialiser and took nine of `dock-questions-loading.test.tsx`'s
- * tests down with it — a bar that could not mount, from a hint that had nothing
- * to do with any of them. That is the useful half of the discovery: the same
- * throw in a browser without `matchMedia` would blank the reading view, and a
- * hint is not worth taking a page down for.
- *
- * `false` for "cannot tell", which is the right way round: every condition this
- * feeds is a reason to *show* the hint, so not knowing means not showing.
- */
-function media(query: string): boolean {
-  return typeof window.matchMedia === "function" && window.matchMedia(query).matches;
-}
 
 /**
  * What this machine looks like right now.

@@ -17,10 +17,11 @@
  * ## The class of bug behind the first half, named
  *
  * **A class name that matches no rule looks exactly like one that works.**
- * `.linky` is scoped on purpose — `.controls button.linky`,
- * `.cmt-dialog button.linky`, `.chat-dialog button.linky`, and styles.css says
- * so in as many words (*"a shape, not a shared class"*). This card is in none
- * of those three ancestors, so the class styled nothing at all, silently, from
+ * `.linky` is scoped on purpose — `.cmt-dialog button.linky`,
+ * `.chat-dialog button.linky`, `.annotate-dialog button.linky`, and styles.css
+ * says so in as many words (*"a shape, not a shared class"*). (There was a
+ * `.controls` one too until the controls bar was emptied on 2026-09-05.) This
+ * card is in none of those ancestors, so the class styled nothing at all, from
  * the day the card was written. docs/reusable/silent-success.md.
  *
  * The assertion for that is a DOM *absence*, which is the shape that rots — so

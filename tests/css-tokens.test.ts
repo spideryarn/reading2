@@ -132,7 +132,7 @@ describe("no stylesheet reads a custom property that nothing defines", () => {
 });
 
 /**
- * The tokens that name a *surface*. Each of the shadcn ones has a
+ * **Tokens that are not text colours.** Mostly surfaces — each shadcn one has a
  * `-foreground` twin that is the text colour, and styles.css adds `--ink` /
  * `--ink-soft` / `--ink-faint` over the top. Painting text in one of these puts
  * near-black on near-black: it is the mistake, not a dark-mode subtlety.
@@ -141,8 +141,16 @@ describe("no stylesheet reads a custom property that nothing defines", () => {
  * `--highlight-wash`) are here on Sol's finding that the first version listed
  * only the shadcn names, which is half the vocabulary this stylesheet actually
  * writes in.
+ *
+ * **It was called `SURFACES` until 2026-09-05, and that name had stopped being
+ * true.** `--border`, `--rule` and `--rule-strong` are hairlines rather than
+ * surfaces — `--rule-strong` is `oklch(0.36 0 0)`, about 2.1:1 on the page:
+ * text you can see is there and cannot read. Painting words in a border colour
+ * is the same mistake as painting them in a background, and the check has
+ * always treated them alike, so the name follows the contract rather than the
+ * other way round. Sol, 2026-09-05.
  */
-const SURFACES = [
+const NON_TEXT_TOKENS = [
   "--background",
   "--card",
   "--popover",
@@ -155,6 +163,7 @@ const SURFACES = [
   "--panel",
   "--surface-raised",
   "--rule",
+  "--rule-strong",
   "--highlight-wash",
 ];
 
@@ -175,7 +184,7 @@ const TEXT_ON_BRIGHT = ["--page"];
  *  Sol showed passing the first version. */
 function resolvesToSurface(token: string, seen = new Set<string>()): boolean {
   if (TEXT_ON_BRIGHT.includes(token)) return false;
-  if (SURFACES.includes(token)) return true;
+  if (NON_TEXT_TOKENS.includes(token)) return true;
   if (seen.has(token) || seen.size > 10) return false;
   seen.add(token);
   const value = valueOf.get(token);
@@ -242,17 +251,39 @@ describe("no text is painted in a surface token", () => {
  * currently a bug: all 88 uses in `src/web` are already the `-foreground` form.
  * So this arrives with a clean baseline, which is the only time a check like
  * this is cheap to add.
+ *
+ * **Four names were excluded here until 2026-09-05, and the exclusion has gone.**
+ * `panel`, `surface-raised`, `rule` and `highlight-wash` were left out on the
+ * grounds that they were not in the `@theme inline` bridge, so `tw:text-rule`
+ * could not compile and there was nothing to guard against. Adding
+ * `--color-rule` and `--color-surface-raised` to that bridge — the whole point
+ * of `260905f` — makes `tw:text-rule` and `tw:text-surface-raised` compile
+ * perfectly well, into near-invisible text on a near-black page. **A theme key
+ * enables every colour-shaped utility, not the one you wanted**, and the new
+ * `tests/tailwind-utilities-resolve.test.ts` would positively approve both of
+ * them, because they do produce a rule. Sol found this, 2026-09-05, and it is
+ * the one cost of that fix.
+ *
+ * `highlight-wash` was already bridged and already unguarded, so it comes out
+ * of the exclusion too. `panel` still is not bridged; it is listed anyway,
+ * because "cannot currently compile" is a fact about today's theme file and not
+ * a reason to leave a hole in a check. All four have a clean baseline.
  */
 describe("no component reaches a surface token through a Tailwind text utility", () => {
-  const bare = SURFACES.map((t) => t.slice(2))
-    .filter((n) => !["panel", "surface-raised", "rule", "highlight-wash"].includes(n))
-    .join("|");
+  const bare = NON_TEXT_TOKENS.map((t) => t.slice(2)).join("|");
   /* The trailing class is what tells `tw:text-muted` from
      `tw:text-muted-foreground` — a `\b` matches before a hyphen, and using one
      here reported all 88 correct call sites as broken. */
   const wrong = new RegExp(`tw:text-(?:${bare})(?![a-zA-Z0-9_-])`, "g");
 
-  const files = globSync("src/web/**/*.tsx").map((file) => ({
+  /* **`{ts,tsx}`, and the `.ts` half is not decoration.** This scanned only
+     `.tsx` until 2026-09-05, on the assumption that class strings live where
+     the JSX does. They do not: `src/web/pill.ts` is a whole module of them, and
+     `tw:text-rule` written there passed this check *and* the resolver test —
+     the resolver quite correctly says the rule exists, and this one never
+     opened the file. Sol found it by making the edit. Tailwind's own `@source`
+     is the whole of `src/web`, so this matches it. */
+  const files = globSync("src/web/**/*.{ts,tsx}").map((file) => ({
     file,
     src: readFileSync(file, "utf8"),
   }));

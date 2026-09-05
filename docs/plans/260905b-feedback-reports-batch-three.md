@@ -279,4 +279,30 @@ its header records that this bug shipped there first. `evals/cost/run.ts` return
 `summarise` on zero draws.
 
 Queued behind 1P and 1V: the feedback reports are the job Greg set, and these are not reports, so
-they get no Sentry write and no note in `docs/user-feedback/`.
+they got no Sentry write and no note in `docs/user-feedback/`.
+
+**Both fixed** — `457c764c` and `dfe170d2`, with the plan in
+[260905e-dictation-benchmarks-cannot-report-clean-over-nothing.md](260905e-dictation-benchmarks-cannot-report-clean-over-nothing.md).
+Three things are worth carrying out of it:
+
+- **Three reds were watched first**, which is the whole point on a class where the defect *is* a
+  check that passes. The sharpest is a verbatim copy of the old three lines kept in the test file as
+  `reportsCleanTheOldWay`, still asserting `true` — the bug preserved as a fixture, so the fix cannot
+  quietly become the bug again.
+- **The limit is stated rather than glossed:** neither benchmark was run end to end, because both
+  make paid calls at import. So nobody watched `bench-models.ts` itself print the false clean bill.
+  That gap is *why* the judgement moved into an importable module instead of staying as two local
+  patches.
+- **`clean` is now computed forwards** — every arm answered all of what it was sent, in whole
+  positive numbers — rather than as an absence of complaints, so a state nobody enumerated lands on
+  the unclean side. That is the general repair for this class, and it is the one thing here worth
+  copying elsewhere.
+
+**Discoverability was the part that needed most care**, because the file being fixed already carried
+its own previous fix in a comment directly above the relapse. A comment is exactly what failed. So
+`tests/dictation-bench-coverage.test.ts` enumerates `evals/dictation/bench-*.ts` and fails if one
+does not import `coverage.js` and take its exit code from it — asserting *which files it found*
+first, because a collector that matches nothing passes every assertion about its contents.
+
+**No further instances in `evals/dictation/`** — all six remaining files opened. One thing reported
+and deliberately not fixed: `gate-models.ts` sets no exit code.

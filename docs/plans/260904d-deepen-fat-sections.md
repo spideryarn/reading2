@@ -1397,14 +1397,17 @@ seven P0. The refusal earned its keep twice over:
   § `usage`) against a floor of 256,900, so a **successful** $40.90 run would have spent the money
   and then reported `structure-rebought` fatally over the phase whose job is to buy it. The real
   token count is now pinned in a test.
-- **$40.90 was never a bound.** A re-asking pass that hands its claim back at its own 740 s deadline
-  is requeued, and the driver re-claimed it at once — with the slug still named in the re-ask lever,
-  so the next claim ignored the checkpoint rows just written and bought the wave again.
-  `REQUEUE_BUDGET = 2` permits three windows, so one nominal pass could buy the book's wave three
-  times, and none of it was in the printed estimate. **The run enforces the bound rather than only
-  naming it**: a re-asking pass stops on its first requeue, the job is left `queued` and resumable,
-  and the self-abort is a fatal finding. The estimate prints the $85.30 worst case it is enforcing
-  against, and says plainly that it is not a spending cap — nothing here refuses a call at $N.
+- **$40.90 was never a bound, and neither is $85.30.** A re-asking pass that hands its claim back at
+  its own 740 s deadline is requeued, and the driver re-claimed it at once — with the slug still
+  named in the re-ask lever, so the next claim ignored the checkpoint rows just written and bought
+  the wave again. `REQUEUE_BUDGET = 2` permits three windows, so one nominal pass could buy the
+  book's wave three times, and none of it was in the printed estimate. **What the run does is stop,
+  not enforce a cap**: a re-asking pass stops on its first requeue, the job is left `queued` and
+  resumable, and the self-abort is a fatal finding. The estimate prints $40.90 as the **nominal
+  estimate** and $85.30 as the **three-window requeue exposure**; *neither is a bound*, and nothing
+  anywhere refuses a call at $N. ⟨This bullet said "the run enforces the bound" and called $85.30 a
+  "worst case" until 2026-09-05, contradicting the runtime text it describes. Sol had asserted the
+  bound version twice and retracted it; the plan kept the retracted claim for another round. DPN-22.⟩
 
 The other eleven were one disease in eleven places: **an answer computed over evidence that is
 absent, partial or failed, printed as though it were a result**
@@ -1439,9 +1442,11 @@ absent, partial or failed, printed as though it were a result**
   now rather than a note: an unchanged tree there is a coincidence, not the evidence phase C exists
   to produce.
 
-**A second review refused it again, and a third closed it.** ⟨GPT Sol, 2026-09-05.⟩ The second pass
-found seven more, two of them reopening findings the first round had been recorded as closing — which
-is the argument for reviewing the *code* as well as the plan.
+**It was refused five times.** ⟨GPT Sol, 2026-09-05.⟩ The second pass found seven more, two of them
+reopening findings the first round had been recorded as closing — which is the argument for reviewing
+the *code* as well as the plan. The fourth and fifth are [below](#stage-5b-round-4), and each of them
+found that the previous round's fix was not the fix it looked like: **twice running, a fix removed
+the version of the hole it had been shown and left the version it had not.**
 
 - **Phase C assigned over the findings array instead of appending to it**, so a fatal scope or
   ledger-completeness finding recorded moments earlier was dropped, and nothing downstream recomputes
@@ -1483,16 +1488,190 @@ is the argument for reviewing the *code* as well as the plan.
   every later query a paid job makes. The client-side deadline does the job the deadline is for,
   which is making sure the original error still arrives; what is genuinely lost, and owed, is
   cancelling the query at the server rather than abandoning it here.⟩
-- **Phase D lines its three windows up before it measures them.** The concurrency arithmetic was
-  right and the phase did not arrange the thing it measures: the book's job is a forced `hierarchy`
-  and starts its measured step at once, while the two load articles start at `fetch` and get there
-  only after stages 1–3. The two load jobs are driven first and announce their measured step as it
-  begins; the book is driven only once both have, and it waits **outside** a claim, because its own
-  step needs 658–778 s against a 740 s deadline and has no seconds to give away. Sol's other
+- **Phase D starts its three measured steps together before it measures them.** The concurrency
+  arithmetic was right and the phase did not arrange the thing it measures: the book's job is a
+  forced `hierarchy` and starts its measured step at once, while the two load articles start at
+  `fetch` and get there only after stages 1–3. The two load jobs are driven first and are **held at
+  the entry** to their measured step; a **readiness wait** ends when both are there, with the gate
+  still shut and nothing of the book driven or bought; then the book is driven, reaches the same
+  entry through the same hook, and **all three are released together**. **It took three goes.** The
+  first was a latch: announcing an arrival held nobody, so load1 could run its whole step and finish
+  before load2 announced, and the wait still ended `"all"` (DPN-20). The second held the loads and
+  then released them *before* driving the book, which moved the same hole one party over — with the
+  third queue slot taken, both released loads could finish before the book reached `hierarchy`, and
+  the outcome still said `"all"` (DPN-20-R). So the book holds too, inside its own claim, and that
+  costs it nothing: its step needs 658–778 s against a 740 s deadline and can give up none of it, but
+  by the time it is driven everybody else is already waiting *for it*, so its wait is one microtask.
+  The two load steps are the ones that really hold, bounded at three minutes, and what it cost each
+  of them is reported as a note. **A readiness wait that does not end `"all"` stops the run rather
+  than buying the book** (DPN-23). **What a successful gate guarantees is a shared start, not a
+  shared window**: the queue's concurrency cap is global and shared, so whether the three overlap for
+  long
+  enough is still `peakConcurrency`'s to measure and refuse. Sol's other
   suggestion — pre-ingest the load articles as far as `blocks`, then force three hierarchy-only jobs
   together — cannot work, and a free `--dry-run` is what showed it: a job that stops short of a
   publishable article fails, and a failed job's draft revision is rolled back, so the second job
   opens on an article with no fetched document.
+
+#### And a fourth review, on the last round before the money <a id="stage-5b-round-4"></a>
+
+**Three P0s, and all three were the same disease in different clothes: the run went on buying after
+it already knew the answer would be incomplete.** ⟨GPT Sol, 2026-09-05.⟩ `stopIfCompromised` reads
+*findings*, and only findings — so anything a stopped job did not turn into one looked, to the run,
+exactly like a clean job.
+
+- **A paid job could end non-`done` with no fatal finding** (DPN-18). A phase-B `hierarchy` writes
+  valid deepening records and then label generation throws; `driveJob` recorded `jobStatus: "error"`
+  and nothing more, and phase C was purchased over a repeat that never finished. Every terminal
+  status other than `done` is fatal now, on a paid run. `--dry-run` is exempt, and that is the
+  rehearsal's shape rather than a loophole: its step list stops at `extract`, so its jobs are
+  *expected* to fail at their last free step.
+- **A deepen-on job could finish `done` with no records file** (DPN-19). `saveDeepenRecords` swallows
+  filesystem and hard-link failures on purpose — instrumentation must not fail a reader's article —
+  and `readRecordsDir` then returned `[]`, which the run printed as *"no records file — nobody
+  asked"*. **"Nobody asked" and "asked and the record was lost" are different facts**, and questions
+  1–3 are computed entirely out of those records. This was the seam where they got confused; it is
+  fatal now, and the line prints which of the two it is.
+- **The phase-D barrier was a latch, not a rendezvous** (DPN-20) — the fix the *third* round asked
+  for, which looked done and was not. See the phase-D bullet above for what it does now and what it
+  does not.
+
+  > **And the fix for that was not the fix either.** ⟨GPT Sol, round 5, 2026-09-05.⟩ Holding the two
+  > load steps and releasing them before the book was driven is a **two-party** gate: they waited for
+  > each other and nothing waited for the book. With another job holding the third queue slot, both
+  > released loads could finish their measured step before the book reached `hierarchy`, and the
+  > outcome still read `"all"` — the same defect, one party over (DPN-20-R). Worth recording as a
+  > *pattern*: each round's fix removed the version of the hole it was shown and left the version it
+  > was not, because "the parties I am holding" kept being a smaller set than "the parties whose
+  > windows have to overlap". **Three attempts at one hole, and rounds 4 and 5 each found that the
+  > previous round's fix was not the fix it looked like** — which is the argument for reviewing the
+  > code after every round rather than declaring the finding closed when its example stops
+  > reproducing. The third go names the invariant instead of patching the example: **no measured
+  > step may start until every measured step is at the entry.**
+- **The immediate ledger read was unbounded** (DPN-21). The end-of-run re-read got a deadline in
+  round 3; the read `driveJob` makes the instant a job stops did not, and that one sits inside phase
+  D's `allSettled` — so one read that never answers is a phase that never reaches reporting. Same
+  mechanism, one constant, both callers.
+- **This plan contradicted the runtime text** (DPN-22), and that is the one worth naming as a
+  failure of this document rather than of the code: the estimate had stopped calling itself a bound
+  and the plan still said the run "enforces the bound" and called $85.30 a "worst case". A claim that
+  has been retracted must not survive in the doc that describes it.
+
+**And a fifth review found the round-4 fix had left one more of each.** ⟨GPT Sol, 2026-09-05.⟩ Both
+in `runPhaseD`, and both are the two diseases of this stage meeting in one function:
+
+- **DPN-20-R — the rendezvous was still two-party.** Recorded with the DPN-20 bullet above, because
+  the pattern is only visible with all three attempts side by side.
+- **DPN-23 — the run still bought after known failure**, in the one place round 4's own fix could not
+  reach. If both load jobs fail before `hierarchy`, the readiness wait ends `"jobs finished first"`,
+  their DPN-18 findings are already on the record — and phase D then drove the paid book anyway,
+  because "drive the book" was an unconditional statement. **The book's phase-D pass exists to answer
+  question 5 and nothing else** (question 1 is phases A and B only), and question 5 needs three
+  windows open at one instant, so a book bought into a phase whose load steps are gone buys nothing
+  at all. `loadReadiness` is the refusal, and it is pure so it can be watched refusing without a
+  database. The book's job is still *queued*, deliberately: `budgetReport`'s `expected` counts
+  phase-D jobs, so a queued-and-refused book still demands a third clock and question 5 still
+  refuses — where a book that was never queued would have quietly lowered the bar to two.
+
+Two smaller things fell out of DPN-23's shape. The readiness wait abandons on **the first load job to
+stop**, not on all of them: `allSettled` cannot resolve while a sibling is held at the entry waiting
+for a gate that wait has not opened yet, so the old form sat out the whole three-minute timeout to
+learn something that was true in the first second. And the gate's own abandon signal is the *book*
+alone, for the same reason.
+
+**And then the last known money-waster, closed on purpose rather than on a review.** ⟨Greg,
+2026-09-05.⟩ Round 5 left one path that still spent knowing the answer could not come back: the
+readiness wait succeeds, the book is driven, and *the gate* then gives up — the book failing to get a
+claim slot inside the deadline being the likeliest way. All three steps ran, `peakConcurrency`
+refused question 5 afterwards, and $7.40 of a $40.90 run had bought an answer the report would not
+quote. **18% of the run, spent on a question already lost, on a shared box where "another agent holds
+the third claim slot" is nearer the expected case than the tail.** So the gate tells a released step
+which of two things happened — `arrive` resolves to `"go"` or `"abandoned"` — and an abandoned step
+throws before `step.run`, having bought nothing. Two guards: never on `"go"`, and never under
+`--dry-run`, whose jobs already stop at their last free step and must not be given a second way to
+fail. The verdict is **latched at the first opening**, because `runPhaseD`'s `finally` releases on
+every path including the successful one, and a second call must not tell three running steps they
+were abandoned. It is the one place this eval fails a step deliberately, so it says so twice: the
+thrown error carries `ABANDONED_MARKER`, and — because the queue rewrites a failed step's message
+into a reader-facing sentence, the trap `checkDriving` already exists for — a fatal finding goes on
+the job's own record, where `run.json` and the closing findings block will both carry it. What phase D
+now guarantees end to end is written out in numbered statements in `runPhaseD`'s docblock.
+
+**A sixth review found two more, and both were phase D again.** ⟨GPT Sol, 2026-09-05.⟩
+
+- **A re-driven measured job ran outside the gate** (DPN-25). A load job is not re-asking, so a
+  requeue re-drove it as any ordinary pass — and its second `arrive()` took the rendezvous's
+  *latched* verdict and returned at once, so the retry ran beside whatever its siblings happened to
+  be doing while the queue replaced the first attempt's clock (`src/jobs.ts` § `runStep`). What came
+  back looked like an ordinary question-5 pass and its duration omitted the attempt that had been
+  lined up. `requeueVerdict` now has a second reason to stop, and it is about evidence rather than
+  money: a job whose step question 5 is timing stops on its first requeue whether or not the re-ask
+  lever names it.
+- **The three measured jobs had no failure signal between them** (DPN-26) — the *fifth* instance of
+  "it buys after it already knows". They were driven concurrently and drained together and that was
+  all, so load 1's `hierarchy` could fail on its structure call while the book and load 2 went on
+  admitting expansion and label calls, for a question 5 that could no longer reach three usable
+  completions. Sol asked for the invariant rather than a fifth guard, and it is this: **the three
+  measured jobs share one fate, and none of them starts more paid work after any of them has lost
+  it** (`startPhaseFate`). A measured step that failed, a wave that fell back, a claim handed back —
+  any of them loses it, and the others stop before their next claim. The honest verb is **stops
+  starting**: a call already in flight belongs to the pipeline, and `src/` is not this eval's to
+  change.
+
+Three smaller ones came with them. Abandonment was producing a **false** `no-records` finding — the
+records were never *requested*, because an abandoned step never runs, and "they were lost" is exactly
+the invented fact DPN-19 exists to have stopped, one branch further on; `no-records` now fires only
+on a job that ended `done` (DPN-27). The abandoned jobs were named off `wait`'s `held` snapshot,
+which cannot see a step that arrived *after* the gate closed, so a late arrival was refused and left
+unexplained; the gate now says who it turned away, because the gate is the only thing that knows
+(DPN-28). And the three claims in the docblock were not exact (DPN-29): retries falsified the first
+until DPN-25 closed them, the second needed a paid-run qualification because `abandonStep` stands
+down under `--dry-run`, and the third repeated a risk **that is simply not real** — after a
+successful gate all three jobs hold claims, which is all three of `DEFAULT_JOB_CONCURRENCY`'s slots,
+so no other job can serialise them. I had asserted the contrary three times. Sol's narrower one-liner
+replaces mine and is the sentence to quote: **"it no longer starts paid measured work when the
+rendezvous already knows Q5 is impossible."**
+
+**And a seventh review found the sixth instance of the class, one level below where the fifth was
+fixed.** ⟨GPT Sol, 2026-09-05.⟩
+
+- **The shared fate stopped new claims, not new calls** (DPN-30). One claim runs the *whole*
+  `hierarchy` step, and that step buys a structure call, an expansion wave **and a whole pass of
+  labels** — `generateHierarchy` catches a failed wave and falls straight through to `generateLabels`
+  regardless (`src/hierarchy.ts`, the `deepenFailed` catch). So the exact DPN-26 scenario survived at
+  the level below: after question 5 was known unanswerable, a sibling could still *begin* an entire
+  label pass. My own sentence — *"a call already in flight finishes"* — was the overclaim, which is
+  the DPN-29 standard failing on the sentence DPN-29 wrote. Up to about **$10.80 of phase D's
+  $14.20** was exposed: the book's $7.40 pass plus whatever remained of the other load's ~$3.40.
+
+  **It was fixable without touching `src/`, and the fix is the abort path `src/` already documents.**
+  The claim's own `AbortController` is private to `advanceJobWith`, so the *claim* cannot be
+  cancelled — and does not need to be. `announcing` already intercepts `run(ctx, …)`, so it hands the
+  step a `ctx` whose `signal` is `AbortSignal.any([ctx.signal, fate.signal])`; `StepContext` is plain
+  data whose `report` is an arrow closing over the step, so a shallow spread carries the rest across
+  intact. Only a *lost* fate aborts, and `ctx.signal` keeps doing its own job. What that buys was read
+  out of `src/` rather than assumed: label batches are queued **with** the signal
+  (`src/labels.ts` § `queue.add(…, { signal })`), and `tests/labels-batching.test.ts` already pins the
+  consequence — *"the callback must never run either, or the 'stop paying' half of fail-fast buys
+  nothing"*. The honest remaining bound is **the single request already in flight**, which may still
+  be billed.
+- **`peakConcurrency` had become a tautology, and `fullConcurrencyMs` replaces it.** Sol confirmed
+  the argument: given three valid completions, all three clocks open before `arrive()` returns and the
+  gate says go only once all three have arrived, so `peakConcurrency === 3` is *constructed* and false
+  only if a clock is corrupt. It is kept as the wiring check it has become. The load measurement is
+  now the longest interval with all three genuinely in flight — `min(finishedAt) - max(startedAt)` —
+  held to a floor **declared before the run and printed in preflight**, so it cannot be chosen after
+  the figure is seen. It is bounded by the shortest of the three, which is the point: below the floor,
+  question 5 reports *latency after a synchronised start*, not sustained three-job load.
+- **The rehearsal could not exercise the failure path**, which was a fair hit: the fate was disarmed
+  wholesale under `--dry-run`, so the one thing DPN-26 and DPN-30 are about — a live failure reaching
+  its siblings — was the one thing the free run could never show. `fateReason` draws the line
+  instead: a rehearsal job failing at the **last** step it was asked to run is the expected ending and
+  loses nothing, while a failure earlier in the list, a requeue, or a fallen-back wave lose the phase
+  in the rehearsal exactly as in the paid run.
+- Non-blocking, fixed with them: `budgetReport` still told a reader that another agent could have
+  serialised a successful gate. It cannot, for the reason DPN-29 established, and a peak below three
+  now means **a clock is wrong** rather than that the phase was serialised.
 
 **The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
 job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global
@@ -1524,7 +1703,7 @@ driving proved instead of a table of zeroes.
 > summaries can say *there was nothing here*. The same run also proved, for free, that **the ingest
 > cannot be split across two jobs**: a job that stops short of a publishable article fails, and a
 > failed job's draft revision is rolled back, so the second job finds no fetched document. That is
-> why phase D lines its three windows up with a start barrier rather than by pre-ingesting.
+> why phase D starts its three windows together with a start rendezvous rather than by pre-ingesting.
 
 ### Stage 6 — recursion, once the verdict has earned it
 

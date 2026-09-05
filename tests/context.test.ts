@@ -150,20 +150,25 @@ describe("continuation cells", () => {
 
 describe("landmarkLines", () => {
   /**
-   * The budget reads four things off the list — how many items, how many
-   * headings, whether one of them is current, and whether the level is the arc
-   * — so a list of the right shape is enough; no tree, no fixture.
+   * The budget reads three things off the list — how many items, how many
+   * headings, and whether one of them is current — so a list of the right shape
+   * is enough; no tree, no fixture.
+   *
+   * It read a fourth until 2026-09-05: whether the level was the arc, whose
+   * landmarks were charged a cheaper rate because a `3 / 5` marker cannot wrap.
+   * That column left Hierarchy with the `Arg` pill, and every landmark here now
+   * has a title that can — docs/plans/260905d-declutter-the-reading-view-top-bars.md.
    */
   const list = (
     items: number,
-    { groups = 0, current = true, arc = false } = {},
+    { groups = 0, current = true } = {},
   ): ContextEntry[] =>
     [
       ...Array.from({ length: groups }, () => ({ kind: "group", tier: "far", item: {} })),
       ...Array.from({ length: items }, (_, i) => ({
         kind: "item",
         tier: current && i === 0 ? "cur" : "far",
-        item: arc ? { step: { index: i + 1, total: items } } : {},
+        item: {},
       })),
     ] as ContextEntry[];
 
@@ -185,13 +190,12 @@ describe("landmarkLines", () => {
 
   it("is a whole number of lines, never negative, never past the cap", () => {
     for (const h of HEIGHTS)
-      for (const n of CASES)
-        for (const arc of [false, true]) {
-          const v = landmarkLines(list(n, { groups: Math.ceil(n / 6), arc }), h);
-          expect(Number.isInteger(v)).toBe(true);
-          expect(v).toBeGreaterThanOrEqual(0);
-          expect(v).toBeLessThanOrEqual(4);
-        }
+      for (const n of CASES) {
+        const v = landmarkLines(list(n, { groups: Math.ceil(n / 6) }), h);
+        expect(Number.isInteger(v)).toBe(true);
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(4);
+      }
   });
 
   it("never grows as the level gets longer", () => {
@@ -209,8 +213,8 @@ describe("landmarkLines", () => {
   });
 
   it("gives a short level lines and a long one none", () => {
-    // The two ends of the ladder, which is the whole point of it: the arc's
-    // five parts were the complaint, and forty sections were already fine.
+    // The two ends of the ladder, which is the whole point of it: a five-part
+    // level was the complaint, and forty sections were already fine.
     expect(landmarkLines(list(5), 1200)).toBeGreaterThan(0);
     expect(landmarkLines(list(40, { groups: 6 }), 1200)).toBe(0);
   });

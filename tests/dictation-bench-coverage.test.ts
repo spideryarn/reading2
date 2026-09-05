@@ -196,6 +196,38 @@ describe("the ordinary shapes", () => {
   });
 });
 
+describe("every TypeScript benchmark in the directory goes through coverage.ts", () => {
+  /**
+   * **So the next one is not written without it.** The previous fix for this
+   * class was recorded in a comment directly above the line that relapsed,
+   * which is exactly what a comment cannot prevent. A README paragraph is the
+   * same instrument. This fails instead.
+   *
+   * `bench-*.mjs` is deliberately out of scope: those two already branch on the
+   * empty case and print `FAIL` rows before computing anything, which is the
+   * same guarantee reached another way — swept and confirmed 2026-09-05.
+   */
+  const dir = new URL("../evals/dictation/", import.meta.url);
+  const benches = fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith("bench-") && f.endsWith(".ts"))
+    .sort();
+
+  it("found the benchmarks it claims to be checking", () => {
+    /* A collector that matches nothing passes every assertion about its
+       contents, forever — `silent-success.md`. Two exist today. */
+    expect(benches).toEqual(["bench-models.ts", "bench-vocabulary-sources.ts"]);
+  });
+
+  for (const file of benches) {
+    it(`${file} imports coverage.ts and exits on it`, () => {
+      const src = fs.readFileSync(new URL(file, dir), "utf8");
+      expect(src).toMatch(/from "\.\/coverage\.js"/);
+      expect(src).toMatch(/exitCodeFor\(coverage\)/);
+    });
+  }
+});
+
 describe("the results files", () => {
   /**
    * **No planned product may be written into a results field.** This is the

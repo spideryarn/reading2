@@ -24,7 +24,7 @@ interface Props {
   /** The tree, nested and numbered. Null if it is unusable. */
   root: SummaryNode | null;
   supplementOf: ReadonlyMap<NodeId, TreeNode>;
-  /** The arc column keyed by start row. Null until `npm run arc` has been run. */
+  /** The arc, keyed by the row each part starts on. Null until stage 5b has run. */
   arcByRow: Map<number, ArcCell> | null;
   /**
    * Where the reader is — `LiveContext.focusRow`, **section-granular**.
