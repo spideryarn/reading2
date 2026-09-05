@@ -1252,6 +1252,13 @@ table is the other copy of the list — and since 2026-09-05 `tests/db-schema.te
 under every name, so the two cannot drift in silence. Before that they could, and the symptom would
 have been a `warn` nobody reads and a bill that goes up.
 
+**There is no `delete`**, deliberately, and nothing needs one. A row is replaced by writing over it,
+and the one caller that has to ignore what is stored — a repeat measuring whether the deepening
+verdict is stable — skips the *read* instead, for the articles it names:
+`SPIDERYARN_DEEPEN_REASK`, in [hierarchy.md § the deepening wave](hierarchy.md#deepening). It is a
+list of slugs rather than a boolean, because a boolean read on every wave spends money on every
+article a worker later picks up.
+
 They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), with
 [`checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) writing the `checkpoints` table. A stage is
 handed one through **[`StoreSession.checkpoints`](../../src/store/session.ts)** — the third argument

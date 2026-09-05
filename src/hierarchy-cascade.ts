@@ -1179,6 +1179,49 @@ export interface ProposedChild {
 }
 
 /**
+ * **A child that survived, and the proposal it came from** — one object, made in
+ * one place, so the two cannot be paired wrongly.
+ *
+ * ## The shape this replaced, and why it had to go
+ *
+ * `normaliseExpansion` used to hand back bare `ModelNode`s, and the wave carried
+ * the model's own children beside them in a second array. The two are **different
+ * lengths** — a start that marks no split point is dropped, and nothing said
+ * which — so *"what did the model say about this child?"* was a question with no
+ * answer. Stage 6 is the recursion, and the recursion is governed by exactly
+ * that question, so it could not have been built on top of it; stage 5 records
+ * verdicts it could not attribute. The obvious mend was a `childIndex` on the
+ * node and a lookup every caller must remember to do, which is a parallel array
+ * with an extra step — and *"a parallel array is a thing that can be one element
+ * short"* is the rule this file already lives by
+ * (`runExpansionWave`'s `ancestorsOf`).
+ *
+ * So the pairing is made where the drop is decided and is impossible to lose.
+ * The proposal here is the **same object** the caller passed in, not a copy: a
+ * field this file has never heard of — today `verdict` and `why`, tomorrow
+ * whatever the prompt learns to ask for — arrives on the other side untouched.
+ *
+ * The node is still exactly what `buildTree` takes, so a caller that wants the
+ * tree writes `children.map((c) => c.node)` and is done.
+ * docs/plans/260904d-deepen-fat-sections.md § stage 5.
+ */
+export interface DerivedChild<C extends ProposedChild = ProposedChild> {
+  /** As `buildTree` takes it: title, gist, `sourceHeading`, and a derived range. */
+  node: ModelNode;
+  /**
+   * The proposal this node was built from — the caller's own object, by
+   * identity.
+   *
+   * **Its `start` is not the node's range start**, and that is the point of
+   * keeping it: the first child is pinned to its parent's own first block, and a
+   * child whose start named a block one past its authored heading is snapped back
+   * onto it. What the model claimed and what it got are both here, which is what
+   * lets `recordBoundaryFaults` measure the difference at all.
+   */
+  proposed: C;
+}
+
+/**
  * **Turn one parent's answer into children with real ranges, immediately.**
  *
  * ## Why immediately
@@ -1297,13 +1340,28 @@ export interface ProposedChild {
  * Fewer repairs here is a property of the response format and of what is
  * refused, not a quieter run.
  *
+ * ## What comes back is a pair, and that is deliberate
+ *
+ * A kept child is handed back **beside the proposal it was built from**, not as
+ * a bare `ModelNode`. The two are made together, in one `map`, so they cannot
+ * come apart; and a caller that needs to know what the model *said* about a
+ * child — its verdict, its `why` — reads it off `proposed` rather than trying to
+ * line two arrays of different lengths up by position. There is nothing to line
+ * up: this function drops a start that marks no split point, and it does not say
+ * which. See `DerivedChild`.
+ *
+ * `C` is whatever shape the caller's proposal has. A scoped answer's child
+ * carries a verdict (`ExpansionAnswerChild` in src/hierarchy-expand.ts); a
+ * test's carries nothing but the four fields. Either way the object handed back
+ * is the very object that went in, so nothing can be lost in the pairing.
+ *
  * @returns the children that were kept, in the model's own order, each with a
- * derived range. Dropped children are absent and are named in
- * `report.droppedChildren`.
+ * derived range and its own proposal. Dropped children are absent and are named
+ * in `report.droppedChildren`.
  */
-export function normaliseExpansion(opts: {
+export function normaliseExpansion<C extends ProposedChild>(opts: {
   /** The model's proposal, in its own order. */
-  children: readonly ProposedChild[];
+  children: readonly C[];
   /** The parent's already-fixed range. Not the answer's to redefine. */
   parent: readonly [string, string];
   blocks: readonly Block[];
@@ -1312,7 +1370,7 @@ export function normaliseExpansion(opts: {
   /** Filled in with what was derived past, and what was dropped. */
   report: BuildReport;
   index?: BlockIndex;
-}): ModelNode[] {
+}): DerivedChild<C>[] {
   const { children, blocks, where, report } = opts;
   const index = opts.index ?? indexBlocks(blocks);
   const [p0, p1] = positions({ range: opts.parent }, index, `The parent at ${where}`);
@@ -1410,7 +1468,7 @@ export function normaliseExpansion(opts: {
   recordBoundaryFaults(kept, claimed, p0, where, planned);
   planned.repairs.push(...snapStartsToHeadings(children, kept, blocks, where));
 
-  const built: ModelNode[] = kept.map((child, k) => {
+  const built: DerivedChild<C>[] = kept.map((child, k) => {
     const next = kept[k + 1];
     const end = next === undefined ? p1 : next.start - 1;
     const proposed = children[child.childIndex]!;
@@ -1418,7 +1476,11 @@ export function normaliseExpansion(opts: {
        backwards floored at the previous kept start; `end` is either `p1` or one
        before a start that was in range. Both index `blocks` because the parent's
        own range came out of `index`. */
-    return {
+    /* **The pair is made here or it is not made at all.** `child.childIndex` is
+       the only thing that knows which proposal survived as which node, it is
+       local to this function, and it was thrown away at this line until
+       2026-09-05. See `DerivedChild`. */
+    const node: ModelNode = {
       title: proposed.title,
       range: [blocks[child.start]!.id, blocks[end]!.id] as [string, string],
       /* **Presence, not truthiness.** This said `proposed.gist ? … : …`, and a
@@ -1450,6 +1512,7 @@ export function normaliseExpansion(opts: {
         ? { sourceHeading: proposed.sourceHeading }
         : {}),
     };
+    return { node, proposed };
   });
 
   /* The answer stood up, so what it cost the run goes on the run's books.

@@ -51,7 +51,7 @@ import {
   type ExpansionTarget,
 } from "../src/hierarchy-cascade.js";
 import { renderFrozenOutline, type OutlineEntry } from "../src/hierarchy-expand.js";
-import { runExpansionWave, type FrozenSeed } from "../src/hierarchy-deepen.js";
+import { freeAnswer, runExpansionWave, type FrozenSeed } from "../src/hierarchy-deepen.js";
 import { structureHash } from "../src/source-hash.js";
 import { generateLabels } from "../src/labels.js";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
@@ -349,7 +349,7 @@ describe("the scoped expansion checkpoints", () => {
       await runExpansionWave({
         slug: "deepen-log",
         checkpoints: store,
-        execute: async () => answer,
+        execute: async () => freeAnswer(answer),
         batches,
         ancestorsOf,
         blocks,
@@ -372,7 +372,7 @@ describe("the scoped expansion checkpoints", () => {
       await runExpansionWave({
         slug: "deepen-log",
         checkpoints: store,
-        execute: async () => answer,
+        execute: async () => freeAnswer(answer),
         batches,
         ancestorsOf,
         blocks,

@@ -107,7 +107,11 @@ The differences that matter to a reader:
   `WidthGate` ([`src/concurrency.ts`](../../src/concurrency.ts)) halves the width on the first 429 of
   an epoch, holds new requests briefly while that takes effect, and earns the width back one slot per
   successful call. A hundred chunks meeting one overload therefore halve it once rather than a
-  hundred times. Underneath it the per-chunk retry is unchanged: the chunk waits and asks again,
+  hundred times. **The pause is not epoch-scoped and the halving is** (fixed 2026-09-05): every
+  refusal extends the hold to the longest window anybody was asked for, because *"the width is too
+  high"* is one fact reported a hundred times while *"come back in thirty seconds"* is a number that
+  can differ — and until that fix, a short first refusal in a burst made the gate discard a longer
+  one arriving behind it and reopen inside a window the provider had just named. Underneath it the per-chunk retry is unchanged: the chunk waits and asks again,
   honouring the provider's own `Retry-After` in full up to `MAX_RETRY_AFTER_MS` (60 s) and failing
   this attempt rather than truncating a wait the provider actually asked for.
 - **A chunk is bounded by bytes as well as by words.** Words alone let a run of image-heavy pages

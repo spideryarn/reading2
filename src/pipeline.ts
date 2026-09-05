@@ -430,6 +430,22 @@ export interface StepContext {
   report(detail: string): void;
   signal: AbortSignal;
   /**
+   * **When this claimant stops** — `Date.now()`'s clock, and `undefined` where
+   * nobody imposed one (a command line, a test).
+   *
+   * The signal above says *"stop now"*; this says *when* that will be, which is
+   * a different and occasionally more useful thing: a step that fans out over
+   * several paid calls can decline to **start** one it cannot finish, and hand
+   * back with what it has bought already banked, rather than being aborted in
+   * the middle of a call nobody will ever read. The hierarchy step's deepening
+   * wave is the only reader today (src/hierarchy-deepen.ts § `runExpansionWave`).
+   *
+   * It is `LEASE_MS - DEADLINE_MARGIN_MS` after the claim, which is the same
+   * instant `src/jobs.ts` sets its own timer for — one number, passed, rather
+   * than two computed in two places.
+   */
+  deadlineAt?: number;
+  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * Resolved once by whoever queued the job and carried here, never read from
@@ -2063,6 +2079,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         checkpoints,
         onProgress: ctx.report,
         signal: ctx.signal,
+        /* Only the deepening wave reads it, and only to decide whether to start
+           another scoped call — see `StepContext.deadlineAt`. With the flag off
+           it changes nothing at all. */
+        ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -2126,6 +2146,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              recommendation 2. */
           labelBatches: run.labelBatches,
           labelsResumed: run.labelsResumed,
+          /* **What the deepening wave did**, and `null` where nobody asked for
+             one — which is every article until stage 8 moves the flag
+             (src/hierarchy-deepen.ts § `DEEPEN_ENV`). Nested rather than eight
+             flat fields, because it is one feature's story and it is read as
+             one: how many sections were eligible, how many came back, what the
+             verdicts said, and what the wave could not do — a section too large
+             to ask about, a call the deadline would not admit, a 429. Every one
+             of those leaves a correct article and a shallower tree, which is
+             precisely the shape that needs a number rather than a symptom.
+             docs/reusable/silent-success.md. */
+          deepen: run.deepen,
+          deepenFailed: run.deepenFailed,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,

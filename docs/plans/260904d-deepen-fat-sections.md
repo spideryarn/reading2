@@ -1,6 +1,6 @@
 # The tree goes as deep as each part of the article needs
 
-**Status: stages 1–4 done; stage 5 — the first live call — is next.** The measurements and the spikes
+**Status: stages 1–4 and 5a done; 5b — the first live call — is the next thing, and it is a decision rather than a task.** The measurements and the spikes
 are in `evals/results/hierarchy-waves-2026-09-04/`, and **stages 3 and 4 have landed in `src/`**, each
 reviewed across families. There is still no network call, no flag, and nothing wired into
 `generateHierarchy`: the cascade is called by nothing. What changed is that it now derives the same
@@ -1165,6 +1165,167 @@ rates by wave and size, and the real bill — before anything recursive is built
 **Done:** Moby-Dick and Origin of Species each produce a valid depth-4 tree through the real pipeline;
 the corpus's articles are untouched where nothing is eligible; the step fits its budget under load,
 or the plan records that it does not and what that costs.
+
+#### What the live run must answer, and what would make us stop <a id="stage-5-questions"></a>
+
+Written **before** the run, because a paid run with no stated question always succeeds. Stage 5 is
+split: **5a** is everything that costs nothing — the import-cycle hoist, the verdict pairing, the
+derived concurrency budget, and the wiring behind a flag that is off — and **5b** is the first live
+wave. 5b is a separate decision because it is the first irreversible spend in this plan, at roughly
+$8.40 a book against today's $1.00, and repeats multiply it.
+
+Five questions, each with the number that answers it and the reading that would stop the plan:
+
+| | question | measured as | what would mean stop |
+|---|---|---|---|
+| 1 | **Is the verdict stable?** | the same node's raw verdict across N repeats of one wave | a flip rate high enough that obeying it is a coin toss — then stage 6 is unbuildable and the mechanical bounds have to carry the whole thing |
+| 2 | **Does the model always say yes?** | raw yes rate, by wave and by node size | a rate near 1 turns a bounded cascade into a bill; the plan named this failure before the prompt was written, so it is a measurement rather than a worry |
+| 3 | **How often does a bound overrule it?** | `because` tallied over every `decideExpansion` — the point of returning a union | if the bounds decide nearly everything, the verdict is costing money to be ignored, and the cheaper conditional-depth prompt is the honest answer |
+| 4 | **What does it actually cost?** | per book and per ordinary article, against the incumbent's $1.00 | materially past the ~8× the plan costed, without a proportionate gain in what the reader can navigate |
+| 5 | **Does it fit the budget under load?** | the whole hierarchy step including labels, under `DEFAULT_JOB_CONCURRENCY` jobs at once | past the 740 s self-abort with checkpoints that do not make the next attempt cheap |
+
+**Two of these can only be answered by repeats**, which is where the cost is. Question 1 is the one
+the rest of the plan leans on: stage 6 obeys the verdict recursively, and it should not be built on a
+signal that changes its mind. **Question 3 is the one that could retire the feature** — if the
+heading rule and the two counters are doing all the work, then the self-assessment is an expensive
+opinion and [the conditional-depth prompt](#the-free-experiment-a-conditional-fourth-level-in-the-one-whole-document-call)
+does the same job for nothing.
+
+**The corpus's ordinary articles are part of the run, not an afterthought.** An article where nothing
+is eligible must come out byte-identical to today, and that is the cheapest possible evidence that
+this is inert until it is wanted.
+
+#### What stage 5a landed, and the six P1s that shaped it <a id="stage-5a-landed"></a>
+
+**5a is everything that costs nothing, and it is done.** The wave is wired into `generateHierarchy`
+behind `SPIDERYARN_DEEPEN_HIERARCHY`, **off by default**, seeded from the built tree, exercised end to
+end against a fake executor. An ordinary ingest today does not call it, and a test asserts that
+directly: no flag, no executor call, `deepen: null` rather than a row of zeros, and the tree unchanged
+in depth. "Nobody asked" and "asked and found nothing" stay different facts.
+
+Three prerequisites came first. **The import cycle was broken before it closed** — `PROMPT_VERSION`,
+`PRODUCTION_EFFORT` (which this plan had not noticed was also a value import) and `renderBlocks`
+hoisted into `src/hierarchy-prompt.ts` and re-exported, so no existing importer changed. That move is
+**proven inert rather than asserted**: the pre-move `hierarchy.ts` taken out of git at `9afcc37f` and
+the new one both mint the structure checkpoint key `2993e1e4b2aaf1d6`, which is pinned as a literal.
+A single changed character there would have missed every checkpoint row ever written and bought every
+reader's stored table of contents again, with nothing to see but the bill. **The verdict is paired
+with the child that survived** — `normaliseExpansion` is generic and returns `{node, proposed}` pairs
+carrying the caller's own object by identity, so a field this file has never heard of survives the
+derivation. And **the concurrency is derived rather than borrowed**: `EXPANSION_CONCURRENCY = 8`, from
+`ceil(20 calls / W) × 45 s ≤ 300 s` where the 300 is the step budget less measured wave-1 and label
+times — four leaves 79 s that one redraw eats, eight leaves a whole further round. The arithmetic is
+itself a test, so moving `STEP_BUDGET_MS.hierarchy` goes red rather than stale.
+
+**The review refused on six established P1s** ⟨GPT Sol, 2026-09-05⟩, and one of them changed what the
+paid run is worth:
+
+- **The per-candidate records never left `deepenTree`.** `DeepenStats` had no field for them, so
+  `generateHierarchy` dropped them at the seam — and three of the five questions above need exactly
+  those records. **Stage 5b would have spent the money and been unable to answer its own questions**,
+  which is the waste [§ the questions](#stage-5-questions) was written to prevent. Now
+  `saveDeepenRecords` writes one file per pass to `SPIDERYARN_DEEPEN_RECORDS`, unset for every reader.
+- **The wave was not deterministic, and this plan claimed it was.** `WidthGate` reserves a slot and
+  *then* jitters, so calls admitted together split randomly between executed and out-of-time, and the
+  completed ones were published anyway. Admission is atomic; dispatch is not. Publication is now all
+  or nothing, with `withheld` counting the bought answers left in checkpoint rows. **Atomic
+  publication does not restore full determinism** — the deadline is wall-clock, so two runs can still
+  differ between "wave-1 tree" and "fully deepened". What it removes is the *partial* tree.
+- **A truncated answer was published as complete.** The executor ignored `stop_reason`, and a response
+  cut exactly after a closing brace parses. Now `ExpansionTruncated`, failing the wave rather than
+  redrawing — an identical redraw truncates identically, and a larger budget is a different question
+  under a different checkpoint key.
+- **A failed wave returned while paid peers were still in the air**, so their checkpoint rows might
+  never land: calls bought and thrown away. `allOrStop` now drains before rethrowing.
+- **Retries and fan-out were recorded on the wrong nodes** — children inheriting the parent call's
+  redraw count, `fanOut` null everywhere. Instrumentation describing the wrong node is worse than
+  none.
+- **And one that was never ours.** `WidthGate.refused` returned early on a stale epoch *before*
+  applying its pause, so within one burst a first short refusal bumped the epoch and a later, longer
+  `Retry-After` was discarded entirely. Pre-existing shared code from the PDF stage's gate, live for
+  real readers at `CHUNK_CONCURRENCY = 100` today. Every refusal now extends the pause; only the
+  halving stays epoch-scoped.
+
+**Resumption is documented rather than built**, and the distinction matters: a withheld wave returns
+normally, labels are written and the job commits done, so **nothing schedules a retry**. It is the
+reader's next Retry or a re-ingest, exactly as a long PDF's second lease window. The rows are there
+and make that attempt cheap; nothing makes it happen.
+
+#### And what a second review of the same code found <a id="stage-5a-round-2"></a>
+
+⟨GPT Sol, 2026-09-05, reviewing stage 5a's code a second time. Refused on one P0 and five P1s; all
+seven findings taken.⟩ **Five of the seven were ways the paid run would take the money and be unable
+to answer**, which is the exact waste [§ the questions](#stage-5-questions) exists to prevent.
+
+- **P0 — the re-ask switch was process-wide and persistent.** Written up under
+  [§ the levers](#stage-5-levers) above, because that is where the lever is described.
+- **`withheld` claimed checkpoint rows that did not exist.** The write is deliberately best-effort
+  and its failure is a `warn`; the outcome was counted anyway, so the number saying *"this is what
+  the next attempt gets for free"* included answers with no row. `ExpansionCallOutcome.checkpointed`
+  is what it is read off now, and `uncheckpointed` beside it counts the answers that were paid for,
+  withheld and lost — money that buys the next attempt nothing, and a `warn` when it is above zero.
+  The trade stands for the *article*; the count stopped lying.
+- **The drain was unbounded for a caller with no signal.** `allOrStop` waits for the calls still in
+  the air before it rethrows, so a paid peer gets to write its row — and its docblock claimed that
+  wait was finite because every caller either aborts in flight or is bounded by a claimant's
+  deadline. Not true here: the wave is reachable from the CLI and from an exported `deepenTree` with
+  no signal at all, and `ExpansionExecutor` has no abort contract. **Bounded rather than aborted**,
+  because aborting the live calls would undo the change the drain exists for. `EXPANSION_DRAIN_MS`
+  is 60 s and shows its arithmetic: the abort reaches every *wait*, so `EXPANSION_ATTEMPTS` and
+  `MAX_RETRY_AFTER_MS` are not in the sum — one packed model call at 45 s, plus the third of it again
+  `CALL_RESERVE_MS` allows for reading the answer and writing the row.
+- **Two record files in one second overwrote.** `<slug>-<stamp>-<pid>.json` cannot separate two
+  passes of one process, which is exactly what `--repeat` is — so the repeat overwrote the run it
+  was bought to be compared against. A process-local counter, and the file is created `wx` so a
+  collision fails loudly and is retried rather than overwriting.
+- **A thrown wave lost its measurement.** `saveDeepenRecords` was only on the success path, so a
+  fatal wave took wave 1's governor decisions, its paid peers' records, the gate's report and the
+  token accounting with it. The partial telemetry now travels on `ExpansionWaveFailed` and then on
+  `DeepenFailed`, and `generateHierarchy` writes a `failed: true` records file before it falls back
+  to wave 1. `deepen-records/2`.
+- **`where` is not a repeat-stable identity.** It is an ordinal path derived from the answer's own
+  fan-out, so two repeats that split one parent at different points both emit `root > child 1` and a
+  moved boundary reads as a verdict that held — wrong in the direction that flatters the feature, on
+  the question most likely to retire it. `CandidateRecord.range` carries the node's derived first and
+  last block id (an address, not prose), pairing is parent-plus-range, and a changed fan-out or an
+  unmatched range is **structural instability** rather than a flip. The counting is in
+  [`evals/deepen/report.ts`](../../evals/deepen/report.ts), which refuses to compare a record with no
+  range.
+- **The gate's explanation was discarded.** `runExpansionWave` computed `gate.report()` and dropped
+  it, and `DeepenStats` kept only `rateLimited` — a count with no width beside it, so a slow wave
+  could not say whether the gate had narrowed to one. `WidthGate.watch()` gives a **per-wave** window
+  — initial, final and narrowest width, and the refusals seen while it was open — because the gate is
+  a process singleton shared with every concurrent job and its cumulative figures would put another
+  book's rate limit on this one's artefact.
+
+#### Two levers, so the paid run can answer what it is being paid for <a id="stage-5-levers"></a>
+
+Built after the review, both free:
+
+- **`SPIDERYARN_DEEPEN_REASK`** names the articles to re-ask — a comma-separated list of slugs — and
+  for those it skips the expansion checkpoint *read* — not read-and-discard, so `found` cannot report
+  rows nobody used — and still **writes**, so a genuine resumption afterwards is still cheap. Without
+  it a repeat is free and the verdicts are identical *by construction*, which is not a stability
+  measurement. No `delete` was added to `CheckpointStore`; its header rules one out.
+  **The structure call is deliberately still resumed**, holding the seed constant so a moving verdict
+  is the scoped call changing its mind rather than a different tree being asked a different question —
+  and saving about two dollars and eight minutes a repeat.
+
+  **It was a boolean for a day, and that was a P0.** The variable is read from `process.env` on
+  *every wave*, so a worker started with it set re-asked for every eligible article it later picked
+  up — and 5b goes through the queue, so the worker doing the repeats is the worker serving everyone
+  else. Real money on strangers' articles, for as long as the process lived. Now the switch is
+  article-scoped: `1`, `true` and `yes` are read as slugs, match nothing, and log a warning naming
+  what was parsed, because *"I set it and nothing re-asked"* must not be silent. **There is
+  deliberately no spelling that means "all articles".**
+- **The wave's tokens reach `HierarchyRun`**, accumulated per *draw*, so a call refused twice and
+  answered on the third reports all three. Flag off, the added term is zero, and a test asserts the
+  four figures are arithmetically unchanged.
+
+**And the obvious command would have been the wrong one.** `npm run hierarchy` passes
+`nullCheckpointStore()`, so it resumes nothing: every repeat would re-buy the structure call *and*
+hand each repeat a different seed, which is exactly the confound the paragraph above exists to avoid.
+Stage 5b goes through the queue.
 
 ### Stage 6 — recursion, once the verdict has earned it
 
