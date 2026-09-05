@@ -153,7 +153,7 @@ away when it happened. [export.md](export.md) is the way data leaves: the zip a 
 one article, and the `db:export` rollback it shares its queries with.
 
 **Moved, as of 2026-09-01.** Every store — reader and pipeline alike — is Postgres under
-`SPIDERYARN_STORE=postgres`, which is what production runs: a pipeline job commits each step's
+Postgres, which since 2026-09-05 is the only store there is: a pipeline job commits each step's
 product into a draft revision and publishes it in one transaction with the job's own finish, rather
 than writing the filesystem layout below. Under the `files` default — a laptop with the flag unset —
 the same stages write that layout, unchanged, until stage 4 deletes it.

@@ -52,21 +52,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-/**
- * **`SPIDERYARN_STORE=postgres` before any import**, because the first case
- * below now queues a real job and presses a real Retry, and `src/jobs.ts` picks
- * its `JobStore` off this flag at *module load*. A plain assignment would leave
- * `enqueue` driving the filesystem queue, where the article identity this file
- * is about is not expressible at all. Same trick, same reason, as
- * tests/retry-keeps-the-checkpoints.test.ts.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { eq, like, sql } from "drizzle-orm";
 
@@ -88,13 +74,8 @@ import {
 } from "../src/labels.js";
 import type { CheckpointStore } from "../src/store/checkpoints.js";
 import type { Block, Tree, TreeNode } from "../src/types.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
-
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
 
@@ -103,42 +84,16 @@ const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
 const { loadEnvLocal } = await import("../src/env.js");
 loadEnvLocal();
 
-let reachable = false;
-let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
-let kind: MissingKind = "no-url";
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  kind = "migration";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.checkpoints') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) {
-      why =
-        "there is no spideryarn.checkpoints table — migration 0028 has not been applied. " +
-        "Run `npm run db:migrate` (read its Target: line first) and these will run.";
-    }
-  } catch (err) {
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-}
-if (!reachable) {
-  process.stderr.write(
-    `\n  ⚠ tests/checkpoints-durable-resume.test.ts is NOT RUNNING.\n` +
-      `    These assertions have not executed: ${why}\n\n`,
-  );
-  failIfPostgresRequired("tests/checkpoints-durable-resume.test.ts", why, kind);
-}
-const when = reachable ? describe : describe.skip;
+/**
+ * The `checkpoints` table by name: *the database is up* and *this table exists*
+ * are different questions, and a probe that asked only the first would let every
+ * assertion below fail for a reason that has nothing to do with the store.
+ * Hand-rolled until 2026-09-05. tests/helpers/pg-ready.ts.
+ */
+await pgReady({
+  suite: "tests/checkpoints-durable-resume.test.ts",
+  tables: ["spideryarn.checkpoints"],
+});
 
 /**
  * **One suite at a time may hold a running job.** The first case queues real
@@ -147,9 +102,7 @@ const when = reachable ? describe : describe.skip;
  * `running` row makes `claim` here answer `busy`, and the case fails on its
  * setup rather than on the question it asks. tests/helpers/run-lock.ts.
  */
-const runLock = reachable
-  ? await takeRunLock("tests/checkpoints-durable-resume.test.ts")
-  : undefined;
+const runLock = await takeRunLock("tests/checkpoints-durable-resume.test.ts");
 
 /* -------------------------------------------------------------- the reader -- */
 
@@ -228,7 +181,7 @@ async function manyChunkPdf(pages: number): Promise<Uint8Array> {
 
 /* ---------------------------------------------------------------- the suite -- */
 
-when("a checkpoint survives the job that paid for it", () => {
+describe("a checkpoint survives the job that paid for it", () => {
   const SLUG = "test-durable-resume";
   const OTHER_SLUG = "test-durable-resume-other";
   /**

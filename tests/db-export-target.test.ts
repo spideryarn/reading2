@@ -95,8 +95,6 @@ function runExport(): Run {
   })();`;
 
   const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: SHELL_URL };
-  /* db:export always talks to Postgres and must not start reading this. */
-  env.SPIDERYARN_STORE = "";
 
   const child = spawnSync(TSX, ["-e", body], { env, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
   return {

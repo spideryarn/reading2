@@ -285,20 +285,15 @@ have cost, are in [`src/feedback-image.ts`](../../src/feedback-image.ts).
 
 ## Trying it locally
 
-**It needs the Postgres store.** `npm run dev` defaults to it since 2026-09-02, so this now works out
-of the box; the files branch still answers `POST /api/feedback` with a 501 by design — there is a
-Postgres implementation and a filesystem *refusal*, the same asymmetry `AdminStore` and
-`VisibilityStore` have ([`src/store/index.ts`](../../src/store/index.ts)). Anyone who has set
-`SPIDERYARN_STORE=files` — in `.env.local` or the shell — still hits it:
+**`npm run dev`, and a database.** There is one store, so nothing has to be selected —
+[supabase-local.md](supabase-local.md) is how to get Postgres running at all.
 
-```
-SPIDERYARN_STORE=postgres npm run dev
-```
-
-Without it the button is there, the dialog opens, and Send fails with a sentence saying this copy of
-the app cannot file reports — which is correct behaviour and looks exactly like a bug if you do not
-know about this paragraph. [supabase-local.md](supabase-local.md) is how to get Postgres running at
-all.
+**There was a filesystem *refusal* until 2026-09-05**, and it is worth knowing what it was: `POST
+/api/feedback` answered 501 with a sentence saying this copy of the app could not file reports,
+because there is no feedback table on a filesystem and a button that accepts a report and drops it is
+worse than no button. It went with the store it was refusing for
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F), along
+with the same asymmetry in `AdminStore` and `VisibilityStore`.
 
 ## Reading the reports
 

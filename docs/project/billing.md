@@ -862,7 +862,8 @@ product rule. The answer when it matters is a daily attempt cap, not a change to
 
 ## Billing is a Postgres feature
 
-Quota is enforced under `SPIDERYARN_STORE=postgres` and not otherwise. Settlement joins the
+Quota is enforced on every run, since 2026-09-05 — it was `SPIDERYARN_STORE=postgres` and not
+otherwise, and there is one store now. Settlement joins the
 Postgres publish transaction, which has no filesystem counterpart, and writing a second
 filesystem ledger would be two implementations of one count.
 

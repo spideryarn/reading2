@@ -60,8 +60,6 @@ import { mintId } from "./ids.js";
    with it. Deliberately not routed through src/store/index.ts, which is the
    *reader's* store. */
 import { costStore, totalRows } from "./store/ai-calls.js";
-import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
-import { fsJobStore } from "./store/jobs-fs.js";
 import { pgJobStore } from "./store/pg-jobs.js";
 /* The refusal a publication answers with, by name, because the walk has to tell
    it apart from a database fault: one is a draft that is not fit to be an
@@ -77,7 +75,6 @@ import {
   type JobEnding,
   type JobStore,
 } from "./store/jobs.js";
-import { STORE } from "./store/live.js";
 import { failureKindOf, jobWorthRetrying, readerFailureOf } from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
 import { runInJob } from "./job-scope.js";
@@ -86,7 +83,6 @@ import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
-import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
 import {
@@ -114,15 +110,17 @@ export type { Job, JobStep, StepName } from "./types.js";
 /**
  * **Where the job records live is no longer this file's business.**
  *
- * `data/_jobs/`, the in-memory `Map`, the serialised writes, the tombstones and
- * the load-from-disk all moved to src/store/jobs-fs.ts, unchanged, behind
- * `JobStore`. Selected here rather than in src/store/index.ts for the same
- * reason src/upload-records.ts selects its own: that file is the *reader's*
- * store and it imports fs.ts, which imports src/pipeline.ts, which this file
- * imports — asking from there would be an import cycle, and `npm run check`
- * gates on cycles.
+ * `data/_jobs/`, the in-memory `Map`, the serialised writes and the tombstones
+ * moved to src/store/jobs-fs.ts behind `JobStore`, and there was a flag here
+ * choosing between that and `pgJobStore` until 2026-09-05. There is one store
+ * now, so this is a binding rather than a choice.
+ *
+ * Bound here rather than in src/store/index.ts for the same reason
+ * src/upload-records.ts binds its own: that file is the *reader's* store and it
+ * imports fs.ts, which imports src/pipeline.ts, which this file imports — asking
+ * from there would be an import cycle, and `npm run check` gates on cycles.
  */
-const store: JobStore = STORE === "postgres" ? pgJobStore : fsJobStore;
+const store: JobStore = pgJobStore;
 
 /**
  * Abort handles for steps **this process** is running, so they can be stopped.
@@ -1742,16 +1740,13 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
  * filesystem session needs nothing awaited to build, and this signature was
  * async for the interface's sake before it was async for a reason.
  *
- * ## The filesystem side, which is unchanged
+ * ## There is no filesystem side any more
  *
- * **Gated on the live store, and nothing else.** With `SPIDERYARN_STORE` unset
- * the session is byte-for-byte what it was: no draft, no publication, no
- * database. That is what every laptop runs and what `data/` is for, and the flip
- * must not alter it — tests/claim-session-files.test.ts is that half of
- * the claim, and it proves it by taking `DATABASE_URL` away, so any database
- * call at all would throw. `pipelineStore` — the aliased `fsArtifacts` import at
- * the top of this file — is the artefact store that branch writes through, and
- * nothing else uses it.
+ * This was `if (STORE !== "postgres") return fsStoreSession(…)` until
+ * 2026-09-05, and that branch was what every laptop ran: no draft, no
+ * publication, no database. It went with the flag. What is left is the one
+ * session, and `tests/claim-session-postgres.test.ts` is the proof that this
+ * line opens it.
  *
  * **Exported so a test can drive the real one.** `advanceJobWith` takes a
  * session because a test must be able to supply fake *steps* — the thirteen real
@@ -1762,7 +1757,6 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
  * it says it selects.
  */
 export async function claimSession(job: Job, attempt: string): Promise<StoreSession> {
-  if (STORE !== "postgres") return fsStoreSession({ artifacts: pipelineStore, jobs: store });
   return await openPgStoreSession({
     slug: job.slug,
     job: { id: job.id, attemptId: attempt },
@@ -2843,12 +2837,11 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * `slugIsTaken`, the one bare global lookup, is no longer consulted here at
    * all, so the two cases are now identical rather than merely alike.
    *
-   * **The filesystem store cannot be asked this and does not need to be.** It
-   * has no owner column, so it has no second reader, and a store with no second
-   * reader cannot express "somebody who is not the owner"
-   * (docs/project/database.md) — `articleExists` there is a path read that
-   * answers for everybody. `src/store/index.ts` refuses to boot on it in
-   * production, so there is no B to keep out.
+   * **Unconditional since 2026-09-05.** It used to carry `STORE === "postgres"`
+   * as well, because the filesystem store had no owner column and so no second
+   * reader, and a store with no second reader cannot express "somebody who is
+   * not the owner" (docs/project/database.md). There is one store, and it has
+   * the column.
    *
    * **It costs one indexed query, and `urlForSlug` in the loop below makes the
    * same one.** Left as two rather than threaded together, because they answer
@@ -2857,7 +2850,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * URL", which is exactly the conflation this check must not inherit.
    * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1f.
    */
-  if (STORE === "postgres" && !request.url && !request.upload) {
+  if (!request.url && !request.upload) {
     if (!(await articleExists(request.slug))) {
       /* The same sentence `GET /api/article/:slug` answers with for a slug
          that is not yours (src/routes.ts), so the two cannot be told apart. */

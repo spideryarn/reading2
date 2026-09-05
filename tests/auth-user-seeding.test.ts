@@ -40,19 +40,16 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 loadEnvLocal();
 
 /* Postgres only, and deliberately: see the header. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/auth-user-seeding.test.ts",
   tables: ["spideryarn.articles"],
 });
-
-const dbIt = it.skipIf(!reachable);
 
 /* Minted per run — this row is inserted and deleted, so a fixed uuid would
    collide with a second process running the same file (tests/fixture-ids.test.ts). */
 const OWNER = crypto.randomUUID();
 
 afterAll(async () => {
-  if (!reachable) return;
   await getDb().execute(sql`delete from auth.users where id = ${OWNER}`);
   await closeDb();
 });
@@ -61,7 +58,7 @@ describe("a test-seeded auth user", () => {
   /* Needs the database and an HTTP round trip to GoTrue, so the default five
      seconds is a load test rather than a timeout under a parallel run — the
      same reasoning, and the same number, as tests/admin-store.test.ts. */
-  dbIt(
+  it(
     "leaves the Auth service able to list the accounts",
     async () => {
       await seedAuthUser(getDb(), {

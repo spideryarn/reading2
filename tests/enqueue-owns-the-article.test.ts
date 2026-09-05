@@ -43,21 +43,7 @@
  *
  * Skips loudly when there is no database; see tests/helpers/pg-ready.ts.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import, for the reason
- * tests/claim-session-postgres.test.ts sets out at length: `src/store/live.ts`
- * reads the flag once, the first time anything imports it, and imports are
- * hoisted above every statement in a module. A plain assignment would leave this
- * whole file exercising the filesystem store — where the check under test is
- * deliberately a no-op, so every case would pass for the wrong reason.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
 
@@ -70,19 +56,12 @@ import { TEST_SUB } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/enqueue-owns-the-article.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **Two readers that really exist**, because `jobs.owner_id` has a foreign key
@@ -102,7 +81,6 @@ let alices: ScratchArticle | undefined;
 let vercel: string | undefined;
 
 beforeAll(async () => {
-  if (!reachable) return;
   /**
    * **`VERCEL`, so `enqueue` does not start driving what it queues.**
    *
@@ -119,7 +97,6 @@ beforeAll(async () => {
 afterAll(async () => {
   if (vercel === undefined) delete process.env.VERCEL;
   else process.env.VERCEL = vercel;
-  if (!reachable) return;
   /* Jobs first: a job row's `draft_revision_id` is a foreign key into the
      revision the article delete is trying to cascade away. */
   for (const slug of [SLUG, NOBODYS]) {
@@ -128,7 +105,7 @@ afterAll(async () => {
   await alices?.remove();
 });
 
-when("enqueue, on an article somebody else owns", () => {
+describe("enqueue, on an article somebody else owns", () => {
   it("refuses Bob, and says nothing about whose it is", async () => {
     /* **404, not 403** — docs/project/auth.md § whose data is it. A 403 would
        confirm that the article exists, which is the one fact a stranger holding

@@ -61,17 +61,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Same
- * block, same reason, as tests/referee-routes-postgres.test.ts.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { MirrorInput, MirrorRemark } from "../src/referee-mirror-types.js";
@@ -83,7 +72,7 @@ loadEnvLocal();
 
 const SLUG = "test-referee-mirror-route";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/referee-mirror-route.test.ts",
   tables: ["spideryarn.comments", "spideryarn.referee_criteria", "spideryarn.revision_blocks"],
 });
@@ -92,21 +81,8 @@ const { handleApi } = await import("../src/routes.js");
 /* The very objects the route reads its comments and criteria from, rather than
    the filesystem ones by name: if the two ever differed, a test that named the
    implementation would go on passing while the route read somewhere else. */
-const { commentStore, refereeCriteriaStore, STORE } = await import("../src/store/index.js");
+const { commentStore, refereeCriteriaStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  /* The positive control: a flag that failed to take looks exactly like this
-     file working, because the filesystem store round-trips a placement through
-     JSON and could not lose a sign if it tried. */
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
 
 const URL_FOR = (slug: string) => `/api/referee/mirror/${slug}`;
 
@@ -222,7 +198,7 @@ interface Anchor {
   start: number;
 }
 
-when("Referee's mirror route", { timeout: 60_000 }, () => {
+describe("Referee's mirror route", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
   /** The two passages, read off the seeded article rather than written down. */
   let FIRST: Anchor;

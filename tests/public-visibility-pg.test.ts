@@ -49,7 +49,7 @@ import {
   searchRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
@@ -63,7 +63,6 @@ loadEnvLocal();
  * once at module load in src/store/live.ts, which is why every import of the
  * route layer in this file is dynamic and everything else is not.
  */
-process.env.SPIDERYARN_STORE = "postgres";
 
 const SLUG = "test-public-visibility";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000ea";
@@ -235,44 +234,16 @@ const OWNER = currentOwnerId();
  * — an unmigrated database would otherwise fail every case with a confusing
  * 42703 instead of saying what to run.
  */
-let reachable = false;
-/** What is missing and which fix it needs, for `REQUIRE_POSTGRES=1`. */
-let why = "DATABASE_URL is not set — run npm run db:start";
-let kind: MissingKind = "no-url";
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  why = "";
-  kind = "migration";
-  try {
-    const probe = await pool.query(
-      `select exists (
-         select 1 from information_schema.columns
-         where table_schema = 'spideryarn'
-           and table_name = 'articles'
-           and column_name = 'visibility'
-       ) as ready`,
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "spideryarn.articles.visibility is missing — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-}
-
-/* A skip is the right default and the wrong answer for a run that exists to
-   prove a machine has a database. tests/helpers/pg-ready.ts. */
-if (!reachable) failIfPostgresRequired("tests/public-visibility-pg.test.ts", why, kind);
-
-const when = reachable ? describe : describe.skip;
+/**
+ * **The column this suite is about**, rather than the schema in general: an
+ * unmigrated database would otherwise fail every case with a confusing 42703
+ * instead of saying what to run. Hand-rolled until 2026-09-05, and a skip until
+ * then too. tests/helpers/pg-ready.ts.
+ */
+await pgReady({
+  suite: "tests/public-visibility-pg.test.ts",
+  columns: [{ table: "spideryarn.articles", column: "visibility" }],
+});
 
 /** A verifier that vouches for exactly one person. src/auth.ts § `Verifier`. */
 const asPerson = (sub: string): Verifier => async () => ({
@@ -393,7 +364,7 @@ async function articleRow() {
  * is a queue. The same exposure every pg suite here has; see
  * tests/store-shelf-pg.test.ts on why two seconds was not enough either.
  */
-when("sharing one article", { timeout: 60_000 }, () => {
+describe("sharing one article", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     await clean();
     const db = getDb();
@@ -1903,7 +1874,7 @@ const BONELESS_ID = "00000000-0000-4000-8000-0000000b04e0";
 const BONELESS_REVISION = "00000000-0000-4000-8000-0000000b04e1";
 const BONELESS_SLUG = "test-public-head-no-blocks";
 
-when("a public article whose revision has no blocks", { timeout: 60_000 }, () => {
+describe("a public article whose revision has no blocks", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const db = getDb();
     await cleanBoneless();
@@ -1989,7 +1960,7 @@ const TITLELESS_SLUG = "test-public-head-no-title";
    has a check constraint on it — "notitl" is refused for three of those four. */
 const TITLELESS_BLOCK = "spya-ntxhqz";
 
-when("a public article with neither a title nor an <h1>", { timeout: 60_000 }, () => {
+describe("a public article with neither a title nor an <h1>", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const db = getDb();
     await cleanTitleless();
@@ -2121,7 +2092,7 @@ const HEADED_SLUG = "test-public-head-h1-fallback";
 /** What both implementations must find: the first `h1` *by ordinal*. */
 const HEADED_H1 = "The first level-one heading";
 
-when("a public article whose only title is its first <h1>", { timeout: 60_000 }, () => {
+describe("a public article whose only title is its first <h1>", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const db = getDb();
     await cleanHeaded();

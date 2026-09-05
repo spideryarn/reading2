@@ -161,21 +161,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/store/live.ts` reads the environment once, the first time anything
- * imports it, and imports are hoisted above every statement in a module — so a
- * plain assignment here would leave `claimSession` handing back the filesystem
- * session, the mock below would never fire, and the file would report success
- * having tested the session that has no transaction in it.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
-
-/**
  * What the runner did to its session, recorded from inside it.
  *
  * `vi.hoisted` because `vi.mock` is hoisted above the imports, so anything the
@@ -242,23 +227,17 @@ import {
   readsPgArtifacts,
   type JobDraftRef,
 } from "../src/store/artifacts-pg.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
-
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
 /** Its own slug, so nothing here collides with another suite's fixtures. */
 const SLUG = "test-commit-path-blocks";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/jobs-commit-path.test.ts",
   tables: [
     "spideryarn.jobs",
@@ -267,19 +246,6 @@ const { reachable } = await pgReady({
     "spideryarn.revision_blocks",
     "spideryarn.revision_step_runs",
   ],
-});
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store this commit is actually going through", () => {
-  it("is the Postgres one", () => {
-    /* Ungated on `reachable`, deliberately. A flag that failed to take would
-       run every case below against `fsStoreSession` — a different session, with
-       no transaction in it — and they would all pass, because the assertions
-       are about what the commit produced rather than about how. A control that
-       vanishes when the database is missing vanishes exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /** A `queued` row straight into the store — **not** `enqueue`, which pumps. */
@@ -334,7 +300,7 @@ async function refForPublishedRevision(jobId: string): Promise<JobDraftRef> {
 
 let article: ScratchArticle | undefined;
 
-when("a step run for real, through the commit", () => {
+describe("a step run for real, through the commit", () => {
   beforeAll(async () => {
     /* Owned by `DEV_OWNER_ID` explicitly, because that is who the advance runs
        as: the Postgres reader filters every article by owner, so a fixture
@@ -343,7 +309,6 @@ when("a step run for real, through the commit", () => {
   }, 120_000);
 
   afterEach(async () => {
-    if (!reachable) return;
     seen.commits = 0;
     seen.settles = 0;
     seen.step = "";
@@ -356,7 +321,6 @@ when("a step run for real, through the commit", () => {
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     /* Jobs first: a job row's `draft_revision_id` is a foreign key into the
        revision the article delete would be trying to cascade away. */
     await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));

@@ -98,16 +98,16 @@
 import { randomUUID } from "node:crypto";
 /* **No `node:fs` and no `node:path` here any more, as of 2026-08-31**, and that
    is worth keeping. The last reader of the disk in this file was `sendSource`,
-   which went to `data/<slug>/raw.pdf` whatever `SPIDERYARN_STORE` said — so the
-   route worked on a laptop and 404d on Vercel, which has no such disk, for as
-   long as it existed. Every route now reaches its bytes through a store, and a
-   fresh `readFile` in this file is both that bug coming back and a route
-   ignoring the store switch. docs/plans/260831b-finish-the-database-move.md. */
+   which went to `data/<slug>/raw.pdf` whatever the store said — so the route
+   worked on a laptop and 404d on Vercel, which has no such disk, for as long as
+   it existed. Every route now reaches its bytes through a store, and a fresh
+   `readFile` in this file is that bug coming back.
+   docs/plans/260831b-finish-the-database-move.md. */
 import type { IncomingMessage, ServerResponse } from "node:http";
-/* From the store rather than from src/api.ts directly, so that
-   SPIDERYARN_STORE=postgres swaps every article read at once and no route has
-   to know which store it is talking to. `files` is the default and is exactly
-   src/api.ts, so nothing changes for anyone who has not opted in.
+/* From the store rather than from src/api.ts directly, so no route has to know
+   which store it is talking to. That was written when there were two and a flag
+   between them; there is one since 2026-09-05, and the indirection is what made
+   deleting the other one a change to `src/store/index.ts` and not to this file.
    docs/plans/260826e-postgres-storage-implementation.md */
 import {
   articleMetadata,

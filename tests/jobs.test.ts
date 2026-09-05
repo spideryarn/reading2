@@ -94,21 +94,6 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/jobs.ts` picks its store **once, at module load** — `const store:
- * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
- * hoisted above every statement in a module, so a plain assignment here would
- * leave the whole file on the filesystem queue with nothing saying so.
- * `claimSession` branches on the same constant.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
-
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -142,7 +127,6 @@ import type { ConvertedProduct } from "../src/pipeline.js";
 import { isSlug, urlKey } from "../src/ingest.js";
 import type { ArtifactKind, ArtifactParts } from "../src/store/artifacts.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";
@@ -153,30 +137,11 @@ import { pgReady } from "./helpers/pg-ready.js";
 import { FIXTURE_ROOT } from "./helpers/require-fixture.js";
 import { scratchArticleInPg, SCRATCH_SOURCE, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/jobs.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
-});
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* **Not gated on `reachable`**, deliberately. A flag that failed to take
-       would run the two queue blocks below against `data/_jobs/`, which answers
-       every one of them happily — and the insert arbitration, the claim
-       predicate and the lease that are the point of the conversion would never
-       be consulted. A control that vanishes when the database is missing
-       vanishes exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 function step(name: StepName, status: JobStep["status"]): JobStep {
@@ -663,12 +628,10 @@ async function removeRows(slugs: readonly string[]): Promise<void> {
  * belongs to another reader"*.
  */
 beforeAll(async () => {
-  if (!reachable) return;
   await bareArticles([SLUG, "test-enqueue-busy-article"]);
 }, 60_000);
 
 afterAll(async () => {
-  if (!reachable) return;
   await removeRows([...OWN_SLUGS, ...MINTED]);
   if (MADE_UPLOADS.length) {
     await getDb().delete(uploads).where(inArray(uploads.id, MADE_UPLOADS));
@@ -987,7 +950,7 @@ async function expireLease(id: string): Promise<void> {
  *   `tests/retry-is-only-for-a-failed-job.test.ts` on the same day and went red
  *   there, so it is covered — but not by this file, and not by anything above.
  */
-when("running a job", () => {
+describe("running a job", () => {
   it("hands back the job already working on a slug rather than starting a second", async () => {
     // A double-click on Add. Both requests must land on one job: the second
     // starting a job of its own would run every step against artefacts the
@@ -1558,7 +1521,7 @@ async function productOf(slug: string, name: StepName, detail: string): Promise<
  * decides freshness for the stages that stamp and which none of these steps
  * exercises.
  */
-when("advancing a job one step at a time", () => {
+describe("advancing a job one step at a time", () => {
   const SLUGS = [
     "test-advance-resume",
     "test-advance-one-step",

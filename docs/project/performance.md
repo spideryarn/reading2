@@ -964,7 +964,7 @@ Said plainly, because the fixes above are all real and none of them has been sho
   Supabase.
 
   ```bash
-  npm run build && SPIDERYARN_STORE=postgres npx vite preview --port 5299 --strictPort
+  npm run build && npx vite preview --port 5299 --strictPort
   npx tsx scripts/measure-cpu.ts --local-sign-in --email <owner> \
     --sign-in-via http://localhost:5273/ \
     --url "http://localhost:5299/read/<slug>" --settle 20 --seconds 25 --scroll
@@ -975,7 +975,7 @@ Said plainly, because the fixes above are all real and none of them has been sho
   `configurePreviewServer` in [`vite.config.ts`](../../vite.config.ts) now puts the API in front of
   `vite preview` so a built bundle *can* be measured. **`npm run build` works against any store** —
   it proves the client resolves, bundles and parses, and it never boots a store at all. It is the
-  `vite preview` step that needs `SPIDERYARN_STORE=postgres` and Postgres up
+  `vite preview` step that needs Postgres up
   ([supabase-local.md](supabase-local.md)), because preview really does serve API requests and Vite
   runs it with `NODE_ENV=production`, so the boot guard in
   [`src/store/index.ts`](../../src/store/index.ts) refuses the filesystem store — rightly, since

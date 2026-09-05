@@ -25,23 +25,7 @@
  * `chatStore`, which is the same object src/routes.ts writes it with.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, set before **any** import runs.
- *
- * `vi.hoisted` and not a plain statement: `src/store/live.ts` reads the flag
- * once, the first time anything imports it, and imports are hoisted above every
- * statement in a module. An ordinary assignment would run after `src/routes.ts`
- * below had already settled the answer to `files` — and the suite would then
- * pass against a store it was not testing. See
- * tests/store-writes-land-in-postgres.test.ts, where this happened.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -53,25 +37,17 @@ loadEnvLocal();
 
 const SLUG = "test-chat-route-fixture";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/chat-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
-
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   test files and does not reset `process.env` between them. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
+const { chatStore } = await import("../src/store/index.js");
 
 let article: ScratchArticle | undefined;
 
 beforeAll(async () => {
-  if (!reachable) return;
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
   /* **The seed is asserted, not assumed.** A clone that copied nothing would
      leave every test below failing on a 404 that reads like a broken route.
@@ -148,16 +124,7 @@ async function ask(body: unknown): Promise<Frame[]> {
     });
 }
 
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Without this, a flag that failed to take looks exactly like the suite
-       working: the filesystem store answers every call happily, against an
-       article this file no longer creates. */
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("the begin frame names both rows of the turn", () => {
+describe("the begin frame names both rows of the turn", () => {
   it("gives the client the question's id, not only the answer's", async () => {
     const frames = await ask({ threadId: "spya-t7r4wz", question: "what is this about?" });
     const begin = frames[0];

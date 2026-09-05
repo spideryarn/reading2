@@ -100,9 +100,6 @@ function run(overrides: Env): Run {
      spawn means the snapshot holds `undefined`, so the child's own assignment
      differs from it and wins over `.env.local`. */
   for (const name of ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) delete env[name];
-  /* db:export does not read this, and must not start reading it — it always
-     talks to Postgres. Pinned so an accidental dependency shows up here. */
-  env.SPIDERYARN_STORE = "";
 
   const child = spawnSync(TSX, ["-e", body], { env, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
   return {

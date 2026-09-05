@@ -73,7 +73,6 @@ type Call = { status: number; body: Record<string, any> };
 
 /** Load a fresh handler with `getDb` and `STORE` mocked, then call it. */
 async function callHealth(opts: {
-  store?: string;
   execute?: () => Promise<unknown>;
 }): Promise<{
   call: () => Promise<Call>;
@@ -114,7 +113,6 @@ async function callHealth(opts: {
   }));
 
   vi.doMock("../src/store/index.js", () => ({
-    STORE: opts.store ?? "postgres",
     listArticles: async () => [{ slug: "a" }],
   }));
 
@@ -215,13 +213,9 @@ describe("the schema block", () => {
     expect(body.schema.error.length).toBe(200);
   });
 
-  it("is skipped entirely on a filesystem store, and does not touch the database", async () => {
-    const { call, executeCalls } = await callHealth({ store: "files" });
-    const { body } = await call();
-    /* Absent, not null: "not checked" must not read as "checked and clean". */
-    expect("schema" in body).toBe(false);
-    expect(executeCalls()).toBe(0);
-  });
+  /* A case stood here until 2026-09-05 saying the schema check was **absent** —
+     not null — on a filesystem store, and that it touched no database. Its
+     subject went with the flag; the check is unconditional now. */
 
   it("coalesces concurrent callers onto one query", async () => {
     /* The cache alone does not do this — it is written after the await, so a

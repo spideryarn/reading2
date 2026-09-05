@@ -538,29 +538,25 @@ describe("localTarget", () => {
   const local = "postgresql://postgres:hunter2@127.0.0.1:54362/postgres";
 
   it("redacts the password in the line it hands back to be printed", () => {
-    expect(localTarget("postgres", local)).toBe(
-      "postgresql://postgres:***@127.0.0.1:54362/postgres",
-    );
+    expect(localTarget(local)).toBe("postgresql://postgres:***@127.0.0.1:54362/postgres");
   });
 
   it("accepts the other spellings of this machine", () => {
-    expect(localTarget("postgres", "postgresql://postgres@localhost:5432/postgres")).toContain(
-      "localhost",
-    );
+    expect(localTarget("postgresql://postgres@localhost:5432/postgres")).toContain("localhost");
   });
 
   it("refuses a remote database", () => {
     expect(() =>
-      localTarget("postgres", "postgresql://postgres:pw@db.abcdef.supabase.co:5432/postgres"),
+      localTarget("postgresql://postgres:pw@db.abcdef.supabase.co:5432/postgres"),
     ).toThrow(/Refusing to run against a non-local database/);
   });
 
-  it("refuses the filesystem store, because the ledger there is not authoritative", () => {
-    expect(() => localTarget("files", local)).toThrow(/measures the Postgres pipeline/);
-  });
+  /* A sixth case stood here until 2026-09-05 — `localTarget("files", …)` refusing
+     because the filesystem ledger was never authoritative. It took a store as its
+     first argument then; there is one store now, so there is nothing to refuse. */
 
   it("refuses an absent DATABASE_URL rather than guessing one", () => {
-    expect(() => localTarget("postgres", undefined)).toThrow(/DATABASE_URL is not set/);
+    expect(() => localTarget(undefined)).toThrow(/DATABASE_URL is not set/);
   });
 });
 

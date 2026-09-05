@@ -43,13 +43,11 @@ const THREAD = "spya-thread";
 const OTHER = "spya-secnd2";
 const NONE: ReadonlySet<string> = new Set();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-chat-pg.test.ts",
   tables: ["spideryarn.chat_messages"],
   max: 4,
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** A clock the test drives, one second per call. */
 function clockFrom(iso: string, stepMs = 1000): () => string {
@@ -67,7 +65,7 @@ async function ordinals(threadId = THREAD): Promise<{ id: string; ordinal: numbe
     .orderBy(asc(chatMessages.ordinal));
 }
 
-when("the Postgres chat store", () => {
+describe("the Postgres chat store", () => {
   beforeAll(async () => {
     await getDb()
       .insert(articles)

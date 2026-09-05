@@ -64,14 +64,12 @@
  * Measured with `pg_locks` sampling, 2026-09-02 —
  * docs/plans/260902c-make-the-test-suite-pass-reliably.md § "Cause 4".
  *
- * So the take lives at the top level of the file, after `pgReady` and only when
- * it reports reachable, exactly as `./run-lock.ts` § "Call it AFTER `pgReady`"
- * describes for the other key:
+ * So the take lives at the top level of the file, after `pgReady`, exactly as
+ * `./run-lock.ts` § "Call it AFTER `pgReady`" describes for the other key:
  *
  * ```ts
- * const { reachable } = await pgReady({ suite: "…", tables: […] });
- * if (reachable) await takeCorpusLock("tests/my-suite.test.ts");
- * const when = reachable ? describe : describe.skip;
+ * await pgReady({ suite: "…", tables: […] });
+ * await takeCorpusLock("tests/my-suite.test.ts");
  * afterAll(async () => { await releaseCorpusLock(); });
  * ```
  *
@@ -81,8 +79,10 @@
  * `import` — `./run-lock.ts` § "Measuring this lock: read the `import` phase,
  * not `tests`" has the measurement, and it applies here word for word.
  *
- * A file about to `describe.skip` must not sit holding the key, hence the
- * `reachable` guard: it would serialise every other run for no reason.
+ * **The `reachable` guard that used to stand in front of the take is gone**, and
+ * so is the case it was for: `pgReady` throws now rather than reporting a
+ * boolean, so a file that cannot use the database never reaches this line at
+ * all. 2026-09-05.
  *
  * ## Why `pg_try_advisory_lock` in a loop rather than `pg_advisory_lock`
  *

@@ -38,7 +38,7 @@ loadEnvLocal();
    says "skipped" rather than showing a green tick for having checked nothing.
    docs/reusable/silent-success.md. Until this used the shared helper it also
    skipped **silently**, which is the same failure one step earlier. */
-const { reachable: pgReachable } = await pgReady({
+await pgReady({
   suite: "tests/store-uploads-parity.test.ts",
   tables: ["spideryarn.uploads"],
 });
@@ -78,13 +78,13 @@ function pending(store: UploadStore, over: Partial<UploadRecord> = {}): UploadRe
   };
 }
 
-const stores: [string, UploadStore, boolean][] = [
-  ["the filesystem store", fsUploadStore, true],
-  ["Postgres", pgUploadStore, pgReachable],
+const stores: [string, UploadStore][] = [
+  ["the filesystem store", fsUploadStore],
+  ["Postgres", pgUploadStore],
 ];
 
-for (const [name, store, available] of stores) {
-  describe.skipIf(!available)(name, () => {
+for (const [name, store] of stores) {
+  describe(name, () => {
     it("hands back exactly what it was given, with nothing turned into null", async () => {
       const record = pending(store);
       await store.create(record);

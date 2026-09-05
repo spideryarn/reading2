@@ -75,7 +75,7 @@ import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import { mintId } from "../src/ids.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
@@ -793,62 +793,28 @@ loadEnvLocal();
  * the reporter will actually print. See tests/blocks-baseline.test.ts for the
  * six mechanisms that were measured before `process.stderr.write` was chosen.
  */
-let reachable = false;
-let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
-/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
-let kind: MissingKind = "no-url";
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  kind = "migration";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.article_revisions') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-    if (reachable) {
-      /* The two columns this file reads and writes, by name. A database missing
-         either fails every assertion below for a reason that has nothing to do
-         with the baseline. */
-      const cols = await pool.query(
-        "select column_name from information_schema.columns where table_schema = 'spideryarn' " +
-          "and table_name = 'article_revisions' and column_name in ('glossary', 'ideas')",
-      );
-      reachable = cols.rowCount === 2;
-      if (!reachable) {
-        why =
-          "article_revisions has no `glossary` and `ideas` columns — run `npm run db:migrate` " +
-          "(check its Target: line first) and these will run.";
-      }
-    }
-  } catch (err) {
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-}
-if (!reachable) {
-  process.stderr.write(
-    `\n  ⚠ the Postgres half of tests/glossary-ideas-baseline.test.ts is NOT RUNNING.\n` +
-      `    These assertions have not executed: ${why}\n\n`,
-  );
-  /* …and under REQUIRE_POSTGRES=1 that warning is not enough: fail. */
-  failIfPostgresRequired("tests/glossary-ideas-baseline.test.ts", why, kind);
-}
-const when = reachable ? describe : describe.skip;
+/**
+ * **The two columns this file reads and writes, by name.** A database missing
+ * either fails every assertion below for a reason that has nothing to do with
+ * the baseline — which is what `pgReady`'s `columns` is for. Forty lines of
+ * hand-rolled probe until 2026-09-05; it refuses now rather than skipping,
+ * because there is one store. tests/helpers/pg-ready.ts.
+ */
+await pgReady({
+  suite: "tests/glossary-ideas-baseline.test.ts",
+  tables: ["spideryarn.article_revisions"],
+  columns: [
+    { table: "spideryarn.article_revisions", column: "glossary" },
+    { table: "spideryarn.article_revisions", column: "ideas" },
+  ],
+});
 
 /** The transaction type, derived the way src/store/artifacts-pg.ts derives it. */
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** Thrown to unwind a fixture transaction; never an error anybody has to see. */
 class RollBack extends Error {}
 
-when("the previous artefact, over the Postgres store", () => {
+describe("the previous artefact, over the Postgres store", () => {
   const SLUG = "test-gloss-ideas-baseline";
   const FRESH_SLUG = "test-gloss-ideas-baseline-new";
 
