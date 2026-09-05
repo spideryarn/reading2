@@ -10,7 +10,15 @@
  */
 import { describe, expect, it } from "vitest";
 import type { AiCallRow } from "../src/ai-spend.js";
-import { by, duplicateJobSteps, marginPeriod, parseArgs, printMargin } from "../scripts/ai-cost.js";
+import {
+  by,
+  duplicateJobSteps,
+  marginPeriod,
+  parseArgs,
+  printMargin,
+  shortfallNotes,
+} from "../scripts/ai-cost.js";
+import type { LedgerRead } from "../src/store/contracts.js";
 
 describe("--month", () => {
   it("runs from the first instant of the month to the first instant of the next", () => {
@@ -404,5 +412,39 @@ describe("steps that ran more than once", () => {
       ["job-2", 3],
       ["job-1", 2],
     ]);
+  });
+});
+
+describe("what the report says it cannot see", () => {
+  const read = (over: Partial<LedgerRead> = {}): LedgerRead => ({
+    rows: [],
+    unreadable: 0,
+    lateCalls: 0,
+    ...over,
+  });
+
+  it("says nothing at all about a ledger with no holes in it", () => {
+    /* Each of these lines is a claim that every figure below it is wrong.
+       Printed unconditionally they are furniture, and furniture is not read. */
+    expect(shortfallNotes(read())).toEqual([]);
+  });
+
+  it("names the two shortfalls separately, because they are different facts", () => {
+    /* A damaged line is a call that happened and cannot be read — go and look at
+       the ledger. A late call is a call that happened and left no line at all —
+       there is nothing to look at, and the warn lines are the only trace. One
+       merged "incomplete" count would send a reader to the wrong place. */
+    const notes = shortfallNotes(read({ unreadable: 2, lateCalls: 3 }));
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toContain("could not be read");
+    expect(notes[1]).toContain("no row was ever written");
+  });
+
+  it("admits that its own count of missing rows only covers this process", () => {
+    /* The honesty that stops the line being misread. `lateCalls()` lives in one
+       process's memory, and this report is a fresh one — so a zero here is not
+       evidence that the server lost nothing. */
+    const notes = shortfallNotes(read({ lateCalls: 1 }));
+    expect(notes.join(" ")).toContain("this process");
   });
 });

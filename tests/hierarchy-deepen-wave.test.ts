@@ -35,6 +35,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CASCADE_RECIPE,
   type CascadeRecipe,
+  MAX_EXPANSION_REDRAWS,
 } from "../src/hierarchy-cascade.js";
 import { WidthGate } from "../src/concurrency.js";
 import type { ExpansionRequest } from "../src/hierarchy-expand.js";
@@ -157,6 +158,36 @@ function answerFor(
       };
     }),
   }));
+}
+
+/**
+ * **An answer that is refused however many times you ask for it**: one child
+ * covering the parent's whole range. `normaliseExpansion` calls that
+ * `not-an-expansion`, and it is right to — you cannot build a subtree from a
+ * child that is its own parent, and the same question would be asked again one
+ * level down until the depth cap.
+ */
+function oneChildSpanningTheParent(request: ExpansionRequest, why?: string): ExpansionAnswer {
+  const sections = request.own.split(/^SECTION /m).filter((s) => s.trim().length > 0);
+  return freeAnswer(
+    JSON.stringify({
+      sections: sections.map((section, i) => {
+        const ids = [...section.matchAll(/(spya-w[a-z0-9]{5})/g)].map((m) => m[1]!);
+        return {
+          section: i + 1,
+          children: [
+            {
+              start: ids[0],
+              title: `Section ${i + 1} entire`,
+              gist: "One child covering the whole of its parent, which is not an expansion.",
+              verdict: "finished",
+              ...(why !== undefined ? { why } : {}),
+            },
+          ],
+        };
+      }),
+    }),
+  );
 }
 
 /** The executor, plus a record of every request it was handed, in arrival order. */
@@ -862,6 +893,143 @@ describe("running out of the step's deadline", () => {
 
 /* ================================================ a wave that dies fatally == */
 
+/**
+ * **A target the model refuses on every draw is the target's failure, not the
+ * wave's.**
+ *
+ * The first paid run of stage 5b died on its very first expansion call. The
+ * target was Moby-Dick's *title page* — four blocks, twenty-one words, forced
+ * open by the heading rule because "By Herman Melville" is an `h2` that no child
+ * starts on. The only protocol-compliant answer was to make the byline its own
+ * spine row; the model declined three times and returned the truthful answer,
+ * *this is one thing*. Thirteen paid calls and $2.73 went with it, and every
+ * peer's answer was withheld.
+ *
+ * `MAX_EXPANSION_REDRAWS`'s own docblock already said what to do — *"a request
+ * the model refuses three times is not unlucky, it is a request this recipe
+ * cannot ask"* — and the code then treated it as if it were unlucky.
+ *
+ * **The pattern already exists and it is `OversizedTarget`**, which `deepenTree`
+ * explicitly does not withhold the wave for: *"It was never asked about, the
+ * decision is deterministic, and the rest of the wave is complete over the
+ * batches that were planned."* A target refused on every draw belongs in the
+ * same box — recorded, left as wave 1 made it, and the wave published without
+ * it.
+ *
+ * **The unit of failure is the call's targets, not the wave and not one
+ * section.** `readExpansion` throws on the first bad section and the checkpoint
+ * row holds the whole raw answer, so a redraw must be the same request to keep
+ * its key. Losing up to three good targets alongside one bad one is the right
+ * price for having one code path rather than two.
+ */
+describe("a call the model refuses on every draw", () => {
+  it("does not fail the wave, and its peers still land", async () => {
+    const tree = await waveOne();
+    const { deepenSeed, batches } = await plan(tree, ONE_PER_CALL);
+    const memory = memoryCheckpoints({ slug: SLUG, articleId: "a-deepen-refused" });
+    let doomed: string | undefined;
+    const wave = await runExpansionWave({
+      slug: SLUG,
+      checkpoints: memory,
+      batches,
+      ancestorsOf: () => [],
+      blocks: BLOCKS,
+      seed: deepenSeed,
+      recipe: ONE_PER_CALL,
+      gate: new WidthGate(2),
+      execute: async (request) => {
+        /* **Keyed on the request, not on a counter.** The wave is concurrent, so
+           a counter counts draws across *different* calls and no single call
+           ever exhausts its budget — the first version of this test refused one
+           draw of each of three calls and every one of them succeeded on its
+           redraw. This refuses one call every time it is asked, which is the
+           case the change is about. One child covering the whole parent is
+           `not-an-expansion`, and refusing it is right: you cannot build a
+           subtree from a child that is its own parent. */
+        doomed ??= request.own;
+        if (request.own === doomed) return oneChildSpanningTheParent(request);
+        return answerFor(request);
+      },
+    });
+    expect(wave.refused, "the refused call was not reported at all").toHaveLength(1);
+    expect(wave.refused[0]?.reason).toBe("not-an-expansion");
+    expect(wave.refused[0]?.draws).toBe(MAX_EXPANSION_REDRAWS + 1);
+    expect(wave.refused[0]?.targets.length).toBeGreaterThan(0);
+    /* And the wave is otherwise whole: the peers answered and banked. */
+    expect(wave.calls.length, "the peers were withheld with the refusal").toBeGreaterThan(0);
+    expect(memory.entries.size).toBeGreaterThan(0);
+  });
+
+  /* A refused call is a paid call. Leaving its usage out understates the wave by
+     exactly the draws the redraw budget exists to pay for — the same argument
+     the redraw loop already makes about a refused answer's tokens. */
+  it("counts what the refused draws cost", async () => {
+    const tree = await waveOne();
+    const { deepenSeed, batches } = await plan(tree, ONE_PER_CALL);
+    let doomed: string | undefined;
+    const wave = await runExpansionWave({
+      slug: SLUG,
+      checkpoints: nullCheckpointStore(),
+      batches,
+      ancestorsOf: () => [],
+      blocks: BLOCKS,
+      seed: deepenSeed,
+      recipe: ONE_PER_CALL,
+      gate: new WidthGate(2),
+      execute: async (request) => {
+        doomed ??= request.own;
+        const answer =
+          request.own === doomed ? oneChildSpanningTheParent(request) : answerFor(request);
+        return { ...answer, usage: { inputTokens: 10, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 } };
+      },
+    });
+    const refusedTokens = wave.refused.reduce((n, r) => n + r.usage.inputTokens, 0);
+    expect(refusedTokens, "the refused draws were paid for and counted as nothing").toBe(
+      10 * (MAX_EXPANSION_REDRAWS + 1),
+    );
+  });
+
+  /**
+   * **The datum we most want, and the one the old path destroyed.**
+   *
+   * A refused answer is never checkpointed — correctly, since a stored refusal
+   * would be replayed for ever. But it was not kept *anywhere*, so nobody could
+   * tell whether the model had declined on the merits or fumbled the schema.
+   * That is precisely the question the title-page case turns on.
+   *
+   * The `why` is the model's own dozen words about the article, so it belongs in
+   * the records file and never in a log line — docs/project/logging.md.
+   */
+  it("keeps the shape of the last refused answer, verdicts and `why` included", async () => {
+    const tree = await waveOne();
+    const { deepenSeed, batches } = await plan(tree, ONE_PER_CALL);
+    let doomed: string | undefined;
+    const wave = await runExpansionWave({
+      slug: SLUG,
+      checkpoints: nullCheckpointStore(),
+      batches,
+      ancestorsOf: () => [],
+      blocks: BLOCKS,
+      seed: deepenSeed,
+      recipe: ONE_PER_CALL,
+      gate: new WidthGate(2),
+      execute: async (request) => {
+        doomed ??= request.own;
+        if (request.own === doomed) {
+          return oneChildSpanningTheParent(request, "this section is a single indivisible thing");
+        }
+        return answerFor(request);
+      },
+    });
+    const shape = wave.refused[0]?.shape;
+    expect(shape, "the refused answer's shape was thrown away").not.toBeNull();
+    expect(shape?.sections).toBe(1);
+    expect(shape?.perSection[0]?.children).toBe(1);
+    expect(shape?.perSection[0]?.verdicts).toEqual(["finished"]);
+    expect(shape?.perSection[0]?.why).toEqual(["this section is a single indivisible thing"]);
+  });
+});
+
 describe("what a fatal wave leaves behind", () => {
   /**
    * **The peer that was paid for is measured even though the wave died.**
@@ -1486,7 +1654,7 @@ describe("the run's token totals", () => {
       for (const file of files) {
         expect(JSON.parse(await readFile(path.join(dir, file), "utf-8"))).toMatchObject({
           slug: SLUG,
-          version: "deepen-records/2",
+          version: "deepen-records/3",
         });
       }
     } finally {

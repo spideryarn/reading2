@@ -36,7 +36,7 @@ import {
   type Mark,
   type TermSelection,
 } from "./annotate.js";
-import { readSelection } from "./selection.js";
+import { readSelection, type SelectionAnchor } from "./selection.js";
 import { internalTarget } from "./internal-links.js";
 import {
   markReturnPath,
@@ -121,7 +121,7 @@ interface Props {
   /** The comment whose dialog is open, so its mark can say so. */
   openComment: string | null;
   /** A usable selection was made in the verbatim column. */
-  onSelect(anchor: ReturnType<typeof readSelection>): void;
+  onSelect(anchor: SelectionAnchor): void;
   /** An existing mark was clicked. */
   onOpenComment(id: string): void;
   /**
@@ -866,8 +866,17 @@ function TableViewInner({
           // comment's words silently reopened that comment instead of asking a
           // new question — and asking about a narrower part of something you
           // already asked about is a completely ordinary thing to want.
-          const anchor = readSelection(window.getSelection());
-          if (anchor) return onSelect(anchor);
+          //
+          // **And a drag we refuse is still a drag.** `readSelection` used to
+          // answer `null` both for "no selection" and for "shorter than the
+          // floor", so a skid inside a commented phrase fell all the way
+          // through to the mark logic at the bottom of this handler and opened
+          // that comment — the exact opposite of the rule above, over words the
+          // reader never clicked. The two are separate variants now, and
+          // `too-short` stops here: nothing opens, and the reader drags again.
+          const read = readSelection(window.getSelection());
+          if (read.kind === "anchor") return onSelect(read.anchor);
+          if (read.kind === "too-short") return;
           /* A link inside a commented passage is a link. `annotateHtml` puts
              the <mark> *inside* the <a>, so without this a click on one would
              open the comment on mouseup and then jump on click — two answers to
