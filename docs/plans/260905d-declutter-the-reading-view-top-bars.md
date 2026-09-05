@@ -136,6 +136,27 @@ default). Docs: `granularity-zoom.md` § What the bar calls each column, `keyboa
 **Done when** every mode's bar holds only pills (Hierarchy) or nothing (everything else), the rail
 is on in `?text=0`, `?spine=0` still turns it off, and no stylesheet rule targets a deleted element.
 
+**Landed 2026-09-05, `ec16ece9`.** Browser pass at 1440×900 and 390×844, signed in, 14 mode × width
+combinations, no console errors. Three things it settled that were open:
+
+- **An empty bar does not look broken.** It draws on the page's own background with a 1px bottom
+  rule, and reads as a divider between the masthead and the article rather than as a gap. So stage 4
+  is an improvement rather than a repair, and stage 1 was safe to push on its own.
+- **The 390px pill-row overflow is already gone** — it was the deleted controls that were pushing
+  `Text` off the right-hand edge, not the pills. `.controls` now measures
+  `scrollWidth === clientWidth` at 390px.
+- **The wordmark and the Feedback button do not move** when the bar's contents change — their rects
+  are pixel-identical across all fourteen combinations. That is stage 4's trap narrowed: the risk is
+  the *band* running under them, not the corners themselves shifting.
+
+One thing it found that is **not ours and not in scope**: at 390px `document.body.scrollWidth` is
+23–35px wider than the window in every mode except `?text=0`. The spine-on/spine-off delta is
+exactly the rail's 12px, so it predates this work — a table minimum-width constraint at narrow
+viewports.
+
+There is also **a red arriving from `dev`**, `tests/doc-links.test.ts`: `summaries.md` cites
+`types.ts` § `TreeNode.question`. Neither file is touched by this plan.
+
 ### Stage 2 — the arc leaves Hierarchy
 
 Drop the `Arg` pill and L0 from the pill list and from `?cols=` fitting; drop `arcCells` from
@@ -149,45 +170,114 @@ Files: `App.tsx`, `TableView.tsx`, `tree.ts`, `keynav.ts`, `layout.ts`, `Context
 **Done when** no `?cols=` value can open an L0 column, ← walks to Parts and stops, Outline mode's
 rung 4 still shows the arc sentence, and `npm run arc` still works.
 
-### Stage 3 — the column-header row goes, and the pills take its job
+### Stage 3 — the column-header row loses its height, not its element
 
-**The failing test comes first.** `stickyOffset()` ([`scroll.ts:77`](../../src/web/scroll.ts))
-returns `0` when there is no `thead th`, so removing the head would land every deep link, every
-`?at=` reading and every arrow-key step *underneath* the controls bar — with nothing reporting an
-error, which is [silent-success.md](../reusable/silent-success.md) exactly. It must measure the bar
-alone when there is no head, the head alone when there is no bar, and `0` only when there is
-neither; `tests/mobile-chrome.test.ts` already holds the last of those and gains the first two.
+**Rewritten 2026-09-05 after GPT Sol refused the first version.** The plan was to delete the
+`<thead>`. That would have emptied the Parts and Sections columns completely: `useColumnContext`
+derives every column's rectangle from `thead th[data-col]`
+([`useColumnContext.ts:107`](../../src/web/useColumnContext.ts)), `ContextPanel` returns `null`
+without one, and the gist cell underneath **deliberately draws only its boundary while panels are
+enabled** ([`TableView.tsx:1033`](../../src/web/TableView.tsx)) — which is unconditional
+(`enabled: true`, line 1320). So Hierarchy's columns would have become empty boxes. Verified
+against the code, not reasoned.
 
-Then: remove the `<thead>`; `columnPill` collapses into `columnLabel`; the aim indicator moves from
-`th.nav-aim` to a `data-aim` attribute on the table, with four static rules tinting the aimed
-column's cells — no per-cell class, so `memo(TableView)` is unaffected and the aim can still be the
-prose column or the spine. Fix the 390px overflow of the pill row.
+**So the row keeps its element and gives up its height.** `thead th` collapses to `height: 0`,
+no padding, no border, with the label text visually hidden but still in the accessibility tree.
+That is what Greg asked for — the vertical space — and it costs none of the four jobs the element
+is quietly doing:
 
-Files: `TableView.tsx`, `tree.ts`, `scroll.ts`, `styles.css` (`thead th`, `.depth-tag`,
-`th.text .th-measure`, `--head-h`, `.only-prose`), `tests/mobile-chrome.test.ts`,
-`tests/column-names.test.ts`. Docs: `granularity-zoom.md`, `keyboard.md`, `design-css-overview.md`.
+| What the `<thead>` is for | After |
+|---|---|
+| The visible column names | gone; the pills in the bar take over, renamed to full words |
+| Column geometry for the fisheye panels | unchanged — `<colgroup>` and `table-layout: fixed` fix the widths, so `left`/`width` are still right, and `bottom` now correctly puts the panels directly under the bar |
+| `stickyOffset()`'s second term | measures zero, so a jump clears the bar and nothing else — which is the truth |
+| `<th scope="col">` naming cells for a screen reader | unchanged; the pills are outside the table and can never do this job |
 
-**Done when** Hierarchy has one sticky row, a deep link lands with the target's top clear of the
-bar, and pressing ← / → visibly moves the aim.
+Also in this stage:
+
+- **`stickyOffset()` stops querying `thead` at all.** An article's *own* prose can contain a
+  `<table><thead><th>` — Sol ran the sanitizer and confirmed one survives — so a global
+  `document.querySelector("thead th")` can match article content and add its height to the chrome
+  offset. Pre-existing rather than introduced, and cheap to close: measure `.controls` only, with a
+  floor of `safeAreaInsets().top` (there is a fixed opaque `.reader::before` of exactly that height,
+  `styles.css:396`), and **`safeTop`, not `0`, when there is no bar**. Regression test with an
+  ordinary article `<thead>` present as a decoy.
+- **`columnPill` collapses into `columnLabel`** — `Parts`, `Sections`, `Paragraphs`.
+- **The aim indicator** moves from `th.nav-aim` to a `data-aim` attribute on the `<table>` — no
+  per-cell class, so `memo(TableView)` is unaffected. It must be a **later `background-image:
+  linear-gradient`, not a `box-shadow`**: `.pin-left` already owns `box-shadow` for the
+  overflow-layer cue (`styles.css:890`) and a second one replaces rather than composes with it. The
+  selector matrix has to cover every gist depth **and the prose cell, which carries no `depth-N`
+  class** (`TableView.tsx:1127`), and the spine.
+- **`.only-prose` is not deleted** — only `table.only-prose thead` is. A second rule uses the same
+  class to align the masthead with centred prose, pinned by
+  `tests/prose-centred-in-its-cell.test.ts:123`.
+- **`?text=0` gets normalised away at boot** rather than left as a state with no exit. The `Text`
+  pill was the only way back to the prose, so an old `?mode=hierarchy&text=0` link would strand the
+  reader. `main.tsx` already rewrites two superseded spellings of the metadata panel; this is a
+  third rewrite in the same place, to `?mode=outline` — which is what that link was asking for and
+  is the mode built to answer it. The parameter machinery stays for the `structure-mode` worktree
+  to delete.
+
+Files: `TableView.tsx`, `tree.ts`, `scroll.ts`, `main.tsx`, `styles.css`,
+`tests/mobile-chrome.test.ts`, `tests/column-names.test.ts`, `tests/url-state.test.ts`. Docs:
+`granularity-zoom.md`, `keyboard.md`, `design-css-overview.md`, `url-state.md`.
+
+**Done when** Hierarchy has one visible sticky row, the fisheye panels still draw their contents, a
+deep link lands with the target's top clear of the bar with an article-owned `<thead>` on the page,
+and pressing ← / → visibly moves the aim including onto the prose.
 
 ### Stage 4 — the bar disappears when it has nothing in it
 
-Render `.controls` only when it has content. `--bar-h` and `--bar-bottom` must fall to `0` (plus
-`--safe-top`) when it is absent, or the band, the spine, the fade and the sticky table head are all
-positioned against a bar that is not there. `stickyOffset()` with no bar and no head must stay `0`.
+Render `.controls` only when it has content.
 
-**The known trap**: the fixed corner wordmark and the Feedback button reserve their space through
-the bars' own padding
+**`--bar-h` does not move**, and the first draft of this stage said it should. It is not a presence
+token: it also sizes `.logo-home` (`styles.css:3702`) and `.fb-button` (`styles.css:13904`), both
+fixed corner elements outside the reader, so zeroing it collapses two hit areas to nothing. Only
+**`--bar-bottom` falls to `var(--safe-top)`** under a bar-less reader; `--bar-hide` is the mobile
+transform token and needs no absent state. GPT Sol, 2026-09-05.
+
+`stickyOffset()` with no bar returns `safeAreaInsets().top`, not `0` — stage 3 already puts it
+there.
+
+**The known trap**: both fixed corner elements — the wordmark *and* the Feedback button — reserve
+their space through the bars' own padding
 ([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) § The bars have to reserve the space), so
-with no bar a `position: fixed` band at `--safe-top` sits under the 136×44 logo. Check
-`HomeLogo.tsx` and either inset the band or move the logo; browser pass at 820px, which is where
-`PublicChrome` measured the same collision.
+with no bar a `position: fixed` band at `--safe-top` runs under both. Clear or reserve **both**, not
+only the logo. Browser pass at 820px, which is where `PublicChrome` measured the same collision.
 
 Files: `App.tsx`, `styles.css`, `scroll.ts`, `layout.ts`. Docs: `web-client.md`,
 `reading-view-overview.md`, `design-css-overview.md`.
 
 **Done when** Plain, Summary, Chat and Glossary show no bar for an owner, a visitor still sees the
 read-only chip, and nothing on the page is positioned as though a bar were there.
+
+## The reviews
+
+**Round 1, on the plan** — [`…-plan-review-sol.md`](260905d-declutter-top-bars-plan-review-sol.md),
+GPT Sol, 2026-09-05. **Refused**, six established P1s and no P0s. Dispositions:
+
+| | Finding | Disposition |
+|---|---|---|
+| F1 | Removing `<thead>` empties every fisheye panel | **Accepted, and it rewrote stage 3.** Verified in the code. |
+| F2 | `stickyOffset()` can match an *article's own* `<thead>` | **Accepted.** Pre-existing; closed in stage 3. |
+| F3 | "`0` when neither" is wrong with a safe-area inset — there is a fixed `.reader::before` of exactly that height | **Accepted.** `safeTop`, not `0`. |
+| F4 | Stage 1 deleted `.mode`, which `ViewOnlyChip` still uses | **Already avoided.** The implementing agent grepped and kept it. |
+| F5 | Deleting the head removes the table's accessible column names | **Accepted**, and the zero-height head keeps them without the visually-hidden `<thead>` + `headers` IDs Sol proposed. |
+| F6 | `?text=0` becomes a state with no way out | **Accepted, different fix.** Sol wanted a conditional recovery pill; a boot-time rewrite to `?mode=outline` is fewer parts and `main.tsx` already does two of these. |
+| F7 | `--bar-h` is not a presence token — it sizes both fixed corners | **Accepted.** Stage 4 moves only `--bar-bottom`. |
+| F8 | The aim rule misses the prose cell and clobbers `.pin-left`'s shadow | **Accepted.** Gradient, not `box-shadow`; matrix specified. |
+| F9 | `.only-prose` has a second consumer with a test behind it | **Accepted.** Only `table.only-prose thead` goes. |
+| F10 | This does not stay out of `structure-mode`'s way | **Accepted as a fact, not as a stop.** See below. |
+
+**On F10 and sequencing.** Sol is right that the overlap is semantic and not just textual: both
+plans touch `App.tsx`, `layout.ts`, `keynav.ts`, `styles.css`, column naming, the navigation rungs
+and the meaning of `?text=0`. It asks that the two not run concurrently. **Overruled**, because they
+already are and Greg asked for this now: `structure-mode` is mid-stage-1 and Structure is an
+*addition* behind the experimental switch, so nothing here removes anything it depends on.
+The rule instead is **whoever lands second merges `dev` and adapts** — and this plan states its new
+contracts explicitly (the rail's default, `stickyOffset`'s selector, `?text=0`'s rewrite, the
+zero-height head) so there is something to adapt *to*. Merge `dev` between every stage.
 
 ## What this deliberately does not do
 
