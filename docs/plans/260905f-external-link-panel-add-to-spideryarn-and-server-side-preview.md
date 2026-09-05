@@ -1,6 +1,30 @@
 # The external link panel: add it to your shelf, and say what is on the other side
 
-**Status:** planned, 2026-09-05. Three stages, each landable on its own.
+**Status:** all three stages built, 2026-09-05. Three stages, each landable on its own.
+
+- **Stage 1 — Add to Spideryarn:** built, commit `3a282b83`.
+- **Stage 2 — the server fetches the destination:** built. `GET /api/link-preview`,
+  `link_previews` (the first ownerless table in this schema), `rate_limit_events`,
+  [`src/link-previews.ts`](../../src/link-previews.ts), and a third source in
+  `link-facts.ts`. What it turned out to be is written up in
+  [links.md § What our own server can reach](../project/links.md#what-our-own-server-can-reach);
+  the doc claim this stage was required to correct is corrected in
+  [260827a-link-previews.md](../research/260827a-link-previews.md).
+- **Stage 3 — the Luna summary:** built. `GET /api/link-summary` (a stream),
+  [`src/link-summary.ts`](../../src/link-summary.ts), `link_summaries`,
+  `link_previews.excerpt`, a second limiter bucket with a day and a global fuse, and a fourth
+  section on the card. What it turned out to be is written up in
+  [links.md § And what it has to do with the piece in your hands](../project/links.md#and-what-it-has-to-do-with-the-piece-in-your-hands),
+  with the measured price and latency and a verbatim sample; § Measured, below, has the rest.
+
+The built code went back to GPT Sol twice —
+[260905f-code-review-sol.md](260905f-code-review-sol.md) for stage 2, five P1s and no P0, and
+[260905f-stage3-code-review-sol.md](260905f-stage3-code-review-sol.md) for stage 3, four P1s and
+seven P2s and no P0. Every finding in both was accepted. Those two reviews are the ones worth
+reading if you are about to touch this: most of their findings are traps the plan could not have
+caught, because they did not exist until the code did — and stage 3's includes the one it could
+not catch about itself, which is that the fencing made the *database* right and left the *screen*
+wrong.
 
 **Reviewed by GPT Sol before any code was written** —
 [260905f-plan-review-sol.md](260905f-plan-review-sol.md), seven P1s and no P0. **Every finding was
@@ -65,7 +89,7 @@ the "one fetch per URL for everybody" privacy win cannot cover it. Hence **two c
 
 | | Keyed by | Shared with | Why |
 |---|---|---|---|
-| the fetch + Readability extraction | `urlKey(url)` alone | **everybody** | this is the expensive, rate-limited, third-party-facing half, and sharing it is what stops the destination learning which reader hovered what |
+| the fetch + Readability extraction | `requestTarget(url)` alone *(this cell said `urlKey` in the draft, and § Two identities two paragraphs down overrules it — corrected here on 2026-09-05 when it was built, because a table is what people read)* | **everybody** | this is the expensive, rate-limited, third-party-facing half, and sharing it is what stops the destination learning which reader hovered what |
 | the Luna summary | `(owner, article, urlKey)` | nobody | it is about *this reader reading this piece*, so a global row would be both wrong and a disclosure |
 
 The second is close to `glossaryLookups`' shape (`src/db/schema.ts` § `glossaryLookups`) — a
@@ -75,7 +99,7 @@ part of the key. Corrected from GPT Sol's review, finding P1-3.* The first is th
 ownerless table in this schema**, and `schema.ts`'s comment above `checkpoints` is the argument it
 has to answer: a global row adds cross-reader sharing "which nobody asked for and which would need
 its own argument about what a cache hit tells a stranger". The argument is written down in
-[links.md § What is deliberately not built yet](../project/links.md#what-is-deliberately-not-built-yet)
+[links.md § Fetched once, for everybody](../project/links.md#fetched-once-for-everybody)
 and it is that the sharing *is* the privacy feature here — but it is a *limited accepted disclosure*
 rather than none at all, and § Where the sharing stops below says what we accept and what we close.
 
@@ -304,6 +328,60 @@ regardless: accumulated partial text held in the **tab-level** preview store, so
 mid-stream and re-hovered picks up what has arrived rather than starting again. Give it its own
 deadline, separate from the existing 8s `LOOKUP_TIMEOUT_MS`. GPT Sol, P1-6, accepted in full.
 
+#### Measured while building, 2026-09-05
+
+Nothing here had been measured on the quick tier before, so these are the first numbers this
+repository has about it. Real calls against the noema essay's own links, `openai/gpt-5.6-luna`
+through OpenRouter (Azure upstream).
+
+**$0.00015 a call** — 2,008 prompt tokens and 87 completion, `cost: 0.0001451` off the wire. Nearly
+the whole prompt comes back as `cached_tokens` after the first call of a session, because these
+models cache a repeated prefix automatically and the system prompt is the bulk of it. First visible
+token 0.9–2.1s; the whole answer 2.0–4.7s; a cache hit ~90ms with one `ready` frame and no stream.
+
+**The 1,024-token reasoning floor did not show up**, and `models.ts` had warned about it as the thing
+that would bite first. `completion_tokens_details.reasoning_tokens` came back **0** on every call at
+`reasoning: { effort: "low" }`. So the ceiling is not the constraint it was expected to be — but it
+is still sized clear of the floor, because "we did not see it on this upstream this week" is not the
+same as "it is not there", and a truncated summary would be *cached for a fortnight*.
+`max_completion_tokens` is sent, and `require_parameters` on the route is what stops an upstream
+quietly ignoring it.
+
+**The failure that actually happens is an upstream 429.** Two of six exploratory calls came back
+`{"error":{"code":429,"message":"openai/gpt-5.6-luna is temporarily rate-limited upstream"}}` —
+*inside* a 200 stream, as data, which is exactly the case `chunk.error` exists for. That is what
+decided the route's failure frame: it ends the stream with `pending` rather than `unavailable` or
+nothing, because a busy minute upstream is a fact about this moment and not about this link, and the
+other two spellings would silence that link for the rest of the session.
+
+**Three real answers, verbatim**, so the question *does it actually read as relative* can be judged
+rather than asserted — [links.md](../project/links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)
+carries the first of them and the profile comparison.
+
+#### What the build changed about the plan
+
+- **The destination's text had to be stored**, and the plan did not say so. Stage 2 keeps a title, a
+  description, a first paragraph and a word count — not Readability's text — so a summariser working
+  from the cached row had nothing of the page to read, and Greg's spec is *run Readability first*.
+  The alternatives were summarising from a CMS blurb, or fetching every destination a second time at
+  summary time, which would undo the one thing the ownerless cache exists for. So
+  `link_previews.excerpt` holds a capped 8,000 characters and is the only column in that table no
+  card ever shows. **Rows written before that column existed have no summary** until they expire and
+  are fetched again — a degradation rather than a refetch on the summary path.
+- **The owner is in the summary's primary key**, where the plan pointed at `glossaryLookups` and Sol
+  corrected the "exactly" to note that its key is `(articleId, entryId)`. Redundant today, because an
+  article has one owner; kept because this row is written *from the reader's profile* and the day
+  `articles` stops being one row per owner an article-keyed row starts serving one reader's
+  personalised summary to another. One uuid in an index against a cross-reader leak later.
+- **The fence needed defending from inside.** The plan asked for untrusted-content delimiters and got
+  them, and a page that writes our own end-marker in its own text closes the fence early — the one
+  injection move that turns on our formatting rather than on the model's judgement. Every run of
+  three or more `=` in the destination is rewritten before it reaches the prompt.
+- **A summary is not offered for an article already on the reader's shelf**, which falls out of the
+  client skipping the *fetch* for those, and is a simplification rather than a decision. It is the
+  case where "how does it stand to this one" would be most interesting. The repair is to summarise
+  from our own stored extraction; noted in links.md as a follow-up.
+
 ## Where the sharing stops
 
 Worth stating before it is built, because a global cache is the one genuinely new thing in this
@@ -331,7 +409,7 @@ which removes arbitrary probing as a way to ask the cache questions.
 
 ## What is deliberately not in scope
 
-- Streaming the summary (above).
+- ~~Streaming the summary~~ — overturned by the review and built as a stream (above).
 - Wikipedia's thumbnail, and a word count for Wikipedia articles — both named and skipped in links.md.
 - Ingest-time prefetch of every link — rejected in the research doc, and the URL-keyed cache delivers
   the benefit people reach for prefetch to get, lazily.

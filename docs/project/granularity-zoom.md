@@ -214,8 +214,9 @@ Prompt rules, derived from the [vision](vision.md#principles):
 - Never introduce a fact that isn't in the range below.
 - No meta-narration ("this section explores…", "the author then turns to…").
 
-Determinism and cost: the whole tree is generated once per article and cached under
-`data/<slug>/tree.json` ([storage layout](architecture.md#storage)), keyed on
+Determinism and cost: the whole tree is generated once per article and cached in the revision's
+`tree` column ([`src/db/schema.ts`](../../src/db/schema.ts); `data/<slug>/tree.json` until
+2026-09-05 — [storage layout](architecture.md#storage)), keyed on
 `hash(extracted blocks) + prompt version + model id`. It is not
 lazy — the reader needs the entire leftmost column instantly, since scanning the whole landscape is
 the point.

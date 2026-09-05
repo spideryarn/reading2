@@ -515,6 +515,80 @@ describe("the Postgres searches store", () => {
     });
   });
 
+  /**
+   * **Two runs, seven writes, asserted after every one.**
+   *
+   * Ported from `tests/store-reader-state-parity.test.ts`, which went with the
+   * filesystem store (86a4ef7c). There it drove both stores through this
+   * sequence and compared them step by step; with one store left, each
+   * comparison becomes an assertion about what Postgres should hold at that
+   * point.
+   *
+   * The sequence is the value. Every other case here begins from an empty
+   * article, so **nothing above can see one run's write reaching another** — a
+   * reset that clears the wrong row, a finish that lands on the neighbour, a
+   * delete that takes more than it names. Two of its steps have no other home
+   * at all: finishing a run that has been **reset** (the reset case above stops
+   * at the blank row, so a `model` left over from before it would go unnoticed),
+   * and `remove`, which nothing else in this file calls.
+   */
+  it("walks one search through begin, finish, fail, retry, finish, delete", async () => {
+    const clock = clockFrom(Date.parse("2026-08-01T00:00:00.000Z"));
+
+    // 1. begin — pending, and nothing an answer would have put there.
+    const first = await pgSearchStore.begin(SLUG, "mentions of arches", "spya-runaa2", clock);
+    expect(first.run.id).toBe("spya-runaa2");
+    expect(first.run.criterion).toBe("mentions of arches");
+    expect(first.run.status).toBe("pending");
+    expect("model" in first.run).toBe(false);
+    expect((await pgSearchStore.load(SLUG)).length).toBe(1);
+
+    // 2. finish it.
+    await pgSearchStore.finish(SLUG, first.run.id, { status: "done", hits: [], model: "m" }, first.attempt);
+    const done = (await pgSearchStore.load(SLUG))[0];
+    expect(done?.status).toBe("done");
+    expect(done?.model).toBe("m");
+    expect(done?.hits).toEqual([]);
+
+    // 3. begin another — a second row, and the first is not disturbed.
+    const second = await pgSearchStore.begin(SLUG, "mentions of vaults", undefined, clock);
+    expect(second.run.id).not.toBe(first.run.id);
+    const both = await pgSearchStore.load(SLUG);
+    expect(both.length).toBe(2);
+    expect(both.find((r) => r.id === first.run.id)?.status).toBe("done");
+    expect(both.find((r) => r.id === second.run.id)?.status).toBe("pending");
+
+    // 4. fail it — and only it.
+    await pgSearchStore.finish(SLUG, second.run.id, { status: "error", error: "fell over" }, second.attempt);
+    const failed = (await pgSearchStore.load(SLUG)).find((r) => r.id === second.run.id);
+    expect(failed?.status).toBe("error");
+    expect(failed?.error).toBe("fell over");
+    expect((await pgSearchStore.load(SLUG)).find((r) => r.id === first.run.id)?.model).toBe("m");
+
+    // 5. retry — same row reset, not a third one, and the error gone with it.
+    const retried = await pgSearchStore.begin(SLUG, "mentions of vaults", second.run.id, clock);
+    expect(retried.run.id).toBe(second.run.id);
+    expect(retried.run.status).toBe("pending");
+    expect("error" in retried.run, "the failed attempt's error survived the reset").toBe(false);
+    // Same question, so the same clock — the opposite of a chat retry.
+    expect(retried.run.createdAt).toBe(second.run.createdAt);
+    expect((await pgSearchStore.load(SLUG)).length).toBe(2);
+
+    // 6. finish the retry, with a different model from the run beside it.
+    await pgSearchStore.finish(SLUG, retried.run.id, { status: "done", hits: [], model: "m2" }, retried.attempt);
+    const answered = (await pgSearchStore.load(SLUG)).find((r) => r.id === second.run.id);
+    expect(answered?.status).toBe("done");
+    expect(answered?.model).toBe("m2");
+    expect("error" in (answered ?? {})).toBe(false);
+
+    // 7. delete the first — the answer is the list that is left, and it agrees
+    //    with what a fresh read says.
+    const remaining = await pgSearchStore.remove(SLUG, first.run.id);
+    expect(remaining.map((r) => r.id)).toEqual([second.run.id]);
+    expect(remaining[0]?.model).toBe("m2");
+    expect((await pgSearchStore.load(SLUG)).map((r) => r.id)).toEqual([second.run.id]);
+  });
+
   it("404s for an article that is not there, and 400s for a non-slug", async () => {
     await expect(pgSearchStore.load("no-such-article-at-all")).rejects.toMatchObject({
       status: 404,

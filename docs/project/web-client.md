@@ -53,12 +53,17 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in styles.css § plain, centred) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
-| `src/api.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
+| `src/store/index.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, bound to the Postgres reader and reached through [`src/routes.ts`](../../src/routes.ts). These lived in `src/api.ts` — the filesystem reader — until it went with the store on 2026-09-05 |
 
 Running it: [setup-dev.md](setup-dev.md). `npm run dev` opens the **library** at `/`
-([library.md](library.md)); an article is `/read/<slug>`, and a fresh clone that has never run the
-pipeline still has the committed `example/` fixture to open (`src/api.ts`). Old
-`/?slug=<slug>` links are rewritten on the way in and keep working.
+([library.md](library.md)) and an article is `/read/<slug>`. Old `/?slug=<slug>` links are rewritten
+on the way in and keep working.
+
+**A fresh clone needs `npm run setup` before it has anything to open.** It used to serve the
+committed `example/` fixture straight off the disk when no article had been ingested, because
+`src/api.ts` read articles from directories and fell back to that one. There is no filesystem reader
+since 2026-09-05, so the fixture reaches you the same way every other article does — `npm run setup`
+runs `db:seed-owner` and then `db:seed-dev`, which loads the committed corpus into Postgres.
 
 Deep links are `/read/<slug>?at=spya-k6fpme`. Every other bit of view state is in the query string
 too — see [url-state.md](url-state.md) for the full set, for the rule that divides the path from the

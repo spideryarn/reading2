@@ -365,7 +365,8 @@ describe("the schema keeps the promises the plan makes", () => {
                             'articles_current_revision_fk','reader_profiles_owner_fk',
                             'uploads_owner_fk','feedback_owner_fk',
                             'billing_accounts_owner_fk','ingest_events_owner_fk',
-                            'jobs_ingest_event_fk','realtime_sessions_owner_fk')
+                            'jobs_ingest_event_fk','realtime_sessions_owner_fk',
+                            'rate_limit_events_owner_fk','link_summaries_owner_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -385,6 +386,19 @@ describe("the schema keeps the promises the plan makes", () => {
            one owner's job cannot spend another owner's quota slot. */
         "jobs_ingest_event_fk",
         "jobs_owner_fk",
+        /* drizzle/20260905191017, and the second of the two CASCADEs in this
+           list rather than a RESTRICT. A summary of where a link goes is a
+           cache — one paragraph, rewritten whenever the article, the profile or
+           the prompt moves, worth nothing once the reader is gone. Restricting
+           a delete on it would mean an account could not be removed until its
+           last hover expired. */
+        "link_summaries_owner_fk",
+        /* drizzle/20260905172650, and the first CASCADE. Bookkeeping: one row
+           per outbound fetch a pointer caused, deleted by the limiter itself as
+           soon as it falls out of the rolling window. It arrived with stage 2 of
+           the link panel and was not added here then, which is exactly the
+           omission this test exists to catch. */
+        "rate_limit_events_owner_fk",
         "reader_profiles_owner_fk",
         /* drizzle/20260902150952. The parent of every realtime `ai_calls` row —
            and the reason RESTRICT here is doubly load-bearing: `ai_calls`

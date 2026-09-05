@@ -588,3 +588,84 @@ prompt half — make them easier — needs none of it and is being built.
   tokens and the plan defers longer depth-2 gists anyway.
 - A full run is 49 calls, roughly 660k input and 50k output tokens. Prompt caching does not help: the
   system block differs per arm and comes first, so each arm re-reads the article.
+
+
+## The result: the gate held, and it is anchor 2 that tripped it
+
+Run `output/summaries-runs/2026-09-05T18-04-46`, seven arms, seven documents, three judging repeats,
+854 of 854 calls returned, $2.5853 all in.
+
+**No ranking is reported**, and that is the declared outcome rather than a disappointment. The
+calibration gate is `MAX_ANCHOR_INVERSIONS = 0`, written down before the run, and the run produced
+fifteen inversions across three repeats.
+
+**But the shape of the failure is the finding.** Fourteen of the fifteen are one anchor:
+
+| anchor | its designed defect | where the judge put it (r1 / r2 / r3 of 12) |
+|---|---|---|
+| 1 | fabricated count — "(6 arguments)" where the text says four | **12th / 12th / 12th**, fidelity `1` every time |
+| 3 | answer-leaking | 10th / 10th / 10th, leakage 4–5 |
+| 5 | the gist with a `?` on it | 11th / 11th / 11th, leakage 5 |
+| 4 | title-only | 8th / 9th / 9th — clean in two of three |
+| **2** | *"neutral lookup question"* | **4th / 2nd / 4th**, scored `5,5,5,5,5` with leakage `1`|
+
+So the judge caught, three times out of three, exactly the two traps `anchors.ts` names as the ones
+that matter — the lines that are *most informative* and therefore most tempting to a judge measuring
+information instead of triage value. It also put the fabricated count at the bottom of every lineup
+with a fidelity of 1, which is the check that the judge is reading the prose rather than the label.
+
+It simply does not agree that anchor 2 is bad. Anchor 2 is
+
+> `Computational functionalism: what four arguments does the section cover?`
+
+and on inspection **it is not a bad line**: the count is right, the topic is named, nothing leaks, and
+a reader can decide from it whether to descend. It was labelled a wall at design time on a theory
+about lookup questions. The judge is scoring it as a door, and the judge is closer to right.
+
+**The gate is not being relaxed, and the run is not being re-scored.** `anchors.ts` says the
+tolerance is *"declared before any run rather than argued after one"*, and reclassifying an anchor
+after seeing where it landed is precisely the argument that rule forbids. The legitimate repair is to
+rewrite or drop anchor 2 **before** the next run — a genuine lookup question is one with no content
+at all in it, e.g. *"What does this section discuss?"*, and anchor 2 has four arguments and a named
+theory in it.
+
+Which means: **the eval spent $2.59 and returned no ranking, and the money was not wasted.** It
+established that this judge, on this criterion, ranks answer-leaking and fabricated lines last with
+perfect consistency — which is the property a future run needs and could not previously assume.
+
+### What the run does say, without the judge
+
+The shape table is observational and survives the gate failure. Against Greg's three asks:
+
+- **His example shape is V4's, near verbatim.** He wrote *"Computational functionalism — why isn't
+  computation sufficient for consciousness? (4 arguments)"*. V4 produced, unprompted, for that exact
+  node: *"Computational functionalism — why might computation not be sufficient for consciousness?
+  (four arguments)"*. V1 has the same content with the hint in front instead.
+- **V4 needs the one-line `questionFor` patch** (`variants.md` § *The code change V4 needs*), because
+  its hint follows the question mark and `questionFor` would otherwise append a second one.
+- **V3 is out on its own evidence**: 39% of its questions are yes/no, against 13–20% everywhere else.
+  A yes/no question is a door with the answer painted on it.
+- **Length runs the wrong way for the rest of the brief.** Incumbent's median question is 10 words;
+  V1 is 16, V4 is 18. Greg also asked for *simpler* language and a *briefer* top-level line, and the
+  variants that hit his shape are the longest ones on the page.
+
+### The lines themselves, which is what the decision should be made on
+
+`noema-mythology-of-conscious-ai`, six depth-1 sections, one judge-free comparison:
+
+| section | incumbent | V1 | V4 |
+|---|---|---|---|
+| n0001 | Could AI ever really be conscious, and why does the answer matter? | conscious AI (an argument): why is machine consciousness unlikely, and what should we do about AI that merely seems conscious? | Conscious AI — could machines ever really be conscious, and how should that shape what we do? (an argument and a set of recommendations) |
+| n0020 | Why do we so readily assume intelligent AI must be conscious? | temptations of conscious AI (several biases): why are we so tempted to see consciousness in AI? | The temptations of conscious AI — why do we keep imagining AI is conscious when it may not be? (six psychological temptations) |
+| n0048 | Why might computation alone never be enough to produce consciousness? | computational functionalism (four arguments): why is computation not sufficient for consciousness? | Computational functionalism — why might computation not be sufficient for consciousness? (four arguments) |
+| n0133 | How should we act ethically given uncertainty about machine consciousness? | what to do (a recommendation): how should we act given uncertainty about machine consciousness? | Conscious AI's uncertainty — what should we do about it given we can't be sure either way? (a set of recommendations) |
+| n0155 | What should we learn about ourselves from the myth of conscious AI? | soul machine (a closing argument): what does mistaking machines for conscious beings cost us, and how do we reclaim our own nature? | Conscious AI's implications — what does the pursuit of machine consciousness reveal about what we value in being human? (a closing reflection) |
+
+**Nothing is being shipped off the back of this.** Greg's own instruction was *"Don't push tooooo
+hard towards this Socratic-question approach if it's going to make things less valuable for the
+user"*, and n0155 is the row that shows the cost: the incumbent line is short and clean, and both
+variants talk more while saying about as much. n0048 is the row that shows the gain, and it is the row
+he wrote the brief from.
+
+The remaining two-thirds of his brief — simpler language, a briefer root line, longer leaf lines —
+are untouched by any of this and are a separate, cheaper change.

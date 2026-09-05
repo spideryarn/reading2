@@ -185,6 +185,25 @@ export const ARTICLE_TABLE_COVERAGE = {
     },
     bundle: { exported: true, into: "content/block-identities.json" },
   },
+  link_summaries: {
+    rollback: {
+      exported: false,
+      why:
+        "A cache of a model's line on where a hovered link goes, keyed by the reader, " +
+        "the article and the address, and validated against four fingerprints of its " +
+        "own inputs — src/db/schema.ts § linkSummaries. Every one of those inputs is " +
+        "exported or is somebody else's public page, so the row can be rebuilt for " +
+        "about a hundredth of a penny, and nothing here is anything the reader wrote.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The same cache, and the bundle has a second reason: a row is written from the " +
+        "reader's own profile, so it is the one per-article artefact that says more " +
+        "about the person than about the piece. Rebuilding it costs a fraction of a " +
+        "penny and it is meaningless outside the card it is drawn on.",
+    },
+  },
   checkpoints: {
     rollback: {
       exported: false,
