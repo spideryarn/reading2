@@ -355,8 +355,8 @@ describe("the add page, which is the fifth copy and was found in a browser", () 
    *
    * `/add/<url>` posts on mount and had exactly the spelling this whole file is
    * about: a boolean `failed`, and `queue.error` rendered beside it. So the
-   * quota's 402 — *"You have added all 3 articles a free account can add… the
-   * pricing page sets one up. [pay-free]"* — was replaced by the generic
+   * quota's 402 — *"A free account can add 3 articles, and this account's
+   * allowance is spent… the pricing page sets one up. [pay-free]"* — was replaced by the generic
    * *"It didn't get as far as the queue"* before anybody could read it, taking
    * the link to the plans with it. **That is the entire point
    * of the surface it was added to**: the refusal names a button, and the page
@@ -371,7 +371,7 @@ describe("the add page, which is the fifth copy and was found in a browser", () 
    *
    * The page is mounted whole, and everything real runs but the auth client.
    */
-  const QUOTA = "You have added all 3 articles a free account can add. [pay-free]";
+  const QUOTA = "A free account can add 3 articles, and this account's allowance is spent. [pay-free]";
 
   it("goes on saying what the server said after the next poll succeeds", async () => {
     refused = QUOTA;

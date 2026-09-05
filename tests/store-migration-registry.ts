@@ -71,11 +71,16 @@
  * rows is a `database-integration`, not collateral. The mechanisms, all five
  * measured rather than assumed:
  *
- * - **`ledger-redirect`** — `selected()` in [`src/store/ai-calls.ts`](../src/store/ai-calls.ts)
- *   returns `fsCostStore` whenever `NODE_ENV === "test"`, whatever the flag
- *   says. Any suite that drives a request through `handleApi` therefore writes
- *   ledger rows to a file. Stage C collapses that to `export const costStore =
- *   guardedLedger`.
+ * - **`ledger-redirect`** — until 2026-09-05, `selected()` in
+ *   [`src/store/ai-calls.ts`](../src/store/ai-calls.ts) returned `fsCostStore`
+ *   whenever `NODE_ENV === "test"`, whatever the flag said, so any suite driving
+ *   a request through `handleApi` wrote ledger rows to a file. **Stage C removed
+ *   that line and nothing else about the selection**, so the mechanism now
+ *   reaches only the files that leave `SPIDERYARN_STORE` unset and take
+ *   `fsCostStore` from the `files` branch — which survives until stage F. The
+ *   twenty-two that pin the flag record into the run's private database instead,
+ *   and for them this mechanism is history rather than outstanding work; the
+ *   entries are left saying so rather than rewritten one by one.
  * - **`step-context-paths`** — `runStep` in [`src/jobs.ts`](../src/jobs.ts)
  *   calls `contextPaths(job.slug)` **unconditionally**, on every step of every
  *   job, under either store; that is `fsLocations` and therefore `dataRoot`.
@@ -442,13 +447,22 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "already, because `comments.criterion_id` and `comments.valence` are columns; the seeder is " +
       "its only filesystem reach.",
   },
+  /**
+   * **Converted by stage C on 2026-09-05, and the entry survives the conversion
+   * rather than describing it.** The witness watched this file execute a
+   * condemned function on 2026-09-03, so the completeness guard above wants an
+   * entry for it whatever it does today; `STORE_CONVERSIONS` is where the fact
+   * that it moved is recorded.
+   */
   "tests/cost-store-under-test.test.ts": {
-    category: "filesystem-adapter-behaviour",
+    category: "database-integration",
     reason:
-      "Its single assertion is that `selected()` hands back the **filesystem** ledger under the " +
-      "test harness whatever the flag says. That is the redirect stage C deletes, so this file " +
-      "dies with stage C rather than with stage G — it is the one adapter test on a different " +
-      "clock from the rest, and the plan already names its replacement.",
+      "It used to assert that `selected()` handed back the **filesystem** ledger under the test " +
+      "harness whatever the flag said, which is the redirect stage C removed. Rewritten in that " +
+      "stage to assert the thing that protects the dev ledger now — the row lands in the run's " +
+      "own private database, named, and is absent from `postgres` — and moved to the " +
+      "`private-postgres` lane, because *which* Postgres is half the claim and a selection cannot " +
+      "answer it. Nothing filesystem is left in it for stage G to take.",
   },
   "tests/data-root.test.ts": {
     category: "filesystem-adapter-behaviour",
@@ -715,10 +729,12 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "The order at the ticket — OpenAI mints, we journal, and only then does the token go out — " +
       "plus a retried report that must not become a second row. The journal is now Postgres: the " +
       "flag is pinned before any import, one article is seeded under `TEST_OWNER`, and every " +
-      "read-back is `realtimeSessionStore.find`. **The ledger deliberately did not move** — " +
-      "`selected()` in `ai-calls.ts` returns the filesystem ledger whenever `NODE_ENV` is `test`, " +
-      "so `SPIDERYARN_LEDGER` still redirects a disposable JSONL and the collapse-on-read " +
-      "assertion is unchanged; that redirect is stage C's. Two assertions were re-expressed: the " +
+      "read-back is `realtimeSessionStore.find`. **The ledger followed in stage C**, and this file " +
+      "was the one the stage-C freeze had missed: it read its rows back out of the JSONL, so " +
+      "removing the redirect turned four cases red. Its `ledger()` helper now asks `costStore` and " +
+      "scopes on the session id, and the collapse-on-read half — which was about an append-only " +
+      "file with no unique key — is covered on the store it is a fact about, by " +
+      "tests/store-ai-calls.test.ts. Two assertions were re-expressed in stage B: the " +
       "journal-write failure is provoked by a `vi.spyOn` rejection on `issue` rather than by a " +
       "path that cannot be written, and *nothing was journalled* is a row count rather than the " +
       "size of a parsed JSON object. Mutation watched red: the `is null` earliest-wins predicate " +
@@ -1597,6 +1613,22 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 3 },
   "tests/chat-spoken-route.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 4, blindSpots: 2, blocksWithoutJudgement: 4 },
+  /**
+   * **Stage C's whole cohort**, frozen before the work started from the dynamic
+   * witness crossed with `TEST_LANES`: of the twenty-seven files that reached
+   * `ai-calls-fs` at run time, this was the only one the redirect's removal
+   * could break, because it is the only one that both pinned the flag to
+   * `postgres` and lived in the lane where `DATABASE_URL` is poisoned.
+   *
+   * **The freeze was one file short, and the run is what said so.** With the
+   * line removed, `tests/live-session-routes.test.ts` went red too — four cases
+   * — because it read its ledger rows back out of a JSONL rather than out of the
+   * store. It is recorded above under stage B and its entry is not amended: the
+   * counts there are what that file carries, and this sentence is where the
+   * stage-C edit to it is written down.
+   */
+  "tests/cost-store-under-test.test.ts":
+    { date: "2026-09-05", stage: "C", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 0 },
   "tests/jobs-commit-path.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 2, blocksWithoutJudgement: 2 },
   "tests/jobs-walk.test.ts":
@@ -1869,6 +1901,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      by the same guard for the same reason. It calls `pgReady`, seeds its own
      owner and its own two tiers, and its oracle is rows it writes itself — so
      the private lane is right and nothing in it needs the shared stack. */
+  /* Stage 5's, 2026-09-05: a public article costs half a slot. It calls
+     `pgReady`, seeds its own owner and writes its own articles and ledger rows,
+     and its oracle is those rows — so the private lane is right and nothing in
+     it needs the shared stack. */
+  "tests/billing-half-units.test.ts": "private-postgres",
   "tests/billing-quota-adjustment.test.ts": "private-postgres",
   "tests/billing-quota-race.test.ts": "private-postgres",
   "tests/billing-settlement.test.ts": "private-postgres",
@@ -1919,6 +1956,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/comment-referee-mark.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
+  /* Stage C, 2026-09-05. A `unit`-lane file until the redirect it asserted
+     went away; what it asserts now is *which database* the ledger lands in,
+     and that needs one. */
+  "tests/cost-store-under-test.test.ts": "private-postgres",
   "tests/db-error-scrub.test.ts": "private-postgres",
   "tests/db-referee-criteria.test.ts": "private-postgres",
   "tests/db-schema-drift.test.ts": "private-postgres",
@@ -2350,6 +2391,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      the row. */
   "tests/billing-quota-adjustment.test.ts": {
     "0b1113b0-0000-4000-8000-00000000e3b0": { kind: "seeded" },
+  },
+  /* Stage 5's reader. `seedAuthUser` in `beforeEach`, and every row it writes —
+     the articles, the billing account, the ingest events — hangs off the
+     `auth.users` foreign key. */
+  "tests/billing-half-units.test.ts": {
+    "0b110a1f-0000-4000-8000-0000000000a1": { kind: "seeded" },
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },

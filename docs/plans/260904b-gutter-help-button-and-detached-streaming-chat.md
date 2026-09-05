@@ -672,6 +672,187 @@ flipped, and against a version missing the `font-size` that makes `65ch` mean th
 **Done:** the exactly-once and double-tap tests red first; a real press spends one model call and
 streams.
 
+#### Built — 2026-09-05 <a id="stage-3-built"></a>
+
+`help?: true` on the `draft` variant, and it is **one field because it is one decision**: the
+question is `HELP_QUESTION`, it is sent on mount without the reader seeing it, and the block's
+opening words go into the message. The first shape was `question` plus an `autoSend` flag, and it
+was wrong for a reason worth keeping — `question` is documented as text carried across and
+*deliberately not sent*, so spending from that field would have made its own doc comment false at
+one of its two call sites.
+
+**Trap 2, fixed narrowly.** `askAboutBlock` quotes only what it is handed, so the "?" passes
+`target.opening` — and the anchor stays `{ blockId }`, with no `quote`/`start`. Putting the opening
+in the *anchor* would have been the shorter fix and would draw a highlight over the first 60
+characters of the paragraph: a mark the reader never made, on words they did not choose.
+**Only for `help`**, leaving the chat button's message alone; whether *that* should also carry the
+opening is § Open, and for Greg, because Greg's own 2026-08-26 reasoning suggests it should.
+
+**Two latches, two different bugs, neither subsuming the other.** `ChatDialog` holds a ref keyed on
+the block id against one press rendering twice (StrictMode, a `target` identity that changes on
+unrelated state, a remount between the floating slot and chat mode). App holds a ref set before any
+state call against two presses rendering once — the iPad double-tap, where both taps read the same
+`chats` array and both conclude there is nothing there. A dependency-free effect clears App's after
+every commit, so the ref guards *a tick* and rendered state guards everything longer: without the
+clear, a press whose thread was cancelled would leave that paragraph's "?" dead for the session.
+
+`helpThreadFor` in `useChatAnchors.ts` — a function rather than three lines inside App, so the rules
+are somewhere a test can reach: newest first, whole-block anchors only. A conversation about a
+phrase the reader *selected* is about that phrase, so reopening it would answer a question they did
+not ask and would make the "?" quietly do nothing on any paragraph they had ever highlighted.
+
+**Trap 1 was pulled forward from stage 4, because stage 3 is what makes it reachable.** The header ✕
+called `cancelAndDiscard` during `firstAnswer` — it aborted the answer and deleted the thread. That
+was defensible while every conversation began with the reader typing and watching. The "?" makes
+"tap ✕ to get back to reading" the single most likely next gesture, and on an iPad there is no Esc
+to do it safely instead, so the button worked perfectly and did the opposite of the feature. The ✕
+is now always Close; the discard is a worded `Cancel` in the footer, shown only during
+`firstAnswer`, never beside the non-destructive `Stop`. `.chat-dialog-stop` was deleted from the
+stylesheet, having lost its only writer.
+
+Closing costs nothing, and that is the fact that makes this safe rather than merely kinder: the
+answer goes on being written and stored (`routes.ts`: *"A reader who leaves does not cancel the
+answer"*), the summary is already in the list so the paragraph keeps its count, and pressing "?"
+again reopens it.
+
+**Every assertion was watched red against a plausible wrong implementation.** Each mutation
+reddened only its own test — one of them two, which the first draft of this table wrongly claimed
+was one apiece:
+
+| mutation | test that went red |
+|---|---|
+| the dialog's latch deleted | StrictMode, **and** "target re-created with the same block" |
+| the latch made a boolean | "sends again for a different paragraph" |
+| the opening no longer passed as the quote | "puts the paragraph's opening words in the message" |
+| `helpThreadFor` keeps the first rather than the newest | "opens the newest of them" |
+| `helpThreadFor` stops excluding selection anchors | "ignores a conversation about a phrase somebody selected" |
+| auto-send keyed on `draft` rather than `help` | "sends nothing at all for an ordinary draft" |
+| header ✕ restored to `cancelAndDiscard` | "the corner ✕ closes and destroys nothing" |
+| footer `Cancel` removed | "but throwing it away is still one press, in the footer" |
+| the arrival replaces rather than folds | "keeps the conversation it just bought"; "does not resurrect a conversation deleted…" |
+| `loaded` used without `loadFailed` | "says the load failed, rather than that the conversation is gone" |
+| the panel never offers a way out of "Starting…" | "waits out the creation window, then offers a way forward" |
+| the verdict stored as a boolean rather than an id | "does not carry one conversation's verdict onto the next" |
+
+Two things went wrong in the test file itself and are worth recording. `vi.resetModules()` per case
+gave the component **a second copy of React**, which loses `IS_REACT_ACT_ENVIRONMENT` and turns
+every assertion into a failure with nothing to do with the code; one mock driven by mutable cells
+replaced it. And the launcher's `describe` originally reimplemented App's query inline — a test that
+would have gone on passing while App did something else entirely — which is why `helpThreadFor` was
+extracted and the test now calls the real thing.
+
+#### What Sol's stage 3 review changed <a id="stage-3-review"></a>
+
+He refused the commit on two, and **neither was in the button's code** — both were in the system it
+leans on, which is the argument for reviewing a stage against the whole tree rather than the diff.
+
+**1. The arriving summary list deleted what the reader did while it was in the air.**
+`useChatAnchors` fetches once on mount and replaced its array with the answer. Press "?" during that
+window and the optimistic summary goes in; the arrival, taken before it, wipes it; the next press
+finds nothing anchored to that paragraph and **buys a second answer**. The hook's header had
+described this exact race for ten days as its reason never to re-fetch — without noticing that
+*"we never re-fetch"* quietly excused the one GET it does make. `foldInLocalWrites` now folds local
+writes back in, with drops remembered separately because a deletion leaves nothing to compare
+against. `tests/help-never-spends-twice.test.tsx` holds the network open to reach it.
+
+**2. "Starting…" could never end, and kept the "?" pointed at nothing.** `starting` was
+`loaded && !thread` — which describes a *missing* thread, not a new one — so it swallowed its own
+opposite and made the "That conversation no longer exists" branch unreachable. Nobody met it while
+every conversation began with the reader typing one, because then the id had just been minted by
+that very panel. The "?" reopens from a **summary**, and a summary can be stale, so the panel
+started routing readers to ids that were not there: a spinner with no Stop, no Delete and no retry,
+and a paragraph whose "?" was dead for good.
+
+**It took four of Sol's passes and two rejected fixes to find the one that works**, and the rejected
+ones are the useful part of the record.
+
+*Attempt one:* "this panel did not mint the id, so it is gone" — and drop the summary. Wrong twice.
+`useChat.loaded` means *the request finished*, not that it succeeded, so a transient outage produced
+no threads, read as a deletion, and **erased the shortcut to a real conversation**: an outage
+performing a delete. And a panel is not the operation's lifetime — press "?", close before the
+`begin` frame, reopen from the optimistic summary, and the new panel's ref is empty while a real
+POST is still in the air, because the send deliberately outlives the unmount. Live conversations
+declared dead, for ordinary and comment-started chats as much as for the "?".
+
+*Attempt two:* the inverse — "we minted it, the load succeeded, and no row in thirty seconds,
+therefore our POST failed". Provable, and **it never runs**. `send` inserts the thread optimistically
+before the request leaves, so `!thread` is false for exactly the ids this panel minted. It passed
+its test only because the mock omitted that insert — as clean an example of
+[silent-success.md](../reusable/silent-success.md) as this repo has, and one I wrote myself while
+holding that doc in mind. Thirty seconds was wrong too: the client allows a POST 180 to open.
+
+**Provenance was the wrong question**, and so, it turned out, was certainty. Both rejected fixes
+were trying to work out *who created the id*. `OPEN_TIMEOUT_MS` — how long the client itself allows
+a send to open a conversation — settles the waiting without anyone's provenance: a successful load
+still lacking the id after three minutes is not waiting for anything, whoever minted it. The
+deadline is keyed by **thread id rather than a boolean**, because after one conversation times out a
+straight swap to another missing one renders once with the verdict still true, and that render
+condemns the second on a clock started for the first. (My own swap test missed that by swapping
+before the first deadline; Sol did not.)
+
+**But the panel still may not conclude the conversation is gone**, and this is the fourth attempt
+because I kept trying to. Three things forbid it: `useChat` makes one GET and never refreshes, so
+the snapshot is old however long you wait; a failed request can come back as a cached synthetic 200,
+so `loadFailed` is not proof of a clean read; and the client's timeout does not bound the *server*,
+which persists the thread before installing the listener that would notice the browser leaving. **A
+write that timed out has an ambiguous outcome by construction.** So nothing is dropped
+automatically. The reader is told what is actually known and given the decision:
+
+> We didn't see this conversation start, and can't tell whether it was saved.
+> **[ Forget this attempt ]**
+
+Both halves of that were rewritten after the sixth review, and the correction is the same one twice:
+say only what is performed. *"This conversation never started"* asserted the very thing the
+paragraph above says is unknowable, and *"Start over"* named an action the button does not take —
+it drops this page's shortcut and closes; pressing "?" again is what starts the replacement, and
+that now works because the stale summary was what routed every press back here.
+
+I first proposed leaving the defect alone as pre-existing chat-lifecycle work, and Sol refused that
+too, correctly: **stage 3 is what makes it permanent.** The chat button always opens a fresh draft,
+so it can never get stuck; the "?" reopens from a summary, so `?` → close before `begin` → POST
+fails → press again lands on the same endless spinner *for the life of the article*. A defect that
+existed became a dead button because of this stage, and "it was already there" does not survive
+that.
+
+Also his, and also a claim we cannot make: the failed-load line first read *"It is still there"*,
+which a failed request cannot know. It now says *"We couldn't check whether it still exists."*
+
+> **The pattern, three times in one stage.** `helpArming`, then two versions of this. Each was a
+> guard added on a plausible argument; each stood or fell on a test written to see whether it
+> actually fired. Two were deleted, and the third only survived once the evidence changed from *who
+> did this* to *how long has it been*. **A guard whose absence cannot be observed is not protection,
+> it is furniture** — and the middle one had a passing test, which is worse, because it was
+> furniture with a certificate. Its test passed only because the mock omitted the optimistic insert
+> that makes the guard unreachable in the real client.
+
+**3. And the finding that deleted code rather than adding it.** He pointed out the App-side
+double-tap latch had no test. Writing one — the real App, the real "?", two clicks in one `act`,
+counting POSTs — showed why it could not have one: *three* things stop the second press spending,
+and deleting any one leaves the count at one. So `helpArming` came out. The structure was already
+doing the work: `helpAboutBlock` only sets a draft, and the send is an effect in a `ChatDialog` that
+mounts once, so two taps before that mount collapse into one draft and one send with nothing having
+to notice. **A guard whose absence cannot be observed is a guard nobody can maintain** — and the
+plan had specified it, which is worth recording as a case of the plan being wrong rather than the
+build.
+
+Also his: the help draft rendered a composer and *"Nothing is asked until you send"* for however
+long it took the passive effect to fire, which React does not promise happens before paint — two
+frames of copy contradicting the action, now an "Asking…" state. And an assertion in
+`block-gutter.test.tsx` that could never contribute a failure, sitting behind an exact equality on
+the same value.
+
+**Accepted rather than fixed, explicitly:** `helpThreadFor` finds any whole-block chat, not a *help*
+thread, because help origin is deliberately not persisted (§ no new `ThreadKind`). So pressing "?"
+on a paragraph where the reader once used the chat button reopens that conversation instead of
+asking. Sol's finding 4, and he is right that it is a product compromise rather than the button's
+promise — it is the cheap v1, and the alternative is the fourth kind that § no-new-kind rejected for
+better reasons.
+
+The copy changed, and **stage 2's exact-string test caught it**, which is what it was put there for:
+*"Ask for help with this paragraph"* → `title` *"Ask the AI for help with this paragraph"* and
+`aria-label` *"Ask the AI for help"*. This is the one control in the gutter that spends money with
+no confirmation, so "the AI" is the word that has to be in front of the finger.
+
 ### Stage 4 — the addendum, and walking away safely
 
 - The per-turn `help: true` → the addendum in `anchorSection`. A test that the system message, the
@@ -752,6 +933,16 @@ Sol ran `tests/spine-width.test.ts`, `tests/chat-unmounted-turn.test.ts` and `te
 — 41 tests, all green — which is how finding 9's "not a gate" was established rather than argued.
 
 ## Open, and for Greg
+
+- **Should the *chat button's* first message carry the paragraph's opening words too?** Stage 3
+  makes the "?" do it, and stopped there on purpose. But the argument for it is Greg's own, written
+  down on 2026-08-26 and quoted in `chat-handoff.ts`: the id **and** the opening words, not the bare
+  id, because *"a six-character code in a text box is not something you can check you clicked
+  correctly"*. Today a chat-button press sends `About block k3m9qt:` and nothing else, so a
+  transcript reopened a week later says which paragraph only if you go and look it up. The opening
+  is already on the target and already shown above the composer; passing it costs one line. Not done
+  here because it changes a message that has been shipping for ten days, and that is a product call
+  rather than a stage 3 detail.
 
 - **The 2 × 2 pad is the visible consequence of call 2**, and it is a bigger change to the look than
   "bigger targets" sounds. Worth a glance at a screenshot after stage 1 before stages 2–4 build on it.

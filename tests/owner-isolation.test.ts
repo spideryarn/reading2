@@ -2144,6 +2144,13 @@ async function cleanListing(): Promise<void> {
     await db.delete(articleRevisions).where(eq(articleRevisions.articleId, row.article));
     await db.delete(articles).where(eq(articles.id, row.article));
   }
+  /* **And the billing anchor, which sharing an article now creates.** Since
+     2026-09-05 a public article costs half a slot, so `pgVisibilityStore.set`
+     takes the owner's `billing_accounts` lock — and creates the row if there is
+     none — before it touches the article. `billing_accounts_owner_fk` then
+     refuses the `auth.users` delete below. src/store/pg-billing.ts § *The lock
+     order*. */
+  await db.execute(sql`delete from spideryarn.billing_accounts where owner_id = ${LIST_OWNER_B}`);
   /* The second account goes last, after every row that references it. Left
      behind it would be an `auth.users` row nothing owns, which the next run's
      `on conflict do nothing` would silently reuse — harmless, and still worth

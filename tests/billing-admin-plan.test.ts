@@ -109,6 +109,9 @@ function merged(options: {
   lifetime?: number;
   inPeriod?: number;
   inFlight?: number;
+  /** How many of the charged rows resolve to a currently-public article. */
+  lifetimeShared?: number;
+  inPeriodShared?: number;
 }): AdminUser {
   const counts: UserCounts = {
     shelf: [],
@@ -124,6 +127,8 @@ function merged(options: {
         lifetime: options.lifetime ?? 0,
         inPeriod: options.inPeriod ?? 0,
         inFlight: options.inFlight ?? 0,
+        lifetimeShared: options.lifetimeShared ?? 0,
+        inPeriodShared: options.inPeriodShared ?? 0,
       },
     ],
     accounts: options.account ? new Map([[OWNER, options.account]]) : new Map(),

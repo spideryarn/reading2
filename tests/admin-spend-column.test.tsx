@@ -45,6 +45,7 @@ function user(over: Partial<AdminUser> = {}): AdminUser {
        no `billing_accounts` row is on the free tier with nothing used. */
     plan: "free",
     ingests: 0,
+    ingestsShared: 0,
     ingestLimit: 3,
     ingestWindow: "lifetime",
     ...over,

@@ -63,6 +63,23 @@ export interface TierOffer {
  * counts (`refusalFor` in src/store/pg-billing.ts). A page that counted only
  * settled successes would tell somebody they had a slot left and then watch the
  * server refuse them.
+ *
+ * ## Every number here is a whole article, and none of them is a half-unit
+ *
+ * A public article costs half (src/billing/half-units.ts), so `used` and `limit`
+ * are no longer two ends of one ratio: eight articles, six of them public, is
+ * ten half-units against a free budget of six. **No rounding rule fixes that** —
+ * `ceil(5/2)` says *"3 of 3 used"* while the wall still admits one, and `floor`
+ * says *"2 of 3"* while two and a half are gone.
+ *
+ * So the wire carries **integer counts that add up** and never a half-unit:
+ * `limit` is the allowance the website markets, `used` is how many ingests are
+ * counted against it, `sharedHalfPrice` is how many of those are cheap right
+ * now, and `atLimit` is the server's own answer to *did the wall refuse* rather
+ * than a comparison this file reconstructs. That last one is why there is a
+ * fourth field instead of a `used >= limit` here: the wall is in
+ * src/store/pg-billing.ts and a second spelling of it on the page is how a page
+ * and a route come to disagree about whether somebody may add an article.
  */
 export type ReaderPlan =
   /**
@@ -84,8 +101,42 @@ export type ReaderPlan =
    * number rather than an answer. It says it does not know.
    */
   | { readonly kind: "unknown" }
-  | { readonly kind: "free"; readonly limit: number; readonly used: number }
-  /** Had a subscription; does not have an entitled one. See the header. */
+  | {
+      readonly kind: "free";
+      readonly limit: number;
+      readonly used: number;
+      /**
+       * How many of `used` are currently public, and therefore counting half.
+       *
+       * Zero for almost everybody, and the copy says nothing about sharing when
+       * it is — a discount nobody has taken is not news.
+       */
+      readonly sharedHalfPrice: number;
+      /** The wall's own answer, not a comparison of the two numbers above. */
+      readonly atLimit: boolean;
+      /**
+       * **Sharing something this account has added would get it back under the
+       * wall** — the server's answer, and absent whenever it would not.
+       *
+       * The page said it unconditionally until 2026-09-05, on the reasoning
+       * that any private article is a private article. Two readers it was false
+       * for: the one whose charged rows all predate `ingest_events.article_id`,
+       * which is every row charged before that day and cannot be cheapened at
+       * all; and the one who has unshared their way to twelve half-units
+       * against a budget of six, where sharing everything they own still would
+       * not do it. It cannot be worked out from `used` and `sharedHalfPrice` —
+       * `sharingWouldMakeRoom` in src/store/pg-billing.ts is the query, asked
+       * only when `atLimit` is true. GPT Sol, 2026-09-05.
+       */
+      readonly sharingMakesRoom?: true;
+    }
+  /**
+   * Had a subscription; does not have an entitled one. See the header.
+   *
+   * `remaining` is a count of **further private articles**, which is exactly the
+   * wall's own answer rather than a rounded ratio — `privateHeadroom` in
+   * src/billing/half-units.ts says why the division in it is exact.
+   */
   | { readonly kind: "lapsed"; readonly limit: number; readonly remaining: number }
   | {
       readonly kind: "paid";
@@ -93,6 +144,10 @@ export type ReaderPlan =
       readonly tierName: string;
       readonly limit: number;
       readonly used: number;
+      /** As `free`'s. */
+      readonly sharedHalfPrice: number;
+      /** As `free`'s. */
+      readonly atLimit: boolean;
       /** ISO. When the allowance starts again — the renewal, not the ending. */
       readonly periodEnd: string;
       /**
@@ -365,6 +420,109 @@ export interface PlanCopy {
  * do is *import* those strings: they are refusals, written to be read after
  * something failed, and these are a read-out of a state that is usually fine.
  */
+/**
+ * *"One of them is public"* / *"Five of them are public"* — a count and the verb
+ * that agrees with it.
+ *
+ * Small enough to inline twice and not small enough to get right twice: the
+ * singular is the half a copy-paste loses.
+ */
+function sharedClause(shared: number): string {
+  return shared === 1 ? "One of them is public" : `${shared} of them are public`;
+}
+
+/**
+ * **Is `used of limit` still a ratio?**
+ *
+ * It is one only while every counted ingest costs a whole article's worth *and*
+ * there are no more of them than the allowance sells. The second half is the one
+ * that was missing until 2026-09-05: unshare six public articles on a free
+ * account and `sharedHalfPrice` goes back to zero while `used` stays at six, so
+ * the page printed *"6 of 3 articles used"* — the exact rendering this file's
+ * header forbids, arrived at from the other direction. GPT Sol found it.
+ */
+function isRatio(plan: { used: number; limit: number; sharedHalfPrice: number }): boolean {
+  return plan.sharedHalfPrice === 0 && plan.used <= plan.limit;
+}
+
+/**
+ * **More articles than the allowance sells, and none of them public now.**
+ *
+ * The mechanism rather than the history: we know the discount is what let them
+ * be added, and we do not know from these three numbers which ones were public
+ * when. Nothing here divides — see the header.
+ */
+function nonePublicNow(limit: number): string {
+  return (
+    `A public article counts as half an article, which is how more than ${limit} can be added. ` +
+    "None of them is public now, so each counts in full. "
+  );
+}
+
+/**
+ * What the count and the allowance mean when they are not a ratio — the shared
+ * clause, plus the *"that is how they fit"* half **only when they do fit**.
+ *
+ * They stop fitting the moment somebody unshares: five articles with one still
+ * public is nine half-units against a budget of six, and *"that is how 5 fit an
+ * allowance of 3"* is then a sentence about arithmetic that did not happen.
+ */
+function howTheyStand(plan: { used: number; limit: number; sharedHalfPrice: number }): string {
+  if (plan.sharedHalfPrice === 0) return nonePublicNow(plan.limit);
+  /* The same `× 2` `/admin/users` does, and for the same reason: the enforcement
+     budget is in half-units, the page is handed integer counts, and neither end
+     has a better claim on the multiplication than the other. */
+  const fits = plan.used * 2 - plan.sharedHalfPrice <= plan.limit * 2;
+  return (
+    `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each` +
+    (fits ? ` — that is how ${plan.used} fit an allowance of ${plan.limit}. ` : ". ")
+  );
+}
+
+/**
+ * The free account's two shapes, lifted out of `describePlan` so that the switch
+ * stays a switch — this is the only arm with three decisions in it.
+ */
+function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
+  /* **The way out of a spent allowance, and it is conditional.** Offering
+     sharing to somebody who has already shared everything — or whose rows all
+     predate the discount, or who is so far over that sharing everything would
+     not do it — is the false offer `ingestQuotaReached`'s conditional sentence
+     exists to avoid, one surface along. The server answers it; this file must
+     not guess (`sharingMakesRoom`). */
+  const wayOut = plan.sharingMakesRoom
+    ? "Sharing more of what you have added makes room, and so does a subscription. "
+    : "A subscription is what adds more. ";
+  /* **Two headlines, because one ratio cannot be true of both accounts.** While
+     `used` and `limit` are the two ends of one ratio this is the sentence it has
+     always been. Once they are not — six public articles inside an allowance of
+     three, or six unshared ones outside it — the second form states the count
+     and the allowance as two facts rather than as a fraction that would read as
+     arithmetic going wrong. Neither form divides anything: see the header. */
+  if (isRatio(plan)) {
+    return {
+      headline: `Free — ${plan.used} of ${plan.limit} articles used`,
+      detail: plan.atLimit
+        ? "That is the whole free allowance, which is a lifetime one rather than a monthly " +
+          `one. ${wayOut}Everything you have added stays exactly where it is, and reading ` +
+          "is never limited."
+        : `The free allowance is ${plan.limit} articles for the lifetime of the account, ` +
+          "not per month. Reading is never limited.",
+    };
+  }
+  return {
+    headline: `Free — ${plan.used} articles added, on an allowance of ${plan.limit}`,
+    detail:
+      howTheyStand(plan) +
+      (plan.atLimit
+        ? "The allowance is a lifetime one rather than a monthly one, and it is spent. " +
+          wayOut +
+          "Everything you have added stays where it is, and reading is never limited."
+        : "The allowance is for the lifetime of the account rather than per month. " +
+          "Reading is never limited."),
+  };
+}
+
 export function describePlan(plan: ReaderPlan): PlanCopy {
   switch (plan.kind) {
     case "off":
@@ -387,16 +545,7 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
           "usually sorts itself out within a minute — reload the page to look again.",
       };
     case "free":
-      return {
-        headline: `Free — ${plan.used} of ${plan.limit} articles used`,
-        detail:
-          plan.used >= plan.limit
-            ? "That is the whole free allowance, which is a lifetime one rather than a monthly " +
-              "one. Everything you have added stays exactly where it is, and reading is never " +
-              "limited — a subscription is what adds more."
-            : `The free allowance is ${plan.limit} articles for the lifetime of the account, not ` +
-              "per month. Reading is never limited.",
-      };
+      return freeCopy(plan);
     case "lapsed":
       /* **No `used`, and no ratio wider than the limit.** See the header: this
          is the one rendering the policy would otherwise make look like a bug. */
@@ -420,10 +569,21 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
          different dates asked of two different fields, so a plan that ends
          before its period does cannot be described as renewing. */
       const ends = plan.endsAt === null ? null : readableDate(plan.endsAt);
+      /* The same two shapes as `free`, and for the same reason — including the
+         account that unshared everything, whose forty against an allowance of
+         twenty is not a ratio either. */
+      const shared = isRatio(plan)
+        ? ""
+        : plan.sharedHalfPrice === 0
+          ? nonePublicNow(plan.limit)
+          : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `;
       return {
-        headline: `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`,
+        headline: isRatio(plan)
+          ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`
+          : `${plan.tierName} — ${plan.used} articles this month, on an allowance of ${plan.limit}`,
         detail:
-          plan.endsAt !== null
+          shared +
+          (plan.endsAt !== null
             ? /* **Says the date, and then says what does not change.** The
                  promise this product makes is that reading what you have
                  already added is never gated (docs/project/vision.md), so the
@@ -431,7 +591,7 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
               `Your plan ends on ${ends ?? "the end of the period"}, and the account then goes ` +
               "back to the free allowance. Everything you have added stays where it is, and " +
               "reading is never limited."
-            : `The allowance starts again on ${readableDate(plan.periodEnd) ?? "your renewal date"}.`,
+            : `The allowance starts again on ${readableDate(plan.periodEnd) ?? "your renewal date"}.`),
       };
     }
   }

@@ -1,0 +1,1 @@
+Yes — the issue is closed. The wording no longer overclaims, and the button accurately names its action. No other findings in the changed lines. Commit.

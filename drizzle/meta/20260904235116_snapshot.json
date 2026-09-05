@@ -1,5 +1,5 @@
 {
-  "id": "0e8f6b79-bd3c-4c23-b124-94e596a4fbb3",
+  "id": "dcdc31c3-e72d-4a18-af0c-338ed323e810",
   "prevId": "ff69ce8c-9e66-42c3-953d-4886f68a0d29",
   "version": "7",
   "dialect": "postgresql",
@@ -1858,7 +1858,7 @@
       "checkConstraints": {
         "checkpoints_namespace": {
           "name": "checkpoints_namespace",
-          "value": "\"spideryarn\".\"checkpoints\".\"namespace\" in ('hierarchy-deepen','hierarchy-labels','hierarchy-structure','pdf-chunk')"
+          "value": "\"spideryarn\".\"checkpoints\".\"namespace\" in ('hierarchy-labels','hierarchy-structure','pdf-chunk')"
         },
         "checkpoints_key_format": {
           "name": "checkpoints_key_format",
@@ -2408,6 +2408,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "slug": {
           "name": "slug",
           "type": "text",
@@ -2438,7 +2444,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "ingest_events_article_id_articles_id_fk": {
+          "name": "ingest_events_article_id_articles_id_fk",
+          "tableFrom": "ingest_events",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "ingest_events_id_owner": {

@@ -203,7 +203,7 @@ import { navPlan, useArrowNav } from "./keynav.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
-import { anchored, countByBlock, useChatAnchors } from "./useChatAnchors.js";
+import { anchored, countByBlock, helpThreadFor, useChatAnchors } from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
 import { articleWaitTitle, pageTitle, useDocumentTitle } from "./page-title.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -2516,6 +2516,81 @@ function Reader({
     [blockText, setNote, setThread],
   );
 
+  /**
+   * **One press, one model call, and the reader keeps reading.**
+   *
+   * The "?" beside a paragraph. Everything about it is the same conversation
+   * the chat button starts — same anchor, same thread, no fourth `ThreadKind`
+   * (the plan says why at length) — except that nobody stops to type: the
+   * question is `HELP_QUESTION` and `ChatDialog` sends it on mount.
+   *
+   * ## Pressing it twice must not cost twice, and there are two ways it can
+   *
+   * **A conversation that already exists is opened, not repeated.** Pressing
+   * "?" on a paragraph you asked about ten minutes ago should show you the
+   * answer you already bought. Only whole-block anchors count: a conversation
+   * about a phrase you *selected* is about that phrase, and reopening it for
+   * somebody asking about the paragraph would answer a question they did not
+   * ask. The newest wins, on the same reasoning — it is the one whose context
+   * is closest to where they are now.
+   *
+   * **And two taps are one press without a latch here, because the send does
+   * not happen here.** This function only sets a draft; `ChatDialog` mounts on
+   * it and its effect is what spends. So two taps that both land before that
+   * mount collapse into one draft and one send, and two taps that straddle it
+   * are caught by the dialog's own ref — the structure does the work, not a
+   * guard.
+   *
+   * There *was* a `helpArming` ref here, added against the iPad double-tap on
+   * the reasoning that two taps in one tick both read the same `chats` array.
+   * It came out on 2026-09-05, when GPT Sol pointed out it was untested, and
+   * testing it showed why: with the real App mounted and the "?" clicked twice
+   * inside one `act`, the POST count stays at one with the ref deleted, and
+   * with the reopen above deleted, and with the dialog's latch deleted — any
+   * two of the three cover it. A guard whose absence cannot be observed is a
+   * guard nobody can maintain, so the honest version is the two that a test can
+   * redden. `tests/public-network-trace.test.tsx` § spends once when the "?" is
+   * double-tapped.
+   *
+   * ## What this deliberately does not do
+   *
+   * **A press before the summaries have arrived mints a new conversation even
+   * if one exists.** `chatSummaries` is a separate fetch from the article, and
+   * `chatAnchors.loaded` exists precisely because *"no conversation with this
+   * id" and "the list has not arrived" are the same state without it* — so
+   * during that window `helpThreadFor` cannot tell them apart either.
+   *
+   * Left alone on purpose, and it is smaller than it was: the arriving list no
+   * longer *deletes* what the reader did while it was in the air
+   * (`foldInLocalWrites` in useChatAnchors.ts), which was the version of this
+   * that actually cost money. What remains is that a press in the first few
+   * hundred milliseconds cannot see a conversation stored on a previous visit.
+   * Refusing the press would give a dead button on a page that looks ready;
+   * queueing it adds state whose only job is a race nobody has hit. The cost
+   * when it happens is a second conversation about a paragraph — which is what
+   * pressing "?" and forgetting you had asked already does anyway.
+   */
+  const helpAboutBlock = useCallback(
+    (blockId: BlockId) => {
+      const existing = helpThreadFor(chatSummaries, blockId);
+      if (existing) {
+        setChatDraft(null);
+        void setNote(null);
+        void setThread(existing.id);
+        return;
+      }
+      void setNote(null);
+      void setThread(null);
+      setChatDraft({
+        kind: "draft",
+        anchor: { blockId },
+        opening: blockText.get(blockId) ?? "",
+        help: true,
+      });
+    },
+    [blockText, chatSummaries, setNote, setThread],
+  );
+
   const selectProse = useCallback(
     (anchor: { blockId: BlockId; quote: string; start: number } | null) => {
       if (!anchor) return;
@@ -2884,7 +2959,7 @@ function Reader({
            docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md
            § Stage 3. Gated on `owner` for the reason above; the two doors are
            one capability. */
-        onHelp={owner ? chatAboutBlock : undefined}
+        onHelp={owner ? helpAboutBlock : undefined}
         terms={termSelections}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}

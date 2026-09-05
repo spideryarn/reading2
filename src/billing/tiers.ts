@@ -31,6 +31,8 @@
 /* The wire's own union, over the database's row type. One set of arms, written
    where the browser can read it — see `Purchase` for why it is a parameter. */
 import type { Purchase, SwitchFrom } from "../billing-plan.js";
+import { articles } from "./half-units.js";
+import type { Articles } from "./half-units.js";
 import type { QuotaRules } from "./quota-adjustment.js";
 import type { ChoiceRules } from "./subscription.js";
 
@@ -70,17 +72,17 @@ export interface TierRow {
  * code handled.
  */
 export type Entitlement =
-  | { readonly tier: "free"; readonly limit: number }
+  | { readonly tier: "free"; readonly limit: Articles }
   | {
       readonly tier: "paid";
       readonly tierId: TierId;
-      readonly limit: number;
+      readonly limit: Articles;
       readonly periodStart: Date;
       readonly periodEnd: Date;
     };
 
 /** Nobody has paid, or nobody could be identified. Never an error — it is a tier. */
-export const FREE: Entitlement = { tier: "free", limit: FREE_LIFETIME_INGESTS };
+export const FREE: Entitlement = { tier: "free", limit: articles(FREE_LIFETIME_INGESTS) };
 
 /**
  * The Stripe subscription statuses that carry entitlement.
@@ -292,8 +294,15 @@ export function choiceRules(tiers: readonly TierRow[], now: Date): ChoiceRules {
  * `tierForPrice` matches retired tiers too, which is the whole point of retiring
  * being a flag rather than a delete.
  */
-function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) => number | null {
-  return (priceId) => tierForPrice(priceId, tiers)?.ingestsPerPeriod ?? null;
+function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) => Articles | null {
+  /* **The boundary where a tier row becomes a count of articles**, and one of
+     the four there are — see src/billing/half-units.ts. Everything downstream of
+     it, the stored delta and the clamp included, stays in that unit until
+     `budgetFor` at the admission seam. */
+  return (priceId) => {
+    const allowance = tierForPrice(priceId, tiers)?.ingestsPerPeriod;
+    return allowance === undefined ? null : articles(allowance);
+  };
 }
 
 /**
@@ -319,9 +328,11 @@ function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) 
 export function quotaRules(tiers: readonly TierRow[]): QuotaRules {
   return {
     allowanceFor: allowanceForPrice(tiers),
-    maxAllowance: tiers.reduce(
-      (most, tier) => (tier.stripePriceId === null ? most : Math.max(most, tier.ingestsPerPeriod)),
-      0,
+    maxAllowance: articles(
+      tiers.reduce(
+        (most, tier) => (tier.stripePriceId === null ? most : Math.max(most, tier.ingestsPerPeriod)),
+        0,
+      ),
     ),
   };
 }
@@ -331,7 +342,7 @@ export function entitlementForTier(tier: TierRow, period: { start: Date; end: Da
   return {
     tier: "paid",
     tierId: tier.id,
-    limit: tier.ingestsPerPeriod,
+    limit: articles(tier.ingestsPerPeriod),
     periodStart: period.start,
     periodEnd: period.end,
   };

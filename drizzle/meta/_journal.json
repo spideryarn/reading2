@@ -495,8 +495,15 @@
     {
       "idx": 70,
       "version": "7",
-      "when": 1788573961145,
-      "tag": "20260905020601_checkpoints_hierarchy_deepen",
+      "when": 1788565876280,
+      "tag": "20260904235116_ingest_events_article_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1788578139327,
+      "tag": "20260905031539_checkpoints_hierarchy_deepen",
       "breakpoints": true
     }
   ]

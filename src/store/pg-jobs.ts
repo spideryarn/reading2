@@ -71,7 +71,7 @@ import { getDb } from "../db/client.js";
 import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
-import { releaseReservations, settleReservation } from "./pg-billing.js";
+import { RELEASED, releaseReservations, settleReservation } from "./pg-billing.js";
 import { jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
@@ -656,7 +656,7 @@ async function settlingIfTerminal(transition: (tx: Tx) => Promise<Job>): Promise
         .from(jobs)
         .where(eq(jobs.id, after.id))
         .limit(1);
-      await settleReservation(tx, row?.ingestEventId ?? null, "released");
+      await settleReservation(tx, row?.ingestEventId ?? null, RELEASED);
       return after;
     },
     READ_COMMITTED,
@@ -1390,7 +1390,7 @@ const rawPgJobStore: JobStore = {
          value the database actually settled on. The asking branch comes back
          `running` and releases nothing. */
       if (row.status === "cancelled") {
-        await settleReservation(tx, row.ingestEventId, "released");
+        await settleReservation(tx, row.ingestEventId, RELEASED);
       }
       return toJob(row);
     }, READ_COMMITTED);

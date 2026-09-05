@@ -89,11 +89,117 @@ describe("the lapsed plan, which is the one that must not read as a bug", () => 
 
 describe("the other plan states", () => {
   it("counts a free account against its lifetime allowance, and says lifetime", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 1 });
+    const words = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, atLimit: false });
     expect(words).toContain("1 of 3");
     /* The word that stops a reader waiting for the 1st of the month. */
     expect(words).toMatch(/lifetime/i);
     expect(words).not.toMatch(/this month/i);
+  });
+
+  /**
+   * **A ratio is only true while one ingest costs one article's worth.** Once a
+   * public article counts half, eight articles can sit inside an allowance of
+   * three — and *"8 of 3 used"* reads as arithmetic going wrong, which is the
+   * exact rendering this file's header exists to forbid on the lapsed arm.
+   *
+   * There is no rounding that fixes it: `ceil(5/2)` says three of three while
+   * the wall still admits one, and `floor` says two of three while two and a
+   * half are gone. So the second form states the count and the allowance as two
+   * facts rather than as a fraction, and nothing on either path divides.
+   */
+  it("stops printing a ratio once some of the articles are public", () => {
+    const words = rendered({
+      kind: "free",
+      limit: 3,
+      used: 6,
+      sharedHalfPrice: 6,
+      atLimit: true,
+    });
+    expect(words).not.toContain("6 of 3");
+    expect(words).toContain("6 articles added");
+    expect(words).toContain("allowance of 3");
+    expect(words).toContain("6 of them are public");
+    /* **No fraction is ever printed** — Greg's rule, and the reason the whole
+       thing is counted in half-units. The words "half an article" are the
+       explanation and are not a fraction; `2.5` and `½` are. */
+    expect(words).not.toMatch(/½|\d+\.5|\d+\s*\/\s*2/);
+    /* And with everything already shared, it must not offer sharing as the way
+       out — the false offer, one surface along from `ingestQuotaReached`. */
+    expect(words).not.toContain("Sharing more");
+  });
+
+  it("offers sharing to somebody at the wall who still has private articles", () => {
+    const words = rendered({
+      kind: "free",
+      limit: 3,
+      used: 4,
+      sharedHalfPrice: 2,
+      atLimit: true,
+      /* **The server's answer, not this file's.** Whether sharing would make
+         room cannot be worked out from `used` and `sharedHalfPrice` — a charged
+         row that predates `ingest_events.article_id` cannot be cheapened at
+         all — so the page is told rather than guessing. */
+      sharingMakesRoom: true,
+    });
+    expect(words).toContain("Sharing more");
+  });
+
+  /**
+   * **The offer is silent without it**, which is the half that matters: the page
+   * said *"Sharing more … makes room"* whenever any private article existed, so
+   * every reader whose charged rows predate the discount — which is every row
+   * charged before 2026-09-05 — was told a way out that does not exist. GPT Sol,
+   * 2026-09-05.
+   */
+  it("says nothing about sharing when the server did not say it would help", () => {
+    for (const plan of [
+      { used: 4, sharedHalfPrice: 2 },
+      { used: 3, sharedHalfPrice: 0 },
+    ] as const) {
+      const words = rendered({ kind: "free", limit: 3, atLimit: true, ...plan });
+      expect(words).not.toContain("Sharing more");
+      expect(words).toContain("A subscription is what adds more");
+    }
+  });
+
+  /**
+   * **The ratio comes back the moment everything is unshared, and it must not.**
+   *
+   * Add six articles, sharing each to reach the permitted six-of-six, then make
+   * them all private again: `used` is 6, `sharedHalfPrice` is 0, and the old
+   * condition — *nothing shared* — printed *"6 of 3 articles used"*, the exact
+   * rendering this file's header forbids. GPT Sol, 2026-09-05.
+   */
+  it("stops printing a ratio when the count is larger than the allowance", () => {
+    const words = rendered({ kind: "free", limit: 3, used: 6, sharedHalfPrice: 0, atLimit: true });
+    expect(words).not.toContain("6 of 3");
+    expect(words).toContain("6 articles added");
+    expect(words).toContain("allowance of 3");
+    /* And it explains the count rather than leaving it looking like a fault. */
+    expect(words).toContain("None of them is public now");
+    expect(words).not.toMatch(/½|\d+\.5|\d+\s*\/\s*2/);
+  });
+
+  /**
+   * **And it must not say they "fit" when they do not.** Five articles with one
+   * still public is nine half-units against a budget of six: over the wall, not
+   * inside it.
+   */
+  it("does not claim a count fits an allowance it is over", () => {
+    const words = rendered({ kind: "free", limit: 3, used: 5, sharedHalfPrice: 1, atLimit: true });
+    expect(words).not.toContain("fit an allowance");
+    expect(words).toContain("One of them is public");
+    /* And the case that does fit still says so. */
+    expect(rendered({ kind: "free", limit: 3, used: 4, sharedHalfPrice: 2, atLimit: true })).toContain(
+      "that is how 4 fit an allowance of 3",
+    );
+  });
+
+  it("keeps the plain ratio while nothing is shared", () => {
+    const words = rendered({ kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, atLimit: true });
+    expect(words).toContain("3 of 3");
+    /* And says nothing about sharing: a discount nobody has taken is not news. */
+    expect(words).not.toMatch(/public/i);
   });
 
   it("names the tier, the month's count and the renewal date for a paid one", () => {
@@ -103,6 +209,8 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
+      sharedHalfPrice: 0,
+      atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: null,
     });
@@ -110,6 +218,24 @@ describe("the other plan states", () => {
     expect(words).toContain("3 of 20");
     expect(words).toContain("3 October 2026");
     expect(words).toMatch(/starts again/i);
+  });
+
+  /** The same fault on the paid arm: forty private articles against Reader's twenty. */
+  it("stops printing a ratio on a paid plan whose count is over the allowance", () => {
+    const words = rendered({
+      kind: "paid",
+      tierId: "reader",
+      tierName: "Spideryarn Reader",
+      limit: 20,
+      used: 40,
+      sharedHalfPrice: 0,
+      atLimit: true,
+      periodEnd: "2026-10-03T11:22:33.000Z",
+      endsAt: null,
+    });
+    expect(words).not.toContain("40 of 20");
+    expect(words).toContain("40 articles this month, on an allowance of 20");
+    expect(words).toContain("None of them is public now");
   });
 
   it("does not say a cancelled subscription renews — it names the day it ends", () => {
@@ -123,6 +249,8 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
+      sharedHalfPrice: 0,
+      atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-10-03T11:22:33.000Z",
     });
@@ -149,6 +277,8 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
+      sharedHalfPrice: 0,
+      atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-11-17T09:00:00.000Z",
     });

@@ -143,6 +143,12 @@ function quotaRefusal(ownerId: string, refused: Refused): Error {
       limit: refused.limit,
       ...(refused.resetAt ? { resetAt: refused.resetAt } : {}),
       ...(refused.lapsed ? { lapsed: true } : {}),
+      /* **Spread only when the wall computed one**, like the two above: absent
+         means *sharing would not make room*, and a `0` would read as a number
+         the sentence could be built from. */
+      ...(refused.shareToMakeRoom === undefined
+        ? {}
+        : { shareToMakeRoom: refused.shareToMakeRoom }),
     }).message,
   );
 }

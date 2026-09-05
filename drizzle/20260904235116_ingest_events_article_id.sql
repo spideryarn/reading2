@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."ingest_events" ADD COLUMN "article_id" uuid;--> statement-breakpoint
+ALTER TABLE "spideryarn"."ingest_events" ADD CONSTRAINT "ingest_events_article_id_articles_id_fk" FOREIGN KEY ("article_id") REFERENCES "spideryarn"."articles"("id") ON DELETE set null ON UPDATE no action;

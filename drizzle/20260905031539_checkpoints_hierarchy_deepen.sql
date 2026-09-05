@@ -11,10 +11,14 @@
 --
 -- Widening a CHECK is a drop and a re-add: Postgres has no ALTER for the
 -- expression. Purely additive — no existing row can violate the wider rule, so
--- there is nothing to migrate and nothing for this to refuse. The list here is
--- the second copy of `CheckpointNamespace` in src/store/checkpoints.ts, and it
--- is generated from `src/db/schema.ts`, so the two cannot drift; the two that
--- CAN drift are the union and the schema, and since 2026-09-05
--- tests/db-schema.test.ts inserts a row under every name to prove they have not.
+-- there is nothing to migrate and nothing for this to refuse.
+--
+-- Regenerated 2026-09-05 after merging origin/dev. The first cut of this
+-- migration was generated before `20260904235116_ingest_events_article_id` was
+-- in the chain, so its snapshot did not know about `ingest_events.article_id`
+-- and the next `drizzle-kit generate` would have diffed against it and tried to
+-- re-add that column. A migration's snapshot is a picture of the whole schema at
+-- that point in the chain, not of the table it touches — so a migration written
+-- on a branch has to be regenerated after the merge, not just replayed.
 ALTER TABLE "spideryarn"."checkpoints" DROP CONSTRAINT "checkpoints_namespace";--> statement-breakpoint
 ALTER TABLE "spideryarn"."checkpoints" ADD CONSTRAINT "checkpoints_namespace" CHECK ("spideryarn"."checkpoints"."namespace" in ('hierarchy-deepen','hierarchy-labels','hierarchy-structure','pdf-chunk'));
