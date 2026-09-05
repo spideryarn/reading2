@@ -116,6 +116,11 @@ Product calls arbitrated by Fable, 2026-09-05, except where marked as Greg's.
    error needs a home. That keeps both of those where they are rather than moving them into the
    Dock, which is the follow-up if the inconsistency turns out to grate.
 
+   **Revisited and reversed the same day**, after measuring it: see § Stage 4, abandoned. The
+   follow-up named in the last sentence turned out to be the *prerequisite* rather than the
+   follow-up, and is now [260905g](260905g-move-the-wordmark-and-feedback-button-into-the-dock.md).
+   Greg chose that over both keeping the strip and dropping it with the corners patched.
+
 ## Stages
 
 Each ends with `npm test`, `npm run typecheck` and `npm run check` green, a browser pass at 1440×900
@@ -343,7 +348,39 @@ and pressing ← / → visibly moves the aim including onto the prose.
   unitless zero in a `calc` sum with a length makes the whole declaration invalid — which would have
   dropped every gist's sticky `top` silently.
 
-### Stage 4 — the bar disappears when it has nothing in it
+### Stage 4 — the bar disappears when it has nothing in it — **abandoned**
+
+**Not built. Superseded by [260905g](260905g-move-the-wordmark-and-feedback-button-into-the-dock.md),
+Greg's call, 2026-09-05**, having measured what it would actually buy. This section is kept as
+written, below the reasoning, because the *next* attempt needs to know why the obvious version does
+not work.
+
+Decision 8 above records Greg choosing this over a blank strip. He chose it before anyone had
+measured it, and the measurement changed the answer, so it went back to him rather than being
+quietly kept or quietly dropped.
+
+**What killed it.** `.controls` is not only a bar: it is what holds the wordmark and the Feedback
+button off the article. Both are `position: fixed` in the top corners at `height: var(--bar-h)`, and
+neither reserves its own space — the bars reserve it for them, through padding
+([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) § The bars have to reserve the space).
+Remove the bar and prose scrolls up behind two controls with no background of their own.
+
+Where the 44px would have landed, worked through with Fable: **nothing** on a phone (the bar already
+leaves on scroll), **nothing** in Hierarchy (the pills keep it), **nothing** in a band mode (the band
+sits at `--bar-bottom` and you would pad it straight back), a genuine win in Plain above ~1080px, and
+**worse** between 732 and 1080px, where the centred column reaches the left edge and the wordmark
+lands on the top line of prose.
+
+And the cost nobody had priced: **`commentError` puts the bar back**, so a comment-transport hiccup
+would slide the spine, the band and every sticky gist 44px in a 180ms animation. A layout that jumps
+on an error path is worse than a strip that is always there.
+
+So the real answer is to move the two corner controls into the Dock, after which this stage is free
+and honest. That is 260905g.
+
+---
+
+*As originally written:*
 
 Render `.controls` only when it has content.
 
