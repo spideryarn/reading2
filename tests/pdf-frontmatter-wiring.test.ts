@@ -7,10 +7,17 @@
  *
  * 1. an accepted title outranks the ladder, and an accepted byline reaches
  *    `meta.byline` — which no PDF has ever had;
- * 2. hiding happens **before** `mendSeamHyphens`, so the prose either side of a
- *    hidden line stops being joined to it *and does not itself go missing*.
- *    The Elsevier paper is the case: `Available online 26 January 2024` renders
- *    joined onto the article paragraph that follows it (GPT Sol, 2026-09-05);
+ * 2. hiding happens **before the render**, so the prose either side of a hidden
+ *    line stops being joined to it *and does not itself go missing*. The
+ *    Elsevier paper is the case: `Available online 26 January 2024` renders
+ *    joined onto the article paragraph that follows it.
+ *
+ *    **What this file does not prove**, and an earlier version of this comment
+ *    claimed: that hiding must precede `mendSeamHyphens` specifically. That
+ *    function only acts across a page boundary, both records here are on page 1,
+ *    and GPT Sol reproduced identical output with the two operations reversed
+ *    (2026-09-05). Production keeps the safe order for consistency — see
+ *    `runPdfExtract` — and nobody has built the case that would tell them apart;
  * 3. none of it touches the score. `recall`, `pagesChecked` and the quality
  *    notes are about what the transcription model wrote, and this pass runs
  *    after they are settled.
@@ -86,6 +93,7 @@ function stubReader(pages: { page: number; text: string }[]): PdfReader {
 
 const frontMatterSaying = (answer: FrontMatterAnswer, onAsk?: () => void): FrontMatterReader => ({
   id: "test/front",
+  usage: () => ({ input: 0, output: 0 }),
   async ask() {
     onAsk?.();
     return answer;
@@ -172,11 +180,41 @@ describe("the front-matter pass inside the stage", () => {
   it("falls back to the ladder when the pass fails, rather than failing the article", async () => {
     const result = await run({
       id: "test/broken",
+      usage: () => ({ input: 0, output: 0 }),
       async ask() {
         throw new Error("the provider refused");
       },
     });
     expect(result.meta.title).toBe("Progress in Biophysics and Molecular Biology");
+  });
+
+  it("lets an abort through even when the pass answered perfectly well", async () => {
+    /* **The shape that got past the first version.** The caller checked
+       `signal.aborted` only in its `catch`, so a reader that noticed the abort
+       and *succeeded anyway* — a cached answer, a request already in flight, a
+       stub — had its answer applied and the article published with
+       `aborted === true`. The one path that got through was the one where
+       nothing went wrong. Reproduced by GPT Sol, 2026-09-05. */
+    const controller = new AbortController();
+    const bytes = new Uint8Array(await readFile(EASY));
+    const pass = await pass0(bytes);
+    await expect(
+      runPdfExtract({
+        bytes,
+        slug: "paper",
+        checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
+        reader: stubReader(pass.pages),
+        signal: controller.signal,
+        frontMatter: {
+          id: "test/aborts-then-succeeds",
+          usage: () => ({ input: 0, output: 0 }),
+          async ask() {
+            controller.abort();
+            return { titleIds: ["p1-r3"], bylineIds: [], publisherIds: [] };
+          },
+        },
+      }),
+    ).rejects.toThrow();
   });
 
   it("lets an abort through rather than quietly publishing a worse title", async () => {
@@ -192,6 +230,7 @@ describe("the front-matter pass inside the stage", () => {
         signal: controller.signal,
         frontMatter: {
           id: "test/aborting",
+          usage: () => ({ input: 0, output: 0 }),
           async ask() {
             controller.abort();
             throw new Error("aborted");

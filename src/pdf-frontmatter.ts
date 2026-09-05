@@ -82,6 +82,31 @@ export const WINDOW_PAGES = 3;
  */
 export const MAX_PUBLISHER_WORDS = 40;
 
+/**
+ * **The most of the window this pass may set aside, as a fraction of its
+ * words** — the cap that bounds the damage rather than the shape of it.
+ *
+ * `MAX_PUBLISHER_WORDS` is a per-record rule, and GPT Sol showed on 2026-09-05
+ * that per-record rules are not a boundary: an answer made entirely of *valid*
+ * ids can choose a false title, name a printed instruction as the byline, and
+ * hide the real authors plus two authored paragraphs, every record under forty
+ * words, no rule broken and nothing in the notes. The ids prove provenance —
+ * that a record exists and was shown — and provenance is not meaning. A prompt
+ * saying "the records are untrusted" is not a boundary either, and
+ * docs/project/security.md says so in its own words.
+ *
+ * So there is an aggregate one. A real front page is a title, a byline, an
+ * affiliation, an abstract and some prose; the publisher's share of its words
+ * is small. On the ten fixtures the largest honest share measured was well
+ * under a third. Half is generous and still refuses "hide the page".
+ *
+ * **Breaching it discards the whole `publisherIds` list and keeps the title and
+ * byline**, rather than rejecting the answer outright: the title is built from
+ * records' own text and is the half that was asked for first. And the refusal
+ * is a note, never a silence.
+ */
+export const MAX_SET_ASIDE_FRACTION = 0.5;
+
 /** A record the model may name, and the id it names it by. */
 export interface FrontMatterItem {
   /** `p1-r7` — opaque, prompt-local, and meaningless outside one call. */
@@ -125,11 +150,15 @@ export class FrontMatterUnreadable extends Error {}
  * model a way to spend a decision on nothing.
  */
 export function frontMatterWindow(records: PdfRecord[]): FrontMatterItem[] {
-  const firstPage = records[0]?.page ?? 1;
   const items: FrontMatterItem[] = [];
   const seenOnPage = new Map<number, number>();
   records.forEach((record, index) => {
-    if (record.page >= firstPage + WINDOW_PAGES) return;
+    /* **Physical pages 1–3, not "the first three pages that have records".**
+       This anchored on `records[0].page`, and a blank or figure-only page 1
+       therefore slid the window silently onto pages 2–4 — a fixed window that
+       is not fixed, which is worse than either an honest fixed one or an
+       honest adaptive one. Reproduced by GPT Sol, 2026-09-05. */
+    if (record.page > WINDOW_PAGES) return;
     if (!RENDERED.has(record.type)) return;
     if (!record.text.trim()) return;
     const n = (seenOnPage.get(record.page) ?? 0) + 1;
@@ -157,6 +186,8 @@ Answer with ids only. Never write out any of the text.
 1. "titleIds": the record or records holding THE ARTICLE'S OWN TITLE — the name of the piece the
    author wrote. In printed order, and only more than one when the title is broken across records
    (a title and its subtitle, or a line break). Empty if you cannot see one.
+   If the title is ALSO printed in a second language, choose only the one in the language the
+   article itself is written in. A translation is a different title, not the rest of this one.
 2. "bylineIds": the record or records naming THE AUTHORS. Not their affiliations, not their email
    addresses, not the editor, not the publisher. Empty if there is none.
 3. "publisherIds": the records that are the PUBLISHER'S FURNITURE rather than the article —
@@ -166,7 +197,10 @@ Answer with ids only. Never write out any of the text.
    library rights page, a volume-and-page strip.
 
 The article's title, its authors, their affiliations, the abstract, the keywords, every heading and
-every paragraph of the author's own prose are NOT the publisher's furniture. When you are unsure,
+every paragraph of the author's own prose are NOT the publisher's furniture. Neither is anything the
+AUTHOR supplied about their own manuscript — a "Short title:" or running-head line, a corresponding
+address, a dedication, an acknowledgement. The test is who wrote it, not whether a reader wants it.
+When you are unsure,
 LEAVE IT OUT of "publisherIds": something the publisher printed is a small irritation, and a
 sentence of the article set aside is invisible and permanent.
 
@@ -283,6 +317,7 @@ export function assemble(items: FrontMatterItem[], answer: FrontMatterAnswer): F
   }
 
   const setAside: number[] = [];
+  let setAsideWords = 0;
   for (const item of publisherItems) {
     if (words(item.text) > MAX_PUBLISHER_WORDS) {
       notes.push(
@@ -292,6 +327,20 @@ export function assemble(items: FrontMatterItem[], answer: FrontMatterAnswer): F
       continue;
     }
     setAside.push(item.index);
+    setAsideWords += words(item.text);
+  }
+
+  /* The aggregate cap — see `MAX_SET_ASIDE_FRACTION`. Measured over what the
+     model was actually shown rather than over the whole document, because that
+     is the only part it could have asked to hide. */
+  const windowWords = items.reduce((n, item) => n + words(item.text), 0);
+  if (windowWords > 0 && setAsideWords / windowWords > MAX_SET_ASIDE_FRACTION) {
+    notes.push(
+      `Set nothing aside: the front-matter pass asked to hide ${setAsideWords} of the ` +
+        `${windowWords} words it was shown, over the ${Math.round(MAX_SET_ASIDE_FRACTION * 100)}% ` +
+        `a publisher's furniture is allowed to be.`,
+    );
+    return { title: title || null, byline: byline || null, setAside: [], notes };
   }
 
   return {
@@ -324,9 +373,21 @@ export function withFrontMatterHidden(records: PdfRecord[], setAside: number[]):
 
 /** Injectable so that a test — and the eval's replay — never spends. */
 export interface FrontMatterReader {
-  /** Goes in the checkpoint key, so a different reader is a different answer. */
+  /** Names the model and the prompt, so a different reader is a different answer. */
   id: string;
   ask(prompt: string, signal?: AbortSignal): Promise<FrontMatterAnswer>;
+  /**
+   * What this reader's calls have cost so far, in tokens.
+   *
+   * **Reported separately from the transcription's, never added to it.** They
+   * are two models on two jobs, and `src/models.ts` is emphatic that a figure
+   * summed across two of those is a figure whose unit nobody can name. The
+   * money is recorded centrally either way — `openRouterJson` meters this call
+   * under `pdf-frontmatter` — so this exists to stop the *stage's* own
+   * `usage` claiming to be everything the run cost while omitting one call.
+   * GPT Sol, 2026-09-05.
+   */
+  usage(): { input: number; output: number };
 }
 
 const MAX_TOKENS = 2_000;
@@ -334,8 +395,12 @@ const MAX_TOKENS = 2_000;
 export function openRouterFrontMatterReader(
   model: string = modelFor("pdf-frontmatter"),
 ): FrontMatterReader {
+  /* Counted per reader rather than per call, because a caller wants "what did
+     this article's front matter cost" and a retry is two calls. */
+  const spent = { input: 0, output: 0 };
   return {
     id: `${model}/${frontMatterFingerprint(model)}`,
+    usage: () => ({ ...spent }),
     async ask(prompt, signal) {
       const call = await openRouterJson(
         "pdf-frontmatter",
@@ -354,8 +419,15 @@ export function openRouterFrontMatterReader(
         ...(signal ? [{ signal }] : []),
       );
       const json = call.json as
-        | { choices?: { message?: { content?: string } }[] }
+        | {
+            choices?: { message?: { content?: string } }[];
+            usage?: { prompt_tokens?: number; completion_tokens?: number };
+          }
         | null;
+      /* Before the content check, because a refusal that arrives as an empty
+         choice still cost what it cost. */
+      spent.input += json?.usage?.prompt_tokens ?? 0;
+      spent.output += json?.usage?.completion_tokens ?? 0;
       const content = json?.choices?.[0]?.message?.content;
       if (!content) throw new Error("The front-matter pass answered with nothing.");
       return parseAnswer(content);
@@ -381,12 +453,22 @@ export function parseAnswer(text: string): FrontMatterAnswer {
        Same rule as `openRouterJson`. */
     throw new FrontMatterUnreadable("the front-matter pass answered with something that is not JSON");
   }
-  const object = raw as Record<string, unknown> | null;
+  /* **The root has to be an object with all three lists**, and the first draft
+     of this let `null`, `[]`, `42` and `{}` all become three empty lists — so a
+     provider that ignored the schema entirely produced a *valid* answer meaning
+     "nothing here", and `{"publisherIds": […]}` alone hid records while silently
+     falling back for the title. That is a malformed answer performing a
+     destructive partial action, which is exactly what the malformed rule exists
+     to prevent. `SCHEMA` requires all three, but this parser's whole job is the
+     case where the provider did not honour the schema. GPT Sol, 2026-09-05. */
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new FrontMatterUnreadable("the front-matter pass answered with something that is not an object");
+  }
+  const object = raw as Record<string, unknown>;
   const list = (key: keyof FrontMatterAnswer): string[] => {
-    const value = object?.[key];
-    if (value === undefined) return [];
+    const value = object[key];
     if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
-      throw new FrontMatterUnreadable(`${key} is not a list of ids`);
+      throw new FrontMatterUnreadable(`${key} is missing or is not a list of ids`);
     }
     return value as string[];
   };
@@ -416,5 +498,13 @@ export async function readFrontMatter(
   const items = frontMatterWindow(records);
   if (!items.length) return null;
   const answer = await reader.ask(promptFor(items), signal);
+  /* **After the await, not only in the caller's `catch`.** A reader that
+     notices the abort and *succeeds anyway* — a cached answer, a request
+     already in flight when the signal fired, a stub — used to have its answer
+     applied and the article published with `signal.aborted === true`. The
+     caller checked `aborted` only on the throwing path, so the one shape that
+     got through was the one where nothing went wrong. Reproduced by GPT Sol,
+     2026-09-05. */
+  signal?.throwIfAborted();
   return assemble(items, answer);
 }

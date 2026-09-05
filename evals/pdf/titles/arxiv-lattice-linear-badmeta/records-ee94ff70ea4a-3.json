@@ -1,0 +1,212 @@
+{
+  "slug": "arxiv-lattice-linear-badmeta",
+  "sample": 3,
+  "prompt": "ee94ff70ea4a",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T08:01:40.548Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Eventually Lattice-Linear Algorithms1234",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Arya Tanmay Gupta, Sandeep S Kulkarni",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "aComputer Science and Engineering Michigan State University",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "Abstract",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Lattice-linear systems allow nodes to execute asynchronously. We introduce eventually lattice-linear algorithms, where lattices are induced only among the states in a subset of the state space. The algorithm guarantees that the system transitions to a state in one of the lattices. Then, the algorithm behaves lattice linearly while traversing to an optimal state through that lattice.\nWe present a lattice-linear self-stabilizing algorithm for service demand based minimal dominating set (SDMDS) problem. Using this as an example, we elaborate the working of, and define, eventually lattice-linear algorithms. Then, we present eventually lattice-linear self-stabilizing algorithms for minimal vertex cover (MVC), maximal independent set (MIS), graph colouring (GC) and 2-dominating set problems (2DS).\nAlgorithms for SDMDS, MVC and MIS converge in 1 round plus n moves (within 2n moves), GC in n + 4m moves, and 2DS in 1 round plus 2n moves (within 3n moves). These results are an improvement over the existing literature. We also present experimental results to show performance gain demonstrating the benefit of lattice-linearity.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Keywords: eventually lattice-linear algorithms, self-stabilization, asynchrony, minimal dominating set, minimal vertex cover, maximal independent set, graph colouring, 2-dominating set",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "1. Introduction",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "A parallel/distributed system consists of several processes that collectively solve a problem while coordinating with each other. In such a system, to successfully solve the given problem, processes need to coordinate with each other.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "1To appear in the Journal of Parallel and Distributed Computing.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "2The experiments presented in this paper were supported through computational resources and services provided by the Institute for Cyber-Enabled Research, Michigan State University.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "3A preliminary version of this paper was published in Proceedings of the 23rd International Symposium on Stabilization, Safety, and Security of Distributed Systems (SSS 2021) [16].",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "4Email addresses: {atgupta,sandeep}@msu.edu",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "publisher",
+      "text": "Preprint submitted to Elsevier January 17, 2024",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "publisher",
+      "text": "arXiv:2311.09760v2 [cs.DC] 13 Jan 2024",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "This could be achieved via shared memory (where the data is stored in a centralized store and each process can access the part that it needs) or message passing (where processes send their updates to each other via messages). As the level of parallelization (number of threads/processes) increases, in these systems, the need for synchronization increases as well.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Synchronization primitives such as local mutual exclusion and dining philosophers are deployed to achieve the required synchronization among processes. Without proper synchronization, the execution of a parallel/distributed algorithm may be incorrect. As an example, in an algorithm for graph colouring, in each step, a node reads the colour of its neighbours, and if necessary, updates its own colour. Execution of this algorithm in a parallel or distributed system requires synchronization to ensure correct behaviour. For example, if two neighbouring nodes, say i and j change their colour simultaneously, the resulting action may be incorrect. Specifically, consider the case where both i and j have colour 0. Both nodes read the states of each other. Consider that i executes first, node i executes and changes its colour to 1. This is as expected. However, when j executes, it has old/inconsistent information about the colour of i. Hence, j also will change its colour to 1. Effectively, without proper synchronization, i and j can end up choosing the same colour and repeat such execution forever. The synchronization primitives discussed above eliminate such behaviour. However, they introduce an overhead, which can be very costly in terms of computational resources and time.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "In general, executing a parallel/distributed program without synchronization can lead to erroneous behaviour. However, if correctness can be guaranteed even in asynchrony, then we can benefit from concurrent execution without bearing the cost of synchronization. In turn, this will be highly useful as the level of parallelization increases.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Garg [12] introduced the modelling of problems using a predicate under which the global states induce a partial order forming a lattice. The problems that can be represented by a predicate under which the global states form a lattice are called lattice-linear problems, and such a predicate is called lattice-linear predicate. In such problems, given an arbitrary global state, such nodes can be pointed out that must change their state to satisfy the requirements of the problem – to reach an optimal global state. Modelling problems in such a way allows them to be solved by parallel processing systems under asynchrony (where a node may read old information about others) while preserving correctness. However, [12] cannot be applied to problems where a lattice-linear predicate does not exist. For example, in a general case of graph colouring, a specific node cannot be pointed out that must change its state to reach an optimal state: for an arbitrary node, it is possible to reach an optimal global state without changing its local state. Moreover, the problems studied in [12] require that the system is initialized in a specific state. Hence, it is not applicable for systems that require self-stabilization.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "In this paper, we study problems that require self-stabilization and cannot be represented by a lattice-linear predicate. We develop eventually lattice-linear self-stabilizing algorithms where one or more lattices are induced in a subset of",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "the state space algorithmically. In other words, there are subsets S1, S2 · · · of the state space such that a lattice is induced in each subset. We present eventually lattice-linear self-stabilizing algorithms for service demand based minimal dominating set (SDMDS), minimal vertex cover (MVC), maximal independent set (MIS), graph colouring (GC) and 2-dominating set (2DS) problems. These algorithms first (1) guarantee that from any arbitrary state, the system reaches a state in one of the lattices, and then (2) these algorithms behave lattice-linearly, and make the system traverse that induced lattice and reach an optimal state.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "We proceed as follows. We begin with the SDMDS problem which is a generalization of the minimal dominating set. We devise a self-stabilizing algorithm for SDMDS. We scrutinize this algorithm and decompose it into two parts, the second of which satisfies the lattice-linearity property of [12] if it begins in a feasible state. Furthermore, the first part of the algorithm ensures that the algorithm reaches a feasible state. We show that the resulting algorithm is self-stabilizing, and the algorithm has limited-interference property (to be discussed in Section 4.5) due to which it is tolerant to the nodes reading old values of other nodes. We also demonstrate that this approach is generic. It applies to various other problems including MVC, MIS, GC and 2DS.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "We also present some experimental results that show the efficacy of eventually lattice-linear algorithms in real-time shared memory systems. Specifically, we compare our algorithm for MIS (Algorithm 3) with algorithms presented in [17] and [24]. The experiments are conducted in cuda environment, which is a shared memory model.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "1.1. Contributions of the paper",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "• We present a self-stabilizing algorithm for the SDMDS problem.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "• We extend the theory of lattice-linear predicate detection from [12] to introduce the class of eventually lattice-linear self-stabilizing algorithms. Such algorithms allow the system to run in asynchrony and ensure its convergence even when the nodes read old values. The algorithms presented in [12] also allow asynchrony, however, they require that (1) the problems have only one optimal state, and (2) the algorithm needs to start in specific initial states.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "• We show that the general design used to develop eventually lattice-linear algorithm for SDMDS can be extended to other problems such as MVC, MIS, GC and 2DS problems.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "• The algorithms for SDMDS, MVC and MIS converge in 1 round plus n moves, the algorithm for GC converges in n+4m moves, and the algorithm for 2DS converges in 1 round plus 2n moves. Also, these algorithms do not require a synchronous environment to execute. Thus, these results are an improvement over the algorithms present in the literature.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "• We use the algorithm for MIS, as an illustration, to show that this algorithm outperforms existing algorithms. This is because these algorithms guarantee convergence in asynchrony. This, in turn, is possible because of the theoretical guarantees due to the lattice-linear nature of these algorithms. The maximum benefit of the asynchrony, allowed by such algorithms, is to execute multiple moves in parallel-",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "Eventually Lattice-Linear Algorithms1234",
+  "recall": 0.996,
+  "quality": [],
+  "usage": {
+    "input": 2787,
+    "output": 2866
+  }
+}

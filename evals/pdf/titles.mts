@@ -35,11 +35,29 @@
  * existing would catch that: `src/pdf-score.ts` counts every record whether it
  * renders or not, so an abstract retyped as hidden keeps recall at 1.0.
  *
- * So each fixture carries `mustKeep` as well as `furniture`, and the report
+ * So each fixture carries `mustKeep` as well as `mustNotRender`, and the report
  * gives retention beside removal. And there is an `overdelete` arm that sets
- * every record aside: **the eval must fail it**. An eval that cannot fail a
- * deliberately broken arm is not measuring what it claims to
- * (docs/reusable/silent-success.md).
+ * every record aside: **the eval must fail it, in every document** — a fixture
+ * that loses nothing when its whole front page is hidden is defending nothing,
+ * and the report names it. An eval that cannot fail a deliberately broken arm
+ * is not measuring what it claims to (docs/reusable/silent-success.md).
+ *
+ * ## Three golds, three jobs, and why they are three lists
+ *
+ * `falseTitles` is what an arm may wrongly **choose**; `mustNotRender` is what
+ * must not remain **on the page**; `mustKeep` is what must **survive**. One list
+ * doing two of those jobs is how the exactly-correct title on
+ * `arxiv-lattice-linear-badmeta` scored as stolen furniture, and how the
+ * parallel English title on `unal-biotec-bilingual-title` was must-drop and
+ * must-keep at once.
+ *
+ * And **a gold is only a measurement where the transcription put it within
+ * reach**. `judge` renders each sample once with nothing set aside and scores
+ * only against that: a `mustKeep` snippet already missing there measures the
+ * transcription rather than the pass, and a `mustNotRender` string already off
+ * the page cannot be removed by anybody. Both are named in the report instead of
+ * counted, and the raw retention is printed beside the scored one so the gap
+ * cannot be forgotten. All of that is GPT Sol's second review, 2026-09-05.
  *
  * ## Why the fixtures are three pages, and why that is not enough on its own
  *
@@ -56,7 +74,7 @@
  * only three pages.
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageCli } from "../../src/cli-ledger.js";
@@ -90,8 +108,33 @@ export interface Fixture {
   byline?: string | null;
   /** What this one is chosen to break. */
   breaks: string;
-  /** The strings a naive extractor is likely to take instead — the must-drop half. */
-  furniture: string[];
+  /**
+   * The strings a title-picker might wrongly **choose** — scored by
+   * `stoleFalseTitle`, and by nothing else.
+   *
+   * These need not be printed anywhere, and several are not: rung 1 of the
+   * ladder reads the PDF's info dictionary, so `arxiv-lattice-linear-badmeta`'s
+   * false title is a 500-character metadata run-on that appears in no record,
+   * and `copernicus`'s is a running head the transcription never emits. A
+   * string here makes no claim about the page.
+   */
+  falseTitles: string[];
+  /**
+   * The strings that must not remain **rendered** on the page — scored by
+   * `removed`, and by nothing else.
+   *
+   * **This is a different list from `falseTitles` because it answers a
+   * different question**, and one gold doing both jobs is how the exact correct
+   * title came to be scored as stolen *and* as dropped on the same verdict
+   * (GPT Sol, 2026-09-05). A masthead usually belongs in both lists; a
+   * metadata-only string belongs in neither this one nor the page, and the
+   * parallel English title on `unal-biotec-bilingual-title` belongs in
+   * `falseTitles` and `mustKeep` — it is the article, and dropping it is damage.
+   *
+   * A string here that the transcription never rendered in the first place is
+   * reported as inert rather than counted, per sample: see `judge`.
+   */
+  mustNotRender: string[];
   /** Short verbatim snippets that MUST survive into the reading view — the must-keep half. */
   mustKeep?: string[];
   pages: number;
@@ -147,6 +190,34 @@ export async function readFixtures(only?: string[]): Promise<Fixture[]> {
 const sourceOf = (slug: string) => path.join(CORPUS, slug, "source.pdf");
 const sampleAt = (slug: string, prompt: string, n: number) =>
   path.join(CORPUS, slug, `records-${prompt}-${n}.json`);
+
+/**
+ * Every sample this fixture has on disk, in order.
+ *
+ * **`readdir` rather than counting up from 1 until a file is missing**, which is
+ * what this did and which cannot tell *"nobody has bought this fixture"* from
+ * *"the corpus is ten fixtures"*: the loop stopped at the first gap, recorded
+ * nothing, and the report then took its document denominator from whatever had
+ * produced a verdict. A checkout with five fixtures banked scored five and said
+ * `5/5`. Reproduced by GPT Sol, 2026-09-05 — the shape in
+ * docs/reusable/silent-success.md where a corpus is a property of the fixtures
+ * and nothing reports which fixtures were exercised.
+ */
+async function samplesFor(slug: string, prompt: string): Promise<Sample[]> {
+  const dir = path.join(CORPUS, slug);
+  if (!existsSync(dir)) return [];
+  const wanted = new RegExp(`^records-${prompt}-(\\d+)\\.json$`);
+  const numbers = (await readdir(dir))
+    .map((name) => wanted.exec(name)?.[1])
+    .filter((n): n is string => n !== undefined)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const samples: Sample[] = [];
+  for (const n of numbers) {
+    samples.push(JSON.parse(await readFile(sampleAt(slug, prompt, n), "utf8")) as Sample);
+  }
+  return samples;
+}
 const tidyAt = (slug: string, prompt: string, n: number, reader: string) =>
   path.join(CORPUS, slug, `tidy-${prompt}-${reader.replace(/[^a-z0-9]+/gi, "-")}-${n}.json`);
 
@@ -366,56 +437,131 @@ export interface Verdict {
   answer: string;
   exact: boolean;
   folded: boolean;
-  /** The answer is one of the strings this fixture predicted would be stolen instead. */
-  stoleFurniture: boolean;
-  /** Of `fixture.furniture`, how many are no longer on the page. */
-  dropped: number;
-  droppedOf: number;
-  /** Of `fixture.mustKeep`, how many survived. The direction that catches over-deletion. */
+  /**
+   * The answer is one of the strings this fixture predicted would be taken
+   * instead — **and is not the gold title**.
+   *
+   * That second clause is not belt-and-braces. The prefix match below is
+   * symmetric, and `arxiv-lattice-linear-badmeta`'s false title *begins with*
+   * the real one, so without the guard the exactly-correct answer scored as
+   * stolen on the same verdict that scored it right (GPT Sol, 2026-09-05).
+   */
+  stoleFalseTitle: boolean;
+  /** The byline this arm offered, or `null` where it offers none — the ladder arms never do. */
+  bylineAnswer: string | null;
+  /** `false` when the arm offered none, so read it beside `bylineAnswer` and not alone. */
+  bylineRight: boolean;
+  /** How many records this arm hid. Zero for both ladder arms, which is why the report says so. */
+  setAside: number;
+  /** Of `mustNotRender`, the ones an arm *could* remove: rendered when nothing is set aside. */
+  removable: number;
+  removed: number;
+  /** `mustNotRender` golds already off the page before this arm ran, named. */
+  inert: string[];
+  /** Of the **reachable** `mustKeep`, how many survived. The direction that catches over-deletion. */
   kept: number;
-  keptOf: number;
-  /** The snippets that did not survive, named — a count alone is not actionable. */
+  reachable: number;
+  /** The reachable snippets this arm lost, named — a count alone is not actionable. */
   lost: string[];
+  /** Snippets absent even with `setAside: []`. A fact about the transcription, not about the arm. */
+  unreachable: string[];
+  /** Retention over **every** declared snippet, reachable or not, so the gap cannot be forgotten. */
+  keptRaw: number;
+  keptOf: number;
 }
 
 export function judge(fixture: Fixture, sample: Sample, arm: string, answer: ArmAnswer): Verdict {
   const folded = foldTitle(answer.title);
+  const right = folded === foldTitle(fixture.title);
   const shown = shownText(sample.transcript, answer.setAside);
+
+  /* **What this sample renders when nothing is set aside** — and the whole of
+     the fix for two findings, because both were the same mistake: a gold
+     compared against the page without first asking whether it was ever on it.
+
+     A `mustKeep` snippet that is already missing here is missing because the
+     transcription's punctuation or line-breaking differs from the manifest's,
+     not because an arm ate it — and once a gold is "lost", deleting its actual
+     record cannot make retention any worse, so the eval stops being able to see
+     the damage it exists to see. Symmetrically, a `mustNotRender` gold the
+     transcription typed `publisher` or `cover` is off the page before any arm
+     runs, and counting it as dropped hands every arm credit for work none of
+     them did. Both reproduced by GPT Sol, 2026-09-05.
+
+     Neither is fixed by loosening the match or by editing golds until they
+     pass. They are scored out and **named**, which says the true thing: this
+     snippet is measuring the transcription, not the pass under test. */
+  const baseline = shownText(sample.transcript, []);
+  const there = (snippet: string, text: string) => text.includes(foldTitle(snippet));
+
   const mustKeep = fixture.mustKeep ?? [];
-  const lost = mustKeep.filter((snippet) => !shown.includes(foldTitle(snippet)));
+  const unreachable = mustKeep.filter((s) => !there(s, baseline));
+  const reachable = mustKeep.filter((s) => there(s, baseline));
+  const lost = reachable.filter((s) => !there(s, shown));
+
+  const inert = fixture.mustNotRender.filter((s) => !there(s, baseline));
+  const removable = fixture.mustNotRender.filter((s) => there(s, baseline));
+
+  const bylineAnswer = answer.byline?.trim() ? answer.byline.trim() : null;
+  const goldByline = fixture.byline?.trim() ? fixture.byline.trim() : null;
+
   return {
     slug: fixture.slug,
     sample: sample.sample,
     arm,
     answer: answer.title,
     exact: answer.title.trim() === fixture.title.trim(),
-    folded: folded === foldTitle(fixture.title),
-    stoleFurniture: fixture.furniture.some((f) => {
-      const ff = foldTitle(f);
-      return ff.length > 0 && (folded === ff || folded.startsWith(ff) || ff.startsWith(folded));
-    }),
-    dropped: fixture.furniture.filter((f) => !shown.includes(foldTitle(f))).length,
-    droppedOf: fixture.furniture.length,
-    kept: mustKeep.length - lost.length,
-    keptOf: mustKeep.length,
+    folded: right,
+    stoleFalseTitle:
+      !right &&
+      fixture.falseTitles.some((f) => {
+        const ff = foldTitle(f);
+        return ff.length > 0 && (folded.startsWith(ff) || ff.startsWith(folded));
+      }),
+    bylineAnswer,
+    bylineRight:
+      goldByline === null
+        ? bylineAnswer === null
+        : bylineAnswer !== null && foldTitle(bylineAnswer) === foldTitle(goldByline),
+    setAside: answer.setAside.length,
+    removable: removable.length,
+    removed: removable.filter((s) => !there(s, shown)).length,
+    inert,
+    kept: reachable.length - lost.length,
+    reachable: reachable.length,
     lost,
+    unreachable,
+    keptRaw: mustKeep.filter((s) => there(s, shown)).length,
+    keptOf: mustKeep.length,
   };
+}
+
+/**
+ * What the sample bank on disk actually holds, fixture by fixture — including
+ * the fixtures it holds **nothing** for, which is the whole reason it is a
+ * return value rather than a local.
+ */
+export interface Bank {
+  counts: { slug: string; samples: number }[];
+  /** The most any one fixture has. A complete bank gives every fixture this many. */
+  most: number;
 }
 
 export async function score(
   fixtures: Fixture[],
   armNames: string[],
-): Promise<{ verdicts: Verdict[]; partial: string[] }> {
+): Promise<{ verdicts: Verdict[]; partial: string[]; bank: Bank }> {
   const prompt = promptFingerprint();
   const verdicts: Verdict[] = [];
   const partial: string[] = [];
+  const counts: Bank["counts"] = [];
   for (const fixture of fixtures) {
+    const samples = await samplesFor(fixture.slug, prompt);
+    counts.push({ slug: fixture.slug, samples: samples.length });
+    if (!samples.length) continue;
     const { pass, whole } = await passFor(fixture);
     if (!whole) partial.push(fixture.slug);
-    for (let n = 1; ; n++) {
-      const at = sampleAt(fixture.slug, prompt, n);
-      if (!existsSync(at)) break;
-      const sample = JSON.parse(await readFile(at, "utf8")) as Sample;
+    for (const sample of samples) {
       for (const name of armNames) {
         const arm = ARMS[name];
         if (!arm) throw new Error(`no such arm: ${name}. Have: ${Object.keys(ARMS).join(", ")}`);
@@ -423,7 +569,194 @@ export async function score(
       }
     }
   }
-  return { verdicts, partial };
+  return { verdicts, partial, bank: { counts, most: Math.max(0, ...counts.map((c) => c.samples)) } };
+}
+
+/**
+ * **What the bank is missing, in words.** Returned rather than printed so the
+ * caller can put it first *and* last.
+ *
+ * **A loud warning and not a hard error**, deliberately. `score` is the thing
+ * you run while the bank is still being bought, `--only` narrows the corpus on
+ * purpose, and a command that refuses to say anything until all thirty samples
+ * exist is a command people work around. What is not acceptable is a corpus of
+ * five looking like a corpus of ten, so the warning names every fixture and is
+ * printed at both ends of the report — the top for whoever reads from the top,
+ * the bottom because that is what a terminal leaves on screen.
+ */
+export function bankNote(bank: Bank): string[] {
+  const empty = bank.counts.filter((c) => c.samples === 0);
+  const short = bank.counts.filter((c) => c.samples > 0 && c.samples < bank.most);
+  const total = bank.counts.reduce((n, c) => n + c.samples, 0);
+  if (!empty.length && !short.length) {
+    return [
+      `CORPUS COMPLETE — ${bank.counts.length} fixtures, ${total} samples, ${bank.most} each.`,
+    ];
+  }
+  const lines = [
+    `CORPUS INCOMPLETE — ${total} samples over ${bank.counts.length - empty.length} of ` +
+      `${bank.counts.length} fixtures. Every rate below is about the fixtures that have records,` +
+      ` NOT about the corpus.`,
+  ];
+  if (empty.length) lines.push(`  no samples at all: ${empty.map((c) => c.slug).join(", ")}`);
+  if (short.length) {
+    lines.push(
+      `  fewer than ${bank.most}: ` +
+        short.map((c) => `${c.slug} (${c.samples})`).join(", "),
+    );
+  }
+  lines.push("  Run `transcribe` before comparing these numbers with anything.");
+  return lines;
+}
+
+/**
+ * Everything one arm got wrong, quoted rather than counted — a rate says an arm
+ * is worse and a quotation says how. The `overdelete` arm is excluded by its
+ * caller: it is *meant* to fail, and its failures are the point of it.
+ *
+ * The quotations run to 160 characters because several golds here are longer
+ * than 110 and the difference lives in the tail: `unal-biotec-bilingual-title`'s
+ * tidy answer is the Spanish title with the English one run onto the end, and
+ * at 90 characters it read as correct.
+ */
+function failures(fixtures: Fixture[], arm: string, mine: Verdict[]): string[] {
+  const wrong = mine.filter((v) => !v.folded);
+  const badByline = mine.filter((v) => v.bylineAnswer !== null && !v.bylineRight);
+  const eaten = mine.filter((v) => v.lost.length);
+  if (!wrong.length && !badByline.length && !eaten.length) return [];
+  const goldOf = (slug: string) => fixtures.find((f) => f.slug === slug);
+  const lines = ["", `${arm}:`];
+  for (const v of wrong) {
+    lines.push(
+      `  wrong title  ${v.slug} #${v.sample}`,
+      `      got:  ${JSON.stringify(v.answer.slice(0, 160))}`,
+      `      want: ${JSON.stringify((goldOf(v.slug)?.title ?? "").slice(0, 160))}`,
+    );
+  }
+  for (const v of badByline) {
+    lines.push(
+      `  wrong byline ${v.slug} #${v.sample}`,
+      `      got:  ${JSON.stringify((v.bylineAnswer ?? "").slice(0, 160))}`,
+      `      want: ${JSON.stringify((goldOf(v.slug)?.byline ?? "").slice(0, 160))}`,
+    );
+  }
+  for (const v of eaten) {
+    lines.push(`  ATE THE ARTICLE  ${v.slug} #${v.sample}`);
+    for (const snippet of v.lost) lines.push(`      lost: ${JSON.stringify(snippet.slice(0, 90))}`);
+  }
+  return lines;
+}
+
+/**
+ * **The worst document for one arm, named** — what the plan promised and what an
+ * average of thirty samples hides.
+ *
+ * Retention first, then titles, because an arm that eats the article is worse
+ * than one that mislabels it. A fixture with nothing reachable sorts as perfect
+ * retention rather than as zero: it is unmeasured, and `attackNote` is where
+ * that gets said.
+ */
+function worstDocument(arm: string, mine: Verdict[], slugs: string[]): string {
+  const worst = slugs
+    .map((slug) => {
+      const forSlug = mine.filter((v) => v.slug === slug);
+      const kept = forSlug.reduce((n, v) => n + v.kept, 0);
+      const reachable = forSlug.reduce((n, v) => n + v.reachable, 0);
+      return { slug, kept, reachable, right: forSlug.filter((v) => v.folded).length, of: forSlug.length };
+    })
+    .filter((s) => s.of > 0)
+    .sort(
+      (a, b) =>
+        (a.reachable ? a.kept / a.reachable : 1) - (b.reachable ? b.kept / b.reachable : 1) ||
+        a.right / a.of - b.right / b.of,
+    )[0];
+  if (!worst) return `  ${arm.padEnd(12)} —`;
+  const pct = worst.reachable ? `${((100 * worst.kept) / worst.reachable).toFixed(0)}%` : "—";
+  return (
+    `  ${arm.padEnd(12)} ${worst.slug} — kept ${worst.kept}/${worst.reachable} ${pct}, ` +
+    `titles right ${worst.right}/${worst.of}`
+  );
+}
+
+/**
+ * **The attack arm, judged per document.**
+ *
+ * The old condition declared success the moment the attack lost one snippet
+ * anywhere in the corpus, which proves nothing about the other nine fixtures. A
+ * document that loses nothing when every one of its front records is hidden is
+ * a document defending nothing, and it has to be named (GPT Sol, 2026-09-05).
+ */
+function attackNote(attack: Verdict[], slugs: string[]): string[] {
+  const perSlug = slugs
+    .map((slug) => {
+      const mine = attack.filter((v) => v.slug === slug);
+      return {
+        slug,
+        samples: mine.length,
+        blind: mine.some((v) => v.lost.length === 0),
+        nothingToLose: mine.every((v) => v.reachable === 0),
+      };
+    })
+    .filter((s) => s.samples > 0);
+  const blind = perSlug.filter((s) => s.blind);
+  const lines = [
+    "",
+    `ATTACK ARM — hiding every front record must lose something in EVERY document. ` +
+      `Detected in ${perSlug.length - blind.length}/${perSlug.length}.`,
+  ];
+  for (const s of blind) {
+    lines.push(
+      `  DEFENDS NOTHING  ${s.slug} — ` +
+        (s.nothingToLose
+          ? "no reachable `mustKeep` snippet at all, so over-deletion is invisible here."
+          : "at least one sample loses nothing when every front record is hidden."),
+    );
+  }
+  if (blind.length) lines.push("  Fix the corpus, not the arm.");
+  return lines;
+}
+
+/**
+ * **The golds that measure the transcription rather than the pass under test.**
+ *
+ * Both lists are properties of the sample bank and identical for every arm, so
+ * they are read off one arm and printed once. Naming them is the whole point:
+ * an unreachable gold scored silently is a check that cannot fail
+ * (docs/reusable/silent-success.md).
+ */
+function transcriptionNotes(oneArm: Verdict[], slugs: string[]): string[] {
+  const byFixture = (pick: (v: Verdict) => string[]) => {
+    const out: string[] = [];
+    for (const slug of slugs) {
+      const mine = oneArm.filter((v) => v.slug === slug);
+      const counts = new Map<string, number>();
+      for (const v of mine) for (const s of pick(v)) counts.set(s, (counts.get(s) ?? 0) + 1);
+      for (const [snippet, n] of counts) {
+        out.push(`  ${slug} ${n}/${mine.length}  ${JSON.stringify(snippet.slice(0, 80))}`);
+      }
+    }
+    return out;
+  };
+  const lines: string[] = [];
+  const unreachable = byFixture((v) => v.unreachable);
+  if (unreachable.length) {
+    lines.push(
+      "",
+      "NOT IN THE TRANSCRIPTION — `mustKeep` golds absent with nothing set aside. A gold that is",
+      "already lost cannot be lost again, so these are scored OUT of must-keep-kept and named here:",
+      ...unreachable,
+    );
+  }
+  const inert = byFixture((v) => v.inert);
+  if (inert.length) {
+    lines.push(
+      "",
+      "ALREADY OFF THE PAGE — `mustNotRender` golds the transcription never rendered (typed `publisher`",
+      "or `cover`, or never emitted at all). No arm can be credited for removing them, and none is:",
+      ...inert,
+    );
+  }
+  return lines;
 }
 
 /**
@@ -431,49 +764,80 @@ export async function score(
  * that wins three samples on one fixture and loses one on three others has not
  * won.
  */
-export function report(fixtures: Fixture[], verdicts: Verdict[], partial: string[]): string {
+export function report(
+  fixtures: Fixture[],
+  verdicts: Verdict[],
+  partial: string[],
+  bank: Bank,
+): string {
   const arms = [...new Set(verdicts.map((v) => v.arm))];
   const slugs = [...new Set(verdicts.map((v) => v.slug))];
-  const lines: string[] = [];
+  const lines: string[] = [...bankNote(bank), ""];
   const rate = (n: number, of: number) => (of ? `${((100 * n) / of).toFixed(0)}%` : "—");
+  const cell = (n: number, of: number, w = 7) => `${`${n}/${of}`.padStart(w)} ${rate(n, of).padStart(4)}`;
+  const forArm = (arm: string) => verdicts.filter((v) => v.arm === arm);
+  const sum = (vs: Verdict[], k: (v: Verdict) => number) => vs.reduce((n, v) => n + k(v), 0);
 
-  lines.push("arm            docs-all-right    samples-right   furniture-dropped     must-keep-kept");
+  lines.push(
+    "arm           docs-right    samples-right   exact  stolen   furniture-gone   must-keep-kept    byline",
+  );
   for (const arm of arms) {
-    const mine = verdicts.filter((v) => v.arm === arm);
+    const mine = forArm(arm);
     const perfect = slugs.filter((slug) => {
       const forSlug = mine.filter((v) => v.slug === slug);
       return forSlug.length > 0 && forSlug.every((v) => v.folded);
     }).length;
-    const sum = (k: (v: Verdict) => number) => mine.reduce((n, v) => n + k(v), 0);
-    const dropped = sum((v) => v.dropped);
-    const droppedOf = sum((v) => v.droppedOf);
-    const kept = sum((v) => v.kept);
-    const keptOf = sum((v) => v.keptOf);
+    /* **"No byline offered" is not "byline wrong"**, and a report that prints
+       one rate cannot tell them apart: the ladder arms answer with a title and
+       nothing else, and scoring them 0% would read as five wrong bylines. So
+       the denominator is what the arm offered, and the count of offers is
+       printed beside it. Every fixture declares a byline gold, so an arm that
+       offers none has skipped the question rather than passed it. */
+    const offered = mine.filter((v) => v.bylineAnswer !== null);
     lines.push(
-      `${arm.padEnd(13)} ${`${perfect}/${slugs.length}`.padStart(7)} ${rate(perfect, slugs.length).padStart(5)}` +
-        `   ${rate(mine.filter((v) => v.folded).length, mine.length).padStart(13)}` +
-        `   ${`${dropped}/${droppedOf}`.padStart(9)} ${rate(dropped, droppedOf).padStart(5)}` +
-        `   ${`${kept}/${keptOf}`.padStart(9)} ${rate(kept, keptOf).padStart(5)}`,
+      `${arm.padEnd(12)} ${cell(perfect, slugs.length)}  ${cell(mine.filter((v) => v.folded).length, mine.length)}` +
+        `  ${rate(mine.filter((v) => v.exact).length, mine.length).padStart(5)}` +
+        `  ${rate(mine.filter((v) => v.stoleFalseTitle).length, mine.length).padStart(6)}` +
+        `  ${cell(sum(mine, (v) => v.removed), sum(mine, (v) => v.removable))}` +
+        `  ${cell(sum(mine, (v) => v.kept), sum(mine, (v) => v.reachable))}` +
+        `  ${offered.length ? cell(offered.filter((v) => v.bylineRight).length, offered.length, 5) : "  none offered"}`,
     );
   }
 
-  /* **The attack arm, judged out loud.** A report that merely prints a bad
-     number for `overdelete` and leaves the reader to notice is the same shape as
-     a check nobody has ever seen fail. */
-  if (arms.includes("overdelete")) {
-    const attack = verdicts.filter((v) => v.arm === "overdelete");
-    const keptOf = attack.reduce((n, v) => n + v.keptOf, 0);
-    const kept = attack.reduce((n, v) => n + v.kept, 0);
+  /* **An arm that hides nothing cannot move either of the last two columns**,
+     so `0/5` and `99/99` are arithmetic rather than results, and a reader who
+     took the second for a win would be reading the eval backwards. Derived from
+     the verdicts rather than from a list of arm names, so a new arm is covered
+     on the day it is written. */
+  const hideNothing = arms.filter((arm) => forArm(arm).every((v) => v.setAside === 0));
+  if (hideNothing.length) {
     lines.push("");
     lines.push(
-      keptOf === 0
-        ? "ATTACK ARM UNTESTED — no fixture declares `mustKeep`, so over-deletion is invisible here."
-        : kept === keptOf
-          ? "ATTACK ARM PASSED, WHICH IS A FAILURE — hiding every front record lost nothing. " +
-            "The `mustKeep` snippets are not on the front pages; fix the corpus, not the arm."
-          : `attack arm correctly fails: it loses ${keptOf - kept} of ${keptOf} must-keep snippets.`,
+      `${hideNothing.join(", ")} set no record aside on any sample, so furniture-gone and ` +
+        `must-keep-kept are 0% and 100% there by construction, not by merit.`,
     );
   }
+
+  /* The raw retention, printed whether or not anything is unreachable, so that
+     the difference between the two numbers is the corpus's problem in one line
+     rather than something a reader has to go and derive. */
+  lines.push("");
+  lines.push(
+    "raw must-keep retention over EVERY declared snippet (reachable or not): " +
+      arms
+        .map((arm) => {
+          const mine = forArm(arm);
+          return `${arm} ${sum(mine, (v) => v.keptRaw)}/${sum(mine, (v) => v.keptOf)}`;
+        })
+        .join(" · "),
+  );
+
+  lines.push("", "worst document per arm — retention first, then titles:");
+  for (const arm of arms) lines.push(worstDocument(arm, forArm(arm), slugs));
+
+  if (arms.includes("overdelete")) lines.push(...attackNote(forArm("overdelete"), slugs));
+  const first = arms[0];
+  if (first) lines.push(...transcriptionNotes(forArm(first), slugs));
 
   if (partial.length) {
     lines.push("");
@@ -501,29 +865,17 @@ export function report(fixtures: Fixture[], verdicts: Verdict[], partial: string
     lines.push("");
     lines.push(`${from} → ${to}: ${won.length} wrong→right, ${regressed.length} right→wrong`);
     for (const v of regressed) {
-      lines.push(`  REGRESSED  ${v.slug} #${v.sample} — now ${JSON.stringify(v.answer.slice(0, 90))}`);
+      lines.push(`  REGRESSED  ${v.slug} #${v.sample} — now ${JSON.stringify(v.answer.slice(0, 160))}`);
     }
     for (const v of won) lines.push(`  fixed      ${v.slug} #${v.sample}`);
   }
 
   for (const arm of arms) {
-    if (arm === "overdelete") continue;
-    const wrong = verdicts.filter((v) => v.arm === arm && !v.folded);
-    const eaten = verdicts.filter((v) => v.arm === arm && v.lost.length);
-    if (!wrong.length && !eaten.length) continue;
-    lines.push("");
-    lines.push(`${arm}:`);
-    for (const v of wrong) {
-      const fixture = fixtures.find((f) => f.slug === v.slug);
-      lines.push(`  wrong title  ${v.slug} #${v.sample}`);
-      lines.push(`      got:  ${JSON.stringify(v.answer.slice(0, 110))}`);
-      lines.push(`      want: ${JSON.stringify((fixture?.title ?? "").slice(0, 110))}`);
-    }
-    for (const v of eaten) {
-      lines.push(`  ATE THE ARTICLE  ${v.slug} #${v.sample}`);
-      for (const snippet of v.lost) lines.push(`      lost: ${JSON.stringify(snippet.slice(0, 90))}`);
-    }
+    if (arm !== "overdelete") lines.push(...failures(fixtures, arm, forArm(arm)));
   }
+
+  lines.push("");
+  lines.push(...bankNote(bank));
   return lines.join("\n");
 }
 
@@ -550,12 +902,12 @@ async function main(): Promise<void> {
       );
       process.exit(1);
     }
-    const { verdicts, partial } = await score(fixtures, arms);
+    const { verdicts, partial, bank } = await score(fixtures, arms);
     if (!verdicts.length) {
       console.error("No samples on disk. Run `transcribe` first.");
       process.exit(1);
     }
-    console.log(report(fixtures, verdicts, partial));
+    console.log(report(fixtures, verdicts, partial, bank));
     const out = flag("out");
     if (out) {
       await writeFile(out, JSON.stringify({ at: new Date().toISOString(), verdicts }, null, 2) + "\n");

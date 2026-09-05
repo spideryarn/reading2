@@ -1802,6 +1802,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           recall: result.recall,
           inputTokens: result.usage.input,
           outputTokens: result.usage.output,
+          /* **The front-matter pass's own tokens, beside the transcription's
+             rather than added to them.** Two models on two jobs, and this line
+             names one of them in `model`; a sum across both would be a number
+             whose unit nobody can state (src/models.ts § `Wire`). The money is
+             recorded centrally under `pdf-frontmatter` either way — this is so
+             the *step's* line stops implying the transcription was the whole
+             bill. GPT Sol, 2026-09-05. */
+          frontMatterInputTokens: result.frontMatterUsage.input,
+          frontMatterOutputTokens: result.frontMatterUsage.output,
           model: result.meta.method,
         },
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,

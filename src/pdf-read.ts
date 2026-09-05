@@ -1595,7 +1595,14 @@ export interface PdfExtractResult {
   extractedHtml: string;
   meta: Meta;
   pages: number;
-  /** How many model calls it took. One per page range. */
+  /**
+   * How many **transcription** calls it took. One per page range.
+   *
+   * Not every model call the stage makes any more: since 2026-09-05 there is
+   * also the front-matter pass, whose tokens are `frontMatterUsage` below.
+   * Deliberately not folded in — one number covering two models on two jobs is
+   * a number whose unit nobody can name (src/models.ts § `Wire`).
+   */
   chunks: number;
   isScan: boolean;
   records: number;
@@ -1625,7 +1632,18 @@ export interface PdfExtractResult {
   stripped: number;
   /** `null` for a scan: there was no text layer to check the transcription against. */
   recall: number | null;
+  /** What the transcription cost, in tokens. `frontMatterUsage` is the rest. */
   usage: { input: number; output: number };
+  /**
+   * What the front-matter pass cost, in tokens — zero when it was turned off.
+   *
+   * Its own field rather than added to `usage`: a different model on a different
+   * job, and a total across two of those is a total whose unit nobody can name.
+   * The *money* is already recorded centrally under `pdf-frontmatter` by
+   * `openRouterJson`, so this is about the stage's own report being honest
+   * rather than about billing. GPT Sol, 2026-09-05.
+   */
+  frontMatterUsage: { input: number; output: number };
 }
 
 export interface PdfExtractOptions {
@@ -1784,18 +1802,21 @@ function usableChunkReading(
 async function frontMatterOrNothing(
   records: PdfRecord[],
   opts: PdfExtractOptions,
-): Promise<FrontMatterDecision | null> {
+): Promise<{ decision: FrontMatterDecision | null; usage: { input: number; output: number } }> {
   const reader = opts.frontMatter;
-  if (!reader) return null;
+  if (!reader) return { decision: null, usage: { input: 0, output: 0 } };
   try {
-    return await readFrontMatter(records, reader, opts.signal);
+    return { decision: await readFrontMatter(records, reader, opts.signal), usage: reader.usage() };
   } catch (err) {
     if (opts.signal?.aborted) throw err;
     log("pipeline").warn(
       { slug: opts.slug, step: "extract", ...errorFields(err) },
       `extract ${opts.slug}: the front-matter pass was no help; using the title ladder`,
     );
-    return null;
+    /* A failed call still cost what it cost, so the usage comes back either
+       way — a refusal that reported nothing is the one shape that would make
+       the stage's figure quietly too small. */
+    return { decision: null, usage: reader.usage() };
   }
 }
 
@@ -2385,18 +2406,30 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * order around it is the whole of what makes it safe.
    *
    * It comes *after* the scoring loop, because the score is a score of what the
-   * model wrote and nothing here may change that. It comes *before*
-   * `mendSeamHyphens`, because that function treats an unrendered record as a
-   * join barrier, and the point of hiding a publisher's line is that the prose
-   * either side of it stops being joined to it. The Kuhn paper is the case in
-   * point: `Available online 26 January 2024` currently renders joined onto the
-   * following article paragraph.
+   * model wrote and nothing here may change that.
+   *
+   * It comes **before `renderHtml`**, and that is the part with evidence behind
+   * it: `renderHtml` joins a `continues` record onto the one before it unless
+   * something unrendered intervenes, so on the Kuhn paper `Available online
+   * 26 January 2024` renders glued to the article paragraph that follows.
+   * Hiding it first breaks that join and leaves the paragraph whole —
+   * `tests/pdf-frontmatter-wiring.test.ts` asserts both halves.
+   *
+   * It also comes before `mendSeamHyphens`, for **consistency rather than a
+   * demonstrated fault**: that function deliberately mirrors `renderHtml`'s
+   * cursor so that it only repairs a boundary `renderHtml` will actually join,
+   * and running it over a different set of record types than the renderer will
+   * see breaks the property it was written to have. Stated honestly because it
+   * is *not* tested — GPT Sol reproduced identical output with the two
+   * operations reversed on the fixture we had, since `mendSeamHyphens` acts only
+   * across a page boundary and a publisher line rarely sits on one. Production
+   * keeps the safe order; nobody has built the case that distinguishes them.
    *
    * And it works on a **clone**. The originals stay exactly as the checkpoints
    * hold them and the scorer graded them; only `type` changes, and only on the
    * copy. GPT Sol, 2026-09-05.
    */
-  const front = await frontMatterOrNothing(all, opts);
+  const { decision: front, usage: frontMatterUsage } = await frontMatterOrNothing(all, opts);
   const presented = withFrontMatterHidden(all, front?.setAside ?? []);
   if (front?.notes.length) notes.push(...front.notes);
   /* After the scoring loop above, and it has to be: the baseline still has the
@@ -2463,6 +2496,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     isScan: pass.isScan,
     records: all.length,
     transcript: mended,
+    frontMatterUsage,
     recall,
     notes,
     retries,
@@ -2820,9 +2854,17 @@ export function titleFrom(records: PdfRecord[], pass: Pass0, name: string): stri
    * It is still a heuristic rather than a proof, and GPT Sol was right to say so
    * (2026-09-05). A page 1 that carries the true title *and* a generic
    * `Research Article` heading, where the true title also runs as a header,
-   * loses to the generic one. That case is a fixture in
-   * `evals/pdf/titles/`, and the rung is measured rather than assumed —
-   * docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md.
+   * loses to the generic one — reproduced, and pinned in
+   * `tests/pdf-title.test.ts` § "loses the title to a generic heading".
+   *
+   * **The corpus cannot see that case**, and an earlier version of this comment
+   * said it could. No fixture's gold title appears in its own full-document
+   * furniture set — checked with production `foldLine` across all ten — so the
+   * only evidence about this rung is that unit test and the measurement below,
+   * which is that on `evals/pdf/titles/` it changes **nothing**: zero
+   * wrong→right, zero right→wrong, over ten documents and thirty samples.
+   * It is kept as a free guard against the reported failure, not as something
+   * shown to help. docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md.
    */
   const heading = (
     headings.find((r) => !pass.furniture.has(foldLine(r.text))) ?? headings[0]
@@ -2948,6 +2990,14 @@ async function main() {
       `${result.usage.input === 0 ? "   (every chunk came from the cache)" : ""}` +
       `${result.retries.length ? `, ${result.retries.length} chunk(s) asked twice` : ""}`,
   );
+  /* On its own line, and only when there was one — a "0 in, 0 out" row for a
+     call that never happened reads as a call that cost nothing. */
+  if (result.frontMatterUsage.input || result.frontMatterUsage.output) {
+    console.log(
+      `         ${result.frontMatterUsage.input} in, ${result.frontMatterUsage.output} out` +
+        ` reading the front matter`,
+    );
+  }
   console.log(`Written: ${path.resolve(outFile)}`);
 
 }

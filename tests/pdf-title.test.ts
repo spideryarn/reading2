@@ -72,6 +72,34 @@ describe("the title ladder", () => {
     expect(titleFrom(records, pass, "paper.pdf")).toBe(PAPER);
   });
 
+  it("loses the title to a generic heading when the title is also the running head", () => {
+    /**
+     * **The known regression, pinned rather than hidden.** GPT Sol predicted it
+     * at the plan stage and reproduced it in the built code (2026-09-05): a page
+     * 1 carrying the true title *and* a generic label like "Research Article",
+     * where the title is also printed as the running head, hands the label the
+     * answer — because the title is furniture by this test and the label is not.
+     *
+     * The plan and an earlier version of this file both said a corpus fixture
+     * covered this. **Neither was true**: comparing every fixture's gold title
+     * against its full-document furniture set with production `foldLine` finds
+     * zero matches, so the corpus cannot see this at all. This test is the only
+     * statement of it that exists.
+     *
+     * It asserts the *wrong* answer on purpose. That is not an endorsement: it
+     * is so that the day somebody makes the ladder cleverer, this goes red and
+     * they find out they fixed it, rather than a silent improvement nobody can
+     * point at. If you are here because it failed — good, delete it and say so
+     * in docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md.
+     */
+    const records = [
+      record({ type: "heading1", text: "Research Article" }),
+      record({ type: "heading1", text: PAPER }),
+    ];
+    const pass = pages([PAPER, PAPER, PAPER], [PAPER]);
+    expect(titleFrom(records, pass, "paper.pdf")).toBe("Research Article");
+  });
+
   it("still prefers a metadata title that does not look like a filename", () => {
     const pass = pages(["anything", "anything", "anything"], [], PAPER);
     expect(titleFrom([record({ type: "heading1", text: JOURNAL })], pass, "x.pdf")).toBe(PAPER);

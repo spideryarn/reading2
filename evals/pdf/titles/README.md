@@ -41,22 +41,51 @@ cuts happen to stand on their own.
 | [`unal-biotec-bilingual-title/`](unal-biotec-bilingual-title/) | Spanish with a parallel English title beneath it, a `heading1`-shaped `ARTÍCULO DE INVESTIGACIÓN` label, and alternating verso/recto running heads. |
 | [`injection-adversary/`](injection-adversary/) | **Ours, synthetic.** Page 1 prints, as ordinary body text, an instruction addressed to a model, telling it the title is something else and to mark the article's prose as publisher furniture. It is the fixture that says whether the front-matter pass obeys the document it is reading. |
 
-## The golds, and why there are two kinds
+## The golds, and why there are four kinds
 
 `expected.json` gives each fixture:
 
 - **`title`** — the article's real title, as printed. The thing being scored.
-- **`byline`** — the authors as printed, or `null`.
-- **`furniture`** — the strings a naive extractor is likely to take *instead*. The must-drop list, and
-  the half that makes a fixture diagnostic rather than merely present.
-- **`mustKeep`** — short verbatim snippets that have to survive into the reading view: the first
-  sentence of the abstract, the first sentence of the body, the byline, a heading.
+- **`byline`** — the authors as printed, or `null`. Scored the same way the title is, and only the
+  `tidy` arm answers it at all; the report says *"none offered"* rather than scoring a silence wrong.
+- **`falseTitles`** — the strings a naive extractor is likely to take *instead*. These need not be
+  printed anywhere: `arxiv-lattice-linear-badmeta`'s is the PDF's info-dictionary `/Title`, and
+  `copernicus`'s is a running head the transcription never emits.
+- **`mustNotRender`** — the strings that must not remain rendered on the page.
+- **`mustKeep`** — short verbatim snippets that have to survive into the reading view: the article's
+  own title, the first sentence of the abstract, the first sentence of the body, the byline.
+
+**`falseTitles` and `mustNotRender` were one list until 2026-09-05, and one list cannot do both
+jobs.** A string that is only in the metadata cannot be taken *off the page*, so every arm scored a
+removal for it — and because the match is a symmetric prefix, the run-on false title that *begins
+with* the real one made the exactly-correct answer count as stolen on the same verdict that counted
+it right. In the other direction, `unal-biotec-bilingual-title`'s parallel English title was
+must-drop and must-keep at once. Two lists, two questions, and a string may be in both.
 
 **`mustKeep` is not symmetry for its own sake.** The obvious score — right title, fewer publisher
 lines shown — is maximised by hiding the whole first page, and nothing that already exists would
 catch that: `src/pdf-score.ts` counts every record whether it renders or not, so an abstract retyped
 as hidden keeps recall at 1.0. The runner has an `overdelete` arm that hides everything, and **the
-report must fail it**.
+report must fail it, in every document** — a fixture that loses nothing when its whole front page is
+hidden defends nothing, and the report names it. That is why every fixture's `mustKeep` now leads
+with the article's own printed title: without it, `injection-adversary` scored a clean pass on a
+verdict that set the real printed title and both injection records aside.
+
+## A gold only measures where the transcription put it in reach
+
+The runner renders each sample once with **nothing** set aside, and scores only against that.
+
+- A `mustKeep` snippet missing from that baseline is missing because the transcription's punctuation
+  or line-breaking differs from the manifest's — not because an arm ate it. Five of the ten byline
+  snippets are in this state, all of them because the printed page fuses affiliation markers into
+  the authors' names (`Salim Rukhsara,∗`) or splits them across records. They are named in the
+  report as a corpus problem and scored out of retention, because once a gold is already "lost",
+  deleting its actual record cannot make retention any worse.
+- A `mustNotRender` string the transcription typed `publisher` or `cover` is off the page before any
+  arm runs. Nearly all of them are: **the transcription model already does most of this job**, which
+  is worth knowing before reading much into the removal column.
+
+Neither is fixed by loosening the match or by editing the golds until they pass. Both are named.
 
 ## Licences
 

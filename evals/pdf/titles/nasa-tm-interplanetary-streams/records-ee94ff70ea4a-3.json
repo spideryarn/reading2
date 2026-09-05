@@ -1,0 +1,124 @@
+{
+  "slug": "nasa-tm-interplanetary-streams",
+  "sample": 3,
+  "prompt": "ee94ff70ea4a",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T08:02:56.572Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "NASA\nTechnical Memorandum --86192\n(NASA-TM-86192) EVOLUTION AND INTERACTION OF LARGE INTERPLANETARY STREAMS (NASA) 41 p\nCSCL 54C\nUnclas\nG3/90 43674",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "EVOLUTION AND INTERACTION OF\nLARGE INTERPLANETARY STREAMS",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Y. C. Whang\nL. F. Burlaga",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "FEBRUARY 1985",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "National Aeronautics and\nSpace Administration\nGoddard Space Flight Center\nGreenbelt, Maryland 20771",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "⟦illegible⟧",
+      "continues": false,
+      "uncertain": true
+    },
+    {
+      "page": 2,
+      "type": "heading1",
+      "text": "EVOLUTION AND INTERACTION OF LARGE INTERPLANETARY STREAMS",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Y. C. Whang",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Department of Mechanical Engineering\nCatholic University of America\nWashington, D.C.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "L. F. Burlaga",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Laboratory for Extraterrestrial Physics\nNASA-Goddard Space Flight Center\nGreenbelt, Maryland",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "February 8, 1985",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Short title: Evolution of large streams",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Submitted to the Journal of Geophysical Research",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Abstract. The paper presents a computer simulation for the evolution and interaction of large interplanetary streams based on multi-spacecraft observations and an unsteady, one-dimensional MHD model. We studied two events each observed by two or more spacecraft separated by a distance of the order of 10 AU. The first simulation is based on the plasma and magnetic field observations made by two radially-aligned spacecraft: first by IMP-8 in November 1977 at 1 AU, and later by Pioneer-10 in January 1978 at 15 AU. The second simulation is based on an event observed first by Helios-1 in May 1980 near 0.6 AU and later by Voyager-1 in June 1980 at 8.1 AU. These examples show that the dynamical evolution of large-scale solar wind structures is dominated by the shock process, including the formation, collision and merging of shocks. Formation of shocks continues to take place even outside 5 AU. Collision and merging of shocks irreversibly restructure the solar wind. The interaction of shocks with stream structures also causes a drastic decrease in the amplitude of the solar wind speed variation with increasing heliocentric distance, and as a result of interactions there is a large variation of shock-strengths and shock-speeds. In the outer heliosphere, the large-scale solar wind and magnetic field evolve into a much simpler structure and MHD shocks are present as a principal component of the solar wind. The simulation results shed new light on interpretation for the interaction and evolution of large interplanetary streams. Observations were made only along a few limited trajectories, but simulation results can supplement these by providing the detailed evolution process for large-scale solar wind structures in the vast region not directly",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "EVOLUTION AND INTERACTION OF\nLARGE INTERPLANETARY STREAMS",
+  "recall": 0.85,
+  "quality": [
+    "Pages 1, 2, 3: 2 run(s) are missing from the transcription, the longest 40 words — “e v g l c t i c n a s c i h t e i i a c t i o n iyd7 15131 c e l a i g e x n t l e l e”.",
+    "Page 1: only 0.495 of its words appear anywhere in this chunk's transcription. The chunk as a whole scores 0.85, which is why this needs saying separately — a short page cannot move a long one's average."
+  ],
+  "usage": {
+    "input": 20006,
+    "output": 2740
+  }
+}

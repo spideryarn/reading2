@@ -21,6 +21,7 @@ import {
   frontMatterWindow,
   FrontMatterUnreadable,
   MAX_PUBLISHER_WORDS,
+  MAX_SET_ASIDE_FRACTION,
   parseAnswer,
   promptFor,
   readFrontMatter,
@@ -239,12 +240,83 @@ describe("what comes back from the model", () => {
     );
   });
 
-  it("treats a missing list as an empty one", () => {
-    expect(parseAnswer(JSON.stringify({ titleIds: ["p1-r1"] }))).toEqual({
-      titleIds: ["p1-r1"],
-      bylineIds: [],
-      publisherIds: [],
-    });
+  it("refuses an answer with a list missing, rather than reading it as empty", () => {
+    /* This used to pass, reading every absent field as `[]`, and that let a
+       malformed answer perform a *destructive partial* action: `{"publisherIds":
+       [...]}` alone hid those records while silently falling back for the title,
+       which is precisely what the malformed rule exists to prevent. The schema
+       requires all three; this parser's whole job is the provider that ignored
+       the schema. GPT Sol, 2026-09-05. */
+    expect(() => parseAnswer(JSON.stringify({ publisherIds: ["p1-r1"] }))).toThrow(
+      FrontMatterUnreadable,
+    );
+  });
+
+  it("refuses a root that is not an object at all", () => {
+    /* `null`, `[]` and `42` each used to become three empty lists — a provider
+       that answered nothing meaningful producing a valid answer meaning
+       "nothing here". */
+    for (const body of ["null", "[]", "42", '"a string"']) {
+      expect(() => parseAnswer(body), body).toThrow(FrontMatterUnreadable);
+    }
+  });
+
+  it("takes an answer with all three lists, empty ones included", () => {
+    expect(parseAnswer(JSON.stringify({ titleIds: ["p1-r1"], bylineIds: [], publisherIds: [] })))
+      .toEqual({ titleIds: ["p1-r1"], bylineIds: [], publisherIds: [] });
+  });
+});
+
+describe("how much of the page it is allowed to hide", () => {
+  /* The attack GPT Sol reproduced on 2026-09-05: every id valid, every record
+     under `MAX_PUBLISHER_WORDS`, no rule broken — and the real authors and two
+     authored paragraphs set aside. Per-record limits are not a boundary, so
+     there is an aggregate one. */
+  const page = (texts: string[]): PdfRecord[] =>
+    texts.map((text) => record({ type: "paragraph", text }));
+
+  it("refuses to hide most of what it was shown, and says so instead of doing it quietly", () => {
+    const records = page([
+      "Contents lists available at ScienceDirect",
+      "The authors are Priya Natarajan and Tomas Herrera",
+      "Sediment cores record decades of tidal and storm activity in layered bands.",
+      "This paper presents a new sparse coding method for tidal sediment cores.",
+    ]);
+    const items = frontMatterWindow(records);
+    const decision = assemble(
+      items,
+      answer({ publisherIds: ["p1-r2", "p1-r3", "p1-r4"] }),
+    );
+    expect(decision.setAside).toEqual([]);
+    expect(decision.notes).toHaveLength(1);
+    expect(decision.notes[0]).toContain("Set nothing aside");
+    expect(MAX_SET_ASIDE_FRACTION).toBeLessThan(1);
+  });
+
+  it("still hides an ordinary masthead, which is a small share of the page", () => {
+    const records = page([
+      "Contents lists available at ScienceDirect",
+      "Sediment cores record decades of tidal and storm activity in layered bands that are " +
+        "difficult to interpret by eye, and this paper is about reading them.",
+      "This paper presents a new sparse coding method for analysing tidal sediment cores " +
+        "collected along the coastline over a period of forty years of survey work.",
+    ]);
+    const decision = assemble(frontMatterWindow(records), answer({ publisherIds: ["p1-r1"] }));
+    expect(decision.setAside).toEqual([0]);
+    expect(decision.notes).toEqual([]);
+  });
+
+  it("keeps the title it found even when it refuses the deletions", () => {
+    const records = [
+      record({ type: "heading1", text: "A landscape of consciousness" }),
+      ...page(["one two three four five", "six seven eight nine ten"]),
+    ];
+    const decision = assemble(
+      frontMatterWindow(records),
+      answer({ titleIds: ["p1-r1"], publisherIds: ["p1-r2", "p1-r3"] }),
+    );
+    expect(decision.title).toBe("A landscape of consciousness");
+    expect(decision.setAside).toEqual([]);
   });
 });
 
@@ -253,6 +325,7 @@ describe("the pass as a whole", () => {
     let asked = 0;
     const decision = await readFrontMatter([], {
       id: "stub",
+      usage: () => ({ input: 0, output: 0 }),
       async ask() {
         asked++;
         return answer();
@@ -269,6 +342,7 @@ describe("the pass as a whole", () => {
       elsevier,
       {
         id: "stub",
+        usage: () => ({ input: 0, output: 0 }),
         async ask(_prompt, signal) {
           saw = signal;
           return answer({ titleIds: ["p1-r6"] });
