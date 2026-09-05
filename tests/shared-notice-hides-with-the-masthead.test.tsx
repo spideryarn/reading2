@@ -38,6 +38,7 @@ import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SharedNotice } from "../src/web/PublicChrome.js";
+import { SHARED_WITH_YOU } from "../src/messages.js";
 
 const CSS = readFileSync(path.join(process.cwd(), "src/web/styles.css"), "utf8");
 
@@ -65,8 +66,27 @@ describe("a visitor's notice, in the strip the band takes over", () => {
        what stops that from becoming true later. */
     expect(html).toMatch(/class="[^"]*\bshared-notice\b/);
     /* And it really is the notice, so a component that rendered nothing but the
-       right class could not pass. */
-    expect(html).toContain("shared this article with you");
+       right class could not pass.
+
+       Against the constant rather than a copy of its words. This line held the
+       sentence longhand until 2026-09-05, when the wording changed under it and
+       this was one of three files red on `dev` — a test that fails for a
+       reworded sentence is reporting on the copywriter, not on the component.
+       What it is really asserting is that `SharedNotice` rendered its text at
+       all, and `SHARED_WITH_YOU` says that without going stale.
+
+       Two things keep that from being weaker than the sentence it replaced,
+       both from GPT Sol, 2026-09-05:
+
+       - **The non-empty guard.** `toContain("")` is vacuously true, so an
+         emptied constant would have passed an assertion whose whole job is to
+         prove something was rendered.
+       - **Through the renderer, not raw.** Today's copy has no `&` or `<`, so
+         a raw comparison happens to work; the first time somebody writes
+         "read, interrogate & remember" it would fail on the escaping and look
+         exactly like the staleness this change is removing. */
+    expect(SHARED_WITH_YOU.trim(), "the shared notice copy is empty").not.toBe("");
+    expect(html).toContain(renderToStaticMarkup(<>{SHARED_WITH_YOU}</>));
   });
 
   it("is hidden under the same condition, beside the masthead's rule", () => {
