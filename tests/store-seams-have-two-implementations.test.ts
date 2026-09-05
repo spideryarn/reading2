@@ -216,6 +216,49 @@ const SEAMS = await seams();
 const sideNames = (impls: Implementation[], side: Side) =>
   impls.filter((i) => i.side === side).map((i) => i.name);
 
+/**
+ * **The contracts `src/store/index.ts` wires a selector for** — a second, and
+ * deliberately different, way of finding a seam.
+ *
+ * `SEAMS` above is implementations ∩ contracts, so a contract that **nothing
+ * implements** never enters it and the Postgres check below cannot look at it.
+ * That was fine while the answer to "is this a seam?" was "something implements
+ * it": an interface nothing implements was a data shape (`RawSource`,
+ * `SweepOptions`, `Turn`), which is what the file header says and why the test
+ * is "is it implemented" rather than a naming rule.
+ *
+ * **It stopped being fine when there was one store.** With two, a seam missing
+ * its Postgres side still had a filesystem one, so it was in `SEAMS` and the
+ * guard saw it — that is the Claims shape of 2026-08-31, and the check caught
+ * it. With one store, the same outage arrives as a contract plus a selector plus
+ * **no implementation at all**, which is invisible to a set built from
+ * implementations. Found by GPT Sol's review of stage G on 2026-09-05, and
+ * reproduced by both of us: a `ReviewMissingStore` contract with a selector and
+ * no adapter passed all five tests.
+ *
+ * A selector is the right second source precisely because a data shape never has
+ * one. `export const commentStore: CommentStore = guarded(…)` says *this
+ * contract is something the app calls*, which is the whole claim.
+ */
+async function selectorContracts(): Promise<string[]> {
+  const ast = parseSource(await readFile(path.join(STORE_DIR, "index.ts"), "utf8"));
+  const named: string[] = [];
+  walkAst(ast, (node) => {
+    if (node.type !== "ExportNamedDeclaration") return;
+    const declaration = node.declaration as AstNode | undefined;
+    if (declaration?.type !== "VariableDeclaration") return;
+    for (const raw of (declaration.declarations as AstNode[]) ?? []) {
+      const id = raw.id as AstNode | undefined;
+      if (id?.type !== "Identifier") continue;
+      const contract = contractOf(id.typeAnnotation);
+      if (contract) named.push(contract);
+    }
+  });
+  return named;
+}
+
+const SELECTED = await selectorContracts();
+
 /* --------------------------------------------------------- the seams exist -- */
 
 describe("the store seams are found by reading the contract, not a list", () => {
@@ -304,6 +347,34 @@ describe("every store seam has a Postgres implementation", () => {
    * has grown to cover every case is a second list of the seams — the thing this
    * file's own header says it exists to make impossible.
    */
+  it("has a Postgres implementation for every contract the app wires a selector for", () => {
+    /* The case above cannot see this one: `SEAMS` is built from implementations,
+       so a contract nothing implements is not in it. This asks the question from
+       the other end — the app calls it, therefore it needs a store. */
+    const wrong: string[] = [];
+    for (const contract of SELECTED) {
+      const impls = SEAMS.get(contract) ?? [];
+      if (sideNames(impls, "postgres").length > 0) continue;
+      wrong.push(contract);
+    }
+    expect(
+      wrong,
+      `src/store/index.ts wires a selector for ${wrong.join(", ")}, and nothing implements ` +
+        "it for Postgres. That is a 501 the moment a reader reaches it, and it is the shape " +
+        "the 2026-08-31 Claims outage takes now there is one store: a contract, a selector, " +
+        "and no adapter. Build the adapter, or take the selector out.",
+    ).toEqual([]);
+  });
+
+  it("finds selectors at all, so the check above cannot pass by finding nothing", () => {
+    /* The check above is satisfied by an empty list, and an empty list is what a
+       parser that stopped matching produces. This is the floor that tells the
+       two apart — the same argument the seam count makes for `SEAMS`. */
+    expect(SELECTED.length).toBeGreaterThan(8);
+    expect(SELECTED).toContain("CommentStore");
+    expect(SELECTED).toContain("ChatStore");
+  });
+
   it("has a Postgres implementation for every seam", () => {
     const wrong: string[] = [];
     for (const [contract, impls] of SEAMS) {

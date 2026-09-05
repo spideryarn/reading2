@@ -374,7 +374,7 @@ transiently, a tap or click pins it — and the row stays one big target. `Toolt
 
 ## The stage
 
-`data/<slug>/quotes.json`, stage 5h, in `STEP_ORDER` and **not** in `DEFAULT_INGEST_STEPS` —
+The `quotes` artefact (`data/<slug>/quotes.json` until 2026-09-05), stage 5h, in `STEP_ORDER` and **not** in `DEFAULT_INGEST_STEPS` —
 everything after `arc` is a thing somebody asks for. In `FORCE_ONLY_WHEN_NAMED`.
 
 ```

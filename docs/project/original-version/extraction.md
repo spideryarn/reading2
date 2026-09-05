@@ -177,8 +177,10 @@ without re-fetching it.
 
 That is cheap insurance and it gets more valuable over time — the URL may be paywalled, changed, or
 gone by the time you want to re-extract, and re-extraction is exactly what happens when the
-extractor improves. We already do this (`data/<slug>/raw.html`); it is worth stating as a rule
-rather than leaving it as a coincidence of the pipeline's shape.
+extractor improves. We already do this — the raw bytes go to the content-addressed `sources` bucket
+(`data/<slug>/raw.html` until 2026-09-05 — [fetching.md § What stage 1 leaves
+behind](../fetching.md#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk)); it is worth
+stating as a rule rather than leaving it as a coincidence of the pipeline's shape.
 
 The rest of their schema is a database's business, with one idea that transfers: **AI output lives
 in a separate `document_enhancements` table, keyed `(document_id, type, subtype)` — overlays on the

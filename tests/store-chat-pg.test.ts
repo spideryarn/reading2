@@ -111,7 +111,11 @@ describe("the Postgres chat store", () => {
        conflict branch of the upsert has to carry the title through — and
        nothing else in these tests exercises that branch, because every other
        thread here is named at the moment it is created. Found by breaking the
-       line and watching the parity sequence stay green. */
+       line and watching every other case in this file stay green — including
+       the long sequence at the foot of it, whose thread is likewise born
+       named. (The sequence it was originally found against,
+       tests/store-reader-state-parity.test.ts, went with the filesystem store;
+       re-checked here on 2026-09-05.) */
     await getDb().insert(chatThreads).values({
       articleId: ARTICLE_ID,
       id: THREAD,
@@ -742,5 +746,151 @@ describe("the Postgres chat store", () => {
     const again = await pgChatStore.retry(SLUG, THREAD, reply.id);
     expect(again.reply.stance).toBe("signposts");
     expect((await pgChatStore.load(SLUG))[0]?.messages.at(-1)?.stance).toBe("signposts");
+  });
+
+  /**
+   * **One conversation, nine writes, asserted after every one.**
+   *
+   * Ported from `tests/store-reader-state-parity.test.ts`, which went with the
+   * filesystem store (86a4ef7c). There it drove both stores through this
+   * sequence and compared them step by step; with one store left, each
+   * comparison becomes an assertion about what Postgres should hold at that
+   * point. The sequence is what survived, and it is the part worth keeping:
+   * every other case in this file starts from a fresh thread, so **state that
+   * leaks from one operation into the next is invisible to all of them**.
+   *
+   * Every step is here for something it can break, in the original's words:
+   * the second `begin` proves a later question does not rename the thread,
+   * `retry` proves the failed attempt's fields are cleared, `edit` proves what
+   * is discarded, and `rename` proves the clock the panel sorts by does not
+   * move. The assertion with no home anywhere else is the retry of an
+   * **errored** answer: the retry case above blanks a `done` one, where
+   * `error: null` writes null over null and cannot go red.
+   */
+  it("walks one conversation through begin, finish, begin, retry, edit, rename", async () => {
+    const clock = clockFrom("2026-08-01T00:00:00.000Z");
+    const messages = async () => (await pgChatStore.load(SLUG))[0]?.messages ?? [];
+    const thread = async () => (await pgChatStore.load(SLUG))[0];
+
+    // 1. begin one — the first question names the thread.
+    const one = await pgChatStore.begin(
+      SLUG,
+      { threadId: THREAD, question: "What is a spandrel?" },
+      clock,
+    );
+    expect(one.thread.title).toBe("What is a spandrel?");
+    expect(one.reply.status).toBe("pending");
+    expect(await ordinals()).toEqual([
+      { id: one.user.id, ordinal: 0 },
+      { id: one.reply.id, ordinal: 1 },
+    ]);
+
+    // 2. finish one — the answer, and everything that came with it.
+    await pgChatStore.finish(
+      SLUG,
+      THREAD,
+      one.reply.id,
+      {
+        status: "done",
+        text: "The space between two arches.",
+        citations: [{ url: "https://example.com/arch" }],
+        searches: 2,
+        model: "a-model",
+      },
+      { now: clock, attempt: one.attempt },
+    );
+    const answered = (await messages()).at(-1);
+    expect(answered?.status).toBe("done");
+    expect(answered?.text).toBe("The space between two arches.");
+    expect(answered?.citations).toEqual([{ url: "https://example.com/arch" }]);
+    expect(answered?.searches).toBe(2);
+    expect(answered?.model).toBe("a-model");
+
+    // 3. begin two — a later question does NOT rename the thread.
+    const two = await pgChatStore.begin(
+      SLUG,
+      { threadId: THREAD, question: "And a pendentive?" },
+      clock,
+    );
+    expect(two.thread.title).toBe("What is a spandrel?");
+    expect((await thread())?.title).toBe("What is a spandrel?");
+    expect((await ordinals()).map((r) => r.ordinal)).toEqual([0, 1, 2, 3]);
+
+    // 4. finish two, badly.
+    await pgChatStore.finish(SLUG, THREAD, two.reply.id, { status: "error", error: "fell over" }, {
+      now: clock,
+      attempt: two.attempt,
+    });
+    const failed = (await messages()).at(-1);
+    expect(failed?.status).toBe("error");
+    expect(failed?.error).toBe("fell over");
+    expect(failed?.text).toBe("");
+
+    // 5. retry two — same row, and the failed attempt's error must be gone.
+    const retried = await pgChatStore.retry(SLUG, THREAD, two.reply.id, clock);
+    expect(retried.reply.id).toBe(two.reply.id);
+    const blanked = (await messages()).at(-1);
+    expect(blanked?.status).toBe("pending");
+    expect(blanked?.text).toBe("");
+    expect(blanked && "error" in blanked, "the failed attempt's error survived the retry").toBe(
+      false,
+    );
+    expect(await ordinals()).toHaveLength(4);
+    // The turn above it is untouched by any of that — the leak this walk exists for.
+    expect((await messages())[1]?.citations).toEqual([{ url: "https://example.com/arch" }]);
+
+    // 6. finish the retry.
+    await pgChatStore.finish(
+      SLUG,
+      THREAD,
+      retried.reply.id,
+      { status: "done", text: "A triangle." },
+      { now: clock, attempt: retried.attempt },
+    );
+    expect((await messages()).at(-1)?.text).toBe("A triangle.");
+    expect((await messages()).at(-1)?.status).toBe("done");
+
+    // 7. edit the second question — the retried answer is what gets discarded.
+    const edited = await pgChatStore.edit(SLUG, THREAD, two.user.id, "And a squinch?", {
+      now: clock,
+    });
+    expect(edited.discarded).toBe(1);
+    const rows = await ordinals();
+    expect(rows.map((r) => r.ordinal)).toEqual([0, 1, 2, 3]);
+    expect(rows[2]?.id).toBe(two.user.id);
+    expect(rows[3]?.id).toBe(edited.reply.id);
+    const afterEdit = await messages();
+    expect(afterEdit[2]?.text).toBe("And a squinch?");
+    expect(afterEdit[2]?.editedAt).toBeTruthy();
+    expect(afterEdit.some((m) => m.text === "A triangle.")).toBe(false);
+    // Editing a later question renames nothing, and the first turn still stands.
+    expect((await thread())?.title).toBe("What is a spandrel?");
+    expect(afterEdit[1]?.text).toBe("The space between two arches.");
+
+    // 8. finish after the edit.
+    await pgChatStore.finish(
+      SLUG,
+      THREAD,
+      edited.reply.id,
+      { status: "done", text: "A corner arch." },
+      { now: clock, attempt: edited.attempt },
+    );
+    expect((await messages()).at(-1)?.text).toBe("A corner arch.");
+    expect((await messages()).at(-1)?.status).toBe("done");
+
+    // 9. rename — the title changes and the panel's sort key does not.
+    const before = (await thread())?.updatedAt;
+    const renamed = await pgChatStore.rename(SLUG, THREAD, "Vaulting");
+    expect(renamed[0]?.title).toBe("Vaulting");
+    const finished = await thread();
+    expect(finished?.title).toBe("Vaulting");
+    expect(finished?.updatedAt).toBe(before);
+    // The whole transcript, after nine writes.
+    expect(finished?.messages.map((m) => m.text)).toEqual([
+      "What is a spandrel?",
+      "The space between two arches.",
+      "And a squinch?",
+      "A corner arch.",
+    ]);
   });
 });

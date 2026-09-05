@@ -79,8 +79,8 @@ one of them a total record, so the new kind or step stays red until it has one: 
 without naming a server module, and which `pipeline.ts` re-exports; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
 `STAGE_EFFORT` and `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts));
 `REVISION_CARRY_POLICY` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); and `ArticleReader`
-([`contracts.ts`](../../src/store/contracts.ts)) with both adapters,
-`fs.ts` and [`pg.ts`](../../src/store/pg.ts), *annotated* rather than
+([`contracts.ts`](../../src/store/contracts.ts)) with its adapter,
+[`pg.ts`](../../src/store/pg.ts), *annotated* rather than
 `Pick`-cast. (`DECODERS`, the filesystem adapter's per-kind decode table, was on this list too until
 `artifacts-fs.ts` was deleted 2026-09-05; there is no Postgres equivalent, because the columns need
 no decoding.)
@@ -130,8 +130,8 @@ Then the residue nothing refuses at compile time:
 - **`PROMPT_VERSION`, bumped, whenever you change what the prompt asks for** — the
   stamp says which prompt wrote the artefact, and an unchanged one makes every
   stored artefact claim it was written by the prompt that ships. Where the stage
-  also has an `outdated` comparison (`src/api.ts`,
-  [`pg.ts`](../../src/store/pg.ts)) the bump surfaces in the panel. `hierarchy`'s
+  also has an `outdated` comparison ([`pg.ts`](../../src/store/pg.ts)) the bump
+  surfaces in the panel. `hierarchy`'s
   is a stamp and nothing more; `labels`' has no comparison either but is inside
   `batchFingerprint`, so it invalidates checkpoint reuse. Check the version is
   *one* constant before you bump it: `sketch` had two literal

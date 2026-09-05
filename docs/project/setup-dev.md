@@ -457,9 +457,9 @@ knowing here:
 | `npm run typecheck` | every tsconfig, plus the guards that the checking happened ([typechecking.md](typechecking.md)) | — |
 | `npm run lint` | Biome over `src/`, `tests/`, `scripts/` ([linting.md](linting.md)) | — |
 
-The comment endpoints have no CLI stage — they are driven from the reading view. They write
-`data/<slug>/comments.json`; deleting that file forgets every question asked about the article, and
-nothing else breaks.
+The comment endpoints have no CLI stage — they are driven from the reading view. They write rows in
+the `comments` table (`data/<slug>/comments.json` until 2026-09-05); deleting them forgets every
+question asked about the article, and nothing else breaks.
 
 **You do not have to run any of this by hand.** Paste a URL into the homepage's add box and the
 ingest queue runs the same chain in the server process, with each stage named as it goes —
@@ -532,10 +532,12 @@ broken, just the signal quietly gone.
 
 ## Where things live
 
-- `data/<slug>/` — real pipeline output. Gitignored. Every directory in here with a `blocks.json`
-  and a `tree.json` appears on the homepage ([library.md](library.md)).
-- [`example/`](../../example/README.md) — the hand-authored placeholder the client falls back to when
-  `data/<slug>/` doesn't exist yet.
+- `data/<slug>/` — until 2026-09-05, real pipeline output, gitignored, and every directory in here
+  with a `blocks.json` and a `tree.json` appeared on the homepage. Pipeline output is now Postgres
+  rows ([library.md](library.md)); nothing writes this layout on an ordinary run any more
+  ([architecture.md § Storage](architecture.md#storage)).
+- [`example/`](../../example/README.md) — the hand-authored placeholder. Nothing reads it at request
+  time any more; `npm run setup` seeds it into Postgres like any other article.
 - `output/` — the prototype extractor's scratch output, including the test article.
 - [`tests/`](../../tests) — Vitest unit tests. `npm test` (once) or `npm run test:watch`. See
   [testing.md](testing.md).
