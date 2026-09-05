@@ -125,6 +125,23 @@ interface Props {
   onThread(id: string): void;
   /** Leave the panel and open the same conversation full width. */
   onOpenFull(): void;
+  /**
+   * **Start a second conversation about the same paragraph.**
+   *
+   * The door that stage 1 of
+   * docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md
+   * had to leave open. Before it, the gutter's chat chip always started a new
+   * whole-block conversation; after it, the chip *reopens* and never starts
+   * one, and the "?" reopens too — so without this there is no gesture anywhere
+   * that begins a second conversation about a paragraph, and the change would
+   * be a removal rather than a fix. Sol wanted it cut; Fable and Greg kept it,
+   * as one more text button in a row that already exists.
+   *
+   * **It must force a draft**, which is why it is a prop of its own rather than
+   * the chip's callback handed down: that one would look at the summaries, find
+   * the conversation the reader is standing in, and reopen it.
+   */
+  onNewConversation?(blockId: BlockId): void;
   /** Told when a thread appears or goes, so the prose can draw or drop its mark. */
   onCreated(summary: ThreadSummary): void;
   onDropped(threadId: string): void;
@@ -139,6 +156,7 @@ export function ChatDialog({
   onClose,
   onThread,
   onOpenFull,
+  onNewConversation,
   onCreated,
   onDropped,
 }: Props) {
@@ -157,6 +175,10 @@ export function ChatDialog({
   } = useChat(slug);
 
   const thread = target.kind === "thread" ? threads.find((t) => t.id === target.threadId) : undefined;
+
+  /* The paragraph a "New conversation" would be about, or `undefined` if this
+     conversation is not anchored to one. See the button in the footer. */
+  const newAbout: BlockId | undefined = thread?.anchor?.blockId;
 
   /* The composer's draft, owned here because `Composer` is remounted whenever
      the panel swaps between its two shapes and would otherwise lose what was
@@ -584,6 +606,30 @@ export function ChatDialog({
             <button type="button" className="linky" onClick={onOpenFull}>
               Open in full chat
             </button>
+            {/* **The only way to start a *second* conversation about a
+                paragraph**, since the gutter's chip began reopening — see
+                `onNewConversation` above.
+
+                Gated on the conversation being anchored to a paragraph at
+                all — one started in the Chat band is about the article and has
+                no paragraph to offer. A conversation started from a *selection*
+                does have one, and gets the button too: the chip on that
+                paragraph now reopens the selection thread, so this is the only
+                way left to start a whole-block one there.
+
+                Read off the stored thread rather than off `target`, which
+                carries an id and nothing else — so the button appears with the
+                transcript rather than before it. */}
+            {onNewConversation && newAbout && (
+              <button
+                type="button"
+                className="linky"
+                onClick={() => onNewConversation(newAbout)}
+                title="Start another conversation about this paragraph"
+              >
+                New conversation
+              </button>
+            )}
             {thread && !streaming && (
               <button
                 type="button"

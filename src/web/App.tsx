@@ -203,7 +203,13 @@ import { navPlan, useArrowNav } from "./keynav.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
-import { anchored, countByBlock, helpThreadFor, useChatAnchors } from "./useChatAnchors.js";
+import {
+  anchored,
+  countByBlock,
+  helpThreadFor,
+  threadFor,
+  useChatAnchors,
+} from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
 import { articleWaitTitle, pageTitle, useDocumentTitle } from "./page-title.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -2474,7 +2480,11 @@ function Reader({
      Everything each of them closes over is itself stable: `useState` setters,
      nuqs setters (`useQueryState` returns a `useCallback` whose own dependencies
      are memoised — nuqs 2.10.0, dist/index.js:724), `blockText` (a memo) and
-     `owner`, which is a prop of `Reader`. */
+     `owner`, which is a prop of `Reader`.
+
+     `startChatAboutBlock` below is the exception to the heading rather than to
+     the rule: it goes to the floating panel, not to `TableView`, and it is a
+     `useCallback` because `chatAboutBlock` — which does — is built on it. */
 
   const openChatThread = useCallback(
     (id: BlockId) => {
@@ -2485,25 +2495,32 @@ function Reader({
     [setNote, setThread],
   );
 
-  /* A conversation anchored to the whole block — the other half of what an
-     anchor can be, and the one that draws no mark in the prose. The paragraph's
-     opening words go into the composer so the reader can see which one they
-     pressed; a six-character id is not something you can check you clicked
-     correctly.
+  /* **A *new* conversation anchored to the whole block** — the other half of
+     what an anchor can be, and the one that draws no mark in the prose. The
+     paragraph's opening words go into the composer so the reader can see which
+     one they pressed; a six-character id is not something you can check you
+     clicked correctly.
 
-     **Handed over only to an owner, and that is the whole gate.** It used to go
-     to everybody with an `if (!owner) return;` inside it, so a visitor got a
-     chat button on every paragraph whose press did nothing. The absent callback
-     is what makes the button absent (BlockGutter.tsx), and the sentence about
-     what chat costs is still one press away in the Chat band. The place a
-     visitor meets the boundary is `onSelect` below, which they reach by accident
-     and which stays silent for that reason.
+     **Split out of `chatAboutBlock` on 2026-09-05**, when the chip started
+     reopening. It is a branch and a door: the branch is what a paragraph with
+     no conversation still gets, and the door is `onNewConversation` on the
+     panel, which has to be able to force a fresh draft from inside a thread —
+     so it cannot go through `chatAboutBlock`, which would reopen the very
+     thread the reader is trying to leave.
+
+     **Handed over only to an owner, and that is the whole gate.** `onChatAbout`
+     used to go to everybody with an `if (!owner) return;` inside it, so a
+     visitor got a chat button on every paragraph whose press did nothing. The
+     absent callback is what makes the button absent (BlockGutter.tsx), and the
+     sentence about what chat costs is still one press away in the Chat band.
+     The place a visitor meets the boundary is `onSelect` below, which they
+     reach by accident and which stays silent for that reason.
 
      The `owner ?` ternary stays at the call site rather than moving in here, so
      that the prop is `undefined` — not a function that does nothing — and the
      button is genuinely absent. It is identity-stable either way, because
      `owner` is. */
-  const chatAboutBlock = useCallback(
+  const startChatAboutBlock = useCallback(
     (blockId: BlockId) => {
       void setNote(null);
       void setThread(null);
@@ -2514,6 +2531,40 @@ function Reader({
       });
     },
     [blockText, setNote, setThread],
+  );
+
+  /**
+   * **The chip opens what it is counting.**
+   *
+   * A press used to land on `startChatAboutBlock` unconditionally, so the blue
+   * mark saying *"(3 already)"* handed the reader an empty composer — the chip
+   * advertised state it would not show them. Reported by Greg, 2026-09-05;
+   * docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md
+   * § stage 1.
+   *
+   * The rule about **which** conversation, and why a whole-block one outranks a
+   * newer selection, lives with the query in `threadFor` rather than here.
+   *
+   * **A new conversation is still reachable**, from the panel this now opens —
+   * `onNewConversation` below, which is `startChatAboutBlock` unwrapped so that
+   * it cannot simply reopen the thread the reader is standing in.
+   *
+   * The same before-the-list-has-arrived tolerance `helpAboutBlock` documents
+   * at length applies here, and costs less: a press in the first few hundred
+   * milliseconds opens a composer instead of a transcript, and buys nothing.
+   */
+  const chatAboutBlock = useCallback(
+    (blockId: BlockId) => {
+      const existing = threadFor(chatSummaries, blockId);
+      if (existing) {
+        setChatDraft(null);
+        void setNote(null);
+        void setThread(existing.id);
+        return;
+      }
+      startChatAboutBlock(blockId);
+    },
+    [chatSummaries, setNote, setThread, startChatAboutBlock],
   );
 
   /**
@@ -3061,6 +3112,10 @@ function Reader({
             setChatDraft(null);
             void setMode("chat");
           }}
+          /* **The draft branch, on purpose**, not `chatAboutBlock` — which
+             would find this very conversation and reopen it, so the button
+             would do nothing. ChatDialog.tsx § `onNewConversation`. */
+          onNewConversation={startChatAboutBlock}
           onCreated={owner.chatAnchors.add}
           onDropped={owner.chatAnchors.drop}
         />

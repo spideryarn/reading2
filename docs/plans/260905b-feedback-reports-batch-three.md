@@ -34,6 +34,9 @@ Not one agent per report — **one agent per set of files**, because three workt
 - **Wave 1**
   - **1Q + 1R + 1S** — all three are the gutter's ? button and the comment it makes. 1Q is where you
     land, 1R is what gets stored, 1S is what comes back. One agent, one story.
+    → [260905c-gutter-comment-chip-explanation-metadata-and-prompt.md](260905c-gutter-comment-chip-explanation-metadata-and-prompt.md).
+    The chip in 1Q turned out to be the **chat** button, not the comment bookmark, and each press of
+    it was minting a fresh conversation rather than opening the ones it counted.
   - **1J + 1K** — both dictation, both `src/web/useDictation*.ts` and the transcription route.
   - **1H + 1N** — a new page and a dialog's copy. Unrelated to each other, but small, and neither
     collides with anything else in the wave.
