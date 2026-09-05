@@ -239,7 +239,7 @@ export function promptFor(items: FrontMatterItem[]): string {
  */
 export function frontMatterFingerprint(model: string): string {
   return createHash("sha256")
-    .update(`${SYSTEM} ${JSON.stringify(SCHEMA)} ${model}`)
+    .update(`${SYSTEM}\u0000${JSON.stringify(SCHEMA)}\u0000${model}`)
     .digest("hex")
     .slice(0, 12);
 }
