@@ -85,3 +85,29 @@ Recorded here because there is nobody in the chat to ask.
 Filled in per agent as each lands. Each agent works in its own worktree, runs
 [engineering-manager.md](../reusable/engineering-manager.md), gets a GPT Sol review of its code, and
 pushes to `dev` itself.
+
+## A red on `dev` that is not this batch's
+
+`tests/store-migration-registry.test.ts` fails on `dev`, and it reproduces alone, so it is not the
+box:
+
+```
+tests/jobs.test.ts: 10 of its top-level blocks account for no mutation, and the record allows 9
+```
+
+It arrived with `cbb903d0` *Stage E: the six stage CLIs go through the queue, against Postgres* —
+the database-move work, not this one. A block was added to `tests/jobs.test.ts` and the registry
+record was not updated to match.
+
+**Deliberately not fixed here.** The two ways to make it green are to annotate the new block with a
+`**Mutation.**` or an honest `**No mutation.**` header, or to raise the allowance from 9 to 10. The
+second defeats the guard, and the first requires knowing whether that block deserves a mutation test
+and then writing one — which is precisely the work the registry exists to force onto the person who
+added the block. Guessing on their behalf would produce a green gate and a worse test.
+
+Every agent in this batch was told it is inherited, so nobody wastes time deciding whether it is
+theirs. It is listed here so it is not lost; it is not on
+[awaiting-approval.md](../user-feedback/awaiting-approval.md), which is for feedback reports.
+
+Separately: `tests/admin-store` goes red under contention and passes alone. Three worktrees on one
+box is the documented limit for a reason.
