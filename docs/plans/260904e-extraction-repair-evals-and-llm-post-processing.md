@@ -363,8 +363,49 @@ The compatibility that rests on is now tested properly, which it was not: see **
 > annotates"* — but frames it as one block on one article rather than as unconditional churn on half
 > the corpus.
 >
-> **Recommended fix, not taken here, because id assignment is not something to change in a review
-> round.** Give such a block the pass-one key `` `e:${tag}` `` instead of `null` — one line at the
+> **Taken, on its own, as stage A2 — 2026-09-05, and it needed one more clause than the
+> recommendation below has.** The failing test was watched red first
+> ([`tests/empty-blocks-keep-their-ids.test.ts`](../../tests/empty-blocks-keep-their-ids.test.ts));
+> every one of its 13 assertions has since been watched red against the code state it guards. Every
+> number reproduced: **218 re-mints → 0**, **17 of 35 fingerprint flips → 0**, **Postgres freshness 18
+> done/17 not → 35/0**. **Rollout churn on real stored data: 0** — five stored filesystem articles
+> (349 blocks) and 77 local Postgres revisions (16,607 blocks) re-split against their own stored
+> blocks under both codebases; no stored id changed position or owner, 7 re-mints and 5 fingerprint
+> flips disappeared, and the one article still churning (`revistes-ub-30977`) churns identically
+> before and after, because its stored blocks were written by an older splitter.
+>
+> **The recommendation below, taken literally, is wrong — and two rounds of GPT Sol review caught it
+> before it landed.** `` `e:${tag}` `` for any block with no text and no `src` makes an inline-SVG
+> `<figure>` interchangeable with the next one: reordering two diagrams put the circle's id on the
+> rectangle, `minted: 0` and the fingerprint unchanged. Reproduced, then fixed. What shipped is
+> narrower in three ways, each of them measured rather than argued:
+>
+> - the key is given **only to a block with nothing in it at all** — no text, no `src`, no child
+>   element — and it carries the block's **attributes and inner text**, because `<hr
+>   class="section-break">` is not a plain `<hr>` and `<p>&#160;</p>` is not `<p></p>`;
+> - the attribute list is **JSON**, not `name=value` joined, for the injectivity reason `keyOf`
+>   already gives;
+> - and an `e:` bucket is **refused outright when the two sides hold different numbers of unclaimed
+>   ids**, so inserting a rule re-mints them all rather than sliding each id onto its neighbour. I
+>   argued against that and was wrong: the refusal costs no fingerprint, because an article that
+>   gained or lost a block has a different fingerprint anyway. It catches a *net* count change and no
+>   more, and both that limit and the part-stamped-document case that the first version of the count
+>   got wrong are pinned as tests.
+>
+> One limitation is accepted with its blast radius written down: `id` is left out of the key (the
+> stored side has ours, having overwritten the author's), so two empty blocks differing only in an
+> author-written id trade ids on a reorder. Refusing instead was **measured** — 33 blocks on 3 of the
+> 35 fixtures if every named empty block is refused, 29 on 2 if only the ones that could actually
+> trade are — i.e. it keeps this bug for a tenth of the corpus, and was declined on that. All the numbers above are with all of it in. The write-up, the class the mistake belongs to,
+> and the lessons from the review are in
+> [260905a](../postmortems/260905a-empty-blocks-remint-their-ids-on-every-extraction.md).
+>
+> One claim in the paragraph below is also **wrong and is corrected there**: "nothing can be anchored
+> to them" — a chat is anchored by `{ blockId }` alone, and every block has a chat button. Nobody has
+> started one about a horizontal rule; that is luck, not a guarantee.
+>
+> **Recommended fix, not taken in the review round, because id assignment is not something to change
+> in one.** Give such a block the pass-one key `` `e:${tag}` `` instead of `null` — one line at the
 > `src` fallback in `exactKey`. Pass one already consumes duplicates in document order, which is the
 > right semantics and the same rule that keeps every repeated `<li>Yes</li>`'s id today. Measured on
 > a scratch copy: **218 re-mints → 0, and the Postgres freshness arm 17-not-done → 0**. The
@@ -384,7 +425,11 @@ The compatibility that rests on is now tested properly, which it was not: see **
 > **A free side finding.** The single filesystem-arm failure is `mkdocs-tabs`, and it is a different
 > bug: re-splitting stage 3's own output loses every block's `context: {type:"callout"}`, because
 > `scrubReserved(doc, CONTEXT_ATTRS)` strips the transport before serialising. On the filesystem a
-> stage-3 re-run therefore drops callout context silently. Worth its own ticket.
+> stage-3 re-run therefore drops callout context silently. Worth its own ticket. **Confirmed with a
+> number and deliberately not fixed in A2** — `mkdocs-tabs` has 8 context-bearing blocks on a first
+> run, 8 on a Postgres-shaped re-split (stage 2's html still carries the attribute) and **0** on a
+> filesystem-shaped one. It is the one remaining filesystem-arm failure after A2, and it is recorded
+> in [260905a § What else this turned up](../postmortems/260905a-empty-blocks-remint-their-ids-on-every-extraction.md).
 
 > **A decision was taken here and then retracted, and both halves are worth keeping.**
 >

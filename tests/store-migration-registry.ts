@@ -461,6 +461,25 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "test for a module rather than for a store object — and its `/var` and warm-`/tmp` arguments " +
       "have nowhere to go once no path is computed at all.",
   },
+  /**
+   * **Arrived 2026-09-05 with the empty-block id fix**, and the hole check
+   * caught it the same way it caught `step-job-preceded-by`: a new test file
+   * that reaches a condemned module through an import it needs for one
+   * assertion. Classified by reading it rather than by re-running witness 2,
+   * which takes the box's Postgres lanes with it and would have been a twelve
+   * minute run beside other agents' suites.
+   */
+  "tests/empty-blocks-keep-their-ids.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Block ids surviving a re-extraction, per docs/project/block-ids.md. Its last case asks the " +
+      "real `STEPS.blocks.isDone` — hence the `src/pipeline.js` import the graph follows — but " +
+      "hands it a hand-built `ArtifactReads` of three artefacts, and `blocksMatchTheirHtml` reads " +
+      "through that object and nothing else. Every other case calls `splitIntoBlocks` on a string. " +
+      "No store is selected and none is constructed, so the hinge changes it in no way.",
+  },
   "tests/enqueue-owns-the-article.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],

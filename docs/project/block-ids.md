@@ -208,7 +208,8 @@ stamped one would hand stage 3 last week's paragraphs already carrying this week
 ### Two passes, and the second one refuses to guess
 
 ```
-  pass 1   the tag + the text exactly as written (or, with no text, the src)  → keep the id
+  pass 1   the tag + the text exactly as written (or, with no text, the src; or, with nothing
+           in it, the tag, attributes and inner text, matched in document order) → keep the id
   pass 2   the tag + the same words, case and punctuation folded away,
            and only where one old block and one new block claim it            → keep the id
   else                                                                        → mint a fresh one
@@ -249,18 +250,34 @@ paragraphs from the article outright while reporting success. The cause, the mea
 and the fix are in [the postmortem](../postmortems/260826d-block-id-matching-non-latin.md).
 
 Measured on the test article, re-extracted *and* with a new paragraph inserted above everything:
-**138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to
-match on and which nobody annotates.
+**138 of 139 ids survive.** The one casualty was an `<hr>`, which has neither text nor a `src` to
+match on and which nobody annotates — and that was a bug, fixed on 2026-09-05.
 
-> **That last sentence understates it, and the understatement matters.** Every text-less block with
-> no `src` anywhere in its html keys as `null` in all three passes, so it is in no bucket on either
-> side and **re-mints on every run over byte-identical input** — not one `<hr>` on one article, but
-> 218 blocks across 17 of the 35 corpus fixtures (122 `<p>`, 59 `<hr>`, 30 `<li>`, 7 `<figure>`).
-> Nothing a reader owns is lost, for exactly the reason above. What does move is the *fingerprint*:
-> `hashBlocks` includes the block id, so half the corpus reports a changed article after a
-> re-extraction that changed no words — and under Postgres those same articles can never satisfy
-> `blocksMatchTheirHtml`, so the `blocks` step never reports itself done. Pre-existing since
-> `84ce16bf` (2026-08-24). Measured, with the one-line fix and the alternatives weighed, in
+> **That last sentence understated it, and the understatement mattered. Fixed 2026-09-05; kept here
+> because the shape of the mistake is worth more than the line that was wrong.** Every text-less
+> block with no `src` anywhere in its html keyed as `null` in all three passes, so it was in no
+> bucket on either side and **re-minted on every run over byte-identical input** — not one `<hr>` on
+> one article, but 218 blocks across 17 of the 35 corpus fixtures (122 `<p>`, 59 `<hr>`, 30 `<li>`,
+> 7 `<figure>`). No reader had anchored anything to one, but that is luck rather than design — a chat
+> can be anchored to any block by its id alone. What moved on every article was the *fingerprint*:
+> `hashBlocks` includes the block id, so half the corpus reported a changed article
+> after a re-extraction that changed no words — and under Postgres those same articles could never
+> satisfy `blocksMatchTheirHtml`, so the `blocks` step never reported itself done. Pre-existing since
+> `84ce16bf` (2026-08-24).
+>
+> A block with **nothing in it at all** — no text, no `src`, and no child element — now takes the
+> pass-one key `` `e:${tag}:${attributes and inner text}` `` and matches positionally among the empty
+> blocks identical to it, so all three numbers are **0** and no stored id moved on rollout. Two
+> guards keep that from becoming a wrong anchor: **position is trusted only where the two sides hold
+> the same number of them**, so inserting one rule re-mints them all rather than sliding each id onto
+> its neighbour; and a text-less block that *does* have markup in it —
+> `<figure><svg>…</svg></figure>`, an inline diagram — goes on minting, because two of those are not
+> interchangeable and keying them by tag alone moved one diagram's id onto the other. The attributes
+> and the inner text are in the key for the same reason, one step less visible: a rule with a
+> `class` on it is not a plain `<hr>`, and `<p>&#160;</p>` is not `<p></p>`. The
+> write-up, the class it belongs to, and the alternatives refused are in
+> [260905a](../postmortems/260905a-empty-blocks-remint-their-ids-on-every-extraction.md); the
+> original investigation is in
 > [260904e § A](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md).
 
 **A PDF re-read costs more than a web page re-extraction, and it is measured.** Re-running stage 2 on
