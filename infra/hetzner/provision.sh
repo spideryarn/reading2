@@ -1032,21 +1032,38 @@ EOF
 # it cannot establish the root-owned regular file the reader requires. `-T` on
 # the mv is load-bearing -- with a directory at the destination the plain form
 # puts the file INSIDE it and exits 0.
-# Anything a previous run left staged, first. An EXIT trap would be the tidier
-# answer, but this script already owns one (for the settings.json temp) and a
-# second would silently disarm the first. A sweep here covers what a trap could
-# not anyway: a run that was killed outright between mktemp and mv.
-rm -f /etc/.gjd-remote-host.*
-gjd_host_tmp=$(mktemp /etc/.gjd-remote-host.XXXXXX)
+# Two cleanups, because they catch different things.
+#
+# FIRST, anything a previous run left staged. A trap cannot help there: a run
+# killed outright between the mktemp and the mv leaves its file with nobody to
+# tidy it.
+#
+# The staging name carries `.tmp.` so the sweep can be sure of what it is
+# deleting. Without it the glob was `.gjd-remote-host.??????`, which matches any
+# six-character suffix -- and `.gjd-remote-host.backup` is exactly six
+# characters, so a file somebody had put there on purpose was swept away. Found
+# by writing that file in a spike and watching it go.
+#
+# `test -f` as well, so a DIRECTORY with a matching name is stepped over rather
+# than making `rm -f` fail and abort the whole run under `set -e`.
+for gjd_host_stale in /etc/.gjd-remote-host.tmp.??????; do
+  if test -f "$gjd_host_stale"; then rm -f "$gjd_host_stale"; fi
+done
+gjd_host_tmp=$(mktemp /etc/.gjd-remote-host.tmp.XXXXXX)
+# SECOND, this run's own file, on any failure the shell can see -- including
+# `mv -T` REFUSING a directory at the destination rather than putting the file
+# inside it, which is the failure this whole form exists for. Measured against a
+# fake /etc on 2026-09-05: without it, one stray file per failed run, for ever.
+#
+# The trap is safe to set here. The one `provision.sh` sets earlier lives inside
+# a heredoc and belongs to a child bash, not to this process -- I had that wrong
+# in the first version and used it as the reason to avoid a trap entirely.
+trap 'rm -f "$gjd_host_tmp"' EXIT
 printf '127.0.0.1\n' > "$gjd_host_tmp"
 chown root:root "$gjd_host_tmp"
 chmod 0644 "$gjd_host_tmp"
-# The `||` is not belt-and-braces: `mv -T` REFUSES a directory at the
-# destination rather than putting the file inside it, and under `set -e` that
-# aborts the run and leaves the staged file behind. Measured against a fake /etc
-# on 2026-09-05: one stray /etc/.gjd-remote-host.XXXXXX per failed run, for ever,
-# because nothing afterwards knows it is there.
-mv -f -T "$gjd_host_tmp" /etc/gjd-remote-host || { rm -f "$gjd_host_tmp"; exit 1; }
+mv -f -T "$gjd_host_tmp" /etc/gjd-remote-host
+trap - EXIT
 # The export it replaces. Left behind it would be a second answer to the same
 # question, honoured only in login shells and read through the branch that does
 # no validation at all -- so a malformed file would be obeyed in one shell and
@@ -1193,8 +1210,14 @@ check "no leftover GJD_REMOTE_HOST export" \
 # fail. So the value is held to the same characters scripts/gjd-remote-host.ts
 # allows, in the same order, before anything interpolates it: an alphanumeric
 # first, then letters, digits, dot, underscore and dash.
+#
+# LC_ALL=C, because a bash range expression collates by LOCALE and the box runs
+# en_GB.UTF-8, where `A-Za-z` also admits the dotted and dotless Turkish i --
+# `Ihost` and `Ihost` passed the guard and would be refused by the reader. It is
+# set inside the check, which check() runs in a subshell of its own, so nothing
+# else in the run sees it.
 check "gjd-remote loopback ssh works, at the address that file names" \
-  'addr=$(cat /etc/gjd-remote-host) && case "$addr" in ""|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*) false ;; *) true ;; esac && timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new $addr hostname"'
+  'LC_ALL=C; addr=$(cat /etc/gjd-remote-host) && case "$addr" in ""|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*) false ;; *) true ;; esac && timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new $addr hostname"'
 # Claude, over that same loopback -- deliberately AFTER it, so a broken ssh is
 # reported as a broken ssh rather than as a missing Claude.
 #

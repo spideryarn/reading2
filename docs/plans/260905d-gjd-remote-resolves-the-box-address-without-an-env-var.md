@@ -253,6 +253,25 @@ bind-mounted variants, private mount namespace:
 And the export check now fails on a dangling symlink (**F14**), while still passing when nothing is
 there.
 
+## Review ledger — GPT Sol, round 4 (narrow re-check of the F11–F16 fixes)
+
+[260905d-review-sol-stage2-recheck.md](260905d-review-sol-stage2-recheck.md), prompt in
+[260905d-review-prompt-stage2-recheck.md](260905d-review-prompt-stage2-recheck.md). Verdict:
+**land-with-changes**, F11–F16 confirmed fixed, four new P2s. All four accepted.
+
+| | | |
+|---|---|---|
+| **F17** | P2 | **`check-cloud-init.ts` never read my checks at all.** It filters physical lines starting with `check `, so a `check "…" \` gave it the argument `\`, and `printf "%s" \` parses perfectly — four checks reported as "runnable shell" with nothing having looked at them. Fixed in the *parser*, not by reformatting the checks: a preflight that silently skips what it cannot parse is the very thing it exists to prevent. Watched go red on a deliberately broken continued check, then green again. |
+| **F18** | P2 | Bash range expressions collate **by locale**, so `[A-Za-z]` under `en_GB.UTF-8` admits the dotted and dotless Turkish i, which the reader's ASCII regex refuses — the claimed equivalence was false. `LC_ALL=C` inside the check's own subshell. Measured: `İhost` accepted under `en_GB`, refused under `C`. |
+| **F19** | P2 | My reason for avoiding an `EXIT` trap was **wrong**: the trap I pointed at lives inside a heredoc and belongs to a child bash, not to `provision.sh`. So there is a trap now, set after `mktemp` and cleared after the rename, and the sweep stays for the killed-outright case a trap cannot reach. |
+| **F20** | P2 | The sweep glob was broader than the files we create. Proved by the spike in the way I least expected: `.gjd-remote-host.backup` is **exactly six characters**, so my "matches mktemp's own shape" glob deleted a file somebody had put there on purpose. The staging name now carries `.tmp.`, and `test -f` steps over a directory rather than aborting the run under `set -e`. |
+
+**The spike also caught itself.** Its first F19 run reported `exit 0` with the file left behind,
+which looked like the trap failing. It was the harness: `write_it && echo …` puts the subshell in a
+condition context, and `set -e` does not fire there. Corrected to `write_it; rc=$?`, the real
+behaviour appears — `mv` refuses, exit 1, nothing left staged. Twice now this spike has measured
+itself rather than the code, in both directions.
+
 ## What done looks like
 
 - On the box, in a shell with no `GJD_REMOTE_HOST`: `ls`, `resolve`, `new-claude --no-attach -p -`

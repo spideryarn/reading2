@@ -276,7 +276,15 @@ if (bashOk(provision, "provision.sh syntax")) note("✓ infra/hetzner/provision.
   }
 }
 
-const checkLines = provision.split("\n").filter((l) => l.trim().startsWith("check "));
+// Backslash-continued lines are JOINED first, and that is not tidiness. A
+// `check "…" \` on its own line matched the filter, the regex took its argument
+// to be the lone `\`, and `printf "%s" \` parses perfectly — so the check was
+// reported as runnable shell while nothing had looked at it. Four checks were
+// invisible that way on 2026-09-05, and the count at the bottom said 44.
+// A checker that silently skips what it cannot parse is the thing this file
+// exists to prevent, so it does not get to do it either.
+const continued = provision.replace(/\\\n\s*/g, " ");
+const checkLines = continued.split("\n").filter((l) => l.trim().startsWith("check "));
 for (const line of checkLines) {
   const m = /^\s*check\s+"([^"]+)"\s+(.*)$/.exec(line);
   if (!m) {
