@@ -3547,6 +3547,55 @@ td.text.has-hit[data-hues="8"] {
 }
 .install-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
 
+/* ------------------------------------------------- the small-screen hint --
+   One banner, once, at the top of the reading view on a narrow touch screen —
+   SmallScreenHint.tsx, and docs/plans/260905e-a-small-screen-banner-on-a-phone.md
+   for why the message is "the band covers the article, press Plain" rather
+   than anything this stylesheet could fix.
+
+   **In flow, not fixed**, which is the whole difference from the install hint
+   above and the reason it needs no `--hint-h` of its own: it is read once on
+   arrival and then scrolls away with the masthead. Two fixed strips over the
+   same bar would have needed a second token and an ordering rule between two
+   sentences that have nothing to say to each other.
+
+   Sized like `.shared-notice`, which is its neighbour in the flow, and
+   coloured like `.install-hint`, which is its sibling in purpose. */
+.small-screen-hint {
+  margin: 0 auto 1rem;
+  max-width: 48rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.small-screen-hint-text { margin: 0; flex: 1; }
+.small-screen-hint-text b { color: var(--ink); font-weight: 600; }
+.small-screen-hint-close {
+  flex: none;
+  /* 32px, `.install-hint-close`'s number and its reason: pressed once, never
+     found again, and one the size of a mode button would read as an equal of
+     the things beside it. Past the 24px CSS minimum either way. */
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.small-screen-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
 .dock-btn {
   display: inline-flex;
   align-items: center;
@@ -12031,6 +12080,15 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    title, and the chip in the controls bar is the half that was always meant
    to survive a scroll. src/web/PublicChrome.tsx § SharedNotice. */
 .reader.band-covers:has(.mode-band) .shared-notice { display: none; }
+/* **And the small-screen banner, for the first of those two reasons only.**
+   It sits in the same stretch of flow and would land under the fixed corner
+   logo the same way. There is no second argument here and none is needed: the
+   banner is one sentence about the layout, the layout has just put a panel
+   over the whole article, and a sentence nobody can read is not a sentence.
+
+   It is *hidden*, never dismissed — pressing Plain brings it back, which is
+   the state the banner is about. src/web/SmallScreenHint.tsx. */
+.reader.band-covers:has(.mode-band) .small-screen-hint { display: none; }
 
 /* ----------------------------------------------------- § a small device ----
    Where a centimetre in *either* direction is worth having.

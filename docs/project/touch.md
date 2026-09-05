@@ -367,6 +367,54 @@ was that Send sat underneath the keys, which is a sizing problem —
 No floating toolbar or keyboard accessory was built, and none should be: it is a
 large, fragile, iOS-only thing, and the reader's real need is to reach the button.
 
+## One banner, once, when both will not fit
+
+Past a crossover the mode band stops taking room from the article and is laid **over** it instead —
+`bandCoversProse` in [`src/web/layout.ts`](../../src/web/layout.ts), and styles.css § a band with no
+room. That is the design ([reading-view-overview.md](reading-view-overview.md)), and from the outside
+it reads as the text having disappeared.
+
+> it's really designed for larger screens. It's possible to use it, but it can really only show
+> either the mode panel or the text … You could also try it in Landscape, and this is a work in
+> progress.
+>
+> — Greg, 2026-09-05
+
+So a reader on a **coarse pointer**, in a window on the wrong side of that crossover, gets one
+sentence at the top of the article saying so and naming **Plain** as the way back to the text.
+[`SmallScreenHint.tsx`](../../src/web/SmallScreenHint.tsx), and
+[260905e-a-small-screen-banner-on-a-phone.md](../plans/260905e-a-small-screen-banner-on-a-phone.md)
+for the four decisions behind it.
+
+**The contract is *until dismissed*, not *once*.** It is on every article and every visit until the
+× is pressed, and then never again on that device. Greg's ask said "the 1st time", and this is
+deliberately not that: a banner that spent itself on a visit where the reader happened to scroll
+straight past would have explained nothing to the one person it is for. Nothing records a *view*;
+the one bit in `localStorage` records a *press*.
+
+**It asks the layout rather than a width**, and that is the part worth carrying elsewhere: an iPad in
+portrait is 834px, which is *above* `MODE_MIN + PROSE_MIN` and *below* the real crossover with the
+12px rail on. A gate written as the sum warned every phone and no iPad — the device it was most
+obviously for — by two pixels.
+
+**Landscape is suggested only when there is a landscape to turn to.** `moreRoomSideways` compares the
+viewport's two sides; a phone already held sideways gets the rest of the sentence and not that
+advice. The crossover itself lands at 844px of *usable* width — and note that is a window rather than
+a device, since `useWindowWidth` takes the safe-area insets out first, so a notched phone whose
+screen is 844pt sideways is handed rather less and keeps the banner.
+
+**Arriving with a mode already open is the one case it does not cover**, and that is accepted rather
+than solved. A covering band is `position: fixed` over the whole article, so there is no stable place
+for a sentence underneath it, and left in flow the banner would land beneath the fixed corner logo —
+the collision `.shared-notice` already hit in August. So `?mode=chat` on a phone shows the covering
+band and no explanation until the reader reaches Plain. The default mode is Plain and a shared link
+carries no mode, so the ordinary first arrival does get it.
+
+It is a sibling of the install hint above it (`InstallHint`, [`install-hint.ts`](../../src/web/install-hint.ts)),
+which tells an iOS reader how to get the browser's own chrome out of the way, and the two share
+`media()` in [`src/web/media.ts`](../../src/web/media.ts). They say different things and sit in
+different places: this one is in flow at the top of the article, that one is fixed above the dock.
+
 ## What we deliberately did not build
 
 - **A setting.** Apple Books and Kindle both ship an explicit continuous-scroll / page-turn toggle,

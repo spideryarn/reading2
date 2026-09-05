@@ -244,6 +244,50 @@ function spineWidth(mode: SpineMode): number {
   return mode === "on" ? SPINE_W : 0;
 }
 
+/**
+ * **The rail, in a mode**: on unless the reader turned it off.
+ *
+ * `?spine=0` is a choice about the page rather than about the mode you happen
+ * to be in, so `null` — nobody has chosen — means on. Named because two
+ * functions now resolve it and they must not drift: `fitMode` needs the mode
+ * for its own arithmetic, and `bandCoversProse` needs it to answer the same
+ * question one press earlier.
+ *
+ * **It is deliberately not `Fit.spine`**, which is what the *current* layout
+ * resolved to and answers a different question — `fitView` turns the rail off
+ * in outline mode, where there is no band at all. A caller asking "would a band
+ * cover the article" has to be told about the rail the band would find, not the
+ * one on screen beside something else.
+ */
+function modeSpine(showSpine: boolean | null): SpineMode {
+  return showSpine === false ? "off" : "on";
+}
+
+/**
+ * **Would an open mode band cover the article rather than sit beside it?**
+ *
+ * The crossover `fitMode` turns on, lifted out so there is exactly one
+ * statement of it. Below this width the band stops taking room from the prose
+ * and is laid over it instead — see the long note inside `fitMode` for why that
+ * is the design and not a failure, and styles.css § a band with no room for the
+ * other half of it.
+ *
+ * **It moves with the rail**, which is why it takes `showSpine` rather than
+ * being a number: 844 with the rail on, 832 without. A caller that guessed the
+ * rail was on would miss an iPad in portrait by two pixels, and one that
+ * guessed it was off would warn a reader whose band fits perfectly well.
+ * Getting that wrong from a hand-copied breakpoint is the accident this
+ * codebase has already had once — see `App.tsx` § `band-covers`.
+ *
+ * **It answers a hypothetical when no band is open**, and that is the point:
+ * `SmallScreenHint` is the other caller, and its whole job is to say what will
+ * happen when the reader presses a mode button, *before* the article vanishes
+ * underneath one.
+ */
+export function bandCoversProse(windowWidth: number, showSpine: boolean | null = null): boolean {
+  return MODE_MIN + PROSE_MIN > Math.max(0, windowWidth - spineWidth(modeSpine(showSpine)));
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 export interface FitInput {
@@ -515,7 +559,7 @@ export function fitView({
  *    only other caller did not know about.
  */
 function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
-  const spine: SpineMode = showSpine === false ? "off" : "on";
+  const spine = modeSpine(showSpine);
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   /**
@@ -574,8 +618,15 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
    * move without anything in CSS moving with it.
    * `tests/spine-width.test.ts` § the band covers the article on a fact, not on
    * a width holds that line.
+   *
+   * **The condition itself moved to `bandCoversProse` on 2026-09-05** and this
+   * function now asks it rather than spelling it out, because a second reader
+   * of the same crossover arrived: the banner that tells a phone reader why the
+   * article vanished (src/web/SmallScreenHint.tsx). Two hand-written copies of
+   * a width is how the stylesheet and this file came to disagree in the first
+   * place, and the fix there was the same one — derive it, do not restate it.
    */
-  if (MODE_MIN + PROSE_MIN > avail) {
+  if (bandCoversProse(windowWidth, showSpine)) {
     return {
       columns: [],
       widths: [avail],
