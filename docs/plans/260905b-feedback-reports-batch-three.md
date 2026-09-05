@@ -95,9 +95,10 @@ box:
 tests/jobs.test.ts: 10 of its top-level blocks account for no mutation, and the record allows 9
 ```
 
-It arrived with `cbb903d0` *Stage E: the six stage CLIs go through the queue, against Postgres* —
-the database-move work, not this one. A block was added to `tests/jobs.test.ts` and the registry
-record was not updated to match.
+A block — `describe("unrunnableStepPlan")` — was added to `tests/jobs.test.ts` and the registry record
+was not updated to match. **It arrived with `aa941484`, Stage A**, not with Stage E's `cbb903d0` as
+this doc first said; the correction is below, and it is the second time on this one red that an
+attribution was reached for rather than derived.
 
 **Left deliberately unfixed here, and then fixed by somebody with better evidence.** The two ways to
 make it green are to annotate the new block with a `**Mutation.**` or an honest `**No mutation.**`
@@ -105,21 +106,44 @@ header, or to raise the allowance from 9 to 10. The second defeats the guard, an
 require knowing whether that block deserves a mutation test — which is the work the registry exists to
 force onto the person who added it. So this batch left the red standing as the forcing function.
 
-**That was the wrong call, on facts this batch did not have.** The session in
-`worktree-deepen-fat-sections` hit the same red holding the missing test in its hands: the rule
-`unrunnableStepPlan` enforces is asserted only against the pure function, and **nothing asserts that
-`enqueue` throws**. It found that out the expensive way — `evals/deepen/`'s free `--dry-run` asks for
-`["fetch","extract","blocks"]`, so after merging `dev` every phase threw at `enqueue`, zero jobs were
-created, and `npm test` stayed green throughout. That dry run is the rehearsal before a £-scale paid
-run, so the gap had already cost something real.
+**That was the wrong call, and the annotation the other session wrote is right.** It annotated the
+block rather than raising the allowance, and the judgement — "no mutation involving the store: no
+store reaches this block" — is *readable off the four `it`s* rather than guessed, which is the
+distinction this batch got wrong.
 
-It annotated the block rather than raising the allowance, and the judgement — "no mutation involving
-the store: no store reaches this block" — is *readable off the four `it`s* rather than guessed, which
-is the distinction this batch got wrong. It then said plainly that this is a gap and not a clean bill,
-named the measured cost, and pointed at the shape `tests/enqueue-owns-the-article.test.ts` already
-uses. The evidence and the class — **a rule enforced at a seam, with a test only for the predicate
-behind it** — are in `260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md`
-§ `stage-e-unrunnable-untested`.
+### The reason first given for that, and retracted
+
+~~The session in `worktree-deepen-fat-sections` hit the same red holding the missing test in its
+hands: the rule `unrunnableStepPlan` enforces is asserted only against the pure function, and nothing
+asserts that `enqueue` throws — found out the expensive way, because `evals/deepen/`'s free
+`--dry-run` asks for `["fetch","extract","blocks"]`, so every phase threw at `enqueue`, zero jobs
+were created, and `npm test` stayed green throughout.~~
+
+**None of that was true of the repo, and it is struck rather than deleted so the correction is
+legible.** `tests/jobs.test.ts:1260` — *"refuses a blocks-only job at the door rather than stranding
+the article"* — drives `enqueue` and asserts both the throw and the 400, and its comment already
+names the trap it exists to close. Verified here, not taken on report: `git log -S` puts the
+predicate, the `enqueue` call, the pure-function block and that wiring test all in **`aa941484`**
+alone, one commit. The dry-run breakage was real but the bug was in its caller;
+`["fetch","extract","blocks"]` is refused correctly and by design.
+
+The retraction is `626cead3`, on `dev`; the `stage-e-unrunnable-untested` anchor is kept so existing
+links still land.
+
+**How the false claim was reached is worth more than the claim was**, and there are two instances of
+one shape here:
+
+- The other session's grep across `tests/` **excluded `tests/jobs.test.ts` — the file it was
+  annotating** — on the assumption that the block it had read was all that file had to say. The
+  wiring test does not name `unrunnableStepPlan` in its title, so nothing surfaced it, and a clean
+  grep was read as evidence of absence.
+- The attribution to `cbb903d0` was reached for because its subject line sounded right, rather than
+  derived with `git log -S`. `cbb903d0` touched that file, but with 26 lines and no new `describe`.
+
+**And this batch's own share of it:** the evidence was written into this doc as fact and repeated to
+Greg without being checked, when the three commands that falsify it take a few seconds. Verifying the
+parts that were easy to verify — the block count, whether the fix had landed — is not the same as
+verifying the claim the decision rested on.
 
 The lesson worth keeping: *don't guess on the author's behalf* was sound, but a red left standing is
 only a forcing function if somebody is coming who will be forced. Meanwhile it hides the next
@@ -133,6 +157,11 @@ destroys:
   able to ask the question again. Caution was right there, and would still be right.
 - Correcting a sentence that misleads its next reader **destroys nothing**. There, caution was only
   delay dressed up as respect — and working out whose the sentence was cost more than fixing it.
+
+The stale-inventory fix in that entry turned out to be the smaller instance of the same shape that
+then produced a false attribution and a false gap on the very same red — three times in one
+afternoon, all of them *a fact reached for rather than re-derived*. That is the thing to take away
+from this section, more than the red itself.
 
 Resolved on `dev` at `0e89d69f`: the two halves landed in different files and did not collide, and
 `tests/store-migration-registry.test.ts` is green again — 13 tests, verified here rather than taken
