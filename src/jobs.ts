@@ -86,7 +86,6 @@ import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
-import { slugIsTaken } from "./store/slug-is-taken.js";
 import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
@@ -2750,6 +2749,26 @@ export interface EnqueueRequest {
    * that says a job was queued.
    */
   retryOf?: string;
+  /**
+   * **Whether to start driving the job in this process.** Defaults to true,
+   * which is what every route wants: a reader who presses Add should not have
+   * to keep a tab open for anything to happen.
+   *
+   * `false` is for a caller that drives the job itself — `scripts/stage.ts` and
+   * `evals/cost/run.ts`, both of which run `advanceJob` in a loop and watch what
+   * each step does. Without it the pump and the caller's loop race for the
+   * single running slot, and the caller's `busy` backoff turns a one-second step
+   * into a five-second one, with the step's own report going to the pump.
+   *
+   * **It replaces a lie.** Both callers used to set `VERCEL=1` around the
+   * `enqueue` call, because `pump` returns immediately when it is set — so a
+   * process on a laptop claimed to be running on Vercel in order to get one
+   * `if` to go the other way. That is fine until something else reads `VERCEL`,
+   * and three things already do. Naming the thing we actually want costs one
+   * field. GPT Sol / stage E of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+   */
+  pump?: boolean;
 }
 
 /**
@@ -2775,6 +2794,13 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
      *request*, or two callers asking for the same thing would hash differently
      depending on what happened to be on disk when each of them asked. */
   const workKey = workKeyFor(names, forced, request.profile, request.upload, request.url);
+  /* **Every exit from this function honours it**, including the two that hand
+     back somebody else's job — a caller driving its own loop does not want a
+     second driver on a job it is about to take over either. See `pump` on
+     `EnqueueRequest`. */
+  const drive = (id: string): void => {
+    if (request.pump !== false) pump(id, owner);
+  };
 
   /**
    * **A slug-named request must target an article this reader owns.**
@@ -2796,11 +2822,26 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * 403 would confirm that the article exists. Nothing distinguishes "somebody
    * else has it" from "nobody has it" on the wire.
    *
-   * **A slug nobody has at all is allowed through.** It is not a cross-owner
-   * blocker — `articles.slug` carries a random short id nobody can guess, so no
-   * other reader can ever come to want this name — and the job blocks only
-   * itself. Refusing it would be a second, unrelated rule about what a slug may
-   * name.
+   * **A slug nobody has at all is refused too, since 2026-09-05, and that
+   * reverses a decision made here.** It used to be allowed through on the
+   * grounds that it is not a cross-owner blocker — `articles.slug` carries a
+   * random short id nobody can guess, so no other reader can ever come to want
+   * this name, and the job blocks only itself. True, and beside the point: what
+   * a bare-slug request *means* is "run something on my existing article", and
+   * letting it name an article that does not exist makes a typo into a purchase.
+   * `npm run blocks -- typoo` created an `articles` row, failed the step inside
+   * it, and left the row and a failed revision on the reader's shelf — measured
+   * 2026-09-03, and the reason this line moved out of
+   * [`scripts/stage.ts`](../scripts/stage.ts), where it was first written as a
+   * pre-check. The invariant belongs at the choke point every caller passes
+   * through, not in one of them.
+   *
+   * **The answer stays indistinguishable**, because `articleExists` is
+   * owner-scoped: "nobody has it" and "somebody else has it" reach this line by
+   * the same route and leave it by the same sentence. That is the existing
+   * privacy rule, kept rather than weakened —
+   * `slugIsTaken`, the one bare global lookup, is no longer consulted here at
+   * all, so the two cases are now identical rather than merely alike.
    *
    * **The filesystem store cannot be asked this and does not need to be.** It
    * has no owner column, so it has no second reader, and a store with no second
@@ -2817,7 +2858,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1f.
    */
   if (STORE === "postgres" && !request.url && !request.upload) {
-    if (!(await articleExists(request.slug)) && (await slugIsTaken(request.slug))) {
+    if (!(await articleExists(request.slug))) {
       /* The same sentence `GET /api/article/:slug` answers with for a slug
          that is not yours (src/routes.ts), so the two cannot be told apart. */
       throw Object.assign(new Error("No such article."), { status: 404 });
@@ -2952,7 +2993,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          off, and takes the next step when the first releases — which is the
          same arrangement as a pump plus an open browser tab, and the whole
          reason the claim exists. */
-      pump(outcome.job.id, owner);
+      drive(outcome.job.id);
       return outcome.job;
     }
 
@@ -2995,7 +3036,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * **A retry inserts nothing at all: it is handed the holder.** See
        * `handBackToARetry` for why a retry cannot take the repair above.
        */
-      if (request.retryOf) return handBackToARetry(outcome.job, owner);
+      if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
         : { kind: "adopted", slug: outcome.job.slug };
@@ -3027,7 +3068,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * spend the whole budget on a 409 about there being too many articles
        * called something there is exactly one of. See `handBackToARetry`.
        */
-      if (request.retryOf) return handBackToARetry(outcome.job, owner);
+      if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
         : { kind: "minted", slug: slugWithShortId(request.slug) };
@@ -3055,7 +3096,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       `job queued: ${slug} — ${names.join(", ")}${forced.size ? ` (forced: ${[...forced].join(", ")})` : ""}`,
     );
 
-    pump(job.id, owner);
+    drive(job.id);
     return job;
   }
 }
@@ -3131,7 +3172,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
  * refusal rather than a fallback: an unreachable branch that stops is better
  * than an unreachable branch that leaks.
  */
-function handBackToARetry(holder: Job, owner: OwnerId): Job {
+function handBackToARetry(holder: Job, owner: OwnerId, drive: (id: string) => void): Job {
   if (holder.ownerId !== owner) {
     /* Made of words we chose and a slug, which src/log.ts permits. */
     throw Object.assign(
@@ -3144,8 +3185,10 @@ function handBackToARetry(holder: Job, owner: OwnerId): Job {
     `retry handed back the active job on ${holder.slug}`,
   );
   /* The same pump `sameWork` gives, and for the same reason: the job we are
-     handing back may have nobody driving it. */
-  pump(holder.id, owner);
+     handing back may have nobody driving it — and it is the *caller's* `drive`
+     rather than `pump` itself, so a caller that asked for `pump: false` gets no
+     second driver on this path either. */
+  drive(holder.id);
   return holder;
 }
 

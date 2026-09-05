@@ -1835,12 +1835,24 @@ Three things that changed since this table was first written:
 The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`, `cancelJob`,
 `retryJob`, `forgetJob`. Nothing above those six knows there are files.
 
-## They are the same functions the CLI runs
+## The CLI *is* this queue <a id="they-are-the-same-functions-the-cli-runs"></a>
 
-`npm run extract`, `npm run blocks` and `npm run hierarchy` still work, and still do exactly what
-they did. Each of those scripts is a thin argv wrapper around an exported function, and the queue
-calls the same function — so there is one code path per stage and no way for the two to drift. That
-was the point of the refactor, and it is the thing to preserve if anyone changes a stage.
+`npm run extract`, `npm run blocks` and `npm run hierarchy` still work, and `npm run fetch` is
+`npm run ingest`. **Since 2026-09-05 they are this queue rather than a second caller of the same
+functions**: [`scripts/stage.ts`](../../scripts/stage.ts) enqueues a job and runs `advanceJob` in a
+loop, which is what a browser tab does. So "one code path per stage, and no way for the two to
+drift" stopped being a discipline and became a fact about the shape.
+
+They had to move. Each of the five was a thin argv wrapper doing its own `fs.writeFile` to a path off
+`process.cwd()` — reaching neither the artefact store nor `data-root.ts` — so under Postgres they
+wrote files nothing reads and reported success. And the command line could not live in the stage
+module: every Postgres artefact write is fenced on a running `jobs` row and a draft revision, so a
+standalone run has to reach `src/jobs.ts`, and `jobs.ts` → `pipeline.ts` → `blocks.ts` means a
+`main()` in a stage that reached for the queue would close an import cycle.
+[setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue) has the
+contract; stage E of
+[260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) has the
+reasoning.
 
 **`npm run arc` is gone, and so are its seven siblings** — `tweets`, `glossary`, `ideas`, `quotes`,
 `timeline`, `quiz`, `sketch`. Deleted on 2026-09-01, because *re-run a stage* is one of the three

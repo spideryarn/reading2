@@ -312,11 +312,43 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   rather than two. The eight article-reading stages had a folder-reading command line of their own
   until 2026-09-01, and it was a second path to the same place — the queue's is the one that
   exercises the store writes.
-- Anything expensive should be cached on a content hash. Seven stages do it, and copy *their* choice
-  of hash input rather than only the idea — the rule is that a fingerprint covers **everything the
-  stage's prompt reads** — for six of the seven that is the blocks, the tree and the head, and there
-  are two head functions because there are two heads
-  ([`src/source-hash.ts`](../../src/source-hash.ts)); for `assets` it is the blocks alone. [database.md](database.md#the-filesystem-era-files-under-dataslug).
+- **Anything expensive should be cached on a content hash, and not everything is.** *Which* stages
+  do it has been said three different ways in this repo — "two of seven" in `AGENTS.md`, "seven
+  stages do it" here — and neither was right. Counted from
+  [`src/pipeline.ts`](../../src/pipeline.ts) on 2026-09-05, by the predicate *the step declares a
+  `stamp()` that `stepIsDone` compares against what the store holds*: **ten of the fourteen in
+  `STEP_ORDER`** —
+  `assets`, and the nine model modes `arc`, `tweets`, `glossary`, `quotes`, `ideas`, `timeline`,
+  `quiz`, `sketch`, `illustrated`. Copy *their* choice of hash input rather than only the idea: a
+  fingerprint covers **everything the stage's prompt reads**, which for the nine is the blocks, the
+  tree and the head — and there are two head functions because there are two heads
+  ([`src/source-hash.ts`](../../src/source-hash.ts)) — and for `assets` the blocks alone, because it
+  has no prompt.
+  [database.md](database.md#the-filesystem-era-files-under-dataslug).
+- **The other four decide freshness some other way, and none of them is a content hash.** They are
+  the front of the pipeline, which is what `npm run ingest`, `npm run extract`, `npm run blocks` and
+  `npm run hierarchy` re-run, so this is the paragraph to read before trusting a skip:
+  - `fetch` and `extract` — **existence**. The step's `produces` are in the store, so it is done.
+  - `blocks` — **structural**, and it is the interesting one: `blocksMatchTheirHtml` re-splits the
+    stored HTML and compares it block for block against the stored blocks. No stamp to go stale, and
+    it notices a change nothing wrote a hash about.
+  - `hierarchy` — **existence**. It *writes* an `inputHash` (its labels file's own `sourceHash`), and
+    nothing reads it back for freshness, because the step declares no `stamp()`.
+  And a fifth thing that looks like it belongs on that list and does not: **`pdf` is not a step.**
+  It is one branch of `extract`, and its per-chunk cache is not step freshness at all — since
+  2026-09-01 it is `checkpoints` rows keyed on an `articles` row
+  ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)).
+
+  **The stage commands resume, since 2026-09-05, and that has a sharp edge.** They had none before:
+  the old file-writing CLIs had no article row and passed `nullCheckpointStore()`, so a killed run
+  paid for its chunks and batches again. Going through the queue gives every run the article's own
+  checkpoints. But `force` is a flag on the *step*, not on the purchase — so a forced re-run finds
+  its structure and label batches already checkpointed and replays them. Measured: two consecutive
+  `npm run hierarchy -- <slug> --force` on an unchanged article bought two model calls and then
+  **none**. **Re-labelling after a prompt change is therefore not `--force`**, whatever route you
+  come by; a reader's Refresh in the browser behaves the same, because this is the queue's rule
+  rather than the command's.
+  [setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue).
 - **Process-wide mutable state must have process lifetime, which a module-level variable does not.**
   Saving anything the server imports makes Vite re-evaluate that module *in place*, so a lock, an
   index or a registry held in a module variable becomes a second empty copy while requests from the
@@ -328,11 +360,16 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - **A cache whose key is deterministic must be written atomically and read tolerantly**, and the two
   are one rule. `writeFile` truncates before it writes, so a killed process leaves a file that exists
   and does not parse; the key does not change between runs, so every later run finds that same file
-  and fails the same way, for ever. Write beside the target and `rename` (`writeAtomic` in
-  [`src/hierarchy.ts`](../../src/hierarchy.ts), [`src/labels.ts`](../../src/labels.ts),
-  [`src/pdf-read.ts`](../../src/pdf-read.ts)); treat an entry that will not parse as a miss and say so
-  in the log. It wedged one article's PDF extract permanently —
+  and fails the same way, for ever. Write beside the target and `rename`; treat an entry that will
+  not parse as a miss and say so in the log. It wedged one article's PDF extract permanently —
   [260828e-pdf-chunk-cache-corrupt-entry.md](../postmortems/260828e-pdf-chunk-cache-corrupt-entry.md).
+
+  **There is no `writeAtomic` left to point at, and the rule stands anyway.** The two copies — in
+  `src/hierarchy.ts` and `src/labels.ts`, deliberately duplicated — belonged to command lines writing
+  artefacts into a directory, and both went with those commands on 2026-09-05. Postgres removes the
+  window rather than guarding it: stage 4's three artefacts are one write inside one transaction, and
+  a half-written set is not a state that exists. Keep the rule for the next thing that caches into a
+  file, which will be something outside the store.
 - What the model calls cost, and the three prompt caches that stop us paying for the article twice,
   are in [prompt-caching.md](prompt-caching.md).
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through

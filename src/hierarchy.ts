@@ -27,15 +27,12 @@
  * **The stage reads no path and writes no file.** It is handed the blocks and
  * hands back the three artefacts in one object; the caller stores them. The
  * pipeline gives that object to the artefact store as a single `parts` map, and
- * `main()` below is the only thing left that turns them into files.
+ * since 2026-09-05 nothing in this file turns them into files at all.
  * docs/plans/260831b-finish-the-database-move.md § Stage 2.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   messagesWireBody,
   streamMessage,
@@ -43,7 +40,6 @@ import {
   type MessagesBody,
 } from "./messages-stream.js";
 import { CAPABLE_MODEL, type Effort } from "./models.js";
-import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -52,14 +48,13 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
 import { COVERAGE_FLOOR, generateLabels, isHeading, mergeLabels, type LabelsFile } from "./labels.js";
 import { hashBlocks } from "./source-hash.js";
-import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
+import type { CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
-import { parseJsonAnswer, parseJsonFrom } from "./parse-json.js";
-import { withLedger } from "./cli-ledger.js";
+import { parseJsonAnswer } from "./parse-json.js";
 import { log } from "./log.js";
 
 /* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
@@ -1770,10 +1765,9 @@ export function buildTree(
   return { version: PROMPT_VERSION, generator: CAPABLE_MODEL, slug, rootId, nodes };
 }
 
-/** The slug a blocks.json path implies — `foo.blocks.json` and `foo.json` both give `foo`. */
-export function slugForBlocksPath(blocksPath: string): string {
-  return path.basename(blocksPath).replace(/\.blocks\.json$/, "").replace(/\.json$/, "");
-}
+/* **`slugForBlocksPath` went on 2026-09-05**, with the command line that was its
+   only caller: it turned `foo.blocks.json` into `foo`. `npm run hierarchy` takes
+   the slug itself now, and there is no path to read one out of. */
 
 /**
  * **Stage 4's three artefacts, and all three are required.**
@@ -1973,30 +1967,13 @@ export interface HierarchyRun {
   elapsedMs: number;
 }
 
-/**
- * Write JSON so that it is either wholly there or not there at all.
- *
- * **`main()`'s, and nothing else's.** The stage itself no longer writes: it
- * returns `HierarchyArtefacts` and the pipeline hands all three to the store in one
- * call. This is the command line's own writer, and the three files it produces
- * are the same three files in the same three places.
- *
- * `writeFile` truncates its target before it writes, so a process killed at the
- * wrong moment leaves a file that exists and is not valid JSON — and existence
- * is exactly what src/pipeline.ts uses to decide a step is done. Writing beside
- * the target and renaming closes that window: `rename` within a directory is
- * atomic, so no reader ever sees a partial file.
- *
- * The temp name carries the process id so two runs over one directory cannot
- * write to the same scratch file. That should not happen — the queue serialises
- * jobs per slug — but a `.tmp` collision would corrupt both, silently, and the
- * pid costs nothing.
- */
-async function writeAtomic(file: string, value: unknown): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-  await rename(tmp, file);
-}
+/* **`writeAtomic` went on 2026-09-05**, with `main()`, which was its only
+   caller. It wrote beside the target and renamed, because `writeFile` truncates
+   before it has anything to put there and the filesystem store read *existence*
+   as "this step is done" — so a process killed mid-write left a `tree.json` that
+   existed and was not JSON. Under Postgres the three artefacts are one write
+   inside one transaction, where a partial set is not a state that exists.
+   src/labels.ts had the deliberately-duplicated twin, and it went the same day. */
 
 /**
  * Stage 4 over a block sequence: the structure in one call, the nav labels in
@@ -2535,161 +2512,24 @@ export async function generateHierarchy(opts: {
   };
 }
 
-/**
- * `npm run hierarchy -- <blocks.json> [outDir]` — **the only caller that still turns
- * these artefacts into files.**
+/* **`npm run hierarchy` used to be here, and it is `scripts/stage.ts` now.**
  *
- * It reads the blocks itself and writes the three files itself, which is what
- * "every stage stays runnable on its own" costs now that the stage neither
- * reads a path nor writes a directory. The files are the same three files, in
- * the same three places, with the same contents.
+ * It took a `blocks.json` path, read it, called `generateHierarchy` with
+ * `nullCheckpointStore()` and wrote `labels.json`, `blocks.json` and
+ * `tree.json` into a directory — three separate writes, in an order chosen so
+ * that the tree, which every reader starts from, appeared only once the other
+ * two were already there. Under Postgres they are one write inside one
+ * transaction and there is no ordering left to get wrong.
+ *
+ * `npm run hierarchy -- <slug> [--force]` runs the same stage through the queue.
+ * Two things a person used to get here are worth naming as losses: the long
+ * per-run report (`Nodes:`, `Repaired:`, `Notes:`, the token counts), of which
+ * the queue keeps the one-line `detail`; and re-labelling on its own, which was
+ * `npm run labels` and is now `--force` on this command — the extra structure
+ * call is the honest price, and there is no `labels` step to ask for instead.
+ * `scripts/stage.ts` has the contract.
+ *
+ * **`withLedger("cli", …)` went with it, and that is not an oversight.** The
+ * job runner opens a `job_step` spend collector per step, so a CLI wrapping the
+ * whole run in a second `"cli"` scope would scope the same money twice.
  */
-async function main(): Promise<void> {
-  const blocksPath = process.argv[2];
-  if (!blocksPath) {
-    console.error("Usage: tsx src/hierarchy.ts <blocks.json> [outDir]");
-    process.exit(1);
-  }
-  const slug = slugForBlocksPath(blocksPath);
-  const outDir = process.argv[3] ?? path.join("data", slug);
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. Without it
-     this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`.
-
-     **Before the first `await`**, which is why it sits above the read rather
-     than beside the call it is for: "the file is read before the work starts"
-     is the property, and a rule that has to make an exception for which awaits
-     are harmless is not a rule. src/labels.ts § `main` makes the same point,
-     and tests/paid-cli-ledger.test.ts is what caught this one going below the
-     blocks read when stage 4 stopped reading them itself. */
-  loadEnvLocal();
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a CLI's uncaught throw is printed, and the same text
-     reaches the log when a stage throws (src/jobs.ts § `errorFields`).
-     src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(blocksPath, "utf-8"),
-    "blocks.json",
-  );
-  // Before the call, not after: this is the only thing on screen for the two
-  // minutes the model takes.
-  console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
-  /* **Nothing is remembered between runs of this command**, and it used to be:
-     the checkpoint landed in the output directory, so a run killed eight batches
-     into a book resumed rather than paying again. The batches are rows keyed on
-     an `articles` row now, and this command does not have one —
-     src/store/checkpoints.ts § nullCheckpointStore. The queue, which is how an
-     article really gets a tree, does have one and does resume. */
-  const run = await generateHierarchy({
-    blocks,
-    slug,
-    checkpoints: nullCheckpointStore(),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  /* **Labels, blocks, then the tree — and here the ordering is still real.**
-     These are three separate writes into a directory other things read, and the
-     filesystem store answers "is this step done?" with "do its files exist?".
-     Each is written beside its target and renamed, so it appears whole or not at
-     all, and the tree — the file every reader starts from — appears only once the
-     other two are already there.
-     The stage itself no longer does any of this: it returns all three and the
-     pipeline stores them in one call, where a partial set is not a state that
-     exists. See the note at the end of `generateHierarchy`. */
-  /* **Made here now.** `generateHierarchy` used to create this directory before
-     the first label batch could checkpoint into it; the batches are rows and it
-     does not, so the one caller that still writes files makes its own. Without
-     it `npm run hierarchy -- blocks.json some/new/dir` fails on the first
-     write. */
-  await mkdir(outDir, { recursive: true });
-  await writeAtomic(path.join(outDir, "labels.json"), run.parts.labels);
-  await writeAtomic(path.join(outDir, "blocks.json"), run.parts.blocks);
-  await writeAtomic(path.join(outDir, "tree.json"), run.parts.tree);
-
-  console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
-  console.log(
-    `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)` +
-      /* Said either way, for the reason the labels line below gives at length:
-         on this command line there is no `articleId` to key on, so it is always
-         "bought", and a line that only speaks when it is interesting cannot say
-         the uninteresting thing. */
-      `, tree ${run.structureResumed ? "resumed from a checkpoint" : "bought"}`,
-  );
-  /* **Said even when it is zero**, which on this command line it always is —
-     the stage commands have no `articleId` to key on and pass
-     `nullCheckpointStore()` (src/store/checkpoints.ts). That is the point: this
-     is the number `generateHierarchy`'s own docstring promises will tell a
-     caller that meant to checkpoint and did not, and a number printed only when
-     it is interesting cannot say the uninteresting thing. It was suppressed at
-     zero until 2026-09-04, and the sibling suppression at the other end left
-     the chunk checkpoints inert for the whole life of the feature
-     (recommendation 2 of
-     docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). */
-  console.log(
-    `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s) ` +
-      `(${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`,
-  );
-  /* Only when it happened, unlike the two lines below — the ratio above already
-     says it every run, and this line is the *reason* for a ratio under one. A
-     dropped label is a leaf that renders as nothing at all, so the run that
-     produced it is the last moment anybody is looking. */
-  if (run.labelsDropped > 0) {
-    console.log(
-      `Dropped:   ${run.labelsDropped} paragraph(s) came back unlabelled twice and were left ` +
-        `bare — see "dropped" in labels.json`,
-    );
-  }
-  /* **Said out loud, every run, including when it is zero.** `strandedSupplement`
-     is the count of apparatus blocks the split refused to place — non-zero means
-     no supplement node was built and the tree is exactly what it would have been
-     without this stage: a correct article with the feature silently absent. A
-     number computed and never printed is the same as no number
-     (docs/reusable/silent-success.md). GPT Sol's review of stage 4, 2026-08-28. */
-  console.log(
-    run.strandedSupplement > 0
-      ? `Notes:     NOT GROUPED — ${run.strandedSupplement} supplement block(s) are not one ` +
-          `trailing run, so no Notes node was built`
-      : `Notes:     ${run.supplementNodes} node(s) over ${run.supplementBlocks} block(s)`,
-  );
-  /* Printed every run, including at zero, for the reason the Notes line above
-     is. These are the two places stage 4 now forgives the model, and a number
-     computed and never shown is the same as no number. */
-  /* The size goes on the same line as the count, because the count on its own
-     stopped meaning anything the day the size bound was lifted: one repair can
-     be a paragraph or it can be a section handed forty blocks that belonged to
-     its neighbour. src/hierarchy.ts § `planChildRanges`.
-
-     **These are now the only thing standing between a slipped boundary and a
-     tree that is misaligned throughout**, since nothing about the tiling
-     refuses an answer any more. `repairedBlocks` against `blocks` above is the
-     fraction of the article that changed hands, and it is the number to read
-     first. */
-  console.log(
-    `Repaired:  ${run.repairedRanges} misaligned boundary(ies)` +
-      (run.repairedRanges > 0
-        ? ` moving ${run.repairedBlocks} block(s), largest ${run.largestRepair}`
-        : "") +
-      `, ${run.droppedChildren} dropped section(s)` +
-      `, ${run.droppedHeadings} unbacked heading claim(s)` +
-      /* A rung whose sole child covered the whole of it, spliced away. Printed
-         at zero with the rest, because a repair nobody is told about is the
-         same shape as the bug it repaired. */
-      `, ${run.collapsedRungs} restated rung(s)`,
-  );
-  console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`\nWrote:     ${path.resolve(outDir)}/tree.json`);
-  console.log(`Validate:  npm run validate-tree -- ${outDir}`);
-  console.log(`Eval:      npm run eval:hierarchy -- ${outDir}`);
-}
-
-/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
-   also matches when a *different* entry file with the same basename imports this
-   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
-   effect of the import, which is the one thing this guard exists to prevent. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void withLedger("cli", main);

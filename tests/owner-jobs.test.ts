@@ -80,6 +80,7 @@ import {
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { STORE } from "../src/store/index.js";
 import type { Job } from "../src/types.js";
+import { bareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -171,6 +172,11 @@ beforeAll(async () => {
     onConflictDoNothing: true,
   });
   await cleanUp();
+  /* **Alice's article, before Alice's job** — added 2026-09-05, when `enqueue`
+     started refusing a bare-slug request for an article the reader does not have
+     (src/jobs.ts). It has to be hers rather than the environment owner's, or the
+     refusal fires on the very line this suite is built around. ./helpers/bare-article.ts. */
+  await bareArticles([SLUG], ALICE);
   /* Queued as Alice, inside a request scope — which is the only way a job gets
      an owner, and the thing this suite is really about. */
   alicesJob = await as(ALICE, () => enqueue({ slug: SLUG, steps: ["fetch"] }));

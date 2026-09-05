@@ -394,28 +394,59 @@ the ways it fails quietly are in [supabase-local.md](supabase-local.md).
 ## The pipeline stages
 
 Each stage runs on its own against a slug, so any one can be re-run without the others
-([architecture.md § Pipeline](architecture.md#pipeline)) — and **the queue is how you do that**:
-`POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`
-([ingest-queue.md](ingest-queue.md)). The commands below are the stages that still have a command
-line: the ones that take a URL, a file or a `blocks.json` rather than an article that is already in
-the library.
+([architecture.md § Pipeline](architecture.md#pipeline)) — and **the queue is how you do that**, from
+a browser as `POST /api/jobs { slug, steps: ["arc"], force: ["arc"] }`
+([ingest-queue.md](ingest-queue.md)), and from a terminal as the four commands below.
 
-**The eight article-reading stages lost theirs on 2026-09-01** — `arc`, `tweets`, `glossary`,
-`ideas`, `quotes`, `timeline`, `quiz` and `sketch`. Each read `blocks.json`, `tree.json` and
-`meta.json` out of a folder and wrote its artefact back beside them, which is a second way to do
+**The eight article-reading stages lost their command lines on 2026-09-01** — `arc`, `tweets`,
+`glossary`, `ideas`, `quotes`, `timeline`, `quiz` and `sketch`. Each read `blocks.json`, `tree.json`
+and `meta.json` out of a folder and wrote its artefact back beside them, which is a second way to do
 what a job already does — and the job is the one that exercises the store writes, the half that
 actually breaks. A stage CLI writing to a different store than the queue reads has cost us a day
 here before ([260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md)).
 
-| Command | Stage | Writes |
+### The stage commands are one script, and they drive the queue
+
+**Changed on 2026-09-05**, in stage E of
+[260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
+The five that were left had the same fault as the eight above, only quieter: each did a bare
+`fs.writeFile` to a path off `process.cwd()`, reaching neither the artefact store nor `data-root.ts`.
+Under Postgres they wrote files nothing reads, and reported success.
+
+They are [`scripts/stage.ts`](../../scripts/stage.ts) now — one script, four npm names, `enqueue`
+then `advanceJob` in a loop. **It is the same code the queue runs**, which is what makes a re-run
+safe: a new draft off the published revision each time, published when the job settles, block ids
+carried rather than re-minted. Read that file's header for the whole contract; the four things worth
+knowing here:
+
+- **By slug, and only one you already have.** A slug that is not yours is refused before anything is
+  queued — deliberately indistinguishable from one nobody has, which is the privacy rule. Typing
+  `npm run blocks -- typoo` used to create an article row and a failed revision and leave the wreck
+  on your shelf.
+- **Without `--force`, nothing happens and it says `skipped`.** Note that the job still settles and
+  still publishes a revision — an identical one. Three runs of `blocks` over one article, two forced,
+  gave three new revisions and **one distinct id set**, measured 2026-09-05.
+- **`--force` re-runs the step; it does not buy a fresh answer.** These runs share the article's
+  `checkpoints` rows, which is what makes a killed run cheap to repeat — and it means a forced
+  `hierarchy` on an unchanged article replays the structure and labels it already paid for. Two
+  consecutive forced runs, measured 2026-09-05: two model calls, then **zero**. Changing what a
+  `force` means to a checkpoint is a queue-wide question, not a CLI one — the browser's Refresh does
+  the same thing.
+- **Naming one step runs one step.** `--force` cascades over the steps *in that job*, which for a
+  one-step job is that step. There is no auto-chaining; several steps is `POST /api/jobs`. `fetch` on
+  its own is refused outright, for the reason the `ingest` row below gives.
+- **It starts slower** — a few seconds — because importing `src/jobs.ts` pulls in most of the module
+  graph. That is import time, not work.
+
+| Command | Stage | Notes |
 |---|---|---|
-| `npm run fetch -- <url> [dir]` | 1, fetch the page and say what came back ([fetching.md](fetching.md)) | `data/<slug>/raw.html` or `raw.pdf`, plus the `raw.json` manifest |
-| `npm run extract -- <url>` | 1–2, fetch + Readability ([content-extraction.md](content-extraction.md)) | `output/<slug>.html`, `data/<slug>/meta.json` |
-| `npm run pdf:pass0 -- <file.pdf>` | 2, what a PDF says for free: pages, words, scan or not, running headers. No model, no network | nothing — it prints |
-| `npm run pdf -- <file.pdf> [slug]` | 2, **the other extractor**: a model reads the pages, the transcription is checked against the PDF's own text, and the result is the same `article.html` Readability would have made ([content-extraction.md § Two extractors](content-extraction.md#two-extractors-one-artefact)) | `output/<slug>.html`, `data/<slug>/meta.json` — and **nothing is remembered between runs** since 2026-09-01: the chunk checkpoints are rows keyed on an `articles` row this command does not have ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)), so a run killed halfway pays again. The queue resumes; this does not |
-| `npm run blocks -- <article.html>` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | `<article>.blocks.json` |
-| `npm run hierarchy -- <blocks.json> [dir]` | 4, the tree **and** its nav labels ([hierarchy.md](hierarchy.md)). Two model passes — the structure in one call, the labels in parallel batches — but one command, and nothing is written until both finish | `tree.json`, `labels.json`, `blocks.json` |
-| `npm run labels -- <dir>` | 4b on its own, against a `tree.json` that already exists ([src/labels.ts](../../src/labels.ts)). The stage to re-run when you have changed the label prompt and do not want to pay for a new tree | `labels.json`, and rewrites `tree.json` |
+| `npm run ingest -- <url> [--force]` | 1–5, **the whole ingest** ([fetching.md](fetching.md), [ingest-queue.md](ingest-queue.md)) | Replaced `npm run fetch`, which was fetch-only and cannot exist on the queue: publication happens once, when the job settles, so a fetch-only job on a new article pays and then fails to publish — and on an existing one *succeeds*, publishing new raw bytes beside stale derived content. **An address already on the shelf is adopted**, and without `--force` every step is `skipped`; `--force` forces `fetch` and `cascadeForce` takes the rest with it, which is the refresh. Measured 2026-09-05: forced, the same article came back with `41 blocks, 0 new ids (41 kept)` |
+| `npm run ingest -- <file.pdf>` | the same, entered through an upload | Mints an upload record, puts the bytes, **claims** it, enqueues and notes the slug — `queueAnUpload`'s order (`src/routes.ts`), and the claim is the move that fails silently: without it the article is perfect and the record stays `pending` with no verified size. `--force` is refused here and only here: every upload mints a fresh slug, so two runs of one file are two articles |
+| `npm run extract -- <slug> [--force]` | 2, Readability over the stored document ([content-extraction.md](content-extraction.md)) | |
+| `npm run blocks -- <slug> [--force]` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | Freshness is structural: the stored HTML is re-split and compared block for block ([architecture.md § Conventions](architecture.md#conventions)) |
+| `npm run hierarchy -- <slug> [--force]` | 4, the tree **and** its nav labels ([hierarchy.md](hierarchy.md)). Two model passes — the structure in one call, the labels in parallel batches — but one step, and nothing is written until both finish | **`npm run labels` is retired.** There is no `labels` step and adding one would be a pipeline redesign to keep a debugging command: stage 4 produces structure, gists, blocks and labels as one typed atomic result. **What that command was for has no replacement**: the plan expected `--force` here to be the re-labelling route, and measurement on 2026-09-05 says it is not — a forced re-run replays the structure and the label batches out of the article's checkpoints and buys nothing. Judging a label-prompt change is `npm run eval:hierarchy`; making `force` mean something to a checkpoint is a queue-wide decision |
+| `npm run pdf:pass0 -- <file.pdf>` | 2, what a PDF says for free: pages, words, scan or not, running headers. No model, no network | prints; writes nothing |
+| `npm run eval:pdf-read -- <file.pdf> [slug]` | **not a stage runner** — the PDF extraction-quality tool, and it was `npm run pdf` until 2026-09-05 | It prints the pages, the chunk plan and the per-chunk recall table ([`src/pdf-score.ts`](../../src/pdf-score.ts)), which is where the numbers in [evals/pdf/README.md](../../evals/pdf/README.md) come from; the queue's `detail` for that step is the title and nothing else. It writes `output/<slug>.html` and `data/<slug>/meta.json` **for a person to look at**, not as store artefacts. Ingesting a PDF is `npm run ingest -- <file.pdf>`. Nothing is remembered between runs: the chunk checkpoints are rows keyed on an `articles` row this command does not have ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)) |
 | `npm run hierarchy:flatten -- …` | 4, tree → the flat sidebar rows ([hierarchy.md](hierarchy.md)) | — |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle, both passes — the client, then the API function ([deployment.md](deployment.md)) | `dist/`, `api-dist/` |
@@ -452,10 +483,11 @@ glossary does not replace the list, it **appends another batch of terms** to it 
 panel's "Find more" button is. To start the list over, delete it first:
 `DELETE /api/glossary/<slug>`, then run the step. See [glossary.md § Finding more](glossary.md).
 
-Each script above is a thin argv wrapper around an exported function, and the queue calls that same
-function — one code path per stage, which is the thing to preserve if you change one. The stages
-that lost their script keep only the exported function, so for those the queue is not merely the
-same path, it is the only one.
+**There is one code path per stage, and since 2026-09-05 there is no longer even a wrapper around
+it.** The stage commands *are* the queue — `scripts/stage.ts` enqueues a job and advances it — so
+the thing that used to be worth preserving ("the script and the queue call the same exported
+function") is now true by construction rather than by discipline. The evals are the remaining
+callers that reach a stage directly, and `npm run eval:pdf-read` is the one command that does.
 
 **Run the validator.** A tree that violates the invariants doesn't crash the client — it silently
 draws a *wrong article*. See [`example/README.md`](../../example/README.md).

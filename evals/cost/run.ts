@@ -168,7 +168,6 @@ import {
   parseStepList,
   requiredAiJobsFor,
   verifyFixtures,
-  withoutTheInProcessPump,
 } from "./harness.js";
 import {
   type Adoption,
@@ -605,9 +604,16 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
      the database before the job exists, because after it the money has moved. */
   if (spec.phase !== "ingest") assertAdoptable(spec.target.slug, spec.target.articleId);
 
-  let job: Job = await withoutTheInProcessPump(() =>
-    enqueue({ slug: wanted, ...(url !== null ? { url } : {}), steps: [...stepNames] }),
-  );
+  /* **`pump: false`, because `driveToDone` below is the driver.** `enqueue`'s
+     own pump runs the *production* registry, synchronously, and would win the
+     claim before this runner's overlay ever sees the job — see § *the pump* in
+     evals/cost/harness.ts for what that produced on the feasibility run. */
+  let job: Job = await enqueue({
+    slug: wanted,
+    ...(url !== null ? { url } : {}),
+    steps: [...stepNames],
+    pump: false,
+  });
 
   /* Recorded **before** the job runs: a crash from here on leaves a cleanup
      manifest rather than an orphan article nobody can name. */

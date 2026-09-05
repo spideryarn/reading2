@@ -1217,12 +1217,16 @@ function requireUrl(ctx: StepContext): string {
  * **The page cap, enforced in stage 1** — one policy, called from the two places
  * the queue's acquisition step has PDF bytes for the first time.
  *
- * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. The stage
- * CLIs do not come through here: `npm run fetch` hands a fetched PDF straight to
- * `writeRaw`, and `npm run pdf` keeps the original before `runPdfExtract` counts
- * anything. Both are deliberate — a CLI is somebody at a keyboard spending their
- * own attention, and neither can reach a reader's job — but "no PDF reaches
- * storage uncounted" is a statement about the queue and not about the repo.
+ * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. It used to
+ * be that the stage CLIs did not come through here at all. Half of that is now
+ * false and half is still true: `npm run ingest` — which replaced `npm run fetch`
+ * on 2026-09-05 and which drives this very queue — is counted like any other
+ * ingest, while `npm run eval:pdf-read` still keeps the original before
+ * `runPdfExtract` counts anything. That exemption is deliberate: it is the PDF
+ * extraction-quality tool, somebody at a keyboard spending their own attention,
+ * and it cannot reach a reader's job. So "no PDF reaches storage uncounted" is
+ * still a statement about the queue and not about the repo — with one fewer
+ * exception than it had.
  *
  * Greg asked for the refusal to arrive in seconds rather than after a job card
  * has been running (docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md
@@ -1602,8 +1606,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that
-         is the store. `npm run fetch` still writes the two files, through
-         `writeRawFiles` in the same module. */
+         is the store. `writeRawFiles` in the same module still writes the two
+         files, and since `npm run fetch` was replaced by `npm run ingest` on
+         2026-09-05 its only remaining caller is a test — it dies in stage G.
+         docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md. */
       const manifest = await writeRaw(doc);
       const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading

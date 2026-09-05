@@ -54,8 +54,8 @@ import { apiFetch } from "./lib/api.js";
  * out to the publisher or told the article was uploaded. Two spellings of the
  * question is how those two answers come to disagree on the same article.
  *
- * It is stricter than `meta.url` in one way that matters. `npm run pdf --
- * <file.pdf>` records `url: "file:///Users/…/thing.pdf"` (src/pdf-read.ts §
+ * It is stricter than `meta.url` in one way that matters. `npm run eval:pdf-read
+ * -- <file.pdf>` records `url: "file:///Users/…/thing.pdf"` (src/pdf-read.ts §
  * `main`), which is not an address anybody can follow and *is* somebody's
  * home directory printed on the page. Rendered as a link it looked like a
  * source and did nothing; here it is a file, which is what it is.

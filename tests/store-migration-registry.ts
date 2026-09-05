@@ -482,6 +482,24 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "test for a module rather than for a store object — and its `/var` and warm-`/tmp` arguments " +
       "have nowhere to go once no path is computed at all.",
   },
+  /**
+   * **`evidence: "static-only"`, because this file arrived after the witness
+   * ran** — 2026-09-05 against 2026-09-03T09:19Z — so its name is not in the
+   * stored `touched` map and cannot be, until witness 2 is re-run. The verdict
+   * rests on the import graph and on the file's own seeder call, which is the
+   * same standing as its several neighbours here.
+   */
+  "tests/enqueue-drives-what-it-queues.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`enqueue` drives what it queues unless the caller passes `pump: false`, asserted as an " +
+      "effect — queue a `fetch` step on a seeded article and look a moment later at whether " +
+      "anything moved it. The claim is about the queue and only exists in Postgres; the seeder is " +
+      "the whole of its filesystem contact. Arrived 2026-09-05 with the parameter, which replaced " +
+      "three callers setting `VERCEL=1` to make one `if` go the other way.",
+  },
   "tests/enqueue-owns-the-article.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -1970,6 +1988,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/db-schema-drift.test.ts": "private-postgres",
   "tests/db-schema.test.ts": "private-postgres",
   "tests/db-transaction-errors.test.ts": "private-postgres",
+  "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
