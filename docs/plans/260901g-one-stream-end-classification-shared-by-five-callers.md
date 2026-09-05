@@ -360,6 +360,43 @@ it goes through `openRouterJson` and has no stream to end. The Messages wire
 (`src/messages-stream.ts`) has no copy of this judgement either: the SDK hands it a whole `message`,
 so there is no terminator to be missing.
 
+### Stage G — the class Stage E's bug belongs to, made unwriteable ✅
+
+Not in the original plan. Stage E fixed `truncated`; writing the postmortem for it —
+[260905i-the-round-variable-read-as-the-turns-answer.md](../postmortems/260905i-the-round-variable-read-as-the-turns-answer.md)
+— found that it was **the third time the same mistake had been made in this one file**, and the
+first two were each fixed in place without anybody naming the shape.
+
+The shape: **a variable the round loop rebuilds every iteration, read after the loop as though it
+summarised the loop.** `usage` (`2e5d6d69`, a three-round turn billed as a third of its real cost),
+`finishReason` for the failure log (`f1a7d7e6`), and `finishReason` again for `truncated`
+(`31830f73`). It is hard to see because **the wrong reading is correct whenever the turn has one
+round**, which is most turns and all the old tests.
+
+`engineering-manager.md` says the prevention a postmortem recommends becomes a stage in the same
+run, so it did. Its first recommendation, the easy high-value one:
+
+- [x] `roundLog`'s element becomes a named `RoundRecord` type with `ended` — the round's
+      `StreamOutcome["kind"]`, set beside the `switch` — and `prose` beside `chars`, because
+      "wrote something" and "wrote more than whitespace" are different questions and `truncated`
+      turns on the second.
+- [x] **Every turn-level fact is now computed from `roundLog` and nothing else.** The two
+      turn-scoped `let`s Stage E introduced are gone; `truncated` is
+      `lastRound?.ended === "truncated" || roundLog.some(r => r.ended === "truncated" && r.prose)`,
+      and `finishReason` is `roundLog.at(-1)?.finishReason` rather than a leftover read of `end`.
+      Identical in behaviour — the two mutations from Stage E were re-run against the new form and
+      both still turn their test red — and the difference is that "read the last round and call it
+      the turn" is now something you have to write out and can see yourself writing.
+- [x] A comment at the boundary saying so, because the next person to add a turn-level field is the
+      person this is for.
+
+*Abandonable as:* the same behaviour with the mistake harder to make. **Recommendations 2 and 3 of
+that postmortem are not done**: 2 is satisfied for this field (the multi-round helper
+`roundsOf(...bodies)` now exists in `tests/converse-stream-end.test.ts`, which was the missing
+piece), and **3 — extracting `runOneRound()` so a round's facts and a turn's facts are different
+types — is a real refactor of a 900-line generator and is deliberately left**, with the argument for
+it written down in the postmortem rather than lost.
+
 ## What this is not
 
 **Not** the transport half of `§ 3.4` — key, endpoint, headers, clocks and accumulation stay where

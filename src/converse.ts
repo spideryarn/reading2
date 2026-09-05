@@ -1516,28 +1516,6 @@ export async function* converse({
   let rounds = 0;
 
   /**
-   * The two halves of the turn's truncation verdict, folded round by round.
-   *
-   * `truncated` is a **failure** in the panel, with a retry offered — *"This
-   * answer ran out of room and stopped mid-sentence"* (src/web/ChatPanel.tsx,
-   * src/types.ts § `truncated`) — and until 2026-09-01 it read only the *last*
-   * round's reason. A round cut off at `max_tokens` mid-sentence has its partial
-   * tool calls reassembled anyway — `wanted` needs only an id and a name — so
-   * the turn goes round again and the next round overwrites the reason. The
-   * answer the reader was shown stopped mid-sentence and the flag said it had
-   * not.
-   *
-   * So: the last round's verdict (today's reading, unchanged) **or** any round
-   * that ran out of room *having written prose*. The second is guarded on the
-   * round's own text because a round cut off inside its tool arguments having
-   * written nothing left nothing mid-sentence in the stored answer, and the
-   * panel would then apologise for an answer that is whole. Strictly additive:
-   * it can turn a `false` into a `true` and never the other way.
-   */
-  let lastRoundRanOutOfRoom = false;
-  let aRoundRanOutOfRoomMidProse = false;
-
-  /**
    * What the turn had done by the time something went wrong.
    *
    * Every field here was already on the success line below — and *only* on the
@@ -1558,26 +1536,48 @@ export async function* converse({
    * the loop, and the point is what they were at the moment of the failure.
    */
   /**
-   * One record per round, so that a turn is legible after it fails.
+   * What one round of the turn did. **The only place a fact about a round
+   * lives, and the only thing the turn's own verdicts are computed from.**
    *
-   * `end`, `roundText` and `calls` are all **reset at the top of every round**,
-   * which means that at the moment anything throws, every round but the last is
-   * unrecoverable. That is not a small gap: a middle round that hit `max_tokens`
-   * reports `finish_reason: "length"` and is then overwritten, so the turn ends
-   * on some other reason and *"the budget was not the problem"* looks proven
-   * when it has only been checked for the final request.
+   * `end`, `roundText` and `calls` are all rebuilt at the top of every round, so
+   * every one of them holds the *last* round's value by the time the loop is
+   * over. Reading one of those after the loop and calling it the turn's answer
+   * is a mistake this file has now made three times — the token counts
+   * (`2e5d6d69`, a three-round turn billed as a third of its real cost), the
+   * failure log (`f1a7d7e6`, "the budget was not the problem" proven for one
+   * request out of four), and `truncated` (`31830f73`, an answer cut off
+   * mid-sentence on round two delivered as whole). Each was fixed in place; none
+   * named the shape. docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md.
    *
-   * **`truncated` no longer has that gap**, as of 2026-09-04 — it is folded over
-   * the rounds rather than read off the last one; see `lastRoundRanOutOfRoom`
-   * and `aRoundRanOutOfRoomMidProse` above. This array is still the only place a
-   * middle round's *reason* is visible.
+   * **So the turn's fields are functions of this array and nothing else.** That
+   * is the whole point of the type: `roundLog.at(-1)` and `roundLog.some(…)`
+   * are things you have to write out and can see yourself writing, where a
+   * leftover `let` gives you "the last round" by default and looks like "the
+   * turn". `ended` is `null` only for a round whose stream never reached the
+   * classifier — a round that threw — which is an honest answer rather than a
+   * gap.
    *
    * An array on the existing lines rather than a line per round, deliberately:
    * logging.md's rule is that a caller which emits a line per item deletes the
    * end of its own request's logs on Vercel. This is bounded by
    * `MAX_TOOL_ROUNDS + 1` either way, but one line stays one line.
    */
-  const roundLog: { finishReason: string | null; chars: number; calls: number }[] = [];
+  type RoundRecord = {
+    /** What the provider said, raw. `plainReason` before it reaches a log line. */
+    finishReason: string | null;
+    /** How `classifyEnd` read this round's stream, or `null` if it never ended. */
+    ended: StreamOutcome["kind"] | null;
+    /** This round's characters, for the log. */
+    chars: number;
+    /**
+     * Whether this round wrote **prose**, which is not the same question as
+     * `chars > 0`: a round can be all whitespace. `truncated` turns on it —
+     * see where that is computed.
+     */
+    prose: boolean;
+    calls: number;
+  };
+  const roundLog: RoundRecord[] = [];
 
   /**
    * A finish reason fit to log, which is not quite the same as the one we got.
@@ -1686,10 +1686,6 @@ export async function* converse({
       signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],
     );
     end = { terminated: false };
-    /* Half of the truncation fold is "did the LAST round run out of room", so it
-       is cleared here with everything else the round owns. The other half is
-       sticky across the turn and is not. */
-    lastRoundRanOutOfRoom = false;
     /** This round's tool calls, being assembled from fragments. See `ToolCallDelta`. */
     const calls = new Map<number, PartialToolCall>();
     let roundText = "";
@@ -1697,9 +1693,11 @@ export async function* converse({
     let roundSearches = 0;
     /* Pushed now and filled in by `noteRound` below, so that a round which dies
        mid-stream still leaves a record rather than a gap. */
-    const record: { finishReason: string | null; chars: number; calls: number } = {
+    const record: RoundRecord = {
       finishReason: null,
+      ended: null,
       chars: 0,
+      prose: false,
       calls: 0,
     };
     roundLog.push(record);
@@ -1716,8 +1714,12 @@ export async function* converse({
          to record what the round had reached at the moment it went wrong. */
       record.finishReason = end.finishReason ?? null;
       record.chars = roundText.length;
+      record.prose = roundText.trim() !== "";
       record.calls = calls.size;
     };
+    /* `ended` is not set here, because it cannot be: this runs before the
+       classifier does, and on the one path where a round throws there is no
+       verdict to record. It is filled in beside the `switch` below. */
 
     /* **Say out loud that the tools are gone.**
 
@@ -1958,6 +1960,11 @@ export async function* converse({
        *this* stream end". What a `length` on round two means to the turn is
        chat's own question, and it is answered by the two variables above. */
     const outcome: StreamOutcome = classifyEnd(end, { signal, deadline, stalled: stall.signal });
+    /* **On the record before anything acts on it**, so that a turn's verdicts
+       have one source and it is the array. Every `case` below is about *this*
+       round; anything the *turn* needs is computed from `roundLog` after the
+       loop. docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md. */
+    record.ended = outcome.kind;
 
     switch (outcome.kind) {
       case "abandoned":
@@ -2055,10 +2062,11 @@ export async function* converse({
            already read to tell them to try again. quiz-mark refuses the same
            ending because a `done` there ticks a question off.
 
-           The flag itself is folded over the rounds rather than read off the
-           last one — see the two variables' docstring above the loop. */
-        lastRoundRanOutOfRoom = true;
-        if (roundText.trim() !== "") aRoundRanOutOfRoomMidProse = true;
+           **Nothing to set here.** `record.ended` above already says this round
+           ran out of room, and `record.prose` says whether it wrote anything;
+           the turn's flag is computed from those after the loop, where you can
+           see it being computed. This case used to set two turn-scoped flags,
+           which is a smaller version of the mistake the fold exists to fix. */
         break;
 
       case "filtered":
@@ -2301,12 +2309,19 @@ export async function* converse({
       break;
     }
   }
-  /* **The last round's reason**, which is what the lines below report on. `end`
-     is rebuilt at the top of every round, so this is the final stream's answer —
-     the same value the local `finishReason` scrape used to hold, from the same
-     source. Every round's is in `roundLog`, which is the only place a middle
-     round's is visible at all. */
-  const finishReason = end.finishReason ?? null;
+  /**
+   * **Everything below this line is about the turn, so everything below this
+   * line reads `roundLog`** — never `end`, `roundText` or `calls`, each of which
+   * holds whatever the last round left in it and reads like the turn's answer.
+   * That confusion has cost this file three bugs;
+   * docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md has
+   * them and why the array is the fix.
+   */
+  const lastRound = roundLog.at(-1);
+  /* The **last round's** reason, said out loud rather than arrived at by
+     leftover assignment — it is what `saidNothing` and the log lines below
+     report on, and it is deliberately not the turn's. */
+  const finishReason = lastRound?.finishReason ?? null;
   const answer = text.trim();
   /* Nothing arrived. Which is two completely different events wearing one
      condition, and the branch is what keeps them apart.
@@ -2335,14 +2350,29 @@ export async function* converse({
      not this: that one is the model deliberately yielding, and it never reaches
      here without going round again.
 
-     Two disjuncts rather than one, and the first is today's reading unchanged —
-     so this is strictly additive, and can only turn a `false` into a `true`. The
-     second catches the round that goes round again and has its reason
-     overwritten; it is guarded on that round's own prose, and both are guarded
-     on `!stopped`, because a reader's stop must not also be reported as our
-     failure. The reasoning is on the two variables where they are declared. */
+     **A fold over the rounds, written out as one.** `truncated` is a *failure*
+     in the panel with a retry offered — "This answer ran out of room and stopped
+     mid-sentence" (src/web/ChatPanel.tsx, src/types.ts § `truncated`) — and
+     until 2026-09-05 it read only the last round's reason. A round cut off at
+     `max_tokens` mid-sentence has its partial tool calls reassembled anyway
+     (`wanted` needs only an id and a name), so the turn went round again and the
+     next round overwrote the reason: the reader was shown a sentence that stops
+     halfway and the flag said it had not.
+
+     Two disjuncts rather than one. The first is the old reading unchanged, so
+     this is **strictly additive** — it can turn a `false` into a `true` and
+     never the other way. The second catches the round that went round again, and
+     is guarded on **that round's own prose**, because a round cut off inside its
+     tool arguments having written nothing left nothing mid-sentence in the
+     stored answer and the panel would be apologising for a whole one. Both are
+     under `!stopped`, because a reader's stop must not also be reported as our
+     failure. GPT Sol's finding F2;
+     docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md. */
   const truncated =
-    !stopped && text.trim() !== "" && (lastRoundRanOutOfRoom || aRoundRanOutOfRoomMidProse);
+    !stopped &&
+    answer !== "" &&
+    (lastRound?.ended === "truncated" ||
+      roundLog.some((r) => r.ended === "truncated" && r.prose));
 
   const known = idsOf(blocks);
   const unknownIds = unknownCitedIds(answer, known);
