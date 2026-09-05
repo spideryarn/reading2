@@ -421,7 +421,22 @@ export type Task =
      an evening hunting reviewers, with nothing saying why. It is also the one
      job whose model a person might reasonably want to change on its own, since
      what it is being asked for is a search rather than an explanation. */
-  | "referee-candidates";
+  | "referee-candidates"
+  /**
+   * **Which of the first records are the article and which are the
+   * publisher's** — the second look at a PDF's front matter, and the only
+   * `Task` that reads a PDF at all.
+   *
+   * A `Task` rather than a fourth `NonTaskAiJob` because it *is* a tier
+   * decision: the three non-task jobs each have one fixed model for a reason
+   * that is not about reasoning (vision, vectors, speech), and this one is a
+   * judgment about a hard call on a page. It is on `chat`, not `messages`,
+   * because it is a small structured call and joins the request-path group.
+   *
+   * It does not read the article — only the first three pages' records, as
+   * text, and it answers with ids. src/pdf-frontmatter.ts.
+   */
+  | "pdf-frontmatter";
 
 /**
  * **The three model calls that are not a `Task`** — and the type exists so that
@@ -616,6 +631,11 @@ export const TASK_TIER: Record<Task, Tier> = {
      results against that — and the whole feature is worthless if the weighing is
      shallow, because a shallow answer is a list of famous names. */
   "referee-candidates": "capable",
+  /* Capable, and this one is worth stating rather than defaulting: the whole
+     job is telling an article's title from a journal's on a page that sets
+     the journal larger, and getting it wrong puts a wrong name on the shelf,
+     the tab and the public shelf. src/pdf-frontmatter.ts. */
+  "pdf-frontmatter": "capable",
 };
 
 /**
@@ -756,6 +776,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "referee-criteria": "chat",
   "referee-claims": "chat",
   "referee-candidates": "chat",
+  "pdf-frontmatter": "chat",
 };
 
 /** Which protocol this task's model call speaks. */
@@ -837,6 +858,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
+  /* It has one because comparing two models on the same cached transcriptions is
+     exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
+     would make the arm and the shipped path different things. */
+  "pdf-frontmatter": "SPIDERYARN_PDF_FRONTMATTER_MODEL",
   "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
   "referee-criteria": "SPIDERYARN_REFEREE_CRITERIA_MODEL",
   "referee-claims": "SPIDERYARN_REFEREE_CLAIMS_MODEL",
