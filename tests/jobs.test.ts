@@ -273,20 +273,22 @@ describe("orderSteps", () => {
  * here hands the pure function a list of step names and reads the string or
  * `undefined` it returns; nothing is claimed, queued or written.
  *
- * **And that is the gap, not a clean bill.** The refusal that matters happens at
- * the queue's door — `enqueue` calls this and throws a 400 — and *nothing*
- * asserts that. The cost of the hole is measured rather than hypothetical:
- * `evals/deepen/`'s free `--dry-run` asked for `["fetch","extract","blocks"]`,
- * every phase threw at `enqueue`, and the whole suite stayed green through it,
- * because this block tests the predicate and no block tests the door. A
- * store-level test belongs with whoever added the rule — it wants an article, an
- * owner and an assertion that no job row is written, which is the shape
- * `tests/enqueue-owns-the-article.test.ts` already has for the ownership refusal.
- * Written here rather than fixed here on purpose: this judgement is a fact about
- * this block, and the registry's real question is one for the rule's author.
- * ⟨Found 2026-09-05 while merging `dev`; see the deliberate "not fixed here" in
- * docs/plans/260905b-feedback-reports-batch-three.md, which this does not
- * overturn — it answers the question that decision left open.⟩
+ * **The door is asserted separately, and deliberately** — see *"refuses a
+ * blocks-only job at the door rather than stranding the article"* further down
+ * this file, which drives `enqueue` itself and expects a 400. That split is the
+ * point rather than an accident: this block owns the decision, that one owns the
+ * wiring, and its docblock gives the reason — a pure function nothing calls is
+ * the shape of half the bugs in this repo.
+ *
+ * ⟨An earlier version of this comment claimed the door was untested and cited a
+ * broken `evals/deepen/ --dry-run` as the cost. **Both halves were wrong.** The
+ * wiring test is ~980 lines below, in this file; the search that missed it
+ * excluded this file on the assumption that the block above was all it had to
+ * say. And the dry run was not evidence of a hole — it asked for a step list the
+ * queue correctly refuses, so the bug was entirely in the caller. Retracted
+ * 2026-09-05, and left here because the way it was missed is worth more than the
+ * claim was: a grep that excludes the file you are annotating cannot find the
+ * thing that would change your mind.⟩
  */
 describe("unrunnableStepPlan", () => {
   it("refuses blocks without hierarchy, which is the request that strands an article", () => {
