@@ -916,6 +916,18 @@ half-evicted article cannot half-open. And a remembered identity **never authori
 is cached is what this reader already fetched, not permission to fetch more.
 [260827r-offline-reading.md](../plans/260827r-offline-reading.md) has the reasoning.
 
+**Which of two answers is fresher is decided before either was asked.** A cacheable GET reserves a
+ticket — its owner's epoch, and the next number in their sequence — before it is sent, and the write
+is accepted only if that ticket still beats what has committed for the URL. Ordering by *when the
+write landed* was the original design and let the slower of two replies win, and let a GET issued
+before a delete put the deleted thing back:
+[a slow response overwrites a fast one](../postmortems/260905e-a-slow-response-overwrites-a-fast-one.md)
+and [the fix](../plans/260905g-cache-freshness-follows-issue-order-not-completion-order.md). Two
+consequences worth knowing: a mutation or a sign-out retires **every** request that owner had in
+flight, so an article still loading when the reader posts a comment may end up partly cached; and a
+retirement that cannot be shown to have happened **deletes the whole cache**, because a copy we
+failed to clear is a copy we would go on serving.
+
 ## The fixture is always on the shelf
 
 `example/` is listed under the slug `example`, flagged, and sorted below the real articles. A fresh

@@ -58,7 +58,18 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { apiFetch } = await import("../src/web/lib/api.js");
-const { writeCached } = await import("../src/web/lib/offline-store.js");
+const { reserveTicket, writeCached } = await import("../src/web/lib/offline-store.js");
+
+/**
+ * Reserve, then write — the two halves `apiFetch` performs either side of a
+ * request, and the only way to write through this module from outside one.
+ *
+ * Every use of it here is scaffolding: opening the database, and fencing on it.
+ * The writes this file is actually about all go through the real `apiFetch`.
+ */
+async function save(url: string, body: unknown, userId: string, slug = ""): Promise<boolean> {
+  return await writeCached(url, body, await reserveTicket(url, userId), slug);
+}
 
 /** The reader every request in this file belongs to. */
 const READER = "user-1";
@@ -127,7 +138,7 @@ beforeEach(async () => {
      upgrade — so there is no object store, every write quietly returns `false`,
      and a suite about which write wins would run entirely against a cache that
      is not there. */
-  expect(await writeCached("/api/article/__boot__", { boot: true }, "boot", "__boot__")).toBe(
+  expect(await save("/api/article/__boot__", { boot: true }, "boot", "__boot__")).toBe(
     true,
   );
   await wipe();
@@ -207,7 +218,7 @@ async function wipe(): Promise<void> {
 let fences = 0;
 async function savesLanded(): Promise<void> {
   for (let i = 0; i < 5; i++) await new Promise((go) => setTimeout(go, 0));
-  await writeCached("/api/article/__fence__", { n: ++fences }, "fence", "__fence__");
+  await save("/api/article/__fence__", { n: ++fences }, "fence", "__fence__");
 }
 
 /* ------------------------------------------------------------------------- *

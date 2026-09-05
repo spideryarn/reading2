@@ -291,10 +291,13 @@ Three things the reproduction established that this plan had wrong:
   ticket, i.e. Stage 2. The test asserts the unambiguous half instead: a save that returned `true`
   and was then deleted by a decision taken before it arrived — which is this module's own docstring
   rule, *"the one thing this must not do is report a success it did not have"*.
-- **The sign-out test constrains where the fence is read**, deliberately, and says so in a comment:
-  advance the epoch at the top of `forgetUser` and an in-flight write survives; advance it **in the
-  transaction that does the deletes** and it does not. Stage 2 could reasonably do either and only
-  one passes.
+- **The sign-out test was thought to constrain where the fence is read** — advance the mark at the
+  top of `forgetUser` and an in-flight write survives; advance it in the transaction that does the
+  deletes and it does not. **Stage 2 proved this wrong** for the ticket design, and the correction
+  matters more than the claim: under the epoch the ticket is taken *before* the call, so it is
+  retired wherever inside `forgetUser` the advance happens, and the test stays green either way.
+  The atomic version is still what got built — a half-done retirement is deletes without an advance,
+  or an advance without deletes — but it is the plan that requires it, not this test.
 
 And one trap worth keeping: a raw `indexedDB.open` with no version, on a database that does not
 exist yet, **creates an empty one** — after which the module's own `openDB(…, 1)` sees a current
@@ -309,40 +312,131 @@ whole suite about which write wins would have run against a cache that was not t
 because nothing is on version 2 yet. So they are a substage of their own, and the redness is
 observed here rather than claimed there.
 
-- [ ] Bump `DB_VERSION` to 2 and add the `meta` store, **without** the deadline. Write the
+- [x] Bump `DB_VERSION` to 2 and add the `meta` store, **without** the deadline. Write the
       blocked-upgrade test — a raw v1 connection held open — and watch `readCached` hang.
-- [ ] Add the bounded `open()`, the `blocked`/`blocking` handlers, and the closing of a connection
+- [x] Add the bounded `open()`, the `blocked`/`blocking` handlers, and the closing of a connection
       that lands after we gave up. The test now settles promptly with no cached copy.
-- [ ] Clear every v1 row in the upgrade, per the decision above, and test that a
+- [x] Clear every v1 row in the upgrade, per the decision above, and test that a
       pre-upgrade row is gone and a post-upgrade write caches normally.
 
 **2b, the fence itself.**
 
-- [ ] `reserveTicket`, and `writeCached(url, body, ticket, slug)` implementing the commit rule.
-- [ ] `readCached`'s touch: one `readwrite` transaction that re-reads the row and writes back only
+- [x] `reserveTicket`, and `writeCached(url, body, ticket, slug)` implementing the commit rule.
+- [x] `readCached`'s touch: one `readwrite` transaction that re-reads the row and writes back only
       `lastOpened`, on the row it actually found. If the row is gone, do nothing.
-- [ ] `invalidate` and `forgetUser`: one transaction each — delete rows, delete `commit` rows,
+- [x] `invalidate` and `forgetUser`: one transaction each — delete rows, delete `commit` rows,
       advance and retain the epoch. The epoch must be advanced **in the transaction that does the
-      deletes**, not at the top of the function; Stage 1's sign-out test fails the other way round.
-- [ ] `evict`: selection, revalidation and whole-article deletion in one transaction of its own,
+      deletes**, not at the top of the function — for **failure containment**, since a half-done
+      retirement is deletes without an advance, or an advance without deletes. The sign-out test
+      cannot show that, per the correction above; nothing asserted it until Sol's F16 added
+      *a transaction that fails half-way keeps none of it*, which faults the epoch `put` and
+      checks both stores rolled back.
+- [x] `evict`: selection, revalidation and whole-article deletion in one transaction of its own,
       after the commit, failing independently.
-- [ ] Every public operation bounded by its own deadline, aborting its transaction on expiry; a
+- [x] Every public operation bounded by its own deadline, aborting its transaction on expiry; a
       failed or timed-out **retirement** disables the page's cache and requests `deleteDatabase`.
-- [ ] The `commit`-row sweep, **deterministic** — Sol's F11 is right that the version in the earlier
+- [x] The `commit`-row sweep, **deterministic** — Sol's F11 is right that the version in the earlier
       draft was not bounded at all: deleting only rows whose article is no longer held can delete
       nothing, leave the count above the threshold, retire live tickets, and do it again on the next
       commit. Instead, on crossing the threshold: advance the epoch **once**, preserve `nextSeq`, and
       delete **all** of that owner's `commit` rows. That genuinely resets the bound, because the
       epoch retires every older ticket. Test the rare cost — every outstanding ticket for that owner
       is refused — and record it.
-- [ ] `api.ts`: await `accessToken()`, reserve for its owner, then send — one round trip, not
+- [x] `api.ts`: await `accessToken()`, reserve for its owner, then send — one round trip, not
       pipelined. A fresh ticket for the post-refresh retry, which is a newly issued request that may
       belong to a refreshed owner and must see any mutation between attempts. Thread it through
       `saving` to `writeCached`. No change to what `saving` decides to cache.
-- [ ] All Stage 1 reds green, all Stage 1 controls still green, and a changed-input control proving
+- [x] All Stage 1 reds green, all Stage 1 controls still green, and a changed-input control proving
       the new tests can still fail. Stage 1's comments mentioning `retiredAt` are updated to the
       epoch; every assertion keeps its meaning.
-- [ ] `npm test`, `npm run typecheck`, `npm run check`, lint on touched files.
+- [x] `npm test`, `npm run typecheck`, `npm run check`, lint on touched files.
+
+**Stage 2 landed, 2026-09-05.** 139 green across the nine cache test files, verified independently
+of the implementer. The blocked-upgrade test settles at 3017 ms — on the deadline — so it passes by
+*giving up*, not by never having been blocked. Before the deadline existed it failed like this:
+
+```
+ ❯ tests/offline-store.test.ts (24 tests | 1 failed | 23 skipped) 10016ms
+     × settles rather than hanging while an old tab holds it off 10014ms
+Error: Test timed out in 10000ms.
+```
+
+Mutation controls, each reverted: dropping the seq comparison turns 2 red, dropping the epoch
+comparison 3, restoring the stale read-modify-write touch 1.
+
+**One previously-green test was replaced, and this is the reasoning.** The `stampFuture` case pinned
+`existing.savedAt > now` — the clock comparison this work exists to remove. Keeping it green would
+have meant keeping that comparison *alongside* the fence: a second, redundant ordering mechanism,
+re-importing the clock that F1 and F2 spent two rounds getting out, and wedging writes for a URL
+after a backwards adjustment. Its own docstring already conceded it could not tell a clock inversion
+from a completion inversion. Replaced by the same promise expressed in the live mechanism — a
+deliberate pair, newer-first giving `false` and issue-order giving `true` — plus a case proving a
+ticket taken for another URL is refused.
+
+Two limits worth knowing rather than discovering later:
+
+- The two "cannot bring back a row … while it was reading" tests now pass because **retirement is
+  atomic**, not because the touch re-reads: the read is ordered after the whole retirement and finds
+  nothing, so no touch happens. Deliberately stale, they stay green. The touch's re-read is pinned by
+  one test, not three.
+- `MAX_COMMITS = 2_000` and `DEADLINE_MS = 3_000` were chosen, not derived. The deadline is what a
+  reader waits on when their network has failed, and it also decides how easily a slow device has its
+  cache deleted by a spurious retirement timeout.
+
+**The code review, and what it cost.** Two rounds. Round one refused with three P1s, all reproduced
+with fault-injection harnesses rather than reasoned: eviction ranking by wall clock could delete the
+article just received while `writeCached` still returned `true` (F14); `open` + commit + eviction each
+took a separate three-second budget, so one call measured 5004 ms against a contract of 3000 (F15);
+and a **synchronous** throw part-way through a transaction — as opposed to a request error event,
+which aborts on its own — left the transaction alive with nothing pending, so it auto-committed the
+body **without its commit row**, after which an older ticket overwrote it (F16). Round two confirmed
+F15–F18 closed and found F14 still open in the concurrent case: two writes landing together take the
+cache to 102, and the first eviction to finish drops two — one of which can be the other write's
+article, because each eviction spares only its own slug.
+
+The closing fix is a presence check, and the shape of it is the part worth remembering: it runs
+**only when eviction actually completed**. Checking unconditionally looked right and quietly
+withdrew F7's promise that a failed eviction leaves a successful write successful — an eviction that
+timed out aborted its transaction and deleted nothing, so the row is still ours. An inconclusive
+check answers `false`, because the promise is never to *claim* a success we did not have; declining
+one we did is the direction this module is allowed to be wrong in.
+
+**One finding overruled, deliberately.** Sol proposed a logical recency counter so eviction's ranking
+would survive a clock rollback in general. Not taken: it changes the schema and the LRU semantics for
+a case nobody has reported, and the narrower fix closes the contract violation on its own. Eviction
+can still choose the *wrong* victim after a clock step; it can no longer choose the row it was called
+for, or one a concurrent write is still reporting on.
+
+**Two tests were silently green, and both are fixed.** A raw `indexedDB.open` with no version creates
+the database at version 1; the module's v1 → v2 upgrade then clears the seeded rows, so a full-cache
+test runs against an empty cache, eviction never triggers, and the assertion is satisfied by an
+absence. It only bites when a test runs alone, because a whole-file run has already been through the
+upgrade. Closed with `onVersion2()`, called by the seeding paths that need it — deliberately **not**
+folded into `seed`, because the upgrade describe seeds a version-1 row on purpose and booting the
+module there upgrades the database out from under the thing under test. The first attempt did exactly
+that and turned a green test red.
+
+Every fix in both rounds was watched failing first. When F14's concurrent case was mutated out, of
+the forty tests then in the two files **only the new one went red** — none of the existing forty
+covered it.
+
+**Gates, 2026-09-05.** `npm run check`: typecheck clean, build clean, cycles clean, chain clean,
+committed clean. Lint, knip, complexity and dupes have findings and are not gates — the baselines
+are unclean on purpose ([linting.md](../project/linting.md)).
+
+`npm test` — **713 passed, 2 failed, 1 skipped** of 716 files, and **neither failure is this work**:
+
+- `admin-store.test.ts` fails in the batch and **passes alone** (3/3). Postgres contention on this
+  box, which is a known habit here rather than a finding.
+- `store-migration-registry.test.ts` fails on `tests/debate-step-registration.test.ts`, which arrived
+  in `39701ce7` — another agent's in-flight work, merged in at worktree setup.
+
+An earlier run also failed `cold-start-lazy-imports` and `pdf-bundle-trace`, both with
+*"api-dist/vercel.js is missing — run `npm run build`"*. Both pass once the build exists; the run
+above had it.
+
+The nine cache suites are **148 green**, run repeatedly. The deadline tests involve real seconds and
+were checked for flakiness rather than run once.
 
 ### Stage 3 — write it down
 
