@@ -371,9 +371,9 @@ a name.
 ## What every call is written down as
 
 Since 2026-08-28 a finished call is not only reported, it is **kept**: one row in `ai_calls`
-(Postgres) or one line of `data/_ai-calls.jsonl` (`files` mode), written by an injected sink and
-awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) picks the
-adapter; `npm run cost` reads it back. The reasoning, the column list, and the four decisions taken
+(Postgres; `data/_ai-calls.jsonl` until 2026-09-05), written by an injected sink and
+awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) reads it
+back for `npm run cost`. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
 
 ### `byok_upstream_nanos` — the column whose name is a condition

@@ -5613,6 +5613,82 @@ says it was a real gap rather than a duplicate.
 right in spirit: it is the one of the five readers whose only consumer is a test *helper* rather than
 a `.test.ts`. That is the shape the other four will take when their own suites stop importing them.
 
+#### Stage G's review — one round, three findings, all accepted, 2026-09-05
+
+Prompt: [`260903f-stage-g-code-review-prompt.md`](260903f-stage-g-code-review-prompt.md).
+Answer: [`260903f-stage-g-code-review-sol.md`](260903f-stage-g-code-review-sol.md). Candidate named
+as four SHAs rather than a range, because `dev` is shared and a merge-base range that evening
+covered twenty-seven other agents' commits.
+
+**No P0 or P1.** Sol independently confirmed the three *ceased to exist* claims, found no third form
+of string-built import, and checked that each reader-state split kept the half Postgres uses. Three
+findings, and none was overruled.
+
+##### F1 (P2) — the narrowed seam guard could not see a seam with **no** implementation
+
+`seams()` is implementations ∩ contracts, so a contract wired through a selector in
+`src/store/index.ts` with no adapter at all never enters `SEAMS`, and the Postgres check cannot look
+at what is not there. Sol proved it by mutation — a planted `ReviewMissingStore` with a selector and
+no adapter passed all five tests — and **I reproduced it before fixing it**, which is the rule.
+
+**This falsifies a claim in the commit message.** I wrote that the narrowing was *strictly
+stronger*. It is strictly stronger **for the seams it discovers**, and that qualifier is doing more
+work than I gave it credit for: with two stores the Claims outage arrived as *has a filesystem side,
+missing Postgres*, which is discoverable; with one store the same outage arrives as *contract,
+selector, nothing*, which is not. The old guard had the identical hole and it did not matter, because
+a half-built seam still had a half to be found by. **Removing the other store is what opened it** —
+the hazard was created by the change, not merely uncovered by it, and that is the kind of thing a
+cross-family reviewer is for.
+
+The fix derives a second candidate set from the **selectors**:
+`export const commentStore: CommentStore = guarded(…)` says *the app calls this contract*, which is
+the claim that matters, and a data shape never has a selector — so it closes the hole without
+flagging `RawSource`, `SweepOptions` and `Turn`, which is why the set was built from implementations
+in the first place. Still derived, never listed. A floor case asserts the selector scan found more
+than eight, because an empty list is what a parser that has stopped matching produces and it would
+satisfy the new check silently.
+
+##### F2 (P2) — a suite was deleted with nothing recording what went with it
+
+`tests/store-reader-state-parity.test.ts` went in `86a4ef7c` and **the plan does not name it**. That
+is exactly the failure this stage's own freeze defines — *"a file deleted with no such line is the
+failure mode, and no gate can see it"* — committed by the person who wrote the sentence. It is worth
+recording plainly rather than fixing quietly: the rule was written down, the mechanism to enforce it
+was a human reading a diff, and the human was me.
+
+It held three sequential walks. The comparison in them died with the second store; the **sequence**
+did not, and none of the 61 cases in `store-chat-pg` and `store-searches-pg` walks a state machine —
+they test each transition from a fresh state, which cannot see state leaking between them.
+
+Two are ported, one is not. The chat walk (begin → finish → begin → retry → edit → rename) and the
+search walk (begin → finish → fail → retry → finish → delete) are now single cases in the surviving
+Postgres suites, each comparison replaced by an assertion about what the store should actually hold
+at that step. The glossary walk is not ported, checked rather than assumed:
+`tests/store-lookups-pg.test.ts:70` and `:95` already cover both halves of it.
+
+**The port recovered coverage rather than performing it, and the evidence is that each break
+reddened only the new case.** Deleting `error: null` from `pg-chat.ts` § `retry` failed *"the failed
+attempt's error survived the retry"* and nothing else; dropping `eq(searchRuns.id, runId)` from
+`pg-searches.ts` § `remove` failed the new case and nothing else. Both properties were genuinely
+uncovered before.
+
+##### F3 (P3 as filed, and under-graded) — docs describing the deleted backend as live
+
+Sol filed three stale doc passages as non-behavioural. Two are.
+**`example/README.md` was not**: it promised that *"a fresh clone that has never run the pipeline
+still has the committed `example/` fixture to open"*, and that was `src/api.ts` falling back to
+`example/` on a read. There is no filesystem reader, so **a documented developer affordance changed**
+— which is a fact about the product, not a citation. The replacement exists and is now what the docs
+say: `npm run setup` runs `db:seed-dev`, which loads the committed corpus into Postgres.
+
+Losing that fallback is the point rather than a casualty. A reader who asked for a slug and was
+served the fixture's text under their own address is the bug the old note in that README describes;
+narrowing it to one slug was the 2026-08-30 fix, and it is now structurally impossible.
+
+`docs/project/library.md` § the seam table was the sharpest of the rest — it named the deleted file
+as **"the Postgres seam"**, which would have sent the next reader to a file that does not exist to
+learn about the store that does.
+
 ### H — tighten the contracts the filesystem store was weakening
 
 `attempt` becomes required in comments, search and referee. **Chat needs the return type split

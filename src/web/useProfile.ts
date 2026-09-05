@@ -24,6 +24,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
+import { forgetSummaries } from "./link-facts.js";
 
 export interface UseProfile {
   /** What the server holds. `null` while loading, and `""` for "never written". */
@@ -147,6 +148,13 @@ export function useProfile(): UseProfile {
         const value = body.profile ?? "";
         setProfile(value);
         setDraft(value);
+        /* **The link cards' summaries were written from this.** They are cached
+           per tab in front of a server that compares a profile hash and would
+           have noticed (src/web/link-facts.ts § `forgetSummaries`) — so without
+           this, a reader who rewrites their description and goes back to an
+           article gets the answers written for the old one, on a card where
+           nothing looks wrong. GPT Sol, 2026-09-05. */
+        forgetSummaries();
       })
       .catch((e: Error) => {
         if (mine === generation.current) setError(e.message);

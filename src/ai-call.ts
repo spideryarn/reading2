@@ -514,6 +514,31 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **The Luna summary of where a hyperlink goes** (src/link-summary.ts) — the
+     app's only quick-tier job, and the only chat row here with **no `order`**.
+
+     `dictation`'s argument, one row down, applies exactly: the Anthropic pin
+     exists so repeat calls land on a cached prefix, and pointed at an OpenAI
+     model it is not merely useless but wrong *quietly* — OpenRouter finds no
+     Anthropic upstream, falls through to the real one, and answers. There is no
+     cached prefix here either: every summary is a different destination, a
+     different paragraph and a different reader.
+
+     **`require_parameters` is kept, and it is the half that matters.** The
+     request sends `max_completion_tokens` — the spelling this model advertises,
+     rather than the deprecated `max_tokens` every other chat caller here sends —
+     and `reasoning: { effort: "low" }`. An upstream that quietly dropped either
+     would answer at full reasoning with no ceiling: a summary that costs several
+     times what it should and arrives late, with nothing at all looking wrong.
+     That is `pdf`'s reason with money instead of a schema. Its teeth are real —
+     see `env-proposal` below, where an unsupported `temperature` became a 404 —
+     so anything added to this body needs checking against Luna's upstreams
+     first. */
+  "link-summary": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   dictation: {
     path: "/v1/chat/completions",
     wire: "chat",
