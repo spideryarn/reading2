@@ -135,7 +135,6 @@ import {
   buildOutline,
   buildSummaryTree,
   columnHint,
-  columnLabel,
   columnPill,
 } from "./tree.js";
 import {
@@ -178,11 +177,7 @@ import {
   type Mode,
   type TermSort,
 } from "./params.js";
-/* The mode's own name, from the one file that spells it — so the bar's close
-   button, the dock's button and the browser tab cannot say three things.
-   src/title-text.ts § MODE_LABEL. */
-import { MODE_LABEL } from "../title-text.js";
-import { ChevronDown, ChevronRight, ClipboardCheck, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardCheck } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -199,13 +194,25 @@ import {
   sectionDepth,
   type Section,
 } from "./position.js";
-import { DEFAULT_ROOT_PX, fitView, proseVisible } from "./layout.js";
+import {
+  bandCoversProse,
+  DEFAULT_ROOT_PX,
+  fitView,
+  offerableGists,
+  proseVisible,
+} from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
 import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
-import { anchored, countByBlock, helpThreadFor, useChatAnchors } from "./useChatAnchors.js";
+import {
+  anchored,
+  countByBlock,
+  helpThreadFor,
+  threadFor,
+  useChatAnchors,
+} from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
 import { articleWaitTitle, pageTitle, useDocumentTitle } from "./page-title.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -235,7 +242,9 @@ import {
   VisitorBand,
 } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
+import { SmallScreenHint } from "./SmallScreenHint.js";
 import { useRenderCount } from "./perf.js";
+import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
   REFEREE_TEXT_ALREADY_SENT,
@@ -1485,9 +1494,11 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
 
   // Page → URL, once the reader stops moving.
   useEffect(() => {
-    const rows = sections.map((s) =>
-      document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(s.blockId)}"]`),
-    );
+    /* One pass over the table, not one document scan per section — see
+       rows.ts. This loop was 38.1% of all script time on a 2,046-block
+       article, and the largest single reason a mode switch there cost 4.7
+       seconds (Sentry SPIDERYARN-READING2-1M). */
+    const rows = rowsForBlockIds(sections.map((s) => s.blockId));
     let frame = 0;
     const measure = () => {
       frame = 0;
@@ -1687,24 +1698,48 @@ function Reader({
   const windowWidth = useWindowWidth();
   const rootFontPx = useRootFontPx();
 
-  // Gist columns are 0 … leafDepth-1. The leaf column is not user-toggled: it
-  // only makes sense in outline mode, where it is the deepest rung of the table
-  // of contents, and is meaningless beside the prose it labels.
+  /**
+   * Every gist depth this article has, 0 … leafDepth-1 — what `fitView` asks
+   * for, and it asks for all of them.
+   *
+   * The leaf column is not one: it only makes sense in outline mode, where it
+   * is the deepest rung of the table of contents, and is meaningless beside the
+   * prose it labels — so it gets its own pill below rather than a place here.
+   */
   const gistDepths = useMemo(
     () => geometry.columnDepths.filter((d) => d < geometry.leafDepth),
     [geometry],
   );
 
+  /**
+   * The subset a reader may actually open — 1 … leafDepth-1, because depth 0
+   * stopped being a column on 2026-09-05.
+   *
+   * Separate from `gistDepths` on purpose: `fitView` documents its input as the
+   * article's *full* depth range and applies the same rule itself, so handing it
+   * a pre-filtered list would quietly make the two disagree about what they are
+   * saying. One rule, `offerableGists` in layout.ts; two callers that need
+   * different things from it. This one is the pill inventory — a pill for a
+   * column the fit will never open is a control that does nothing.
+   */
+  const offerableGistDepths = useMemo(() => offerableGists(gistDepths), [gistDepths]);
+
   const [cols, setCols] = useQueryState("cols", colsParam);
-  const [showText, setShowText] = useQueryState("text", textParam);
+  /* Read-only since 2026-09-05: the `Text` pill that wrote it went with the
+     rest of the controls bar, so `?text=0` is something a reader arrives with
+     rather than something they can ask for here. Outline mode itself is
+     unchanged — docs/project/url-state.md § `?text=`. */
+  const [showText] = useQueryState("text", textParam);
 
   /**
    * Whether the reader has had a view about the spine — see params.ts §
    * spineParam and layout.ts § showSpine.
    *
-   * `null` until they press the pill, and `null` is not the same as `true`:
-   * absent means the rail follows the window and the mode as it always has, and
-   * that is what the `auto` control puts back.
+   * `null` means the rail is on, which is what it means for everybody who has
+   * never touched the parameter — the pill that wrote it went on 2026-09-05.
+   * Nothing on this page writes it any more except the one line below that puts
+   * `null` *back* when Search or Ideas opens with the rail hidden, and that
+   * still needs the third state: "nobody has touched this" is what it restores.
    */
   const [showSpine, setShowSpine] = useQueryState("spine", spineParam);
 
@@ -1815,17 +1850,21 @@ function Reader({
   );
 
   /**
-   * What the L0 column renders — one sentence per part on where the argument
-   * stands there, rather than the root node repeated down the whole page.
-   * Null until `npm run arc` has been run for this article, and then the column
-   * falls back to the root exactly as it used to. See tree.js § the arc.
+   * The arc — one sentence per part on where the argument stands there — keyed
+   * by the row each part starts on.
+   *
+   * **Outline mode is the only thing that reads this now**, as its rung 4
+   * (`OutlinePanel` § `row.arc`). It used to draw Hierarchy's L0 column as
+   * well; that column went on 2026-09-05 with the rest of the declutter
+   * (layout.ts § `offerableGists`) and the artefact did not — `src/arc.ts`, the
+   * `arc` job step and `arc.json` are all untouched.
+   *
+   * **The owner's live arc, falling back to the payload's.** An owner may have
+   * arrived without one and had it written while they read, so theirs comes
+   * from `useArc` — which also returns `null` for an arc it knows to be stale,
+   * rather than showing sentences whose ranges no longer match. A visitor has
+   * only the payload. src/web/useArc.ts.
    */
-  /* **The owner's live arc, falling back to the payload's.** An owner may have
-     arrived without one and had it written while they read, so their column
-     comes from `useArc` — which also returns `null` for an arc it knows to be
-     stale, rather than drawing a column that would silently omit the entries
-     whose ranges no longer match. A visitor has only the payload.
-     src/web/useArc.ts. */
   const liveArc = capability.kind === "owner" ? (capability.arc.arc ?? undefined) : article.arc;
   const arcCells = useMemo(
     () => buildArcColumn(geometry, liveArc),
@@ -2323,8 +2362,8 @@ function Reader({
    * afterwards, when you have lost your place.
    */
   const nav = useMemo(
-    () => navPlan(geometry, fit.columns, proseOn, !!arcCells),
-    [geometry, fit.columns, proseOn, arcCells],
+    () => navPlan(geometry, fit.columns, proseOn),
+    [geometry, fit.columns, proseOn],
   );
   const navDepth = useArrowNav(
     nav,
@@ -2504,7 +2543,11 @@ function Reader({
      Everything each of them closes over is itself stable: `useState` setters,
      nuqs setters (`useQueryState` returns a `useCallback` whose own dependencies
      are memoised — nuqs 2.10.0, dist/index.js:724), `blockText` (a memo) and
-     `owner`, which is a prop of `Reader`. */
+     `owner`, which is a prop of `Reader`.
+
+     `startChatAboutBlock` below is the exception to the heading rather than to
+     the rule: it goes to the floating panel, not to `TableView`, and it is a
+     `useCallback` because `chatAboutBlock` — which does — is built on it. */
 
   const openChatThread = useCallback(
     (id: BlockId) => {
@@ -2515,25 +2558,32 @@ function Reader({
     [setNote, setThread],
   );
 
-  /* A conversation anchored to the whole block — the other half of what an
-     anchor can be, and the one that draws no mark in the prose. The paragraph's
-     opening words go into the composer so the reader can see which one they
-     pressed; a six-character id is not something you can check you clicked
-     correctly.
+  /* **A *new* conversation anchored to the whole block** — the other half of
+     what an anchor can be, and the one that draws no mark in the prose. The
+     paragraph's opening words go into the composer so the reader can see which
+     one they pressed; a six-character id is not something you can check you
+     clicked correctly.
 
-     **Handed over only to an owner, and that is the whole gate.** It used to go
-     to everybody with an `if (!owner) return;` inside it, so a visitor got a
-     chat button on every paragraph whose press did nothing. The absent callback
-     is what makes the button absent (BlockGutter.tsx), and the sentence about
-     what chat costs is still one press away in the Chat band. The place a
-     visitor meets the boundary is `onSelect` below, which they reach by accident
-     and which stays silent for that reason.
+     **Split out of `chatAboutBlock` on 2026-09-05**, when the chip started
+     reopening. It is a branch and a door: the branch is what a paragraph with
+     no conversation still gets, and the door is `onNewConversation` on the
+     panel, which has to be able to force a fresh draft from inside a thread —
+     so it cannot go through `chatAboutBlock`, which would reopen the very
+     thread the reader is trying to leave.
+
+     **Handed over only to an owner, and that is the whole gate.** `onChatAbout`
+     used to go to everybody with an `if (!owner) return;` inside it, so a
+     visitor got a chat button on every paragraph whose press did nothing. The
+     absent callback is what makes the button absent (BlockGutter.tsx), and the
+     sentence about what chat costs is still one press away in the Chat band.
+     The place a visitor meets the boundary is `onSelect` below, which they
+     reach by accident and which stays silent for that reason.
 
      The `owner ?` ternary stays at the call site rather than moving in here, so
      that the prop is `undefined` — not a function that does nothing — and the
      button is genuinely absent. It is identity-stable either way, because
      `owner` is. */
-  const chatAboutBlock = useCallback(
+  const startChatAboutBlock = useCallback(
     (blockId: BlockId) => {
       void setNote(null);
       void setThread(null);
@@ -2544,6 +2594,40 @@ function Reader({
       });
     },
     [blockText, setNote, setThread],
+  );
+
+  /**
+   * **The chip opens what it is counting.**
+   *
+   * A press used to land on `startChatAboutBlock` unconditionally, so the blue
+   * mark saying *"(3 already)"* handed the reader an empty composer — the chip
+   * advertised state it would not show them. Reported by Greg, 2026-09-05;
+   * docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md
+   * § stage 1.
+   *
+   * The rule about **which** conversation, and why a whole-block one outranks a
+   * newer selection, lives with the query in `threadFor` rather than here.
+   *
+   * **A new conversation is still reachable**, from the panel this now opens —
+   * `onNewConversation` below, which is `startChatAboutBlock` unwrapped so that
+   * it cannot simply reopen the thread the reader is standing in.
+   *
+   * The same before-the-list-has-arrived tolerance `helpAboutBlock` documents
+   * at length applies here, and costs less: a press in the first few hundred
+   * milliseconds opens a composer instead of a transcript, and buys nothing.
+   */
+  const chatAboutBlock = useCallback(
+    (blockId: BlockId) => {
+      const existing = threadFor(chatSummaries, blockId);
+      if (existing) {
+        setChatDraft(null);
+        void setNote(null);
+        void setThread(existing.id);
+        return;
+      }
+      startChatAboutBlock(blockId);
+    },
+    [chatSummaries, setNote, setThread, startChatAboutBlock],
   );
 
   /**
@@ -2671,43 +2755,16 @@ function Reader({
 
   // Toggling writes the set into the URL, which also takes the columns off
   // automatic — the window should not quietly overrule a choice the reader made.
-  // The `auto` control clears it again.
+  // **And there is no way back to automatic** since the `auto` control went with
+  // the rest of the bar on 2026-09-05: only deleting `?cols=` by hand restores
+  // it. Deliberate — the pills are how a reader says what they want, and a
+  // control whose whole job is undoing them was part of what made this bar
+  // unreadable (docs/plans/260905d-declutter-the-reading-view-top-bars.md).
   const toggle = (d: number) => {
     const next = new Set(fit.columns);
     next.has(d) ? next.delete(d) : next.add(d);
     setCols([...next].sort((a, b) => a - b));
   };
-
-  /**
-   * The rail, on or off — Greg, 2026-08-26: "a button in the top bar to
-   * show/hide the Spine (just as we can with L0, L1, etc)".
-   *
-   * **First in the bar, and outside the mode/contents split below**, since
-   * 2026-08-27 — Greg: move it "to the furthest-left (to mirror its column
-   * position)". The bar reads left to right in the order the things it names
-   * stand on screen, and the rail is left of every column, so its pill is left
-   * of every pill. Being outside the split is the same fact stated in code:
-   * every other control here belongs to one half or the other, and this one
-   * belongs to both. The granularity pills go in a mode because the columns
-   * they name are not there, and a control that looks live and does nothing is
-   * worse than no control; the spine is the opposite case, on screen in every
-   * mode, so the pill that hides it is too.
-   *
-   * `pressed` reads the resolved layout rather than the parameter, so the pill
-   * says what is actually on screen — unpressed in outline mode, where nobody
-   * chose anything and the rail is gone anyway. Pressing it then writes the
-   * explicit `?spine=1` that overrules that.
-   */
-  const spineToggle = (
-    <Toggle
-      className={PILL}
-      pressed={fit.spine !== "off"}
-      onPressedChange={(on) => void setShowSpine(on)}
-      title="Spine — show or hide the bird's-eye rail of the whole article down the left edge"
-    >
-      Spine
-    </Toggle>
-  );
 
   return (
     <div
@@ -2776,156 +2833,84 @@ function Reader({
           dismissible: it is what this page is, not a notification.
           PublicChrome.tsx. */}
       {!owner && <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />}
+      {/* **Why the article and the mode panel are never both on screen here**,
+          on a narrow touch window, once per device. Below it the reader is
+          about to press a mode button and watch the text disappear; this is the
+          sentence that says the way back is Plain.
+
+          After the visitor's notice, not before: what footing you are reading
+          on outranks a note about the shape of the window. Before the controls
+          bar, because the bar is what the note is about — and because the bar
+          is sticky and this is not, so a banner underneath it would slide out
+          from behind the thing it names.
+
+          **`bandCoversProse` rather than a width, and `showSpine` rather than
+          `fit.spine`.** The banner is about one layout decision and has to fire
+          exactly where that decision does — which moves with the rail, since
+          the rail is 12px of the window the band is negotiating for. The raw
+          parameter, not the resolved `fit.spine`, because this is a question
+          about a band that is *not open yet*: `fitView` turns the rail off in
+          outline mode, where there is no band, and reading that would make the
+          banner blink in and out as an iPad reader switched modes. layout.ts §
+          `modeSpine` is where the two resolutions were made one.
+
+          Asking layout.ts is also what keeps it live without a listener of its
+          own: `useWindowWidth` above re-measures on `resize` and
+          `orientationchange`, and this recomputes with it. SmallScreenHint.tsx. */}
+      <SmallScreenHint bandCovers={bandCoversProse(windowWidth, showSpine)} />
+      {/* **What is left of this bar after 2026-09-05**, and the list of what
+          went is the point — Greg: *"The top bars are really crowded and
+          confusing … They're all unnecessary and confusing."* Gone: the `Spine`
+          toggle (the rail is simply on now — layout.ts § `spine`), the `Mode`
+          and `Granularity` labels, the mode-name chip, the `×`, the `Text`
+          pill, `fit`/`auto`, the `reading`/`outline` chip, the `↑↓` readout and
+          the tree-version chip. Every one of them was defensible on its own and
+          the sum was unreadable; the reasoning for each is in the git history
+          and in docs/plans/260905d-declutter-the-reading-view-top-bars.md.
+
+          Two things say what the old chrome said, more quietly: the Dock at the
+          foot of the page names the open mode and is the way out of it, and
+          the URL still carries `?spine=`, `?text=` and `?cols=` for anybody who
+          wants to pin the layout by hand (docs/project/url-state.md). */}
       <div className="controls">
-        {/* First of all, before even the spine: what footing you are reading
-            on outranks every control that follows, and this bar is the one
-            piece of chrome that is on screen at every scroll position. */}
+        {/* First of all: what footing you are reading on outranks every control
+            that follows, and this bar is the one piece of chrome that is on
+            screen at every scroll position. */}
         {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
-        {/* Leftmost of the *view* controls, because the rail it names is
-            leftmost — and before the mode/contents split, because it is the one
-            control that survives both. See `spineToggle` above. */}
-        {spineToggle}
         {/* The granularity controls belong to the table-of-contents mode, so
             they go with it. Leaving them on screen in another mode would offer
             columns that are not there — a control that looks live, does
-            nothing, and gives the reader no way to tell which. The mode's own
-            name takes their place so the bar still says what the middle band
-            is. */}
-        {inMode ? (
+            nothing, and gives the reader no way to tell which. Nothing takes
+            their place: the mode's name is on the Dock, and saying it twice is
+            what this bar was full of. */}
+        {!inMode && (
           <>
-            <span className="controls-label">Mode</span>
-            {/* **The label, not the mode id.** `.mode { text-transform:
-                uppercase }` means these look identical for all thirteen today —
-                which is exactly the problem: the id is a URL token and the label
-                is a product noun, and the two are one rename apart. Renaming
-                Referee to Reviewer in `MODE_LABEL` and the Dock would have left
-                this bar saying REFEREE, in the one place on screen that names
-                the open mode. src/title-text.ts § MODE_LABEL is the one word. */}
-            <span className="mode on">{MODE_LABEL[mode]}</span>
-            {/* **The way out, and it is an icon now.** It said `back to contents`
-                until 2026-08-31 — a 12px grey text link in a bar of pills, and
-                measured against the rest of the bar it was the quietest thing in
-                it. Greg asked for an icon and for the word `contents` to go, the
-                mode having been called Hierarchy since 2026-08-29.
-
-                **It names no destination on screen**, which is the other half
-                of the change. `back to Hierarchy` was the obvious rename and it
-                commits the bar to a claim that stops being true the moment the
-                default moves — which it did, the same day. `×` says *close
-                this*.
-
-                **It goes to `plain` by name, not to `DEFAULT_MODE`**, and the
-                two happen to be the same mode today. GPT Sol asked for the
-                literal, 2026-08-31, and the reason is that they are different
-                contracts: *where the reader lands with no instructions* and
-                *what closing a panel means* have no reason to agree, and if the
-                default moves again this button would silently start opening
-                whatever it moved to. Closing a band means the article, and
-                `plain` is the mode that is the article.
-
-                **Rejected: remembering which band-less mode the reader came
-                from.** One `useRef` and the same button starts doing two
-                different things depending on history the reader cannot see —
-                and a ref resets on remount, so it would be *mostly* consistent,
-                which is worse than either answer taken plainly.
-
-                Not rendered in Plain, where `bandOpen` is false: there is
-                nothing to close, and it would land where it already is.
-                docs/plans/plain-mode-and-the-way-out.md § 3. */}
-            {bandOpen && (
-              <button
-                type="button"
-                className="mode-close"
-                onClick={() => void setMode("plain")}
-                title={`Close ${MODE_LABEL[mode]} and go back to the article`}
-                aria-label={`Close ${MODE_LABEL[mode]}`}
+            {offerableGistDepths.map((d) => (
+              <Toggle
+                key={d}
+                className={PILL}
+                pressed={shownGists.includes(d)}
+                onPressedChange={() => toggle(d)}
+                title={columnHint(d, geometry.leafDepth)}
               >
-                <X size={14} aria-hidden />
-              </button>
+                {columnPill(d, geometry.leafDepth)}
+              </Toggle>
+            ))}
+            {/* The paragraph outline, beside the prose rather than instead of
+                it. Only offered in reading mode: in outline mode this column is
+                the view, and turning it off would leave nothing. */}
+            {showText && (
+              <Toggle
+                className={PILL}
+                pressed={leafOn}
+                onPressedChange={() => toggle(geometry.leafDepth)}
+                title={columnHint(geometry.leafDepth, geometry.leafDepth)}
+              >
+                {columnPill(geometry.leafDepth, geometry.leafDepth)}
+              </Toggle>
             )}
           </>
-        ) : (
-          <>
-          <span className="controls-label">Granularity</span>
-          {gistDepths.map((d) => (
-            <Toggle
-              key={d}
-              className={PILL}
-              pressed={shownGists.includes(d)}
-              onPressedChange={() => toggle(d)}
-              title={columnHint(d, geometry.leafDepth, d === 0 && !!arcCells)}
-            >
-              {columnPill(d, geometry.leafDepth)}
-            </Toggle>
-          ))}
-          {/* The paragraph outline, beside the prose rather than instead of it.
-              Only offered in reading mode: in outline mode this column is the
-              view, and turning it off would leave nothing. */}
-          {showText && (
-            <Toggle
-              className={PILL}
-              pressed={leafOn}
-              onPressedChange={() => toggle(geometry.leafDepth)}
-              title={columnHint(geometry.leafDepth, geometry.leafDepth)}
-            >
-              {columnPill(geometry.leafDepth, geometry.leafDepth)}
-            </Toggle>
-          )}
-          <Toggle
-            className={PILL}
-            pressed={showText}
-            onPressedChange={() => setShowText((v) => !v)}
-            title="Hide the text to collapse the table into a whole-article outline"
-          >
-            Text
-          </Toggle>
-          {/* `fit` means nothing has been pinned down by hand, so it has to
-              watch both parameters: a reader who has hidden the rail but left
-              the columns alone is not on automatic, and would otherwise have no
-              way back. `auto` clears the pair for the same reason.
-
-              **The pair, deliberately, and it does cost something** — GPT Sol
-              named it, 2026-08-26: you cannot hand the rail back to automatic
-              while keeping columns you chose. The bar gets one "nothing is
-              pinned" affordance rather than one per parameter, because two
-              would be two more words in a bar that is already dense, to undo a
-              state almost nobody is in. Say `auto` resets the layout, not the
-              columns.
-
-              There is no `auto` in a mode, and it is not needed: `fitMode`
-              turns the rail off only for an explicit `?spine=0`, so pressing
-              the pill back on there is indistinguishable from automatic. */}
-          {cols === null && showSpine === null ? (
-            <span
-              className="mode"
-              title="The columns and the spine are following the window width"
-            >
-              fit
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="linky"
-              onClick={() => {
-                void setCols(null);
-                void setShowSpine(null);
-              }}
-              title="Let the columns and the spine follow the window width again"
-            >
-              auto
-            </button>
-          )}
-          <span className="mode">{showText ? "reading" : "outline"}</span>
-          </>
         )}
-        {/* The aim, said out loud. The arrows are useless as an experiment if
-            you cannot tell what they are pointing at before you press one. */}
-        <span
-          className="keynav"
-          title="Up and down arrows step through this level — left and right arrows, or the pointer, change which level that is"
-        >
-          ↑↓ {columnLabel(navDepth, geometry.leafDepth, navDepth === 0 && !!arcCells)}
-        </span>
         {/* Failures of the comment transport belong here rather than in the
             dialog: if the fetch never landed there is no dialog to put them in. */}
         {commentError && (
@@ -2971,9 +2956,14 @@ function Reader({
         columns={fit.columns}
         layout={fit}
         showText={proseOn}
+        /* **The only thing left that says what ← / → are aiming at.** The bar
+           used to carry an `↑↓ Sections` readout beside it, on the argument
+           that the arrows are useless if you cannot tell what they point at
+           before you press one. That went on 2026-09-05 with the rest of the
+           bar; the lit column header is what remains, and it goes too in stage
+           3 of docs/plans/260905d-declutter-the-reading-view-top-bars.md, which
+           owes the aim a quieter indicator of its own. */
         navDepth={navDepth}
-        arcCells={arcCells}
-        arcPending={capability.kind === "owner" && capability.arc.working}
         onJump={jumpTo}
         notes={notes}
         noteReturn={noteReturn}
@@ -3098,6 +3088,10 @@ function Reader({
             setChatDraft(null);
             void setMode("chat");
           }}
+          /* **The draft branch, on purpose**, not `chatAboutBlock` — which
+             would find this very conversation and reopen it, so the button
+             would do nothing. ChatDialog.tsx § `onNewConversation`. */
+          onNewConversation={startChatAboutBlock}
           onCreated={owner.chatAnchors.add}
           onDropped={owner.chatAnchors.drop}
         />
@@ -4535,16 +4529,12 @@ export function ConversationBand({
            that contradicts an existing thread rather than taking our word for
            it, so this being wrong is a 409 rather than a corrupted transcript. */
         const sendKind = open?.kind ?? kind;
-        const id = send(
-          thread,
-          question,
-          at,
+        const id = send(thread, question, at, {
           useProfile,
-          (corrected) => void setThread(corrected),
-          undefined,
-          sendKind,
-          sendKind === "remember" ? stance : undefined,
-        );
+          onThreadId: (corrected) => void setThread(corrected),
+          kind: sendKind,
+          ...(sendKind === "remember" ? { stance } : {}),
+        });
         if (id !== thread) void setThread(id);
       }}
       /* The box under the list. `null` rather than `thread` is the whole
@@ -4557,16 +4547,12 @@ export function ConversationBand({
       onSendNew={(question, useProfile) => {
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
-        const id = send(
-          null,
-          question,
-          at,
+        const id = send(null, question, at, {
           useProfile,
-          (corrected) => void setThread(corrected),
-          undefined,
+          onThreadId: (corrected) => void setThread(corrected),
           kind,
-          kind === "remember" ? stance : undefined,
-        );
+          ...(kind === "remember" ? { stance } : {}),
+        });
         void setThread(id);
         setFocusNonce((n) => n + 1);
       }}

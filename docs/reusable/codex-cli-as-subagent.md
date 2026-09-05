@@ -395,8 +395,12 @@ red* — was one the reviewer could not follow.
 table with per-path rules, which the wrapper selects with `-c default_permissions=review` in place
 of `--sandbox`. The table is checked in at [`.codex/config.toml`](../../.codex/config.toml): read
 everywhere, write to `/tmp` and to the three cache directories under `node_modules`, and nothing
-else. Measured under it, first with `codex sandbox` (the sandbox with no model in it, free) and
-then with a real `codex exec`:
+else. The same file also sets `default_permissions = ":workspace"`, because codex requires a
+top-level default as soon as a `[permissions]` table exists: without it every `codex` in the
+checkout — a human's interactive session included — exits 1 before the model. The wrapper
+overrides it with `review` or an explicit `--sandbox`, and neither is loosened by it.
+Measured under the profile, first with `codex sandbox` (the sandbox with no model in it, free)
+and then with a real `codex exec`:
 
 | | `read-only` | `review` | `workspace-write` |
 |---|---|---|---|
@@ -470,7 +474,7 @@ The profile is not `workspace-write` under another name, and the reason not to r
 instead is the reason the whole review design gives: a reviewer that can edit the tree is a
 reviewer that will fix the finding rather than hand back the mutation.
 
-Two traps in codex's side of it, both hit while measuring:
+Three traps in codex's side of it, all hit while measuring:
 
 - **A profile needs an explicit `"/" = "read"`.** Without it bwrap cannot even exec the codex
   binary under `~/.codex`, and the failure is a bare `execvp … No such file or directory`.
@@ -481,6 +485,21 @@ Two traps in codex's side of it, both hit while measuring:
   the table gets codex's `default_permissions requires a [permissions] table` at exit 1, in the
   log nobody reads; the wrapper checks for the header first and refuses in one line, naming
   `--sandbox read-only` as the way to run there anyway.
+- **A table on disk is not enough — the checkout has to be trusted.** Codex reads a project's
+  `.codex/config.toml` only when `$CODEX_HOME/config.toml` names that directory, or one above
+  it, as a trusted project. Anywhere else it skips the file *in silence*. So in a fresh clone —
+  a new box, a repo cloned to a new path — selecting `review` fails exactly as though the table
+  were missing, while the wrapper's own check has read it off disk and agreed it is there. Trust
+  the checkout root once and its subdirectories and worktrees inherit it:
+
+  ```toml
+  [projects."/absolute/path/to/checkout"]
+  trust_level = "trusted"
+  ```
+
+  It cannot be passed on the command line — `-c 'projects."/abs".trust_level="trusted"'` does
+  not compose — so this is a line somebody adds to their own config. The wrapper cannot prevent
+  it, but it recognises the failure and prints that stanza with the path filled in.
 
 ### The approval-policy trap
 

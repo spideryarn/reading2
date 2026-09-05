@@ -68,9 +68,12 @@ import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.
  * The label, in the sticky controls bar — so it is on screen at every scroll
  * position rather than only on arrival.
  *
- * `.mode` is the bar's existing class for a word that states rather than acts;
- * it is what "reading"/"outline" and the mode name are already drawn with, so
- * this reads as one more fact about the page instead of a new kind of thing.
+ * `.mode` is the bar's class for a word that states rather than acts — it was
+ * what "reading"/"outline" and the mode name were drawn with, so this read as
+ * one more fact about the page rather than a new kind of thing. Those went on
+ * 2026-09-05 (App.tsx § the controls bar) and this chip is now the class's only
+ * consumer, which is why styles.css § `.mode` says so: nothing is left to
+ * quietly change the shape from underneath it.
  */
 export function ViewOnlyChip({ sessionUnconfirmed }: { sessionUnconfirmed: boolean }) {
   return (

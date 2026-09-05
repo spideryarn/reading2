@@ -76,8 +76,8 @@ export function BillingSection() {
           <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
             <TriangleAlert size={12} /> Couldn't read your plan — {billing.error}{" "}
             {/* **Not `className="linky"`, which styled nothing here.** That
-                class is scoped in styles.css to `.controls`, `.cmt-dialog` and
-                `.chat-dialog` ancestors — "a shape, not a shared class", as it
+                class is scoped in styles.css to `.cmt-dialog`, `.chat-dialog`
+                and `.annotate-dialog` ancestors — "a shape, not a shared class", as it
                 says — and this card is in none of them, so the button arrived
                 with no underline and nothing to mark it as pressable in the
                 middle of a sentence. Same fix as `SettingsSection.tsx` and the

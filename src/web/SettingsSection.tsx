@@ -122,7 +122,8 @@ export function SettingsSection() {
                 `loadError` set, and the switch is still pressable by keyboard
                 or label. docs/reusable/silent-success.md. */}
             {/* **Not `className="linky"`, which styled nothing here** — that
-                class is scoped to `.controls` / `.cmt-dialog` / `.chat-dialog`
+                class is scoped to `.cmt-dialog` / `.chat-dialog` /
+                `.annotate-dialog`
                 and this page is in none of them, so both buttons in this
                 component were plain text in the middle of a sentence. The two
                 utilities are all that is left to say: the reset in tailwind.css

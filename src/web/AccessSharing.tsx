@@ -560,8 +560,8 @@ export function AccessSharing({
               It read as a line of plain text until then, and the reason is
               worth knowing because four other buttons in this app still have
               it: `className="linky"` styles **nothing here**. That class is
-              scoped — `.controls button.linky`, `.cmt-dialog button.linky`,
-              `.chat-dialog button.linky`, and styles.css says so in as many
+              scoped — `.cmt-dialog button.linky`, `.chat-dialog button.linky`,
+              `.annotate-dialog button.linky`, and styles.css says so in as many
               words (*"a shape, not a shared class"*). This card is in none of
               those three, so the class matched no rule at all and the button
               fell back to the reset: no border, no padding, no affordance. A

@@ -59,6 +59,7 @@ const report = (): BuildReport => ({
   droppedChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
+  droppedQuestions: [],
 });
 
 /** A node by the title the model gave it. */

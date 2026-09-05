@@ -31,9 +31,9 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 
 | Param | Meaning | History | Example |
 |---|---|---|---|
-| `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
-| `text` | `1` reading mode, `0` outline mode | push | `?text=0` |
-| `spine` | whether the bird's-eye rail is on screen. **Absent means automatic** — off in outline mode, on wherever there is prose ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)). Present means the reader chose, in either direction. | push | `?spine=0` |
+| `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. **A `0` is dropped in silence** since 2026-09-05: there is no L0 column any more, and an old link is not an error (`offerableGists`, [layout.ts](../../src/web/layout.ts)). | push | `?cols=1,2`, or `?cols=none` |
+| `text` | `1` reading mode, `0` outline mode. **Read-only since 2026-09-05** — see below | push | `?text=0` |
+| `spine` | whether the bird's-eye rail is on screen. **Absent means on**, in every mode ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)); `0` is the only thing that takes it away. **Read-only since 2026-09-05** — see below | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
@@ -136,8 +136,19 @@ a toggle, and that is exactly what it cost.
 
 Note which half of the old rule survived. The parameter says **on or off** and the derivation keeps
 everything else: full-vs-narrow is still `fitView`'s, because how much room there is was never the
-reader's question. And absent still means derived, which is why this one has no default — see
-`?gate=` below for the same call made for the same reason.
+reader's question.
+
+**And then the toggle went again, on 2026-09-05, and the parameter stayed.** Greg: *"we don't need
+the 'Spine' button (let's just default to always showing it)"* — so the rail is on wherever nobody
+has said otherwise, outline mode included, and nothing on screen writes `?spine=` or `?text=` any
+more ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)). Both are still honoured
+on arrival: `?spine=0` still hides the rail, and `?text=0` still collapses the rows — though only
+alongside `?mode=hierarchy`, since the default mode is Plain and Plain has no columns to collapse.
+**Stage 3 of that plan normalises a bare `?text=0` to `?mode=outline` at boot**, because the `Text`
+pill was the only way back to the prose and an old link would otherwise strand the reader. Deleting them would save little — `fitView` still needs a three-state answer, and App.tsx puts
+`?spine=` back to *absent* when Search or Ideas opens for a reader who had hidden the rail — and it
+is a URL-contract change, which is a different kind of change from taking a button off a bar. So
+this is now a parameter with no writer, which is a fair description of a **link format**.
 
 `cols=none` exists because the empty list would otherwise serialize to an empty string, which is
 indistinguishable from the parameter being absent — and absent means *automatic*, which is the

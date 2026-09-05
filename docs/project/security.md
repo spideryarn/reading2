@@ -765,6 +765,14 @@ because every rule in it is a rule about that shape; `tests/collect-citations.te
 to its caller through a callback that **takes no argument**, so neither caller can log the URL it
 threw away — see [logging.md](logging.md#redaction-is-path-based-and-that-is-the-whole-limitation).
 
+There is a **second collector** beside it since 2026-09-05, `collectSearchEvidence`, which keeps the
+annotation's page extract as well for the one caller that has to check a claim against it. It does
+not repeat the rule: both are two lines over one shared `collectAnnotated`, so the `isWebUrl` refusal
+and the dedupe have exactly one implementation and cannot drift the way chat's and explain's copies
+did. The extract is opt-in *at the collector* rather than a wider `Citation` precisely so that chat
+messages and comments do not start storing slices of third-party pages
+([260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) § Stage 1).
+
 `isWebUrl` also has to *parse*, not only allow, and that is the second half of its job: the panel
 calls `new URL()` again to show a hostname when a citation has no title, and `new URL()` **throws**
 rather than returning null. One malformed citation used to take the whole chat panel down mid-render.

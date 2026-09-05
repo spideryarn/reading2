@@ -41,6 +41,9 @@ Not one agent per report — **one agent per set of files**, because three workt
 - **Wave 1**
   - **1Q + 1R + 1S** — all three are the gutter's ? button and the comment it makes. 1Q is where you
     land, 1R is what gets stored, 1S is what comes back. One agent, one story.
+    → [260905c-gutter-comment-chip-explanation-metadata-and-prompt.md](260905c-gutter-comment-chip-explanation-metadata-and-prompt.md).
+    The chip in 1Q turned out to be the **chat** button, not the comment bookmark, and each press of
+    it was minting a fresh conversation rather than opening the ones it counted.
   - **1J + 1K** — both dictation, both `src/web/useDictation*.ts` and the transcription route.
   - **1H + 1N** — a new page and a dialog's copy. Unrelated to each other, but small, and neither
     collides with anything else in the wave.
@@ -82,9 +85,76 @@ Recorded here because there is nobody in the chat to ask.
 
 ## What actually happened
 
-Filled in per agent as each lands. Each agent works in its own worktree, runs
-[engineering-manager.md](../reusable/engineering-manager.md), gets a GPT Sol review of its code, and
-pushes to `dev` itself.
+**All thirteen shipped and resolved**, in five agents over one afternoon; the queue and
+[awaiting-approval.md](../user-feedback/awaiting-approval.md) are both empty, and there are thirteen
+notes in `docs/user-feedback/` dated `260905_`. Nothing was declined and nothing is waiting on Greg
+as a report — the decisions left for him are listed at the end.
+
+**Four reports turned out not to be the thing they described.** That is the pattern of the batch, and
+it is an argument for reproducing before fixing rather than for readers writing better reports:
+
+- **1Q named the wrong chip.** The orange bookmark was innocent; the blue one is the chat button —
+  and the fault was worse than reported. On a chip advertising "3 already", three presses took the
+  count 1→2→3: every attempt to *reach* a conversation was creating another.
+- **1K's `[mic-offline]` was one code over two different sentences** — the recogniser dropping
+  mid-speech, and the upload failing afterwards — which is exactly why the report had an "if" in
+  front of each half. It could not pick a branch because the four characters could not.
+- **1N's "delay" was not slowness.** Close cleared the form and shut the dialog in the same React
+  commit, so the browser painted an empty feedback box for one frame in place of the thank-you.
+- **1M's cost was script, not layout** — 60.4% against 3.0%, the *opposite* of the 2026-09-03 scroll
+  finding, which would have sent anyone following the existing precedent to the wrong place.
+
+**And two of the three assumptions taken up front were wrong in the same direction** — the work was
+in a different place than the brief guessed:
+
+1. **1S was a prompt change, as assumed.** Right.
+2. **1X's brief pointed at [`src/explain.ts`](../../src/explain.ts). That file is not on the chat
+   path.** The header this batch read so confidently is about a different surface. What was actually
+   wrong: the tool did reach the wire, production logged the turn as `searches:0`, and **the model
+   was offered the search and declined — because chat's prompt discourages what explain's
+   encourages.** Two prompts pulling opposite ways, which no amount of staring at `explain.ts` would
+   have shown.
+3. **1V could not be done as asked at all.** *There is no prompt that generates Summary mode.* The
+   panel draws the stage-4 `gist`, which is rendered in ten other places and fed back into later
+   structure waves as context. Editing it would have turned shelf blurbs into questions and degraded
+   the trees the cascade builds. So the question became a separate field on the node, drawn in
+   Summary mode alone — built differently on purpose, and the reasoning is in that report's note.
+
+**The cross-family reviews paid for themselves four times**, each catching something a plan-stage
+review could not have:
+
+- a restore that would have **fired a paid model call** when a reader reopened an article (1W);
+- `proposalFromTree` not carrying `question`, so deepening one section **wiped every question in the
+  article** — reproduced, four before and zero after (1V);
+- "Try again" silently losing the teaching prompt (1R);
+- and on dictation, *do not ship* with four findings, three reproduced by calling the code — `100 Ah`
+  and `Er` deleted as fillers, `--help` becoming `-help`.
+
+**Greg's mid-run offer of `GOOGLE_API_KEY` or `OPENAI_API_KEY` was investigated and declined**, which
+is the outcome worth recording because it stops the next agent reopening it: Google's `mode: "smart"`
+strips fillers but bundles that with restructuring speech into lists and resolving self-corrections;
+OpenAI has no filler parameter at all; and neither gives zero data retention on an ordinary paid key,
+which would break the promise printed on the button. `ai-gateway.md` is untouched because nothing
+switched.
+
+### What is left for Greg
+
+Nothing here blocks anything, and none of it is a report:
+
+1. **Existing articles show no Socratic question until their hierarchy is re-run**
+   (`npm run hierarchy -- <slug> --force`). Nothing backfills. Whether to sweep the library is his.
+2. **Whether those questions pull their weight at all**, once seen on screen — several are tight
+   paraphrases of their own gist in interrogative form, and the agent that built them said so rather
+   than hiding it. They have never been rendered in a real browser; the panel tests are jsdom.
+3. **The backfill of existing "?" presses** is a heuristic `UPDATE` over real readers' words, so it
+   is deliberately his to run and not an agent's.
+4. **`/design` stays open to any signed-in reader.** The link moved to `/admin`; drawing a link was
+   never a gate, and the page reads no data. Gating it is a separate decision.
+5. **Mode switching is faster, not fast** — Hierarchy still costs ~2.8s on a 2,046-block article, and
+   the remainder is forced synchronous layout. Measured and written up, deliberately unbuilt: the
+   tempting fix caches row offsets, and a stale cache points the reader at the wrong section.
+6. Two smaller things the agents surfaced: `MIN_SELECTION_CHARS = 8` drops short selections with no
+   feedback, and two plan docs share the letter `260905c`, which `plan-name.ts` cannot detect.
 
 ## A red on `dev` that is not this batch's
 
@@ -209,4 +279,30 @@ its header records that this bug shipped there first. `evals/cost/run.ts` return
 `summarise` on zero draws.
 
 Queued behind 1P and 1V: the feedback reports are the job Greg set, and these are not reports, so
-they get no Sentry write and no note in `docs/user-feedback/`.
+they got no Sentry write and no note in `docs/user-feedback/`.
+
+**Both fixed** — `457c764c` and `dfe170d2`, with the plan in
+[260905e-dictation-benchmarks-cannot-report-clean-over-nothing.md](260905e-dictation-benchmarks-cannot-report-clean-over-nothing.md).
+Three things are worth carrying out of it:
+
+- **Three reds were watched first**, which is the whole point on a class where the defect *is* a
+  check that passes. The sharpest is a verbatim copy of the old three lines kept in the test file as
+  `reportsCleanTheOldWay`, still asserting `true` — the bug preserved as a fixture, so the fix cannot
+  quietly become the bug again.
+- **The limit is stated rather than glossed:** neither benchmark was run end to end, because both
+  make paid calls at import. So nobody watched `bench-models.ts` itself print the false clean bill.
+  That gap is *why* the judgement moved into an importable module instead of staying as two local
+  patches.
+- **`clean` is now computed forwards** — every arm answered all of what it was sent, in whole
+  positive numbers — rather than as an absence of complaints, so a state nobody enumerated lands on
+  the unclean side. That is the general repair for this class, and it is the one thing here worth
+  copying elsewhere.
+
+**Discoverability was the part that needed most care**, because the file being fixed already carried
+its own previous fix in a comment directly above the relapse. A comment is exactly what failed. So
+`tests/dictation-bench-coverage.test.ts` enumerates `evals/dictation/bench-*.ts` and fails if one
+does not import `coverage.js` and take its exit code from it — asserting *which files it found*
+first, because a collector that matches nothing passes every assertion about its contents.
+
+**No further instances in `evals/dictation/`** — all six remaining files opened. One thing reported
+and deliberately not fixed: `gate-models.ts` sets no exit code.

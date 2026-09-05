@@ -26,7 +26,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) | **the one thing here that is not a component and not view state**: a module-scope service, one per tab, that polls the job list and walks each job through its steps. On Vercel the browser is the worker, and `App()` is a chain of early returns — so while this lived in `useJobs`, whether an import kept running depended on whether the route you opened happened to mount an unrelated feature hook. `useJobSession` (in `useJobs.ts`) starts and stops it on `user.id` and resumes it on a fresh access token; `useJobs` is a `useSyncExternalStore` subscriber over it. [ingest-queue.md § The browser is the worker](ingest-queue.md#the-browser-is-the-worker) |
 | [`src/web/uploadEngine.ts`](../../src/web/uploadEngine.ts) + [`useUpload.ts`](../../src/web/useUpload.ts) | **the second one**, and it exists for the same reason: getting a PDF from the reader's disk into an article — hash, grant, PUT, `POST /api/jobs` — takes minutes, and the reader is meant to walk away from it. Held in a mount, it died the moment they did. One transfer at a time, bound to `user.id` in the same `useJobSession`, every reply fenced so a PUT landing after a sign-out or a Stop writes nothing. It reports its queue POST through `jobEngine.epoch()` / `actionSucceeded` rather than waking the poller itself. [ingest-queue.md § Add commits, and does not wait](ingest-queue.md#add-commits-and-does-not-wait) |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
-| [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
+| [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: the gist columns, the hover chain and deep links — [granularity-zoom.md](granularity-zoom.md) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Beside the title are **two marks**: one saying where the piece came from — ↗ out to the publisher, or ⬆ meaning it was uploaded and there is nowhere to go back to — and, for the owner only, one saying **who can read it**, a globe or a lock linking to the metadata page's sharing switch ([library.md § The Shared badge](library.md#the-shared-badge)) |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the mode switch (thirteen of them, `MODES_UI`), your questions, and the links to the tweets and metadata pages — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **four** kinds — navigate, open a drawer, switch mode, and the experimental-features toggle at the end — and the markup says which (`aria-current` / `aria-expanded` / `aria-checked` / `aria-pressed`). The order is Greg's, set by hand; the way home and the dimmed placeholders both left it on 2026-08-26 |
 | [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts) | how much of itself that bar spells out, **measured rather than keyed to a width**: it asks the row whether it overflows and drops labels until it does not. A `max-width: 1100px` media query did this until 2026-09-02 and the number went stale as the modes multiplied — [260902k-the-bottom-bar-measures-its-own-fit.md](../plans/260902k-the-bottom-bar-measures-its-own-fit.md) |
@@ -36,7 +36,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
-| [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-…](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md) |
+| [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`App.tsx`](../../src/web/App.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
@@ -93,9 +93,10 @@ So *a mode is open* and *a band is open* are two questions now, named `inMode` a
 below already exists because of.
 
 "Permanent" means *no mode takes it away*, which is the claim Greg's framing is making, and it is
-still true. It is not a promise the reader cannot put the rail away themselves: the `Spine` pill in
-the controls bar does exactly that, in every mode, and it is the one granularity-bar control that
-stays on screen in one ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
+still true. It is not a promise the reader cannot put the rail away themselves: `?spine=0` does
+exactly that, in every mode. There was a `Spine` pill in the controls bar until 2026-09-05, and it
+was the one granularity-bar control that stayed on screen in a mode; now the rail is simply on
+unless the URL says otherwise ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
 [url-state.md](url-state.md) for `?spine=`). The prose is the half with no off switch: `?text=0` hides it
 in the hierarchy mode and nowhere else, which is what `proseVisible` in
 [`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice. (Plain is not an
@@ -146,7 +147,7 @@ place in an order that already exists than 40 lines of CSS that simply state the
 
 **What is staying hand-written, and always will be:** the spine, the table geometry and its
 `rowSpan` arithmetic, the sticky-bar ladder and its z-index order, the reading measure, `mark.cmt`
-and the annotation layer, the arc column, the modeless comment shell, and the runtime pixel geometry
+and the annotation layer, the modeless comment shell, and the runtime pixel geometry
 [`layout.ts`](../../src/web/layout.ts) computes. That is about 1,060 of `styles.css`'s 1,212 lines.
 **So there are two ways of styling here, permanently** — utilities for chrome, semantic CSS for
 everything utilities cannot express. Nobody is going to convert the rest, and nobody should try.
@@ -159,7 +160,7 @@ it, not by reasoning about it. The file itself carries the long version; this is
 | Guard | Without it |
 |---|---|
 | `prefix(tw)` on both imports | Tailwind's scanner is a plain **text** scanner — it pulls bare words out of source and emits a utility for any that matches a utility name. It found 18 in `src/web/`, two of which collide with live class names, and `.outline` drew a 1px border round the whole table in outline mode (`/?text=0`) |
-| `@layer app` on the `styles.css` import | Unlayered declarations beat layered ones whatever the order. Every place a shadcn component goes is already covered by a descendant rule (`.controls button`, `.cmt-nav button`, `.cmt-dialog header`), so a utility you deliberately wrote would lose twice over and say nothing |
+| `@layer app` on the `styles.css` import | Unlayered declarations beat layered ones whatever the order. Every place a shadcn component goes is already covered by a descendant rule (`.cmt-nav button`, `.cmt-dialog header`, `.cmt-dialog button.linky`), so a utility you deliberately wrote would lose twice over and say nothing |
 | `source(none)` + an explicit `@source "../../src/web"` | v4 auto-detects sources from the project root. It scanned `docs/`, found the `tw:flex` and `tw:rounded-md` written as **examples in the migration plan's prose**, and compiled them into the production bundle — seven utilities no component used. It then happened again from a doc comment inside [`lib/utils.ts`](../../src/web/lib/utils.ts) |
 | `@custom-variant dark (&)` | Tailwind compiles `dark:` to `@media (prefers-color-scheme: dark)`, and this page is dark with no media query — see [§ Dark mode](#dark-mode) |
 
@@ -221,10 +222,12 @@ second is the one that mattered:
   change them — but that had to happen first.
 - `.controls button.linky` — the `auto` control, the one thing in that bar that never became a
   `Toggle` — only ever overrode border-colour, underline and inline padding, and leaned on the base
-  rule for the rest. It now states its box in full. Two of its declarations look like dead weight
-  and are not: the `1px solid transparent` border is 2px of box and is what keeps it the same
-  height as the pills beside it, and the `border-radius` has nothing to round but is what keeps the
-  focus ring a lozenge, because an outline follows `border-radius` whether or not a border shows.
+  rule for the rest, so it was made to state its box in full. Both it and the `×` went on
+  2026-09-05, when the bar was cut down to the granularity pills
+  ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), and their rules went with
+  them. The lesson outlives them and is written above `.mode` in `styles.css`: **any button put
+  back in this bar states its own reset in full**, because there is no `.controls button` left to
+  inherit one from.
 
 `.controls button.on` was genuinely dead before it was deleted: Radix marks state with
 `data-state="on"`, never a class.
