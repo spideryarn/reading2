@@ -64,8 +64,11 @@ The transferable rule: **a search that excludes the file you are writing about c
 thing that would change your mind**, and "I grepped and found nothing" is only evidence if the grep
 could have found it.
 
-**Two of the three agents were wrong by different routes, and the second route is the more
-dangerous.** The provenance -- that the rule came from Stage E -- entered this branch as a stated
+**Two of the three agents were wrong by different routes, and they are not the same size.** The
+load-bearing error was mine: asserted in my own voice, off my own grep, into three places including a
+doc already on `dev`. The other made it easier to believe and is worth naming for a different reason
+-- how such a fact travels, not how much of the blame it carries. The provenance -- that the rule
+came from Stage E -- entered this branch as a stated
 finding from `spideryarn2-ba`, a peer session with no stake in the outcome, which had genuinely
 checked the *count* (nine `describe`s at the merge base, ten on `dev`) and then attributed the
 difference to the recent commit whose subject sounded like it fitted, without running the one command
@@ -78,6 +81,16 @@ so it propagates further and faster than a guess made in one's own voice. ⟨`sp
 The two mistakes are siblings: **a check whose scope quietly excludes the case that would fail it.**
 One excluded a file, the other excluded a command. That is the same shape as layer 2 below, reached
 from a third direction, which is the argument for treating it as this postmortem's real subject.
+
+**And there was a third instance, older than both, sitting inside the same red.** The registry entry
+for `tests/jobs.test.ts` read *"eight of its ten blocks are pure functions"* -- a count written when
+ten was the total, restated as current long after a new block had arrived. That sentence is the same
+move in miniature: **a fact reached for rather than re-derived.** So the shape was already present in
+the record of the very guard that went red, and then produced a false gap and a false provenance on
+top of it, all within one afternoon and all on one red. ⟨`spideryarn2-dd`, 2026-09-05, which made the
+connection and fixed the sentence in `c7bb7266` with a dated count and a scope, per CLAUDE.md on
+inventories.⟩ Three agents, three routes, one shape -- which is better evidence for the class than any
+of the three fixes.
 
 **And the retraction is better evidence for that subject than the original claim would have been.**
 An absent test is at least legible -- a gap somebody can see. What actually happened is worse and
