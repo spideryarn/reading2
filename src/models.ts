@@ -421,7 +421,45 @@ export type Task =
      an evening hunting reviewers, with nothing saying why. It is also the one
      job whose model a person might reasonably want to change on its own, since
      what it is being asked for is a search rather than an explanation. */
-  | "referee-candidates";
+  | "referee-candidates"
+  /**
+   * **Which of the first records are the article and which are the
+   * publisher's** — the second look at a PDF's front matter, and the only
+   * `Task` that reads a PDF at all.
+   *
+   * A `Task` rather than a fourth `NonTaskAiJob` because it *is* a tier
+   * decision: the three non-task jobs each have one fixed model for a reason
+   * that is not about reasoning (vision, vectors, speech), and this one is a
+   * judgment about a hard call on a page. It is on `chat`, not `messages`,
+   * because it is a small structured call and joins the request-path group.
+   *
+   * It does not read the article — only the first three pages' records, as
+   * text, and it answers with ids. src/pdf-frontmatter.ts.
+   */
+  | "pdf-frontmatter"
+  /**
+   * **What the rest of the web says about this piece** —
+   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+   *
+   * **The odd one in this union, and the oddity is worth stating.** It is a
+   * *pipeline step* (`StepName`, src/types.ts) that is on the **chat** wire, so
+   * it is the one task that appears in `REQUEST_PATH_TASKS` below without a
+   * reader sitting watching a stream. That list is derived from `TASK_WIRE`
+   * rather than hand-kept, so it means exactly *"speaks chat/completions"* and
+   * has never meant more; the sentence beside it is now half true and the
+   * derivation is the thing to trust.
+   *
+   * Why the chat wire at all: this is the only call anywhere in the pipeline
+   * that needs `openrouter:web_search`, which is a server-side tool on
+   * chat/completions and does not exist on the Messages shape. `src/pdf-read.ts`
+   * is the precedent for a pipeline call on that wire.
+   *
+   * It is **not** an `ArticleStage` (below): it shares no byte-exact cached
+   * article prefix with the Messages-wire stages, so it takes no row in
+   * `STAGE_EFFORT` or `ARTICLE_RENDERER`. src/types.ts § `StepName` says the
+   * same thing where a reader of that union will trip over it.
+   */
+  | "debate";
 
 /**
  * **The three model calls that are not a `Task`** — and the type exists so that
@@ -616,6 +654,18 @@ export const TASK_TIER: Record<Task, Tier> = {
      results against that — and the whole feature is worthless if the weighing is
      shallow, because a shallow answer is a list of famous names. */
   "referee-candidates": "capable",
+  /* Capable, and this one is worth stating rather than defaulting: the whole
+     job is telling an article's title from a journal's on a page that sets
+     the journal larger, and getting it wrong puts a wrong name on the shelf,
+     the tab and the public shelf. src/pdf-frontmatter.ts. */
+  "pdf-frontmatter": "capable",
+  /* Capable, like `referee-candidates`, which is the closest job in the app:
+     both weigh search results against a judgment about a text, and both are
+     worthless if the weighing is shallow. Here a shallow answer is nine
+     correctly-cited pages about sourdough starters presented as critical
+     reception — the exact thing Stage 0 got back, and the thing every rule in
+     src/debate.ts exists to refuse. */
+  debate: "capable",
 };
 
 /**
@@ -756,6 +806,12 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "referee-criteria": "chat",
   "referee-claims": "chat",
   "referee-candidates": "chat",
+  "pdf-frontmatter": "chat",
+  /* **The one pipeline step on this wire**, and the reason is `openrouter:web_search`:
+     a server-side tool that exists on chat/completions and not on the Messages
+     shape. Every other artefact-producing step is `"messages"`. See `Task`
+     above, and src/pdf-read.ts for the precedent. */
+  debate: "chat",
 };
 
 /** Which protocol this task's model call speaks. */
@@ -837,10 +893,20 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
+  /* It has one because comparing two models on the same cached transcriptions is
+     exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
+     would make the arm and the shipped path different things. */
+  "pdf-frontmatter": "SPIDERYARN_PDF_FRONTMATTER_MODEL",
   "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
   "referee-criteria": "SPIDERYARN_REFEREE_CRITERIA_MODEL",
   "referee-claims": "SPIDERYARN_REFEREE_CLAIMS_MODEL",
   "referee-candidates": "SPIDERYARN_REFEREE_CANDIDATES_MODEL",
+  /* It has one because it is on the chat wire, where every other task does —
+     and because the one comparison this stage will actually want is *kept
+     verified rows per dollar* across models and engines, which the plan defers
+     until there is a rate to compare. A code change to run an arm would make
+     the arm and the shipped path different things. */
+  debate: "SPIDERYARN_DEBATE_MODEL",
 };
 
 /** What a task will really send, and whether anything overrode the code to say so. */

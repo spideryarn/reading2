@@ -36,8 +36,41 @@
  * The model is stubbed, so the real `generateQuiz` runs end to end and nothing
  * reaches the network. Harness copied from
  * tests/late-step-on-a-cold-instance.test.ts.
+ *
+ * ## The store here is a fake, and it always was one
+ *
+ * Until 2026-09-05 it was a `createFsArtifactStore` over a copy of `example/`.
+ * Nothing above is a claim about files: what the file needs is *a store that
+ * records stamps*, and any store that does will do — which is the
+ * `store-agnostic-fake` verdict in
+ * [store-migration-registry.ts](store-migration-registry.ts). It is
+ * `memoryArtefactsFrom` now, so stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * can delete `src/store/artifacts-fs.ts` without this file noticing.
+ *
+ * **Mutation.** Run 2026-09-05. (1) `STAMP_SOURCE.quiz` set to `null` — bug 2 of
+ * the two above, made real: **3 of 6 red**, on *expected null to be 'quiz'*,
+ * *stampFor answered null — is there a STAMP_SOURCE row?*, and *a quiz written a
+ * moment ago is not current*. That is the file doing exactly the job it claims.
+ * (2) `memoryArtefactsFrom` made to plant neither `blocks` nor `meta`, so the
+ * fake holds an article the stage cannot read: **4 of 6 red**, all four on *No
+ * blocks or tree for "noema-mythology-of-conscious-ai" — run the hierarchy step
+ * first*. The two table-shape cases stay green under both arms, correctly:
+ * `STAMP_SOURCE.quiz` and `BASELINE.quiz` are read off the module, not the
+ * store. (3) Added 2026-09-05 after the cross-family review: deleting the
+ * `store.plant` line from *does not skip when the article moves underneath it*
+ * reddens that case on `expected true to be false`. **Before the memory fake was
+ * made to hand back copies it did not** — the store aliased its own object, so
+ * the `first.text = …` edit had already moved the article and the `plant` was
+ * decoration. helpers/memory-artefacts.ts § `detach` has the reproduction.
+ *
+ * **Blind to.** Where an artefact physically lives, and any behaviour that is
+ * the filesystem adapter's own — a fake with no paths cannot see a wrong `PATHS`
+ * row. It is also blind to the *Postgres* half of registration: a
+ * `revision_step_runs` row that recorded the stamp wrongly would pass every case
+ * here, and `tests/store-artefacts-pg.test.ts` is what covers it.
  */
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -47,9 +80,9 @@ import { readArticle } from "../src/article-input.js";
 import { isBodyEvidence } from "../src/block-policy.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import { BASELINE, STAMP_SOURCE } from "../src/store/artifacts.js";
-import type { ArtifactStore } from "../src/store/artifacts.js";
+import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
+import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import type { Quiz } from "../src/types.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -101,13 +134,11 @@ const REPO = path.resolve(import.meta.dirname, "..");
 const SLUG = "noema-mythology-of-conscious-ai";
 
 let root = "";
-let store: ArtifactStore;
+let store: MemoryArtifactStore;
 
 function ctxFor(): StepContext {
   return {
     slug: SLUG,
-    dir: path.join(root, "data", SLUG),
-    htmlFile: path.join(root, "output", `${SLUG}.html`),
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -163,10 +194,6 @@ async function runAndWrite(): Promise<Quiz> {
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), "spya-quiz-"));
   await cp(path.join(REPO, "example"), path.join(root, "data", SLUG), { recursive: true });
-  store = createFsArtifactStore((slug) => ({
-    dir: path.join(root, "data", slug),
-    htmlFile: path.join(root, "output", `${slug}.html`),
-  }));
 }, 30_000);
 
 afterAll(async () => {
@@ -175,16 +202,20 @@ afterAll(async () => {
 
 beforeEach(async () => {
   calls = 0;
-  await rm(path.join(root, "data", SLUG, "quiz.json"), { force: true });
-  await rm(path.join(root, "data", SLUG, "steps"), { recursive: true, force: true });
-  /* The last test moves a block's text on purpose. Put it back, so the order
-     these run in cannot change what any of them is asking. */
-  await cp(
-    path.join(REPO, "example", "blocks.json"),
-    path.join(root, "data", SLUG, "blocks.json"),
-  );
+  /* **A fresh store per case, read off the untouched copy of `example/`.** It
+     replaces three lines of cleanup — delete `quiz.json`, delete the `steps/`
+     markers, put `blocks.json` back — which existed only because the store and
+     the fixture were the same directory. They are not any more: the copy of
+     `example/` is now never written to, so "start from the fixture" is one call,
+     and the last case's edit to a block cannot leak into the others by any
+     route rather than by the one this used to undo. */
+  store = await memoryArtefactsFrom(root, SLUG);
 });
 
+/**
+ * **No mutation of its own** — this is the block the header's first arm was
+ * aimed at: `STAMP_SOURCE.quiz` set to `null` reddens two of its three cases.
+ */
 describe("what the store records when the quiz step has run", () => {
   it("names the quiz artefact in STAMP_SOURCE, and does not say null", () => {
     /* Stated on its own because it is the one that fails *before* anything can
@@ -230,6 +261,10 @@ describe("what the store records when the quiz step has run", () => {
   });
 });
 
+/**
+ * **No mutation of its own** — the header's first arm reddens *skips, and spends
+ * nothing*, and its second reddens both cases here by emptying the store.
+ */
 describe("running the step again", () => {
   it("skips, and spends nothing, when nothing has moved", async () => {
     await runAndWrite();
@@ -255,17 +290,23 @@ describe("running the step again", () => {
        ever with a green tick over it. */
     await runAndWrite();
 
-    const at = path.join(root, "data", SLUG, "blocks.json");
-    const file = JSON.parse(await readFile(at, "utf-8")) as { blocks: { text: string }[] };
-    const first = file.blocks[0];
+    const file = await store.read(SLUG, "hierarchy", "blocks");
+    const first = file?.blocks?.[0];
     if (!first) throw new Error("the fixture has no blocks");
     first.text = `${first.text} — and one more sentence the quiz never saw.`;
-    await writeFile(at, JSON.stringify(file, null, 2));
+    store.plant(SLUG, "hierarchy", "blocks", file);
 
     expect(await stepIsDone(STEPS.quiz, ctxFor(), store)).toBe(false);
   });
 });
 
+/**
+ * **No mutation involving the store, and that is the point of the block.** Its
+ * one case reads `BASELINE.quiz` off the module and asserts it is absent; no
+ * store is consulted, so neither arm in the header touches it. Adding a
+ * `BASELINE` row is what would redden it, and that is a change to
+ * src/store/artifacts.ts rather than to any adapter.
+ */
 describe("what the quiz step deliberately does not register", () => {
   it("has no BASELINE row, because it inherits no ids", () => {
     /* Not an omission — `readBaseline` **throws** for a kind with no row, which

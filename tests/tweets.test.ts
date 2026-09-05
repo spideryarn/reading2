@@ -10,10 +10,7 @@
  * exported and tested precisely so that only the genuinely nondeterministic
  * part goes untested. See docs/project/testing.md.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   buildThread,
   countChars,
@@ -27,12 +24,8 @@ import {
 import { articleFingerprint } from "../src/source-hash.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
-import {
-  type ArtifactLocations,
-  createFsArtifactStore,
-  pathFor,
-} from "../src/store/artifacts-fs.js";
-import type { ArtifactStore } from "../src/store/artifacts.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
+import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import type { Block, Tree, TweetThread } from "../src/types.js";
 
 function block(id: string, text: string): Block {
@@ -41,6 +34,11 @@ function block(id: string, text: string): Block {
 
 const BLOCKS = [block("spya-aaaaaa", "The first paragraph."), block("spya-bbbbbb", "The second.")];
 
+/**
+ * **No mutation involving the store: this block has no store in it.** It counts
+ * characters in a string, which is arithmetic; the D conversion is the last
+ * block in the file and neither of its arms reaches this one.
+ */
 describe("countChars", () => {
   it("counts what a reader would count", () => {
     expect(countChars("hello")).toBe(5);
@@ -63,6 +61,11 @@ describe("countChars", () => {
   });
 });
 
+/**
+ * **No mutation involving the store: this block has no store in it.** It builds
+ * a thread out of an array the caller passes in, so nothing is read from or
+ * written to anywhere.
+ */
 describe("buildThread", () => {
   const opts = { slug: "a-slug", sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
 
@@ -122,6 +125,11 @@ describe("buildThread", () => {
   });
 });
 
+/**
+ * **No mutation involving the store: this block has no store in it.** It hashes
+ * arrays of blocks handed to it directly, which is the pure half of the
+ * freshness question — the half that consults a store is the last block.
+ */
 describe("hashBlocks and isStale", () => {
   it("is stable for the same article", () => {
     expect(hashBlocks(BLOCKS)).toBe(hashBlocks(BLOCKS.map((b) => ({ ...b }))));
@@ -207,6 +215,10 @@ describe("hashBlocks and isStale", () => {
   });
 });
 
+/**
+ * **No mutation involving the store: this block has no store in it.** It turns a
+ * word count into a number of posts, and takes the word count as an argument.
+ */
 describe("suggestedLength", () => {
   it("scales with the article rather than being a flat twelve", () => {
     // Theirs asked for 12 every time, tuned on academic papers of roughly one
@@ -251,24 +263,14 @@ describe("suggestedLength", () => {
 
 const SLUG = "test-tweets-stamp";
 
-const roots: string[] = [];
 
-afterAll(async () => {
-  for (const root of roots) await rm(root, { recursive: true, force: true });
-});
-
-/** An empty article directory pair, in a temp root that gets cleaned up. */
-async function tempArticle(): Promise<ArtifactLocations> {
-  const root = await mkdtemp(path.join(tmpdir(), "spya-tweets-"));
-  roots.push(root);
-  const at = {
-    dir: path.join(root, "data", SLUG),
-    htmlFile: path.join(root, "output", `${SLUG}.html`),
-  };
-  await mkdir(at.dir, { recursive: true });
-  await mkdir(path.dirname(at.htmlFile), { recursive: true });
-  return at;
-}
+/*
+ * **`tempArticleDir()` stood here until 2026-09-05.** It minted an empty
+ * article directory for the two things that wanted one, and both wanted it
+ * because a directory was the *wrong* place to look. Neither can exist now that
+ * `StepContext` carries no path. The store is
+ * [helpers/memory-artefacts.ts](helpers/memory-artefacts.ts), and always was.
+ */
 
 /**
  * The tree and the metadata the stamped cases are written against.
@@ -309,39 +311,78 @@ function threadFor(blocks: Block[], over: Partial<TweetThread>): TweetThread {
 }
 
 /**
- * A context pointing at a directory that holds nothing.
+ * The context these cases hand the step, which says nothing about storage.
  *
- * **Deliberately not the store's directory.** Freshness is the store's answer
- * now, and a context whose `dir` agreed with it could not tell the two apart —
- * on the filesystem they are the same file, so a test that pointed both at one
- * place would pass just as happily against the path-reading version this
- * replaced. Nothing here runs, so most of the rest is the type asking.
+ * **It took a directory until 2026-09-05** — `ctxFor()`, deliberately
+ * pointed at an empty one, so that a `stepIsDone` reading `ctx.dir` could not
+ * agree with the store by accident. `StepContext.dir` is gone, so there is
+ * nothing left to point anywhere: freshness is the store's answer and the
+ * context carries no second one. Nothing here runs, so the rest is the type
+ * asking.
  */
-function ctxAt(dir: string): StepContext {
+function ctxFor(): StepContext {
   return {
     slug: SLUG,
-    dir,
-    htmlFile: path.join(dir, "page.html"),
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
   };
 }
 
-async function writeJson(file: string, value: unknown): Promise<void> {
-  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-}
-
+/**
+ * **The store here is a fake, and it always was one.**
+ *
+ * Until 2026-09-05 it was a `createFsArtifactStore` over a `mkdtemp` directory,
+ * and each case wrote its thread with `writeJson(pathFor(where, …))`. Nothing in
+ * this block is a claim about files: the store appears only so that
+ * `stepIsDone` has a stamp to read, which is the whole of the
+ * `store-agnostic-fake` verdict in
+ * [store-migration-registry.ts](store-migration-registry.ts). It is
+ * `memoryArtefacts()` now, so stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * can delete `src/store/artifacts-fs.ts` without this file noticing.
+ *
+ * `plant` rather than `write` is what keeps the *unreadable* case reachable:
+ * `write` refuses a bad shape, which is the point of `write`, so a fake needs
+ * the same door the truncated file used to be.
+ *
+ * **Mutation.** Run 2026-09-05. (1) `stepIsDone` in src/pipeline.ts made to
+ * compare the recorded stamp against *itself* rather than against what the step
+ * would produce now — freshness answering yes to its own question: **5 red of
+ * 32**, and they are exactly the five that ask whether something moved
+ * underneath the thread (re-cut sections, a rename, changed blocks, a new prompt
+ * version, a new model). (2) `memoryArtefacts().plant` made a no-op, so the fake
+ * holds nothing: **1 red** — *says done for a thread written against these very
+ * blocks*. Every other case in the block asserts `false`, which an empty store
+ * also produces, so that single red is the whole of what a planted artefact is
+ * load-bearing for here, and saying so is more useful than a bigger number.
+ *
+ * **And that sentence was the warning about the next finding, unread.** Round 2
+ * of the review established that two cases here — *thread carries no stamp at
+ * all* and *reads the store, not the directory* — reached their `false` without
+ * testing anything: both omitted the tree and the metadata that
+ * `STEPS.tweets.stamp` fingerprints alongside the blocks, so the *expected*
+ * stamp was null and `stepIsDone` returned early. **Older than the conversion**:
+ * the pre-conversion versions had the same hole, the first leaning on `ask()`
+ * having filled a shared directory earlier in the file and the second building
+ * `inTheStore` as a fresh empty directory that never had a tree either. Both now
+ * plant the tree and metadata and assert the stamp is reachable before asserting
+ * on it. (3) With that in place, making each case's stored thread genuinely
+ * current — a real stamp on the first, unmoved blocks on the second — reddens
+ * both on *expected true to be false*, which is what says they now discriminate.
+ *
+ * **Blind to.** Anything about where an artefact physically lives: a fake with
+ * no paths cannot see a `PATHS` row that is wrong, and
+ * [pipeline-artifact-store.test.ts](pipeline-artifact-store.test.ts) is what
+ * covers that. Also blind to the filesystem's aliasing of
+ * `extractedHtml`/`stampedHtml`, which this fake deliberately does not
+ * reproduce and no case here reads.
+ */
 describe("tweets freshness, through the step's stamp", () => {
-  let where: ArtifactLocations;
-  let store: ArtifactStore;
-  /** Stays empty for every case below; see `ctxAt`. */
-  let elsewhere: string;
+  let store: MemoryArtifactStore;
 
-  beforeAll(async () => {
-    where = await tempArticle();
-    store = createFsArtifactStore(() => where);
-    elsewhere = (await tempArticle()).dir;
+  beforeAll(() => {
+    store = memoryArtefacts();
   });
 
   /** Put a thread and some blocks in the store, then ask the pipeline. */
@@ -350,21 +391,22 @@ describe("tweets freshness, through the step's stamp", () => {
     blocks: Block[] | null,
     over: { tree?: Tree; meta?: unknown } = {},
   ): Promise<boolean> {
-    const file = pathFor(where, "tweets", "tweets");
-    if (thread === "unreadable") await writeFile(file, "{ not json", "utf8");
-    else if (thread) await writeJson(file, threadFor(BLOCKS, thread));
-    else await rm(file, { force: true });
+    /* `"{ not json"` is a string where the store expects an object, so
+       `whyUnusable` answers *not an object* and the read comes back `null` —
+       the same three-state answer a half-written file produced. */
+    if (thread === "unreadable") store.plant(SLUG, "tweets", "tweets", "{ not json");
+    else if (thread) store.plant(SLUG, "tweets", "tweets", threadFor(BLOCKS, thread));
+    else store.forget(SLUG, "tweets", "tweets");
 
-    const blocksFile = pathFor(where, "hierarchy", "blocks");
-    if (blocks) await writeJson(blocksFile, { blocks });
-    else await rm(blocksFile, { force: true });
+    if (blocks) store.plant(SLUG, "hierarchy", "blocks", { blocks });
+    else store.forget(SLUG, "hierarchy", "blocks");
 
     /* The other two thirds of what the stamp compares. Written every time, so
        that "no blocks" stays the only thing a case removes. */
-    await writeJson(pathFor(where, "hierarchy", "tree"), over.tree ?? STAMP_TREE);
-    await writeJson(pathFor(where, "extract", "meta"), over.meta ?? STAMP_META);
+    store.plant(SLUG, "hierarchy", "tree", over.tree ?? STAMP_TREE);
+    store.plant(SLUG, "extract", "meta", over.meta ?? STAMP_META);
 
-    return stepIsDone(STEPS.tweets, ctxAt(elsewhere), store);
+    return stepIsDone(STEPS.tweets, ctxFor(), store);
   }
 
   it("says done for a thread written against these very blocks", async () => {
@@ -418,35 +460,43 @@ describe("tweets freshness, through the step's stamp", () => {
   });
 
   it("says not-done when the thread carries no stamp at all", async () => {
-    await writeJson(pathFor(where, "tweets", "tweets"), { tweets: [], limit: 280 });
-    await writeJson(pathFor(where, "hierarchy", "blocks"), { blocks: BLOCKS });
-    expect(await stepIsDone(STEPS.tweets, ctxAt(elsewhere), store)).toBe(false);
+    store.plant(SLUG, "tweets", "tweets", { tweets: [], limit: 280 });
+    store.plant(SLUG, "hierarchy", "blocks", { blocks: BLOCKS });
+    /* **The other two thirds of the stamp, planted rather than inherited from
+       whichever case ran last.** `STEPS.tweets.stamp` fingerprints blocks, tree
+       and metadata together, so without a tree and a `meta` the *expected*
+       stamp is null and `stepIsDone` answers `false` before it has looked at
+       the thread at all — which is the answer this case wants, arrived at
+       without testing anything. It passed that way both before and after the
+       2026-09-05 conversion, on `ask()` having filled the shared store earlier
+       in the file. */
+    store.plant(SLUG, "hierarchy", "tree", STAMP_TREE);
+    store.plant(SLUG, "extract", "meta", STAMP_META);
+    expect(
+      await STEPS.tweets.stamp?.(ctxFor(), store),
+      "the expected stamp is null, so `false` below is about a missing tree rather than a missing stamp",
+    ).not.toBeNull();
+
+    expect(await stepIsDone(STEPS.tweets, ctxFor(), store)).toBe(false);
   });
 
-  /**
-   * The store is the authority, not the path in the context.
+  /*
+   * **`reads the store, not the directory the context happens to name` stood
+   * here until 2026-09-05, and it is gone because its subject is.**
    *
-   * Red before D0: `isDone: (ctx) => threadIsCurrent(ctx.dir)` read `ctx.dir`
-   * and answered *done* about a thread the store does not hold, which is the
-   * whole reason freshness had to move behind the seam.
+   * It planted a stale thread in the store, wrote a perfectly current
+   * `tweets.json` and `blocks.json` into a real directory on disk, pointed
+   * `ctx.dir` at that directory, and asserted `stepIsDone` still said *not
+   * done*. The files were the control: without them the case would have passed
+   * against a system with no directory to prefer, which is the vacuous shape
+   * this file's own header keeps catching.
+   *
+   * `StepContext.dir` went with the filesystem store in stage G of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+   * There is no path on the context for a stage to read, so the property has
+   * **ceased to exist** rather than lost its coverage, and re-expressing it
+   * would mean writing a control for a mechanism nothing can reach. The rule it
+   * enforced holds by construction now: the only thing a step is handed to
+   * answer freshness with is an `ArtifactReads`.
    */
-  it("reads the store, not the directory the context happens to name", async () => {
-    const inTheStore = await tempArticle();
-    const onTheSide = await tempArticle();
-    const moved = [...BLOCKS, block("spya-eeeeee", "Rewritten since.")];
-    // What the store holds is stale: written against BLOCKS, and the blocks it
-    // holds have moved on.
-    await writeJson(pathFor(inTheStore, "tweets", "tweets"), threadFor(BLOCKS, {}));
-    await writeJson(pathFor(inTheStore, "hierarchy", "blocks"), { blocks: moved });
-    // `ctx.dir` holds a perfectly current pair, and is the wrong place to look.
-    await writeJson(path.join(onTheSide.dir, "tweets.json"), threadFor(moved, {}));
-    await writeJson(path.join(onTheSide.dir, "blocks.json"), { blocks: moved });
-
-    const done = await stepIsDone(
-      STEPS.tweets,
-      ctxAt(onTheSide.dir),
-      createFsArtifactStore(() => inTheStore),
-    );
-    expect(done).toBe(false);
-  });
 });

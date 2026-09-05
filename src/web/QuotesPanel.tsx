@@ -404,6 +404,34 @@ export function rankQuotes(quotes: Quote[], rank: QuoteRank, bar = QUOTE_BAR_DEF
     .map((x) => x.quote);
 }
 
+/**
+ * **What the panel is actually showing**, from the two raw URL parameters — the
+ * one question the band and the prose must never answer separately.
+ *
+ * Three steps, and each is somebody's hard-won rule rather than a step:
+ * `snapToStop` brings an arriving `?bar=` onto a position the slider can be
+ * dragged to, `effectiveRank` falls back off `prioritised` on a list with
+ * nothing to bar, and `rankQuotes` orders and — in `prioritised` alone — hides.
+ * `null` is *nobody has touched the bar*, resolved here to `QUOTE_BAR_DEFAULT`,
+ * which is what keeps the default one number in one file.
+ *
+ * **Extracted on 2026-09-05, when the prose started marking every visible
+ * quote.** Until then the panel computed this and the band computed a *piece*
+ * of it — enough to notice that the bar had hidden the selected row. Now the
+ * marks are this exact list, so the two callers have to be asking one function:
+ * a row hidden by the bar with its wash still on the paragraph is precisely the
+ * failure src/web/threshold.ts exists to prevent, and it would arrive as two
+ * expressions that agreed until one of them was edited.
+ */
+export function markedQuotes(
+  quotes: readonly Quote[],
+  rank: QuoteRank,
+  bar: number | null,
+): Quote[] {
+  const list = [...quotes];
+  return rankQuotes(list, effectiveRank(list, rank), snapToStop(barStops(list), bar ?? QUOTE_BAR_DEFAULT));
+}
+
 /** One number to put on a row, with the name of what it is. */
 export interface RowScore {
   key: "importance" | "striking";
@@ -464,7 +492,13 @@ export function QuotesPanel({
      RankBar's pressed state, the numbers on each row — has to agree about what
      order the list is actually in. One call, one answer, passed down. */
   const rank = effectiveRank(all, chosenRank);
-  const shown = quotes ? rankQuotes(all, rank, bar) : [];
+  /* **`markedQuotes` and not `rankQuotes(all, rank, bar)`**, although the two
+     compute the same list from the same three lines. The prose marks this list
+     now, and it reaches it from the band rather than from here — so the two
+     have to call one function or they are two expressions that agree until
+     somebody edits one. `bar` and `rank` above are still needed on their own,
+     by the slider and by the RankBar's pressed state. */
+  const shown = quotes ? markedQuotes(all, chosenRank, chosenBar) : [];
   /* From the LIST, not from the owner hook — so the sentence appears for a
      visitor as well, which is what makes "the reader is told" true rather than
      true for whoever happens to own the article. */
@@ -510,8 +544,9 @@ export function QuotesPanel({
   return (
     <aside className="mode-band quotes" aria-label="Quotes">
       <div className="band-head">
-        <QuoteIcon size={14} className="band-head-icon" />
-        <h2>Quotes</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the count below it. */}
         {quotes && (
           <span className="quotes-count">
             {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
@@ -621,9 +656,11 @@ export function QuotesPanel({
                      call the glossary makes, for the same reason. */
                   unscored={rank === "prioritised" && priorityOf(quote) === undefined}
                   onSelect={() => {
-                    // Pressing the selected quote again clears it, which is
-                    // what takes the mark back out of the prose. A selection
-                    // you cannot cancel is a mode inside a mode.
+                    // Pressing the selected quote again clears it. Since
+                    // 2026-09-05 that takes the *ring* off the passage and
+                    // leaves the wash, because every visible quote is marked
+                    // whether or not one is selected. A selection you cannot
+                    // cancel is a mode inside a mode.
                     if (quote.id === quoteId) return onQuote(null);
                     onQuote(quote.id);
                     onJump(quote.blockId);
@@ -634,9 +671,7 @@ export function QuotesPanel({
             </ol>
           </div>
 
-          {owner?.quotes && (
-            <Foot quotes={owner.quotes} rerun={rerun} />
-          )}
+          {owner?.quotes && <Foot rerun={rerun} />}
         </>
       )}
     </aside>
@@ -927,27 +962,31 @@ const LABEL: Record<RowScore["key"], string> = {
 };
 
 /**
- * Under the list: who chose these and when, and the one verb.
+ * Under the list: the one verb.
  *
- * The provenance a visitor never sees — `owner.quotes` is the artefact, where
- * the list above is the projection, and that distinction is the same one
- * `GlossaryPanel`'s `Foot` keeps.
+ * **It printed `generator · version` above the button until 2026-09-05**, and
+ * that line went for the reason the glossary's did, on the same day and by the
+ * same instruction — Greg, having read both feet:
+ *
+ * > we can probably get rid of Start again button and the "claude-sonnet-5 ·
+ * > glossary/3 · one pass" at the bottom, those are all confusing and
+ * > unnecessary.
+ *
+ * > also do the same for Quotes (and any other modes as needed)
+ *
+ * Which model wrote a list and which prompt version it used are pipeline facts:
+ * the public projection already drops them for a visitor
+ * (src/public-types.ts), they are still on the artefact and in the export, and
+ * `Metadata` is where an owner can see them
+ * (src/web/Metadata.tsx § `StageRow`). A reader deciding whether to press
+ * *Choose them again* is not helped by either. `Foot` in
+ * src/web/GlossaryPanel.tsx carries the longer version of the argument.
+ *
+ * So this takes no artefact at all now, and `owner.quotes` is read at the call
+ * site only as the *is there a list yet* test for whether to draw the foot.
  */
-function Foot({
-  quotes,
-  rerun,
-}: {
-  quotes: { generator: string; version: string };
-  rerun(label: string, again?: boolean): ReactElement;
-}) {
-  return (
-    <div className="quotes-foot">
-      <p className="quotes-provenance">
-        {quotes.generator} · {quotes.version}
-      </p>
-      {rerun("Choose them again", true)}
-    </div>
-  );
+function Foot({ rerun }: { rerun(label: string, again?: boolean): ReactElement }) {
+  return <div className="quotes-foot">{rerun("Choose them again", true)}</div>;
 }
 
 function Progress(props: {

@@ -45,7 +45,7 @@ loadEnvLocal();
 
    Until the shared helper this probe was on a **two-second** connect timeout
    and skipped **silently**; the helper's header records what each cost. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/admin-store.test.ts",
   tables: ["spideryarn.articles"],
 });
@@ -61,7 +61,6 @@ const { reachable } = await pgReady({
  * Twenty, which is long enough that a real hang still fails rather than hanging
  * the run.
  */
-const dbIt = it.skipIf(!reachable);
 const SLOW = 20_000;
 
 /** Is this a string a `Date` can be built from, and does it round-trip? */
@@ -72,12 +71,15 @@ function isIso(value: unknown): boolean {
 }
 
 describe("the admin user list", () => {
-  dbIt("answers with the whole shape, and every field the right type", async () => {
+  it("answers with the whole shape, and every field the right type", async () => {
     /* Imported here rather than at the top: `src/store/index.ts` throws at
-       module load when `SPIDERYARN_STORE=postgres` is set without Supabase
-       Storage configured, and this suite must not take the whole run down on a
-       machine that has a database but no bucket. The Postgres adapter itself
-       has no such requirement, so it is imported directly. */
+       module load when Supabase Storage is not configured, and this suite must
+       not take the whole run down on a machine that has a database but no
+       bucket. The Postgres adapter itself has no such requirement, so it is
+       imported directly. (The condition used to be "`SPIDERYARN_STORE=postgres`
+       is set without Storage"; there is one store since 2026-09-05 and the
+       check is unconditional now, so the reason to import late is unchanged and
+       the sentence was not.) */
     const { pgAdminStore } = await import("../src/store/pg-admin.js");
     const users = await pgAdminStore.listUsersAcrossOwners();
 
@@ -120,7 +122,7 @@ describe("the admin user list", () => {
     }
   }, SLOW);
 
-  dbIt("gives every account its own row, and no account two", async () => {
+  it("gives every account its own row, and no account two", async () => {
     const { pgAdminStore } = await import("../src/store/pg-admin.js");
     const users = await pgAdminStore.listUsersAcrossOwners();
     /* The join is six `group by` queries merged by a `Map`, and the way that
@@ -161,7 +163,7 @@ describe("the admin user list", () => {
    * are inside — hence a per-run owner id, and a `finally` that removes both
    * the rows and the account whatever happens.
    */
-  dbIt("converts a real non-zero count, rather than resting on `?? 0`", async () => {
+  it("converts a real non-zero count, rather than resting on `?? 0`", async () => {
     const { randomUUID } = await import("node:crypto");
     const { seedAuthUser } = await import("./helpers/seed-auth-user.js");
     const { getDb } = await import("../src/db/client.js");

@@ -43,6 +43,16 @@ const HOISTED = vi.hoisted(() => {
   return { previousLevel };
 });
 
+import {
+  CASCADE_RECIPE,
+  UNMEASURED_OVERHEAD,
+  planExpansionBatches,
+  type ExpansionBatch,
+  type ExpansionTarget,
+} from "../src/hierarchy-cascade.js";
+import { renderFrozenOutline, type OutlineEntry } from "../src/hierarchy-expand.js";
+import { freeAnswer, runExpansionWave, type FrozenSeed } from "../src/hierarchy-deepen.js";
+import { structureHash } from "../src/source-hash.js";
 import { generateLabels } from "../src/labels.js";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
@@ -107,6 +117,7 @@ async function extractInto(store: MemoryCheckpoints): Promise<void> {
   const bytes = new Uint8Array(await readFile(EASY));
   const pass = await pass0(bytes);
   await runPdfExtract({
+    frontMatter: null,
     bytes,
     url: "https://example.test/paper.pdf",
     checkpoints: store,
@@ -246,5 +257,142 @@ describe("the label batch checkpoints", () => {
     const said = lines(written, "hierarchy-labels", '"found":0');
     expect(said).toHaveLength(1);
     expect(said[0]).toMatch(/"asked":[1-9]/);
+  });
+});
+
+/* --------------------------------------------------- the scoped expansions -- */
+
+/**
+ * One parent of twelve paragraphs, one call, one answer that divides it in two.
+ *
+ * Nothing here is about what a good division looks like — the protocol's own
+ * tests are tests/hierarchy-deepen.test.ts — only about the read that happens
+ * before the first call goes out.
+ */
+function expansionFixture(): {
+  batches: ExpansionBatch[];
+  blocks: Block[];
+  seed: FrozenSeed;
+  ancestorsOf: () => readonly OutlineEntry[];
+  answer: string;
+} {
+  const id = (i: number): string => `spya-e${"abcdefghjkmn"[i]}0000`;
+  const blocks: Block[] = Array.from({ length: 12 }, (_, i) => ({
+    id: id(i),
+    tag: "p",
+    kind: "text",
+    text: `Paragraph ${i} carries the argument a little further along.`,
+    words: 9,
+    html: `<p id="${id(i)}">Paragraph ${i}</p>`,
+    gistable: true,
+  }));
+  const target: ExpansionTarget = {
+    node: { title: "The Long Middle", gist: "It makes its case at length.", range: [id(0), id(11)], status: "pending" },
+    where: "root > child 1",
+  };
+  const batches = planExpansionBatches([target], blocks, CASCADE_RECIPE, UNMEASURED_OVERHEAD).filter(
+    (call): call is ExpansionBatch => call.kind === "batch",
+  );
+  /* `structureHash` of a tree the wave-1 call would have produced. Its shape is
+     irrelevant here; that it is frozen is the point, and it is a constant. */
+  const seed: FrozenSeed = {
+    outline: renderFrozenOutline({
+      title: "The Whole Work",
+      gist: "It argues one thing.",
+      range: [id(0), id(11)],
+      children: [{ title: "The Long Middle", gist: "It makes its case at length.", range: [id(0), id(11)] }],
+    }),
+    hash: structureHash({
+      version: "test",
+      generator: "test",
+      slug: "deepen-log",
+      rootId: "n0001",
+      nodes: {
+        n0001: { id: "n0001", depth: 0, parent: null, children: [], range: [id(0), id(11)], title: "The Whole Work" },
+      },
+    }),
+  };
+  const answer = JSON.stringify({
+    sections: [
+      {
+        section: 1,
+        children: [
+          { start: id(0), title: "The first half", gist: "It opens the case.", verdict: "finished" },
+          { start: id(6), title: "The second half", gist: "It closes the case.", verdict: "finished" },
+        ],
+      },
+    ],
+  });
+  return { batches, blocks, seed, ancestorsOf: () => [], answer };
+}
+
+/**
+ * **The third caller**, added with the namespace on 2026-09-05.
+ *
+ * A wave of scoped expansion calls is the most likely of the three to be running
+ * with a dead cache and nobody the wiser: the calls are cheap individually, so
+ * the symptom of every lookup missing is a bill that is merely larger rather
+ * than a step that visibly fails. Its read reports a third number as well —
+ * `usable`, the rows that were for this question **and still normalise** — so
+ * `found - usable` names the rows that existed and were re-bought anyway, which
+ * is the number a poisoned row shows up in.
+ *
+ * The `found: 0` case is again the one the old design could not produce, and it
+ * runs against a fake executor rather than against no credential, because this
+ * caller has a seam for exactly that.
+ */
+describe("the scoped expansion checkpoints", () => {
+  it("says what it asked for, what it found and what it could use, on a cold cache", async () => {
+    const store = memoryCheckpoints({ slug: "deepen-log", articleId: "article-deepen-log" });
+    const { batches, blocks, seed, ancestorsOf, answer } = expansionFixture();
+
+    const written = await logLinesWhile(async () => {
+      await runExpansionWave({
+        slug: "deepen-log",
+        checkpoints: store,
+        execute: async () => freeAnswer(answer),
+        batches,
+        ancestorsOf,
+        blocks,
+        seed,
+        recipe: CASCADE_RECIPE,
+      });
+    });
+
+    expect(written).toContain("hierarchy-deepen");
+    const said = lines(written, "hierarchy-deepen", '"found":0');
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/"asked":[1-9]/);
+    expect(said[0]).toMatch(/"usable":0/);
+  });
+
+  it("says what it found and what it used when everything is already paid for", async () => {
+    const store = memoryCheckpoints({ slug: "deepen-log", articleId: "article-deepen-log" });
+    const { batches, blocks, seed, ancestorsOf, answer } = expansionFixture();
+    const run = async (): Promise<void> => {
+      await runExpansionWave({
+        slug: "deepen-log",
+        checkpoints: store,
+        execute: async () => freeAnswer(answer),
+        batches,
+        ancestorsOf,
+        blocks,
+        seed,
+        recipe: CASCADE_RECIPE,
+      });
+    };
+    await run();
+
+    const written = await logLinesWhile(run);
+    expect(written).toContain("hierarchy-deepen");
+    const said = lines(written, "hierarchy-deepen", '"found":');
+    expect(said).toHaveLength(1);
+    /* All three track something, which is what stops the pair of tests passing
+       on two constants. */
+    const n = (field: string): number =>
+      Number(new RegExp(`"${field}":(\\d+)`).exec(said[0] ?? "")?.[1]);
+    expect(n("asked")).toBeGreaterThan(0);
+    expect(n("found")).toBe(n("asked"));
+    expect(n("usable")).toBe(n("asked"));
   });
 });

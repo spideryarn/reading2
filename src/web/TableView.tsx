@@ -25,7 +25,7 @@ import {
 } from "react";
 import type { Article, BlockId, Comment, NodeId, TreeNode } from "../types.js";
 import { useRenderCount } from "./perf.js";
-import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
+import { columnLabel, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
 import {
   annotateHtml,
@@ -36,7 +36,7 @@ import {
   type Mark,
   type TermSelection,
 } from "./annotate.js";
-import { readSelection } from "./selection.js";
+import { readSelection, type SelectionAnchor } from "./selection.js";
 import { internalTarget } from "./internal-links.js";
 import {
   markReturnPath,
@@ -84,28 +84,20 @@ interface Props {
   /** Explicit pixel widths, one per rendered column. See layout.ts. */
   layout: Layout;
   showText: boolean;
-  /**
-   * The depth ↑ / ↓ are currently aimed at, so the column can say so. Chosen by
-   * where the pointer is — see keynav.ts, and the `data-nav-depth` tags below.
-   */
-  navDepth: number;
-  /**
-   * What the L0 column renders: one sentence per part on where the argument
-   * stands there. Null when `arc.json` hasn't been generated, and then L0 falls
-   * back to the root node exactly as it used to. See tree.js § the arc.
-   */
-  arcCells: Map<number, ArcCell> | null;
-  /**
-   * An arc is being written right now, and there is none to draw yet.
-   *
-   * Since 2026-08-29 the arc is not built by every ingest — the article opens as
-   * soon as the tree is ready — so the L0 column can be the root gist *while a
-   * real arc is on its way*, which is a different thing from the root gist being
-   * all there will ever be. Without this the wait is invisible: the fallback is
-   * good enough that nothing looks like it is loading. Greg asked for a loading
-   * state here specifically (2026-08-29).
-   */
-  arcPending: boolean;
+  /* **No `navDepth` here since 2026-09-05.** The depth ← / → are aimed at used
+     to come in as a prop so the header row could light the matching `<th>`.
+     That row has no height now, and the aim is drawn by tinting the column —
+     which has to reach the fisheye panels, which are `position: fixed` outside
+     this table. So it is one `data-aim` attribute on `.reader` (App.tsx) and a
+     rule in styles.css § the aimed column, and this component stops re-rendering
+     on every twitch of the pointer. The cells still carry `data-nav-depth`,
+     which is what that rule matches and what keynav.ts resolves an aim with. */
+  /* **No `arcCells` here since 2026-09-05.** The L0 column drew the arc — one
+     sentence per part, with a `3 / 7` step marker and a loading tint while the
+     stage was still running — and Greg took the column out: "let's get rid of
+     the 'Arg' button and functionality altogether". The arc itself is alive and
+     well; App.tsx hands it to `OutlinePanel` instead
+     (docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5). */
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
   /**
@@ -129,7 +121,7 @@ interface Props {
   /** The comment whose dialog is open, so its mark can say so. */
   openComment: string | null;
   /** A usable selection was made in the verbatim column. */
-  onSelect(anchor: ReturnType<typeof readSelection>): void;
+  onSelect(anchor: SelectionAnchor): void;
   /** An existing mark was clicked. */
   onOpenComment(id: string): void;
   /**
@@ -157,6 +149,13 @@ interface Props {
    * too rather than as the `?(…)` shorthand.
    */
   onChatAbout?: ((blockId: BlockId) => void) | undefined;
+  /**
+   * The reader pressed "?" beside a paragraph — the same capability as
+   * `onChatAbout`, passed the same way and absent for a visitor for the same
+   * reason. BlockGutter.tsx has the argument for why it is its own callback
+   * rather than a flag on that one.
+   */
+  onHelp?: ((blockId: BlockId) => void) | undefined;
   /**
    * Every glossary term this article has, so every one can be underlined.
    *
@@ -265,9 +264,6 @@ function TableViewInner({
   columns,
   layout,
   showText,
-  navDepth,
-  arcCells,
-  arcPending,
   onJump,
   notes,
   noteReturn,
@@ -281,6 +277,7 @@ function TableViewInner({
   openChat,
   onOpenChat,
   onChatAbout,
+  onHelp,
   terms,
   openTerm,
   hitMarks,
@@ -339,45 +336,25 @@ function TableViewInner({
    */
   const swipeable = panels ? { [SWIPE_ATTR]: "" } : {};
 
-  // The items of each gist column, in document order, with the row each one
-  // starts on. The arc column's items carry the sentence and a step marker
-  // instead of a title. `text` is the empty string when the arc has no
-  // sentence for a part — never undefined, which would let the renderer fall
-  // back to the part's gist and quietly turn the column into a copy of L1.
+  /* The items of each gist column, in document order, with the row each one
+     starts on. Every column is now built the same way; until 2026-09-05 depth 0
+     was a special case that read the arc's cells instead, carrying a sentence
+     and a `3 / 7` marker where the others carry a title. `ContextItem` carried
+     a `text` and a `step` for it, and lost both the same day — context.ts. */
   const colKey = columns.join(",");
   const levels = useMemo(() => {
     const m = new Map<number, { items: ContextItem[]; starts: number[] }>();
     // `filter(Boolean)` before `Number`: an empty column set splits to [""],
-    // and Number("") is 0, which would conjure an arc level out of nothing.
+    // and Number("") is 0, which would conjure a level out of nothing.
     for (const d of colKey.split(",").filter(Boolean).map(Number)) {
       if (d === geometry.leafDepth) continue; // leaves have no gist to list
-      if (d === 0 && arcCells) {
-        const entries = [...arcCells.entries()].sort((a, b) => a[0] - b[0]);
-        m.set(0, {
-          items: entries.map(([, a]) => ({
-            node: a.node,
-            blockId: a.node.range[0],
-            /* The apparatus takes no `text`, so the list falls through to its
-               title. `""` on a part is deliberate — it stops the renderer
-               falling back to the part's gist and turning the arc column into a
-               copy of L1 — but on a supplement there is no gist to fall back to
-               and "Notes" is the content. */
-            ...(a.supplement ? { supplement: true } : { text: a.text ?? "" }),
-            ...(a.index !== undefined && a.total !== undefined
-              ? { step: { index: a.index, total: a.total } }
-              : {}),
-          })),
-          starts: entries.map(([row]) => row),
-        });
-        continue;
-      }
       m.set(
         d,
         itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
       );
     }
     return m;
-  }, [colKey, geometry, arcCells, blocks]);
+  }, [colKey, geometry, blocks]);
   const depths = useMemo(() => [...levels.keys()], [levels]);
   // The ancestor path of the hovered row — used to light up the chain across
   // every level at once, which is the whole point of seeing them side by side.
@@ -392,9 +369,9 @@ function TableViewInner({
     // A panel entry wins over a row, because pointing at one means leaving the
     // table: `tbody`'s mouseleave clears hoveredRow on the way. The chain is
     // the entry's ancestors, so pointing at a section still lights the part it
-    // belongs to and the arc above that — one entry per coarser column, which
-    // is what a row hover gives. Its own sections are not lit: a part holds
-    // many, and lighting all of them would be a different gesture.
+    // belongs to and whatever is coarser than that — one entry per coarser
+    // column, which is what a row hover gives. Its own sections are not lit:
+    // a part holds many, and lighting all of them would be a different gesture.
     if (hoveredNode) {
       const chain = new Set<NodeId>();
       for (let id: NodeId | null = hoveredNode; id; id = article.tree.nodes[id]?.parent ?? null) {
@@ -409,7 +386,6 @@ function TableViewInner({
   const crumbFor = (item: ContextItem): string | null => {
     const parent = item.node.parent === null ? undefined : article.tree.nodes[item.node.parent];
     if (parent && parent.depth >= 1) return parent.title;
-    if (item.step) return "The argument";
     const level = levels.get(item.node.depth);
     // By node, not by identity: a group heading's item is built fresh in
     // levelList and is never the same object as the one in `levels`.
@@ -694,24 +670,30 @@ function TableViewInner({
   return (
     <>
     <table
-      /* `only-prose` — the article is the only column there is, so the table
-         head is a label for the whole screen. It reads `Text verbatim` above
-         a column of the author's paragraphs, which says nothing that looking
-         at them does not, and it costs 40px of a 390px landscape viewport
-         where a third of the height is already bars. So the stylesheet drops
-         it (§ a narrow window).
+      /* `only-prose` — the article is the only column there is. It used to hide
+         the table head as well, which was worth 40px of a 390px landscape
+         viewport where a third of the height is already bars; the head has had
+         no height in any mode since 2026-09-05 (styles.css § the head with no
+         row), so that rule went and this class is now only what centres the
+         masthead over a centred column (styles.css § plain, centred).
 
          The condition is `no gist columns AND the prose is on`, not
          `one column`: a single *gist* column still has to say which level it
          is, and in outline mode that is the only place saying so. Reached
-         three ways — a phone in reading mode, and either width of mode band,
-         where the head has been equally redundant beside a chat panel on a
-         laptop all along.
+         three ways — a phone in reading mode, and either width of mode band.
 
-         `stickyOffset()` needs no telling: it measures `thead th` rather than
-         reading `--head-h`, and a `display: none` head measures zero. That is
-         the second time this week that "measure it, don't agree a number with
-         another file" has paid for itself — scroll.ts says why. */
+         **The head could not have gone on being `display: none` here**, which
+         is worth stating because it looks like the obvious tidy-up: that takes
+         the element out of the box tree, and `useColumnContext.ts` measures
+         `thead th[data-col]` for every fisheye panel's rectangle. A hidden head
+         means panels with no geometry, over gist cells that deliberately draw
+         nothing while panels are on. Zero height costs none of that.
+
+         **`only-prose` also switches the aim tint off**, which is the other
+         thing it now does: with no gist columns the prose is the only rung
+         there is, the pointer rests on it permanently, and the tint would be a
+         standing orange cast over the whole article rather than a choice
+         between columns. styles.css § the aimed column. */
       className={`zoom ${showText ? "reading" : "outline"}${overflowing ? " overflowing" : ""}${
         columns.length === 0 && showText ? " only-prose" : ""
       }`}
@@ -725,53 +707,51 @@ function TableViewInner({
           <col key={i} style={{ width: w }} />
         ))}
       </colgroup>
+      {/* **A head with no height, and every one of its jobs intact.** Greg
+          asked for the row of `PARTS L1` / `SECTIONS L2` labels back as
+          vertical space, 2026-09-05, and the words moved into the controls
+          bar's pills (App.tsx § the controls bar). What could not move is
+          everything else this row does:
+
+           - `data-col` is where `useColumnContext.ts` gets each column's
+             `left`, `width` and `bottom` from. Delete the head and every
+             fisheye panel returns `null`, over gist cells that draw nothing
+             while panels are on — Hierarchy's Parts and Sections columns
+             become empty boxes.
+           - `scope="col"` is what makes a screen reader say "Sections" before
+             reading a cell. The pills are outside the table and can never do
+             this: they are buttons, not headers.
+           - The head's sticky `top` is the y a panel starts at, and at zero
+             height that is the bar's own bottom edge — so the panels now sit
+             directly under the bar rather than a head's height below it.
+
+          So the label wears the shared `.sr-only` clip-rect utility rather than
+          removed, and the cell keeps its position in the table's layout. The
+          `L{d}` depth tag went with the visible row: a number that said where a
+          column sits in the tree rather than what is in it, and nothing to read
+          out loud. styles.css § the head with no row. */}
       <thead>
         <tr>
           {columns.map((d) => (
             <th
               key={d}
+              scope="col"
               data-nav-depth={d}
               data-col={d}
               className={[
                 d === pinLeft ? "pin-left" : "",
                 d === pinRight ? "pin-right" : "",
-                /* One column lights, and it is the one the aim names. The arc
-                   and Parts share a stride — the arc's cells are the parts'
-                   cells, tree.ts § the arc — but they are separate rungs on the
-                   ← / → ladder, so lighting both would leave the reader unable
-                   to see which of the two another → would leave. */
-                d === navDepth ? "nav-aim" : "",
               ].filter(Boolean).join(" ")}
             >
-              {columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells)}
-              <span className="depth-tag">L{d}</span>
+              <span className="sr-only">{columnLabel(d, geometry.leafDepth)}</span>
             </th>
           ))}
           {showText && (
             /* The prose column is the finest granularity there is, so the
                arrows mean the same thing over it as over the leaf column: one
                paragraph at a time. Leaves are 1:1 with blocks (src/hierarchy.ts). */
-            <th
-              data-nav-depth={geometry.leafDepth}
-              className={`text pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
-            >
-              {/* **Two spans, and neither is decoration.** The prose below is
-                  centred in its cell (styles.css § text), so a heading left at
-                  the cell's edge names a column whose text starts 180px to its
-                  right — the masthead had the same defect and was fixed the same
-                  way. `.th-measure` is the box that does the moving: it carries
-                  the article's font *purely so that `65ch` means there what it
-                  means in the prose*, and `.th-name` puts the head's own type
-                  back. They have to be two elements because one element cannot
-                  both resolve a `ch` in the reading face and be set in the
-                  chrome's. The other headers are untouched — they sit over
-                  columns that are not centred and are right as they are.
-                  styles.css § the header over the article's column. */}
-              <span className="th-measure">
-                <span className="th-name">
-                  Text<span className="depth-tag">verbatim</span>
-                </span>
-              </span>
+            <th scope="col" data-nav-depth={geometry.leafDepth} className="text pin-right">
+              <span className="sr-only">Text verbatim</span>
             </th>
           )}
         </tr>
@@ -886,8 +866,17 @@ function TableViewInner({
           // comment's words silently reopened that comment instead of asking a
           // new question — and asking about a narrower part of something you
           // already asked about is a completely ordinary thing to want.
-          const anchor = readSelection(window.getSelection());
-          if (anchor) return onSelect(anchor);
+          //
+          // **And a drag we refuse is still a drag.** `readSelection` used to
+          // answer `null` both for "no selection" and for "shorter than the
+          // floor", so a skid inside a commented phrase fell all the way
+          // through to the mark logic at the bottom of this handler and opened
+          // that comment — the exact opposite of the rule above, over words the
+          // reader never clicked. The two are separate variants now, and
+          // `too-short` stops here: nothing opens, and the reader drags again.
+          const read = readSelection(window.getSelection());
+          if (read.kind === "anchor") return onSelect(read.anchor);
+          if (read.kind === "too-short") return;
           /* A link inside a commented passage is a link. `annotateHtml` puts
              the <mark> *inside* the <a>, so without this a click on one would
              open the comment on mouseup and then jump on click — two answers to
@@ -942,54 +931,6 @@ function TableViewInner({
             className={hoveredRow === row ? "row-active" : undefined}
           >
             {columns.map((depth) => {
-              /* The arc column. It is tagged with its own depth, not with the
-                 parts' — Greg wants ← to run all the way out to the argument
-                 (2026-08-26), so L0 is a rung of its own. It still *steps* by
-                 part, because its cells are the parts' cells; that borrowing
-                 happens once, in navPlan (keynav.ts). */
-              if (depth === 0 && arcCells) {
-                const arc = arcCells.get(row);
-                if (!arc) return null; // covered by a rowSpan above
-                return (
-                  <td
-                    key={depth}
-                    rowSpan={arc.rowSpan}
-                    data-nav-depth={depth}
-                    {...swipeable}
-                    className={[
-                      "gist arc depth-0",
-                      activeChain.has(arc.node.id) ? "active" : "",
-                      depth === pinLeft ? "pin-left" : "",
-                      depth === pinRight ? "pin-right" : "",
-                    ].filter(Boolean).join(" ")}
-                    onClick={() => onJump(arc.node.range[0])}
-                  >
-                    {/* Under a panel the cell is a boundary and a click target;
-                        its content is the panel's current entry. */}
-                    {!panels && (
-                      <div className="sticky">
-                        {/* A supplement sits outside the numbering — "3 / 7",
-                            not "3 / 9" — and its title is its content, so it
-                            gets the title where a part gets its marker. Never a
-                            hole: the arc has no sentence for the apparatus and
-                            never will. src/supplement.ts. */}
-                        {arc.supplement ? (
-                          <div className="arc-step arc-supplement">{arc.node.title}</div>
-                        ) : (
-                          <div className="arc-step">
-                            {arc.index} <span className="of">/ {arc.total}</span>
-                          </div>
-                        )}
-                        {/* No fallback if the sentence is missing: an empty cell
-                            is a failure the reader can see, and borrowing the
-                            part's own gist here would quietly turn this column
-                            back into a copy of the next one. */}
-                        <p className="gist-text">{arc.text}</p>
-                      </div>
-                    )}
-                  </td>
-                );
-              }
               const cell = geometry.cellAt.get(`${depth}:${row}`);
               if (!cell) return null; // covered by a rowSpan above
               const { node } = cell;
@@ -1009,11 +950,6 @@ function TableViewInner({
                     // nothing to do with inheritance — so `--tint` set on the
                     // <col> resolves on an element that nothing reads it from.
                     `depth-${depth}`,
-                    /* The root gist standing in for an arc that is coming. Only
-                       at depth 0, and only while there is genuinely no arc —
-                       `arcCells` being null is what makes this cell the L0 one
-                       rather than an ordinary gist. */
-                    depth === 0 && !arcCells && arcPending ? "arc-pending" : "",
                     active ? "active" : "",
                     cell.continuation ? "continuation" : "",
                     depth === geometry.leafDepth ? "leaf" : "",
@@ -1070,10 +1006,22 @@ function TableViewInner({
                    `kind-callout` is still emitted for revisions extracted in the
                    few hours that kind existed, and the stylesheet answers to
                    both. */
-                /* `has-marks` says this row draws all three gutter slots, and
-                   the stylesheet floors its height so none of them can hang
-                   below the row and take a click meant for the next one.
-                   § the gutter in styles.css has the reasoning. */
+                /* **No class here says how tall this row's gutter is, and that
+                   is the 2026-09-05 change.** `gutter-pad` used to, flooring
+                   every owner's row at three slots so nothing could hang below
+                   it into the next paragraph. The gutter now measures the room
+                   the row already has and draws only what fits — styles.css §
+                   the gutter — so *that* floor, the class and
+                   `tests/gutter-pad-floor.test.tsx` have all gone, and a
+                   one-line paragraph is 39.1px again rather than 87.1px. The
+                   one-slot floor on `td.text` stays, because the collapsed
+                   gutter still draws one 24px control.
+
+                   The invariant they existed for is narrowed, not dropped:
+                   nothing **closed** may be drawn below what its own row has
+                   room for, the open "…" panel being a deliberate exception. It
+                   is enforced a row at a time by a container query instead of a
+                   class at a time from here. */
                 /* `note` on every block of the notes region and `note-open` on
                    its first, which is the one that carries the rule across the
                    column and the heading. Both come off the note index rather
@@ -1084,7 +1032,7 @@ function TableViewInner({
                   block.context ? ` ctx-${block.context.type}` : ""
                 } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }${cmtsByBlock.has(block.id) ? " has-marks" : ""}${
+                }${
                   notes?.noteOf.has(block.id) ? " note" : ""
                 }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,
@@ -1149,6 +1097,7 @@ function TableViewInner({
                   chatCount={chatCounts.get(block.id) ?? 0}
                   onOpenComment={onOpenComment}
                   onChatAbout={onChatAbout}
+                  onHelp={onHelp}
                   onJump={onJump}
                   announce={announce}
                 />
@@ -1191,8 +1140,14 @@ function TableViewInner({
       </tbody>
     </table>
     {/* One panel per gist column, laid over it, following the focus line —
-        see useColumnContext.ts. */}
-    {panels && (
+        see useColumnContext.ts. `depths` and not `panels` alone: `columns` can
+        be the leaf column on its own (`?cols=3`, or Para with every gist pill
+        off), which passes `panels` and yields no levels at all — and then the
+        hook measures every row on every scroll to decide which entry of nothing
+        to highlight. Same waste `panels` was given its `columns.length` guard
+        for in 2026-08-27; that guard simply cannot see the leaf column, because
+        `levels` is what drops it. */}
+    {panels && depths.length > 0 && (
       <ColumnPanels
         sections={sections}
         depths={depths}
@@ -1291,7 +1246,6 @@ function ColumnPanels({
         <ContextPanel
           key={d}
           depth={d}
-          navDepth={d}
           entries={entries}
           rect={live.rects.get(d) ?? null}
           viewportH={live.viewportH}

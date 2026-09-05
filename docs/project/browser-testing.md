@@ -51,6 +51,15 @@ So: kill the **listening** PID (`lsof -ti :PORT`, or find the `vite` child), the
 actually free before starting another. And prove *which code* is being served before you trust a
 single thing the browser tells you — the `curl` below is the whole of it, and it takes one second.
 
+**Never `pkill -f vite`**, which is what an agent tidying up after itself reaches for. The box runs
+one dev server per worktree across 5273–5277, so a pattern kill is tree-wide however local the
+intention: on 2026-09-03 a browser subagent finished its check, ran it, and killed every other
+agent's server. Nothing durable was lost — dev servers, not work — but each of those sessions then
+saw a failure that looked like its own bug, with nothing to tell them otherwise. It was noticed only
+because the subagent reported it unprompted. Same reasoning as naming your own files in a commit: on
+a shared tree, every broad-match command is somebody else's problem. **Put the constraint in the
+prompt when you dispatch browser work** — capture the PID at launch, kill only that.
+
 **And the port you were given can change hands while you work.** A dev server killed by memory
 pressure — a full `npm test` on a loaded box will do it — frees its port, and the next peer's Vite
 walks up and takes it. Your automation goes on signing in and answering, from another worktree's
@@ -392,25 +401,33 @@ click. Google needs the port to be on the local redirect allow-list; see
 
 ## The URLs and widths worth checking
 
-The view has two modes and the second is easy to forget:
+**`/` is Plain, not Hierarchy** — `DEFAULT_MODE` in [`src/modes.ts`](../../src/modes.ts) has been
+`plain` since 2026-08-29, so every case below that is about columns says `?mode=hierarchy`
+explicitly. A pass run against a bare `/` looks fine and exercises none of it.
 
 | URL | What you're looking at |
 |---|---|
-| `/` | reading mode: column headers `Article L0 │ Parts L1 │ Sections L2 │ Text verbatim` (the first reads `Argument L0` once `arc.json` exists), and a controls bar of `Spine · Arg · L1 · L2 · Para · Text` — [granularity-zoom.md § What the bar calls each column](granularity-zoom.md#what-the-bar-calls-each-column) |
-| `/?text=0` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
-| `/?at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
+| `/` | **Plain** — the article and nothing else. Since 2026-09-05 there is no controls bar to speak of here at all |
+| `/?mode=hierarchy` | reading mode: a controls bar of `Parts · Sections · Paragraphs` and nothing else. **No column-header row** — since 2026-09-05 the `<thead>` is still in the DOM and has zero height, which is not the same as being gone: read `document.querySelector('thead th').getBoundingClientRect().height` and expect exactly `0`, and check the fisheye panels still have their contents ([granularity-zoom.md § the header row](granularity-zoom.md#the-header-row)) |
+| `/?mode=hierarchy&text=0` | an old link from before the `Text` pill went. It must **rewrite itself to `?mode=outline`** before the page paints, dropping the `text` pair — the address had no way back to the prose ([url-state.md](url-state.md#the-parameters)) |
+| `/?mode=hierarchy&cols=0,1,2` | an old link from before the L0 column went. It must open **1 and 2**, silently dropping the `0` — not error, not draw an empty column |
+| `/?mode=outline` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
+| `/?mode=hierarchy&at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
-| `/?cols=0,1&text=1` | an explicit column choice, which pins the columns and takes them off auto-fit |
-| `/?spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
-| `/?text=0&spine=1` | the rail kept in outline mode, where it is off by default. The one combination that proves `?spine=` is three-state rather than two |
+| `/?mode=hierarchy&cols=1,2` | an explicit column choice, which pins the columns and takes them off auto-fit. There is no way back to automatic from the UI — the `auto` control went on 2026-09-05 |
+| `/?mode=hierarchy&spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
+| `/?mode=outline&spine=0` | since 2026-09-05 the rail is **on** in outline mode, where it used to be off by default, so this is the combination that proves `?spine=` still bites |
 | `/?mode=chat&spine=0` | the rail hidden with a mode band open, which is the only way `fitMode` returns `off`. Both smallest terms of the sticky bars' `left` at once |
 | `/?slug=<slug>` | a different article; defaults to `example` |
 
-**Widths.** At the default three gist columns the table is 1120px wide. Anything under that
-overflows horizontally and the pinned end columns start overlapping the middle ones — which is the
-design, not a fault: the pinned columns sit *on top* and the drop shadow is there to say "more to
-scroll". 1000×900 is a good window for exercising it; a full-width window hides the whole class of
-bug. Below the `td.text` minimum of 34rem the prose measure clamps rather than breaking.
+**Widths.** Auto-fit opens two gist columns at most — L1 and L2, never L0 — so the default
+Hierarchy table is those two plus the prose, and it fits the window rather than overflowing it
+(`tests/layout.test.ts` has the worked numbers). Overflow is now something you have to **ask for**:
+`?mode=hierarchy&cols=1,2,3` in a narrow window is the way to see the pinned end columns overlap the
+middle ones, which is the design and not a fault — the pinned columns sit *on top* and the drop
+shadow is there to say "more to scroll". 1000×900 is a good window for exercising it; a full-width
+window hides the whole class of bug. Below the `td.text` minimum of 34rem the prose measure clamps
+rather than breaking.
 
 ## Scroll, then read the address bar
 
@@ -645,9 +662,11 @@ with a frame count before believing otherwise:
 ```
 
 
-1. **Slide the pointer across the columns without pressing anything.** The header underline and the
-   `↑↓ …` label in the controls bar should follow it, and they should agree. Over the spine both
-   should say *Parts*; over the masthead or the controls bar, *Sections*.
+1. **Slide the pointer across the columns without pressing anything.** The header underline should
+   follow it. The controls bar carried an `↑↓ …` label saying the same thing until 2026-09-05, and
+   it was the half that could name the spine, which has no header — so over the spine there is now
+   nothing to check until stage 3 of
+   [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) gives the aim its own tint.
 2. **Park in each column and press ↓.** The distance travelled should get shorter as you move right:
    a part, a section, a paragraph.
 3. **Scroll to the middle of a section and press ↑.** It should go to the top of *that* section, not
@@ -657,10 +676,11 @@ with a frame count before believing otherwise:
    `keynav.ts` is measuring mid-flight instead of stepping from its own last target.
 5. **Press Back.** As with scrolling, it must leave the page — arrow keys write `?at=` through the
    ordinary position listener and must never push a history entry.
-6. **Walk ← to the far left and → to the far right.** The label must reach *Argument* at one end
-   and *Paragraphs* (with the `Text` header lit) at the other, and stop rather than wrap. Exactly one
-   header lights at a time. This is the check that catches a rung being folded into its neighbour,
-   which is what the arc column was doing until 2026-08-26.
+6. **Walk ← to the far left and → to the far right.** The aim must reach *Parts* at one end and
+   *Paragraphs* (with the `Text` header lit) at the other, and stop rather than wrap. Exactly one
+   header lights at a time. This is the check that catches a rung being folded into its neighbour.
+   The left end was *Argument* until 2026-09-05, when the L0 column went
+   ([keyboard.md § Choosing the level without a mouse](keyboard.md#choosing-the-level-without-a-mouse)).
 7. **Click a bottom-bar mode button with the mouse, then press ← / →.** The *columns* must move and
    the mode must not. Then Tab into that group and press ← / →: now the *mode* must move. One
    behaviour is the article's and the other is the radiogroup's, and the only thing that tells them
@@ -760,18 +780,23 @@ the emitted CSS, not the page:
 ```js
 // in the dev server, over the served stylesheet text
 [...document.styleSheets].flatMap(s => [...s.cssRules]).filter(r => r.constructor.name === 'CSSLayerBlockRule').map(r => r.name)
-// 'app' must be there, and it must contain `.controls button` — not sit empty
+// 'app' must be there, and it must contain a `.controls`/`.masthead` rule — not sit empty
 ```
 
 Adding `layer(app)` and finding the page unchanged is *also* what total failure looks like, so check
 both halves: that the app rules are inside the layer, **and** that a temporary `tw:px-4` on something
 inside `.controls` actually moves it.
 
-**`/?text=0` is where a scanner collision shows.** Tailwind's source scanner is a plain text scan,
-so before `prefix(tw)` it generated an `.outline` utility — and `TableView` uses `outline` as a
-*mode* class on the `<table>`. The result was a 1px border round the whole table, in a mode you have
-to opt into, that reads as a deliberate design choice. Outline mode is not the default view; check
-it explicitly, every time styling changes.
+**`/?text=0` was where a scanner collision showed, and it is not reachable any more.** Tailwind's
+source scanner is a plain text scan, so before `prefix(tw)` it generated an `.outline` utility — and
+`TableView` uses `outline` as a *mode* class on the `<table>`. The result was a 1px border round the
+whole table, in a state you had to opt into, that read as a deliberate design choice. **Since
+2026-09-05 `?text=0` is rewritten away at boot** ([url-state.md](url-state.md#the-parameters)), so
+nothing sets `showText` false and `table.zoom.outline` cannot be drawn at all — which means this
+particular check no longer fires and the collision would now hide until somebody reintroduces the
+state. The lesson generalises and is the part to keep: a *mode* class that shares a name with a
+utility is a border nobody ordered, and the only way to see it is to get the mode on screen. Check
+whichever of `.reading`, `.overflowing` and `.only-prose` you can reach when styling changes.
 
 Related, and worth knowing before you trust the compiled CSS at all: **`tailwind.css` sets
 `source(none)` with one explicit `@source`, because v4 otherwise scans from the project root and

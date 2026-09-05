@@ -21,15 +21,21 @@ manual; that one is the taste.
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
 written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
 
-## Which store is live, and the one refusal that matters
+## There is one store, and a tombstone where the flag was
 
-`SPIDERYARN_STORE` still **defaults to `files`** for a CLI script, a test, or anything else that
-imports [`src/store/live.ts`](../../src/store/live.ts) directly. `npm run dev` is the one exception,
-since 2026-09-02: `package.json`'s `dev` script itself sets `postgres` unless something already set
-the variable, so a fresh checkout's dev server reads Postgres without anyone opting in. But
-[`src/store/index.ts`](../../src/store/index.ts)
-**refuses to boot on `files` in production**, and the reason generalises well beyond deployment: the
-filesystem store has **no owner column**, so it has no second reader, and a store with no second
+**`SPIDERYARN_STORE` chose between a directory under `data/` and Postgres until 2026-09-05.** It
+chooses nothing now: [`src/store/index.ts`](../../src/store/index.ts) wires Postgres and only
+Postgres, and what is left of the variable in
+[`src/store/live.ts`](../../src/store/live.ts) is a **validator** — unset and `postgres` pass in
+silence, `files` or anything else throws a sentence with the date in it. It is there because Vercel's
+Preview and Production environments still carry the variable and only Greg can take it out; silently
+ignoring somebody who asked for the store that is gone would be the failure this whole migration was
+leaving behind. It goes when the variable does
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § I).
+
+Everything below about *why* the filesystem store could not be the live one is kept, because it is
+the argument that got us here rather than a description of a switch. The sharpest form: the
+filesystem store had **no owner column**, so it had no second reader, and a store with no second
 reader cannot express "somebody who is not the owner". That is why
 [auth.md](auth.md#whose-data-is-it) is a Postgres story, and why
 [260827ai-public-read-only-access.md](../plans/260827ai-public-read-only-access.md#postgres-is-the-destination-and-this-feature-cannot-work-without-it)
@@ -46,13 +52,21 @@ admin's user list, the visibility switch, public reading — and each of them re
 sentence rather than returning a plausible default. Those branches are **scaffolding around a store
 that is going away**, and they get deleted rather than maintained.
 
-A one-sided seam now has to **declare itself** in `SEAM_ASYMMETRIES`
-([`src/store/live.ts`](../../src/store/live.ts)), because a refusal written only in a docstring is
-indistinguishable from a store somebody forgot — which is how Claims shipped filesystem-only and
-answered 501 in production for four hours with every test green
+Every store seam must have a **Postgres implementation**, and
+[`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts)
+derives both the seams and the implementations from the source rather than from a list anybody
+maintains. A seam with no Postgres side is a 501 for every reader, and it looks exactly like a seam
+that works — which is how Claims shipped filesystem-only and answered 501 in production for four
+hours with every test green
 ([260901e](../postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md)).
-A missing *files* side needs a reason; a missing *postgres* side needs a reason **and** one plain
-sentence naming what a reader cannot do on the deployed app, because that is what it is.
+A `pgFooStore` whose every method calls `notMigrated` is the same 501 by a longer route, so the same
+test flags it.
+
+That guard asked for *two* implementations, and carried a `SEAM_ASYMMETRIES` map for the seams that
+deliberately had one, until 2026-09-05. Two was never the point: it was asking for a Postgres side
+in a world where `files` was the default and would otherwise hide its absence. With one store the
+map would have had to name every seam, so it went and the assertion narrowed to what still matters
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § G).
 
 ## The filesystem era: files under `data/<slug>/`
 
@@ -87,6 +101,21 @@ able to write them without passing through our server — a serverless function 
 Storage additionally holds a copy at `sha256/<hash>.pdf`, keyed by its own contents so two readers
 with the same paper converge on one object.
 
+**What the bucket will accept is a decision, and it is enforced on both sides.** `sources` declares
+five types in [`supabase/config.toml`](../../supabase/config.toml) — PDF, HTML, and PNG/JPEG/GIF for
+the article images that arrived with [260829b](../plans/260829b-hosting-the-articles-images.md) — and
+our own byte-sniffing in [`src/assets.ts`](../../src/assets.ts) independently admits those same three
+image kinds. **SVG is absent from both on purpose**, an SVG being a script-bearing document rather
+than a picture; Storage answers `415` to one even under the service key, measured against the running
+container. So it cannot be stored today even by mistake, which is the point of having the line twice.
+
+The hazard is that the two sides are widened separately, and the doc that owns that hazard is
+[deployment.md § the bucket checks](deployment.md#who-can-reach-it) — `bucketDrift` in
+[`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) compares declared against running. It
+exists because the allowlist has drifted on production twice
+([260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md)). Adding an
+image format means the config, the sniffer, and a thought about what the sanitiser now has to survive.
+
 So there are now **two** stores under the filesystem era, and the seam between them is
 [`src/store/blobs.ts`](../../src/store/blobs.ts). That is early rather than premature: the eventual
 design has *every* raw document — fetched or uploaded, HTML or PDF — as an object with the row
@@ -108,9 +137,9 @@ and it said it would move when that moved.
 **It moved first, on 2026-08-27**, and the reason it did not wait is that it had a harder deadline
 than the queue: minting a grant and queueing the job are **two HTTP requests**, and on a serverless
 host they may not run on the same machine, so a record on a function's local disk is one the second
-request cannot find. There is now a `spideryarn.uploads` table and two adapters behind
-[`src/store/uploads.ts`](../../src/store/uploads.ts) — `SPIDERYARN_STORE` picks one, exactly as it
-does for everything else. The rules the record obeys never moved at all: `canTransition`,
+request cannot find. There is now a `spideryarn.uploads` table behind
+[`src/store/uploads.ts`](../../src/store/uploads.ts). There were two adapters and a flag choosing
+between them until 2026-09-05, exactly as for everything else. The rules the record obeys never moved at all: `canTransition`,
 `grantExpired` and `sweepable` are in [`src/source.ts`](../../src/source.ts) and touch no storage,
 which is what made this a change of adapter rather than of rules.
 
@@ -126,15 +155,20 @@ two-simultaneous-claims race against both.
 [260827h-durable-queue-and-uploads.md](../plans/260827h-durable-queue-and-uploads.md), whose first line is about why
 a durable record for one part of an ingest does not make the ingest durable.
 
-**Reads** all go through [`src/api.ts`](../../src/api.ts) — `loadArticle`, `loadTweets`,
+**Reads** all go through `src/api.ts` — `loadArticle`, `loadTweets`,
 `loadGlossary`, `articleMetadata`, `listArticles`. (`deleteGlossary` is the one *write* that goes
 through it, and [glossary.md](glossary.md) says why it has to.) [library.md](library.md) makes the same point from the other side.
 
 **Writes do not.** This doc used to say "`src/api.ts` is the one file the store lives behind", and
-that is only half true — it is the *read* seam. The write path is
-`PipelineStep.outputs(ctx): string[]`, an interface that returns **file paths**, implemented across
-seven stage modules (`fetch`, `extract`, `blocks`, `hierarchy`, `arc`, `tweets`, `glossary`). Any estimate that treats
-the Postgres move as a one-file change is wrong, and this is where that mistake starts.
+that is only half true — it is the *read* seam. The write path was
+`PipelineStep.outputs(ctx): string[]`, an interface that returned **file paths**, implemented across
+seven stage modules (`fetch`, `extract`, `blocks`, `hierarchy`, `arc`, `tweets`, `glossary`). Any estimate that treated
+the Postgres move as a one-file change was wrong, and this is where that mistake started.
+
+**Both of those are gone now**, and the paragraph is kept because the estimate it corrects is the
+thing worth remembering. `src/api.ts` went on 2026-09-05 with the filesystem store it was the reader
+for; `outputs` went the same day, once nothing in `src/` called it. A step declares `produces` — the
+*kinds* it makes — and the `ArtifactStore` decides where those go.
 
 Why files at all: *"Prefer boring: filesystem over database, one server process"* —
 [AGENTS.md](../../AGENTS.md). Each stage writes JSON and every stage stays independently runnable.
@@ -206,11 +240,9 @@ nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the
 visible; it was not in the first version of that file, which reported nine passes for having checked
 nothing.
 
-**Reads now come out of Postgres when you ask them to — and, since 2026-09-02, without asking.**
-`npm run dev` serves every article, the library, the metadata page and the reader's comments from
-the database instead of from disk; `SPIDERYARN_STORE=files npm run dev` is the escape hatch back to
-disk, and `files` remains the default for everything that is not `npm run dev` — `vite preview`
-included, which still wants `SPIDERYARN_STORE=postgres` said out loud. The work,
+**Reads come out of Postgres, and since 2026-09-05 there is nowhere else for them to come from.**
+Every article, the library, the metadata page and the reader's comments. There was an escape hatch
+back to disk — `SPIDERYARN_STORE=files npm run dev` — and it went with the store it named. The work,
 and what is still missing, is in
 [260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md).
 
@@ -329,7 +361,7 @@ column on an exported table is still a hand-written line in `exportArticle`, whi
 | [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
 | [`tests/store-parity-referee.test.ts`](../../tests/store-parity-referee.test.ts) | the same, for Referee's two stores — the suite that would have caught Claims shipping filesystem-only |
 | [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts) | every seam in `contracts.ts` has both adapters, or declares its one-sidedness — see below |
-| [`tests/referee-routes-postgres.test.ts`](../../tests/referee-routes-postgres.test.ts) | Referee's routes driven under `SPIDERYARN_STORE=postgres`, because every other route suite runs on the default |
+| [`tests/referee-routes-postgres.test.ts`](../../tests/referee-routes-postgres.test.ts) | Referee's routes driven against Postgres — which every route suite does since 2026-09-05, and this one did first |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
 
 Three rules that outrank convenience, all learned the expensive way:
@@ -1226,14 +1258,34 @@ Two stages keep working state that has to **survive their own failure**: `hierar
 batch of nav labels as it comes back, and the PDF reader records each transcribed chunk. A 429 eight
 batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
+**Four namespaces**, and the list is `CheckpointNamespace` in
+[`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
+and three that all belong to the `hierarchy` step — `hierarchy-structure` (the one whole-document
+call for the tree), `hierarchy-deepen` (each scoped call that splits a section too fat to read,
+[`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts)) and `hierarchy-labels` (the nav-label
+batches). They are separate because they are separate questions with separate prices: a run that
+dies in the labels must not buy the tree again. Adding one is a migration, since the CHECK on the
+table is the other copy of the list — and since 2026-09-05 `tests/db-schema.test.ts` inserts a row
+under every name, so the two cannot drift in silence. Before that they could, and the symptom would
+have been a `warn` nobody reads and a bill that goes up.
+
+**There is no `delete`**, deliberately, and nothing needs one. A row is replaced by writing over it,
+and the one caller that has to ignore what is stored — a repeat measuring whether the deepening
+verdict is stable — skips the *read* instead, for the articles it names:
+`SPIDERYARN_DEEPEN_REASK`, in [hierarchy.md § the deepening wave](hierarchy.md#deepening). It is a
+list of slugs rather than a boolean, because a boolean read on every wave spends money on every
+article a worker later picks up.
+
 They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), with
 [`checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) writing the `checkpoints` table. A stage is
 handed one through **[`StoreSession.checkpoints`](../../src/store/session.ts)** — the third argument
 to `PipelineStep.run` — and never builds one for itself.
 
 **This was a directory until 2026-09-01, and it was not a tidiness problem.** The files went to
-`data/<slug>/`, which on Vercel is job-scoped `/tmp`; a retry is a new job id by design and lands on
-a different machine anyway, so **every attempt at a long PDF started from zero**. A document dense
+`data/<slug>/`, which on Vercel was job-scoped `/tmp` (that scoping — `src/job-scope.ts` and
+`src/store/data-root.ts` — was itself deleted 2026-09-05, once every store was Postgres); a retry was
+a new job id by design and landed on a different machine anyway, so **every attempt at a long PDF
+started from zero**. A document dense
 enough to plan a chunk per page can miss the 740s step deadline ([`src/pdf-read.ts`](../../src/pdf-read.ts)
 § `CHUNK_CONCURRENCY` has the arithmetic, against `MAX_PAGES`), so an accepted document could fail
 for ever without ever accumulating enough finished work to get under it — a liveness failure rather
@@ -1269,7 +1321,12 @@ What to know before touching any of it:
   delete a file that was not its own, machinery that existed only because the unit of deletion — one
   file holding every batch — was larger than the unit of work. One row per batch removes the hazard
   rather than guarding it.
-- **The key is 16 lower-case hex characters**, and the `checkpoints_key_format` CHECK says so. Both
+- **The key is 16 lower-case hex characters by practice, not by contract.** What
+  `checkpoints_key_format` and `CHECKPOINT_KEY_RE` (`src/store/checkpoints.ts`) actually allow is 1
+  to 128 of `[a-z0-9_-]` starting on a letter or digit; every producer so far happens to mint 16 hex
+  and there is no reason to break the habit. Read the regex as the rule and the habit as the habit —
+  this line said the CHECK pinned the length until 2026-09-05, which would have misled anyone adding
+  a checkpoint on its authority. Both
   producers are checked against it by the tests that own them — `tests/labels-batching.test.ts` on
   the real `batchFingerprint`, `tests/pdf-read.test.ts` on the keys a real run stores. Add a
   third checkpoint and its key has to satisfy that too; a `:` separator or upper-case hex would land
@@ -1279,10 +1336,10 @@ What to know before touching any of it:
   `warn`. The worst a broken checkpoint may cost is the saving. The filesystem version could not say
   that — a full `/tmp` made `mkdir` throw straight out of the stage, which is a cache becoming an
   outage.
-- **A laptop with `SPIDERYARN_STORE=files` checkpoints nothing.** `fsStoreSession` has no `articles`
-  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines default
-  to `files` and do the same, since none of them go through `npm run dev`'s `package.json`-level
-  `postgres` default. Articles come out identical and a *second* attempt after a killed
+- ~~**A laptop with `SPIDERYARN_STORE=files` checkpoints nothing.**~~ Not since 2026-09-05: there is
+  one store and every run has an `articles` row to key on. `fsStoreSession` had none and handed out
+  `nullCheckpointStore()`, and the stage command lines defaulted to the same. Articles came out
+  identical and a *second* attempt after a killed
   one pays again. That is a decision, written down at `nullCheckpointStore` in
   [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), and it ends when the filesystem store
   does.
@@ -1298,8 +1355,10 @@ adapter uses `getDb()` and takes no `tx`.
   the same link ran at 119 KB/s and the whole import took under two minutes. The tell is
   `pg_stat_activity` showing the statement `active` on `Client:ClientRead` — the server waiting for
   you. Measure the upload before blaming the database.
-- **Vercel does not have these values yet** — `SPIDERYARN_STORE`, `DATABASE_URL`,
-  `SPIDERYARN_OWNER_ID`, `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables).
+- **Vercel does not have these values yet** — `DATABASE_URL`, `SPIDERYARN_OWNER_ID`,
+  `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables). (`SPIDERYARN_STORE` was
+  on this list and is now the opposite: it is set there and wants **taking off** — stage I of
+  [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).)
 - **`on delete restrict` is inherited, not chosen.** All seven `owner_id` foreign keys use it, which
   means deleting the user from the Auth admin API or the dashboard will fail with `23503` while any
   row is owned. Supabase's own guidance is `cascade` or `set null`; keeping `restrict` is defensible

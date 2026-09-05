@@ -1,0 +1,9 @@
+{
+  "metaTitle": "ARNN: Attentive Recurrent Neural Network for Multi-channel EEG Signals to Identify Epileptic Seizures",
+  "furniture": [
+    "lstm"
+  ],
+  "isScan": false,
+  "pages": 12,
+  "sha256": "4d3224a33d35b2e92c4294bad40f7593dcbcef68daaa8175e452e9d04767ab91"
+}

@@ -211,6 +211,109 @@ of sections that are no longer the ones you opened. It would be long *and* quiet
 is the stable half, so the depth is what a link carries.
 
 
+## The question under the claim
+
+**Added 2026-09-05**, from SPIDERYARN-READING2-1V. Greg:
+
+> Tweak the prompt that generates the Summary mode to be a bit more in the form of Socratic
+> questions that encourage the reader to read the actual text to get the full answers
+>
+> — Greg, 2026-09-05
+
+So under the gist, on the article and on each of its parts, there is now a second line: **one
+question that node's prose answers and its gist does not**. Italic, a step smaller, fainter — a
+different *kind* of line, so the eye scanning for what the article says can skip the column of them
+and the reader looking for a way in finds one on every part.
+
+### There is no prompt that generates Summary mode, and that is the whole story
+
+The literal request cannot be carried out, because the sentence in this panel is the **`gist`** that
+stage 4 writes onto every internal node — this feature has no stage, no artefact and no prompt of
+its own (§ top of this file). And that gist is rendered in ten other places: the granularity-zoom
+columns, the spine tooltips, the masthead, the shelf card on [the library](library.md) and
+[the public shelf](public-shelf.md), the outline rows, the diagram cards, the fisheye.
+
+Worse than the display, **it is also an input**. `chainRung` in
+[`hierarchy-expand.ts`](../../src/hierarchy-expand.ts) feeds ancestor gists back to the later
+structure waves as context, so a gist bent towards questions would degrade the trees the cascade
+goes on to build. One prompt edit, ten regressions.
+
+So the question is a **second field**, `TreeNode.question`, written by the same stage-4 call and
+drawn in this panel alone. Nothing else reads it, and a shelf card still says what the article
+claims.
+
+### Root and parts, and it is enforced rather than requested
+
+The prompt asks for a question on the root and on each depth-1 node only;
+[`questionFor`](../../src/hierarchy.ts) drops any written deeper. One per section on a fifty-section
+article is noise, the default cut-off (`deep=1`) draws only these rows anyway, and a scope the code
+holds is a fact rather than a hope.
+
+### The gist stayed for one day
+
+It was drawn beside the question from the morning of 2026-09-05 until that evening, on this
+reasoning, which is kept because it was sound about the questions it was written for:
+
+> *"A bit more"* is the brief, and a panel of nothing but questions would fail the first thing
+> [vision.md](vision.md) asks of this feature — *scan before you commit*. A reader deciding whether
+> to descend needs to know what the section says.
+
+**Greg reversed it the same evening** ([SPIDERYARN-READING2-24](../user-feedback/260905_1803-only-the-socratic-question.md)),
+having read the shipped version on a real article:
+
+> I quite like some of these new Socratic questions in the summary mode, but the intent wasn't that
+> we would show both the gist and the Socratic question, the intent was that we would show only the
+> Socratic question when we have one.
+
+So the rule is now **`question ?? gist`**, and the panel draws one line. The reason the old argument
+stopped applying is worth keeping, because it is about the *questions* and not about the layout: the
+first prompt asked for the question *"this node's text answers and its gist does NOT"*, so the only
+honest output was a bare why-question that could not carry a row alone. A question that names its
+topic and presupposes where the section lands can. **The renderer does not know which kind it has,
+and does not need to** — that is the prompt's business, and which prompt is
+[`evals/summaries`](../../evals/summaries/variants.md).
+
+**Absence is ordinary, not a fault.** Every article whose hierarchy predates 2026-09-05 has no
+question on any row and shows its gists exactly as before; only a row with neither says so. And note
+what § Two places a part can end up with no question now means: a depth-1 node built by the
+deepening cascade has no question, because the expansion prompt has no such field, so **the panel
+can show a question on one part and a gist on its neighbour**. That was invisible while the question
+was a faint second line.
+
+### Punctuation is normalised, never read for meaning
+
+Measured, on the first real toc/5 run — noema, 141 blocks, 2026-09-05. Six questions, none written
+deeper than a part, and **one of the six came back with no `?`**, so a missing mark is added rather
+than treated as a fault.
+
+The first version of that rule also *dropped* anything ending in `.` as a statement, and GPT Sol
+killed it: a full stop is not evidence of mood. *"How did this affect the U.S."* is a question that
+rule discarded invisibly, while a real statement without a mark sailed through. So the rule is now
+syntactic and does one thing — append the mark — and the failure the prompt actually names, *"never
+the gist with a question mark on it"*, is caught by **comparing the question with the gist**,
+ignoring case and punctuation.
+
+`BuildReport.droppedQuestions` counts every loss, including a question that went down with a
+[collapsed rung](../../src/hierarchy.ts) — nothing on screen distinguishes a question that was
+thrown away from one the model chose not to write.
+
+**Two places a part can end up with no question**, both benign absence rather than breakage, both
+named in the plan doc: a rung that restated its parent is spliced away and its children come up in
+its place carrying none; and a flat article deepened through stage 5 grows its parts from the
+expansion call, whose prompt does not ask for questions.
+
+### Existing articles have none until their hierarchy is re-run
+
+The field is written by stage 4, and stage 4 is cached on a content hash of the request, so **no
+existing article grows a question on its own**. `PROMPT_VERSION` moved `toc/4` → `toc/5`, which
+correctly stops a part-finished article resuming onto the old prompt, but a finished tree is simply
+a finished tree. Getting the questions means `npm run hierarchy -- <slug> --force`, at roughly the
+cost of a structure call per article.
+
+Absence is ordinary and draws nothing: the panel looks exactly as it did before this existed. That
+is unlike a missing *gist*, which says so on screen, and the asymmetry is deliberate —
+the comment on `TreeNode`'s [`types.ts` § `question`](../../src/types.ts).
+
 ## A summary is a door
 
 **Added 2026-08-26, the same day the rest of it landed.** Greg:

@@ -44,9 +44,10 @@
  *   run's repairs.
  */
 import { isBodyEvidence, isStructural } from "./block-policy.js";
+import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
 import type { BuildReport, ModelNode } from "./hierarchy.js";
 import { nameValue } from "./ids.js";
-import type { Block } from "./types.js";
+import type { Block, Tree, TreeNode } from "./types.js";
 
 /**
  * **The constants the cascade is shaped by — and none of them is
@@ -75,6 +76,26 @@ export interface CascadeRecipe {
    * written down separately are two numbers that will disagree.
    */
   terminalBlocks: number;
+  /**
+   * **The forced-open ceiling**: a node holding more body words than this is
+   * expanded even when the model called it finished, and the run counts it.
+   *
+   * The bound exists because the two failure modes are not symmetrical. A model
+   * that says "deeper" too often costs money, which the floor and the cap
+   * already bound. A model that says "finished" about four thousand words costs
+   * the reader the level this whole plan is for, and nothing downstream can see
+   * it — the tree tiles, has a gist on every node, and passes every invariant.
+   *
+   * Measured on Origin of Species, 2026-09-04: **41% of the body's words sit in
+   * sections that are both over 2,000 words and above the divisibility floor**,
+   * so this is doing substantial work rather than tidying an artefact
+   * (docs/plans/260904d-deepen-fat-sections.md § "Where I checked Fable").
+   *
+   * In the recipe rather than a module constant for the reason the others are:
+   * the eval varies it per arm, and a number nobody can vary is a number nobody
+   * can measure the effect of.
+   */
+  forcedOpenWords: number;
   /** Predicted child nodes one call may be asked for, across all its parents. */
   maxPredictedChildrenPerBatch: number;
   /** Parents one call may carry, however small they are. */
@@ -134,6 +155,7 @@ export interface CascadeRecipe {
  */
 export const CASCADE_RECIPE: CascadeRecipe = {
   terminalBlocks: 9,
+  forcedOpenWords: 2_000,
   maxPredictedChildrenPerBatch: 36,
   maxParentsPerBatch: 4,
   maxEvidenceTokensPerBatch: 24_000,
@@ -164,6 +186,49 @@ const MAX_PREDICTED_CHILDREN = 9;
 const MIN_EXPANSION_CHILDREN = 2;
 
 /**
+ * **How many more times a refused expansion call may be drawn**, and it is
+ * two — three draws in all.
+ *
+ * ## It is not the job layer's budget, and conflating them would be a bug
+ *
+ * `REQUEUE_BUDGET` in [`jobs.ts`](jobs.ts) is also 2 and means something else
+ * entirely: how many times a *job* may be handed back to the queue when its
+ * lease window runs out. That one is about wall-clock, it is spent by the
+ * platform rather than by the model, and a fake executor cannot exhaust it. This
+ * one is about a single call whose *answer* was refused —
+ * `ExpansionRefused` — and it is spent within one attempt, several times over if
+ * several calls each need a redraw. A cascade that reinvented the lease budget
+ * here would silently cap the whole article's redraws at two, which is the
+ * number for one call. ⟨docs/plans/260904d-deepen-fat-sections.md § stage 4.⟩
+ *
+ * ## Two, and why that is the number
+ *
+ * Every `ExpansionRefused` is a fault in what the model said rather than in what
+ * it was asked — a missing verdict, a truncated answer, three starts that
+ * collapse to one child — so the same request drawn again is a genuinely
+ * different question, and the spike's two runs over one 382-block section came
+ * back with 10 children and then 20, which is how much draw-to-draw variance
+ * there is on this path. One redraw would leave a single unlucky draw failing a
+ * whole wave. Beyond three the shape changes: a request the model refuses three
+ * times is not unlucky, it is a request this recipe cannot ask, and going on
+ * paying to find that out is exactly the failure `OversizedTarget` exists to
+ * make visible rather than expensive. Three draws also bounds the worst case at
+ * 3× the wave's bill, which is affordable where 6× is not.
+ *
+ * The plan calls this a **per-target** cap, to name the sense it is *not*. In
+ * practice it is counted per call, and the two coincide: a refusal fails the
+ * whole answer rather than one section of it, and `planExpansionBatches` never
+ * splits a parent across two calls, so a target is only ever redrawn as part of
+ * one call.
+ *
+ * It is a module constant rather than a `CascadeRecipe` field on purpose — the
+ * recipe's fields are the ones an eval arm varies to measure the *tree* it
+ * produces, and this one cannot change the tree, only how many draws it took to
+ * get there.
+ */
+export const MAX_EXPANSION_REDRAWS = 2;
+
+/**
  * **An expansion answer this module will not build a subtree from.**
  *
  * One class for every refusal, so stage 2's retry policy is written once and a
@@ -175,10 +240,30 @@ const MIN_EXPANSION_CHILDREN = 2;
  * deliberately **not** merged into the run's report (see `normaliseExpansion` §
  * "The caller's `report`"), and it travels here so that a retry can be logged
  * with the drops that provoked it rather than with nothing.
+ *
+ * ## Four of the reasons belong to the schema, not to this file
+ *
+ * `bad-verdict`, `malformed-answer`, `missing-verdict` and `target-mismatch`
+ * are raised by `parseExpansionAnswer` (src/hierarchy-expand.ts) **before**
+ * anything here has seen the answer, and they carry an empty `planned` because
+ * nothing was planned: an answer whose shape is wrong never reached the
+ * derivation. They live in this union rather than in a second error class for
+ * the reason the paragraph above gives — the retry policy is written once, and
+ * a refusal wearing a shape nobody catches is a scoped call silently becoming a
+ * stage failure. The split between the two files is deliberate and is stated in
+ * `normaliseExpansion`: the schema check is about the answer's *shape* and the
+ * normalisation is about its *ranges*.
  */
 export class ExpansionRefused extends Error {
   constructor(
-    readonly reason: "invented-start" | "not-an-expansion",
+    readonly reason:
+      | "bad-verdict"
+      | "invented-start"
+      | "malformed-answer"
+      | "missing-verdict"
+      | "not-an-expansion"
+      | "outside-parent"
+      | "target-mismatch",
     message: string,
     readonly planned: BuildReport,
   ) {
@@ -284,6 +369,37 @@ export interface CapReached {
 export interface CascadeState {
   root: CascadeNode;
   capReached: CapReached[];
+  /**
+   * Targets whose expansion call the model refused on every draw. Required for
+   * the same reason `capReached` is: a type that offers nowhere to put one
+   * invites `status: "terminal"` and a shrug. Arrived 2026-09-05, when a refused
+   * call stopped taking its whole wave down with it. `RefusedTarget`.
+   */
+  refused: RefusedTarget[];
+}
+
+/**
+ * **A target whose expansion call the model refused on every draw its budget
+ * allowed**, and which therefore stayed exactly as the wave before it left it.
+ *
+ * The second way a node the governor would have split ends up `terminal`, and it
+ * needs a record for the reason `capReached` does: silent, it is
+ * indistinguishable from a node that legitimately stopped, and it costs the
+ * reader a level. `RefusedCall` in src/hierarchy-deepen.ts is where one is made.
+ *
+ * `reason` and `draws` and nothing else: the *shape* of what the model actually
+ * said carries its own `why`, which is article-adjacent text, and lives on the
+ * node's `CandidateRecord` in the deepening records file instead.
+ */
+export interface RefusedTarget {
+  /** Its position in the cascade's own proposal — "root > child 2 > child 4". */
+  where: string;
+  range: readonly [string, string];
+  structuralBlocks: number;
+  /** The `ExpansionRefused` reason of the last draw. */
+  reason: string;
+  /** Draws made, counting the first. */
+  draws: number;
 }
 
 /**
@@ -372,6 +488,39 @@ export function structuralBlocksIn(
 }
 
 /**
+ * **How many words of this node the model is actually shown** — `isBodyEvidence`,
+ * and `Block.words` rather than a re-count.
+ *
+ * The counterpart to `structuralBlocksIn`, and it deliberately uses a *different*
+ * predicate, because it answers a different question. The block count asks how
+ * many rows a reader could navigate to, so it counts `isStructural`. The word
+ * count asks how much prose the call has to hold in its head before it can say
+ * whether the node divides — so it counts what `renderBlocks` (src/hierarchy.ts)
+ * actually sends, which is every body block including the `gistable: false` ones
+ * it marks `NOT-GISTABLE` and prints in full. A withheld supplement costs the
+ * marker and is not prose, so it is excluded; `estimateEvidenceTokens` makes the
+ * same split for the same reason.
+ *
+ * Words rather than tokens because the ceiling is a statement about reading, not
+ * about a request: the plan's tables, the 800-word pre-filter and the 2,000-word
+ * ceiling are all counted this way, and a bound measured in one unit and
+ * enforced in another is a bound nobody can check.
+ */
+export function bodyWordsIn(
+  node: RangedNode,
+  blocks: readonly Block[],
+  index: BlockIndex = indexBlocks(blocks),
+): number {
+  const [lo, hi] = positions(node, index, "This node");
+  let words = 0;
+  for (let i = lo; i <= hi; i++) {
+    const block = blocks[i]!;
+    if (isBodyEvidence(block)) words += block.words;
+  }
+  return words;
+}
+
+/**
  * **An authored heading inside this node that no boundary has honoured.**
  *
  * Resolved means *a boundary already starts there*: the node's own first block,
@@ -416,10 +565,50 @@ function hasUnresolvedHeading(
     if (at !== undefined) resolved.add(at);
   }
   for (let i = lo; i <= hi; i++) {
-    const block = blocks[i]!;
-    if (block.kind === "heading" && isBodyEvidence(block) && !resolved.has(i)) return true;
+    if (isAuthoredBoundary(blocks[i]!) && !resolved.has(i)) return true;
   }
   return false;
+}
+
+/**
+ * **A heading the model is shown, and therefore one it can be held to.**
+ *
+ * Extracted so the clause above and the count below cannot drift into two
+ * opinions about what a heading is — the same argument the comment above makes
+ * for using `kind === "heading"` rather than inventing a third test.
+ */
+function isAuthoredBoundary(block: Block): boolean {
+  return block.kind === "heading" && isBodyEvidence(block);
+}
+
+/**
+ * **How many of the author's own headings are inside this node's range**, the
+ * node's own first block included.
+ *
+ * Not a bound and not a decision: it is the number the *request builder* needs,
+ * because the expansion prompt's settled precedence is that an authored heading
+ * always begins a child and `predictedChildren` caps at nine
+ * (docs/plans/260904d-deepen-fat-sections.md § "Where the author's headings and
+ * the fan-out target collide"). A twenty-heading parent therefore answers with
+ * twenty children whatever the fan-out target says, and a `max_tokens` sized
+ * from `predictedChildren` alone would truncate it — the one failure on this
+ * path that costs a whole paid call and returns nothing usable.
+ *
+ * It counts *every* authored body heading in range where `hasUnresolvedHeading`
+ * asks only whether one is unaccounted for, and the difference is deliberate:
+ * one is a stopping rule, this is an arithmetic upper bound on the answer's
+ * size. They share `isAuthoredBoundary` so they cannot disagree about what
+ * they are counting.
+ */
+export function bodyHeadingsIn(
+  node: RangedNode,
+  blocks: readonly Block[],
+  index: BlockIndex = indexBlocks(blocks),
+): number {
+  const [lo, hi] = positions(node, index, "This node");
+  let found = 0;
+  for (let i = lo; i <= hi; i++) if (isAuthoredBoundary(blocks[i]!)) found++;
+  return found;
 }
 
 /**
@@ -454,6 +643,155 @@ export function shouldExpand(
 ): boolean {
   if (structuralBlocksIn(node, blocks, index) > recipe.terminalBlocks) return true;
   return hasUnresolvedHeading(node, blocks, index);
+}
+
+/* ------------------------------------------------------- the precedence */
+
+/**
+ * **What the call said about one child it proposed**: is this finished, or does
+ * it want a level of its own?
+ *
+ * A two-member union rather than a boolean, and that is the whole point. A
+ * boolean field that goes missing reads as `false`, and `false` here means
+ * "finished" — *"a missing field silently reading as finished is the shape of
+ * this plan's whole failure mode"*
+ * (docs/plans/260904d-deepen-fat-sections.md § stage 4). Absent is a third
+ * state, it is spelled `undefined`, and `decideExpansion` reports it under its
+ * own name rather than folding it into either answer.
+ *
+ * Stage 4 owns the wire schema, where the field is **required**. This is only
+ * the shape the governor reads.
+ */
+export type ModelVerdict = "needs-deeper" | "finished";
+
+/**
+ * **The governor's verdict on one node, and which bound produced it.**
+ *
+ * A discriminated union rather than a boolean, because "expand" and "expand
+ * because the author put two headings in it" are different facts and only the
+ * second one can be measured. Every number the plan asks the eval to report —
+ * the raw yes rate, the effective yes rate, how often a bound overrode the
+ * model — is a tally of `because`, and none of them can be recovered from a
+ * boolean after the fact.
+ *
+ * The pairings are in the type: `"authored-heading"` can only ever expand,
+ * `"depth-cap"` can only ever stop. A switch on `because` is exhaustive, and
+ * tests/hierarchy-cascade.test.ts holds the `never` check that keeps it so.
+ */
+export type ExpansionDecision =
+  | {
+      decision: "expand";
+      because: "authored-heading" | "forced-open" | "unassessed-ceiling" | "verdict";
+    }
+  | { decision: "stop"; because: "depth-cap" | "divisibility-floor" | "verdict" | "no-verdict" };
+
+/**
+ * **The five bounds, in order.** The layer above `shouldExpand` that knows about
+ * depth and about what the model said.
+ *
+ * | | bound | rule |
+ * |---|---|---|
+ * | 1 | depth cap | past it, nothing expands |
+ * | 2 | heading rule | forces open, and **beats the floor** |
+ * | 3 | divisibility floor | never expand a node under the terminal size |
+ * | 4 | forced-open ceiling | over `forcedOpenWords`, above the floor, called finished → opened anyway |
+ * | 5 | the model's verdict | decides everything the four leave open |
+ *
+ * **They are ordered, and the order is the part that had to be written down.**
+ * The plan's first draft listed them as a set, and two of them contradict: an
+ * eight-block node holding two authored headings is under the floor *and* over
+ * the heading rule. `shouldExpand` had already settled that collision — *"a size
+ * rule alone can break the hard-heading rule […] its leaves would then span a
+ * heading, which the prompt calls a hard boundary"* — so bounds 2 and 3 are
+ * asked here as the single question `shouldExpand` already answers, rather than
+ * as two questions that could be ordered differently by accident.
+ * ⟨GPT Sol, finding 4.⟩
+ *
+ * **The plan's table says bound 2 is "two or more authored heading blocks", and
+ * the code's rule is broader.** `hasUnresolvedHeading` fires on *any* authored
+ * body heading in range that no boundary starts on, which subsumes the
+ * two-heading case and also handles the supplement heading and the
+ * `gistable: false` heading, neither of which the table mentions. The table's
+ * phrasing is how the 22-of-54 Moby-Dick figure was *measured*, not a second
+ * rule; the code's is the rule.
+ *
+ * **This does not make `shouldExpand` consult `maxDepth`, and must not.** That
+ * file-header ruling is what keeps a capped node *visible*: `shouldExpand` still
+ * says the node wants splitting, this says the cap refused it, and the executor
+ * writes a `capReached` record from the two together. A `shouldExpand` that
+ * returned `false` at the cap would produce a silently terminal node —
+ * indistinguishable, in every mechanical measure, from one the governor
+ * legitimately stopped.
+ *
+ * ## What an absent verdict does
+ *
+ * It **stops** — unless a mechanical bound opens it — and it says so under its
+ * own name either way: `because: "no-verdict"` rather than `"verdict"` when it
+ * stops, and `"unassessed-ceiling"` rather than `"forced-open"` when the ceiling
+ * opens it.
+ * The decision coincides with what "finished" would have produced, and the
+ * *reason* does not — which is the whole difference between a wave nobody has
+ * asked yet (wave 1's tree, where no verdict exists for any node) and a call
+ * that answered. The mechanical bounds above still force those nodes open, which
+ * is exactly the "one additional scoped wave over mechanically selected targets"
+ * stage 5 runs. Erring towards stopping is also the side that cannot spend
+ * money it was never told to.
+ */
+export function decideExpansion(opts: {
+  node: RangedNode;
+  /** The node's own depth; the root is 0. Expanding it creates children at `depth + 1`. */
+  depth: number;
+  blocks: readonly Block[];
+  recipe: CascadeRecipe;
+  /** What the call that proposed this node said about it, if one has been made. */
+  verdict?: ModelVerdict | undefined;
+  index?: BlockIndex;
+}): ExpansionDecision {
+  const { node, depth, blocks, recipe, verdict } = opts;
+  const index = opts.index ?? indexBlocks(blocks);
+
+  /* 1. The cap. A node at `maxDepth` may not have children, because they would
+     be one level deeper than the cascade is allowed to go. */
+  if (depth >= recipe.maxDepth) return { decision: "stop", because: "depth-cap" };
+
+  /* 2 and 3, in one question, because `shouldExpand` already orders them: it is
+     true when the node is over the floor OR holds an unresolved authored
+     heading, so a false here is the floor with nothing overruling it. */
+  if (!shouldExpand(node, blocks, recipe, index)) {
+    return { decision: "stop", because: "divisibility-floor" };
+  }
+  /* 2, named. Asked only to say which of the two clauses carried it — the
+     decision was already taken above, so the two cannot disagree. */
+  if (hasUnresolvedHeading(node, blocks, index)) {
+    return { decision: "expand", because: "authored-heading" };
+  }
+
+  /* 5 before 4, where they agree. `forcedOpen` counts nodes opened *against* a
+     finished verdict, so a node the model already wanted deeper belongs to the
+     verdict, not to the ceiling. */
+  if (verdict === "needs-deeper") return { decision: "expand", because: "verdict" };
+
+  /* 4. Above the floor, no heading forcing it, and too big to be one section
+     whatever it says about itself.
+
+     **`forced-open` only when something was actually overruled.** The ceiling's
+     whole reported number is *how often it overrode a model that said finished*,
+     and a node nobody has asked yet overrides nothing — counting the two
+     together would make that figure read high on exactly the wave where no
+     verdict exists for any node, which is wave 1, which is every article's
+     first pass. The decision is the same either way; the attribution is not,
+     and the attribution is why this returns a union rather than a boolean.
+     ⟨GPT Sol's review of stage 3, F2.⟩ */
+  if (bodyWordsIn(node, blocks, index) > recipe.forcedOpenWords) {
+    return {
+      decision: "expand",
+      because: verdict === undefined ? "unassessed-ceiling" : "forced-open",
+    };
+  }
+
+  return verdict === undefined
+    ? { decision: "stop", because: "no-verdict" }
+    : { decision: "stop", because: "verdict" };
 }
 
 /**
@@ -872,6 +1210,49 @@ export interface ProposedChild {
 }
 
 /**
+ * **A child that survived, and the proposal it came from** — one object, made in
+ * one place, so the two cannot be paired wrongly.
+ *
+ * ## The shape this replaced, and why it had to go
+ *
+ * `normaliseExpansion` used to hand back bare `ModelNode`s, and the wave carried
+ * the model's own children beside them in a second array. The two are **different
+ * lengths** — a start that marks no split point is dropped, and nothing said
+ * which — so *"what did the model say about this child?"* was a question with no
+ * answer. Stage 6 is the recursion, and the recursion is governed by exactly
+ * that question, so it could not have been built on top of it; stage 5 records
+ * verdicts it could not attribute. The obvious mend was a `childIndex` on the
+ * node and a lookup every caller must remember to do, which is a parallel array
+ * with an extra step — and *"a parallel array is a thing that can be one element
+ * short"* is the rule this file already lives by
+ * (`runExpansionWave`'s `ancestorsOf`).
+ *
+ * So the pairing is made where the drop is decided and is impossible to lose.
+ * The proposal here is the **same object** the caller passed in, not a copy: a
+ * field this file has never heard of — today `verdict` and `why`, tomorrow
+ * whatever the prompt learns to ask for — arrives on the other side untouched.
+ *
+ * The node is still exactly what `buildTree` takes, so a caller that wants the
+ * tree writes `children.map((c) => c.node)` and is done.
+ * docs/plans/260904d-deepen-fat-sections.md § stage 5.
+ */
+export interface DerivedChild<C extends ProposedChild = ProposedChild> {
+  /** As `buildTree` takes it: title, gist, `sourceHeading`, and a derived range. */
+  node: ModelNode;
+  /**
+   * The proposal this node was built from — the caller's own object, by
+   * identity.
+   *
+   * **Its `start` is not the node's range start**, and that is the point of
+   * keeping it: the first child is pinned to its parent's own first block, and a
+   * child whose start named a block one past its authored heading is snapped back
+   * onto it. What the model claimed and what it got are both here, which is what
+   * lets `recordBoundaryFaults` measure the difference at all.
+   */
+  proposed: C;
+}
+
+/**
  * **Turn one parent's answer into children with real ranges, immediately.**
  *
  * ## Why immediately
@@ -890,10 +1271,16 @@ export interface ProposedChild {
  * Read src/hierarchy.ts § `planChildRanges` for the reasoning; this is the
  * same algorithm with the ends deleted rather than a second one:
  *
- * - the first kept child starts at the parent's start, because children must
- *   cover their parent and nothing else can supply that block;
- * - every later child starts where the model said, clamped into the parent and
- *   required to be strictly after the previous kept child's start;
+ * - **every** claimed start is checked against the parent first, and one
+ *   outside it is **refused** — the first child's included;
+ * - the first kept child then starts at the parent's start, because children
+ *   must cover their parent and nothing else can supply that block;
+ * - every later child starts where the model said, dropped if that is not
+ *   strictly after the previous kept child's start;
+ * - a child that begins one block after the authored heading its own
+ *   `sourceHeading` names is moved back onto it (src/heading-snap.ts — the one
+ *   piece of the derivation the two files literally share, because it was the
+ *   one piece they disagreed about);
  * - every child ends one block before the next kept child starts, and the last
  *   ends at the parent's end.
  *
@@ -922,6 +1309,26 @@ export interface ProposedChild {
  * size bound, the count bound and the backwards range back, and it is the model
  * naming something that does not exist — a message that names it is more use
  * than a tree built as though the child had never been proposed.
+ *
+ * **A start outside the parent.** `planChildRanges` clamps one back inside, and
+ * that is right for the incumbent: a whole-document call names a boundary in an
+ * article it has all of, so a start past a node's edge is an ordinary
+ * misplacement and the clamp is a repair. It is not right here. The whole
+ * argument for the cascade is that *"a call shown thirty blocks cannot emit a
+ * range that is wrong by 1,289 of them"*, and a clamp makes that sentence false
+ * by quietly mending the one case that would have proved it — the answer is
+ * about a stretch of the article this call was never shown, which is a
+ * different fault from a boundary in the wrong place.
+ *
+ * **And the first child is not exempt from the check**, though it is still
+ * pinned. The pin is right — children must cover their parent and nothing else
+ * can supply that block — but exempting the *claim* from the range check is a
+ * different thing entirely, and it was a hole: a first `start` naming a block in
+ * a sibling section passed every gate, and the sibling's title, gist and verdict
+ * were attached to this parent's prose. So the order is check, then pin, and
+ * only an in-parent first start is ever pinned; how far *inside* the parent it
+ * was is the head repair, and that pin is a rule rather than a clamp. ⟨GPT Sol's
+ * review of stage 4, F2 — an error in the brief rather than in the build.⟩
  *
  * **Fewer than two kept children is not an expansion.** One child inherits its
  * parent's entire range, so `shouldExpand` asks the identical question one level
@@ -954,18 +1361,38 @@ export interface ProposedChild {
  * child's start and the previous child's end. With ends withheld there is one
  * claim per boundary, so an answer cannot disagree with itself, and the
  * `"short"` and `"over"` repairs at the closing boundary become unreachable.
- * What is left measures how far the derivation had to move a claim: the head
- * boundary, where the first child's ambition meets its parent's fixed start,
- * and a later start clamped back inside the parent. Fewer repairs here is a
- * property of the response format, not a quieter run.
+ * What is left is the head boundary, where the first child's ambition meets its
+ * parent's fixed start — and, since the clamp became a refusal, that is now the
+ * *only* boundary this can record, because every kept later start is believed
+ * exactly as claimed. **And it can only ever record a `"gap"` there**, now that
+ * the first child's claim is range-checked before it is pinned: a claim below
+ * the parent's start is refused rather than pinned, so the pin can only ever
+ * pull a boundary backwards. The snap's movements are recorded by the snap.
+ * Fewer repairs here is a property of the response format and of what is
+ * refused, not a quieter run.
+ *
+ * ## What comes back is a pair, and that is deliberate
+ *
+ * A kept child is handed back **beside the proposal it was built from**, not as
+ * a bare `ModelNode`. The two are made together, in one `map`, so they cannot
+ * come apart; and a caller that needs to know what the model *said* about a
+ * child — its verdict, its `why` — reads it off `proposed` rather than trying to
+ * line two arrays of different lengths up by position. There is nothing to line
+ * up: this function drops a start that marks no split point, and it does not say
+ * which. See `DerivedChild`.
+ *
+ * `C` is whatever shape the caller's proposal has. A scoped answer's child
+ * carries a verdict (`ExpansionAnswerChild` in src/hierarchy-expand.ts); a
+ * test's carries nothing but the four fields. Either way the object handed back
+ * is the very object that went in, so nothing can be lost in the pairing.
  *
  * @returns the children that were kept, in the model's own order, each with a
- * derived range. Dropped children are absent and are named in
- * `report.droppedChildren`.
+ * derived range and its own proposal. Dropped children are absent and are named
+ * in `report.droppedChildren`.
  */
-export function normaliseExpansion(opts: {
+export function normaliseExpansion<C extends ProposedChild>(opts: {
   /** The model's proposal, in its own order. */
-  children: readonly ProposedChild[];
+  children: readonly C[];
   /** The parent's already-fixed range. Not the answer's to redefine. */
   parent: readonly [string, string];
   blocks: readonly Block[];
@@ -974,14 +1401,14 @@ export function normaliseExpansion(opts: {
   /** Filled in with what was derived past, and what was dropped. */
   report: BuildReport;
   index?: BlockIndex;
-}): ModelNode[] {
+}): DerivedChild<C>[] {
   const { children, blocks, where, report } = opts;
   const index = opts.index ?? indexBlocks(blocks);
   const [p0, p1] = positions({ range: opts.parent }, index, `The parent at ${where}`);
 
   /* Planned into a report of its own and merged into the caller's only once the
      answer has survived every refusal below — see § "The caller's `report`". */
-  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
+  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 
   if (children.length === 0) {
     throw new ExpansionRefused(
@@ -1008,22 +1435,44 @@ export function normaliseExpansion(opts: {
     return at;
   });
 
-  const clamp = (v: number): number => Math.min(Math.max(v, p0), p1);
-
   /** The split points, in the model's order: which children survive, and where. */
-  const kept: { childIndex: number; start: number }[] = [];
+  const kept: KeptChild[] = [];
   for (const [i, at] of claimed.entries()) {
+    /* **Every claim is range-checked, and the first one is not exempt.** The
+       check used to sit below the pin, so the opening claim never reached it —
+       and a first `start` naming a block in a *sibling* section therefore
+       passed all four gates, with that sibling's title, gist and verdict
+       attached to this parent's prose. Nothing distinguishes that from the
+       fault this refusal exists for: an answer about a stretch of the article
+       this call was never shown. The pin below is a rule about the parent's own
+       first block, not a licence to believe a claim from outside it. */
+    if (at < p0 || at > p1) {
+      throw new ExpansionRefused(
+        "outside-parent",
+        `The expansion of ${where} > child ${i + 1} starts at ${nameValue(children[i]!.start)}, ` +
+          `which is outside the parent's range — the parent runs from ` +
+          `${nameValue(opts.parent[0])} to ${nameValue(opts.parent[1])}. A scoped call is shown ` +
+          `its parent's blocks and nothing else, so a start outside them is an answer about a ` +
+          `different stretch of the article.`,
+        planned,
+      );
+    }
     const previous = kept.at(-1);
     if (previous === undefined) {
+      /* **Pinned, not clamped.** The first kept child takes its parent's start
+         whatever it claimed — having first been checked to have claimed
+         *something inside the parent* — because children must cover their
+         parent and nothing else can supply that block. How far in the claim
+         was is not lost: it is the head repair, which `recordBoundaryFaults`
+         measures. */
       kept.push({ childIndex: i, start: p0 });
       continue;
     }
-    const start = clamp(at);
-    if (start <= previous.start) {
+    if (at <= previous.start) {
       planned.droppedChildren.push(`${where} > child ${i + 1}`);
       continue;
     }
-    kept.push({ childIndex: i, start });
+    kept.push({ childIndex: i, start: at });
   }
 
   /* **After planning, because the collapse is only visible here.** A proposal
@@ -1041,14 +1490,28 @@ export function normaliseExpansion(opts: {
     );
   }
 
-  const built: ModelNode[] = kept.map((child, k) => {
+  /* **Measure first, snap second, build third**, and that order is the whole of
+     it — it is `planChildRanges`'s order, for its reason. `recordBoundaryFaults`
+     compares the model's claims with where the boundary ended up, so running it
+     after the snap would report a phantom fault against a section's own correct
+     start and make the snap invisible in the telemetry that watches it. The snap
+     records its own repair; nothing else measures it. */
+  recordBoundaryFaults(kept, claimed, p0, where, planned);
+  planned.repairs.push(...snapStartsToHeadings(children, kept, blocks, where));
+
+  const built: DerivedChild<C>[] = kept.map((child, k) => {
     const next = kept[k + 1];
     const end = next === undefined ? p1 : next.start - 1;
     const proposed = children[child.childIndex]!;
-    /* In range: `start` is clamped into [p0, p1] and `end` is either `p1` or one
-       before a start that was, and both index `blocks` because the parent's own
-       range came out of `index`. */
-    return {
+    /* In range: `start` is `p0`, a claim checked to be inside [p0, p1], or a snap
+       backwards floored at the previous kept start; `end` is either `p1` or one
+       before a start that was in range. Both index `blocks` because the parent's
+       own range came out of `index`. */
+    /* **The pair is made here or it is not made at all.** `child.childIndex` is
+       the only thing that knows which proposal survived as which node, it is
+       local to this function, and it was thrown away at this line until
+       2026-09-05. See `DerivedChild`. */
+    const node: ModelNode = {
       title: proposed.title,
       range: [blocks[child.start]!.id, blocks[end]!.id] as [string, string],
       /* **Presence, not truthiness.** This said `proposed.gist ? … : …`, and a
@@ -1080,14 +1543,25 @@ export function normaliseExpansion(opts: {
         ? { sourceHeading: proposed.sourceHeading }
         : {}),
     };
+    return { node, proposed };
   });
 
-  recordBoundaryFaults(kept, claimed, p0, where, planned);
+  /* The answer stood up, so what it cost the run goes on the run's books.
 
-  /* The answer stood up, so what it cost the run goes on the run's books. */
+     **`collapsedRungs` is deliberately not among them.** That figure counts a
+     rung `buildTree` spliced away because its sole child covered the whole of
+     it (src/hierarchy.ts § `collapseRestatedRungs`); this function *refuses*
+     that answer instead, above, and the asymmetry is the point — a scoped call
+     can be re-asked and a whole-document one cannot. So nothing here can ever
+     put anything in it. */
   report.repairs.push(...planned.repairs);
   report.droppedChildren.push(...planned.droppedChildren);
   report.droppedHeadings.push(...planned.droppedHeadings);
+  /* An expansion writes depth-2 and deeper nodes, where `questionFor` keeps
+     none — so this is normally empty. It is carried anyway, because a count
+     that is only summed on some paths is a count that means one thing here
+     and another there. */
+  report.droppedQuestions.push(...planned.droppedQuestions);
   return built;
 }
 
@@ -1130,14 +1604,20 @@ function recordBoundaryFaults(
   };
 
   /* The node's own start, against what its first child claimed. The first
-     child is pinned here whatever it said, so this is the boundary that
-     absorbs a wholly misplaced opening claim — and the size is how far. */
+     child is pinned here whatever it claimed *inside* the parent, so this is
+     the boundary that absorbs an opening claim which began too late — and the
+     size is how far. Always a `"gap"`, never an `"overlap"`: a claim below the
+     parent's start is refused rather than pinned. */
   const head = kept[0];
   if (head !== undefined) fault(head.childIndex, p0, claimed[head.childIndex]!);
 
-  /* Each interior boundary. One claim, so the only way it can move is the
-     clamp back inside the parent — everything else either advanced (and was
-     believed exactly) or did not (and was dropped). */
+  /* Each interior boundary — **and this is structurally zero today**, kept as
+     the standing proof of that rather than as live measurement. There is one
+     claim per boundary, and since a start outside the parent is now refused
+     rather than clamped, a kept later start is exactly what was claimed;
+     everything else either advanced (and was believed) or did not (and was
+     dropped). The day this records something is the day an adjustment crept in
+     between the claim and the split point, which is the thing worth reporting. */
   for (const child of kept.slice(1)) {
     fault(child.childIndex, child.start, claimed[child.childIndex]!);
   }
@@ -1145,6 +1625,90 @@ function recordBoundaryFaults(
   /* There is no closing boundary to check: with no end claims, the last child
      ends at its parent's end by construction, and `"short"` and `"over"` are
      unreachable. See `normaliseExpansion` § "What it cannot report". */
+}
+
+/* ------------------------------------------------- the tree, backwards */
+
+/**
+ * **A finished tree, back in the shape a proposal has.**
+ *
+ * Wave 2 plans from the tree wave 1 built: it needs each node's range to slice
+ * the evidence, its title and gist to write the ancestor chain, and its
+ * `sourceHeading` to know which boundaries the author gave. `Tree` is the stored
+ * form — flat, id-keyed, with a leaf per block — and `ModelNode` is the shape
+ * every function here and in `buildTree` speaks. This is the one conversion
+ * between them, so there is one place for it to be wrong.
+ *
+ * **The leaf layer is dropped, and that is what makes it lossless rather than
+ * lossy.** `buildTree` grows leaves under the deepest internal node from the
+ * range alone, so a leaf carries no decision — re-running the build regrows
+ * exactly the same ones. Its `navLabel` comes from the separate labels artefact
+ * that `buildTree` is handed alongside the proposal, not from the tree, so the
+ * labels survive a round trip through the same `navLabels` map. A node with no
+ * children *is* a leaf and nothing else: `buildTree` gives every internal node at
+ * least one child, whether it recursed or grew leaves.
+ *
+ * **Point it at the body tree, not at one `appendSupplement` has run over.**
+ * A supplement node is an internal node whose children are all leaves, so it
+ * comes back as an ordinary childless node with its `treatment: "supplement"`
+ * gone — `ModelNode` has nowhere to put it, because the model never proposes
+ * one. src/supplement.ts appends that node after the tree is built, and the
+ * cascade works on the body, so the case does not arise; it would be a silent
+ * loss if it did, which is why it is written down here.
+ *
+ * **`summary` is dropped too**, for the same reason and with less at stake: it
+ * is written by a later stage over the finished tree, not proposed.
+ *
+ * What is preserved is what a range check cannot see: the internal shape, and
+ * the `title`, `gist` and `sourceHeading` on every node. A round trip that kept
+ * the ranges and mismatched the titles would produce a tree in which every
+ * section is named after its neighbour, and `assertTreeSound` would pass it.
+ * tests/hierarchy-cascade.test.ts asserts all four.
+ */
+export function proposalFromTree(tree: Tree): ModelNode {
+  const root = tree.nodes[tree.rootId];
+  if (root === undefined) {
+    throw new Error(
+      `This tree names ${nameValue(tree.rootId)} as its root, and holds no such node.`,
+    );
+  }
+  const visit = (node: TreeNode): ModelNode => {
+    const children = node.children
+      .map((id) => {
+        const child = tree.nodes[id];
+        if (child === undefined) {
+          throw new Error(
+            `The node ${nameValue(node.id)} names a child ${nameValue(id)} this tree does not ` +
+              `hold, so the proposal built from it would cover less of the article than the tree.`,
+          );
+        }
+        return child;
+      })
+      /* Leaves are regrown from the range; see above. `length === 0` is the
+         whole test, because `buildTree` never leaves an internal node empty. */
+      .filter((child) => child.children.length > 0)
+      .map(visit);
+    return {
+      title: node.title,
+      range: [node.range[0], node.range[1]],
+      /* **Presence, not truthiness**, the same rule `normaliseExpansion` follows:
+         a field the tree carries must not vanish on the way back out, or the
+         round trip is lossy in exactly the case that says something has gone
+         strange upstream. */
+      ...(node.gist !== undefined ? { gist: node.gist } : {}),
+      /* **And the question, for exactly the reason above.** Left out of the
+         first draft of SPIDERYARN-READING2-1V, and GPT Sol reproduced what that
+         cost: four questions before `deepenTree`, zero after it. Deepening any
+         one section rebuilds the whole tree through this function, so a field
+         missing here is not degraded on the deepened branch — it is gone from
+         the article. The rule this paragraph states is the rule; a new field on
+         `TreeNode` belongs on this list the day it is added. */
+      ...(node.question !== undefined ? { question: node.question } : {}),
+      ...(node.sourceHeading !== undefined ? { sourceHeading: node.sourceHeading } : {}),
+      ...(children.length > 0 ? { children } : {}),
+    };
+  };
+  return visit(root);
 }
 
 /* --------------------------------------------------------- completeness */
@@ -1179,8 +1743,17 @@ export function assertCascadeComplete(
 ): void {
   const index = indexBlocks(blocks);
   const faults: string[] = [];
-  /** Where each `capReached` record says the governor was overruled. */
-  const recorded = new Map(state.capReached.map((c) => [c.where, c]));
+  /**
+   * **Where something says why a node the governor would have split is
+   * terminal.** Two kinds of record answer that question and they are different
+   * facts — the depth cap is deterministic and ours, a refusal is the model's —
+   * but this guard asks only whether *an* explanation exists, so they share one
+   * index here and stay separate everywhere else.
+   */
+  const recorded = new Map<string, unknown>([
+    ...state.capReached.map((c) => [c.where, c] as const),
+    ...state.refused.map((r) => [r.where, r] as const),
+  ]);
   const claimedTerminal = new Set<string>();
 
   /* Positions and block ids only, and the ids through `nameValue`. This message
@@ -1209,7 +1782,7 @@ export function assertCascadeComplete(
           faults.push(
             `${name(where, node)} is marked terminal but holds ` +
               `${structuralBlocksIn(node, blocks, index)} structural block(s) or an unresolved ` +
-              `heading, and no capReached record explains it`,
+              `heading, and neither a capReached nor a refusal record explains it`,
           );
         }
         break;
@@ -1235,7 +1808,9 @@ export function assertCascadeComplete(
      class of fault as the missing record above and just as invisible. */
   for (const where of recorded.keys()) {
     if (!claimedTerminal.has(where)) {
-      faults.push(`a capReached record names ${where}, which is not a terminal node in this tree`);
+      faults.push(
+        `a capReached or refusal record names ${where}, which is not a terminal node in this tree`,
+      );
     }
   }
 

@@ -1486,8 +1486,12 @@ export function DiagramPanel({
   return (
     <aside className="mode-band diag" aria-label="Diagram">
       <div className="band-head">
-        <Network size={14} className="band-head-icon" />
-        <h2>Diagram</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays, and here that matters more than elsewhere: the caveat below
+            was moved *into* this row on 2026-08-30 precisely because the row
+            cannot wrap. Removing the row would send it back to being four lines
+            of prose above the picture, which is what Greg asked to be rid of. */}
         {/* **The scatter's caveat lives in this row, and the reason is that this
             row cannot wrap.** It was four lines of prose above the picture until
             2026-08-30 — Greg: *"It uses up valuable vertical real estate. Hide it

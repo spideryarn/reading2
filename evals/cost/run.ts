@@ -5,13 +5,17 @@
  *   npm run eval:cost -- --fixture long-html --fixture pdf --repeat 3
  *   npm run eval:cost -- --list                               (the corpus)
  *   npm run eval:cost -- --preflight                          (the gate only; spends nothing)
- *   npm run eval:cost -- --steps fetch,extract,blocks         (free: stops before the paid step)
+ *   npm run eval:cost -- --steps fetch,extract               (free: stops before the paid step)
  *   npm run eval:cost -- --steps fetch,extract,blocks,hierarchy,arc --keep
  *   npm run eval:cost -- --fixture short-html --all-modes     (ingest, then 8 mode jobs)
  *   npm run eval:cost -- --against <slug> --steps arc,tweets --batched-modes
  *
  * `--steps` names the steps the job runs, so a mode step has to be named after
  * the ingest steps it depends on — a fresh slug has no blocks for `arc` to read.
+ * **`blocks` has to be named with `hierarchy`** (`unrunnableStepPlan`,
+ * src/jobs.ts): a job that rebuilds the blocks and not the tree produces an
+ * article that cannot be published, so `enqueue` refuses it rather than letting
+ * the run get all the way to a publication failure.
  * `--keep` leaves the article and job behind for inspection instead of deleting
  * them; the ids are in the run's `run.json` either way. `--batched-modes` and
  * `--allow-unpriced` each disable one refusal below, deliberately, and both are
@@ -148,7 +152,6 @@ import { effortFor, STAGE_EFFORT } from "../../src/models.js";
 import { environmentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../../src/owner.js";
 import { DEFAULT_INGEST_STEPS, STEPS } from "../../src/pipeline.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import { STORE } from "../../src/store/live.js";
 import type { Job, StepName } from "../../src/types.js";
 import { type CostFixture, FIXTURES, fixtureByName } from "./fixtures.js";
 import {
@@ -168,7 +171,6 @@ import {
   parseStepList,
   requiredAiJobsFor,
   verifyFixtures,
-  withoutTheInProcessPump,
 } from "./harness.js";
 import {
   type Adoption,
@@ -219,7 +221,6 @@ interface RunMeta {
    * could not be asked. GPT Sol, 2026-09-02.
    */
   srcPatchSha256: string | null;
-  store: string;
   databaseTarget: string;
   /** Who the articles belong to. Never the environment owner — see `assertDistinctEvalOwner`. */
   evalOwnerId: string;
@@ -301,6 +302,18 @@ interface Draw {
   ledgerWallClockMs?: number | null;
   /** Lines of the ledger that could not be read. A total that is short must say so. */
   unreadable?: number;
+  /**
+   * Calls that finished after their collector had reported, so no row was ever
+   * written for them — process-wide, and so not attributable to this draw.
+   *
+   * The *other* way `money` below can be short, and deliberately a separate
+   * field: `unreadable` is a line on disk that will not parse, this is a line
+   * that does not exist. `observedSpend` and `checkLedgerComplete` are the
+   * sharper instrument for the same failure — they compare calls made against
+   * rows kept, per step — and this is the blunt one the store can offer any
+   * caller. See `LedgerRead` in src/store/contracts.ts.
+   */
+  lateCalls?: number;
   money?: Money;
   byStep?: StepSpend[];
   byAiJob?: StepSpend[];
@@ -605,9 +618,16 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
      the database before the job exists, because after it the money has moved. */
   if (spec.phase !== "ingest") assertAdoptable(spec.target.slug, spec.target.articleId);
 
-  let job: Job = await withoutTheInProcessPump(() =>
-    enqueue({ slug: wanted, ...(url !== null ? { url } : {}), steps: [...stepNames] }),
-  );
+  /* **`pump: false`, because `driveToDone` below is the driver.** `enqueue`'s
+     own pump runs the *production* registry, synchronously, and would win the
+     claim before this runner's overlay ever sees the job — see § *the pump* in
+     evals/cost/harness.ts for what that produced on the feasibility run. */
+  let job: Job = await enqueue({
+    slug: wanted,
+    ...(url !== null ? { url } : {}),
+    steps: [...stepNames],
+    pump: false,
+  });
 
   /* Recorded **before** the job runs: a crash from here on leaves a cleanup
      manifest rather than an orphan article nobody can name. */
@@ -671,6 +691,7 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
      this database were buying at the same moment. */
   const ledger = await costStore.forJob(job.id);
   draw.unreadable = ledger.unreadable;
+  draw.lateCalls = ledger.lateCalls;
   draw.money = totalMoney(ledger.rows);
   draw.byStep = aggregateByStep(ledger.rows);
   draw.byAiJob = aggregateByAiJob(ledger.rows);
@@ -777,6 +798,12 @@ function printDraw(draw: Draw): void {
       "   (fetch is a fixture read, so no network latency is in either)",
   );
   if (draw.unreadable) console.log(`  UNREADABLE    ${draw.unreadable} ledger line(s) could not be read`);
+  /* Said apart from UNREADABLE, because they send a reader to different places:
+     one is damage in the file, the other is a row the file never got. */
+  if (draw.lateCalls)
+    console.log(
+      `  LATE          ${draw.lateCalls} call(s) in this process finished after their collector reported, so no row was written`,
+    );
   if (draw.byStep?.length) {
     console.log("  by step");
     console.log(formatStepTable(draw.byStep));
@@ -873,7 +900,6 @@ function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): Run
        to `src` and `evals`, which are the directories that decide what a call
        costs; a doc edit does not make two runs incomparable. */
     srcPatchSha256: patchDigest(git),
-    store: STORE,
     databaseTarget,
     evalOwnerId: EVAL_OWNER_ID,
     environmentOwnerId: environmentOwnerId(),
@@ -1145,7 +1171,7 @@ async function runDraws(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const databaseTarget = localTarget(STORE, process.env.DATABASE_URL);
+  const databaseTarget = localTarget(process.env.DATABASE_URL);
   /* **Before anything else that could spend.** A job in one job is one cache
      group, so a step list holding two compatible modes measures the second one
      warm — and no amount of checking afterwards can un-warm it. */
@@ -1154,7 +1180,7 @@ async function main(): Promise<void> {
   const meta = currentMeta(databaseTarget, args.batchedModes ? "batched-modes" : "per-mode");
 
   console.log(`Target: ${databaseTarget}`);
-  console.log(`Store:  ${meta.store}   commit ${meta.commit.slice(0, 8)}${meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""}`);
+  console.log(`Commit: ${meta.commit.slice(0, 8)}${meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""}`);
   console.log(`Ledger: ${costStore.describe()}`);
   console.log(`Owner:  ${meta.evalOwnerId}   (environment owner ${meta.environmentOwnerId})`);
   console.log(

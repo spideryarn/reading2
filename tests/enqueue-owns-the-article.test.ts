@@ -43,21 +43,7 @@
  *
  * Skips loudly when there is no database; see tests/helpers/pg-ready.ts.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import, for the reason
- * tests/claim-session-postgres.test.ts sets out at length: `src/store/live.ts`
- * reads the flag once, the first time anything imports it, and imports are
- * hoisted above every statement in a module. A plain assignment would leave this
- * whole file exercising the filesystem store — where the check under test is
- * deliberately a no-op, so every case would pass for the wrong reason.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
 
@@ -70,19 +56,12 @@ import { TEST_SUB } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/enqueue-owns-the-article.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **Two readers that really exist**, because `jobs.owner_id` has a foreign key
@@ -102,7 +81,6 @@ let alices: ScratchArticle | undefined;
 let vercel: string | undefined;
 
 beforeAll(async () => {
-  if (!reachable) return;
   /**
    * **`VERCEL`, so `enqueue` does not start driving what it queues.**
    *
@@ -119,7 +97,6 @@ beforeAll(async () => {
 afterAll(async () => {
   if (vercel === undefined) delete process.env.VERCEL;
   else process.env.VERCEL = vercel;
-  if (!reachable) return;
   /* Jobs first: a job row's `draft_revision_id` is a foreign key into the
      revision the article delete is trying to cascade away. */
   for (const slug of [SLUG, NOBODYS]) {
@@ -128,7 +105,7 @@ afterAll(async () => {
   await alices?.remove();
 });
 
-when("enqueue, on an article somebody else owns", () => {
+describe("enqueue, on an article somebody else owns", () => {
   it("refuses Bob, and says nothing about whose it is", async () => {
     /* **404, not 403** — docs/project/auth.md § whose data is it. A 403 would
        confirm that the article exists, which is the one fact a stranger holding
@@ -157,18 +134,52 @@ when("enqueue, on an article somebody else owns", () => {
   });
 
   /**
-   * **A slug nobody has at all is allowed, and that is a decision.**
+   * **This expectation reversed on 2026-09-05, deliberately.**
    *
-   * It is not a cross-owner blocker: every minted slug ends in a random short
-   * id (src/ingest.ts § `slugWithShortId`), so no other reader can ever come to
-   * want this name, and the job blocks nothing but itself. Refusing it would be
-   * a second, unrelated rule about what a slug may name, and it would refuse
-   * every fixture in the suite that queues a job against a slug it has not
-   * built yet.
+   * It used to read *"allows a slug nobody has, because there is nobody to take
+   * it from"*, and the reasoning was sound as far as it went: every minted slug
+   * ends in a random short id (src/ingest.ts § `slugWithShortId`), so no other
+   * reader can ever come to want the name, and a job on a slug nobody has blocks
+   * nothing but itself. Refusing it looked like a second, unrelated rule about
+   * what a slug may name.
+   *
+   * What that missed is what a bare-slug request **means**. It carries no URL
+   * and no upload, so it is not claiming a name — it is saying *run this on my
+   * existing article*. Letting it name an article that does not exist turns a
+   * typo into a purchase: `npm run blocks -- typoo` created an `articles` row,
+   * failed the step inside it, and left the row and a failed revision on the
+   * reader's shelf. Measured 2026-09-03, and the reason the check moved into
+   * `enqueue` rather than staying a pre-check in `scripts/stage.ts`, where it was
+   * first written. Stage E of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+   *
+   * **Watched red before the reversal**, on the code as it stood: *"Error: No
+   * such article. ❯ Module.enqueue src/jobs.ts"* — the old case failing on the
+   * new rule, which is the only way to know the two cases really are the same
+   * question with opposite answers.
+   *
+   * **The privacy rule is unchanged and is in fact now stricter.** The refusal
+   * used to consult `slugIsTaken`, the one deliberately unfiltered global
+   * lookup, so "nobody has it" and "somebody else has it" were merely *treated*
+   * alike; the only question asked now is `articleExists`, which is owner-scoped,
+   * so they are indistinguishable by construction. Same sentence, same 404,
+   * whichever it was — docs/project/auth.md § whose data is it.
    */
-  it("allows a slug nobody has, because there is nobody to take it from", async () => {
-    const job = await runAsOwner(BOB, () => enqueue({ slug: NOBODYS, steps: ["ideas"] }));
-    expect(job.slug).toBe(NOBODYS);
-    expect(job.ownerId).toBe(BOB);
+  it("refuses a slug nobody has, because a bare slug means an article you have", async () => {
+    await expect(
+      runAsOwner(BOB, () => enqueue({ slug: NOBODYS, steps: ["ideas"] })),
+    ).rejects.toMatchObject({ status: 404 });
+
+    /* **And the same sentence as the case above**, which is the whole of the
+       privacy claim: a stranger holding a guessed slug cannot tell an article
+       that is somebody else's from one that has never existed. */
+    await expect(
+      runAsOwner(BOB, () => enqueue({ slug: NOBODYS, steps: ["ideas"] })),
+    ).rejects.toThrow("No such article.");
+
+    /* No row, for the same reason the first case checks: a refusal that still
+       inserted would leave the wreck this rule exists to prevent. */
+    const rows = await getDb().select().from(jobsTable).where(eq(jobsTable.slug, NOBODYS));
+    expect(rows, "a job was written for an article nobody has").toEqual([]);
   });
 });

@@ -177,6 +177,19 @@ export type TitleSpec =
   | { kind: "features" }
   /** What it costs — PricingPage.tsx. */
   | { kind: "pricing" }
+  /** How to reach us — ContactPage.tsx. */
+  | { kind: "contact" }
+  /**
+   * **The shelf of shared articles** — `/read/public`, PublicLibraryPage.tsx.
+   *
+   * Its own variant rather than borrowing `library`, and the two are worth
+   * keeping apart in the tab above all: `library` is *your* shelf and leads with
+   * the app's name and the strapline, because for the person who owns it that
+   * page is the homepage. This one is somebody else's articles, so it is named
+   * like every other page — what is specific first — and it carries no
+   * strapline, because it is not a front door.
+   */
+  | { kind: "public-library" }
   /** The administrator's pages. `page` is which one — see router.ts. */
   | { kind: "admin"; page: AdminPage }
   /**
@@ -267,6 +280,16 @@ function segments(spec: TitleSpec): string[] {
 
     case "pricing":
       return ["Pricing", APP_NAME];
+
+    case "contact":
+      return ["Contact", APP_NAME];
+
+    /* The page's own heading, unshortened — it is already two words, which is
+       the length the two cases above had to cut down to. It says *Shared* and
+       not *Public* for the reason the shelf badge does: an owner reads "shared"
+       as something they did, and this list is exactly what they did. */
+    case "public-library":
+      return ["Shared articles", APP_NAME];
 
     /* Most specific part first, like every other page: "Users · Admin ·
        Spideryarn" rather than the other way round, so the tab is legible when

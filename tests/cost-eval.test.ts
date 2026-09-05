@@ -50,7 +50,6 @@ import {
   parseStepList,
   requiredAiJobsFor,
   verifyFixtures,
-  withoutTheInProcessPump,
 } from "../evals/cost/harness.js";
 import {
   aggregateByStep,
@@ -539,53 +538,35 @@ describe("localTarget", () => {
   const local = "postgresql://postgres:hunter2@127.0.0.1:54362/postgres";
 
   it("redacts the password in the line it hands back to be printed", () => {
-    expect(localTarget("postgres", local)).toBe(
-      "postgresql://postgres:***@127.0.0.1:54362/postgres",
-    );
+    expect(localTarget(local)).toBe("postgresql://postgres:***@127.0.0.1:54362/postgres");
   });
 
   it("accepts the other spellings of this machine", () => {
-    expect(localTarget("postgres", "postgresql://postgres@localhost:5432/postgres")).toContain(
-      "localhost",
-    );
+    expect(localTarget("postgresql://postgres@localhost:5432/postgres")).toContain("localhost");
   });
 
   it("refuses a remote database", () => {
     expect(() =>
-      localTarget("postgres", "postgresql://postgres:pw@db.abcdef.supabase.co:5432/postgres"),
+      localTarget("postgresql://postgres:pw@db.abcdef.supabase.co:5432/postgres"),
     ).toThrow(/Refusing to run against a non-local database/);
   });
 
-  it("refuses the filesystem store, because the ledger there is not authoritative", () => {
-    expect(() => localTarget("files", local)).toThrow(/measures the Postgres pipeline/);
-  });
+  /* A sixth case stood here until 2026-09-05 — `localTarget("files", …)` refusing
+     because the filesystem ledger was never authoritative. It took a store as its
+     first argument then; there is one store now, so there is nothing to refuse. */
 
   it("refuses an absent DATABASE_URL rather than guessing one", () => {
-    expect(() => localTarget("postgres", undefined)).toThrow(/DATABASE_URL is not set/);
+    expect(() => localTarget(undefined)).toThrow(/DATABASE_URL is not set/);
   });
 });
 
-describe("withoutTheInProcessPump", () => {
-  it("sets VERCEL for the call and puts the environment back", async () => {
-    const before = process.env.VERCEL;
-    let seen: string | undefined;
-    await withoutTheInProcessPump(async () => {
-      seen = process.env.VERCEL;
-    });
-    expect(seen).toBe("1");
-    expect(process.env.VERCEL).toBe(before);
-  });
-
-  it("puts it back even when the call throws", async () => {
-    const before = process.env.VERCEL;
-    await expect(
-      withoutTheInProcessPump(async () => {
-        throw new Error("enqueue failed");
-      }),
-    ).rejects.toThrow("enqueue failed");
-    expect(process.env.VERCEL).toBe(before);
-  });
-});
+/* **`withoutTheInProcessPump` was tested here and is gone**, 2026-09-05. It set
+   `VERCEL=1` across the `enqueue` call so that `pump` would return immediately,
+   and the two cases here checked that its `try/finally` put `process.env` back —
+   a test of a `try/finally`, which says nothing about whether the pump was
+   stopped. `enqueue` takes `pump: false` now (src/jobs.ts), the eval passes it,
+   and the effect is asserted in tests/enqueue-drives-what-it-queues.test.ts:
+   queue a job, look a moment later, see whether anything moved it. */
 
 describe("reading a finished job back", () => {
   it("reads the block count out of the step's own detail line", () => {

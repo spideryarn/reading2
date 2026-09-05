@@ -119,7 +119,6 @@ import { mirror } from "../../src/referee-mirror.js";
 import { CANDIDATES_OPENING } from "../../src/referee-candidates.js";
 import { findPassages } from "../../src/search.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import { STORE } from "../../src/store/live.js";
 import { makeLookUpTerm } from "../../src/term-lookup.js";
 import type { LookupsByTerm } from "../../src/glossary-lookups.js";
 import type {
@@ -629,7 +628,6 @@ interface RoundResult {
 interface RunFile {
   startedAt: string;
   slug: string;
-  store: string;
   databaseTarget: string;
   evalOwnerId: string;
   environmentOwnerId: string;
@@ -840,11 +838,10 @@ async function main(): Promise<void> {
   /* **Every gate before anything that could spend**, and the same three run.ts
      uses — this file creates no articles and no jobs, so it needs no others, but
      it spends real money and so needs all of these. */
-  const databaseTarget = localTarget(STORE, process.env.DATABASE_URL);
+  const databaseTarget = localTarget(process.env.DATABASE_URL);
   assertDistinctEvalOwner(EVAL_OWNER_ID, environmentOwnerId());
 
   console.log(`Target: ${databaseTarget}`);
-  console.log(`Store:  ${STORE}`);
   console.log(`Ledger: ${costStore.describe()}`);
   console.log(`Owner:  ${EVAL_OWNER_ID}   (environment owner ${environmentOwnerId()})`);
   console.log(`Slug:   ${args.slug}`);
@@ -885,7 +882,6 @@ async function main(): Promise<void> {
   const runFile: RunFile = {
     startedAt: new Date().toISOString(),
     slug: args.slug,
-    store: STORE,
     databaseTarget,
     evalOwnerId: EVAL_OWNER_ID,
     environmentOwnerId: environmentOwnerId(),

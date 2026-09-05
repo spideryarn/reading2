@@ -45,7 +45,7 @@ the thing that decides where any future piece of state goes:
 **The path says which article, and which of its pages. The query string says how you are looking at
 it.**
 
-So `/read/noema-mythology-of-conscious-ai?cols=0,1&at=spya-tgnssb` is one link that carries both, and
+So `/read/noema-mythology-of-conscious-ai?cols=1,2&at=spya-tgnssb` is one link that carries both, and
 [url-state.md](url-state.md) still owns the second half of it. Old `/?slug=x` links are rewritten to
 `/read/x` before React mounts, keeping every parameter they arrived with — see
 [`main.tsx`](../../src/web/main.tsx), which also sends the two superseded spellings of the article's
@@ -138,6 +138,56 @@ the queue skips every step whose artefact is on disk, which is every step.
 
 The plan, the decisions and what was deliberately left out are in
 [260826k-library-shelf-actions-and-search.md](../plans/260826k-library-shelf-actions-and-search.md).
+
+Since 2026-09-05 each of the five carries a [`ControlTip`](tooltips.md#controltip-which-is-what-most-of-them-are-now)
+card rather than a `title`, the whole row in one `TooltipGroup`.
+
+### When a button cannot do its job
+
+Two of the five need a source URL, and until 2026-09-05 they were simply **not drawn** without one —
+each absence a real fix (a re-fetch with nothing to fetch, an anchor pointed at a `javascript:` URL),
+each made by deleting the control. The cost only shows across cards:
+
+> On the Homepage shelf, there are a few icons that show up on hover … (sometimes I see them,
+> sometimes I don't). And if some actions are not available, perhaps show them but disabled with a
+> tooltip explaining why.
+>
+> — Greg, 2026-09-05
+
+So all five are always drawn, and the precondition decides whether the button *works* rather than
+whether it exists. The card and the accessible name both say **which** absence it is: no address
+recorded at all, versus an address we will not follow. The card never says *why* there is no address
+— "you uploaded this" is a claim assembled from a gap in our own files, and a revision can be
+published with no `requested_url` and no `final_url`, which is the same refusal
+[`Metadata.tsx`](../../src/web/Metadata.tsx) § `uploaded` makes.
+
+**One test decides both buttons, not two.** Re-fetch was gated on "has a URL" and the link on "has a
+*web* URL", on the reasoning that a non-web address is still an address — but it is not an address
+stage 1 will follow ([`src/fetch.ts`](../../src/fetch.ts) refuses anything but http(s)), so a
+`javascript:` article got a live button over a job that always failed at its first step. GPT Sol,
+2026-09-05.
+
+**`aria-disabled`, never the `disabled` attribute**, and that is the whole feature rather than a
+detail: a natively disabled button is out of the tab order and suppresses activation, and engines
+differ on whether it dispatches pointer events at all — so it is not a reliable tooltip trigger by
+any route, and the card that must open is exactly the one explaining why the button is unavailable.
+[`IconButton.tsx`](../../src/web/IconButton.tsx) makes that the meaning of its `disabled` prop, and
+**stops** the click rather than merely declining it: an absent handler still lets the event bubble,
+and the card's stretched title link is what it would bubble towards.
+
+The cost is two dead tab stops per address-less article. That is the trade — the stop is what makes
+the explanation findable without a mouse.
+
+**jsdom does not reproduce the suppression**, so a test that opened the card on a natively disabled
+button and called that proof is green over exactly this bug —
+[`tests/shelf-action-tooltips.test.tsx`](../../tests/shelf-action-tooltips.test.tsx) asserts the
+attribute instead, and says so.
+
+The one thing still deleted rather than disabled is the **anchor**: where the recorded address is not
+`http(s)` the control is a `<button>`, so there is no `href` in the DOM holding a value we would not
+follow. [security.md](security.md), [`src/urls.ts`](../../src/urls.ts) § `isWebUrl`.
+
+[260905h-rich-tooltips-on-the-shelf-action-buttons.md](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md).
 
 ### The card is no longer one big link
 
@@ -243,7 +293,7 @@ people to click through modals.
 
 Stage 2 rewrites `meta.json` on every run (see [below](#metajson-and-the-articles-identity)). A
 renamed title stored there would work perfectly and be silently undone by the next
-`npm run extract` — a bug that reports success, waits weeks, and then looks like the rename never
+a re-run of stage 2 — a bug that reports success, waits weeks, and then looks like the rename never
 happened. So the reader's title lives in shelf state and `describeArticle` prefers it, which is why
 a renamed article is called the same thing on the card, in the masthead and in the search results.
 `tests/shelf.test.ts` re-runs the rewrite and asserts the override survives.
@@ -270,7 +320,9 @@ Two things are worth knowing about the two new sites:
 - **The new title comes back from the server, not from the input.** Clearing the field sends
   `title: null`, and what the reader should then see is whatever the extractor last found — a string
   neither page has. So `useArticleRename` reports `entry.title` from the response, which is
-  `titleFor`'s answer to "what is this article called now" ([`src/api.ts`](../../src/api.ts)).
+  `titleFor`'s answer to "what is this article called now"
+  ([`src/library-scalars.ts`](../../src/library-scalars.ts) — it lived in `src/api.ts` until that
+  file went with the filesystem store on 2026-09-05).
 - **The reading view cannot say whether the title on screen is the reader's own.** `GET
   /api/article/:slug` deliberately does not carry the superseded title — the same refusal
   `LibraryEntry` makes — so the editor's hint has a third state there: `undefined` for *we do not
@@ -328,8 +380,10 @@ text.
 
 | Store | Where |
 |---|---|
-| `files` | `data/<slug>/shelf.json` — [`src/shelf.ts`](../../src/shelf.ts) |
-| `postgres` | four columns on `spideryarn.articles`: `archived_at`, `title_override`, `opens`, `last_opened_at` |
+| `postgres` | four columns on `spideryarn.articles`: `archived_at`, `title_override`, `opens`, `last_opened_at` — [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) |
+
+The filesystem half — `data/<slug>/shelf.json`, and the writes in `src/shelf.ts` — was deleted on
+2026-09-05.
 
 Columns on `articles` and **not** on `article_revisions`, which is the load-bearing part: a revision
 is one extraction, and re-extracting must not un-archive an article, forget its title or reset the
@@ -350,12 +404,11 @@ Hovering the date line gives everything the card has no room for: when it was ad
 often you have opened it, how many questions you have asked, which optional stages have produced
 something, and the size in words, blocks, parts and sections.
 
-**What it deliberately does not say.** Chat threads and saved searches are per-article reader state
-that has *not* moved to Postgres — [`src/chat.ts`](../../src/chat.ts) and
-[`src/searches.ts`](../../src/searches.ts) write files in both modes, and the `chat_threads` /
-`search_runs` tables exist but nothing touches them. A count that reads 7 on the filesystem and 0 in
-Postgres is worse than no count at all, because it looks like an answer. They go in when step 10 of
-[260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md) lands.
+**What it deliberately does not say.** Chat threads and saved searches are per-article reader state,
+and now live in Postgres like everything else — `chat_threads` via
+[`src/store/pg-chat.ts`](../../src/store/pg-chat.ts), `search_runs` via
+[`src/store/pg-searches.ts`](../../src/store/pg-searches.ts). The tooltip still doesn't show a count
+for either; nobody has wired that read into it.
 
 ## Finding an article, and finding a passage in one
 
@@ -382,36 +435,31 @@ errors and Undo → search → `ShelfControls` → the "n of m" count → the li
 | Store | How |
 |---|---|
 | `postgres` | a generated `tsvector` column on `revision_blocks`, GIN index, `websearch_to_tsquery` to parse, `ts_rank_cd` to sort — [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) |
-| `files` | scan every `blocks.json` in memory, fold, substring-match, rank by count damped by length — [`src/library-search.ts`](../../src/library-search.ts) |
 
-**The two do not agree, and it is worth being precise about how far that goes**, because the first
-version of this paragraph got it wrong. It said they agreed on the *set* of block ids for a
-single-word query. They do not: Postgres matches English lexemes, so `writes` finds "writing" and
-"write-nots" while `the` finds nothing at all (a stop word); the filesystem scan matches substrings,
-so it finds `the` inside "theory" and misses every inflection. Single words were exactly the case the
-old claim called safe. A cross-family review caught it, 2026-08-26.
+Until 2026-09-05 there was a second implementation, a filesystem scan of every `blocks.json` in
+`src/library-search.ts`'s `searchLibrary`, deleted along with the rest of the filesystem store. It is
+worth keeping why the two were never a matched pair, because the first version of this paragraph got
+it wrong: it said they agreed on the *set* of block ids for a single-word query. They did not —
+Postgres matches English lexemes, so `writes` found "writing" and "write-nots" while `the` found
+nothing at all (a stop word); the filesystem scan matched substrings, so it found `the` inside
+"theory" and missed every inflection. Single words were exactly the case the old claim called safe. A
+cross-family review caught it, 2026-08-26. Postgres is now the only implementation, so there is
+nothing left to diverge from.
 
-What they *do* share, and what a test may hold them to: an exact word that appears verbatim, is not a
-stop word, and has no inflections in the corpus is found by both, in the same blocks. Ranking is
-never comparable — `ts_rank_cd` with normalisation flag 1 on one side, a count damped by paragraph
-length on the other. The divergence is written down rather than papered over, because a hand-built
-near-copy of `websearch_to_tsquery` would be worse than an obviously simpler thing that admits what
-it is.
-
-**The one thing they must agree about exactly is `excludeSlug`**, because it is not a matching rule.
-It is a promise that a named article is absent from the results, and both adapters keep it the same
-way: inside the query, before the cap. Nothing on this page uses it — the shelf's box searches
-everything — but chat's `search_library` does, to leave out the article the reader has open, and it
-had to become a store argument rather than a filter over the results for a reason worth knowing about
-before you write the next one of these. Filtering afterwards means the cap is spent first, so one
-loud article can empty the list and the caller reports finding nothing. The whole story is in
+**`excludeSlug` is not a matching rule.** It is a promise that a named article is absent from the
+results, kept inside the query, before the cap. Nothing on this page uses it — the shelf's box
+searches everything — but chat's `search_library` does, to leave out the article the reader has open,
+and it had to become a store argument rather than a filter over the results for a reason worth
+knowing about before you write the next one of these. Filtering afterwards means the cap is spent
+first, so one loud article can empty the list and the caller reports finding nothing. The whole story
+is in
 [chat-tools.md § The reader's own article ate its own search results](chat-tools.md#the-readers-own-article-ate-its-own-search-results);
 the contract is `LibrarySearchOptions` in [`src/store/contracts.ts`](../../src/store/contracts.ts).
 
 The hit carries **the whole paragraph**, not a snippet, and the client cuts it. Trimming on the
-server would mean the two adapters trimming differently — Postgres knows which *stems* matched, not
-which characters, so it would either return the whole thing anyway or call `ts_headline` and hand
-back a second flavour of highlighting to reconcile with the client's own. One highlighter.
+server would mean reconciling two flavours of highlighting — Postgres knows which *stems* matched,
+not which characters, so it would either return the whole thing anyway or call `ts_headline` and hand
+back a second flavour to reconcile with the client's own. One highlighter.
 
 What was considered and deferred, with the research behind it in
 [260826e-postgres-search.md](../research/260826e-postgres-search.md): **BM25** (`pg_search`/ParadeDB is not available
@@ -572,8 +620,9 @@ The date at bottom-right is the one thing on the card that moves: it says whatev
 currently sorted by — see [§ The card says what it is sorted by](#the-card-says-what-it-is-sorted-by).
 
 The blurb is **the tree root's `gist`** — one sentence about the whole article, from the same pass
-that fills the L0 column ([granularity-zoom.md](granularity-zoom.md)). That is this product's own
-idea turned on its own library, and it costs nothing, because the sentence already exists.
+that writes every other gist ([granularity-zoom.md](granularity-zoom.md)); the L0 column it used to
+fill is gone, the sentence is not. That is this product's own idea turned on its own library, and it
+costs nothing, because the sentence already exists.
 
 Note what is deliberately *not* a fallback for it: **the first arc entry**. An arc sentence says
 where the argument stands at the end of part one ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)),
@@ -588,8 +637,8 @@ have told us the card said 47 minutes and the masthead 54 — see
 
 ### The Shared badge
 
-An article anyone with the link can read wears a small globe and the word **Shared**, on the meta
-line of the card and in the title cell of the table — one component,
+An article anyone can read without signing in wears a small globe and the word **Shared**, on the
+meta line of the card and in the title cell of the table — one component,
 [`SharedBadge`](../../src/web/ShelfEntry.tsx), because a marker added to one of the shelf's two
 renderers looks finished from wherever you were standing. Hovering it gives the owner's own sentence
 from the sharing card, `SHARING_ON` in [`src/messages.ts`](../../src/messages.ts).
@@ -614,20 +663,29 @@ there is enough shared material for it to be worth anything — Greg's decision 
 [260902j-public-read-only-access-audit-and-improvements.md](../plans/260902j-public-read-only-access-audit-and-improvements.md).
 The visitor's side of the same fact is `ViewOnlyChip` in
 [`src/web/PublicChrome.tsx`](../../src/web/PublicChrome.tsx), and it says something else: *you may
-not change this*, where this says *anyone with the link can read this*.
+not change this*, where this says *anyone can read this without signing in*.
 
-**There is a second shelf now, and it is not this one narrowed.** `/read/public` lists every public
-article, to anybody, signed in or not — Greg, 2026-09-04: *"create a `/read/public/` page that lists
-Public-readable pages … to showcase what Spideryarn is capable of."* It is a separate query
-([`src/store/public-library.ts`](../../src/store/public-library.ts)), a separate DTO
-([`src/public-library-types.ts`](../../src/public-library-types.ts)) and a separate card, and none of
-them is a widened `LibraryEntry`: there is no `opens`, `lastOpenedAt`, `comments`, `titleOverridden`,
-`archivedAt` or `purpose`, because every one of those is a fact about a *person's* relationship with
-a document rather than about the document. The decision above is unchanged — this shelf is not a
-filter over the owner's — and the promise it changes (a shared article becomes *discoverable*, not
-only reachable by link) is
+**And that decision still stands next to a page that does exactly what it says there is no way to
+do**, which reads as a contradiction and is not — **they are two different shelves**, and this is
+the paragraph that says so rather than leaving the next reader to work it out.
+[public-shelf.md](public-shelf.md) is `/read/public`, and it lists *what anybody has shared*, to
+anybody, signed in or not — Greg, 2026-09-04: *"create a `/read/public/` page that lists
+Public-readable pages … to showcase what Spideryarn is capable of."* This shelf is *your articles*,
+nearly all of them private, and narrowing it to the shared few would be a control that answers a
+question its owner already knows the answer to. Nothing about the owner's shelf changed when that
+page arrived: no filter, no sort, no chip on a private card. The two lists share no query, no DTO
+and no card component, and none of the public ones is a widened `LibraryEntry` — there is no
+`opens`, `lastOpenedAt`, `comments`, `titleOverridden`, `archivedAt` or `purpose` on the wire,
+because every one of those is a fact about a *person's* relationship with a document rather than
+about the document.
+
+**What did change is the promise, and it is a promise this page makes.** Sharing used to mean
+*reachable by anyone with the link*; since the listing shipped it also means *listed publicly*, so
+the badge above, its hover sentence and the masthead's mark all say the wider thing —
+`SHARING_ON` in [`src/messages.ts`](../../src/messages.ts) is the one string the three are built
+from. The decision to widen it retroactively rather than grandfather anything is
 [260904b-pricing-page-and-public-showcase.md](../plans/260904b-pricing-page-and-public-showcase.md)
-§ 1.
+§ 1, and it rests on there being one account holder.
 
 The name `public` is reserved as an article slug, because `/read/public` would otherwise be an
 address two things claim: `isReservedSlug` in [`src/ingest.ts`](../../src/ingest.ts), refused at
@@ -652,7 +710,7 @@ different moments:
 | **filesystem** | at read, over the artefacts the directory walk just loaded | its return value |
 | **Postgres** | at **publish**, inside the transaction that writes the blocks and the tree | the five columns it wrote |
 
-`describeArticle` in [`src/api.ts`](../../src/api.ts) *receives* those five and assembles the card.
+`describeArticle` in `src/api.ts` *receives* those five and assembles the card.
 It used to derive them itself, which made it a second implementation — and the two had **already
 diverged once**, over the `excerpt` rung of the blurb's fallback, found in review rather than by a
 test.
@@ -749,24 +807,26 @@ which is where it was always meant to be
 
 Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
 
-- **The slug comes from the output filename, not from the URL.** Stage 3 names its blocks file after
-  the HTML file and stage 4 names the data directory after *that* ([`src/hierarchy.ts`](../../src/hierarchy.ts)),
-  so the basename is what the rest of the pipeline will call this article. Deriving it from the URL a
-  second time would be right for `npm run extract <url>` and wrong the moment anyone passed an
-  explicit filename — and the only symptom would be an article with no byline.
+- **The slug is passed in, and used to be read off the output filename.** Stage 3 named its blocks
+  file after the HTML file and stage 4 named the data directory after *that*, so the basename was
+  what the rest of the pipeline would call this article — and deriving it from the URL a second time
+  would have been right for `npm run extract <url>` and wrong the moment anyone passed an explicit
+  filename, with an article that had no byline as the only symptom. There is no filename to read one
+  off any more: `runExtract` takes the slug, and the command line that could pass one went on
+  2026-09-05.
 - **It is rewritten every run**, because re-extracting is how you refresh a page and the fetch date
   should follow.
 
 An article whose `meta.json` predates this still lists: the title falls back to the first `<h1>` and
-the date to the mtime of `blocks.json`. It just has no byline and no source link. Re-run
-`npm run extract` to fix that.
+the date to the mtime of `blocks.json`. It just has no byline and no source link.
+`npm run extract -- <slug> --force` fixes it.
 
 ## When this becomes Postgres
 
 See [database.md](database.md) for the store as a whole, and
 [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) for the schema and the risks.
 
-[`src/api.ts`](../../src/api.ts) is the seam, and it is the only file that knows there are
+`src/api.ts` is the seam, and it is the only file that knows there are
 directories. Above it the client sees two types, both already shaped as rows:
 
 - `Article` — one article in full, `GET /api/article/:slug`
@@ -809,11 +869,10 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl`, `isSlug` — shared by the extractor, the add box and the server |
-| [`src/api.ts`](../../src/api.ts) | `listArticles()`, `describeArticle()` — **the Postgres seam** |
-| [`src/library-scalars.ts`](../../src/library-scalars.ts) | **the two derivations both stores share**: the card's five numbers and blurb, and the `<h1>` a missing title falls back to |
-| [`src/shelf.ts`](../../src/shelf.ts) | archived, renamed, opened — `data/<slug>/shelf.json` |
-| [`src/library-search.ts`](../../src/library-search.ts) | searching every article at once, filesystem half |
-| [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | the same two things, in SQL |
+| `src/api.ts` | `listArticles()`, `describeArticle()` — **the Postgres seam** |
+| [`src/library-scalars.ts`](../../src/library-scalars.ts) | **the two derivations every reader shares**: the card's five numbers and blurb, and the `<h1>` a missing title falls back to |
+| [`src/shelf.ts`](../../src/shelf.ts) | `MAX_TITLE_CHARS`, and `loadShelf` for fixtures — the writes moved to Postgres |
+| [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | archived, renamed, opened, and searching every article at once — all of it, in SQL |
 | [`src/web/useShelf.ts`](../../src/web/useShelf.ts) | the shelf and its verbs, client side, including Undo — and **which of the saved copy and the live answer wins** |
 | [`src/web/lib/cached-shelf.ts`](../../src/web/lib/cached-shelf.ts) | reading the saved shelf back, and refusing to draw a body an older deployment wrote |
 | [`src/web/useLibrarySearch.ts`](../../src/web/useLibrarySearch.ts) | the debounced half of the box, and dropping late responses |
@@ -896,6 +955,26 @@ fortnight testing `Array.isArray(body)` against a payload that has never been an
 returned the shelf untouched every single time and the test covering it had invented a third shape
 — [260903e-offline-shelf-filter-never-ran.md](../postmortems/260903e-offline-shelf-filter-never-ran.md).
 
+**Three deliberate limits, so nobody builds them by accident.** There is **no service worker and no
+sync queue** — the fallback is for a failed *transport*, not a general offline mode, and nothing a
+reader does offline is replayed when they return. The cache key is user-plus-URL, so one browser's
+two readers never see each other's shelf; eviction is whole-article rather than per-response, so a
+half-evicted article cannot half-open. And a remembered identity **never authorises a request**: what
+is cached is what this reader already fetched, not permission to fetch more.
+[260827r-offline-reading.md](../plans/260827r-offline-reading.md) has the reasoning.
+
+**Which of two answers is fresher is decided before either was asked.** A cacheable GET reserves a
+ticket — its owner's epoch, and the next number in their sequence — before it is sent, and the write
+is accepted only if that ticket still beats what has committed for the URL. Ordering by *when the
+write landed* was the original design and let the slower of two replies win, and let a GET issued
+before a delete put the deleted thing back:
+[a slow response overwrites a fast one](../postmortems/260905e-a-slow-response-overwrites-a-fast-one.md)
+and [the fix](../plans/260905g-cache-freshness-follows-issue-order-not-completion-order.md). Two
+consequences worth knowing: a mutation or a sign-out retires **every** request that owner had in
+flight, so an article still loading when the reader posts a comment may end up partly cached; and a
+retirement that cannot be shown to have happened **deletes the whole cache**, because a copy we
+failed to clear is a copy we would go on serving.
+
 ## The fixture is always on the shelf
 
 `example/` is listed under the slug `example`, flagged, and sorted below the real articles. A fresh
@@ -904,7 +983,7 @@ clone has no `data/` at all, and an empty homepage reads as a broken app rather 
 Note it is listed under its **directory name** and not under the slug inside its own `meta.json` —
 that one names the full Noema article the fixture is an excerpt of, and listing it there would
 collide with the real thing. `loadArticle("example")` resolves by falling through
-([`src/api.ts`](../../src/api.ts)), so the slug that lists is the slug that opens.
+(`src/api.ts`), so the slug that lists is the slug that opens.
 
 ## See also
 

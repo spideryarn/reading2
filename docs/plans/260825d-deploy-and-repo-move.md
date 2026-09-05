@@ -99,7 +99,7 @@ Plus one piece of config, which is trivial: `/read/<slug>` is a real path and a 
 serve `index.html` for it. [library.md](../project/library.md) already warned — "whatever eventually
 serves it must do the same". Three lines of `vercel.json`.
 
-**None of this is a flaw**, and the seams are already cut: [`src/api.ts`](../../src/api.ts) says in
+**None of this is a flaw**, and the seams are already cut: `src/api.ts` says in
 its own header that it is "the seam Postgres goes behind", and
 [`src/routes.ts`](../../src/routes.ts) is deliberately transport-free so a real server mounts it
 unchanged. Greg's Supabase decision walks straight through both of those doors — **#2 stops being
@@ -125,7 +125,7 @@ ordering), #4, and the rewrite rule.
 Greg's instruction was to assume it is in place. So this is the interface this plan is written
 against — **if the other agent's work covers less than this, the gaps come back here as work**:
 
-1. **Article artefacts in Supabase, behind [`src/api.ts`](../../src/api.ts).** `meta`, `blocks`,
+1. **Article artefacts in Supabase, behind `src/api.ts`.** `meta`, `blocks`,
    `tree`, `arc`, `comments` — read *and written* through it, so the pipeline stages no longer write
    to local disk in production. This is the one that matters; without it nothing else on this list
    helps.
@@ -297,7 +297,7 @@ There are a few non-paying users. Two cheap kindnesses, neither of which is on t
 ### If Supabase slips
 
 The fallback, kept because it is genuinely good and takes about half a day: **publish statically.**
-A script calls `listArticles()` and `loadArticle(slug)` from [`src/api.ts`](../../src/api.ts) — both
+A script calls `listArticles()` and `loadArticle(slug)` from `src/api.ts` — both
 already transport-free — and writes `dist/api/library.json` and `dist/api/article/<slug>.json`;
 `vercel.json` rewrites `/api/article/:slug` to the `.json`; `data/` comes out of `.gitignore`. Zero
 functions, zero storage decisions, nothing running.

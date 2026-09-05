@@ -17,7 +17,6 @@ import { describe, expect, it } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
 import {
-  CHUNK_CONCURRENCY,
   type PdfReader,
   planChunks,
   runPdfExtract,
@@ -27,7 +26,7 @@ const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
 
 /**
  * A PDF dense enough that every page becomes its own chunk, so there are more
- * chunks than `CHUNK_CONCURRENCY`.
+ * chunks than the queue is wide.
  *
  * **Built rather than borrowed, because no fixture in the repo can test this.**
  * `easy` plans 2 chunks, `much-harder` 3, `harder` 5 — all at or below the
@@ -45,11 +44,18 @@ const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
  * what `drawText` was handed. The words are made unique per page so nothing
  * trips the twenty-word repeat dedup.
  *
- * **The page count is derived from `CHUNK_CONCURRENCY` rather than written
- * down**, since 2026-09-04, when the width went from 8 to 16 and a literal 24
- * stopped clearing it: two of these tests failed on their own guard, which is
- * the guard doing exactly its job and the number sitting in the wrong place.
- * `ENOUGH_PAGES` below is what both callers use.
+ * **The page count is derived from `WIDTH` — this file's own width — and not
+ * from `CHUNK_CONCURRENCY`.** It was derived from the production constant
+ * between 2026-09-04 morning and evening, which worked while that number was 16
+ * (40 pages, quick) and stopped working the moment it became 100: 208 pages, and
+ * the first test timed out building them.
+ *
+ * The deeper reason to cut the tie is the one
+ * docs/postmortems/260904c-a-document-refused-for-an-answer-it-never-had-to-give.md
+ * names — *do not pin a boundary constant in a test and call the boundary the
+ * feature*. What these tests claim is **the queue admits exactly its configured
+ * width**, which is true of any width and cheapest to show at a small one.
+ * `runPdfExtract` takes `width` for exactly this, and production never passes it.
  */
 async function manyChunkPdf(pages: number): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
@@ -68,7 +74,8 @@ async function manyChunkPdf(pages: number): Promise<Uint8Array> {
  * two pages a chunk (see above), plus a margin, so a small change in how `pass0`
  * counts words cannot quietly drop the total back to the bound.
  */
-const ENOUGH_PAGES = (CHUNK_CONCURRENCY + 4) * 2;
+const WIDTH = 8;
+const ENOUGH_PAGES = (WIDTH + 4) * 2;
 
 /** The pages an instruction asks to be emitted, ignoring any context page. */
 function askedPages(instruction: string): number[] {
@@ -140,6 +147,7 @@ async function fixture() {
 
 async function runWith(reader: PdfReader, bytes: Uint8Array) {
   return runPdfExtract({
+    frontMatter: null,
     bytes,
     url: "https://example.test/paper.pdf",
     /* A fresh one per call, so nothing here resumes: this file is about the
@@ -148,6 +156,7 @@ async function runWith(reader: PdfReader, bytes: Uint8Array) {
     checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
     slug: "paper",
     reader,
+    width: WIDTH,
   });
 }
 
@@ -158,7 +167,7 @@ describe("PDF chunks are read concurrently", () => {
     const total = planChunks(pass).length;
     /* The whole point of the synthetic PDF. If this is ever not true the test
        below is measuring nothing, so it is asserted rather than assumed. */
-    expect(total).toBeGreaterThan(CHUNK_CONCURRENCY);
+    expect(total).toBeGreaterThan(WIDTH);
 
     let inFlight = 0;
     let peak = 0;
@@ -167,7 +176,7 @@ describe("PDF chunks are read concurrently", () => {
      * **Every call is held for one fixed window, and the window has to be a
      * timer.**
      *
-     * The obvious design — release as soon as `CHUNK_CONCURRENCY` calls are in
+     * The obvious design — release as soon as `WIDTH` calls are in
      * flight — was tried and is useless: it PASSES with `concurrency: Infinity`.
      * Each task does an async cache read before it reaches the reader, so the
      * twelve tasks arrive staggered; releasing on the eighth lets those eight
@@ -194,7 +203,7 @@ describe("PDF chunks are read concurrently", () => {
     /* Three breakages, three reds. Sequential or any narrower queue: peak is
        that width and the equality fails. An unbounded `Promise.all` or a
        `concurrency: Infinity`: peak reaches all 12. */
-    expect(peak).toBe(CHUNK_CONCURRENCY);
+    expect(peak).toBe(WIDTH);
     expect(peak).toBeLessThan(total);
   });
 
@@ -254,6 +263,7 @@ describe("PDF chunks are read concurrently", () => {
 
     const survivor = async (reader: PdfReader) => {
       const result = await runPdfExtract({
+        frontMatter: null,
         bytes,
         url: "https://example.test/paper.pdf",
         checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
@@ -326,7 +336,7 @@ describe("PDF chunks are read concurrently", () => {
     const bytes = await manyChunkPdf(ENOUGH_PAGES);
     const pass = await pass0(bytes);
     const chunks = planChunks(pass);
-    expect(chunks.length).toBeGreaterThan(CHUNK_CONCURRENCY);
+    expect(chunks.length).toBeGreaterThan(WIDTH);
     const doomed = chunks[0]!.pages[0]!;
 
     const aborted: number[][] = [];
@@ -341,7 +351,7 @@ describe("PDF chunks are read concurrently", () => {
     const reader = scriptedReader(pass, {
       onStart: (pages) => {
         started.push(pages);
-        if (started.length >= CHUNK_CONCURRENCY) waveFull();
+        if (started.length >= WIDTH) waveFull();
       },
       onSignal: (pages, signal) => {
         signal?.addEventListener("abort", () => aborted.push(pages));
@@ -371,19 +381,19 @@ describe("PDF chunks are read concurrently", () => {
        dequeued and calls the reader, and is then aborted by the shared signal in
        the same turn. A call that starts and does not finish.
 
-       This line read `CHUNK_CONCURRENCY` until 2026-09-04 and passed for a
+       This line read the queue's width until 2026-09-04 and passed for a
        reason that was not the one written above it: `cutPages` put an `await`
        between the dequeue and the call, so the seventeenth `onStart` landed
        *after* this assertion rather than never happening. Measured rather than
        reasoned — flushing the timers after the rejection turns 16 into 17 on
        that code too, so cutting the chunks up front changed what is visible
        here and not what the queue does. */
-    expect(started.length).toBe(CHUNK_CONCURRENCY + 1);
+    expect(started.length).toBe(WIDTH + 1);
 
     /* `fatal.abort()`: everything in the air was signalled. Redden by deleting
        the `abort()` — nothing lands in `aborted` and the 5s guards fire instead.
 
-       `CHUNK_CONCURRENCY` and not one less: the doomed chunk is in this list
+       `WIDTH` and not one less: the doomed chunk is in this list
        too. Its listener is attached to the same shared signal and stays
        attached after it has thrown, so it fires along with the rest. The first
        version of this assertion said `- 1` on the assumption that a chunk which
@@ -395,6 +405,6 @@ describe("PDF chunks are read concurrently", () => {
        signal a moment before it fires, so it is signalled too — which is the
        half of this that matters, since it means the call it started never
        completes. */
-    expect(aborted.length).toBe(CHUNK_CONCURRENCY + 1);
+    expect(aborted.length).toBe(WIDTH + 1);
   });
 });

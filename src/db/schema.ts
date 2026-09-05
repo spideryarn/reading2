@@ -81,6 +81,7 @@ import type { LabelsFile } from "../labels.js";
 import type {
   Arc,
   Citation,
+  Debate,
   FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
@@ -873,6 +874,42 @@ export const articleRevisions = spideryarn.table(
      * resolve, in the browser as well as on the server.
      */
     illustrated: jsonb("illustrated").$type<Illustrated>(),
+
+    /**
+     * What the rest of the web says about this piece — `Debate`, src/types.ts,
+     * written by the `debate` step.
+     * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+     *
+     * **The only artefact column here holding text this app did not make and
+     * did not fetch**, and that is the one thing about it to know. Every row
+     * carries quoted passages of a stranger's web page, returned by
+     * OpenRouter's server-side search and capped at
+     * `MAX_EVIDENCE_EXCERPT` (8,000 characters) before they reach memory. They
+     * are stored so a reader can check the claim being made about that page,
+     * they are rendered as text and never as markup, and every URL in here is
+     * re-judged by `publicCitationUrl` at the public boundary rather than
+     * trusted because it is stored.
+     *
+     * The WHOLE artefact, like its neighbours, and `sourceHash` is
+     * `articleWithIdsFingerprint` — the blocks, the tree and the cited head —
+     * because pass B shows the model the article with its block ids on it. A
+     * column holding the rows without the hash could not answer whether the
+     * claims those rows answer are still in the piece.
+     *
+     * **`searchedAt` is not staleness and must not be read as it.** It is when
+     * the search ran, it crosses both DTOs deliberately, and a visitor opening a
+     * year-old shared article is owed the date without the artefact declaring
+     * itself invalid. `stale` continues to mean the article changed.
+     *
+     * **No `profileHash`**, like `timeline` and `quiz`: who is reading does not
+     * change what the web said.
+     *
+     * **No foreign key from a claim row's `blockId` to `revision_blocks`**, on
+     * the same argument the glossary, the ideas, the quotes, the timeline, the
+     * quiz and the sketch make: a dropped paragraph should cost that row its
+     * jump rather than take a delete with it or block one.
+     */
+    debate: jsonb("debate").$type<Debate>(),
 
     /**
      * The article's own images, and what became of each — `Assets`,
@@ -2001,10 +2038,11 @@ export const jobs = spideryarn.table(
      * unique — it is the URL contract — so two owners can build toward one
      * name, and until 2026-08-30 only `jobs_only_one_running` (above, and gone)
      * stopped them doing it at once. What this protects is not ambiguity but
-     * corruption: src/store/artifacts-fs.ts keys every artefact write, the
-     * attempt marker and `interrupted()` on `(slug, step)` in one shared
-     * `data/<slug>/` directory with no job scoping, so two claimants on one
-     * article overwrite each other's output outright.
+     * corruption: until it was deleted 2026-09-05, src/store/artifacts-fs.ts
+     * keyed every artefact write, the attempt marker and `interrupted()` on
+     * `(slug, step)` in one shared `data/<slug>/` directory with no job
+     * scoping, so two claimants on one article would overwrite each other's
+     * output outright.
      *
      * It is a backstop, not the mechanism. The order rule in
      * src/store/pg-jobs.ts § `claim` — no older active row for this slug — is
@@ -2215,7 +2253,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate')`,
     ),
     check(
       "revision_step_runs_status",
@@ -3046,6 +3084,26 @@ export const chatMessages = spideryarn.table(
      * two byte for byte, which is how `tools` was caught going missing.
      */
     stance: text("stance"),
+    /**
+     * **The reader pressed the "?" beside a paragraph rather than typing.**
+     * User rows only.
+     *
+     * Report 1R's metadata, and a column of its own rather than a fourth
+     * `chat_threads.kind` — the refusal that keeps a help conversation an
+     * ordinary anchored chat, and therefore keeps every mark the reading view
+     * draws a chat. See `ChatMessage.help` in src/types.ts for why it is on the
+     * message rather than on the thread; the short version is that a retry has
+     * to inherit it, and a thread-level flag would have had to be refused.
+     *
+     * `notNull().default(false)`, shaped like `stopped` and `interrupted` beside
+     * it, so every existing row reads as "not a help press" — which is true of
+     * all of them except the "?" presses of 2026-09-04..05. Those are **not**
+     * backfilled: the only way to find them is to match stored question text
+     * against two historical wordings, and that is a heuristic rewrite of real
+     * readers' rows. The preflight `SELECT` and the exact `UPDATE` are Greg's to
+     * run or refuse. docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md.
+     */
+    help: boolean("help").notNull().default(false),
     createdAt: createdAt(),
 
     /**
@@ -3091,6 +3149,11 @@ export const chatMessages = spideryarn.table(
       "chat_messages_stance_assistant_only",
       sql`${t.stance} is null or ${t.role} = 'assistant'`,
     ),
+    /* The mirror of the rule above it, and there for the same reason: `help`
+       describes the reader's own request, so only the reader's rows may carry
+       one. Without this a bug that wrote it onto the answer would be invisible —
+       nothing reads it there, and the transcript would look right. */
+    check("chat_messages_help_user_only", sql`${t.help} = false or ${t.role} = 'user'`),
     foreignKey({
       name: "chat_messages_thread_fk",
       columns: [t.articleId, t.threadId],
@@ -3734,9 +3797,17 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
+    /**
+     * **The other copy of `CheckpointNamespace`** (src/store/checkpoints.ts),
+     * and the two are checked against each other by *"the checkpoints namespace
+     * CHECK lists exactly the namespaces the type has"* in
+     * tests/db-schema.test.ts. Adding a name to the union without adding it here
+     * is a write Postgres refuses — and the callers deliberately treat a failed
+     * checkpoint write as a `warn`, so the only symptom would be the bill.
+     */
     check(
       "checkpoints_namespace",
-      sql`${t.namespace} in ('hierarchy-labels','hierarchy-structure','pdf-chunk')`,
+      sql`${t.namespace} in ('hierarchy-deepen','hierarchy-labels','hierarchy-structure','pdf-chunk')`,
     ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
@@ -4037,6 +4108,29 @@ export const billingAccounts = spideryarn.table(
       "billing_accounts_subscription_needs_customer",
       sql`${t.stripeSubscriptionId} is null or ${t.stripeCustomerId} is not null`,
     ),
+    /* **And the four columns a subscription writes belong to one.** They are
+       written in a single `UPDATE` by `syncSubscriptionFromStripe`
+       (../billing/sync.ts), all of them on every sync and all of them to null
+       together, so any of them set without an id is a row nothing in this
+       codebase can have produced.
+
+       It is here because that row was **schema-valid and it spent money**.
+       `status = 'active'` with a known price and a readable period made
+       `entitlementFromRow` answer *paying Reader* while every "do they already
+       have a subscription" test — which reads the id — said no, so `/profile`
+       offered a Reader the Reader plan and pressing it would have opened a
+       second, concurrently billed subscription. GPT Sol found it on 2026-09-04;
+       `subscriptionState` (../billing/tiers.ts) is the code half, which fails
+       closed for the same row, and this is the half that holds for every writer.
+
+       `num_nonnulls` rather than four disjunctions, the same idiom as
+       `billing_accounts_quota_delta_is_dated` below: it says the rule instead of
+       encoding it. `cancel_at_period_end` is not in the list — it is `not null`
+       with a default of false, so it has no "unset" to mean anything by. */
+    check(
+      "billing_accounts_subscription_fields_need_subscription",
+      sql`${t.stripeSubscriptionId} is not null or num_nonnulls(${t.status}, ${t.priceId}, ${t.currentPeriodStart}, ${t.currentPeriodEnd}) = 0`,
+    ),
     /* A delta without a period cannot be applied and a period without a delta
        says nothing, so one of the two alone is a bug rather than a state.
        `num_nonnulls` rather than a pair of disjunctions because it says the rule
@@ -4145,6 +4239,49 @@ export const ingestEvents = spideryarn.table(
     succeededAt: timestamp("succeeded_at", { withTimezone: true }),
     /** Set when the job failed, was cancelled, or never became a job at all. */
     releasedAt: timestamp("released_at", { withTimezone: true }),
+    /**
+     * **The article this charge produced** — written in the same statement that
+     * sets `succeeded_at`, and null on every other kind of row.
+     *
+     * ## Why it had to exist
+     *
+     * A currently-public article costs **half** what a private one does
+     * (docs/project/billing.md § *A public article counts half*), and usage is
+     * recomputed live from `articles.visibility` rather than credited once — so
+     * the usage query has to get from a charged row to the article it produced.
+     * Before this column there was no route. `slug` is diagnostic and worse than
+     * mutable: it is the pre-allocation stem for a URL add and **null** for an
+     * upload. The only other path, `ingest_events → jobs.ingest_event_id →
+     * jobs.slug → articles.slug`, fails at both hops — jobs are hard-deleted by
+     * the reader and by the retention sweep, and a slug is not identity.
+     *
+     * `ai_calls.article_id` is the precedent: a real foreign key with
+     * `on delete set null`. The *text-not-a-key* reasoning recorded there is
+     * about `job_id`, which points at something disposable; an article is not.
+     *
+     * ## Nullable for ever, so the type is the only guard
+     *
+     * Every row charged before 2026-09-05 has no way to be backfilled, so a
+     * `NOT NULL` constraint is impossible. `usageSql` therefore reads
+     * `coalesce(visibility, 'private')` over a **left** join: a row that cannot
+     * be resolved is charged **full price**, which is the direction that cannot
+     * be gamed. The guard against a future caller quietly charging a public
+     * article full price for ever is in the type: `settleReservation` takes a
+     * discriminated outcome that *carries* the article id, so a successful
+     * settlement cannot be expressed without one.
+     *
+     * ## Deleting an article silently raises its owner's usage
+     *
+     * `on delete set null` turns each of that article's charged rows back into
+     * full price. **There is no article-deletion path in the app today** —
+     * archiving is the only removal the interface offers — so this is a policy
+     * written down rather than a defect: if one is ever built it must take the
+     * owner's `billing_accounts` lock first (see the lock order in
+     * src/store/pg-billing.ts) and say what it will cost, exactly as unsharing
+     * does. The alternative — `on delete restrict` — would make the ledger able
+     * to veto a deletion, which is worse.
+     */
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
     /**
      * What the article was called at the time — **diagnostic only**. A slug is
      * mutable, so it could never be this row's identity; it is here so that a

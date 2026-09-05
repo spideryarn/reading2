@@ -70,9 +70,16 @@ variable "swap_gb" {
     It bounds nothing, though. Swap thrashing can still make SSH unusable, and
     the real answer if that happens is a per-session memory limit, not more swap.
     vm.swappiness is set to 10 so this stays a safety net rather than routine.
+
+    Raised 16 -> 32 on 2026-09-04, when the paragraph above happened: ~14 agents,
+    four worktrees running vitest at once, load 97 on 16 cores, all 16GB of swap
+    consumed and chrome OOM-killed twice. 32GB held. The prediction was right and
+    so was the caveat - SSH stayed usable but everything crawled, so treat
+    exhausting this as the signal to shed load, not to raise the number again.
+    See docs/reusable/diagnose-box-resources.md.
   TXT
   type        = number
-  default     = 16
+  default     = 32
 }
 
 variable "node_major" {

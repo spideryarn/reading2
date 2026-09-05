@@ -112,30 +112,37 @@ describe("the reserved shelf address", () => {
    *
    * `load` is `null` here on purpose: `servePublicReadPage` does not attempt one
    * for this address, so passing a head would be testing a call that never
-   * happens. The status is 404 while there is no page behind the address —
-   * stage 3b makes it a 200 — and what this pins either way is that the answer
-   * does not come from the article reader.
+   * happens. **200 since stage 3b**, because there is a page behind the address
+   * now — and still no head, because a `PublicHead` is composed from an article
+   * and this is not one. What this pins either way is that the answer does not
+   * come from the article reader.
    */
   it("is answered by the edge without consulting the article reader", () => {
     const decision = decidePublicPage("GET", PUBLIC_LIBRARY_SLUG, null, "sha");
     expect(decision.head).toBeNull();
-    expect(decision.status).toBe(404);
+    expect(decision.status).toBe(200);
   });
 
   /**
    * **And the client and the edge agree about it**, which is the property this
-   * file exists for. App.tsx draws the 404 page for `public-library`; the edge
-   * sets a 404. A 200 from one and a not-found page from the other is the shape
-   * that ships without anybody noticing.
+   * file exists for. App.tsx draws `PublicLibraryPage` for `public-library`; the
+   * edge sets a 200. A 200 from one and a not-found page from the other is the
+   * shape that ships without anybody noticing, and it went the other way round
+   * until stage 3b: both said 404, deliberately, while there was no page.
+   *
+   * **`head` stays `null` on both sides of that change**, which is the part
+   * worth keeping an assertion on now that the status has moved. The obvious
+   * next edit here is to give the shelf a link-preview card, and the reason not
+   * to is that `PublicHead` is composed from one article's title and gist
+   * (src/public/page-head.ts) — there is no article, so a head built here could
+   * only be a made-up one.
    */
   it("and the client's answer and the edge's status say the same thing", () => {
     const route = parseRoute(PUBLIC_LIBRARY_HREF);
     const decision = decidePublicPage("GET", PUBLIC_LIBRARY_SLUG, null, "sha");
-    /* Both "there is no article here". When stage 3b lands, both become "there
-       is a page here" — and this assertion is what makes changing one of them
-       alone a red test. */
+    /* Both "there is a page here, and it is not an article". */
     expect(route.kind).toBe("public-library");
-    expect(decision.status).toBe(404);
+    expect(decision.status).toBe(200);
     expect(decision.head).toBeNull();
   });
 
@@ -160,12 +167,10 @@ describe("the reserved shelf address", () => {
 
 /* ------------------------------------------- the third enforcer, for real -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/reserved-article-address.test.ts",
   tables: ["spideryarn.articles"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * **The one line in the repo that brings an article address into existence.**
  *
@@ -177,7 +182,7 @@ const when = reachable ? describe : describe.skip;
  * fixture, and a transaction that throws is the cheapest way to have written
  * nothing — which also means these cases cannot collide with a peer's run.
  */
-when("creating an article with the reserved name", { timeout: 20_000 }, () => {
+describe("creating an article with the reserved name", { timeout: 20_000 }, () => {
   afterAll(async () => {
     await closeDb();
   });

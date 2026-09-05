@@ -46,22 +46,7 @@
  * A `fetch` step on a slug with no source URL fails immediately and offline,
  * which is how a job gets queued here without buying anything.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/jobs.ts` picks its store **once, at module load** — `const store:
- * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
- * hoisted above every statement in a module, so a plain assignment here would
- * leave the whole file on the filesystem queue with nothing saying so. The same
- * trap, spelled out at greater length, in tests/enqueue-owns-the-article.test.ts.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
 
@@ -78,15 +63,10 @@ import {
   retryJob,
 } from "../src/jobs.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
-import { STORE } from "../src/store/index.js";
 import type { Job } from "../src/types.js";
+import { bareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
-
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
@@ -109,20 +89,9 @@ const SLUG = "test-owner-jobs";
 const ALICE = "00000000-0000-4000-8000-0000000000a7" as OwnerId;
 const BOB = "00000000-0000-4000-8000-0000000000a8" as OwnerId;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/owner-jobs.test.ts",
   tables: ["spideryarn.jobs"],
-});
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* A flag that failed to take is invisible otherwise: the filesystem queue
-       answers every call here happily, and the owner column whose `where`
-       clause is the subject of the file would never be consulted. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /** Do something as a signed-in reader, exactly as `handleApi` does. */
@@ -158,7 +127,6 @@ async function cleanUp(): Promise<void> {
 }
 
 beforeAll(async () => {
-  if (!reachable) return;
   const db = getDb();
   await seedAuthUser(db, {
     id: ALICE,
@@ -171,6 +139,11 @@ beforeAll(async () => {
     onConflictDoNothing: true,
   });
   await cleanUp();
+  /* **Alice's article, before Alice's job** — added 2026-09-05, when `enqueue`
+     started refusing a bare-slug request for an article the reader does not have
+     (src/jobs.ts). It has to be hers rather than the environment owner's, or the
+     refusal fires on the very line this suite is built around. ./helpers/bare-article.ts. */
+  await bareArticles([SLUG], ALICE);
   /* Queued as Alice, inside a request scope — which is the only way a job gets
      an owner, and the thing this suite is really about. */
   alicesJob = await as(ALICE, () => enqueue({ slug: SLUG, steps: ["fetch"] }));
@@ -178,12 +151,11 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  if (!reachable) return;
   await cleanUp();
   await closeDb();
 });
 
-when("a job Alice queued", () => {
+describe("a job Alice queued", () => {
   it("belongs to her", () => {
     expect(alicesJob.ownerId).toBe(ALICE);
   });
@@ -246,7 +218,7 @@ when("a job Alice queued", () => {
   });
 });
 
-when("outside a request", () => {
+describe("outside a request", () => {
   /**
    * **The hole that used to be here closed on 2026-08-27, and it closed because
    * the thing it existed for went away.**

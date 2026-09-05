@@ -24,6 +24,7 @@ import type { PoolClient } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
 import { UPLOAD_STATUSES } from "../src/source.js";
+import { CHECKPOINT_NAMESPACES } from "../src/store/checkpoints.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -43,7 +44,7 @@ loadEnvLocal();
  * **two-second** connect timeout and skipped **silently**. `keepPool` because
  * every test below runs its own SQL through this pool.
  */
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/db-schema.test.ts",
   tables: ["spideryarn.block_identities"],
   keepPool: true,
@@ -130,10 +131,8 @@ async function addBlock(
  * `skipIf` and not an early return: a skipped test is reported as skipped, and
  * a run that checked nothing must never look like a run that passed.
  */
-const dbIt = it.skipIf(!reachable);
-
 describe("the schema keeps the promises the plan makes", () => {
-  dbIt("the same block id in two different articles is fine", async () => {
+  it("the same block id in two different articles is fine", async () => {
     await inRollback(async (c) => {
       await seed(c);
       // The whole reason the primary key is composite. `spya-` ids collide
@@ -151,7 +150,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("a malformed block id is refused", async () => {
+  it("a malformed block id is refused", async () => {
     await inRollback(async (c) => {
       await seed(c);
       // `1`, `l`, `o` are not in the alphabet (src/ids.ts) — they are the
@@ -165,7 +164,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("a block row cannot reference an id that was never minted", async () => {
+  it("a block row cannot reference an id that was never minted", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await c.query(
@@ -181,7 +180,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("two blocks cannot share an ordinal in one revision", async () => {
+  it("two blocks cannot share an ordinal in one revision", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await c.query(
@@ -202,7 +201,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("a comment survives its block leaving the article", async () => {
+  it("a comment survives its block leaving the article", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await c.query(
@@ -236,7 +235,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("an article cannot point at another article's revision", async () => {
+  it("an article cannot point at another article's revision", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await c.query(
@@ -254,7 +253,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("there can only ever be one queue_state row", async () => {
+  it("there can only ever be one queue_state row", async () => {
     await inRollback(async (c) => {
       // Claiming locks this row before choosing a job, and that is the only
       // thing giving global concurrency 1 — `FOR UPDATE SKIP LOCKED` does not.
@@ -266,7 +265,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("the queue_state row cannot be deleted", async () => {
+  it("the queue_state row cannot be deleted", async () => {
     await inRollback(async (c) => {
       // The CHECK stops a SECOND row. Nothing in SQL can stop the row going
       // missing — and that is the dangerous direction: claiming locks
@@ -295,7 +294,7 @@ describe("the schema keeps the promises the plan makes", () => {
    * turn this red and have to say why, and nobody reading the table's
    * constraints is left believing a guarantee that is not there.
    */
-  dbIt("the schema allows two jobs to run at once — the cap is not in the database", async () => {
+  it("the schema allows two jobs to run at once — the cap is not in the database", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const running = (id: string) =>
@@ -314,7 +313,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("a running job must carry its fencing token", async () => {
+  it("a running job must carry its fencing token", async () => {
     await inRollback(async (c) => {
       await seed(c);
       // A NULL attempt_id fences nothing while looking exactly like one that
@@ -330,7 +329,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("the id CHECK accepts exactly what mintId can produce", async () => {
+  it("the id CHECK accepts exactly what mintId can produce", async () => {
     await inRollback(async (c) => {
       await seed(c);
       // The regex is ID_PATTERN.source, not a hand-copy. The hand-copied
@@ -354,7 +353,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("the hand-written constraints survived migration", async () => {
+  it("the hand-written constraints survived migration", async () => {
     await inRollback(async (c) => {
       // drizzle-kit's snapshot does not know about drizzle/0001_*.sql, so a
       // future generated migration that drops and recreates one of these tables
@@ -410,7 +409,7 @@ describe("the schema keeps the promises the plan makes", () => {
    * Different work on one article now goes in. What still cannot: the same work
    * twice.
    */
-  dbIt("one article takes a line of different jobs, but not the same one twice", async () => {
+  it("one article takes a line of different jobs, but not the same one twice", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const queued = (id: string, work: string) =>
@@ -445,7 +444,7 @@ describe("the schema keeps the promises the plan makes", () => {
    * by one word, and a "tidy-up" that made them agree would break one of them
    * silently — GPT Sol, 2026-09-02.
    */
-  dbIt("a stopped job stops de-duplicating before it stops holding the article", async () => {
+  it("a stopped job stops de-duplicating before it stops holding the article", async () => {
     await inRollback(async (c) => {
       await seed(c);
       await c.query(
@@ -485,7 +484,7 @@ describe("the schema keeps the promises the plan makes", () => {
    * at all: `jobs_only_one_running` had gone and `jobs_active_slug` was
    * owner-scoped.
    */
-  dbIt("two owners cannot run, or claim the name of, one article at once", async () => {
+  it("two owners cannot run, or claim the name of, one article at once", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const other = "22222222-2222-2222-2222-222222222222";
@@ -530,7 +529,7 @@ describe("the schema keeps the promises the plan makes", () => {
    * another owner's (Greg, 2026-08-26: reuse the source, add a per-user
    * article).
    */
-  dbIt("one owner cannot have two active jobs minting an article for one address", async () => {
+  it("one owner cannot have two active jobs minting an article for one address", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const other = "22222222-2222-2222-2222-222222222222";
@@ -573,7 +572,7 @@ describe("the schema keeps the promises the plan makes", () => {
    * was taken because the alternative is a comment asking every future
    * transition to remember.
    */
-  dbIt("only a running job may be stopping", async () => {
+  it("only a running job may be stopping", async () => {
     await inRollback(async (c) => {
       await seed(c);
       for (const status of ["queued", "done", "error", "cancelled"]) {
@@ -595,7 +594,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("a job carries both halves of its upload or neither", async () => {
+  it("a job carries both halves of its upload or neither", async () => {
     await inRollback(async (c) => {
       await seed(c);
       // `upload_id` is ON DELETE SET NULL, so without this a swept upload leaves
@@ -611,7 +610,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("the uploads status CHECK lists exactly the statuses the type has", async () => {
+  it("the uploads status CHECK lists exactly the statuses the type has", async () => {
     await inRollback(async (c) => {
       await seed(c);
       /* **The table copied a TypeScript union, and a copy drifts.** A draft of
@@ -643,7 +642,7 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("a terminal upload has to carry its evidence", async () => {
+  it("a terminal upload has to carry its evidence", async () => {
     await inRollback(async (c) => {
       await seed(c);
       // `verified` with no hash and `rejected` with no reason are states the
@@ -665,7 +664,47 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("spideryarn is not exposed through the Data API", async () => {
+  it("the checkpoints namespace CHECK lists exactly the namespaces the type has", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      /**
+       * **Two hand-kept copies of one list, with nothing between them until
+       * now.** `CheckpointNamespace` (src/store/checkpoints.ts) is the union;
+       * the CHECK on this table is the other copy, and adding a name to the
+       * first without the second is a write Postgres refuses.
+       *
+       * That combination is worse than an ordinary constraint violation,
+       * because **both callers deliberately swallow a failed checkpoint write**
+       * — a write that throws is meant to cost one re-buy rather than the run,
+       * so it is logged at `warn` and the stage carries on. The only symptom of
+       * a namespace declared and never accepted is therefore a cache that never
+       * hits and a bill that goes up. docs/reusable/silent-success.md; and it
+       * came within one migration of happening when `hierarchy-deepen` was added
+       * on 2026-09-05.
+       *
+       * Asserted against `CHECKPOINT_NAMESPACES` itself rather than a list typed
+       * out again here, which would be a third copy with the same problem.
+       */
+      for (const namespace of CHECKPOINT_NAMESPACES) {
+        await c.query(
+          `insert into spideryarn.checkpoints (article_id, namespace, key, value)
+           values ($1, $2, $3, '{}'::jsonb)`,
+          [ART_1, namespace, `k${namespace.replace(/[^a-z0-9]/g, "")}`],
+        );
+      }
+      /* The control: a table that refused everything, or one whose CHECK had
+         been dropped in the way, could not pass both halves. */
+      await expectViolation(c, /checkpoints_namespace/, () =>
+        c.query(
+          `insert into spideryarn.checkpoints (article_id, namespace, key, value)
+           values ($1, 'hierarchy-invented', 'k0', '{}'::jsonb)`,
+          [ART_1],
+        ),
+      );
+    });
+  });
+
+  it("spideryarn is not exposed through the Data API", async () => {
     await inRollback(async (c) => {
       // PostgREST reads `[api].schemas` from config.toml, not the catalog, so
       // this asserts the next line of defence: the anon role cannot read the
@@ -689,7 +728,7 @@ describe("the schema keeps the promises the plan makes", () => {
      */
     const SHA = "a".repeat(64);
 
-    dbIt("refuses a hash that is not one", async () => {
+    it("refuses a hash that is not one", async () => {
       await inRollback(async (c) => {
         await expectViolation(c, /raw_sources_sha256_format/, () =>
           c.query(
@@ -708,7 +747,7 @@ describe("the schema keeps the promises the plan makes", () => {
       });
     });
 
-    dbIt("refuses a kind that names no decoder", async () => {
+    it("refuses a kind that names no decoder", async () => {
       await inRollback(async (c) => {
         await expectViolation(c, /raw_sources_kind/, () =>
           c.query("insert into spideryarn.raw_sources values ($1,'docx',1,'x',now())", [SHA]),
@@ -716,7 +755,7 @@ describe("the schema keeps the promises the plan makes", () => {
       });
     });
 
-    dbIt("refuses half a pointer", async () => {
+    it("refuses half a pointer", async () => {
       await inRollback(async (c) => {
         await seed(c);
         await c.query(
@@ -739,7 +778,7 @@ describe("the schema keeps the promises the plan makes", () => {
       });
     });
 
-    dbIt("refuses a pointer to an object it has no record of", async () => {
+    it("refuses a pointer to an object it has no record of", async () => {
       await inRollback(async (c) => {
         await seed(c);
         await c.query(
@@ -755,7 +794,7 @@ describe("the schema keeps the promises the plan makes", () => {
       });
     });
 
-    dbIt("accepts a whole pointer to a registered object", async () => {
+    it("accepts a whole pointer to a registered object", async () => {
       /* The other half, and it is not decoration: four rejections and no
          acceptance is indistinguishable from a constraint that refuses
          everything, which would fail closed and look like rigour. */
@@ -781,7 +820,7 @@ describe("the schema keeps the promises the plan makes", () => {
       });
     });
 
-    dbIt("lets two revisions share one source document", async () => {
+    it("lets two revisions share one source document", async () => {
       /* Dedup is the point of naming an object after its contents: two readers
          with the same paper get one object. Nothing may stop the second
          reference. */

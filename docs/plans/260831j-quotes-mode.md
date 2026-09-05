@@ -467,7 +467,10 @@ every seam. In dependency order:
   There is nothing here for the web to check — the words are either in the article or they are gone.
 - **No copy button.** Worth having, not in this landing: it needs a decision about whether it copies
   the quote, the quote and a citation, or a deep link, and that is its own small design.
-- **No marks unless a quote is selected**, and no second selected quote. See above.
+- **No marks unless a quote is selected**, and no second selected quote. See above. **Reversed on
+  2026-09-05** — every quote the panel is showing is now marked, and the bar is the density control;
+  the selected one is still exactly one, and now wears the ring.
+  [260905g](260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md).
 - **No `?quotes=` multi-select** the way search has `?runs=`. A reader comparing two quotes is
   comparing two sentences of one article, which is what the article is for.
 

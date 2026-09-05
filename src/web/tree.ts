@@ -207,40 +207,45 @@ export function navigableItems(
   return out;
 }
 
-/** Human label for a column. `hasArc` renames L0, which stops being the root. */
-export function columnLabel(depth: number, leafDepth: number, hasArc = false): string {
+/**
+ * **Human label for a column — the only one there is, since 2026-09-05.**
+ *
+ * There were two of these. `columnPill` wore `L1`, `L2` and `Para` in the
+ * controls bar and this one wore `Parts`, `Sections` and `Paragraphs` over the
+ * columns themselves, and the numbers were defended on the grounds that
+ * *"`Parts` and `Sections` are exactly what a depth of 1 and 2 mean here, and
+ * both the column header and the tooltip say so"*. Stage 3 of
+ * docs/plans/260905d-declutter-the-reading-view-top-bars.md took the header
+ * row's height away, and a touch reader cannot open a tooltip — so both legs of
+ * that argument went at once and the pills took the full words instead. It cost
+ * roughly 90px of a row that shed well over 300.
+ *
+ * A depth number said where a column sits in the tree rather than what is in
+ * it, which is the objection Greg raised against `L0` and `L3` on 2026-08-27
+ * and which applied to the middle rungs all along.
+ *
+ * **`Paragraphs` is tested before the depth**, so it is right at whatever depth
+ * the leaves happen to be — a two-deep article's leaves are at 2 and a
+ * five-deep article's at 5, and the pill this replaced read `L{leafDepth}` and
+ * so said something different on each.
+ *
+ * **Depth 0 kept its name and lost its column.** It read "Argument" whenever
+ * the arc had been generated and "Article" otherwise, which is the `hasArc`
+ * argument that went on 2026-09-05 along with the L0 column itself
+ * (layout.ts § `offerableGists`). Nothing offers depth 0 now, so the branch is
+ * one word again — and it is the true one: the root of the tree is the whole
+ * article. Left here rather than deleted because the depth still exists in
+ * every tree and `?cols=0` still parses; a label that lied would be worse than
+ * one nothing currently asks for.
+ */
+export function columnLabel(depth: number, leafDepth: number): string {
   if (depth === leafDepth) return "Paragraphs";
   switch (depth) {
-    case 0: return hasArc ? "Argument" : "Article";
+    case 0: return "Article";
     case 1: return "Parts";
     case 2: return "Sections";
     default: return `Level ${depth}`;
   }
-}
-
-/**
- * The short label the controls bar's pill wears — the same column
- * `columnLabel` names in full, in the two or four characters a pill has room
- * for.
- *
- * Two of these were depth numbers until 2026-08-27, and a depth number says
- * where a column sits in the tree rather than what is in it. Greg: rename `L0`
- * to `Arg`, and the paragraph pill to anything short that explains itself. So
- * the two ends of the ladder are named — the arc at the top, paragraphs at the
- * bottom — and the middle rungs keep their numbers, because `Parts` and
- * `Sections` are exactly what a depth of 1 and 2 mean here and the tooltip says
- * so anyway.
- *
- * `Arg` is the arc's name even on an article that has no arc yet, where the
- * column falls back to the root gist (§ the arc). The pill is a fixed piece of
- * furniture and a reader who learned where `Arg` is should not find it renamed
- * by a pipeline stage they never ran; `columnLabel` still tells the truth in
- * the column's own header and in the tooltip.
- */
-export function columnPill(depth: number, leafDepth: number): string {
-  if (depth === leafDepth) return "Para";
-  if (depth === 0) return "Arg";
-  return `L${depth}`;
 }
 
 /**
@@ -254,38 +259,44 @@ export function columnPill(depth: number, leafDepth: number): string {
  *
  * Built from `columnLabel` rather than repeating it, so a column renamed there
  * is renamed here too. Note the label goes in lower-case mid-sentence, which is
- * why `columnLabel` returns "Argument" and not "The argument" — the leading
- * article made this read "the the argument column" from 2026-08-26 until the
- * pills were named.
+ * why every one of them is a bare noun — a label carrying its own article
+ * ("The argument", which is what depth 0 returned from 2026-08-26 until the
+ * pills were named) made this read "the the argument column".
  */
-export function columnHint(depth: number, leafDepth: number, hasArc = false): string {
-  return `Show or hide the ${columnLabel(depth, leafDepth, hasArc).toLowerCase()} column — ${
-    columnStride(depth, leafDepth, hasArc)
+export function columnHint(depth: number, leafDepth: number): string {
+  return `Show or hide the ${columnLabel(depth, leafDepth).toLowerCase()} column — ${
+    columnStride(depth, leafDepth)
   }`;
 }
 
 /** What one cell of a column covers — the half of `columnHint` that varies. */
-function columnStride(depth: number, leafDepth: number, hasArc: boolean): string {
+function columnStride(depth: number, leafDepth: number): string {
   if (depth === leafDepth) return "one line per paragraph, beside the full text";
-  if (depth === 0) {
-    return hasArc
-      ? "one sentence per part on where the argument stands"
-      : "the whole piece in one sentence";
-  }
+  // Depth 0 is no longer offered as a column (columnLabel above); this is what
+  // it always said when the arc had not been generated, and the arc's own
+  // wording went with the column.
+  if (depth === 0) return "the whole piece in one sentence";
   if (depth === 1) return "one sentence per part";
   if (depth === 2) return "one sentence per section";
   return "one sentence per group at this depth";
 }
 
 /* -------------------------------------------------------------- the arc --
-   What the L0 column renders once stage 5b has run (src/arc.ts).
+   One sentence per part on where the argument stands there, from stage 5b
+   (src/arc.ts).
 
-   Rendering the root there made the column a single cell spanning the whole
-   article — a constant on an axis that means "this changes as you move down
-   the page", duplicating the masthead and costing 240px to do it. The arc
-   replaces it with one sentence per part saying where the argument stands,
-   which is the only content that is both article-level and vertically varying.
-   See granularity-zoom.md#the-arc. */
+   **This was Hierarchy's L0 column until 2026-09-05, and now it is Outline
+   mode's rung 4** (OutlinePanel.tsx) — Greg took the column out of Hierarchy
+   with the rest of the top-bar clutter, and the artefact stayed exactly where
+   it was: docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions
+   5, and 260903b decision 7, which says Argument mode v1 will be this and
+   nothing more.
+
+   Why it exists at all is still the reason to keep it: rendering the root in a
+   column made it a single cell spanning the whole article — a constant on an
+   axis that means "this changes as you move down the page", duplicating the
+   masthead and costing 240px to do it. The arc is the only content that is both
+   article-level and vertically varying. See granularity-zoom.md#the-arc. */
 
 export interface ArcCell {
   /** The part this sits against. Boundaries are L1's, exactly. */
@@ -311,13 +322,17 @@ export interface ArcCell {
 }
 
 /**
- * The arc column, keyed by the row each cell starts on.
+ * The arc, keyed by the row each part starts on.
  *
- * Built from the L1 column's own cells, so the two columns share boundaries by
- * construction rather than by two walks of the tree agreeing. **Every part gets
- * a cell**, even one the arc has no sentence for: a missing `<td>` does not
- * leave a gap in an HTML table, it shifts every later cell in the row one
- * column left, so the whole view would silently misalign.
+ * Built from the L1 column's own cells, so the arc and the parts share
+ * boundaries by construction rather than by two walks of the tree agreeing —
+ * which is what lets Outline mode hang each sentence off the right part row.
+ *
+ * **Every part gets an entry**, even one the arc has no sentence for. That was
+ * a hard requirement while this drew a table column, where a missing `<td>`
+ * does not leave a gap but shifts every later cell in the row one column left;
+ * the column went on 2026-09-05 and the invariant stays, because a caller that
+ * indexes by part still wants a `Map` with no holes in it.
  *
  * Entries are matched to parts by block range, never by node id — ids are
  * positional and a re-run of `npm run hierarchy` renumbers them, which would quietly
@@ -474,6 +489,12 @@ export interface SummaryNode {
   supplement?: true;
   /** One sentence, from the tree. Present on every internal node stage 4 wrote. */
   gist?: string;
+  /**
+   * The Socratic question under it, on the root and depth-1 nodes only, and
+   * only on trees built after 2026-09-05 — types.ts § `TreeNode.question`.
+   * Absent everywhere else, and the panel simply draws no second line.
+   */
+  question?: string;
   children: SummaryNode[];
 }
 
@@ -534,6 +555,7 @@ export function buildSummaryTree(
       blocks: endRow - startRow + 1,
       ...(apparatus && { supplement: true as const }),
       ...(node.gist !== undefined && { gist: node.gist }),
+      ...(node.question !== undefined && { question: node.question }),
       children,
     };
   };

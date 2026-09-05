@@ -91,10 +91,10 @@
  * ## And a second rule, which is *whether* a button is drawn at all
  *
  * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
- * Four of the thirteen — Quotes, Timeline, Referee and Remember — are behind the
- * experimental-features switch, so the bar draws the rows that are not
- * experimental **plus whichever mode the reader is in**. Every row carries a
- * required `experimental: boolean`, so mode fourteen cannot be added without
+ * Five of the fourteen — Quotes, Timeline, Referee, Remember and Debate — are
+ * behind the experimental-features switch, so the bar draws the rows that are
+ * not experimental **plus whichever mode the reader is in**. Every row carries
+ * a required `experimental: boolean`, so mode fifteen cannot be added without
  * somebody deciding which side of that line it is on.
  *
  * **Diagram came back out on 2026-09-04**, and the gate went one level down
@@ -128,6 +128,7 @@ import {
   Clock,
   FlaskConical,
   Focus,
+  Globe,
   LoaderCircle,
   Network,
   Info,
@@ -182,7 +183,7 @@ import { InstallHint } from "./InstallHint.js";
  * reader to draw it for, whether we have an answer yet, and each of the three
  * ways the answer can be wrong. `since` is the only field of
  * `ExperimentalSetting` left out, and it is left out because *when* you turned
- * it on is a sentence and the bar is seventeen icons — `/profile` says it
+ * it on is a sentence and the bar is eighteen icons — `/profile` says it
  * (SettingsSection.tsx).
  *
  * **Derived from the store's interface rather than restated.** Nine documented
@@ -448,7 +449,7 @@ interface ModeUi {
    * **Required on every row, and not an optional flag on five.**
    * `ModesMissingFromDock` proves each mode has a row; only a required field
    * proves each row *made the decision*, and docs/project/new-mode.md says the
-   * author must make it. An optional flag would quietly enrol mode fourteen
+   * author must make it. An optional flag would quietly enrol mode fifteen
    * among the polished ones. (GPT Sol, finding 8.)
    */
   experimental: boolean;
@@ -468,7 +469,7 @@ interface ModeUi {
 }
 
 /* `satisfies` and deliberately **not** `as const satisfies`, which is what
-   `STEP_ORDER` in src/pipeline.ts uses for the same check. `satisfies` alone
+   `STEP_ORDER` in src/step-order.ts uses for the same check. `satisfies` alone
    already keeps each row's `mode` as its literal — that is the only field
    `ModesMissingFromDock` reads — while `as const` would additionally make the
    element type a union of thirteen distinct shapes, twelve of which have no
@@ -486,6 +487,14 @@ const MODES_UI = [
      widths where every other button loses one (styles.css § the bar's fit ladder) —
      so on a phone the bar is eight icons and one word, and the word is the exit.
      Cheap to change to a size bump if it does not read.
+
+     **And since 2026-09-05 it is the only way out**, the `×` in the controls
+     bar having gone with the rest of that bar. It inherits the contract the `×`
+     was written to keep (GPT Sol, 2026-08-31): closing a band goes to `plain`
+     *by name*, never to `DEFAULT_MODE`. They are the same mode today and they
+     are different questions — *where a reader lands with no instructions* and
+     *what closing a panel means* have no reason to agree — so this row says
+     `"plain"` as a literal, and moving the default cannot silently redirect it.
 
      It is also **not the fix for the problem Greg hit**, and that is worth
      saying here so nobody thinks it was: on a phone the bar this button sits in
@@ -631,6 +640,34 @@ const MODES_UI = [
     icon: MessagesSquare,
     blurb: "Ask about this article — answers point back at the paragraphs they came from",
   },
+  /* **After Chat and before Remember**, which is a placement in the ordering
+     this list has followed since Greg set it by hand rather than an array
+     index: it runs from the article restated, through the ways into it, to the
+     conversation about it, and Remember is last because its content comes from
+     the READER. Debate's content comes from neither the article nor the reader
+     — it is the only mode in this bar whose content is **not in the article at
+     all** — so it goes at the far end of the outward run and one step short of
+     the reader's own. Greg has not set this one by hand; move it if it is
+     wrong.
+
+     **`Globe`, and it is the same word this app already draws for "this came
+     from the open web"** — the glossary's web lookup, chat's search, the
+     reviewer brief (GlossaryPanel.tsx, ChatPanel.tsx, CandidatesPanel.tsx). No
+     other button in this bar is a globe, so it is unmistakable beside Chat's
+     two bubbles, which `MessageSquareQuote` would not have been. The glyph's
+     other sense in this app — *shared publicly* — appears only on surfaces that
+     are about sharing, and the bar is not one. docs/project/icons.md.
+
+     The blurb names the empty case, because it is the commonest one: most
+     pieces have no critical reception at all, and a mode that is empty four
+     times in five reads as broken unless the button said so first.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
+  {
+    mode: "debate",
+    experimental: true,
+    icon: Globe,
+    blurb: "What the rest of the web says about this piece — often nobody has written anything, and it says so",
+  },
   /* Last, and one step further out than Chat, which is the end of the ordering
      this list has followed since Greg set it by hand: it runs from the article
      restated, through the ways into it, to the conversation about it. Remember
@@ -682,7 +719,7 @@ export type ModesMissingFromDock<
 > = T;
 
 /**
- * **Which of the thirteen the bar actually draws.** Two rules, and the second
+ * **Which of the fourteen the bar actually draws.** Two rules, and the second
  * is the one that is easy to lose.
  *
  * 1. Every row that is not experimental.
@@ -1067,7 +1104,7 @@ export function Dock({
               icon={m.icon}
               label={MODE_LABEL[m.mode]}
               /* `dock-mode` says *this is one of the modes* on a page where
-                 they are thirteen loose links rather than one segment, so
+                 they are fourteen loose links rather than one segment, so
                  § the bar's fit ladder can take their labels at rung 1 the way
                  it takes the segment's. Without it rung 1 does nothing on the
                  metadata and tweets pages, and the bar there skips straight
@@ -1293,10 +1330,10 @@ export function withMode(search: string, mode: Mode): string {
  *
  * **What replaces it: a tab stop per button.** Tab reaches every mode, Enter,
  * Space or a click selects, and no arrow key is captured anywhere in the bar.
- * The cost is that the segment is thirteen tab stops rather than one, so tabbing
+ * The cost is that the segment is fourteen tab stops rather than one, so tabbing
  * past the bar takes longer — accepted, because the alternative is worse in a
- * way a mouse cannot see: a roving tabindex with no arrows leaves twelve of the
- * thirteen modes unreachable by keyboard altogether.
+ * way a mouse cannot see: a roving tabindex with no arrows leaves thirteen of
+ * the fourteen modes unreachable by keyboard altogether.
  *
  * `role="radio"` and `aria-checked` stay. *Exactly one of these is on* is still
  * true, it is what the hairline frame says to a sighted reader (styles.css
@@ -1381,10 +1418,10 @@ function DockModes({
    * A settle delay was drafted to race that; taking the arrows off removes it
    * instead, which is the smaller thing to have to be right about.
    *
-   * **The cost, which is real:** the segment goes from one tab stop to thirteen,
+   * **The cost, which is real:** the segment goes from one tab stop to fourteen,
    * so tabbing past the bar takes more presses. That is the price of every mode
    * staying reachable without arrows, and it is the right way round — a roving
-   * tabindex with no arrows would leave twelve of the thirteen unreachable by
+   * tabindex with no arrows would leave thirteen of the fourteen unreachable by
    * keyboard, which is worse than what was fixed and invisible to a mouse.
    *
    * `role="radio"` and `aria-checked` stay: *exactly one of these is on* is
@@ -1431,14 +1468,14 @@ function DockModes({
               aria-label={MODE_LABEL[m.mode]}
               /* Every button, not a roving one. See the note above the
                  radiogroup: with no arrow keys to move within the group, a
-                 single tab stop would leave twelve of the thirteen modes
+                 single tab stop would leave thirteen of the fourteen modes
                  unreachable by keyboard. */
               tabIndex={0}
               onClick={(e) => {
                 /* **The one place in the app that knows a mode was pressed**,
                    which is why the token is minted here and not in `onMode` —
                    `setMode` is a query-state setter, and Back and Forward move
-                   it too. Four of the thirteen modes open on an artefact
+                   it too. Five of the fourteen modes open on an artefact
                    nobody has paid for yet, and this is what tells that panel
                    the difference between a press and a pasted link.
                    src/web/activation.ts. */
@@ -1494,7 +1531,7 @@ function DockLink({
    * Keep this label on every rung of § the bar's fit ladder — `keepLabel` in
    * `MODES_UI`, which is Plain, the way out.
    *
-   * It only reaches here off the reading view, where the modes are thirteen
+   * It only reaches here off the reading view, where the modes are fourteen
    * loose links rather than a segment. Passing it was missed until GPT Sol
    * found it: the word survived every narrow window on the reading view and
    * vanished on the metadata page, which is the page you are *most* likely to
@@ -1521,7 +1558,7 @@ function DockLink({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § the bar's fit ladder
-          can drop all seventeen of the bar's labels with one rule rather than with
+          can drop all eighteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
@@ -1573,7 +1610,7 @@ function DockTab({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § the bar's fit ladder
-          can drop all seventeen of the bar's labels with one rule rather than with
+          can drop all eighteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
@@ -1664,7 +1701,7 @@ function DockExperimentalSwitch({
       <button
         type="button"
         /* `dock-experimental` styles nothing. It is how a test and a browser
-           pass find this one button among seventeen that are all `dock-btn` —
+           pass find this one button among eighteen that are all `dock-btn` —
            the alternative is matching on the label, which is copy and is allowed
            to change. `dock-mode` next door is the same idea doing real work for
            the fit ladder.
@@ -1774,7 +1811,7 @@ const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
   stale: (on) => `${experimentalOffline(on)} Press to check again.`,
   waiting: () => "Loading…",
   /* `null` for the date — *when* you turned it on is the one thing `/profile`
-     can say and a button in a row of seventeen icons cannot. */
+     can say and a button in a row of eighteen icons cannot. */
   ready: (on) => (on ? experimentalIsOn(null) : EXPERIMENTAL_IS_OFF),
 };
 

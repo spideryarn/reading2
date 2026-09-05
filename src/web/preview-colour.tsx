@@ -68,32 +68,40 @@ function Preview() {
     >
       <div>
         <SearchPanel
+          /* The owner's arm, because the whole point of this page is the
+             colour picker and a visitor has no such control. The four verbs
+             and the three fetch flags moved onto `SearchAccess` on 2026-09-04
+             — src/web/SearchPanel.tsx says why they belong together. */
+          access={{
+            kind: "owner",
+            loaded: true,
+            loadFailed: false,
+            error: null,
+            onAsk: () => {},
+            onRetry: () => {},
+            onRecolour: (id, colour) => {
+              // eslint-disable-next-line no-console
+              console.log("[preview] recolour", id, colour);
+              setRuns((prev) =>
+                prev.map((r) => {
+                  if (r.id !== id) return r;
+                  const { colour: _was, ...rest } = r;
+                  return colour === null ? rest : { ...rest, colour };
+                }),
+              );
+            },
+            onDelete: () => {},
+          }}
           matcher="meaning"
           onMatcher={() => {}}
           find={null}
           onFind={() => {}}
           runs={runs}
-          loaded
-          loadFailed={false}
           active={active}
           slots={slots}
           onToggle={(id, on) => setActive((a) => (on ? [...a, id] : a.filter((x) => x !== id)))}
           onSolo={(id) => setActive([id])}
           onToggleAll={(on) => setActive(on ? runs.map((r) => r.id) : [])}
-          onAsk={() => {}}
-          onRetry={() => {}}
-          onRecolour={(id, colour) => {
-            // eslint-disable-next-line no-console
-            console.log("[preview] recolour", id, colour);
-            setRuns((prev) =>
-              prev.map((r) => {
-                if (r.id !== id) return r;
-                const { colour: _was, ...rest } = r;
-                return colour === null ? rest : { ...rest, colour };
-              }),
-            );
-          }}
-          onDelete={() => {}}
           found={[]}
           all={[]}
           order="document"
@@ -103,7 +111,6 @@ function Preview() {
           onGate={() => {}}
           openKey={null}
           onOpen={() => {}}
-          error={null}
         />
       </div>
       {/* Clear of the fixed band, so the state dump is readable beside it

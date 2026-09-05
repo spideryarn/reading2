@@ -31,6 +31,7 @@
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
+ *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
@@ -98,16 +99,16 @@
 import { randomUUID } from "node:crypto";
 /* **No `node:fs` and no `node:path` here any more, as of 2026-08-31**, and that
    is worth keeping. The last reader of the disk in this file was `sendSource`,
-   which went to `data/<slug>/raw.pdf` whatever `SPIDERYARN_STORE` said — so the
-   route worked on a laptop and 404d on Vercel, which has no such disk, for as
-   long as it existed. Every route now reaches its bytes through a store, and a
-   fresh `readFile` in this file is both that bug coming back and a route
-   ignoring the store switch. docs/plans/260831b-finish-the-database-move.md. */
+   which went to `data/<slug>/raw.pdf` whatever the store said — so the route
+   worked on a laptop and 404d on Vercel, which has no such disk, for as long as
+   it existed. Every route now reaches its bytes through a store, and a fresh
+   `readFile` in this file is that bug coming back.
+   docs/plans/260831b-finish-the-database-move.md. */
 import type { IncomingMessage, ServerResponse } from "node:http";
-/* From the store rather than from src/api.ts directly, so that
-   SPIDERYARN_STORE=postgres swaps every article read at once and no route has
-   to know which store it is talking to. `files` is the default and is exactly
-   src/api.ts, so nothing changes for anyone who has not opted in.
+/* From the store rather than from src/api.ts directly, so no route has to know
+   which store it is talking to. That was written when there were two and a flag
+   between them; there is one since 2026-09-05, and the indirection is what made
+   deleting the other one a change to `src/store/index.ts` and not to this file.
    docs/plans/260826e-postgres-storage-implementation.md */
 import {
   articleMetadata,
@@ -130,6 +131,7 @@ import {
   loadIllustrated,
   loadSketch,
   loadQuiz,
+  loadDebate,
   loadTimeline,
   loadTweets,
 } from "./store/index.js";
@@ -338,6 +340,7 @@ import {
   MAX_AUDIO_BASE64,
   isAudioFormat,
   parseWhere,
+  tooLongMessage,
   transcribe,
 } from "./transcribe.js";
 import type {
@@ -508,9 +511,10 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      § What the inventory found). Under `postgres` that answered *"this article
      did not come from a PDF"* about a PDF sitting in the `sources` bucket, and
      deployed it was the jobless `dataRoot()` caller that
-     src/store/data-root.ts names by route — where that function deliberately
-     throws, because both available answers are wrong. So the feature worked on
-     a laptop and 404d on every production request, for as long as it existed.
+     src/store/data-root.ts (deleted 2026-09-05) named by route — where that
+     function deliberately threw, because both available answers were wrong. So
+     the feature worked on a laptop and 404d on every production request, for
+     as long as it existed.
 
      `readPdf`, not "read the source document", because the content type is the
      boundary: an HTML source served from our own origin is stored XSS, so the
@@ -2098,8 +2102,8 @@ function liveMessages(slug: string): Set<string> {
 /**
  * Turn abandoned `pending` answers into `error`, so the reader can ask again.
  *
- * The rule itself lives in the store now — `fsChatStore.sweepPending` for the
- * filesystem, an `UPDATE … WHERE` for Postgres — and what is left here is the
+ * The rule itself lives in the store now — `pgChatStore.sweepPending`, an
+ * `UPDATE … WHERE` — and what is left here is the
  * half only a running server knows: which rows this process is writing, and
  * how long another process's row is allowed to be silent. See `SweepOptions`
  * in src/store/contracts.ts for why neither half is sufficient alone.
@@ -2162,6 +2166,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     anchor,
     kind,
     stance,
+    help,
     sourceCommentId,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
@@ -2188,6 +2193,18 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
   if (kind !== undefined && !isThreadKind(kind)) {
     throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
+  }
+  /* **Absent or literally `true`, and nothing else.** Same rule as `stance` and
+     `kind` above, and the same reason: a client that sends `help: "yes"` and
+     gets a 200 has no way to learn that the answer it received was written with
+     the ordinary prompt, and neither has the reader. `false` is refused too
+     rather than treated as absent — a client sending it has a bug, and accepting
+     it quietly is how the bug survives to the next release.
+
+     Checked before anything is read or written, so a bad body is an ordinary
+     JSON 400 rather than an `error` frame inside a 200 stream. */
+  if (help !== undefined && help !== true) {
+    throw httpError(400, "help must be true, or left out entirely");
   }
   const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
@@ -2222,6 +2239,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      finding 4. */
   if ((wantsRetry || wantsEdit) && (kind !== undefined || stance !== undefined)) {
     throw httpError(400, "A retry or an edit takes its kind and stance from the conversation");
+  }
+  /* **And neither may claim to be a help press**, for a sharper version of the
+     same reason — sharper because here the client would be *right* and still
+     must not be believed. A retry re-asks a stored question, and whether that
+     question was a "?" press is recorded on the row itself. Taking the body's
+     word for it would let a stale tab retry an ordinary question as an
+     explanation, or an explanation as an ordinary question, with the stored
+     metadata and the prompt that was actually used disagreeing and nothing on
+     screen saying so. The row is authoritative; see `converse({ help })` below.
+
+     A separate check from the one above so the sentence can say which field. */
+  if ((wantsRetry || wantsEdit) && help !== undefined) {
+    throw httpError(400, "A retry or an edit takes its help flag from the stored question");
   }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
@@ -2293,6 +2323,66 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, `A ${wantedKind} conversation is about the whole article and cannot be anchored`);
   }
   const wanted = parseAnchor(anchor);
+  /* **`help: true` has a meaning, and the meaning is checked, not just the
+     shape.**
+
+     Far above, `help` is validated as absent-or-literally-`true`. That is the
+     wire; this is the contract, and it is one sentence — `ChatMessage.help` in
+     src/types.ts: *the paragraph "?" button created this thread*. Without these
+     three checks the flag was accepted on a later turn of an existing
+     conversation, on an unanchored one, on a selection chat, and on a Remember
+     or Candidates thread. Every one of those stores a press nobody made **and**
+     answers the request with the teaching prompt, so the row and the answer are
+     both wrong and agree with each other.
+
+     Refused rather than dropped, which is the posture the anchor rule just
+     above takes and for the same reason: a client whose request is silently
+     reinterpreted has no way to learn that it was, and neither has the reader.
+
+     All three are checked here, before `loadArticle` and before anything is
+     written, so a bad body is an ordinary JSON 400 rather than an `error` frame
+     inside a 200 stream — and the first of them is stated a second time under
+     `inTurnOrder`, where the read is safe from a thread appearing between the
+     look and the write. `help === true` is the only truthy value that can reach
+     here.
+
+     The real client sends exactly what these allow: `helpAboutBlock` in
+     src/web/App.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
+     on the send that creates the thread — pinned by *still lets through the
+     thing the real client sends* in tests/chat-help-route.test.ts, so tightening
+     this any further goes red rather than quiet.
+
+     GPT Sol's review of the built code, finding 1. */
+  if (help === true) {
+    /* A thread already exists under this id, so this turn is not creating one.
+       `storedKind` is defined for exactly the threads that exist, and it was
+       loaded a few dozen lines up for the character cap, so this costs nothing.
+
+       **Checked again under `inTurnOrder` below**, and that is not belt and
+       braces: this read is outside the lock, so a thread can be created between
+       it and the write. Here for the sentence and the fast refusal; there for
+       the guarantee — the division `withTurn`'s own kind check already
+       describes. */
+    if (storedKind !== undefined) {
+      throw httpError(400, 'A "?" press starts a conversation; a later question in one is not one');
+    }
+    /* Absent means chat — the default `withTurn` applies to a thread it is
+       creating — so the effective kind is what is checked, not the field. And
+       it can be read off the body alone because the rule above has established
+       that this turn creates the thread. */
+    if ((wantedKind ?? "chat") !== "chat") {
+      throw httpError(
+        400,
+        `A ${wantedKind} conversation is about the whole article, not a passage, so it cannot be a "?" press`,
+      );
+    }
+    if (!wanted || "quote" in wanted) {
+      throw httpError(
+        400,
+        'A "?" press is about a whole paragraph: send anchor: { blockId }, with no quote',
+      );
+    }
+  }
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
   // 404 rather than an `error` frame inside a 200 stream.
   const article = await loadArticle(slug);
@@ -2375,6 +2465,32 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         throw httpError(409, "That conversation is already a different kind");
       }
     }
+    /* **And a "?" press CREATES a conversation**, read again under the lock.
+
+       The same rule refused this request far above, before `loadArticle`, off a
+       load taken outside `inTurnOrder`. That one is the sentence a reader's
+       client gets and the reason nothing was loaded for a request that was
+       never going to run; this one is the guarantee, and it is here for the
+       reason the two checks above it give — the thread cannot be created
+       between the look and the write. Same division as `kind`, whose store-side
+       twin is inside `withTurn`'s transaction.
+
+       A later question in an existing conversation is the reader typing. A flag
+       saying otherwise puts a press in the database that nobody made **and**
+       answers an ordinary follow-up with the teaching prompt.
+
+       400 rather than 409, unlike its two neighbours: they describe a request
+       that would have been fine against a different conversation, and this one
+       is a client sending a field it has no business sending at all. */
+    if (help === true) {
+      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
+      if (existing) {
+        throw httpError(
+          400,
+          'A "?" press starts a conversation; a later question in one is not one',
+        );
+      }
+    }
     return wantsRetry
       ? await chatStore.retry(slug, threadId, retry as string)
       : wantsEdit
@@ -2398,6 +2514,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
                `withTurn` writes whatever it is given and the check constraint
                refuses one on a user row. */
             ...(stance ? { stance: stance as RememberStance } : {}),
+            /* Onto the **user** row, not the reply — the mirror of `stance` just
+               above. `withTurn` writes it and a CHECK constraint refuses one on
+               an assistant row. */
+            ...(help === true ? { help: true as const } : {}),
           });
   });
   const { thread, reply, user } = begun;
@@ -2566,6 +2686,23 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conversation is. GPT Sol's review of docs/plans/260827ah-review-mode.md,
          finding 5. */
       kind: thread.kind,
+      /* **The passage, from the THREAD, on every turn** — same rule as `kind`
+         just above, and this one had never been kept. `buildConverseMessages`
+         has documented since 2026-08-26 that the structural anchor is sent every
+         turn *because* `recentHistory` drops the oldest turns, so a passage that
+         lives only in the reader's first message stops being sent while the
+         panel and the database still say the thread is anchored to it. Nothing
+         passed it, so on the chat path that was never true.
+
+         `?? null` rather than a conditional spread: the option's type admits
+         null, `anchorSection` returns "" for it, and `exactOptionalPropertyTypes`
+         refuses an explicit `undefined`. Nothing moves above the `cache_control`
+         breakpoint — the line lands in the final user message, beside the
+         profile and the position. GPT Sol's review of the built code, finding 2.
+
+         The quote stays fenced in `anchorSection`: the passage is the article's
+         words, and the article is untrusted — docs/project/security.md. */
+      anchor: thread.anchor ?? null,
       /* And the stance from the reply row, for the same reason one step down:
          `withTurn` wrote the request's, `withRetry` carried over the replaced
          answer's, `withEdit` took it from the answer it is replacing. Reading
@@ -2573,6 +2710,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          "what does this pending answer say it is?" — instead of the route
          re-deriving it three ways. */
       ...(reply.stance ? { stance: reply.stance } : {}),
+      /* **From the stored QUESTION row, never from the request body** — the rule
+         `kind` and `stance` above already follow, applied to the one field the
+         client could have got right and still must not be asked.
+
+         All three ways in agree here without arranging it: `withTurn` wrote it
+         onto the row it just created, `withRetry` hands back the very same
+         stored question, and `withEdit` spreads it onto the rewritten one. So
+         pressing "Try again" on an explanation is answered as an explanation,
+         which is exactly what a thread-level flag could not have done — it would
+         have had to be refused on a turn that creates no thread, and the reader
+         would have got a different kind of answer with nothing saying so. GPT
+         Sol's review of docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md,
+         finding 1. */
+      help: user.help === true,
       signal: stop.signal,
     })) {
       if (event.type === "delta") {
@@ -3936,8 +4087,8 @@ function claimsProblem(blocks: Block[]): string | null {
  *   every instant rather than only at the end.
  * - **There is no id and no attempt.** One run per article, so `finish` writes
  *   over whatever `begin` wrote and identity is the slug. The cost of that is
- *   real and is written down in src/referee-claims-store.ts: two tabs running
- *   this at once will have the slower answer win, where a criterion's
+ *   real and is written down in src/store/pg-referee-claims.ts: two tabs
+ *   running this at once will have the slower answer win, where a criterion's
  *   `attempt` would have refused the stale one.
  *
  * The `dropped` counts come back on the outcome and are **not** sent to the
@@ -5194,7 +5345,8 @@ interface ReaderState {
  * stored, so the rule has to hold for every writer rather than for this one
  * route. (The summary steer was the counter-example — validated at the boundary
  * because it went straight into a prompt and never landed anywhere — and it is
- * gone: docs/plans/260830o-steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
+ * gone: docs/plans/260830o-steer-becomes-the-profile.md.) `pgReaderStore.writeProfile`
+ * (src/store/pg-reader.ts) throws with `status: 400`, which
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
 async function patchReader(body: unknown): Promise<ReaderState> {
@@ -5309,17 +5461,11 @@ async function transcribeDictation(
     /* The number is in the message because the fix depends on it, and the fix
        is "record less" — which a reader can only act on if they know what the
        limit is. docs/project/copy.md. */
-    throw httpError(
-      413,
-      /* **Raw audio, not the encoded figure.** The limit is on base64, which is
-         a third larger than the file it encodes — so quoting it as "MB of
-         audio" overstated what a reader may record by exactly that third, and
-         the number in an error message is the one thing in it somebody acts on.
-         GPT Sol's code review, item 9. */
-      `That recording is too long. The limit is about ${
-        Math.round(((MAX_AUDIO_BASE64 * 3) / 4 / 1024 / 1024) * 10) / 10
-      } MB of audio. [mic-too-long]`,
-    );
+    /* **The same sentence the browser would have shown**, and the arithmetic
+       that turns base64 into "MB of audio" now lives once, beside the constant,
+       rather than here and again in `dictation-upload.ts`. The two used to be
+       different sentences under one code — `tests/dictation-codes.test.ts`. */
+    throw httpError(413, tooLongMessage());
   }
   if (!isAudioFormat(sent.format)) throw httpError(400, "format is not one we can transcribe");
   const where = parseWhere(sent.context);
@@ -6399,9 +6545,11 @@ export async function serveAuthenticatedApi(
      `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
   const askTerm = /^\/api\/glossary\/([\w.%-]+)\/ask$/.exec(path);
   /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
-     so re-running the step already *is* "start again". The glossary needs a
-     delete precisely because running it again would add to the list it is
-     trying to throw away. Asking for these is
+     so re-running the step already *is* "start again". The glossary has a delete
+     precisely because running it again would add to the list it is trying to
+     throw away — though since 2026-09-05 nothing in the client calls it, and
+     this route's shape is the one the glossary's button was measured against
+     when it went (docs/project/glossary.md § Finding more). Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(path);
   /* Read only, and no DELETE, for exactly the reason `ideas` above has none:
@@ -6423,6 +6571,13 @@ export async function serveAuthenticatedApi(
      in front of it. It stores nothing — see `markOneAnswer`. */
   const quiz = /^\/api\/quiz\/([\w.%-]+)$/.exec(path);
   const quizMark = /^\/api\/quiz\/([\w.%-]+)\/mark$/.exec(path);
+  /* What the rest of the web says about this piece —
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. GET
+     only, and no DELETE, for the reason `ideas`, `quotes` and `timeline` have
+     none: the step replaces rather than appends, so asking the web again is
+     POST /api/jobs { slug, steps: ["debate"] }. That is also the only way to
+     start one — this route never spends. */
+  const debate = /^\/api\/debate\/([\w.%-]+)$/.exec(path);
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      four reads around it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
@@ -6946,6 +7101,19 @@ export async function serveAuthenticatedApi(
       send(res, 200, await loadQuiz(slugPart(quiz, 1)));
       return;
     }
+    if (debate && req.method === "GET") {
+      /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
+         is reading does not change what the web said, so there is no third
+         staleness fact and offering one would be a banner about a thing that
+         cannot have happened. `DebateResponse` in src/types.ts has two fields.
+
+         **And nothing here about how old the search is.** `searchedAt` travels
+         on the artefact and the panel prints it; it is provenance rather than
+         staleness, and a year-old shared link must not have its artefact
+         declared invalid by the clock. */
+      send(res, 200, await loadDebate(slugPart(debate, 1)));
+      return;
+    }
     if (quizMark && req.method === "POST") {
       /* One of the handful of endpoints here that does not answer with JSON —
          it writes its own headers and ends the response. It is still reached
@@ -7354,9 +7522,9 @@ export async function serveAuthenticatedApi(
     if (criteria && req.method === "GET") {
       const slug = slugPart(criteria, 1);
       /* Both halves in one response, and read close together, for the reason
-         `readSearches` gives: the paper can be re-extracted between them, and a
-         list read before a hash read would be compared against an article none
-         of its criteria ever saw. */
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a list read before a hash read would
+         be compared against an article none of its criteria ever saw. */
       send(res, 200, {
         criteria: await sweepCriteria(slug),
         sourceHash: await refereeCriteriaStore.sourceHash(slug),
@@ -7401,9 +7569,9 @@ export async function serveAuthenticatedApi(
     if (refereeClaims && req.method === "GET") {
       const slug = slugPart(refereeClaims, 1);
       /* Both halves in one response, and read close together, for the reason
-         `readSearches` gives: the paper can be re-extracted between them, and a
-         run read before a hash read would be compared against an article it was
-         never answered about.
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a run read before a hash read would
+         be compared against an article it was never answered about.
 
          The sweep is a *read* that repairs: a `pending` run this process is not
          running is one an earlier process died in the middle of, and leaving it
@@ -7674,13 +7842,13 @@ export async function serveAuthenticatedApi(
      * door it is being sent through — the two look identical to
      * `location.assign`. **Ours does not use it**, and that was a decision
      * rather than an omission: it navigates immediately, and a sentence rendered
-     * for the half-second before a navigation is a sentence nobody reads. What
-     * the page does instead is not offer Upgrade to an account whose press would
-     * only reach the Portal (`canCheckout`, src/billing-plan.ts), which removes
-     * the case rather than explaining it. The field stays because the two
-     * outcomes really are different and a caller that wanted to wait could say
-     * so. This comment claimed the client explained it; it did not.
-     * GPT Sol, 2026-09-03.
+     * for the half-second before a navigation is a sentence nobody reads. The
+     * page says which door it is before the press instead of after it: since
+     * 2026-09-04 `summary.purchase` (src/billing-plan.ts) carries the same
+     * distinction, so a subscriber's button reads *Switch plan* and the sentence
+     * under the cards names the Portal. The field stays because the two outcomes
+     * really are different and a caller that wanted to wait could say so. This
+     * comment claimed the client explained it; it did not. GPT Sol, 2026-09-03.
      *
      * **200, not 302.** A redirect would be answered by `fetch` before the page
      * could say anything, and the client is an SPA that navigates itself.

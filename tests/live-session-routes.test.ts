@@ -39,13 +39,19 @@
  * JavaScript over an object it had just read. Every one of those can now be
  * wrong in a way a file could not be.
  *
- * **The ledger did not move, and that is deliberate rather than an oversight.**
- * `selected()` in src/store/ai-calls.ts returns the *filesystem* ledger whenever
- * `NODE_ENV === "test"`, whatever the flag says, because Postgres-mode route
- * suites once wrote 4,714 fixture rows into the development ledger. So
- * `SPIDERYARN_LEDGER` still redirects a disposable JSONL here, `fsCostStore` is
- * still what `ledger()` reads, and the two-lines-collapse-to-one assertion below
- * is unchanged and still true. Stage C of the plan above owns that redirect.
+ * **The ledger moved too, on 2026-09-05, and this file was one of two that
+ * noticed.** Until stage C `selected()` in src/store/ai-calls.ts returned the
+ * *filesystem* ledger whenever `NODE_ENV === "test"`, whatever the flag said,
+ * because Postgres-mode route suites had once written 4,714 fixture rows into
+ * the development ledger. Stage T replaced that defence with a database minted
+ * per run, so the redirect went — and with it the JSONL that `ledger()` used to
+ * read. It now reads `costStore`, which is the same object `src/routes.ts`
+ * holds, and the rows land in this run's private database.
+ *
+ * That is not a rename. The two-lines-collapse-to-one assertion below was about
+ * an append-only file with no unique key, and Postgres has no such half; the
+ * comment on it says what survived, what did not, and where the other half is
+ * covered now.
  *
  * ## The mutation, watched red on 2026-09-04
  *
@@ -71,20 +77,6 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement, and
- * `src/store/index.ts` picks `realtimeSessionStore` at its own module load.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { and, count, eq } from "drizzle-orm";
@@ -96,37 +88,31 @@ import { loadEnvLocal } from "../src/env.js";
 import { LIVE_MODEL, LIVE_TRANSCRIBER } from "../src/live.js";
 import { responseReport, transcriptionReport } from "../src/web/live/meter.js";
 import { handleApi } from "../src/routes.js";
-import { realtimeSessionStore, STORE } from "../src/store/index.js";
+import { costStore } from "../src/store/ai-calls.js";
+import { realtimeSessionStore } from "../src/store/index.js";
 import type { RealtimeSession } from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
 loadEnvLocal();
 
 const SLUG = "test-live-session-routes";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/live-session-routes.test.ts",
   tables: ["spideryarn.articles", "spideryarn.realtime_sessions"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-let scratch: string;
 let article: ScratchArticle | undefined;
 const realKey = process.env.OPENAI_API_KEY;
-const realLedger = process.env.SPIDERYARN_LEDGER;
 
+/* **No `SPIDERYARN_LEDGER` here since stage C**, and the temp directory that
+   held it has gone with it. That variable redirected the *filesystem* adapter,
+   which is what `selected()` used to hand back under `NODE_ENV === "test"`; the
+   flag is pinned to `postgres` above, so the rows go to the run's own private
+   database and the redirect had nothing left to redirect. */
 beforeAll(async () => {
-  if (!reachable) return;
-  scratch = await mkdtemp(path.join(tmpdir(), "spideryarn-live-"));
-  process.env.SPIDERYARN_LEDGER = path.join(scratch, "ai-calls.jsonl");
   /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
      Postgres journal resolves `article_slug` through `ownedSlug` — an article
      seeded as anybody else would leave `article_id` null on every row, which is
@@ -140,20 +126,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await article?.remove();
   await closeDb();
-  if (scratch) await rm(scratch, { recursive: true, force: true });
-  if (realLedger === undefined) delete process.env.SPIDERYARN_LEDGER;
-  else process.env.SPIDERYARN_LEDGER = realLedger;
 }, 60_000);
-
-describe("the store this journal is actually written to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this suite working — the filesystem
-       journal answers every read below with the same fields. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /** Whether OpenAI answers at all, so a test can drive the failure path. */
 let mintFails = false;
@@ -257,17 +230,33 @@ async function journalled(): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
-/** Every ledger row this suite has written. */
-async function ledger(): Promise<AiCallRow[]> {
-  try {
-    const text = await readFile(process.env.SPIDERYARN_LEDGER ?? "", "utf8");
-    return text
-      .split("\n")
-      .filter((l) => l.trim() !== "")
-      .map((l) => JSON.parse(l) as AiCallRow);
-  } catch {
-    return [];
-  }
+/**
+ * **The ledger rows this session has written, out of the store the route used.**
+ *
+ * `costStore` and not a file: stage C removed the `NODE_ENV === "test"` redirect
+ * from `selected()` in src/store/ai-calls.ts, so a suite that pins the flag to
+ * `postgres` — this one does, at the top — now records into the run's private
+ * test database. Reading a JSONL here would have found an empty file and the
+ * four assertions below would have been asserting about nothing.
+ *
+ * **Scoped by session id in this helper, not separately by each caller.** The
+ * private lane mints one database for the whole run and every earlier file's
+ * rows are still in it. `read()` has **no default window** — omitting both
+ * bounds means every row in the table (src/store/ai-calls-pg.ts § `read`) — so
+ * this fetches the run's whole ledger and filters it in JavaScript. Every
+ * question this file asks is about one session, and asking it here keeps all six
+ * call sites' answers statements about this suite rather than about whatever ran
+ * first.
+ *
+ * **JavaScript rather than SQL, deliberately for now.** The population is the
+ * one run's ledger — 16 rows when stage C measured it — and a `where` here would
+ * be a second way of asking a question `read()` already answers. If a lane ever
+ * grows a ledger big enough for this to matter, the fix is a bound on `read()`,
+ * not a filter that silently reads less than it claims to.
+ */
+async function ledger(sessionId: string): Promise<AiCallRow[]> {
+  const { rows } = await costStore.read();
+  return rows.filter((r) => r.realtimeSessionId === sessionId);
 }
 
 /** A plausible spoken turn, dated now so the window checks pass. */
@@ -294,7 +283,7 @@ function turn(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 /* ------------------------------------------------------- the ticket -- */
 
-when("the ticket writes the journal row before it releases the token", () => {
+describe("the ticket writes the journal row before it releases the token", () => {
   it("hands back a session id, and there is a row behind it", () => {
     return (async () => {
       const id = await ticket("spya-laaaaa");
@@ -378,7 +367,7 @@ when("the ticket writes the journal row before it releases the token", () => {
 
 /* ------------------------------------------------------- the events -- */
 
-when("the acceptance endpoints", () => {
+describe("the acceptance endpoints", () => {
   it("records the data channel opening, and keeps the first time", async () => {
     const id = await ticket("spya-lbaaaa");
     expect((await post(`/api/live/${id}/connected`, {})).status).toBe(200);
@@ -395,7 +384,7 @@ when("the acceptance endpoints", () => {
   it("turns a usage report into a priced ledger row", async () => {
     const id = await ticket("spya-lbaaab");
     expect((await post(`/api/live/${id}/usage`, turn())).status).toBe(200);
-    const row = (await ledger()).find((r) => r.realtimeSessionId === id);
+    const row = (await ledger(id))[0];
     expect(row).toBeDefined();
     expect(row?.wire).toBe("realtime");
     expect(row?.job).toBe("live_conversation");
@@ -417,29 +406,36 @@ when("the acceptance endpoints", () => {
     const id = await ticket("spya-lbaaac");
     await post(`/api/live/${id}/usage`, turn({ providerEventId: "resp_dup" }));
     await post(`/api/live/${id}/usage`, turn({ providerEventId: "resp_dup" }));
-    const lines = (await ledger()).filter((r) => r.realtimeSessionId === id);
-    /* Both lines are on disk, and that is correct: the file is append-only and
-       is never rewritten, so the evidence that the browser posted twice
-       survives. */
-    expect(lines).toHaveLength(2);
-    const { fsCostStore } = await import("../src/store/ai-calls-fs.js");
-    const rows = (await fsCostStore.read()).rows.filter((r) => r.realtimeSessionId === id);
-    /* **One row, on either store.** The row's id is derived from the event, so
-       the retry collides: Postgres absorbs it on `on conflict do nothing`, and
-       the filesystem ledger — which is append-only and has no unique key, so
-       both lines really are on disk — collapses them by id on read
-       (`fsCostStore.read`). Until 2026-09-03 this asserted only that the two
-       copies shared an id, which was true and was not enough: `totalRows()`
-       added both, and this test was green through it. GPT Sol. */
-    expect(rows).toHaveLength(1);
+    /* **One row, and now it is the database saying so.** The row's id is derived
+       from the event, so the retry collides and Postgres absorbs it on
+       `on conflict do nothing`.
+
+       Until stage C this suite wrote to a JSONL, where the same assertion had
+       two halves: both lines really were on disk, because that file is
+       append-only and has no unique key, and `fsCostStore.read` collapsed them
+       by id on the way out. The append-only half has no counterpart here — the
+       second insert reaches the unique index and stops. That half is still
+       covered, on the store it is a fact about, by *counts a call once however
+       many times its line was appended* in tests/store-ai-calls.test.ts.
+
+       The history is worth keeping because of what it caught: until 2026-09-03
+       this asserted only that the two copies shared an id, which was true and
+       was not enough — `totalRows()` added both, and the test was green through
+       it. GPT Sol. */
+    expect(await ledger(id)).toHaveLength(1);
   });
 
   it("refuses a report the server cannot believe, and writes nothing", async () => {
     const id = await ticket("spya-lbaaad");
-    const before = (await ledger()).length;
+    /* **This session's rows, not the ledger's length.** Counting the whole
+       ledger would have been a statement about the run rather than about the
+       refusal, and it would pass on a database nothing had written to. `before`
+       is zero here and is read rather than asserted, so the claim stays *this
+       request added nothing* rather than *the table is empty*. */
+    const before = (await ledger(id)).length;
     const out = await post(`/api/live/${id}/usage`, turn({ outputAudioTokens: 999_999 }));
     expect(out.status).toBe(400);
-    expect(await ledger()).toHaveLength(before);
+    expect(await ledger(id)).toHaveLength(before);
   });
 
   it("refuses a session that does not exist, with a 404 rather than a 403", async () => {
@@ -468,7 +464,7 @@ when("the acceptance endpoints", () => {
   });
 });
 
-when("what the browser actually posts, end to end", () => {
+describe("what the browser actually posts, end to end", () => {
   /**
    * **The closest thing to a real session this box can run.** A raw provider
    * event goes through the client's own projection (src/web/live/meter.ts),
@@ -519,7 +515,7 @@ when("what the browser actually posts, end to end", () => {
     const out = await post(`/api/live/${id}/usage`, JSON.parse(JSON.stringify(report)));
     expect(out.status, JSON.stringify(out.body)).toBe(200);
 
-    const row = (await ledger()).find((r) => r.providerEventId === "resp_browser_1");
+    const row = (await ledger(id)).find((r) => r.providerEventId === "resp_browser_1");
     expect(row?.requestedModel).toBe(LIVE_MODEL);
     expect(row?.costSource).toBe("computed");
     expect(row?.computedCostNanos).toBeGreaterThan(0);
@@ -549,7 +545,7 @@ when("what the browser actually posts, end to end", () => {
     const out = await post(`/api/live/${id}/usage`, JSON.parse(JSON.stringify(report)));
     expect(out.status, JSON.stringify(out.body)).toBe(200);
 
-    const row = (await ledger()).find((r) => r.providerEventId === "item_browser_1");
+    const row = (await ledger(id)).find((r) => r.providerEventId === "item_browser_1");
     expect(row?.requestedModel).toBe(LIVE_TRANSCRIBER);
     expect(row?.transcriptionSeconds).toBe(4);
     expect(row?.computedCostNanos).toBeGreaterThan(0);
@@ -559,7 +555,7 @@ when("what the browser actually posts, end to end", () => {
   });
 });
 
-when("the gate", () => {
+describe("the gate", () => {
   it("refuses all three to a request with no session", async () => {
     /* **They are under `/api/live/`, not `/api/public/`**, so they are behind
        `requireUser` like everything else — and this is the assertion that says
@@ -576,7 +572,7 @@ when("the gate", () => {
 
 /* ------------------------------------- what this stage looks like alone -- */
 
-when("deployed on its own, before the browser posts anything", () => {
+describe("deployed on its own, before the browser posts anything", () => {
   it("shows an issued session that reported nothing, rather than an absence", async () => {
     /* **The whole point of Stage 2A.** Until the browser half lands, every
        session will look exactly like this — and that is the honest state rather
@@ -585,6 +581,6 @@ when("deployed on its own, before the browser posts anything", () => {
        does. docs/reusable/silent-success.md. */
     const id = await ticket("spya-lcaaaa");
     expect(await session(id)).not.toBeNull();
-    expect((await ledger()).filter((r) => r.realtimeSessionId === id)).toHaveLength(0);
+    expect(await ledger(id)).toHaveLength(0);
   });
 });

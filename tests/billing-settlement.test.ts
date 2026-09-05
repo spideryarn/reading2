@@ -116,12 +116,7 @@ import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-/* `SPIDERYARN_STORE=postgres` before a single import is evaluated — src/store/live.ts
-   reads the flag once, at first import, and imports are hoisted above ordinary
-   statements. The reasoning in full is in tests/store-pg-session.test.ts. */
 const HOISTED = vi.hoisted(() => {
-  const store = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
   /* **And the logger has to be able to speak.** Two cases below assert that a
      ledger anomaly is *written down* rather than swallowed, and `level()` in
      src/log.ts reads `LOG_LEVEL` once at that module's load — vitest's
@@ -135,7 +130,7 @@ const HOISTED = vi.hoisted(() => {
   if (level === undefined || level === "silent" || level === "fatal") {
     process.env.LOG_LEVEL = "error";
   }
-  return { store, level };
+  return { level };
 });
 
 import { closeDb, getDb } from "../src/db/client.js";
@@ -151,11 +146,10 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { mintId, mintUniqueId } from "../src/ids.js";
 import { runAsOwner } from "../src/owner.js";
-import { STEPS, contextPaths } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import type { ConvertedProduct, PipelineStep, StepContext } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { reserveIngest } from "../src/store/pg-billing.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
@@ -172,8 +166,6 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put both flags back straight away — vitest reuses a worker across files, and
    the modules above have already captured them. */
-if (HOISTED.store === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.store;
 if (HOISTED.level === undefined) delete process.env.LOG_LEVEL;
 else process.env.LOG_LEVEL = HOISTED.level;
 
@@ -220,7 +212,7 @@ let runLock: HeldRunLock | undefined;
  * callers are drawing their own transactions from, and a held connection there
  * is one fewer for them. tests/billing-quota-race.test.ts does the same.
  */
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-settlement.test.ts",
   tables: [
     "spideryarn.jobs",
@@ -233,32 +225,28 @@ const { reachable, pool } = await pgReady({
   max: 4,
 });
 
-if (reachable) {
-  runLock = await takeRunLockAndSetUp("tests/billing-settlement.test.ts", async (lockClient) => {
-    /* Jobs before ingest events: `jobs_ingest_event_fk` points that way, so the
-       other order is a foreign key violation rather than a clean sweep. */
-    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query("delete from spideryarn.ingest_events where owner_id::text like $1", [
-      RUBBLE,
-    ]);
-    await lockClient.query("delete from spideryarn.billing_accounts where owner_id::text like $1", [
-      RUBBLE,
-    ]);
-    await lockClient.query(
-      "update spideryarn.articles set current_revision_id = null where slug like $1",
-      [SLUG_RUBBLE],
-    );
-    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-    await seedAuthUser(lockClient, {
-      id: OWNER,
-      email: `billing-settlement-${OWNER}@example.invalid`,
-    });
+runLock = await takeRunLockAndSetUp("tests/billing-settlement.test.ts", async (lockClient) => {
+  /* Jobs before ingest events: `jobs_ingest_event_fk` points that way, so the
+     other order is a foreign key violation rather than a clean sweep. */
+  await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+  await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query("delete from spideryarn.ingest_events where owner_id::text like $1", [
+    RUBBLE,
+  ]);
+  await lockClient.query("delete from spideryarn.billing_accounts where owner_id::text like $1", [
+    RUBBLE,
+  ]);
+  await lockClient.query(
+    "update spideryarn.articles set current_revision_id = null where slug like $1",
+    [SLUG_RUBBLE],
+  );
+  await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+  await seedAuthUser(lockClient, {
+    id: OWNER,
+    email: `billing-settlement-${OWNER}@example.invalid`,
   });
-}
-
-const when = reachable ? describe : describe.skip;
+});
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -411,7 +399,6 @@ function fakeArc(): PipelineStep<"arc"> {
   return {
     name: "arc",
     label: "Reading the shape of the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     async run() {
       return { detail: "one entry" } as ConvertedProduct;
@@ -421,11 +408,8 @@ function fakeArc(): PipelineStep<"arc"> {
 
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
-  const { dir, htmlFile } = contextPaths(slug);
   return {
     slug,
-    dir,
-    htmlFile,
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -645,9 +629,8 @@ function answerOf<T>(settled: Settled<T>, what: string): T {
 
 /* ------------------------------------------------------------------ tests -- */
 
-when("a job's ending settles its quota slot", () => {
+describe("a job's ending settles its quota slot", () => {
   afterEach(async () => {
-    if (!reachable) return;
     /* Jobs first: the composite foreign key from `jobs.ingest_event_id` is what
        stops the ledger rows going while a job still names one. */
     await db().delete(jobsTable).where(eq(jobsTable.ownerId, OWNER));
@@ -656,7 +639,6 @@ when("a job's ending settles its quota slot", () => {
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     await cleanUpThenRelease(
       async () => {
         const database = getDb();
@@ -685,8 +667,6 @@ when("a job's ending settles its quota slot", () => {
   /* -------------------------------------------------------- the link itself -- */
 
   mine("writes the slot onto the job in the job's own INSERT", async () => {
-    expect(STORE, "the vi.hoisted flag did not reach src/store/live.ts").toBe("postgres");
-
     const slug = `${SLUG_PREFIX}link`;
     const reservation = await reserveSlot(slug);
     const job = await queueJob(slug, ["arc"], reservation);

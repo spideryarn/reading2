@@ -59,37 +59,66 @@ function poseDock(top: number): void {
 }
 
 const BAR_H = 44;
-const HEAD_H = 40;
 
 /**
- * A `.controls` bar and a `thead th`, both with posed rects, plus a status-bar
- * inset the machine running this does not have.
+ * A `.controls` bar with a posed rect, plus a status-bar inset the machine
+ * running this does not have.
  *
  * `barBottom` is the input: where the bar's bottom edge currently is. That is
  * the one thing `stickyOffset` can measure, and the three cases below are the
  * three values it takes — far down the page (not stuck yet), at rest under the
  * clock, and negative (slid off the top).
+ *
+ * **This used to pose a `thead th` too**, because the answer used to be the bar
+ * plus the table head. Since 2026-09-05 the head has no height (styles.css
+ * § the head with no row) and `stickyOffset` does not look for one at all — so a
+ * head posed here could only hide a regression. `poseArticleHead` below is the
+ * deliberate opposite: a head that is emphatically *not* ours, sitting on the
+ * page, so the cases can state that the function cannot be confused by one.
  */
 function poseBar(barBottom: number, safeTop: number): void {
-  /* The inset is posed by writing real pixels onto the probe safe-area.ts
-     makes. jsdom has no `env()`, so this is the only way to say "this machine
-     has a 47px status bar" — and without it every assertion below would hold
-     against a `stickyOffset` that ignored the inset entirely, which is the
-     whole regression. */
-  safeAreaInsets();
-  const probe = document.querySelector<HTMLElement>('div[aria-hidden="true"]');
-  probe?.style.setProperty("padding-top", `${safeTop}px`);
+  poseInset(safeTop);
 
   const bar = document.createElement("div");
   bar.className = "controls";
   bar.getBoundingClientRect = () =>
     ({ top: barBottom - BAR_H, bottom: barBottom, height: BAR_H }) as DOMRect;
   document.body.appendChild(bar);
+}
 
+/**
+ * The status bar on its own, for the cases that pose no `.controls`.
+ *
+ * Written as real pixels onto the probe safe-area.ts makes. jsdom has no
+ * `env()`, so this is the only way to say "this machine has a 47px status
+ * bar" — and without it every assertion below would hold against a
+ * `stickyOffset` that ignored the inset entirely, which is the whole
+ * regression.
+ */
+function poseInset(safeTop: number): void {
+  safeAreaInsets();
+  document
+    .querySelector<HTMLElement>('div[aria-hidden="true"]')
+    ?.style.setProperty("padding-top", `${safeTop}px`);
+}
+
+/**
+ * **A `<thead>` belonging to the *article*, which is a thing that exists.**
+ *
+ * An author's own prose can contain a table, and `src/sanitize.ts` keeps its
+ * head — checked by running the sanitiser over one rather than by reading the
+ * allowlist. `stickyOffset` used to finish with
+ * `document.querySelector("thead th")`, a query with no scope on it whatever,
+ * so a decoy like this one was always a candidate answer; only document order
+ * kept it from being picked. The rect here is 300px tall at y=900, which is
+ * nothing like any number the function may correctly return, so a version that
+ * went back to reading a head could not pass by coincidence.
+ */
+function poseArticleHead(): void {
   const table = document.createElement("table");
   const head = document.createElement("thead");
   const th = document.createElement("th");
-  th.getBoundingClientRect = () => ({ top: 0, bottom: HEAD_H, height: HEAD_H }) as DOMRect;
+  th.getBoundingClientRect = () => ({ top: 900, bottom: 1200, height: 300 }) as DOMRect;
   head.appendChild(th);
   table.appendChild(head);
   document.body.appendChild(table);
@@ -106,6 +135,11 @@ afterEach(() => {
  * `viewport-fit=cover`, and 47 is `env(safe-area-inset-top)` on an installed
  * app on a notched iPhone — which is zero on every machine that can run this
  * suite. Posing it is the only way to have an opinion about it at all.
+ *
+ * **Rewritten 2026-09-05**, when the table head lost its height and this
+ * function stopped adding it on. The three positions the bar can be in are
+ * unchanged; what went is a second term of 40 that used to be in every
+ * expectation, and the answer for "no bar at all" moved from `0` to the inset.
  */
 describe("stickyOffset with a status bar", () => {
   const SAFE_TOP = 47;
@@ -113,40 +147,77 @@ describe("stickyOffset with a status bar", () => {
   it("predicts the resting bar while it is still scrolling down the page", () => {
     // Not stuck yet: bottom is far down, so the clamp's ceiling answers.
     poseBar(300, SAFE_TOP);
-    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H + HEAD_H); // 131
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H); // 91
   });
 
   it("measures the bar once it is stuck under the clock", () => {
     poseBar(SAFE_TOP + BAR_H, SAFE_TOP);
-    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H + HEAD_H); // 131
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H); // 91
   });
 
   it("still clears the status bar once the bar has slid off the top", () => {
     /* The bar is translated to just above the screen, so its `bottom` is
-       negative. **This is the assertion the floor exists for.** With
-       `Math.max(0, …)` the answer was 40 — the table head's height alone — for
-       a head that is in fact pinned at 47 and whose bottom edge is at 87. Every
-       deep link and arrow-key step would have landed 47px under the clock, in
-       the state a reader spends most of their time in, on the one device this
-       feature is for. */
+       negative. **This is the assertion the floor exists for**, and it survived
+       the head losing its height: there is a fixed opaque `.reader::before` of
+       exactly the inset's height (styles.css `.reader::before`), so a destination has
+       to clear the status bar even with every bar gone. A floor of `0` would
+       land every deep link and arrow-key step under the clock, in the state a
+       reader spends most of their time in, on the one device this feature is
+       for. */
     poseBar(-3, SAFE_TOP);
-    expect(stickyOffset()).toBe(SAFE_TOP + HEAD_H); // 87, not 40
+    expect(stickyOffset()).toBe(SAFE_TOP); // 47, not 0
   });
 
   it("is unchanged on a machine with no status bar", () => {
-    // The control: all three cases collapse to what this returned before.
+    // The control: every case collapses to the bar and nothing else.
     poseBar(BAR_H, 0);
-    expect(stickyOffset()).toBe(BAR_H + HEAD_H); // 84
+    expect(stickyOffset()).toBe(BAR_H); // 44
     document.body.innerHTML = "";
     poseBar(-BAR_H, 0);
-    expect(stickyOffset()).toBe(HEAD_H); // 40
+    expect(stickyOffset()).toBe(0);
   });
 
-  it("is zero before the table exists, whatever the inset", () => {
-    safeAreaInsets();
-    document.querySelector<HTMLElement>('div[aria-hidden="true"]')
-      ?.style.setProperty("padding-top", "47px");
-    expect(stickyOffset()).toBe(0);
+  /**
+   * **The status bar is still in the way when nothing else is.**
+   *
+   * This case used to expect `0` and was named "before the table exists". Both
+   * halves were wrong by 2026-09-05: there is no table in the answer any more,
+   * and `.reader::before` paints an opaque strip of exactly `--safe-top` under
+   * the clock whether or not a `.controls` is drawn. Stage 4 of
+   * docs/plans/260905d-declutter-the-reading-view-top-bars.md removes the bar
+   * outright in most modes, so this stops being a boot-time transient and
+   * becomes the resting state.
+   */
+  it("still clears the notch when there is no bar on the page at all", () => {
+    poseInset(SAFE_TOP);
+    expect(stickyOffset()).toBe(SAFE_TOP);
+  });
+
+  /**
+   * **An article's own `<table><thead>` is not our chrome.**
+   *
+   * The old implementation ended in a global `document.querySelector("thead
+   * th")` and added its height to the answer. Ours happened to come first in
+   * document order, so this was latent rather than live — but "the right
+   * element by luck of ordering" is not a contract, and the head that used to
+   * justify the query now measures nothing anyway. Every position of the bar is
+   * re-checked with the decoy present, because a regression here would show
+   * only on the articles that happen to contain a table.
+   */
+  it("ignores a <thead> that belongs to the article", () => {
+    poseBar(SAFE_TOP + BAR_H, SAFE_TOP);
+    poseArticleHead();
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H);
+
+    document.body.innerHTML = "";
+    poseBar(-3, SAFE_TOP);
+    poseArticleHead();
+    expect(stickyOffset()).toBe(SAFE_TOP);
+
+    document.body.innerHTML = "";
+    poseInset(SAFE_TOP);
+    poseArticleHead();
+    expect(stickyOffset()).toBe(SAFE_TOP);
   });
 });
 

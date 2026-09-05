@@ -50,7 +50,7 @@
  *
  * ## The vocabularies that are copied rather than imported
  *
- * `STEP_ORDER` lives in src/pipeline.ts and `JobStatus` is a type rather than an
+ * `STEP_ORDER` lives in src/step-order.ts and `JobStatus` is a type rather than an
  * array, so `STEPS` and `JOB_STATUSES` below are second copies. That is the
  * same trade src/db/schema.ts makes for its CHECK constraints, and it is pinned
  * the same way — behaviourally, by tests/feedback-payload.test.ts, which feeds
@@ -160,7 +160,7 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as 
 const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
 
 /**
- * `STEP_ORDER` in src/pipeline.ts, copied. See the header for why it is copied
+ * `STEP_ORDER` in src/step-order.ts, copied. See the header for why it is copied
  * and what keeps the copy honest.
  */
 const STEPS = [
@@ -178,6 +178,7 @@ const STEPS = [
   "quiz",
   "sketch",
   "illustrated",
+  "debate",
 ] as const;
 
 /** `JobStatus` in src/types.ts, which is a type and so cannot be imported as one. */

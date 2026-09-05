@@ -36,9 +36,7 @@ import { pgReady } from "./helpers/pg-ready.js";
 loadEnvLocal();
 
 /* No table of its own: this file locks and unlocks and never writes a row. */
-const { reachable } = await pgReady({ suite: "tests/corpus-lock.test.ts" });
-
-const when = reachable ? describe : describe.skip;
+await pgReady({ suite: "tests/corpus-lock.test.ts" });
 
 /**
  * A key of this run's own.
@@ -57,9 +55,7 @@ const WAITING_SUITE = "tests/fake-corpus-suite.test.ts";
 const WAITING_APP = `corpus-lock ${WAITING_SUITE}`;
 
 /** A connection that never holds the lock, kept for asking about other people's. */
-const observer = reachable
-  ? new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })
-  : undefined;
+const observer = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 
 afterAll(async () => {
   /* Belt as well as braces: if a case somehow ended holding the key, it goes
@@ -97,7 +93,7 @@ async function backendsGone(appName: string, withinMs = 3000): Promise<number> {
   }
 }
 
-when("the corpus lock", () => {
+describe("the corpus lock", () => {
   it("gives up on a deadline, names the file that was waiting, and leaves nothing behind", async () => {
     const rival = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
     try {

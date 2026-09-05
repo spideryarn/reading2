@@ -97,6 +97,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 | [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
 | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
+| [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the page that draws it — **the only defence it holds is which route it asks**. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
 `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
@@ -144,14 +145,16 @@ the shelf.
 therefore a **closed query rather than a reusable predicate** — there is no exported
 *"visibility is public"* clause for anybody to bolt onto another query — and it carries the same
 readability bar as `loadArticle`/`loadHead` (a tree and at least one block), so a damaged revision
-cannot become a card whose destination 404s. It selects seven named columns, orders totally, and is
-bounded.
+cannot become a card whose destination 404s. It selects eight named columns, orders totally, and is
+bounded. Every one of the eight is a fact about the *document* — the eighth, added the same day, is
+`byline`, the author the publisher's own page declared. Nothing in the projection names the reader
+who shared it.
 
 **The existing static guard could not have caught a bad one.** `tests/owner-isolation.test.ts` greps
 `src/store/` for `eq(articles.slug, …)`, and a listing has no slug in it. That file now has a second
 section, *ownerless enumeration*, which inventories every query naming the `articles` table
 reachable from the public import graph, permits exactly two, reads the listing's **generated SQL**
-for the public predicate and the absence of `owner_id`, pins its seven columns, and runs it against
+for the public predicate and the absence of `owner_id`, pins its eight columns, and runs it against
 two owners over private, public-readable and public-but-unreadable rows. Each of those was watched
 failing against a deliberately broken query before it was believed.
 
@@ -171,12 +174,42 @@ past the regex it replaced.
 `<h1>`, so the listing's projection caps every text column it returns with `left()` **in the SQL** —
 after the rows are built it is too late, the bytes have crossed. `PUBLIC_CARD_CHARS` in
 [`src/store/public-library.ts`](../../src/store/public-library.ts) holds the numbers, and a fixture
-with a 5,000-character title, gist, site name and `<h1>` measures them. A partial index
+with a 5,000-character title, gist, site name, byline and `<h1>` measures them. A partial index
 (`articles_public_listing`, `drizzle/20260904175802_*`) covers `visibility = 'public'` in the
 listing's exact order, so `limit` bounds the database's work and not only the reply.
 
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
+
+#### And since 2026-09-04 there is a page over it, which holds one defence
+
+`/read/public` ([public-shelf.md](public-shelf.md), `PublicLibraryPage` in
+[`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx)) is now the **third**
+signed-out surface, after `/read/<slug>` and the marketing pages. A page is not where the predicate
+lives and it must not become one, so the only thing it can get wrong is worth naming exactly: **a
+page can leak a private article in one way, by asking for one.** The listing route cannot answer with
+one whatever happens to it later; an owner-scoped route asked from this page would.
+
+So the guard is an inventory rather than an absence — `tests/public-shelf-page.test.tsx` records the
+page's whole conversation with the server and asserts it is one request, to `/api/public/library`,
+with `credentials: "omit"`, no `Authorization`, and **no call into the auth module at all** (that
+module is stubbed wholesale, because a mount effect reaching for a session would make no request and
+leave a URL list looking clean). It asserts the same request signed in as signed out, which is the
+rule the whole namespace follows and is the property the obvious "improvement" — enrich the page for
+somebody who has an account — would break. A test that seeded a private article and looked for its
+title in the DOM would have gone green the day somebody swapped the loader for `useShelf`.
+
+**The inventory is of the page's requests, not of the tab's, and that is a known hole rather than an
+oversight.** Production mounts `App`, which initialises a session and starts the job service before
+it reaches this branch, so an `App` arm that later wrapped this page in something owner-scoped would
+leave every assertion green. GPT Sol raised it reviewing the built page, 2026-09-04; closing it needs
+a suite that renders `<App />` and **nothing in `tests/` does**, so it is recorded as the next guard
+rather than half-built. It is a gap in the guard and not a disclosure: today's branches render this
+page and nothing else.
+
+**The page shows the shelf is not the catalogue**, which is a smaller point and still worth one
+sentence: its own copy says an article that is not listed is one nobody has shared, so a reader
+cannot mistake absence for concealment. [privacy.md](privacy.md) is what an owner is told.
 
 **Diagram used to be deliberately *not* here, and since 2026-09-04 it is.** `POLICY` marked it
 owners-only unconditionally, because its pictures POST for embeddings and spend money. What changed
@@ -255,12 +288,36 @@ says what a sixth would have to prove. `tests/shared-inventory.test.ts` holds
 them to `PublicArticle`'s key set with a total record, so a new field on the wire fails to compile
 until somebody decides which line covers it.
 
+**`search_runs` is that sixth, hours later** ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)
+§ Stage 4), and it proves the same three things: `publicSearchesQuery` names its columns, repeats
+`publicSlug` in its own `where`, and refuses unfinished and failed runs in SQL
+(`PUBLIC_SEARCHES_WHERE`). Greg's line was at *making* one — *"Only owner can create new searches.
+Everyone else can see the ones they have already created"* — so what stops a visitor spending is a
+`SearchAccess` union whose visitor arm carries none of the four verbs, plus `useSearch` being mounted
+in `SearchBand` alone.
+
+**It has a fourth thing of its own, and it is the one to know: `source_hash` is selected and must not
+cross.** `isStale` turns it into a derived `stale` boolean before the DTO sees it, which makes this
+the only column in the whole public surface whose presence in a `select` is *not* a promise about the
+payload. Getting its inputs wrong has no symptom but a warning on every row that reads as a fact
+about the article, so `tests/public-visibility-pg.test.ts` asserts a run whose fingerprint matches
+comes back **not** stale — the positive control, without which a derivation hardwired to `true`
+passes.
+
 **A row that is not swept is a row that can be forgotten, and one was.** `available.arc` was
 computed, sent and read by nothing for the first day, so an article with no arc listed nothing under
 *not built yet* — and the comment beside the tweets line said tweets were "the one artefact with no
 mode of its own", which is the mistake written out and still not seen. GPT Sol's review found it.
 The tests that missed it compared all-flags-false against all-flags-true, which agrees with a
 function that ignores a flag entirely; the ones there now turn on **one flag at a time**.
+
+**The tick-box is not a rights check, and the other half of the protection is a takedown route.**
+It moves responsibility onto the owner; nothing verifies that they hold the rights, and nothing
+could. So since 2026-09-04 there is one place a wronged rightsholder can write —
+[privacy.md § If something here is yours](privacy.md#if-something-here-is-yours), a section rather
+than a page, linked from the two surfaces a stranger meets a republished article on. There is
+deliberately **no** administrator path that unpublishes anybody's article: the mechanism is the
+owner's own sharing switch, and a person decides.
 
 **`StageState.done` is the wrong signal, and this is the trap.** It is
 `status === "done" && isCurrent(step)`, so a **stale** artefact reports `done: false` — while

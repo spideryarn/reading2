@@ -21,6 +21,13 @@ Support, privacy requests, "delete my account" and anything else all land in the
 the person reading them is the same person and a `privacy@` alias would imply a department that does
 not exist.
 
+**And it is the only address in the UI**, since 2026-09-05 — the feedback dialog's failed-send
+fallback offered `ADMIN_EMAIL` until Greg found it, and its intro read the reader their own address
+back. Both went; [feedback.md § The dialog names no address](feedback.md#the-dialog-names-no-address-since-2026-09-05)
+has his words and what replaced them. `ADMIN_EMAIL` ([admin.md](admin.md)) is an identity for logs
+and for the seed and stays as it is; what changed is that nothing the browser loads imports it, which
+`tests/site-footer.test.tsx` now pins.
+
 Anything that needs it imports it. That includes the browser —
 `site-text.js` is on the shared-import allowlist in `tests/client-imports.test.ts`, which it
 qualifies for by importing nothing at all. The alternative is a second copy of the address that
@@ -54,6 +61,43 @@ worth reading the header for. `tests/site-footer.test.tsx` pins the dropping, th
 **and the inventory**: which files mount it, how many times each, and which two declare themselves.
 The inventory is there because every other test in the file is satisfied by a component nothing
 renders.
+
+## The contact page
+
+[`ContactPage.tsx`](../../src/web/ContactPage.tsx) at `/contact`, since 2026-09-05, because Greg
+asked for one:
+
+> Add a /contact page and link to it appropriately. For now it can be really brief. Mostly just
+> saying Spideryarn is in beta, but we'd really love your feedback or suggestions. The best way to do
+> it is with the Feedback button in the top right. You can also contact us at hello@spideryarn.com.
+>
+> — Greg, 2026-09-05
+
+Three sentences, in that order, and the order is the content: **the Feedback button is the answer and
+the address is the fallback**. That is not only manners — a report filed through the button always
+arrives with the address the reader was standing on and, on an article, its slug; tick the box and it
+also carries which passages were on screen, the requests the page made and the id Vercel logged them
+under ([feedback.md](feedback.md)). An email carries none of that.
+
+**The sentence about the button is hedged, and the hedges were bought at review.** It says *"if you
+are signed in"*, because `FeedbackButton` is in the signed-in chrome and this page renders bare to a
+stranger; and it says the report *carries that page's address* rather than *"so we can see what you
+saw"*, because pressing Feedback here sends `/contact`, and no screenshot goes unless the reader
+attaches one. GPT Sol established both as a P1 against the first draft — the page that tells people
+how to reach us is the worst place in the app to overclaim.
+
+**Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry `SiteNav`,
+a hero and the `--site-*` token scope, which exist to sell something over a long scroll; this is four
+sentences, so it takes the policy page's Back link, `h1` and `SiteFooter`.
+
+**Linked from one place**: `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is
+what that array is for. That puts it on all eight pages that carry the row and nowhere under
+`/read/`. **The row's `mailto:` stayed** — mildly redundant beside a Contact link, and the redundancy
+is the cheaper mistake, since the address is the one thing in the row a stuck reader can act on in
+one press. The plan
+([260905c](../plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md)) names that as a
+judgment call Greg can overrule in one line, along with the decision not to add it to `SiteNav`,
+whose top bar was measured tight at the 320px reflow width.
 
 ## The privacy policy
 
@@ -184,11 +228,13 @@ and is untouched. Three other sentences moved for the same reason, and the plan'
 it**, because they are the kind that is easy to state backwards. A slot is reserved only where the
 request carries a URL or an upload, and settled only on a `done` ending — so a failed fetch costs
 nothing, pasting the same URL again costs a second article even though every step then skips, and
-re-running something already on your shelf is free. And **the answer about reaching your limit
-deliberately offers a subscriber no upgrade**: `canCheckout` is false while any non-terminal
-subscription exists, so `/pricing` draws a paying reader no plan button and the page has no upgrade
-to point at. The hosted Portal *has* been able to switch tiers since 2026-09-04, so the dead end is
-now ours rather than Stripe's — [billing.md](billing.md#reader-researcher-open-at-stripe-closed-in-our-own-ui).
+re-running something already on your shelf is free. And **the answer about reaching your limit offered a
+subscriber no upgrade until 2026-09-04**, because there was not one: the Portal could not switch
+between two Products, and then the gate on every plan button asked whether an open subscription
+existed rather than whether this tier was somewhere to go. Both were fixed that day, so the answer
+now names the larger plan — and says *for the part of the month that is left*, because a mid-period
+switch prorates the allowance rather than granting it whole
+([billing.md](billing.md#reader-researcher-open-at-stripe-and-open-in-our-own-ui)).
 
 ### The one tooltip, and what it is not for
 

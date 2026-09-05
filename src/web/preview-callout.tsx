@@ -97,9 +97,6 @@ function Frame({ width, label }: { width: number; label: string }) {
           columns={[]}
           layout={{ widths: [width - 12], tableW: width, overflowing: false }}
           showText
-          navDepth={geometry.leafDepth}
-          arcCells={null}
-          arcPending={false}
           onJump={() => {}}
           comments={[]}
           openComment={null}

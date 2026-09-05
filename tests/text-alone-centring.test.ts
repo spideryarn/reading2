@@ -23,6 +23,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_ROOT_PX, proseAloneMaxPx } from "../src/web/layout.js";
 
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
@@ -56,14 +57,34 @@ describe("the article on its own is centred", () => {
     expect(rule(".reader.text-alone table.zoom")).toContain("margin-inline: auto");
   });
 
-  it("the masthead is the same width and centred with it", () => {
+  it("the masthead is centred on the prose's axis, not on the cell's", () => {
     const r = rule(".reader.text-alone .masthead-inner");
     expect(r).toContain("margin-inline: auto");
-    // From `fit.tableW`, so `PROSE_ALONE_MAX_REM` is not copied into CSS.
-    expect(r).toContain("var(--table-w)");
-    // Inside the cell's own padding, so the title starts where the prose does.
-    expect(r).toContain("var(--text-pad-l)");
-    expect(r).toContain("var(--text-pad-r)");
+    /* **`--reading-measure`, and NOT `--table-w`.** This assertion is inverted
+       from the one it replaces, and the inversion is the finding. The rule used
+       to be the reading *cell* — `--table-w` less its two pads — which was the
+       right box for exactly as long as the prose filled its cell. On 2026-09-04
+       `.prose` started dividing the leftover inside that cell
+       (`tests/prose-centred-in-its-cell.test.ts`), and the same week the gutter
+       became a 2 × 2 pad and `--text-pad-l` grew from 33.6px to 59.2px. Both
+       moved the prose right, neither moved the title, and the errors added:
+       measured at **22.5px** of misalignment at a 1280 window, against the 4px
+       this rule's comment still claimed.
+
+       Neither branch's tests could have caught it, and this file is the reason
+       why — it asserted `--table-w` was present, which was true of the broken
+       rule. So the assertion now names the *other* box. */
+    expect(r).not.toContain("var(--table-w)");
+    expect(r).toContain("var(--reading-measure)");
+    /* The cell's asymmetric padding, subtracted the way it is *signed* rather
+       than merely mentioned: the prose sits half their difference right of the
+       table's centre, so a box on the same axis loses twice that. Written out
+       because `toContain` on the two names separately was satisfied by the rule
+       that was wrong. */
+    expect(r).toContain("var(--text-pad-r) - var(--text-pad-l)");
+    /* `65ch` counts the chrome's zeroes without this — the same line, and the
+       same reason, as the sibling rule and `.blk-gutter` both carry. */
+    expect(r).toContain("font-size: var(--reading-size)");
   });
 
   it("the cell's padding is the same two tokens the masthead subtracts", () => {
@@ -74,8 +95,42 @@ describe("the article on its own is centred", () => {
     expect(css).toContain(
       "padding: var(--block-pad) var(--text-pad-r) var(--block-pad) var(--text-pad-l)",
     );
-    expect(css).toContain("--text-pad-l: 2.1rem");
+    /* The left one stopped being a literal on 2026-09-04: it is the prose
+       gutter's column and nothing else, so it is computed from the gutter rather
+       than restated beside it. What matters to *this* file is only that the
+       masthead and the cell still name the same token. */
+    expect(css).toContain("--text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
     expect(css).toContain("--text-pad-r: 1.4rem");
+  });
+
+  it("and the cap in layout.ts is wide enough to hold them plus the measure", () => {
+    /* **The one arithmetic tie between this stylesheet and layout.ts, and it
+       goes stale silently.** The cap is documented as the measure plus these two
+       pads, so widening either without raising it takes the difference off a lone
+       prose column's line length — and nothing renders differently enough to
+       notice. It happened on 2026-09-04, when the gutter became a 2 × 2 pad and
+       `--text-pad-l` went 2.1rem → 3.7rem; GPT Sol found it by reading, which is
+       the only way it could have been found. It went the other way on 2026-09-05
+       — 3.7rem → 2.2rem, when the pad became one column that truncates — and
+       this test caught *that* one by going red, which is what it is for.
+
+       **The inequality itself is checked at five root font sizes in
+       `tests/gutter-target-size.test.ts`**, which is where it belongs now that
+       the left pad is not a rem constant — below a 16px root the gutter's px
+       floor makes it *wider* in rem, so one number cannot be right everywhere.
+       Given a fact one home; what is left here is the default root, so this
+       file's own story stays readable. */
+    const MEASURE_REM = 46;
+    const padR = Number(/--text-pad-r:\s*([\d.]+)rem/.exec(css)?.[1]);
+    const padL = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
+    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeGreaterThanOrEqual(
+      (MEASURE_REM + padL + padR) * DEFAULT_ROOT_PX,
+    );
+    // And not so generous that the column stops looking capped at all: the
+    // rounding runs upwards by design, but by under a rem.
+    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeLessThan(
+      (MEASURE_REM + padL + padR + 1) * DEFAULT_ROOT_PX,
+    );
   });
 
   it("App writes the class and the width the stylesheet reads", () => {

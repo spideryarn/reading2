@@ -59,12 +59,10 @@ const SLUG = "test-publish-guards";
 
 /* ---------------------------------------------------- is there a database -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-publish-guards.test.ts",
   tables: ["spideryarn.article_revisions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /* ------------------------------------------------------------ the article -- */
 
@@ -179,7 +177,7 @@ async function draftReadyToPublish(): Promise<string> {
 
 /* ------------------------------------------------------------------ tests -- */
 
-when("the publication guard", () => {
+describe("the publication guard", () => {
   beforeAll(async () => {
     // A first publication, so later drafts are the ordinary carried-forward
     // shape rather than the first-ever revision of an article.

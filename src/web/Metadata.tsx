@@ -168,6 +168,7 @@ import {
   ListTree,
   MessageCircle,
   MessageCircleQuestionMark,
+  MessagesSquare,
   Paintbrush,
   PenLine,
   RefreshCw,
@@ -267,6 +268,15 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* A paintbrush beside the sketch's pen: the same argument, painted rather
      than drawn. docs/project/diagram.md § Illustrated. */
   illustrated: Paintbrush,
+  /* Two speech marks facing each other: the one stage whose artefact is other
+     people's words rather than a reading of these ones.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+
+     **The only line of `src/web/` this stage touches**, and it is here because
+     `STAGE_ICONS` is a `Record<StepName, …>` — the typecheck asks for it the
+     moment the step exists, which is exactly what that record is for. The mode
+     itself, its button and its panel are a later stage. */
+  debate: MessagesSquare,
 };
 
 /**
@@ -1235,7 +1245,7 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
      metadata goes straight into the row, so a `javascript:` or `data:` value is
      reachable and an anchor here would be an active URL sink (src/urls.ts,
      docs/project/security.md; GPT Sol, 2026-08-31, the third of three sinks on
-     this field). A `file://` from `npm run pdf` lands here too.
+     this field). A `file://` from `npm run eval:pdf-read` lands here too.
 
      **Only the sentence changes; the address itself is never printed.** An
      earlier version of this line showed the refused value as inert text, on the

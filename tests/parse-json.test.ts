@@ -42,7 +42,7 @@
  * bytes.
  */
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -59,29 +59,38 @@ const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /**
- * Two throwaway directories under the gitignored `data/`, removed afterwards.
+ * One throwaway directory under the gitignored `data/`, removed afterwards.
  *
- * Two rather than one, because `data/` is shared with every other suite and
- * `listArticles` walks the whole of it on every call — so a corrupt artefact
- * left lying there fails `tests/library.test.ts` in a *different worker*, which
- * is a flaky test blaming the wrong file.
+ * `STORE_SLUG` is `_`-prefixed, which is how the reader-state modules already
+ * say "not an article" (`data/_jobs/` is the queue's). `assertSlug` in
+ * src/slug.ts admits the prefix precisely so that reader state can be asked
+ * about such a name, and it names `loadComments("_test-parse-json")` — this
+ * directory — as the reason it stays looser than `isSlug`.
  *
- * `STORE_SLUG` is `_`-prefixed, which is how src/api.ts already says "not an
- * article" (`data/_jobs/` is the queue's). `listArticles` skips those by name,
- * so the three corrupt reader-state files in it are invisible to the shelf.
+ * **There were two directories until 2026-09-05**, and the second was a
+ * complete copy of `example/` with `arc.json` corrupted, because `loadArticle`
+ * in `src/api.ts` demanded a real slug and walked a real article. That file was
+ * the *filesystem article reader* and was deleted with the filesystem store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ * the stage-G section), so the copy went with it.
  *
- * `ARTICLE_SLUG` cannot use that trick, because `loadArticle` requires a real
- * slug (`isSlug` in src/ingest.ts forbids `_`). So it is a **complete, valid
- * copy of `example/` with only `arc.json` corrupted** — chosen because
- * `describeDir` reads blocks.json, tree.json and meta.json and never reads
- * arc.json, while `loadArticle` reads all four. The shelf therefore sees an
- * ordinary article and the parse only blows up on the path being tested.
+ * **The fourth store loader changed twice on the same day**, and the second
+ * change is the one worth knowing about. It was briefly `loadClaimsRun`, which
+ * was itself deleted hours later when `src/referee-claims-store.ts` went — the
+ * whole filesystem claims store. It is `loadShelf` now, which has live callers:
+ * `tests/helpers/seed-reader-state.ts` and `tests/store-parity.test.ts` read a
+ * fixture's `shelf.json` through it to seed the columns Postgres keeps.
+ *
+ * **That is the property this file is careful about.** The claim here is about
+ * what reaches a *log line*, so it has to be driven by something that logs —
+ * a direct call to `parseJsonFrom` satisfies "the helper was called" and not
+ * "the sentinel is absent from the bytes on fd 1". Each of the four loaders
+ * below is a function something still calls, and if a later group deletes one,
+ * the honest repair is to repoint the scenario at another live caller that logs
+ * — not to drop the case, and not to demote it to a unit test.
  */
 const STORE_SLUG = "_test-parse-json";
 const STORE_DIR = path.join(ROOT, "data", STORE_SLUG);
-const ARTICLE_SLUG = "test-parse-json-article";
-const ARTICLE_DIR = path.join(ROOT, "data", ARTICLE_SLUG);
-const EXAMPLE = path.join(ROOT, "example");
 
 /** A module of `src/`, as a quoted absolute path for the child's `import()`. */
 const src = (name: string) => JSON.stringify(path.join(ROOT, "src", name));
@@ -97,12 +106,14 @@ const helper = (name: string) => JSON.stringify(path.join(ROOT, "tests", "helper
  * in `chat.json`, what they went looking for in `searches.json`, and whatever a
  * model said back.
  *
- * `arc` is `arc.json` read by `loadArticle` in src/api.ts; `blocks` is the
- * `blocks.json` that `readArticleFromDir` parses for an eval
- * (tests/helpers/article-from-dir.ts).
+ * `shelf` is `shelf.json` read by `loadShelf` in src/shelf.ts — the title a
+ * reader typed over the extractor's, which is short, is theirs, and is the one
+ * V8 would quote back **whole**, because under twenty characters there is no
+ * ellipsis. `blocks` is the `blocks.json` that `readArticleFromDir` parses for
+ * an eval (tests/helpers/article-from-dir.ts).
  */
 const LEAK = {
-  arc: "ZQARCJSONA",
+  shelf: "ZQSHELFAAA",
   blocks: "ZQBLOCKSAA",
   comments: "ZQCOMMENTS",
   chat: "ZQCHATBBBB",
@@ -145,13 +156,8 @@ beforeAll(async () => {
     writeFile(path.join(STORE_DIR, "comments.json"), corrupt(LEAK.comments), "utf8"),
     writeFile(path.join(STORE_DIR, "chat.json"), corrupt(LEAK.chat), "utf8"),
     writeFile(path.join(STORE_DIR, "searches.json"), corrupt(LEAK.searches), "utf8"),
+    writeFile(path.join(STORE_DIR, "shelf.json"), corrupt(LEAK.shelf), "utf8"),
   ]);
-
-  // A whole valid article, with one optional artefact corrupted. See the note
-  // on ARTICLE_SLUG: this is what keeps the shelf working while the read under
-  // test still fails.
-  await cp(EXAMPLE, ARTICLE_DIR, { recursive: true });
-  await writeFile(path.join(ARTICLE_DIR, "arc.json"), corrupt(LEAK.arc), "utf8");
 
   /* One child, six scenarios, because a child costs a few hundred milliseconds
      and none of these needs its own environment.
@@ -174,7 +180,7 @@ beforeAll(async () => {
       }
     };
 
-    const { loadArticle } = await import(${src("api.ts")});
+    const { loadShelf } = await import(${src("shelf.ts")});
     const { loadComments } = await import(${src("comments.ts")});
     const { loadThreads } = await import(${src("chat.ts")});
     const { loadRuns } = await import(${src("searches.ts")});
@@ -183,7 +189,7 @@ beforeAll(async () => {
     const { parseJsonFrom, stripFence } = await import(${src("parse-json.ts")});
 
     // These four log for themselves, then rethrow.
-    await step("read", () => loadArticle(${JSON.stringify(ARTICLE_SLUG)}));
+    await step("shelf", () => loadShelf(${JSON.stringify(STORE_SLUG)}));
     await step("comments", () => loadComments(${JSON.stringify(STORE_SLUG)}));
     await step("chat", () => loadThreads(${JSON.stringify(STORE_SLUG)}));
     await step("searches", () => loadRuns(${JSON.stringify(STORE_SLUG)}));
@@ -233,7 +239,6 @@ beforeAll(async () => {
     throw new Error(
       `expected ${EXPECTED_LINES} log lines from the child, got ${lines.length}` +
         `\n--- fixture ${STORE_DIR}: ${(await readdir(STORE_DIR)).join(", ")}` +
-        `\n--- fixture ${ARTICLE_DIR}: ${(await readdir(ARTICLE_DIR)).join(", ")}` +
         `\n--- stdout ---\n${stdout}\n--- stderr ---\n${child.stderr}`,
     );
   }
@@ -241,7 +246,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await rm(STORE_DIR, { recursive: true, force: true });
-  await rm(ARTICLE_DIR, { recursive: true, force: true });
 });
 
 describe("a malformed artefact in the log", () => {
@@ -256,6 +260,7 @@ describe("a malformed artefact in the log", () => {
     expect(stdout).toContain("blocks.json");
     expect(stdout).toContain("chat.json");
     expect(stdout).toContain("searches.json");
+    expect(stdout).toContain("shelf.json");
   });
 });
 

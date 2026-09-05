@@ -33,16 +33,13 @@
  * and importing it would also *run* it.
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import path from "node:path";
 import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
-import { loadEnvLocal } from "./env.js";
-import { slugFromUrl } from "./ingest.js";
-import { isMain } from "./is-main.js";
 import { canonicalKey } from "./source.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 
@@ -297,11 +294,12 @@ export async function writeRaw(
  * caller writes*, and for a command line the caller is `main()`. Every stage
  * that still has a command line leaves the file it always left —
  * `output/<slug>.html`, `tree.json`, `labels.json` — and a `fetch` command that
- * printed a digest instead would be the one that broke the pattern. It would also break
- * something people actually do: running `npm run fetch -- <url>` by hand under
- * `SPIDERYARN_STORE=files` satisfies the queue's `fetch` step, because the
- * filesystem artefact store reads `raw.json` at exactly this path
- * (`PATHS.fetch.raw` in src/store/artifacts-fs.ts).
+ * printed a digest instead would be the one that broke the pattern. It would also have
+ * broken something people used to do: running `npm run fetch -- <url>` by hand
+ * under `SPIDERYARN_STORE=files` satisfied the queue's `fetch` step, because
+ * the filesystem artefact store read `raw.json` at exactly this path
+ * (`PATHS.fetch.raw` in src/store/artifacts-fs.ts, deleted 2026-09-05) — there
+ * is one store now, and that flag is gone too.
  *
  * **It takes the manifest rather than making one**, so the two files cannot
  * describe different documents: the caller has already had `writeRaw` hash and
@@ -336,8 +334,9 @@ export async function writeRawFiles(
  * src/store/export.ts and `readPdf` in src/store/pg-source.ts.
  *
  * **None of the three is ever silently downgraded to "assume HTML".** That
- * fallback existed on `readRaw` below and stage 2 relied on it; it is gone, and
- * this class is what replaced it. Greg's decision 4 of
+ * fallback existed on `readRaw`, which stage 2 relied on and which was deleted
+ * on 2026-09-05 — the note where it stood, below, has the history; it is gone,
+ * and this class is what replaced it. Greg's decision 4 of
  * docs/plans/260831b-finish-the-database-move.md makes refetching the right answer for
  * an old article — but only if the state says so out loud, which is what a
  * thrown error does and what a quiet default did not.
@@ -569,32 +568,25 @@ function credentialsSeen(): string {
   return `${seen("SUPABASE_URL")} and ${seen("SUPABASE_SERVICE_ROLE_KEY")}`;
 }
 
-/**
- * The manifest sitting in a directory, or `null` when there is not one.
- *
- * **Not stage 2's route any more, and the `null` no longer means "assume
- * HTML".** It meant that until 2026-08-31: every article ingested before
- * manifests existed had a `raw.html` and no `raw.json`, and stage 2 fell back
- * to reading that file. Nothing writes `raw.html` now, so the fallback had
- * nothing to fall back *to*, and it is gone rather than left pointing at
- * absence. Two articles in the local corpus were relying on it —
- * `data/constitution` and `data/noema-mythology-of-conscious-ai` — and the
- * answer for them is a re-fetch (Greg, 2026-08-30: the corpus is expendable).
- *
- * What still calls this is `articleMetadata` in src/api.ts, which shows the
- * metadata page where a document came from. `slugIsSpokenFor` in src/jobs.ts
- * called it too until 2026-08-31, to decide whether an upload would collide
- * with an article already there; that question no longer exists — every slug
- * carries a globally unique short id, so nothing collides
- * (docs/plans/260831b-finish-the-database-move.md § Stage 3 item 0).
- */
-export async function readRaw(dir: string): Promise<RawManifest | null> {
-  try {
-    return JSON.parse(await readFile(path.join(dir, "raw.json"), "utf8")) as RawManifest;
-  } catch {
-    return null;
-  }
-}
+/* **`readRaw(dir)` was here, and it went on 2026-09-05.** It read a `raw.json`
+   out of a `data/<slug>/` and answered `null` for anything it could not parse.
+   Its last caller was `loadSource` in src/api.ts, which went with the
+   filesystem store
+   (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+   Its own docstring named `articleMetadata` as what still called it, and that
+   had been wrong for some time — the function it named never mentioned it.
+
+   **The thing worth keeping is why its `null` stopped meaning "assume HTML".**
+   Until 2026-08-31 every article ingested before manifests existed had a
+   `raw.html` and no `raw.json`, and stage 2 fell back to reading that file.
+   Nothing writes `raw.html` now, so the fallback had nothing to fall back *to*.
+   `RawDocumentUnavailable` above is what replaced it: three named reasons, none
+   of them silently downgraded to a guess.
+
+   The read that survived `readRaw`'s deletion was `fsArtifacts.read`, which
+   went through the artefact seam rather than opening the file a second way —
+   but it went too, with the rest of src/store/artifacts-fs.ts, on 2026-09-05.
+   There is one store now, and no manifest read on disk at all. */
 
 /* ------------------------------------------------------------------ *
  * How it fails
@@ -1898,129 +1890,28 @@ export async function fetchHtml(url: string, options: FetchOptions = {}): Promis
 }
 
 /* ------------------------------------------------------------------ *
- * Stage 1 as a command
- * ------------------------------------------------------------------ */
-
-/**
- * `npm run fetch -- <url> [dir]`
+ * Stage 1 as a command — gone, 2026-09-05
+ * ------------------------------------------------------------------ *
  *
- * Writes what came back to `data/<slug>/raw.html`, or `raw.pdf`, with the
- * `raw.json` manifest beside it — the same place and name the filesystem
- * artefact store keeps them, so running this by hand satisfies the queue's
- * fetch step under `SPIDERYARN_STORE=files` and the queue skips straight to
- * extraction (docs/project/ingest-queue.md).
+ * `npm run fetch -- <url> [dir]` wrote `data/<slug>/raw.html` (or `raw.pdf`)
+ * and the `raw.json` manifest beside it, by hand, off `process.cwd()` — which
+ * satisfied the queue's fetch step only under the filesystem store. Under
+ * Postgres it wrote files nothing reads.
  *
- * **The writing moved out of `writeRaw` and into here on 2026-08-31**, which
- * looks like nothing changed and is the whole shape of stage 2c. The stage no
- * longer writes: it returns a manifest, and whoever called it decides where
- * that goes — the store, for the queue, and `writeRawFiles` for this command,
- * which is the rule every converted stage follows. What a person running this
- * sees is identical.
+ * It is **`npm run ingest -- <url>`** now, and it does the whole ingest rather
+ * than stage 1: the queue publishes once, when the job settles, and a
+ * fetch-only job either fails at publication or — worse, on an existing
+ * article — succeeds and publishes new raw bytes beside stale derived content.
+ * The reasoning is in `scripts/stage.ts` § `ingestUrl`.
  *
- * Mostly, though, this exists for the other job: **finding out why a URL won't
- * come in.** It prints the chain, the type, the encoding and the size, which
- * between them explain nearly every failure — and on a failure it prints the
- * code and the sentence rather than a stack trace.
+ * **Renamed rather than aliased**, so `npm run fetch` fails with *"Missing
+ * script"* instead of quietly doing something else.
  *
- * It also prints the **object key and the credentials that chose its store**,
- * which is new and is worth having: the bytes go into the content-addressed
- * `sources` bucket as well as into the file above, and which bucket that is
- * depends on this process's credentials (`blobStore()`, src/store/blobs.ts).
- * Half the local corpus turned out to be split across two of them because
- * nothing had ever read one back — see `missingObjectAdvice`. The key alone
- * does not say which store it is in, and two runs that wrote to two different
- * stores printed the identical line; the `Store:` line is the half that makes
- * that visible.
- *
- * The slug comes from the URL you typed, not from where you were redirected to,
- * so that it matches what the add box on the homepage shows for the same URL
- * (src/ingest.ts). Where the two differ, the line below says so.
+ * The diagnostics that command carried — the redirect chain, the type, the
+ * encoding, the stored-vs-network size, the object key and the credentials that
+ * chose its store — are the one real loss, and they were what made it useful for
+ * *finding out why a URL will not come in*. `fetchDocument` still returns every
+ * one of those fields; nothing prints them today. `missingObjectAdvice` and
+ * `credentialsSeen` above are what said which blob store a process had chosen,
+ * and they still do, from inside the failure that needs them.
  */
-async function main(): Promise<void> {
-  /* **First, before the arguments, and this is not the cosmetic ordering it
-     looks like.** Every paid CLI in this repo loads `.env.local` because
-     otherwise a paid call reads "OPENROUTER_API_KEY is not set" with the key
-     sitting unread in the file (src/cli-ledger.ts). This one has a second and
-     worse failure: `blobStore()` picks between Supabase Storage and
-     `data/_blobs/` from `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
-     (src/store/blobs.ts), so a command that has not read the file makes a
-     *different storage selection from the server*, which loads it. It then
-     writes `raw.json`, the queue counts the fetch step done, and extraction
-     dereferences the manifest against the other store and blocks on an object
-     that exists — docs/postmortems/260831e-a-write-path-with-no-reader.md, recreated by
-     the command meant to be the safe way in. GPT Sol found it, 2026-08-31.
-
-     Above the argument check rather than beside `writeRaw` so there is no
-     ordering left to get wrong later, and so the guarantee is observable: the
-     no-argument run applies the file and then prints usage, which is what
-     tests/stage2c-raw-bytes.test.ts drives. Inside `main`, so importing this
-     module still reads no files — the rule src/ideas.ts states. It memoises,
-     so a second call anywhere costs nothing. */
-  loadEnvLocal();
-
-  const url = process.argv[2];
-  if (!url) {
-    console.error("Usage: tsx src/fetch.ts <url> [dir]");
-    process.exit(1);
-  }
-
-  let doc: FetchedDocument;
-  try {
-    doc = await fetchDocument(url);
-  } catch (err) {
-    const failure = classifyNetworkError(err, url);
-    console.error(`\n  \u2717 ${failure.code}\n    ${failure.message}\n`);
-    process.exit(1);
-  }
-
-  const slug = slugFromUrl(url) || "article";
-  const dir = process.argv[3] ?? path.join("data", slug);
-  /* **`writeRaw` and `writeRawFiles`, not a second copy of either.** This wrote
-     `doc.bytes` by hand and no manifest at all, which made `npm run fetch` and
-     the pipeline produce *different files at the same path*: undecoded bytes
-     here against the decoded string there, and stage 2 read that path as UTF-8,
-     so a page in any other encoding came out as mojibake one way and correctly
-     the other. There is one function that decides what bytes we keep
-     (`storedDocumentBytes`) and both callers go through it. */
-  const manifest = await writeRaw(doc);
-  const written = await writeRawFiles(dir, doc, manifest);
-
-  console.log(`Requested: ${doc.requestedUrl}`);
-  if (doc.url !== doc.requestedUrl) {
-    console.log(`Final:     ${doc.url}   (${doc.chain.length - 1} redirect(s))`);
-  }
-  console.log(`Slug:      ${slug}`);
-  console.log(`Type:      ${doc.kind}${doc.contentType ? `  (${doc.contentType})` : ""}`);
-  if (doc.encoding) console.log(`Encoding:  ${doc.encoding}`);
-  console.log(`Size:      ${(doc.bytes.byteLength / 1024).toFixed(1)} KB`);
-  /* The stored count as well as the network one whenever they differ, which is
-     every page that was not already UTF-8 — the two numbers `bytes` and
-     `storedBytes` exist to keep apart, and a diagnostic that printed only one
-     would be the place somebody learned they were the same. */
-  if (manifest.storedBytes !== manifest.bytes) {
-    console.log(`Stored:    ${(manifest.storedBytes / 1024).toFixed(1)} KB (decoded)`);
-  }
-  console.log(`\nWritten to: ${path.resolve(written.file)}`);
-  console.log(`            ${path.resolve(written.manifestFile)}`);
-  console.log(`Object:     ${canonicalKey(manifest.storedSha256, manifest.kind)}`);
-  /* **And which store that object is in**, which the key alone does not say and
-     which is the whole difficulty: the same key names an object in Supabase
-     Storage on one process and in `data/_blobs/` on another, and a command that
-     printed only the name is a command you can run twice, get identical output
-     from, and have written to two different places. The credentials rather than
-     the adapter's name for the same reason `missingObjectAdvice` reports them:
-     the selection rule is `blobStore()`'s, and a second copy of it here is the
-     thing that goes stale. GPT Sol, 2026-08-31. */
-  console.log(`Store:      chosen by blobStore() from this process — ${credentialsSeen()}`);
-  if (doc.kind === "pdf") {
-    console.log("\nNote: nothing downstream reads a PDF yet — see docs/project/fetching.md.");
-  }
-}
-
-/* This guard used to be `import.meta.url.endsWith(path.basename(process.argv[1]))`,
-   which six other files' comments called wrong and which nothing had ever run
-   against a case that showed it: it ran this CLI as a side effect of importing
-   the module whenever any *other* `fetch.ts` was the entry file, and it never
-   fired at all from a directory with a space in its name. tests/is-main.test.ts
-   holds the failing input for each. */
-if (isMain(import.meta.url)) void main();

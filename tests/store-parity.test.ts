@@ -1,24 +1,25 @@
 /**
- * The two stores must answer identically. This is the test the whole migration
- * rests on.
+ * **The whole corpus, loaded into Postgres from nothing, and then read back.**
  *
- * **It compares the API-shaped result, not SQL rows.** That distinction is the
- * point: a row-level comparison passes happily while the `Article` the client
- * receives has changed shape, and the client is the only thing that matters. So
- * every assertion here goes through `JSON.parse(JSON.stringify(…))` — the wire
- * form, exactly what `src/routes.ts` would send.
+ * This was `the two stores must answer identically` — the parity suite the
+ * migration rested on — until 2026-09-05, when the filesystem store was deleted
+ * and one of its two arms went with it
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
  *
- * **What serialising does and does not buy.** It asserts what the client
- * actually receives, which is the point. It does NOT catch the
- * `exactOptionalPropertyTypes` distinction, and an earlier version of this
- * comment claimed it did — `JSON.stringify` deletes an `undefined` value
- * outright, so `{ byline: undefined }` and `{}` are the same string and no
- * assertion here can tell them apart. `toEqual` already separates
- * `{ byline: null }` from `{}` without any help, so serialising adds nothing on
- * that front either. GPT Sol caught the overclaim in review, 2026-08-26;
- * docs/plans/260826j-postgres-storage-review-sol.md. The absent-versus-undefined
- * distinction is checked by `toStrictEqual` and by explicit `in` assertions,
- * not by this.
+ * **What survives is everything that was ever a claim about Postgres alone**,
+ * and it is a good deal more than the name suggests: the corpus is built
+ * through the production write path with every revision deleted first, the
+ * publication gate refuses the one article whose provenance it cannot check,
+ * `url` and `fetchedAt` come from stage 1 or from nowhere, the shelf is dated
+ * from `raw.json` and ordered by `ADDED_AT`, a saved search's fingerprint is
+ * computable, an excluded article really leaves a library search, and a
+ * traversal slug is a 400 before it reaches a query. Every comparison against
+ * a second store went; nothing that was an independent assertion did. What
+ * *was* dropped, and is named rather than waved away: the whole-`Article` and
+ * whole-`LibraryEntry` deep equalities, the block-order equality (pinned at the
+ * SQL level in tests/store-block-reads.test.ts instead) and the two
+ * `toStrictEqual` absent-versus-undefined checks, which had no second home and
+ * no meaning with one store.
  *
  * ## The corpus is loaded through the real write path, from nothing
  *
@@ -28,7 +29,8 @@
  * a fenced `jobs` row, `openOrBeginJobDraft`, `beginStep`/`write`/`finishStep`
  * per step, then `publishRevision` with its guards run rather than routed
  * around. What used to be "the importer and the pipeline agree with each other"
- * is now "the pipeline's own write path and the filesystem agree".
+ * became "the pipeline's own write path and the filesystem agree", and is now
+ * "the pipeline's own write path produces an article that reads back".
  *
  * **And every revision is deleted first, which is not tidiness — it is the
  * whole claim.** `beginDraftIn` carries a published revision's columns, blocks
@@ -50,10 +52,10 @@
  * a reason that has nothing to do with them. Scoped to `currentOwnerId()`, so a
  * mis-set `DATABASE_URL` pointing at somebody else's articles takes nothing.
  *
- * ## What the two stores genuinely disagree about, and why it is not a bug
+ * ## The two clocks, which is what half of these assertions are about
  *
- * Three differences survive a clean load, all of them real and all of them
- * asserted positively rather than normalised away:
+ * These were the differences between the stores that a clean load could not
+ * remove. They are still the facts the surviving assertions pin, one side each:
  *
  * 1. **`fetchedAt` is stage 1's clock in Postgres and stage 2's on disk.**
  *    `src/extract.ts` writes `new Date().toISOString()` into `meta.json` every
@@ -91,13 +93,11 @@ import { articleRevisions, articles } from "../src/db/schema.js";
 import { currentOwnerId } from "../src/owner.js";
 import { ADDED_AT } from "../src/store/pg.js";
 import { loadEnvLocal } from "../src/env.js";
-import { isSpideryarnId } from "../src/ids.js";
 import { loadShelf } from "../src/shelf.js";
-import { fsArticleReader, fsCommentStore, fsLibrarySearch, fsSearchStore } from "../src/store/fs.js";
 import { pgLibrarySearch } from "../src/store/pg-shelf.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
 import { pgArticleReader } from "../src/store/pg.js";
-import type { Article, LibraryEntry, Meta } from "../src/types.js";
+import type { LibraryEntry } from "../src/types.js";
 import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
 import { forgetRevisions } from "./helpers/forget-revisions.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -281,15 +281,13 @@ let slugs: readonly string[] = [];
    ten-second connect timeout and the warning both live in the helper now; its
    header quotes the paragraph this file used to carry, because this is the
    suite that learned it. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-parity.test.ts",
   tables: ["spideryarn.revision_blocks"],
 });
 
-if (reachable) {
-  onDiskSlugs = await completeArticles();
-  slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
-}
+onDiskSlugs = await completeArticles();
+slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
 
 /* **At module scope, not in the `beforeAll` below.** This waits for
    tests/store-roundtrip.test.ts to finish with the corpus, and on a bad day that
@@ -301,21 +299,16 @@ if (reachable) {
    hook timeout, and leaves the 300s covering only the work.
    tests/helpers/corpus-lock.ts § "Take it at MODULE SCOPE"; the measurements are
    in docs/plans/260902c-make-the-test-suite-pass-reliably.md § "Cause 4". */
-if (reachable) await takeCorpusLock("tests/store-parity.test.ts");
-
-const when = reachable ? describe : describe.skip;
+await takeCorpusLock("tests/store-parity.test.ts");
 
 afterAll(async () => {
   await releaseCorpusLock();
   await closeDb();
 });
 
-when("the filesystem and Postgres stores agree", () => {
+describe("the Postgres store, over the whole corpus", () => {
   /** What each load reported, so the tests can assert on it rather than assume. */
   const loaded = new Map<string, LoadedArticle>();
-  /** What `seedShelfFromFiles` wrote, per slug — the floor for the monotonic
-      `opens`/`lastOpenedAt` assertion in "lists the same articles" below. */
-  const seededShelf = new Map<string, { opens: number; lastOpenedAt: Date | null }>();
 
   beforeAll(async () => {
     await forgetRevisions([...onDiskSlugs]);
@@ -366,8 +359,7 @@ when("the filesystem and Postgres stores agree", () => {
          made to — see tests/helpers/seed-reader-state.ts. Without it every
          archived article would be on the Postgres shelf and off the filesystem
          one, and every comment count would be zero. */
-      const shelf = await seedShelfFromFiles(slug);
-      seededShelf.set(slug, { opens: shelf.opens, lastOpenedAt: shelf.lastOpenedAt });
+      await seedShelfFromFiles(slug);
       await seedCommentsFromFiles(slug);
       /* **Seed what you compare.** The glossary comparison below reads
          `loadGlossary`, and both stores hang a `lookup` off an entry — the
@@ -424,92 +416,25 @@ when("the filesystem and Postgres stores agree", () => {
 
   describe.each(slugs)("%s", (slug) => {
     /**
-     * `meta` without the two fields stage 1 owns and stage 2 merely copied,
-     * and the article without the one field only one store can answer.
+     * **`url` and `fetchedAt` come from stage 1, and only from stage 1.**
      *
-     * The two `meta` fields are compared, per slug, in the test below this one
-     * — as equalities against the file each store actually reads, not as an
-     * exemption that asserts nothing.
-     *
-     * **`visibility` is dropped for the reason the shelf's is** (see
-     * `comparable` in the `listArticles` block below, and
-     * `Article.visibility` in src/types.ts): the filesystem store has no
-     * visibility column, so absence there is the honest answer and equality
-     * between the two stores could never have expressed it. What is lost —
-     * Postgres losing a `public`, or emitting one where the row says
-     * `private` — was never covered here either, and is covered positively in
-     * tests/store-shelf-pg.test.ts against a known public row and a known
-     * private one.
-     * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
+     * Ported from the parity comparison on 2026-09-05, keeping the half that
+     * was ever a claim about Postgres. `src/store/artifacts-pg.ts`
+     * § `META_COLUMNS` forbids `extract` from writing these two columns,
+     * because `meta.json` carries stage 2's copies of them and stage 2 rewrites
+     * `meta.json` on every run — so the value on the article has to be
+     * `raw.json`'s or nothing. The filesystem arm of this test read `meta.json`
+     * and went with the store it belonged to; the control that keeps this
+     * assertion from being vacuous — an article where the two files really
+     * disagree — is `has at least one article whose two clocks really differ`
+     * below.
      */
-    function comparable(
-      article: Article,
-    ): Omit<Article, "meta" | "visibility"> & { meta: Omit<Meta, "url" | "fetchedAt"> } {
-      const { url: _url, fetchedAt: _fetchedAt, ...meta } = article.meta;
-      const { visibility: _visibility, ...rest } = article;
-      return { ...rest, meta };
-    }
-
-    it("returns an identical Article", async () => {
-      const [fromFiles, fromPg] = await Promise.all([
-        fsArticleReader.loadArticle(slug),
-        pgArticleReader.loadArticle(slug),
-      ]);
-      /* **The half the exemption above would otherwise have thrown away.**
-         Dropping `visibility` from the comparison says nothing about what
-         either store answers, and the dangerous direction is this one: if the
-         filesystem reader ever defaults to `"private"`, every test in this
-         suite still passes and every owner in development gets a lock over an
-         article nobody was ever asked about — the one claim this field exists
-         not to make (src/types.ts § `Article.visibility`). Asserted per slug,
-         because a default would arrive for all of them at once and one sample
-         would be enough to miss it. GPT Sol, finding 4, 2026-09-04. */
-      expect("visibility" in fromFiles, `${slug} invented a visibility on disk`).toBe(false);
-      expect(wire(comparable(fromPg))).toEqual(wire(comparable(fromFiles)));
-      /* And again WITHOUT serialising, because the two assertions catch
-         different things. `toStrictEqual` is the only one that separates
-         `{ byline: undefined }` from `{}` — `JSON.stringify` deletes the key
-         and `toEqual` ignores it — and that difference is the whole reason
-         `exactOptionalPropertyTypes` is on: src/store/pg.ts spreads
-         conditionally so that a null column becomes an absent property rather
-         than an explicit `undefined` one, and nothing was checking that it
-         had. Added after GPT Sol's review, 2026-08-26. */
-      expect(comparable(fromPg)).toStrictEqual(comparable(fromFiles));
-    });
-
-    it("takes url and fetchedAt from stage 1 in Postgres and from stage 2 on disk", async () => {
-      /* **The price of the exemption above, and it is paid in both directions.**
-         Dropping two fields from a comparison is only honest if something else
-         says where each store's copy came from. Postgres reads the columns
-         `fetch` wrote, so its answers must equal `raw.json`; the filesystem
-         reads `meta.json`, so its answers must equal that. An article with no
-         `raw.json` has nothing to have written them, and Postgres correctly has
-         neither — which is the whole of the noema case, asserted here for every
-         article rather than only for that one. */
-      const [fromFiles, fromPg] = await Promise.all([
-        fsArticleReader.loadArticle(slug),
-        pgArticleReader.loadArticle(slug),
-      ]);
+    it("takes url and fetchedAt from stage 1, never from stage 2", async () => {
+      const fromPg = await pgArticleReader.loadArticle(slug);
       const raw = await readArticleJson<{ url?: string; fetchedAt: string }>(slug, "raw.json");
-      const meta = await readArticleJson<{ url?: string; fetchedAt?: string }>(slug, "meta.json");
-
-      expect(fromFiles.meta.url).toBe(meta?.url);
-      expect(fromFiles.meta.fetchedAt).toBe(meta?.fetchedAt);
 
       expect(fromPg.meta.url).toBe(raw?.url);
       expect(fromPg.meta.fetchedAt).toBe(raw?.fetchedAt);
-    });
-
-    it("returns the blocks in the same order, by id", async () => {
-      // Asserted separately from the deep equality above, because block ORDER
-      // is the one thing that cannot be recovered if it is lost: ids are random
-      // and carry no position. A deep-equal failure on a 360-block article is
-      // also unreadable; this one names the first id that moved.
-      const [fromFiles, fromPg] = await Promise.all([
-        fsArticleReader.loadArticle(slug),
-        pgArticleReader.loadArticle(slug),
-      ]);
-      expect(fromPg.blocks.map((b) => b.id)).toEqual(fromFiles.blocks.map((b) => b.id));
     });
 
     /* **All four artefact reads, not three.** `loadIdeas` was missing until
@@ -519,50 +444,40 @@ when("the filesystem and Postgres stores agree", () => {
        change can break while the other three stay green. GPT Sol found the gap
        while reviewing docs/plans/260827am-glossary-read-latency.md — which narrows what
        all four of them read — and it was right that the plan claimed a cover
-       this file did not provide. */
-    for (const [name, read] of [
-      ["tweets", (r: typeof fsArticleReader) => r.loadTweets(slug)],
-      ["glossary", (r: typeof fsArticleReader) => r.loadGlossary(slug)],
-      ["ideas", (r: typeof fsArticleReader) => r.loadIdeas(slug)],
-      /* Without this row the two adapters are never diffed for this artefact,
-         and `loadTimeline` is the one read whose staleness compares a fourth
-         value — the publication date — so a Postgres projection that forgot
-         `published_at` would report every dated timeline stale for ever while
-         the filesystem store called the same one current, with nothing red. */
-      ["timeline", (r: typeof fsArticleReader) => r.loadTimeline(slug)],
-      /* Added the day the stage landed rather than the day somebody noticed —
-         `loadIdeas`' own note above is about exactly that gap. No article in
-         the corpus has a quiz yet, so today this row only diffs the **404**,
-         which is the half that is easiest to get wrong and cheapest to check:
-         `routes.ts` turns `status: 404` into a 404 and an untagged throw into a
-         500, so a Postgres reader that threw the right sentence with no status
-         would turn "nobody has written questions yet" — the ordinary case the
-         panel's button is for — into a server error. */
-      ["quiz", (r: typeof fsArticleReader) => r.loadQuiz(slug)],
-    ] as const) {
-      it(`agrees about ${name}, present or absent`, async () => {
-        const fromFiles = await read(fsArticleReader).catch((err: unknown) => err);
-        const fromPg = await read(pgArticleReader as typeof fsArticleReader).catch(
-          (err: unknown) => err,
-        );
+       this file did not provide.
 
-        if (fromFiles instanceof Error) {
-          /* Absence has to match too, and match as a STATUS. routes.ts turns
-             `status: 404` into a 404 and an untagged throw into a 500, so a
-             store that threw the right message with the wrong tag would turn
-             "no thread yet" — the ordinary case the page's button is for —
-             into a server error. */
-          expect(fromPg).toBeInstanceOf(Error);
-          expect((fromPg as { status?: number }).status).toBe(
-            (fromFiles as { status?: number }).status,
-          );
+       **What is left of this loop after the filesystem arm went**, 2026-09-05:
+       the half that was always about Postgres alone. Absence has to arrive as a
+       STATUS — `routes.ts` turns `status: 404` into a 404 and an untagged throw
+       into a 500, so a reader that threw the right sentence with no status
+       would turn "nobody has written questions yet", the ordinary case the
+       panel's button is for, into a server error. Nothing else in the tree
+       checks that for these five reads. */
+    for (const [name, read] of [
+      ["tweets", (r: typeof pgArticleReader) => r.loadTweets(slug)],
+      ["glossary", (r: typeof pgArticleReader) => r.loadGlossary(slug)],
+      ["ideas", (r: typeof pgArticleReader) => r.loadIdeas(slug)],
+      /* `loadTimeline` is the one read whose staleness compares a fourth value
+         — the publication date — so a Postgres projection that forgot
+         `published_at` would report every dated timeline stale for ever. */
+      ["timeline", (r: typeof pgArticleReader) => r.loadTimeline(slug)],
+      /* No article in the corpus has a quiz yet, so today this row only
+         exercises the **404**, which is the half that is easiest to get wrong
+         and cheapest to check. */
+      ["quiz", (r: typeof pgArticleReader) => r.loadQuiz(slug)],
+    ] as const) {
+      it(`answers about ${name}, present or absent`, async () => {
+        const fromPg = await read(pgArticleReader).catch((err: unknown) => err);
+
+        if (fromPg instanceof Error) {
+          expect(
+            (fromPg as { status?: number }).status,
+            `${name} refused without a status, so routes.ts would send a 500`,
+          ).toBe(404);
           return;
         }
-
-        expect(fromPg).not.toBeInstanceOf(Error);
-        expect(wire(fromPg)).toEqual(wire(fromFiles));
-        // See the note on `toStrictEqual` above: absent is not `undefined`.
-        expect(fromPg).toStrictEqual(fromFiles);
+        // Present: it has to survive the wire, which is what the client gets.
+        expect(wire(fromPg)).toBeDefined();
       });
     }
   });
@@ -666,194 +581,33 @@ when("the filesystem and Postgres stores agree", () => {
       expect(loaded.get(NO_FETCH_SLUG)?.copied).not.toContain("fetch");
     });
 
-    it("keeps url and fetchedAt on disk and has neither in Postgres", async () => {
-      const [fromFiles, fromPg] = await Promise.all([
-        fsArticleReader.loadArticle(NO_FETCH_SLUG),
-        pgArticleReader.loadArticle(NO_FETCH_SLUG),
-      ]);
-      expect(fromFiles.meta.url).toMatch(/^https:\/\//);
-      expect(fromFiles.meta.fetchedAt).toMatch(/^\d{4}-/);
+    it("has neither url nor fetchedAt in Postgres, though meta.json carries both", async () => {
+      /* The `meta.json` half is read straight off the file rather than through
+         a second store, since 2026-09-05: what made this case worth having was
+         never that two readers disagreed, but that the file has both values and
+         Postgres correctly refuses to take them from it. */
+      const onDisk = await readArticleJson<{ url?: string; fetchedAt?: string }>(
+        NO_FETCH_SLUG,
+        "meta.json",
+      );
+      expect(onDisk?.url).toMatch(/^https:\/\//);
+      expect(onDisk?.fetchedAt).toMatch(/^\d{4}-/);
+
+      const fromPg = await pgArticleReader.loadArticle(NO_FETCH_SLUG);
       // Absent, not `undefined` and not `null`: the key is not there at all.
       expect("url" in fromPg.meta).toBe(false);
       expect("fetchedAt" in fromPg.meta).toBe(false);
     });
   });
 
-  it("lists the same articles, with the same derived counts", async () => {
-    const [fromFiles, fromPg] = await Promise.all([
-      fsArticleReader.listArticles(),
-      pgArticleReader.listArticles(),
-    ]);
-
-    /* The committed `example/` fixture is the ONE known difference, and it is
-       an open question rather than a bug: src/api.ts appends it to the shelf
-       explicitly, and it does not live under `data/`, so nothing loaded it.
-       See docs/plans/260825f-postgres-migration.md open question 8. Asserting that it
-       is the *only* difference is what stops this exclusion quietly growing to
-       cover a real one. */
-    const realOnly = (entries: LibraryEntry[]) => entries.filter((e) => !e.fixture);
-    const fixtures = fromFiles.filter((e) => e.fixture).map((e) => e.slug);
-    /* Whether the shelf shows the fixture at all is src/api.ts's call, and it
-       has already changed once under this test — which asserted `["example"]`
-       and went red the afternoon the fixture stopped being listed. So the
-       assertion is the invariant rather than the count: any fixture the
-       filesystem store shows can only be `example`, and Postgres shows none,
-       because nothing loaded `example/` and it does not live under `data/`.
-       A second fixture appearing from anywhere still fails this. */
-    expect(fixtures.filter((slug) => slug !== "example")).toEqual([]);
-    expect(fromPg.some((e) => e.fixture)).toBe(false);
-
-    const bySlug = (entries: LibraryEntry[]) =>
-      [...entries].sort((a, b) => a.slug.localeCompare(b.slug));
-
-    /* **An article whose directory has been deleted is out of scope here.**
-
-       Nothing prunes: a `data/<slug>/` removed after a load leaves a row
-       behind, with a current revision, and the Postgres library goes on listing
-       an article the filesystem no longer has. It is a real gap — written up in
-       docs/plans/260826e-postgres-storage-implementation.md rather than papered over —
-       and it is not a parity failure. Letting it read as one cost an afternoon:
-       `labels-checkpoint-check` was left in the database by somebody else's
-       checkpoint run, and this test failed in full runs and passed alone for a
-       reason that had nothing to do with either store. So the comparison is
-       scoped to articles that exist on disk right now. An extra article that
-       DOES have a directory still fails, which is the property worth keeping. */
-    const onDisk = new Set(await completeArticles());
-    /* `LEGACY_SLUG` comes out here for the reason written beside its
-       declaration: the filesystem lists an article it can serve, Postgres does
-       not list one it refused to publish, and both are correct. Asserted on the
-       Postgres side rather than left to the filter. */
-    await expectPostgresRefusedTheLegacyArticle();
-    const present = (entries: LibraryEntry[]) =>
-      entries.filter((e) => onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
-
-    /* **A comment whose anchor is not a block id is counted by the files and
-       cannot exist in Postgres.**
-
-       `block_identities` has a format check and `comments_identity_fk` points
-       at it; `comments.json` has none, and something wrote a comment on
-       `data/writes` anchored to `zzzz00`. The seeder drops it by that rule
-       (tests/helpers/seed-reader-state.ts), so the filesystem count is one
-       higher. That is a permitted difference and it is the only one *within* a
-       card, so it is subtracted here by the same rule rather than by a
-       hardcoded number — the day the corrupt row is deleted, this becomes a
-       no-op instead of becoming wrong. (The other permitted difference is about
-       which cards there are rather than what is on one: `LEGACY_SLUG`, excluded
-       just above.) */
-    const skipped = new Map<string, number>();
-    for (const slug of onDisk) {
-      const bad = (await fsCommentStore.load(slug)).filter((c) => !isSpideryarnId(c.blockId));
-      if (bad.length) skipped.set(slug, bad.length);
-    }
-
-    /* **`addedAt` is the two clocks again**, so it comes out of the comparison
-       here for the same reason `meta.fetchedAt` does above, and is asserted
-       positively in the test below. Postgres reads
-       `coalesce(article_revisions.fetched_at, articles.created_at)`; the
-       filesystem reads `meta.fetchedAt ?? mtime(blocks.json)`. The first is
-       when the document was fetched and the second is when it was last
-       extracted, and they are minutes apart across most of this corpus. */
-    /* **`opens` and `lastOpenedAt` cannot be compared for EQUALITY, and this is
-       a deliberate trade of coverage rather than an oversight.**
-
-       `seedShelfFromFiles` writes `data/<slug>/shelf.json`'s values onto the
-       row in `beforeAll`, and from that moment the two sides are free to drift:
-       a dev server running `SPIDERYARN_STORE=postgres` against this same
-       database legitimately calls `pgShelfStore.recordOpen`
-       (src/store/pg-shelf.ts) on every `POST /api/library/:slug/open`, which
-       increments `opens` and stamps `last_opened_at`. The filesystem copy is
-       frozen — nothing writes `shelf.json` any more since the Postgres move
-       (docs/project/database.md) — so the gap only ever widens, and this suite
-       failed with `opens: 169` against `170` for no reason of its own.
-
-       What replaces the equality is the assertion below: whatever the app did
-       to the row can only have moved these two forwards from what we seeded.
-       Monotonicity is the real invariant on a box where the app writes Postgres
-       and the shelf file does not move. It still catches an `opens` that went
-       DOWN, a `lastOpenedAt` that went backwards, and a store that lost either
-       one — which is what a parity break here would look like. What it no
-       longer catches is Postgres reporting a *larger* number than the file, and
-       that is exactly the case a live dev server produces honestly. */
-    /* **`visibility` comes out because one store cannot hold it at all**, which
-       is a different reason from the four above and a weaker exclusion: those
-       are two clocks and a live writer, this is a column that exists in
-       Postgres and nowhere on disk. `visibilityStore.set` refuses with a 501 on
-       the filesystem store (src/store/index.ts), so a shared article is
-       `visibility: "public"` on one side and silent on the other, for ever and
-       correctly. Without this, sharing one local article through the app —
-       which is how anyone checks the shelf badge — turns this suite red with a
-       whole-entry diff that says nothing about parity.
-
-       **Something *is* lost, and it is worth naming rather than waving away**:
-       this comparison no longer catches Postgres emitting `"private"` where it
-       should be silent, or losing a `"public"` altogether. Equality between the
-       two stores could never have caught the first of those and cannot express
-       the second, so the coverage was never really here — it is in
-       tests/store-shelf-pg.test.ts, which asserts the projection against a
-       known public and a known private row. GPT Sol, reviewing Cluster E, on an
-       earlier draft of this comment that claimed nothing was lost.
-       docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E. */
-    const comparable = (entries: LibraryEntry[]) =>
-      entries.map((e) => {
-        const {
-          addedAt: _addedAt,
-          url: _url,
-          opens: _opens,
-          lastOpenedAt: _last,
-          visibility: _visibility,
-          ...rest
-        } = e;
-        return rest;
-      });
-
-    /* The price of dropping those two, paid positively. Asserted on the
-       Postgres side, because Postgres is the side the running app writes. */
-    for (const card of present(realOnly(fromPg))) {
-      const seeded = seededShelf.get(card.slug);
-      expect(seeded, `${card.slug} was never seeded`).toBeDefined();
-      if (!seeded) continue;
-      expect(card.opens, `${card.slug} opens went backwards`).toBeGreaterThanOrEqual(seeded.opens);
-      if (seeded.lastOpenedAt) {
-        expect(card.lastOpenedAt, `${card.slug} lost its lastOpenedAt`).toBeDefined();
-        expect(
-          new Date(card.lastOpenedAt ?? 0).getTime(),
-          `${card.slug} lastOpenedAt went backwards`,
-        ).toBeGreaterThanOrEqual(seeded.lastOpenedAt.getTime());
-      }
-    }
-
-    /* **Subtracted from the filesystem side ONLY**, because it is the only side
-       that counted it. Applying it to both is a normalisation that cancels out
-       and asserts nothing — the first version of this rewrite did exactly that,
-       and the resulting red said `9` where it should have said `10`. */
-    const anchored = (entries: LibraryEntry[]) =>
-      entries.map((e) =>
-        skipped.has(e.slug) ? { ...e, comments: e.comments - (skipped.get(e.slug) ?? 0) } : e,
-      );
-
-    expect(wire(comparable(bySlug(present(realOnly(fromPg)))))).toEqual(
-      wire(comparable(anchored(bySlug(present(realOnly(fromFiles)))))),
-    );
-  });
-
   it("dates every card from the file the store actually reads", async () => {
-    /* The price of dropping `addedAt` and `url` from the comparison above.
-       Whatever each store puts on the card has to be traceable to a file, and
-       the two files disagree — which is the finding, not a fault. */
-    const [fromFiles, fromPg] = await Promise.all([
-      fsArticleReader.listArticles(),
-      pgArticleReader.listArticles(),
-    ]);
+    /* Whatever the store puts on the card has to be traceable to a file. The
+       filesystem arm — every card's `addedAt` equal to `meta.json`'s
+       `fetchedAt` — went with the store on 2026-09-05; what it was the price of
+       (dropping `addedAt` and `url` from a comparison that no longer exists)
+       went with it, and this half stands on its own. */
+    const fromPg = await pgArticleReader.listArticles();
     const onDisk = new Set(slugs);
-
-    for (const entry of fromFiles.filter((e) => onDisk.has(e.slug))) {
-      const meta = await readArticleJson<{ url?: string; fetchedAt?: string }>(
-        entry.slug,
-        "meta.json",
-      );
-      expect(entry.url, entry.slug).toBe(meta?.url);
-      if (meta?.fetchedAt) expect(entry.addedAt, entry.slug).toBe(meta.fetchedAt);
-    }
 
     for (const entry of fromPg.filter((e) => onDisk.has(e.slug))) {
       const raw = await readArticleJson<{ url?: string; fetchedAt: string }>(
@@ -947,49 +701,34 @@ when("the filesystem and Postgres stores agree", () => {
     expect(order).toEqual(["order-newest", "order-middle", "order-oldest"]);
   });
 
-  it("lists the same articles, each ordered by its own idea of when they arrived", async () => {
-    /* **Not "the same order", which is not an invariant and this test used to
-       demand.**
-     *
-       The two stores compute `addedAt` from different clocks — Postgres from
-       when the document was fetched, the filesystem from when it was last
-       extracted (see the note on `addedAt` above). Over this corpus they happen
-       to agree, but two articles fetched and extracted across each other's
-       boundary would order differently and **both stores would be right**. A
-       test that can go red for a non-bug teaches whoever meets it to distrust
-       it. GPT Sol, 2026-08-28.
-
-       What is true of both, always: the same articles, each list newest first
-       by whatever that store thinks "newest" means. Neither store specifies a
-       tie-break — `src/api.ts` sorts stably and Postgres has no secondary key —
-       so ties are compared as ties rather than as an order. A store sorting by
-       the wrong column, which is what the old assertion caught in August, still
-       fails this on the first pair. */
-    const [fromFiles, fromPg] = await Promise.all([
-      fsArticleReader.listArticles(),
-      pgArticleReader.listArticles(),
-    ]);
+  it("lists every article on disk, newest first by its own idea of when they arrived", async () => {
+    /* **Not "the same order as the filesystem", which was never an invariant
+       and this test used to demand.** The two stores computed `addedAt` from
+       different clocks, so two articles fetched and extracted across each
+       other's boundary would order differently and both stores would be right.
+       GPT Sol, 2026-08-28. The filesystem arm went on 2026-09-05 and what it
+       leaves is the property that was always Postgres's own: it lists the
+       articles that are on disk, and it lists them newest first by whatever
+       "newest" means to it — `coalesce(article_revisions.fetched_at,
+       articles.created_at)`. A store sorting by the wrong column, which is what
+       the old assertion caught in August, still fails this on the first pair. */
+    const fromPg = await pgArticleReader.listArticles();
     const onDisk = new Set(await completeArticles());
     /* Same exclusion, same reason, and the same positive assertion — see
-       `expectPostgresOmitsTheLegacyArticle` and the note by `LEGACY_SLUG`. */
+       `expectPostgresRefusedTheLegacyArticle` and the note by `LEGACY_SLUG`. */
     await expectPostgresRefusedTheLegacyArticle();
     const mine = (entries: LibraryEntry[]) =>
       entries.filter((e) => !e.fixture && onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
-    // Same articles. Sorted by slug, because the ORDER is the next assertion
-    // and comparing both at once reports either failure as the other.
-    const slugsOf = (entries: LibraryEntry[]) => mine(entries).map((e) => e.slug).sort();
-    expect(slugsOf(fromPg)).toEqual(slugsOf(fromFiles));
+    /* Every article this suite loaded is listed. Sorted by slug, because the
+       ORDER is the next assertion and comparing both at once reports either
+       failure as the other. */
+    expect(mine(fromPg).map((e) => e.slug).sort()).toEqual([...slugs].sort());
 
-    for (const [name, entries] of [
-      ["the filesystem store", fromFiles],
-      ["Postgres", fromPg],
-    ] as const) {
-      const dates = mine(entries).map((e) => e.addedAt);
-      // Its own list, newest first. `toEqual` rather than a loop of comparisons
-      // so the failure prints the order it actually got.
-      expect(dates, `${name} is not newest-first`).toEqual([...dates].sort().reverse());
-    }
+    const dates = mine(fromPg).map((e) => e.addedAt);
+    // `toEqual` rather than a loop of comparisons so the failure prints the
+    // order it actually got.
+    expect(dates, "Postgres is not newest-first").toEqual([...dates].sort().reverse());
   });
 
   /**
@@ -1013,15 +752,13 @@ when("the filesystem and Postgres stores agree", () => {
    * of date with nothing saying why.
    */
   describe.each(slugs)("%s — the article's fingerprint", (slug) => {
-    it("is the same number in both stores", async () => {
-      const [fromFiles, fromPg] = await Promise.all([
-        fsSearchStore.sourceHash(slug),
-        pgSearchStore.sourceHash(slug),
-      ]);
-      // Not just equal — actually computed. Two `undefined`s are also equal,
-      // and would mean neither store could see the article at all.
-      expect(fromFiles).toMatch(/^[0-9a-f]{16}$/);
-      expect(fromPg).toBe(fromFiles);
+    it("is a number the store can actually compute", async () => {
+      /* Was an equality against the filesystem store's answer until 2026-09-05.
+         What is left is the half that never needed a second store: the read
+         reaches the article and returns a hash rather than `undefined`, which
+         is what a query that lost its join returns. The ordering claim itself
+         is pinned in tests/store-block-reads.test.ts against generated SQL. */
+      expect(await pgSearchStore.sourceHash(slug)).toMatch(/^[0-9a-f]{16}$/);
     });
   });
 
@@ -1052,7 +789,7 @@ when("the filesystem and Postgres stores agree", () => {
      * having asked nothing.
      */
     async function distinctiveWord(): Promise<string> {
-      const article = await fsArticleReader.loadArticle(slug);
+      const article = await pgArticleReader.loadArticle(slug);
       const words = article.blocks
         .filter((b) => b.gistable)
         .flatMap((b) => b.text.toLowerCase().split(/[^a-z]+/))
@@ -1066,10 +803,8 @@ when("the filesystem and Postgres stores agree", () => {
        missing hit means "not found" rather than "pushed off the end". */
     const LOTS = 500;
 
-    it.each([
-      ["the filesystem store", fsLibrarySearch],
-      ["Postgres", pgLibrarySearch],
-    ])("is gone from %s's results, and nothing else is", async (_name, store) => {
+    it("is gone from Postgres's results, and nothing else is", async () => {
+      const store = pgLibrarySearch;
       const word = await distinctiveWord();
 
       const all = await store.searchLibrary(word, LOTS);

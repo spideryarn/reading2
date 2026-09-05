@@ -44,6 +44,7 @@ import {
   limitForPeriod,
   nextQuotaAdjustment,
 } from "../src/billing/quota-adjustment.js";
+import { articles } from "../src/billing/half-units.js";
 import type { QuotaAdjustment, QuotaRules } from "../src/billing/quota-adjustment.js";
 import { syncSubscriptionFromStripe } from "../src/billing/sync.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -55,14 +56,12 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 /** Before `pgReady`: vitest does not load `.env.local` on its own. */
 loadEnvLocal();
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-quota-adjustment.test.ts",
   tables: ["spideryarn.billing_accounts", "spideryarn.ingest_events", "spideryarn.billing_tiers"],
   keepPool: true,
   max: 4,
 });
-
-const dbIt = reachable ? it : it.skip;
 
 /** This file's own reader. Fixed, so a run killed halfway is swept by the next. */
 const OWNER = "0b1113b0-0000-4000-8000-00000000e3b0";
@@ -350,7 +349,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
    * 33.0, where a few milliseconds of clock drift between the fixture and the
    * sync would decide the floor. Off the boundary, drift moves it by 1e-7.
    */
-  dbIt("hands over three days' worth of Researcher, not a month's", async () => {
+  it("hands over three days' worth of Researcher, not a month's", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -361,7 +360,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
   });
 
   /** An upgrade on the day of renewal is worth very nearly the whole difference. */
-  dbIt("hands over the whole difference when the period has barely started", async () => {
+  it("hands over the whole difference when the period has barely started", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 2 * HOUR);
     const periodEnd = new Date(now.getTime() + (30 * DAY - 2 * HOUR));
@@ -377,7 +376,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
   });
 
   /** The step the whole exploit rests on: an hour left is worth almost nothing. */
-  dbIt("hands over nearly nothing when there is an hour of the period left", async () => {
+  it("hands over nearly nothing when there is an hour of the period left", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - (30 * DAY - HOUR));
     const periodEnd = new Date(now.getTime() + HOUR);
@@ -390,7 +389,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
   });
 
   /** And the same arithmetic downwards, because the money credits the same way. */
-  dbIt("takes the allowance back down on a downgrade", async () => {
+  it("takes the allowance back down on a downgrade", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - (3 * DAY + HOUR));
     const periodEnd = new Date(now.getTime() + (27 * DAY - HOUR));
@@ -408,7 +407,7 @@ describe("a plan change mid-period moves the allowance by what is left of the pe
    * where a single change at the last instant would have put them, not
    * 130 ingests higher.
    */
-  dbIt("does not let up-down-up cycling accumulate allowance", async () => {
+  it("does not let up-down-up cycling accumulate allowance", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - (15 * DAY + HOUR));
     const periodEnd = new Date(now.getTime() + (15 * DAY - HOUR));
@@ -442,7 +441,7 @@ describe("which period an override belongs to", () => {
    * override — otherwise the second delivery reads the *old* price beside the
    * new one and pays the difference out all over again.
    */
-  dbIt("does not hand the difference over twice when the webhook is delivered twice", async () => {
+  it("does not hand the difference over twice when the webhook is delivered twice", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -464,7 +463,7 @@ describe("which period an override belongs to", () => {
    * period is not this one, so a sync that forgot to clear it would still meter
    * at 150. Both guards are wanted; this is the pin for the one in sync.
    */
-  dbIt("clears the override when the period rolls over", async () => {
+  it("clears the override when the period rolls over", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -489,7 +488,7 @@ describe("which period an override belongs to", () => {
    * thing under test, and this file is the only one that drives sync end to end,
    * so the pin belongs here.
    */
-  dbIt("records the period Stripe reported, not the one already in the row", async () => {
+  it("records the period Stripe reported, not the one already in the row", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -507,7 +506,7 @@ describe("which period an override belongs to", () => {
    * read side's half of the same rule — and the half that holds even if a future
    * change to sync forgets to clear one.
    */
-  dbIt("meters on the tier when the stored override belongs to another period", async () => {
+  it("meters on the tier when the stored override belongs to another period", async () => {
     if (!pool) return;
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 3 * DAY);
@@ -538,7 +537,7 @@ describe("which period an override belongs to", () => {
    * way, which is better than being wrong in whichever direction a stale
    * timestamp happens to point. GPT Sol, 2026-09-04, reproduced.
    */
-  dbIt("does not let an older event scale a change it did not cause", async () => {
+  it("does not let an older event scale a change it did not cause", async () => {
     const now = wholeSecond();
     /* Day 20 of 30. The stale event would claim day 17. */
     const periodStart = new Date(now.getTime() - 20 * DAY);
@@ -563,7 +562,7 @@ describe("which period an override belongs to", () => {
    * same Stripe second share a period start, so the period test alone cannot
    * tell them apart. GPT Sol, 2026-09-04, reproduced.
    */
-  dbIt("does not prorate when a different subscription starts the same second", async () => {
+  it("does not prorate when a different subscription starts the same second", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 15 * DAY);
     const periodEnd = new Date(now.getTime() + 15 * DAY);
@@ -592,7 +591,7 @@ describe("which period an override belongs to", () => {
    * what it left keeps the tier table in charge of the base.
    * GPT Sol, 2026-09-04, reproduced.
    */
-  dbIt("follows a tier raise for an account carrying an override", async () => {
+  it("follows a tier raise for an account carrying an override", async () => {
     if (!pool) return;
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
@@ -624,7 +623,7 @@ describe("which period an override belongs to", () => {
    * at full price with no proration credit, so the reader is buying more rather
    * than taking it, and the period test alone is what notices.
    */
-  dbIt("gives a freshly-bought subscription its whole allowance", async () => {
+  it("gives a freshly-bought subscription its whole allowance", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -677,7 +676,7 @@ describe("what one sync writes", () => {
     return row as Record<string, unknown>;
   }
 
-  dbIt("writes every field from what Stripe said, not from what the row said", async () => {
+  it("writes every field from what Stripe said, not from what the row said", async () => {
     const now = wholeSecond();
     const periodStart = new Date(now.getTime() - 5 * DAY);
     const periodEnd = new Date(now.getTime() + 25 * DAY);
@@ -728,7 +727,7 @@ describe("what one sync writes", () => {
    * partial update would break: a cancelled subscription keeping a period that
    * makes it look current is exactly how somebody stays entitled for free.
    */
-  dbIt("clears every field when the customer has no subscription we can meter", async () => {
+  it("clears every field when the customer has no subscription we can meter", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -771,7 +770,7 @@ describe("what one sync writes", () => {
    * tests/billing-quota-race.test.ts § *a held transaction beats a race* is the
    * same shape: assert the blocking rather than hoping for an interleaving.
    */
-  dbIt("reads and moves the price inside one critical section", async () => {
+  it("reads and moves the price inside one critical section", async () => {
     if (!pool) return;
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
@@ -841,7 +840,7 @@ describe("the columns the database will not accept", () => {
    * An adjustment without a period cannot be applied and a period without an
    * adjustment says nothing, so either alone is a bug rather than a state.
    */
-  dbIt("refuses an adjustment with no period, and a period with no adjustment", async () => {
+  it("refuses an adjustment with no period, and a period with no adjustment", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -853,7 +852,7 @@ describe("the columns the database will not accept", () => {
   });
 
   /** And accepts both halves of the rule, so the test above is not vacuous. */
-  dbIt("accepts both null and both set", async () => {
+  it("accepts both null and both set", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: READER.price, periodStart, periodEnd });
@@ -870,7 +869,7 @@ describe("the columns the database will not accept", () => {
    * function of `billing_tiers`, which a row constraint cannot see, so it is
    * enforced at the read by `limitForPeriod` and pinned from both ends there.
    */
-  dbIt("accepts the negative delta an upgrade stores", async () => {
+  it("accepts the negative delta an upgrade stores", async () => {
     const now = wholeSecond();
     const { periodStart, periodEnd } = threeDaysLeft(now);
     await storedRow({ priceId: RESEARCHER.price, periodStart, periodEnd });
@@ -896,8 +895,8 @@ const PURE_PERIOD = {
 
 const RULES: QuotaRules = {
   allowanceFor: (priceId) =>
-    priceId === "price_reader" ? 20 : priceId === "price_researcher" ? 150 : null,
-  maxAllowance: 150,
+    priceId === "price_reader" ? articles(20) : priceId === "price_researcher" ? articles(150) : null,
+  maxAllowance: articles(150),
 };
 
 /** The row as it stands before a change: Reader, this subscription, this period. */
@@ -941,7 +940,7 @@ describe("how much of the period is left", () => {
 
 describe("what counts as a plan change at all", () => {
   it("clears when there is no subscription left to meter", () => {
-    expect(change({ stored: storedReader({ delta: 13, periodStart: new Date(0) }), incoming: null })).toEqual(
+    expect(change({ stored: storedReader({ delta: articles(13), periodStart: new Date(0) }), incoming: null })).toEqual(
       NO_ADJUSTMENT,
     );
   });
@@ -950,7 +949,7 @@ describe("what counts as a plan change at all", () => {
   it("clears when the incoming period starts later", () => {
     expect(
       change({
-        stored: storedReader({ delta: 13, periodStart: new Date(0) }),
+        stored: storedReader({ delta: articles(13), periodStart: new Date(0) }),
         incoming: { ...PURE_PERIOD, periodStart: new Date(1000), periodEnd: new Date(2000) },
         now: new Date(1500),
       }),
@@ -967,7 +966,7 @@ describe("what counts as a plan change at all", () => {
     expect(
       change({
         stored: {
-          ...storedReader({ delta: 13, periodStart: new Date(5000) }),
+          ...storedReader({ delta: articles(13), periodStart: new Date(5000) }),
           currentPeriodStart: new Date(5000),
         },
       }),
@@ -991,6 +990,47 @@ describe("what counts as a plan change at all", () => {
     ).toEqual(NO_ADJUSTMENT);
   });
 
+  /**
+   * **Ending a trial to switch plan is not a mid-period plan change either — and
+   * the copy on both pages depends on it.**
+   *
+   * `trialing` is an entitled status (src/billing/tiers.ts) and the hosted
+   * Portal is configured `trial_update_behavior: "end_trial"`, so a trialling
+   * reader who switches has their trial ended: the trial period stops at that
+   * moment and a paid one starts, which is a **new period start** on the same
+   * subscription. This branch therefore writes no delta, and the reader gets the
+   * whole of the new tier's allowance rather than a part-month share.
+   *
+   * That is not a bug — a trial nobody paid for has no allowance to prorate away
+   * from — but it made the sentence beside the *Switch plan* button false, which
+   * promised "the larger allowance is added for the part of the month that is
+   * left". `switchingPlan("trial")` (src/billing-plan.ts) says the true thing,
+   * and this is the fact it says. GPT Sol, 2026-09-04, finding 2, reproduced.
+   *
+   * Pinned here rather than argued in a comment, so that a change to the
+   * ordering rule which quietly started prorating this makes the copy red.
+   */
+  it("clears when a trial ends into a new period on the same subscription", () => {
+    const started = new Date(400);
+    const adjustment = change({
+      /* The trial: Reader's price, the period that has just been cut short. */
+      stored: storedReader(),
+      /* The switch: same subscription, Researcher's price, a period beginning
+         now because the trial has just ended. */
+      incoming: {
+        ...PURE_PERIOD,
+        priceId: "price_researcher",
+        periodStart: started,
+        periodEnd: new Date(1400),
+      },
+      now: started,
+    });
+    expect(adjustment).toEqual(NO_ADJUSTMENT);
+    /* And what the wall then allows is the whole 150, read the way admission
+       reads it — not the ~75 a half-period proration would have given. */
+    expect(limitForPeriod(articles(150), started, adjustment, RULES.maxAllowance)).toBe(150);
+  });
+
   /** And a row that has never been synced has no subscription to match against. */
   it("clears when the row names no subscription at all", () => {
     expect(change({ stored: { ...storedResearcher(), subscriptionId: null } })).toEqual(
@@ -1002,7 +1042,7 @@ describe("what counts as a plan change at all", () => {
   it("carries an existing adjustment through unchanged when nothing changed", () => {
     expect(
       change({
-        stored: storedResearcher({ delta: -117, periodStart: new Date(0) }),
+        stored: storedResearcher({ delta: articles(-117), periodStart: new Date(0) }),
         now: new Date(900),
       }),
     ).toEqual({ delta: -117, periodStart: new Date(0) });
@@ -1066,12 +1106,12 @@ describe("what a mid-period change is worth", () => {
   it("cannot be talked above the largest tier, or below nothing", () => {
     /* An absurd stored delta plus a full-value upgrade: capped at 150, so 0. */
     expect(
-      change({ stored: storedReader({ delta: 9000, periodStart: new Date(0) }), now: new Date(0) }),
+      change({ stored: storedReader({ delta: articles(9000), periodStart: new Date(0) }), now: new Date(0) }),
     ).toEqual({ delta: 0, periodStart: new Date(0) });
     /* And the floor: a stored −9000 downgraded lands at 0, so −20 against Reader. */
     expect(
       change({
-        stored: storedResearcher({ delta: -9000, periodStart: new Date(0) }),
+        stored: storedResearcher({ delta: articles(-9000), periodStart: new Date(0) }),
         incoming: { ...PURE_PERIOD, priceId: "price_reader" },
         now: new Date(0),
       }),
@@ -1135,7 +1175,7 @@ describe("what a mid-period change is worth", () => {
         now: at(t),
       });
       const tier = price === "price_reader" ? 20 : 150;
-      limits.push(limitForPeriod(tier, new Date(0), next, 150));
+      limits.push(limitForPeriod(articles(tier), new Date(0), next, articles(150)));
       stored = { ...storedReader(next), priceId: price };
     }
     /* Up to 85, back to 20, up to 84, back to 19, up to 83 — the drift is
@@ -1145,10 +1185,10 @@ describe("what a mid-period change is worth", () => {
 });
 
 describe("the limit the row carries", () => {
-  const upgraded: QuotaAdjustment = { delta: -117, periodStart: new Date(0) };
+  const upgraded: QuotaAdjustment = { delta: articles(-117), periodStart: new Date(0) };
 
   it("is the tier plus the adjustment, when the adjustment belongs to this period", () => {
-    expect(limitForPeriod(150, new Date(0), upgraded, 150)).toBe(33);
+    expect(limitForPeriod(articles(150), new Date(0), upgraded, articles(150))).toBe(33);
   });
 
   /**
@@ -1157,8 +1197,8 @@ describe("the limit the row carries", () => {
    * it left. An absolute 33 would have sat at 33 through every future raise.
    */
   it("follows the tier when the tier is raised under it", () => {
-    expect(limitForPeriod(200, new Date(0), upgraded, 200)).toBe(83);
-    expect(limitForPeriod(50, new Date(0), { delta: 13, periodStart: new Date(0) }, 150)).toBe(63);
+    expect(limitForPeriod(articles(200), new Date(0), upgraded, articles(200))).toBe(83);
+    expect(limitForPeriod(articles(50), new Date(0), { delta: articles(13), periodStart: new Date(0) }, articles(150))).toBe(63);
   });
 
   /**
@@ -1167,16 +1207,16 @@ describe("the limit the row carries", () => {
    * none of them may meter somebody on last month's number.
    */
   it("is the tier's, when the adjustment belongs to another period", () => {
-    expect(limitForPeriod(150, new Date(9999), upgraded, 150)).toBe(150);
+    expect(limitForPeriod(articles(150), new Date(9999), upgraded, articles(150))).toBe(150);
   });
 
   it("is the tier's when there is no adjustment at all", () => {
-    expect(limitForPeriod(150, new Date(0), NO_ADJUSTMENT, 150)).toBe(150);
+    expect(limitForPeriod(articles(150), new Date(0), NO_ADJUSTMENT, articles(150))).toBe(150);
   });
 
   it("cannot exceed the largest allowance any tier sells, or fall below nothing", () => {
-    expect(limitForPeriod(20, new Date(0), { delta: 9000, periodStart: new Date(0) }, 150)).toBe(150);
-    expect(limitForPeriod(20, new Date(0), { delta: -9000, periodStart: new Date(0) }, 150)).toBe(0);
+    expect(limitForPeriod(articles(20), new Date(0), { delta: articles(9000), periodStart: new Date(0) }, articles(150))).toBe(150);
+    expect(limitForPeriod(articles(20), new Date(0), { delta: articles(-9000), periodStart: new Date(0) }, articles(150))).toBe(0);
   });
 });
 

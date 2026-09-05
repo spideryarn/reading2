@@ -141,6 +141,10 @@ export interface IngestTally {
   inPeriod: number;
   /** Reservations taken and not settled. Counted as used, as the wall does. */
   inFlight: number;
+  /** How many of `lifetime` are currently public, and so cost half a slot. */
+  lifetimeShared: number;
+  /** How many of `inPeriod` are. Never includes `inFlight` — see `planFacts`. */
+  inPeriodShared: number;
 }
 
 /** Everything the merge needs, named so the call site reads as a sentence. */
@@ -189,7 +193,10 @@ function tally(rows: CountRow[]): Map<string, number> {
  * values are declared once — a fourth added there and not here would be a type
  * error at the spread rather than a silent narrowing.
  */
-type PlanFacts = Pick<AdminUser, "plan" | "ingests" | "ingestLimit" | "ingestWindow"> &
+type PlanFacts = Pick<
+  AdminUser,
+  "plan" | "ingests" | "ingestsShared" | "ingestLimit" | "ingestWindow"
+> &
   Partial<Pick<AdminUser, "planStatus">>;
 
 /**
@@ -244,6 +251,11 @@ function planFacts(
   const inFlight = counts?.inFlight ?? 0;
   const lifetime = (counts?.lifetime ?? 0) + inFlight;
   const inPeriod = (counts?.inPeriod ?? 0) + inFlight;
+  /* **Not `+ inFlight`**, unlike the two above: an unsettled reservation is
+     charged full price, because nobody yet knows whether the article will be
+     shared. src/billing/half-units.ts. */
+  const lifetimeShared = counts?.lifetimeShared ?? 0;
+  const inPeriodShared = counts?.inPeriodShared ?? 0;
 
   const entitlement = entitlementFromRow(account, tiers, now);
 
@@ -256,6 +268,7 @@ function planFacts(
       plan: tier?.id ?? "free",
       ...(status === undefined ? {} : { planStatus: status }),
       ingests: lifetime,
+      ingestsShared: lifetimeShared,
       ingestLimit: tier?.ingestsPerPeriod ?? FREE_LIFETIME_INGESTS,
       /* **Its own window, not `lifetime`.** The count and the limit are measured
          over different spans here and only the cell can say so — see
@@ -269,6 +282,7 @@ function planFacts(
         plan: entitlement.tierId,
         ...(status === undefined ? {} : { planStatus: status }),
         ingests: inPeriod,
+        ingestsShared: inPeriodShared,
         ingestLimit: entitlement.limit,
         ingestWindow: "period",
       }
@@ -276,6 +290,7 @@ function planFacts(
         plan: "free",
         ...(status === undefined ? {} : { planStatus: status }),
         ingests: lifetime,
+        ingestsShared: lifetimeShared,
         ingestLimit: entitlement.limit,
         ingestWindow: "lifetime",
       };
@@ -500,9 +515,33 @@ export function adminQueries(db: Db) {
         inFlight: sql<number>`count(*) filter (
             where ${ingestEvents.succeededAt} is null
               and ${ingestEvents.releasedAt} is null)`.mapWith(Number),
+        /* **How many of the counted rows are cheap right now**, over each of the
+           two windows above — because a currently-public article costs half a
+           slot (src/billing/half-units.ts) and `12 / 3` on this page would
+           otherwise read as the wall having failed. The *count* goes on the wire
+           and the arithmetic happens in the browser, which is the same rule
+           ../billing-plan.ts states: integer counts that add up, and no
+           half-unit divided for display.
+
+           The join is `left` and the predicate is `= 'public'`, so a row whose
+           article is gone or predates the column falls to full price — the same
+           `coalesce` reading `usageSql` uses, and the direction that cannot be
+           gamed. In flight is not counted here for the same reason it is not
+           discounted there: nobody knows yet. */
+        lifetimeShared: sql<number>`count(*) filter (
+            where ${ingestEvents.succeededAt} is not null
+              and ${articles.visibility} = 'public')`.mapWith(Number),
+        inPeriodShared: sql<number>`count(*) filter (
+            where ${ingestEvents.succeededAt} is not null
+              and ${billingAccounts.currentPeriodStart} is not null
+              and ${billingAccounts.currentPeriodEnd} is not null
+              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd}
+              and ${articles.visibility} = 'public')`.mapWith(Number),
       })
       .from(ingestEvents)
       .leftJoin(billingAccounts, eq(billingAccounts.ownerId, ingestEvents.ownerId))
+      .leftJoin(articles, eq(articles.id, ingestEvents.articleId))
       .groupBy(ingestEvents.ownerId),
   };
 }

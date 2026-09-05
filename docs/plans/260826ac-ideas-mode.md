@@ -500,7 +500,7 @@ pipeline artefact has a checklist:
 | Where | What |
 |---|---|
 | [`src/store/artifacts.ts`](../../src/store/artifacts.ts) | `"ideas"` in `ArtifactKind`, and its type in `ArtifactMap` |
-| [`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) | the file-backed adapter, keyed `(step, kind)` |
+| `src/store/artifacts-fs.ts` | the file-backed adapter, keyed `(step, kind)` |
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | `loadIdeas` on `ArticleReader`, beside `loadGlossary` and `loadSummaries` |
 | [`src/db/schema.ts`](../../src/db/schema.ts) | a whole-artefact JSONB column on `article_revisions`, and `"ideas"` in the `revision_step_runs` CHECK constraint |
 | `src/store/pg-*.ts` | the Postgres reader |

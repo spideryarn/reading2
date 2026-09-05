@@ -3,8 +3,11 @@
 Everything about *how you are looking at an article* lives in the query string — and, since
 2026-08-26, everything about how you are looking at **the shelf** does too
 ([§ The library's own five](#the-librarys-own-five)). Nothing the reader
-can change lives in `useState`, and nothing lives in `localStorage`. Which article you are looking at
-is the **path** — see [§ Which article is the path](#which-article-is-the-path).
+can change lives in `useState`, and nothing lives in `localStorage` — with one exception since
+2026-09-05, which is about *which address you arrive at* rather than about where state lives while
+you are here: [§ Reopening an article where you left it](#reopening-an-article-where-you-left-it).
+Which article you are looking at is the **path** — see
+[§ Which article is the path](#which-article-is-the-path).
 
 > Ideally, I would like to be able to remember the state. So if I, for example, scroll down to a
 > particular place in the doc for example (or changed something else, etc etc), that should update
@@ -28,9 +31,9 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 
 | Param | Meaning | History | Example |
 |---|---|---|---|
-| `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
-| `text` | `1` reading mode, `0` outline mode | push | `?text=0` |
-| `spine` | whether the bird's-eye rail is on screen. **Absent means automatic** — off in outline mode, on wherever there is prose ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)). Present means the reader chose, in either direction. | push | `?spine=0` |
+| `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. **A `0` is dropped in silence** since 2026-09-05: there is no L0 column any more, and an old link is not an error (`offerableGists`, [layout.ts](../../src/web/layout.ts)). | push | `?cols=1,2`, or `?cols=none` |
+| `text` | `1` reading mode, `0` outline mode. **Nothing writes it and `0` does not survive arrival, since 2026-09-05** — an incoming `?mode=hierarchy&text=0` is rewritten to `?mode=outline` and the pair is dropped whatever the mode, because the pill that could put the prose back has gone; see below | push | `?text=0` |
+| `spine` | whether the bird's-eye rail is on screen. **Absent means on**, in every mode ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)); `0` is the only thing that takes it away. **Read-only since 2026-09-05** — see below | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
@@ -133,8 +136,42 @@ a toggle, and that is exactly what it cost.
 
 Note which half of the old rule survived. The parameter says **on or off** and the derivation keeps
 everything else: full-vs-narrow is still `fitView`'s, because how much room there is was never the
-reader's question. And absent still means derived, which is why this one has no default — see
-`?gate=` below for the same call made for the same reason.
+reader's question.
+
+**And then the toggle went again, on 2026-09-05, and the parameter stayed.** Greg: *"we don't need
+the 'Spine' button (let's just default to always showing it)"* — so the rail is on wherever nobody
+has said otherwise, outline mode included, and nothing on screen writes `?spine=` or `?text=` any
+more ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)). Both are still honoured
+on arrival: `?spine=0` still hides the rail.
+
+**`?text=0` does not survive arrival, since stage 3 of that plan.** It was the one address the
+reader could not leave: the `Text` pill was the only way back to the prose and it went with the bar.
+So `settleAddress` rewrites it (`liftStrandedText` in [router.ts](../../src/web/router.ts)) —
+**`?mode=hierarchy&text=0` → `?mode=outline`, and the `text` pair is dropped whatever the mode was.**
+
+Three things about that rule are not the obvious ones, and each is why it is written as it is:
+
+- **It is the Hierarchy spelling that strands anybody**, not a bare `?text=0`. `inMode` is
+  `mode !== "hierarchy"` and `proseVisible` is `modeBand || showText`, so a mode band shows the
+  article whatever `?text=` says — `?mode=glossary&text=0` has always been a no-op.
+- **The pair is dropped anyway, in every mode**, and that is defusing rather than tidying: leave
+  `text=0` on a Plain address and the reader walks into the stranded state the moment they press
+  Hierarchy on the Dock, because the parameter is still in the URL.
+- **Outline, not Plain** — arbitrated by Fable, 2026-09-05. Neither restores the no-prose state, so
+  "honour what they asked for" cannot decide it. What does is that the reader who saved that link was
+  looking at a bar that said **OUTLINE**: the old `reading`/`outline` chip flipped whenever `text=0`
+  was on, and this file's neighbour calls the compact table "outline mode" throughout.
+
+The **server predicts the same rewrite** — `readMode` in [read-address.ts](../../src/read-address.ts)
+— or the tab would read Hierarchy and be replaced a second later
+([page-titles.md](page-titles.md)). It is also out of `REMEMBERED` in
+[last-view.ts](../../src/web/last-view.ts): a restore runs after the rewrite, so a stored `text=0`
+would walk straight past it.
+
+Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and App.tsx puts
+`?spine=` back to *absent* when Search or Ideas opens for a reader who had hidden the rail — and it
+is a URL-contract change, which is a different kind of change from taking a button off a bar. So
+this is now a parameter with no writer, which is a fair description of a **link format**.
 
 `cols=none` exists because the empty list would otherwise serialize to an empty string, which is
 indistinguishable from the parameter being absent — and absent means *automatic*, which is the
@@ -379,6 +416,59 @@ which the assumption stopped being true and why it stayed invisible for five day
 generated and are regenerated whenever `tree.json` is rebuilt, so a URL holding one would silently
 point somewhere else after the next run. Block ids are minted once and preserved. The distinction is
 easy to lose because the section *is* a node — hence the id of its first **block**.
+
+## Reopening an article where you left it
+
+> If I close and then reopen an article, it should ideally return me to the position/state/view that
+> I was in. It's fine for this to be local to the device/browser, or whatever is simplest
+>
+> — Greg, 2026-09-05
+
+Everything above is why that was nearly free. The state was already in one string; the only missing
+piece was something to keep a copy of it and put it back. So: **the query string is copied into
+`localStorage` under the slug as the reader moves, and put back when they open that article at an
+address that says nothing.** [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
+[`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `ArticlePage`
+([`App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
+fine.
+
+**This does not make `localStorage` a second source of truth**, which is what the rule at the top of
+this file is protecting. What is stored is a copy of an address the reader has already left, read
+exactly once — in a layout effect, before anything paints — to decide which address they arrive at.
+After that the URL is the only writer, exactly as before, and the two can never disagree because
+only one of them is ever consulted.
+
+**The link always wins.** A restore happens only when the incoming address carries **none** of the
+article's parameters — not merely none of the remembered ones. So a shared `?at=`, `?note=` or
+`?find=` beats this browser's memory outright, which it has to: getting that backwards would mean a
+link you sent somebody opened somewhere else on their machine.
+
+Some things are deliberately **not** put back, and the reason is one sentence — a dialog, a drawer,
+an open conversation and a search are things the reader **did**, not places they **were**:
+`?note=`, `?panel=`, `?thread=`, and search mode's whole matcher (`?match=`, `?find=`, `?run=`,
+`?runs=`, `?order=`, `?conf=`).
+
+**And three values of `?mode=` are remembered as *no mode*: `chat`, `diagram` and `remember`.** Each
+of those starts something merely by being arrived in — Diagram POSTs `/api/similar` or
+`/api/projection` for three of its five pictures, which costs a model call; Remember and Chat both
+open a conversation. Their subordinate parameters are still remembered, so pressing Diagram or
+Remember later returns the reader to the picture or the half they had chosen. The list is
+`NEEDS_AN_EXPLICIT_PRESS` in [`last-view.ts`](../../src/web/last-view.ts), with the evidence for
+each beside it. Two of the three were found by a cross-family review after a survey had reported all
+thirteen modes inert — so **check the mode's own hook before adding one back**, and note that a
+`?mode=` a reader *sent* in a link is untouched either way: this is only about what is replayed
+unasked.
+
+**A parameter this file gains later is neither remembered nor recognised**, and the second half of
+that is the one that bites: a link carrying only the new parameter would look like a bare address
+and be written over. `tests/last-view.test.ts` scans the client for `useQueryState` keys and fails on
+one that neither list has heard of, so the thirty-sixth parameter is a decision rather than an
+omission.
+
+Deferred, and named in
+[260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):
+anything cross-device, pruning old entries, remembering the matcher, remembering which of the
+article's three pages you were on, and any visible "start from the top" affordance.
 
 ## Why the query string and not the hash
 

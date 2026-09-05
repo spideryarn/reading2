@@ -16,22 +16,7 @@
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement.
- *
- * Postgres rather than the filesystem on purpose here: the thing most likely to
- * be missed when a kind is added is the `chat_threads_kind` CHECK constraint,
- * and the filesystem store has no constraint to violate. A suite that ran on
- * files would pass with the migration unapplied.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -43,33 +28,19 @@ loadEnvLocal();
 
 const SLUG = "test-candidates-route-fixture";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/candidates-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
+const { chatStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* A flag that failed to take looks exactly like the suite working: the
-       filesystem store answers happily, and the CHECK constraint — the thing
-       most likely to be missing — is never touched. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 let article: ScratchArticle | undefined;
 let ANCHOR = "";
 
 beforeAll(async () => {
-  if (!reachable) return;
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
   ANCHOR = article.blocks[0]?.id ?? "";
   expect(ANCHOR).toMatch(/^spya-/);
@@ -127,7 +98,7 @@ async function post(body: unknown): Promise<{ status: number; body: string }> {
   return { status: (res as { statusCode: number }).statusCode, body: written };
 }
 
-when("a Candidates conversation can be started at all", () => {
+describe("a Candidates conversation can be started at all", () => {
   it("stores the kind, through the CHECK constraint and back out of it", async () => {
     /* Four places have to agree for this one assertion to hold: the union, the
        route's validation, `withTurn`'s write, and the Postgres reader's
@@ -157,7 +128,7 @@ when("a Candidates conversation can be started at all", () => {
   });
 });
 
-when("what a Candidates turn may not carry", () => {
+describe("what a Candidates turn may not carry", () => {
   it("400s an anchor, because the question is about the whole paper", async () => {
     /* The rule is *only a chat may be anchored*, written that way round so a
        fourth kind is anchor-less by default. An unanchored thread draws no mark
@@ -184,7 +155,7 @@ when("what a Candidates turn may not carry", () => {
   });
 });
 
-when("a thread's kind belongs to the thread", () => {
+describe("a thread's kind belongs to the thread", () => {
   it("409s a send that would turn a Candidates thread into a chat", async () => {
     /* A stale tab is the case: the panel it came from was Referee mode's, and
        the one it is talking to now is not. Refused rather than taken, because

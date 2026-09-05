@@ -113,15 +113,6 @@ import path from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-/* `SPIDERYARN_STORE=postgres` before a single import is evaluated — src/store/live.ts
-   reads the flag once, at first import, and imports are hoisted above ordinary
-   statements. The reasoning in full is in tests/store-pg-session.test.ts. */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
-
 import { closeDb, getDb } from "../src/db/client.js";
 import {
   articleRevisions,
@@ -134,11 +125,10 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { mintId, mintUniqueId } from "../src/ids.js";
 import { runAsOwner } from "../src/owner.js";
-import { STEPS, contextPaths } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import type { ConvertedProduct, PipelineStep, StepContext } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
@@ -153,8 +143,6 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put the flag back straight away — vitest reuses a worker across files, and the
    modules above have already captured it. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
@@ -182,7 +170,7 @@ const ARC_JOB = "the arc the job wrote";
 
 let runLock: HeldRunLock | undefined;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/pg-session-exact-base.test.ts",
   tables: [
     "spideryarn.jobs",
@@ -193,28 +181,24 @@ const { reachable } = await pgReady({
   ],
 });
 
-if (reachable) {
-  /* The sweep runs on the lock's own connection, so it is covered by the key —
-     and through `takeRunLockAndSetUp`, so a statement that throws gives the key
-     back. This is module scope: no `afterAll` has been registered yet, so
-     nothing else would. tests/helpers/lock-lifecycle.ts. */
-  runLock = await takeRunLockAndSetUp("tests/pg-session-exact-base.test.ts", async (lockClient) => {
-    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query(
-      "update spideryarn.articles set current_revision_id = null where slug like $1",
-      [SLUG_RUBBLE],
-    );
-    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-    await seedAuthUser(lockClient, {
-      id: OWNER,
-      email: `pg-session-exact-base-${OWNER}@example.invalid`,
-    });
+/* The sweep runs on the lock's own connection, so it is covered by the key —
+   and through `takeRunLockAndSetUp`, so a statement that throws gives the key
+   back. This is module scope: no `afterAll` has been registered yet, so
+   nothing else would. tests/helpers/lock-lifecycle.ts. */
+runLock = await takeRunLockAndSetUp("tests/pg-session-exact-base.test.ts", async (lockClient) => {
+  await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+  await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query(
+    "update spideryarn.articles set current_revision_id = null where slug like $1",
+    [SLUG_RUBBLE],
+  );
+  await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+  await seedAuthUser(lockClient, {
+    id: OWNER,
+    email: `pg-session-exact-base-${OWNER}@example.invalid`,
   });
-}
-
-const when = reachable ? describe : describe.skip;
+});
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -384,7 +368,6 @@ function fakeArc(): PipelineStep<"arc"> {
   return {
     name: "arc",
     label: "Reading the shape of the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     async run() {
       return { detail: "one entry" } as ConvertedProduct;
@@ -462,11 +445,8 @@ async function reopenWithSession(slug: string, jobId: string): Promise<Claimed> 
 
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
-  const { dir, htmlFile } = contextPaths(slug);
   return {
     slug,
-    dir,
-    htmlFile,
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -519,16 +499,14 @@ const mine = (name: string, body: () => Promise<void>) => it(name, () => runAsOw
 
 /* ------------------------------------------------------------------ tests -- */
 
-when("publishing a draft whose base has moved", () => {
+describe("publishing a draft whose base has moved", () => {
   afterEach(async () => {
-    if (!reachable) return;
     await db()
       .delete(jobsTable)
       .where(and(eq(jobsTable.ownerId, OWNER), inArray(jobsTable.status, ["queued", "running"])));
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     /* Release last, and whatever the cleanup did: one failed statement used to
        skip it, leaving the key held until the worker exited and every peer
        suite waiting on it. tests/helpers/lock-lifecycle.ts. */
@@ -566,8 +544,6 @@ when("publishing a draft whose base has moved", () => {
    * being copied and the job finishing, and the job must not bury it.
    */
   mine("refuses, and leaves the other publication serving the article", async () => {
-    expect(STORE, "the vi.hoisted flag did not reach src/store/live.ts").toBe("postgres");
-
     const slug = `${SLUG_PREFIX}moved`;
     const fixture = await publishR1(slug);
     const claimed = await claimWithSession(slug, ["arc"]);

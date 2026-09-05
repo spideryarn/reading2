@@ -90,11 +90,27 @@ GISTS (internal nodes)
   handholds — and ordinary words for everything else. A gist is read at a glance
   and has to land first time: plainer than the article, never further from it.
 
+QUESTIONS (the root and depth-1 nodes only)
+
+- Exactly ONE question on the root and on each depth-1 node. Omit it entirely
+  on deeper nodes.
+- It is the question this node's text answers and its gist does NOT. The reader
+  has the gist beside it; the question is what sends them into the prose for
+  the rest of the answer.
+- It must need the argument to answer, not a fact to look up: "why", "how", or
+  "what follows if" — never "which example", "who said", or anything one
+  sentence settles.
+- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- The root's question is the one the whole piece exists to answer.
+- Under 15 words, ending in "?". The article's own words for what it names,
+  ordinary words for the rest, exactly as with gists.
+
 OUTPUT
 
 JSON only, no prose, no code fence:
 
-{"root": {"title": "...", "gist": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
+{"root": {"title": "...", "gist": "...", "question": "...",
+          "range": ["<firstBlockId>", "<lastBlockId>"],
           "sourceHeading": "...", "children": [ ... ]}}
 
 Use only block ids that appear in the input. Do not invent ids.`;

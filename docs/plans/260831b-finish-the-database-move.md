@@ -325,7 +325,7 @@ and `readRaw(dir)` with no store branch, and it was the last unconditional files
 [`src/routes.ts`](../../src/routes.ts). It now asks `sourceStore.readPdf(slug)`, a new `SourceStore`
 seam in [`contracts.ts`](../../src/store/contracts.ts) selected in
 [`index.ts`](../../src/store/index.ts) like every other store: `fsSourceStore` in
-[`artifacts-fs.ts`](../../src/store/artifacts-fs.ts), `pgSourceStore` in the new
+`artifacts-fs.ts`, `pgSourceStore` in the new
 [`pg-source.ts`](../../src/store/pg-source.ts). `node:fs` and `node:path` are gone from routes.ts
 altogether and a test says they stay gone.
 
@@ -342,7 +342,7 @@ altogether and a test says they stay gone.
   `readRawDocument` in [`export.ts`](../../src/store/export.ts). The numeric status is load-bearing:
   `guardDbStore` scrubs everything else.
 - **It was also the deployed jobless `dataRoot()` caller** that
-  [`data-root.ts`](../../src/store/data-root.ts) named by route. It is not one any more, and that
+  `data-root.ts` named by route. It is not one any more, and that
   file's header says so.
 - **Two negative controls were missing, and the review found both.** GPT Sol passed the
   implementation on every point and then said what the *tests* could not do: every Postgres fixture
@@ -641,7 +641,7 @@ back in place and the baseline is the only possible source; the same mutation no
 fault 2 in miniature — in Postgres `extractedHtml` never carries ids, so *every* run is that run.
 
 **`extractedHtml` and `stampedHtml` stay one file on the filesystem, and that is a deliberate
-non-decision.** `PATHS` in [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts) maps both to
+non-decision.** `PATHS` in `artifacts-fs.ts` maps both to
 `at.htmlFile`, which is why `blocksMatchTheirHtml` cannot fail there however carefully it is written
 — it compares stage 3's own output against stage 3's own blocks. Splitting the two paths would make
 the guard real on a laptop, and it was considered and passed over: it would make every existing
@@ -1209,7 +1209,7 @@ places nobody thinks of as storage:
 - **`readArticleFromDir`** in [`src/article-input.ts`](../../src/article-input.ts), and with it the
   last filesystem read in the article half of the pipeline. This is the payoff for having put it in
   one place: a function to delete rather than seven `readFile`s to hunt.
-- **`dataRoot()`** and [`src/store/data-root.ts`](../../src/store/data-root.ts) entirely, once
+- **`dataRoot()`** and `src/store/data-root.ts` entirely, once
   nothing resolves a path. Check `contextPaths` and `StepContext.dir`/`htmlFile` with it — several
   stages still take a `dir` for checkpoints alone, and those are the D2 landing rather than this one.
 - `RawManifest.file`, which is now a restatement of `kind`. `SHAPE.raw`

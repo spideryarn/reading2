@@ -1,11 +1,15 @@
 /**
- * Chat threads on disk — `data/<slug>/chat.json`.
+ * **What a conversation *is*** — the pure decisions `pgChatStore`
+ * (src/store/pg-chat.ts) is written against, plus one fixture reader.
  *
- * The sibling of src/comments.ts, and deliberately the same shape: reader state
- * beside the article rather than in it, one JSON file, an atomic write, and a
- * serialised read-modify-write queue. Where the two differ is said out loud
- * below; everything else is the same because a second good way to store reader
- * state would be one way too many.
+ * `withTurn`, `withSpokenTurn`, `withRetry`, `withEdit` and `requireTail` take
+ * a `ChatThread[]` and return what the stored conversation would become. They
+ * are the sibling of src/comments.ts's vocabulary and they hold every rule the
+ * two used to hold twice. Every write goes to Postgres; the file-writing half
+ * of this module went with `src/store/fs.ts` on 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * `loadThreads` stays for one caller — `tests/helpers/seed-reader-state.ts`,
+ * which reads a fixture's `data/<slug>/chat.json` into rows.
  *
  * **Why several threads and not one.** Greg chose it, 2026-08-25, over both a
  * single thread per article and no persistence at all. The cost is real and
@@ -22,7 +26,7 @@
  * this file when storage moves to Postgres — the answer is "one table, one row
  * per message", and nothing in this module's interface has to change.
  */
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   ChatAnchor,
@@ -52,25 +56,6 @@ import { assertSlug } from "./slug.js";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "chat.json");
-
-/**
- * Read-modify-write serialised per process — see src/comments.ts for the full
- * reasoning.
- *
- * It matters more here than it does there. A chat answer is written to this
- * file **twice** — once when the reader sends, once when the model finishes —
- * and a streamed answer means those two writes are tens of seconds apart with
- * the reader free to type again in between. Without the chain, sending a second
- * message while the first is still streaming reads the file as it was before
- * the first user turn landed, and the second write puts it back that way. Both
- * writes succeed. One turn is simply gone.
- */
-let queue: Promise<unknown> = Promise.resolve();
-function serialised<T>(work: () => Promise<T>): Promise<T> {
-  const run = queue.then(work, work);
-  queue = run.catch(() => {});
-  return run;
-}
 
 /**
  * A stored thread written before Remember mode existed has no `kind`. Give it one.
@@ -120,41 +105,6 @@ export async function loadThreads(slug: string): Promise<ChatThread[]> {
 }
 
 /**
- * Write the file so a reader never sees a half-written one.
- *
- * `writeFile` truncates before it writes, so there is a window where the file
- * is empty or cut off mid-object; land in it and every later read throws,
- * wedging every thread rather than losing the one being written. Writing a
- * neighbour and renaming over the top makes the swap atomic. The temp file goes
- * in the same directory because `rename` is only atomic within one filesystem.
- */
-async function save(slug: string, threads: ChatThread[]): Promise<void> {
-  const file = fileFor(slug);
-  await mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.tmp`;
-  try {
-    await writeFile(temp, JSON.stringify({ threads }, null, 2), "utf8");
-    await rename(temp, file);
-  } catch (err) {
-    await rm(temp, { force: true });
-    throw err;
-  }
-}
-
-/** Apply `mutate` to the stored threads and write the result back. */
-export function update(
-  slug: string,
-  mutate: (threads: ChatThread[]) => ChatThread[],
-): Promise<ChatThread[]> {
-  assertSlug(slug);
-  return serialised(async () => {
-    const next = mutate(await loadThreads(slug));
-    await save(slug, next);
-    return next;
-  });
-}
-
-/**
  * A thread's name, taken from the first thing the reader typed.
  *
  * Cut on a word boundary, and only when there is something to cut — a short
@@ -194,30 +144,8 @@ function taken(threads: ChatThread[]): Set<string> {
    does not delete: gone from the screen, back on the next reload.
 
    A conversation starts existing when its first question is asked. That is
-   `beginTurn`, which creates the thread if it is missing. */
-
-export async function renameThread(
-  slug: string,
-  threadId: string,
-  title: string,
-): Promise<ChatThread[]> {
-  // The title is prose the reader wrote, so it is not logged — only that a
-  // rename happened, which is the part an operator could act on.
-  const next = await update(slug, (threads) =>
-    threads.map((t) => (t.id === threadId ? { ...t, title: titleFrom(title) } : t)),
-  );
-  log("store").info({ slug, threadId }, "chat thread renamed");
-  return next;
-}
-
-export async function deleteThread(slug: string, threadId: string): Promise<ChatThread[]> {
-  const remaining = await update(slug, (threads) => threads.filter((t) => t.id !== threadId));
-  // Destructive with no undo, so it is logged — and `remaining` is the count, so
-  // a delete that removed nothing (a stale id from a second tab) can be told
-  // apart from one that did.
-  log("store").info({ slug, threadId, remaining: remaining.length }, "chat thread deleted");
-  return remaining;
-}
+   `withTurn` below, which creates the thread if it is missing —
+   `pgChatStore.appendTurn` is what runs it. */
 
 export interface Turn {
   /** The reader's message. */
@@ -256,6 +184,19 @@ export interface Turn {
    * instruction produced it.
    */
   stance?: RememberStance;
+  /**
+   * The reader pressed the "?" beside a paragraph rather than typing this
+   * question — **only meaningful when this turn creates the thread**, in the
+   * sense that the "?" only ever sends a first question. But unlike `anchor` and
+   * `kind` above, it does **not** belong to the thread: it is written onto the
+   * **user message** this turn creates, so that a retry or an edit of that
+   * question inherits it without anybody arranging it.
+   *
+   * That is the whole reason it is not a fourth `ThreadKind` and not a column on
+   * `chat_threads` — see `ChatMessage.help` in src/types.ts. `true` or absent;
+   * there is no `false`.
+   */
+  help?: true;
 }
 
 /**
@@ -294,7 +235,7 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question, anchor, kind, stance }: Turn,
+  { threadId, question, anchor, kind, stance, help }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
@@ -316,6 +257,13 @@ export function withTurn(
     text: question,
     createdAt: at,
     status: "done",
+    /* **On the reader's row, and only ever here.** The mirror of `stance` on the
+       reply below: one says how the answer was asked for, the other how it was
+       written. Conditional spread rather than `help: help`, because
+       `exactOptionalPropertyTypes` is on and the two stores are compared field
+       for field — an explicit `undefined` and an absent key are not the same
+       thing. See `Turn.help`. */
+    ...(help ? { help } : {}),
   };
   const reply: ChatMessage = {
     id: mintUniqueId(ids),
@@ -331,9 +279,9 @@ export function withTurn(
   };
   const base: ChatThread = existing ?? {
     /* The client mints the thread id so `?thread=` can be in the URL before
-       the first message is sent — the same trick createComment allows for a
-       comment id, and for the same reason: nothing has to be swapped when the
-       answer lands.
+       the first message is sent — the same trick `pgCommentStore.create` allows
+       for a comment id, and for the same reason: nothing has to be swapped when
+       the answer lands.
 
        Accepted only if it is one of ours and free. A caller who sends
        something else gets a minted id rather than an error, and gets it back
@@ -531,87 +479,6 @@ export function withSpokenTurn(
   };
 }
 
-export async function beginTurn(
-  slug: string,
-  turn: Turn,
-  now: () => string = () => new Date().toISOString(),
-): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage }> {
-  let out!: { thread: ChatThread; user: ChatMessage; reply: ChatMessage };
-  await update(slug, (threads) => {
-    const { threads: next, ...rest } = withTurn(threads, turn, now());
-    out = rest;
-    return next;
-  });
-  log("store").info(
-    { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
-    "chat turn started",
-  );
-  return out;
-}
-
-/**
- * Write the finished (or failed) answer over the `pending` row.
- *
- * Never appends. The row is already there — `beginTurn` put it there — and
- * appending on completion would leave the pending one behind as a permanent
- * spinner nothing can clear.
- */
-export async function finishTurn(
-  slug: string,
-  threadId: string,
-  messageId: string,
-  patch: Partial<ChatMessage>,
-  now: () => string = () => new Date().toISOString(),
-): Promise<ChatThread[]> {
-  const next = await update(slug, (threads) =>
-    threads.map((t) =>
-      t.id !== threadId
-        ? t
-        : {
-            ...t,
-            updatedAt: now(),
-            messages: t.messages.map((m) =>
-              m.id === messageId ? { ...m, ...patch, id: m.id, role: m.role } : m,
-            ),
-          },
-    ),
-  );
-  /* The reader can see this — the turn shows as failed — so it is not silent to
-     them. It is silent to whoever is running the server, who is the one who can
-     tell a bad API key from a model that timed out.
-
-     **The stored `error` string is deliberately NOT logged.** This line used to
-     carry it as `reason`, on the grounds that it is "the stored error string,
-     never the answer" — which is true and is not the point. That string is
-     whatever `converse` threw, and one of the things `converse` throws is
-     `OpenRouter ${status}: ${detail.slice(0, 400)}` (src/converse.ts) — four
-     hundred characters of a provider's response body. A provider that echoes
-     the request back in an error puts the reader's question, and the article
-     prose sent as context with it, into that string. Redaction could never have
-     caught it: it is path-based, and `reason` is not a path anyone would think
-     to list.
-
-     Nothing is lost by dropping it. src/converse.ts logs its own failure line
-     for every one of these — model, HTTP status, elapsed time, whether the
-     deadline fired, how much the reader had already watched arrive — and that
-     is what actually distinguishes a bad key from a slow model.
-
-     This is the same bug as the one in src/comments.ts, which was found by
-     GPT/Codex and fixed there first; this file was written by copying that one
-     and brought the bug back with it. Keep the two in step.
-
-     **The throw site is fixed now (2026-08-26).** src/converse.ts no longer puts
-     any of the provider's body in the message — `ProviderRefused` in
-     src/ai-call.ts — so the string this line declines to log is safe
-     today. It still declines, because a rule that holds only while every call
-     site stays careful is not a rule, and because what a reader of this line
-     needs is the status and the model, which are already on it. */
-  if (patch.status === "error") {
-    log("store").warn({ slug, threadId, messageId }, "chat answer failed");
-  }
-  return next;
-}
-
 /**
  * A retry or an edit that the stored conversation will not accept.
  *
@@ -626,6 +493,39 @@ export class ChatConflict extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ChatConflict";
+  }
+}
+
+/** What both chat sweeps write. One constant, so they cannot drift. */
+export const CHAT_SWEPT = "The server stopped before this answer finished.";
+
+/**
+ * The stale-edit guard.
+ *
+ * A stale tab editing an old question discards every turn added since it last
+ * looked, and today nothing notices: `withEdit` checks only that its target
+ * still exists and is a question. So tab A appends Q2 and A2, stale tab B edits
+ * Q1 and deletes both, A's answer lands on a message that is gone, and the
+ * reader — who saw a perfectly successful answer — reloads to find it missing.
+ * The mutex orders those two writes; it does not make the result correct.
+ *
+ * Deliberately narrow: no thread version, because a version column would 409
+ * two *appends* that succeed today, and inventing a failure mode is the one
+ * thing this migration must not do. Only the destructive operation is guarded,
+ * and only against its discard set having changed. `withRetry` has always had
+ * exactly this guard, by insisting on the thread's real last message.
+ */
+export function requireTail(
+  threads: ChatThread[],
+  threadId: string,
+  expectedTailId: string,
+): void {
+  const thread = threads.find((t) => t.id === threadId);
+  const tail = thread?.messages.at(-1);
+  if (tail?.id !== expectedTailId) {
+    throw new ChatConflict(
+      "This conversation has moved on since you opened it. Reload before editing.",
+    );
   }
 }
 
@@ -709,25 +609,6 @@ export function withRetry(
     reply,
     user: question,
   };
-}
-
-export async function retryTurn(
-  slug: string,
-  threadId: string,
-  messageId: string,
-  now: () => string = () => new Date().toISOString(),
-): Promise<{ thread: ChatThread; reply: ChatMessage; user: ChatMessage }> {
-  let out!: { thread: ChatThread; reply: ChatMessage; user: ChatMessage };
-  await update(slug, (threads) => {
-    const next = withRetry(threads, threadId, messageId, now());
-    out = { thread: next.thread, reply: next.reply, user: next.user };
-    return next.threads;
-  });
-  log("store").info(
-    { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
-    "chat answer retried",
-  );
-  return out;
 }
 
 /**

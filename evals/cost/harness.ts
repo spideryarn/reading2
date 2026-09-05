@@ -10,8 +10,10 @@
  * - **`evalRegistry`** overlays `scopeKind: "eval"` on everything a step buys.
  * - **`fixtureFetch`** replaces stage 1 with committed bytes, through the
  *   exported `writeRaw`, without weakening any SSRF guard.
- * - **`withoutTheInProcessPump`** stops `enqueue` racing the caller for the
- *   claim with the *production* registry.
+ *
+ * There were three. The third stopped `enqueue` racing the caller for the claim
+ * with the *production* registry, and it is now `pump: false` on the request
+ * itself — see § *the pump* below for what it was and why it went.
  *
  * Tested in tests/cost-eval.test.ts.
  */
@@ -42,17 +44,15 @@ const LOCAL_HOSTS = ["127.0.0.1", "localhost", "::1", "[::1]"];
  * section about a command reaching a database other than the one on its command
  * line, with a success message either way.
  *
- * Takes both values rather than reading them, so this can be exercised for
- * every answer instead of only for the one this machine happens to give.
+ * Takes the URL rather than reading it, so this can be exercised for every
+ * answer instead of only for the one this machine happens to give.
+ *
+ * **It took the store as a first argument until 2026-09-05** and refused when it
+ * was not `postgres`, which was the honest check while `npm run eval:cost` had
+ * to set a flag to get the pipeline this measures. There is one store now, so
+ * there is nothing left to refuse and the only question is which database.
  */
-export function localTarget(store: string, url: string | undefined): string {
-  if (store !== "postgres") {
-    throw new Error(
-      `This eval measures the Postgres pipeline and the store is "${store}". ` +
-        "Run it as `npm run eval:cost`, which sets SPIDERYARN_STORE=postgres — the flag is " +
-        "read once at module load (src/store/live.ts), so setting it inside the runner is too late.",
-    );
-  }
+export function localTarget(url: string | undefined): string {
   if (!url) {
     throw new Error("DATABASE_URL is not set. `npm run db:start`, then it comes from .env.local.");
   }
@@ -159,31 +159,24 @@ export function fixtureFetch(
  * **The trap that would have produced a corpus of network-fetched,
  * Product-attributed articles**, and it is not in the plan.
  *
- * `enqueue` ends with `pump(job.id, owner)`, `pump` calls `advanceJob`, and
- * `advanceJob` is `advanceJobWith(id, PRODUCTION)` — the production registry. It
- * starts synchronously inside `enqueue`, so it wins the claim before the caller
- * can, and the job then runs production's `fetch` (which goes to the network)
- * with no eval overlay on anything. The feasibility dry pass hit this on its
- * first run: the fixture step never executed and the job died in production's
- * `requireUrl`, which is the *loud* version — a fixture whose URL happens to
- * resolve would have run silently and wrongly.
+ * `enqueue` used to end with `pump(job.id, owner)` unconditionally, `pump` calls
+ * `advanceJob`, and `advanceJob` is `advanceJobWith(id, PRODUCTION)` — the
+ * production registry. It starts synchronously inside `enqueue`, so it wins the
+ * claim before the caller can, and the job then runs production's `fetch` (which
+ * goes to the network) with no eval overlay on anything. The feasibility dry
+ * pass hit this on its first run: the fixture step never executed and the job
+ * died in production's `requireUrl`, which is the *loud* version — a fixture
+ * whose URL happens to resolve would have run silently and wrongly.
  *
- * `pump` returns immediately when `VERCEL` is set, and that is the existing
- * idiom: tests/claim-session-postgres.test.ts sets it round `enqueue` for
- * exactly this, and its comment says the variable is there "only to stop
- * `enqueue`'s pump". Across the one call and nothing else, so the steps
- * themselves run with the ordinary environment.
+ * **The defence is `pump: false` on the request** (src/jobs.ts §
+ * `EnqueueRequest`), and there is no helper left here to import. Until
+ * 2026-09-05 it was `withoutTheInProcessPump`, which set `VERCEL=1` across the
+ * `enqueue` call because `pump` returns immediately when it is set — a process
+ * on this box claiming to be on Vercel in order to get one `if` to go the other
+ * way, in the *third* place that trick had been copied to. Stage E of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * gave `enqueue` the honest parameter and deleted all three.
  */
-export async function withoutTheInProcessPump<T>(fn: () => Promise<T>): Promise<T> {
-  const before = process.env.VERCEL;
-  process.env.VERCEL = "1";
-  try {
-    return await fn();
-  } finally {
-    if (before === undefined) delete process.env.VERCEL;
-    else process.env.VERCEL = before;
-  }
-}
 
 /* ------------------------------------------------------ reading a job back -- */
 
@@ -371,7 +364,7 @@ const ON_DEMAND_MODES: readonly StepName[] = PAYING_STEPS.filter((s) => s !== "h
 export const ALL_MODES = ON_DEMAND_MODES;
 
 /**
- * `--steps fetch,extract,blocks` or `--modes arc,ideas` — a comma-separated
+ * `--steps fetch,extract,blocks,hierarchy` or `--modes arc,ideas` — a comma-separated
  * list, checked against `STEP_ORDER` so a typo is a message rather than a job
  * that quietly runs the default five and a bill nobody expected.
  *

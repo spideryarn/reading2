@@ -10,11 +10,20 @@
  * exercised only by tests and therefore free to drift from the path production
  * actually runs. It is the *real* write path, driven over a fixture:
  *
+ * **The source side stopped being a store on 2026-09-05, and that changes
+ * nothing about the sentence above.** It reads the fixture through
+ * [`./fixture-artefacts.ts`](fixture-artefacts.ts) — two methods over a
+ * committed directory tree — rather than through `createFsArtifactStore`. What
+ * makes the paragraph true is the *destination*: `pgArtifactsIn`, unchanged,
+ * with every guard it has. A reader of files is not a second write path, and
+ * that helper's header has the argument in full.
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § D.
+ *
  * 1. the raw document put in the bucket with `storeRawSource`, which is what
  *    stage 1 does before it writes a manifest naming the object;
  * 2. a running `jobs` row, because every artefact write is fenced on one;
  * 3. `openOrBeginJobDraft`, the same call `advanceJob` makes;
- * 4. `copyArtefacts` from the filesystem store to `pgArtifactsIn`, which is
+ * 4. `copyArtefacts` from a **fixture reader** to `pgArtifactsIn`, which is
  *    `beginStep` → `write` → `finishStep` per step, in pipeline order;
  * 5. `publishRevision`, with its guards run rather than routed around;
  * 6. the job removed, so the next call can start one for this article.
@@ -73,6 +82,37 @@
  * change there is. Keep it importable with no vitest in scope — nothing in this
  * module or its helpers imports the test runner, and that is load-bearing.
  * docs/plans/260902d-a-dev-account-that-is-ready-to-use-on-every-box.md.
+ *
+ * ## The evidence for the 2026-09-05 change of source
+ *
+ * **Mutation.** Two arms, against `./fixture-artefacts.ts`, both watched red on
+ * 2026-09-05. (1) `LAYOUT.fetch.raw` pointed at `raw-MUTANT.json` — one row of
+ * the path table wrong, which is exactly how a hand-copied layout rots:
+ * `tests/helpers-load-article.test.ts` goes **2 of 6 red**, on
+ * *expected [ 'extract', 'blocks', …(6) ] to include 'fetch'* and on
+ * *expected null to be 'faf7ea1188c…'*, which is the raw document never reaching
+ * the bucket. (2) `stampFor` made to answer `null` for every step that has a
+ * stamp: `helpers-load-article` and `tests/store-block-roles-pg.test.ts` go
+ * **8 of 10 red** together, on *No article artefacts for "test-block-roles-pg"*
+ * — the publish guard refusing a revision whose tree cannot be shown to match
+ * its blocks. Both arms were restored and both files re-run green.
+ *
+ * **And the equivalence was proved directly rather than inferred from green
+ * suites.** A probe drove the old `createFsArtifactStore` and the new reader
+ * over all five committed corpus articles and compared the results: the `copied`
+ * list is identical for each — 3, 8, 8, 4 and 9 steps, **32 in total** — and so
+ * are all **52 artefacts** and all **32 stamps**, byte for byte as JSON. Zero
+ * differences. That is the claim nine suites' `loaded.copied` assertions rest
+ * on, measured once at the seam instead of sampled through them.
+ * `./fixture-artefacts.ts` names the nine, and says which three of the plan's
+ * twelve are not among them.
+ *
+ * **Blind to.** Whether the *destination* is right: every one of these mutations
+ * is on the reading side, and a `pgArtifactsIn` that dropped a column would pass
+ * all of them — that is `tests/store-artefacts-pg.test.ts` and
+ * `tests/store-parity.test.ts`. Blind, too, to a fixture article no suite loads:
+ * the probe covers the five in the committed corpus, and a sixth added later is
+ * covered by nothing until something reads it.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -84,8 +124,7 @@ import { articles, jobs } from "../../src/db/schema.js";
 import type { RawManifest } from "../../src/fetch.js";
 import { mintId } from "../../src/ids.js";
 import { type OwnerId, currentOwnerId, runAsOwner } from "../../src/owner.js";
-import { createFsArtifactStore } from "../../src/store/artifacts-fs.js";
-import type { ArtifactLocations } from "../../src/store/artifacts-fs.js";
+import { fixtureArtefacts } from "./fixture-artefacts.js";
 import { pgArtifactsIn } from "../../src/store/artifacts-pg.js";
 import { storeRawSource } from "../../src/store/blobs.js";
 import { insertWhenSlotFree } from "./running-slot.js";
@@ -99,20 +138,6 @@ import {
 import type { JobStep, StepName } from "../../src/types.js";
 import { copyArtefacts } from "../../src/store/copy-artefacts.js";
 import { FIXTURE_ROOT } from "./require-fixture.js";
-
-/**
- * `data/` and `output/` for one root, which is what the filesystem store's
- * `locate` is.
- *
- * Written out here rather than reached for through `fsLocations`, because
- * `fsLocations` calls `dataRoot()` and `dataRoot()` on a laptop is the
- * **repository root** — the working `data/` a reader has been reading out of,
- * not the corpus this suite is supposed to be testing against.
- */
-const locationsIn = (root: string) => (slug: string): ArtifactLocations => ({
-  dir: path.join(root, "data", slug),
-  htmlFile: path.join(root, "output", `${slug}.html`),
-});
 
 /** What the load produced, so a caller can assert on it rather than assume. */
 export interface LoadedArticle {
@@ -411,7 +436,7 @@ export async function loadArticleIntoPg(
   return runAsOwner(ownerId, async () => {
     await storeRawBytesFor(slug, root);
 
-    const fs = createFsArtifactStore(locationsIn(root));
+    const fixture = fixtureArtefacts(root);
     const db = getDb();
 
     return withRunningJob(slug, ownerId, serialise, async (job) => {
@@ -424,18 +449,20 @@ export async function loadArticleIntoPg(
         attemptId: job.attemptId,
       };
 
-      const copied = await db.transaction((tx) => copyArtefacts(fs, pgArtifactsIn(ref, tx), slug));
+      const copied = await db.transaction((tx) =>
+        copyArtefacts(fixture, pgArtifactsIn(ref, tx), slug),
+      );
 
       /* **Refuse a copy that moved nothing, before publishing it.** Carry-forward
          means a draft opened from a published revision already holds that
          revision's blocks, tree and step runs — so publishing after copying zero
-         steps republishes the *old* article and reports success. The filesystem
+         steps republishes the *old* article and reports success. The fixture
          directory could have been empty, or misspelled, or half-written, and the
          result would be indistinguishable from a load that worked. Sol found
          this, and it is the same shape as everything else in this landing. */
       if (copied.length === 0) {
         throw new Error(
-          `nothing to load for "${slug}" under ${root}: the filesystem store has no ` +
+          `nothing to load for "${slug}" under ${root}: the fixture tree has no ` +
             "complete step for it. " +
             "Publishing now would republish whatever is already in Postgres and call it a load.",
         );

@@ -19,8 +19,6 @@
  * their exported functions, never by reimplementing what they do.
  */
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { eq } from "drizzle-orm";
 import { readArticle, tryReadArticle } from "./article-input.js";
 import {
@@ -74,6 +72,11 @@ import {
   inputFingerprint as quizFingerprint,
   PROMPT_VERSION as QUIZ_PROMPT_VERSION,
 } from "./quiz.js";
+import {
+  generateDebate,
+  inputFingerprint as debateFingerprint,
+  PROMPT_VERSION as DEBATE_PROMPT_VERSION,
+} from "./debate.js";
 import { stageFailure } from "./job-failure.js";
 import {
   generateIllustrated,
@@ -89,12 +92,20 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
+import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { MAX_PAGES } from "./uploads.js";
 import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
-import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
+import {
+  ARTICLE_RENDERER,
+  type ArticleStage,
+  CAPABLE_MODEL,
+  modelFor,
+  STAGE_EFFORT,
+} from "./models.js";
+import { STEP_ORDER } from "./step-order.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
@@ -110,7 +121,6 @@ import {
 } from "./messages.js";
 import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
-import { fsLocations } from "./store/artifacts-fs.js";
 import { blobStore, CONTENT_TYPE, storeRawSource } from "./store/blobs.js";
 import {
   type ArtifactKind,
@@ -121,10 +131,9 @@ import {
 } from "./store/artifacts.js";
 import { generateHierarchy } from "./hierarchy.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
-import type { Block, JobUpload, Meta, StepName } from "./types.js";
+import type { Block, JobUpload, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
-import { STORE } from "./store/live.js";
 import { ownedSlug } from "./store/owned-slug.js";
 
 /**
@@ -154,154 +163,24 @@ const plog = log("pipeline");
 export type { StepName };
 
 /**
- * Every step there is, in pipeline order.
+ * **The order, and the two types read off it, live in
+ * [step-order.ts](./step-order.ts)** — `STEP_ORDER` re-exported here so that
+ * every importer that has always said `from "./pipeline.js"` still can, and so
+ * that there is one ordering in the repository rather than two.
  *
- * This constant does two jobs and both need every name: `orderSteps` sorts by
- * `indexOf` here (a name that is missing gets `-1` and sorts to the **front**,
- * so it would run before `fetch`), and `isStepName` below is what decides which
- * names the API will accept at all.
+ * They moved out on 2026-09-04 because `src/web/useStepJob.ts` needs
+ * `StepBefore` and may not import this file: it is a server module, and
+ * `tests/client-imports.test.ts` holds the client to leaves. The leaf's header
+ * has the reasoning, including why the `import type` that was there first is
+ * not the exemption it looks like.
  *
- * It used to do a third — being the default for a job that named no steps — and
- * that is `DEFAULT_INGEST_STEPS` now, because `tweets` was the first step that
- * belongs in the order and not in the default. `glossary` is the second, and
- * the pair of them is what turned that from an exception into the shape of the
- * list: everything up to `arc` makes the article readable, and everything after
- * it is a thing somebody asks for. See
- * docs/plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely and
- * docs/project/glossary.md.
+ * Only this one name is re-exported. `StepBefore`'s one importer is the client,
+ * which names the leaf directly, and `StepsMissingFromOrder` exists to be
+ * checked beside the array it guards, by nothing importing it at all — a
+ * re-export of either would be a second address for a name with no callers at
+ * this one.
  */
-export const STEP_ORDER = [
-  "fetch",
-  "extract",
-  "blocks",
-  "hierarchy",
-  /* After `hierarchy` because it reads stage 4's `blocks.json` — the copy the reader
-     will actually render, and the one `inputHashFor` already hashes, so
-     freshness comes free from the machinery that is here rather than from a
-     second one invented for this step. Before `arc` because everything up to
-     `arc` is what makes the article readable, and an article whose figures are
-     still being fetched from the publisher is not finished being ingested.
-     docs/plans/260829b-hosting-the-articles-images.md#the-step. */
-  "assets",
-  "arc",
-  "tweets",
-  "glossary",
-  /* Straight after `glossary`, and that is not cosmetic: the two send
-     byte-identical article bytes at the same effort, so a job asking for BOTH
-     pays for the article once (src/models.ts § ARTICLE_RENDERER). Two separate
-     jobs share nothing — `cacheArticle` below only marks a prefix another step
-     of the SAME job will read — so this buys the reader who asks for both at
-     once and nobody else. And it bought nobody anything at all until 2026-09-03,
-     when `quotes` started sending a breakpoint of its own: see
-     `cacheArticleForStep`. docs/project/quotes.md. */
-  "quotes",
-  "ideas",
-  /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
-     the two send byte-identical article bytes at the same effort and the same
-     `ids` renderer, so a job asking for BOTH pays for the article once
-     (src/models.ts § ARTICLE_RENDERER, § STAGE_EFFORT). `ideas`, `timeline` and
-     `sketch` are one cache group and are contiguous for that reason.
-
-     Off `DEFAULT_INGEST_STEPS`, like the four before it: it costs a model call
-     over the whole article and it is a mode somebody goes to. */
-  "timeline",
-  /* Beside `timeline`, for the third time and the same argument: `high` effort
-     and the `ids` renderer, so `ideas`, `timeline`, `quiz` and `sketch` are one
-     cache group and this list keeps them contiguous. A `quiz` placed anywhere
-     else in this array would still work and would quietly stop sharing the
-     cached article prefix with the three stages it is identical to — the
-     failure `sharesArticleCache` exists to prevent, and the one nothing throws
-     about (tests/article-cache-group.test.ts).
-
-     Off `DEFAULT_INGEST_STEPS`, like the five before it: it costs a model call
-     over the whole article and it is a thing somebody asks for.
-     docs/plans/260831al-review-quiz-sub-mode.md. */
-  "quiz",
-  /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one
-     below, and it is the slowest single model call in the app at 121–194
-     seconds measured. docs/project/diagram.md § Sketch. */
-  "sketch",
-  /* **Last, and after `sketch` for a reason no other pair here has**: this is
-     the only step whose input is another step's artefact. The order does not
-     *pull* the Sketch in — `useStepJob` posts `steps: [step]` and nothing puts
-     a prerequisite in front of it — so the step refuses instead. What the order
-     buys is that a run naming both draws before it paints.
-     docs/project/diagram.md § Illustrated. */
-  "illustrated",
-] as const satisfies readonly StepName[];
-
-/**
- * **Every `StepName` that `STEP_ORDER` above does not list.** Always `never`.
- *
- * Add a step to `StepName` (src/types.ts) and forget the row above, and this
- * line goes red naming the step you forgot: `T extends never` is a constraint,
- * and the default it is checked against stops being `never` the moment a name
- * is missing. That is the check the plain `StepName[]` annotation could not
- * make — it widened the tuple away and said only that each entry *is* a step,
- * never that every step *is* an entry.
- *
- * The consequences of a gap are not cosmetic: `orderSteps` sorts by `indexOf`,
- * so an unlisted step gets `-1` and runs before `fetch`; `isStepName` rejects
- * it over HTTP; and tests/db-step-constraint.test.ts derives the SQL CHECK from
- * this array, so a name missing here is a name the database refuses to store.
- *
- * **Exported only so it survives.** `noUnusedLocals` deletes an unreferenced
- * type alias, which would take the check with it; nothing imports this and
- * nothing should — which is why it is tagged `@public`, so knip does not list
- * it as an unused export and nobody tidies the check away.
- *
- * tests/jobs.test.ts is the runtime half, and it is the one that catches a
- * duplicate or a wrong order — a union discards both.
- *
- * @public
- */
-export type StepsMissingFromOrder<
-  T extends never = Exclude<StepName, (typeof STEP_ORDER)[number]>,
-> = T;
-
-/**
- * **Every step the array above runs before `S`**, as a union. `never` for
- * `fetch`, which nothing precedes.
- *
- * Read off `STEP_ORDER` itself rather than written out, so there is one
- * ordering here and not two: move a name in the array and this answers
- * differently on the next compile.
- *
- * **What it is for**: `StepRun.precededBy` in src/web/useStepJob.ts, where a
- * caller names the steps that have to run before its own inside one job. The
- * server does not honour that word — `orderSteps` (src/jobs.ts) sorts whatever
- * arrives by `STEP_ORDER` and nothing else — so `precededBy: ["assets"]` on
- * `hierarchy` would come back as `["hierarchy", "assets"]`, a "preceding" step
- * that runs afterwards, with nothing anywhere saying so. GPT Sol reproduced
- * exactly that on 2026-09-03; the one caller in the tree is safe, so what this
- * closes is the next caller rather than a live bug.
- *
- * The check has to be a type rather than a `STEP_ORDER.indexOf` comparison at
- * the call site, because the call site is in the browser and **nothing under
- * `src/web/` imports `src/pipeline.ts`**: this is a server module, and the
- * client's answer to needing part of it has twice been a shape rather than a
- * copy (src/web/feedback-diagnostics.ts § `WORD`, *"why a third copy of
- * `STEP_ORDER` would be worse than a shape"*). A `import type` costs the bundle
- * nothing — it is erased, and `verbatimModuleSyntax` makes that a rule rather
- * than an optimisation — so the ordering can be checked in the browser's code
- * without any of the ordering's module reaching the browser. **Keep the import
- * in `useStepJob.ts` a type-only one**; making it a value import is what would
- * pull the pipeline into the client bundle.
- *
- * `[S] extends [Head]` rather than `S extends Head`, so a union `S` — which is
- * what the defaulted `StepJob<StepName>` supplies — fails every branch and
- * widens to the whole list instead of distributing into nonsense. That is the
- * one hole: a caller who passes a `StepName`-typed variable rather than a
- * literal gets no check. All nine callers pass literals.
- */
-export type StepBefore<
-  S extends StepName,
-  T extends readonly StepName[] = typeof STEP_ORDER,
-> = T extends readonly [infer Head extends StepName, ...infer Rest extends readonly StepName[]]
-  ? [S] extends [Head]
-    ? never
-    : Head | StepBefore<S, Rest>
-  : never;
+export { STEP_ORDER };
 
 /**
  * What "add this URL" runs: every step that makes the article readable.
@@ -535,6 +414,15 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      image call per plate. A positional cascade that swept this in would spend
      that on somebody who pressed a button one band along. */
   "illustrated",
+  /* All of `illustrated`'s reasons, and it is the only step here whose inputs
+     are not in this repository at all: it reads `blocks.json`, `tree.json` and
+     the metadata, but what it *returns* comes off the open web, so re-fetching
+     the article is no reason whatever to buy the search again. Up to ~$0.27 a
+     run, typically $0.13–0.20 (Stage 0b), and its `stamp` below compares a
+     stored `sourceHash` against what the store holds, so when the article
+     really has moved it re-runs without being forced. And it replaces rather
+     than appends. */
+  "debate",
 ]);
 
 export interface StepContext {
@@ -551,13 +439,35 @@ export interface StepContext {
    * putting it into every step is what keeps it true.
    */
   upload?: JobUpload;
-  /** `data/<slug>` — where the durable artefacts live. */
-  dir: string;
-  /** `output/<slug>.html` — the debug page, and what stage 3 reads and writes ids into. */
-  htmlFile: string;
+  /*
+   * **`dir` and `htmlFile` stood here until 2026-09-05, and nothing goes back
+   * in their place.** They were `data/<slug>` and `output/<slug>.html`, computed
+   * by `contextPaths` on every step of every job and read by nothing but the
+   * `outputs` closures that have gone with them. A step is told what it may
+   * read and where its product goes by the `ArtifactStore` it is handed; a path
+   * on the context is a second answer to that question, and the one the
+   * filesystem store used to give.
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G.
+   */
   /** Say something short about how this step is going. Shown live; not persisted. */
   report(detail: string): void;
   signal: AbortSignal;
+  /**
+   * **When this claimant stops** — `Date.now()`'s clock, and `undefined` where
+   * nobody imposed one (a command line, a test).
+   *
+   * The signal above says *"stop now"*; this says *when* that will be, which is
+   * a different and occasionally more useful thing: a step that fans out over
+   * several paid calls can decline to **start** one it cannot finish, and hand
+   * back with what it has bought already banked, rather than being aborted in
+   * the middle of a call nobody will ever read. The hierarchy step's deepening
+   * wave is the only reader today (src/hierarchy-deepen.ts § `runExpansionWave`).
+   *
+   * It is `LEASE_MS - DEADLINE_MARGIN_MS` after the claim, which is the same
+   * instant `src/jobs.ts` sets its own timer for — one number, passed, rather
+   * than two computed in two places.
+   */
+  deadlineAt?: number;
   /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
@@ -694,36 +604,27 @@ export interface PipelineStep<N extends StepName = StepName> {
   /** Present tense, naming the actual thing — "Fetching the page", never "Loading". */
   label: string;
   /**
-   * Every file this step writes.
+   * **What** this step produces — the kinds of thing it makes
+   * (src/store/artifacts.ts), with the `ArtifactStore` deciding where they go.
    *
-   * A step counts as done when **all** of them are present, which is the only
-   * safe reading for the two steps that write more than one: `extract` writes
-   * the HTML and `meta.json`, `hierarchy` writes `tree.json` and its copy of
-   * `blocks.json`. Checking only the first would let a crash between the two
-   * writes leave a step that reports itself finished with half its output, and
-   * the stage after it would consume the missing half.
+   * A step counts as done when **all** of them are readable, which is the only
+   * safe reading for the two steps that make more than one: `extract` makes the
+   * HTML and the metadata, `hierarchy` the tree, the labels and its copy of the
+   * blocks. Checking only the first would let a crash between the two writes
+   * leave a step that reports itself finished with half its output, and the
+   * stage after it would consume the missing half.
    *
    * **For most steps this is still an existence check, not a correctness
    * check** — unless the step supplies `isDone` below. See the honest account of
    * the gap in
    * docs/project/ingest-queue.md#idempotent-is-the-goal-this-is-a-step-towards-it.
-   */
-  outputs(ctx: StepContext): string[];
-  /**
-   * The same list said the other way: **what** this step produces, rather than
-   * where it lands.
    *
-   * `outputs` is repo paths, and after the move to Postgres there are no paths
-   * — the tree is a column, not a file. So a step names the *kinds* of thing it
-   * makes (src/store/artifacts.ts) and an `ArtifactStore` decides where those
-   * go. The file adapter maps them back to exactly the paths `outputs` returns,
-   * which is what tests/pipeline-artifact-store.test.ts asserts step by step.
-   *
-   * **Both are here on purpose, for now.** Landing the new declaration beside
-   * the old one, with a test holding them together, is what makes the swap
-   * checkable before anything depends on it. `outputs` goes when the Postgres
-   * adapter lands and `assertProduced` stops needing a path — see
-   * docs/plans/260826e-postgres-storage-implementation.md § The order.
+   * **An `outputs(ctx): string[]` stood beside it until 2026-09-05**, saying the
+   * same list as repository paths, and the pair existed so the swap to kinds
+   * could be checked against the old declaration before anything depended on it
+   * (docs/plans/260826e-postgres-storage-implementation.md § The order). The
+   * paths went with the filesystem store; `produces` is the whole declaration
+   * now, and `assertProduced` reads it through the store.
    */
   produces: readonly ArtifactKind[];
   /**
@@ -760,10 +661,10 @@ export interface PipelineStep<N extends StepName = StepName> {
    * architecture.md#storage has always specified for a cached artefact and what
    * nothing had implemented.
    *
-   * Kept optional, and kept out of `outputs`, on purpose: this is the only
-   * place in the interface that can read a file's *contents*, so a step that
-   * gets it wrong burns a model call every run. Adding one is a deliberate act.
-   * `assertProduced` still uses `outputs`, because "did you write the file"
+   * Kept optional, and kept out of `produces`, on purpose: this is the only
+   * place in the interface that can read an artefact's *contents*, so a step
+   * that gets it wrong burns a model call every run. Adding one is a deliberate
+   * act. `assertProduced` reads `produces` instead, because "did you write it"
    * stays a separate question from "was it worth writing".
    *
    * **`stamp` above is what replaces this, and one step is still here** —
@@ -776,9 +677,10 @@ export interface PipelineStep<N extends StepName = StepName> {
    * it now (`tweets/2`), as `glossary` did when it made the move.
    * What is left is one `stamp` line here and one deletion in the stage.
    *
-   * Worth doing before the artefacts leave the filesystem rather than after:
-   * both of these `isDone` implementations read `ctx.dir`, and under Postgres
-   * there is no directory to read. docs/plans/260827j-transactional-stage-runner.md § D.
+   * Worth doing before the artefacts left the filesystem rather than after:
+   * both of these `isDone` implementations used to read a directory off `ctx`,
+   * and under Postgres there is no directory to read.
+   * docs/plans/260827j-transactional-stage-runner.md § D.
    */
   isDone?(ctx: StepContext, store: ArtifactReads): Promise<boolean>;
   /**
@@ -801,8 +703,8 @@ export interface PipelineStep<N extends StepName = StepName> {
    * and `ideas`, are the next piece of work and this is the seam they take.
    *
    * **`checkpoints` is the third argument and not a field of `ctx`**, and the
-   * reason is the same as `store`'s: `ctx` also reaches `stamp`, `isDone` and
-   * `outputs`, none of which may buy anything, and a capability that only the
+   * reason is the same as `store`'s: `ctx` also reaches `stamp` and `isDone`,
+   * neither of which may buy anything, and a capability that only the
    * run phase has should only be reachable from the run phase. Two of the
    * thirteen steps use it — `extract`, for a PDF's per-chunk transcriptions, and
    * `hierarchy`, for the nav-label batches — and both hand it straight down to
@@ -874,7 +776,8 @@ function canonicalBlock(block: Block): string {
  *
  * This began as `htmlCarriesItsIds`, which asked it alone. On disk that was
  * enough **by accident**: `extract.extractedHtml` and `blocks.stampedHtml` both
- * resolve to `at.htmlFile` (`PATHS` in src/store/artifacts-fs.ts), so a
+ * resolved to the same `output/<slug>.html` in the filesystem store's path map
+ * (deleted 2026-09-05), so a
  * re-extraction overwrites the very file question 1 reads and the missing ids
  * give it away. In Postgres they are two columns (`extracted_html`,
  * `stamped_html`), question 1 compares stage 3's own output against stage 3's
@@ -994,11 +897,6 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
   if (run.html !== stamped) return false;
   if (run.blocks.length !== file.blocks.length) return false;
   return run.blocks.every((c, i) => canonicalBlock(c) === canonicalBlock(file.blocks[i]!));
-}
-
-/** Stage 3's own artefact, beside the HTML. Stage 4 copies it into `data/<slug>/`. */
-function blocksPathFor(ctx: StepContext): string {
-  return ctx.htmlFile.replace(/\.html$/, ".blocks.json");
 }
 
 /*
@@ -1178,8 +1076,9 @@ export async function assertProduced(
  *
  * It used to read `data/<slug>/meta.json` and nothing else. On Vercel that
  * directory is empty on every fresh invocation — `/tmp` is per-instance and
- * scoped to one job (src/store/data-root.ts) — so this answered **"no article
- * exists" for every slug in the library**, and so did `urlForSlug`. What that
+ * was scoped to one job by src/store/data-root.ts (deleted 2026-09-05) — so
+ * this answered **"no article exists" for every slug in the library**, and so
+ * did `urlForSlug`. What that
  * costs, traced from `freeSlug` (src/jobs.ts) through `onShelfOrInFlight`:
  *
  * 1. `freeSlug` believes the slug is unclaimed and hands it out.
@@ -1220,29 +1119,16 @@ export async function assertProduced(
  * published. A slug with a row under it is spoken for, and saying otherwise is
  * the failure this function exists to prevent.
  *
- * ## The filesystem branch asks `fsLocations`, and must go on doing so
- *
- * It used to resolve `data/` from a module-scope
- * `path.resolve(import.meta.dirname, "..")`, which is the constant
- * src/store/data-root.ts exists to end — the repository root on a laptop,
- * `/var` inside the Vercel bundle, and deaf to `SPIDERYARN_DATA_ROOT`.
- *
- * **So this function and `contextPaths` disagreed about where `data/` is**, and
- * they are called one line apart: `slugIsSpokenFor` (src/jobs.ts) asks
- * `articleExists` and then reads `raw.json` from `contextPaths(candidate).dir`.
- * With the override set, that read `meta.json` out of one tree and `raw.json`
- * out of another and had no way to notice. Nothing had tripped over it yet;
- * both now go through `dataRoot()`, and putting the constant back would
- * reintroduce it silently.
+ * **There was a filesystem branch here until 2026-09-05**, reading `meta.json`
+ * out of the filesystem store's `data/<slug>`. It is gone with the flag, and
+ * with it the one way this function and `contextPaths` could disagree about
+ * where `data/` is: they were called one line apart in `slugIsSpokenFor`
+ * (src/jobs.ts), and with a data-root override set, one read `meta.json` out of
+ * one tree and the other `raw.json` out of another with no way to notice.
+ * `contextPaths` itself went the same day — see where it stood, below.
  */
 export async function articleExists(slug: string): Promise<boolean> {
-  if (STORE === "postgres") return (await ownedArticle(slug)) !== undefined;
-  try {
-    await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8");
-    return true;
-  } catch {
-    return false;
-  }
+  return (await ownedArticle(slug)) !== undefined;
 }
 
 /**
@@ -1293,34 +1179,30 @@ export function stepLabel(name: StepName, upload: boolean): string {
  * branch is owner-scoped, and for the cross-owner case this deliberately does
  * not fix.
  *
- * Under Postgres this is the **published** revision's `final_url`, which is the
- * same column every other reader treats as `Meta.url` (src/store/pg.ts §
- * `metaFrom`). A run still in flight has no published revision and so no answer
- * here; `activeFor` is what covers that, and `onShelfOrInFlight` already asks
- * it second.
+ * This is the **published** revision's `final_url`, which is the same column
+ * every other reader treats as `Meta.url` (src/store/pg.ts § `metaFrom`). A run
+ * still in flight has no published revision and so no answer here; `activeFor`
+ * is what covers that, and `onShelfOrInFlight` already asks it second.
+ *
+ * The `meta.json` branch beside it went with the flag on 2026-09-05.
  */
 export async function urlForSlug(slug: string): Promise<string | undefined> {
-  if (STORE === "postgres") return (await ownedArticle(slug))?.url ?? undefined;
-  try {
-    const meta = JSON.parse(
-      await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8"),
-    ) as Meta;
-    return meta.url;
-  } catch {
-    return undefined;
-  }
+  return (await ownedArticle(slug))?.url ?? undefined;
 }
 
-/**
- * Everything a step needs to know about where this article's files go.
+/*
+ * **`contextPaths(slug)` stood here until 2026-09-05.** It returned
+ * `data/<slug>` and `output/<slug>.html`, `src/jobs.ts` called it on every step
+ * of every job to fill `StepContext.dir` and `htmlFile`, and by the end nothing
+ * read the answer: the last consumers were the `outputs` closures, which went
+ * with it. Proved before deleting rather than after, by making it return
+ * `/nonexistent` and watching ten pipeline, job and session suites — 86 tests —
+ * stay green.
  *
- * The definition itself is `fsLocations` in src/store/artifacts-fs.ts, because
- * the store is the layer allowed to know about paths at all. This stays here,
- * and stays exported, so the callers that already use it did not have to move.
+ * Nothing replaces it. Where an article's artefacts live is the
+ * `ArtifactStore`'s business and no step's, which is the seam
+ * docs/project/architecture.md § Stage ownership describes.
  */
-export function contextPaths(slug: string): { dir: string; htmlFile: string } {
-  return fsLocations(slug);
-}
 
 /**
  * The URL a step needs, or a clear error rather than a fetch of `undefined`.
@@ -1346,12 +1228,16 @@ function requireUrl(ctx: StepContext): string {
  * **The page cap, enforced in stage 1** — one policy, called from the two places
  * the queue's acquisition step has PDF bytes for the first time.
  *
- * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. The stage
- * CLIs do not come through here: `npm run fetch` hands a fetched PDF straight to
- * `writeRaw`, and `npm run pdf` keeps the original before `runPdfExtract` counts
- * anything. Both are deliberate — a CLI is somebody at a keyboard spending their
- * own attention, and neither can reach a reader's job — but "no PDF reaches
- * storage uncounted" is a statement about the queue and not about the repo.
+ * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. It used to
+ * be that the stage CLIs did not come through here at all. Half of that is now
+ * false and half is still true: `npm run ingest` — which replaced `npm run fetch`
+ * on 2026-09-05 and which drives this very queue — is counted like any other
+ * ingest, while `npm run eval:pdf-read` still keeps the original before
+ * `runPdfExtract` counts anything. That exemption is deliberate: it is the PDF
+ * extraction-quality tool, somebody at a keyboard spending their own attention,
+ * and it cannot reach a reader's job. So "no PDF reaches storage uncounted" is
+ * still a statement about the queue and not about the repo — with one fewer
+ * exception than it had.
  *
  * Greg asked for the refusal to arrive in seconds rather than after a job card
  * has been running (docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md
@@ -1706,7 +1592,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * done". Listing `raw.html` would make an article that turned out to be a
      * PDF look permanently unfetched, and it would re-fetch on every retry.
      */
-    outputs: (ctx) => [path.join(ctx.dir, "raw.json")],
     produces: ["raw"],
     async run(ctx) {
       /* **The one branch in the whole pipeline that knows where an article came
@@ -1731,8 +1616,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that
-         is the store. `npm run fetch` still writes the two files, through
-         `writeRawFiles` in the same module. */
+         is the store. `writeRawFiles` in the same module still writes the two
+         files, and since `npm run fetch` was replaced by `npm run ingest` on
+         2026-09-05 its only remaining caller is a test — it dies in stage G.
+         docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md. */
       const manifest = await writeRaw(doc);
       const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
@@ -1764,7 +1651,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   extract: {
     name: "extract",
     label: "Extracting the article",
-    outputs: (ctx) => [ctx.htmlFile, path.join(ctx.dir, "meta.json")],
     produces: ["extractedHtml", "meta"],
     async run(ctx, store, checkpoints) {
       /* **The manifest through the store, and the bytes by content address.**
@@ -1876,6 +1762,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
 
       const result = await runPdfExtract({
+        frontMatter: openRouterFrontMatterReader(),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
@@ -1923,6 +1810,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           recall: result.recall,
           inputTokens: result.usage.input,
           outputTokens: result.usage.output,
+          /* **The front-matter pass's own tokens, beside the transcription's
+             rather than added to them.** Two models on two jobs, and this line
+             names one of them in `model`; a sum across both would be a number
+             whose unit nobody can state (src/models.ts § `Wire`). The money is
+             recorded centrally under `pdf-frontmatter` either way — this is so
+             the *step's* line stops implying the transcription was the whole
+             bill. GPT Sol, 2026-09-05. */
+          frontMatterInputTokens: result.frontMatterUsage.input,
+          frontMatterOutputTokens: result.frontMatterUsage.output,
           model: result.meta.method,
         },
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
@@ -1957,7 +1853,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * would redo stage 3 every time, and `{ steps: ["blocks"] }` could never
      * skip itself.
      */
-    outputs: (ctx) => [blocksPathFor(ctx), ctx.htmlFile],
     produces: ["blocks", "stampedHtml"],
     /* Presence is not enough here, and this is the only step where that is
        true for a reason other than cost — see `blocksMatchTheirHtml`. */
@@ -2118,11 +2013,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     /* `labels.json` is in here as well as the tree, because stage 4 is two model
        passes now and a directory with a tree but no labels is a half-run step,
        not a finished one. src/hierarchy.ts writes the tree last for the same reason. */
-    outputs: (ctx) => [
-      path.join(ctx.dir, "tree.json"),
-      path.join(ctx.dir, "labels.json"),
-      path.join(ctx.dir, "blocks.json"),
-    ],
     produces: ["tree", "labels", "blocks"],
     /**
      * **No `stamp`, and it is not an oversight — one was written and withdrawn
@@ -2192,6 +2082,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         checkpoints,
         onProgress: ctx.report,
         signal: ctx.signal,
+        /* Only the deepening wave reads it, and only to decide whether to start
+           another scoped call — see `StepContext.deadlineAt`. With the flag off
+           it changes nothing at all. */
+        ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -2230,6 +2124,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/hierarchy.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
           droppedHeadings: run.droppedHeadings,
+          /* **Socratic questions written but not kept.** Nothing on screen
+             distinguishes a question the model chose not to write from one
+             this stage threw away, so this is the only place a prompt that
+             had drifted into writing unusable ones would show up.
+             src/hierarchy.ts § `questionFor`. */
+          droppedQuestions: run.droppedQuestions,
+          /* **Rungs that restated their parent**, spliced away rather than
+             stored — two gist columns of identical extent is a duplicated cell
+             the reader sees, not a wasted column. Nothing about it moves a
+             block, so it is its own figure rather than a repair.
+             src/hierarchy.ts § `collapseRestatedRungs`. */
+          collapsedRungs: run.collapsedRungs,
           /* The third thing this stage forgives, and the only one with no trace
              in the product: a paragraph the model would not label twice running
              is a leaf with no row, which renders as nothing rather than as an
@@ -2249,6 +2155,29 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              recommendation 2. */
           labelBatches: run.labelBatches,
           labelsResumed: run.labelsResumed,
+          /* What the label pass actually paid for, beside what it resumed. */
+          labelCalls: run.labelCalls,
+          /* **Was the tree bought or replayed?** Until 2026-09-05 this was
+             printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
+             docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+             deleted that CLI — so taking the deletion whole would have dropped
+             the one signal that says which. It belongs here anyway: it is the
+             field that says why a forced re-run was cheap, and without it the
+             only way to tell is to infer it from a token count, which is what
+             evals/deepen/ was reduced to doing. */
+          structureResumed: run.structureResumed,
+          /* **What the deepening wave did**, and `null` where nobody asked for
+             one — which is every article until stage 8 moves the flag
+             (src/hierarchy-deepen.ts § `DEEPEN_ENV`). Nested rather than eight
+             flat fields, because it is one feature's story and it is read as
+             one: how many sections were eligible, how many came back, what the
+             verdicts said, and what the wave could not do — a section too large
+             to ask about, a call the deadline would not admit, a 429. Every one
+             of those leaves a correct article and a shallower tree, which is
+             precisely the shape that needs a number rather than a symptom.
+             docs/reusable/silent-success.md. */
+          deepen: run.deepen,
+          deepenFailed: run.deepenFailed,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,
@@ -2295,6 +2224,32 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * (`scripts/checkpoints-sweep.ts`, `sweepPgCheckpoints`), which is where a
        * cache's lifetime belongs. src/store/checkpoints.ts § Retention.
        */
+      /**
+       * **The deepening clause is reader-scale, and the operator's numbers are
+       * deliberately not here.**
+       *
+       * `detail` is persisted with the step and rendered on the reader's
+       * progress card (`src/web/AddArticle.tsx`), so it takes the same shape as
+       * the `labelsDropped` clause above: a sentence for the one moment somebody
+       * is already watching. `withheld` and `uncheckpointed` are operator
+       * telemetry about checkpoint rows — "0 saved for retry, 0 not saved" is
+       * noise on a card — and they are in the log line above, which is where
+       * `src/jobs.ts` says a step's real numbers belong.
+       *
+       * **Silent when the flag is off**, because a clause about a feature nobody
+       * asked for reads, at zero, as "tried and found nothing" — the distinction
+       * `deepen: null` exists to keep. Silent at `targets === 0` for the same
+       * reason. A failure is *not* silent: the step succeeds and the reader gets
+       * a shallower tree than the article was going to get, and that should not
+       * be something only a log knows. ⟨Fable and GPT Sol, 2026-09-05, arbitrating
+       * where the counters went when the CLI that printed them was deleted.⟩
+       */
+      const deepened =
+        run.deepenFailed
+          ? ", deepening failed (tree kept)"
+          : run.deepen && run.deepen.targets > 0
+            ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
+            : "";
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
@@ -2302,7 +2257,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           `${run.internal} sections over ${run.blocks} blocks` +
           (run.labelsDropped > 0
             ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
-            : ""),
+            : "") +
+          deepened,
       };
     },
   },
@@ -2321,7 +2277,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   assets: {
     name: "assets",
     label: "Fetching the images",
-    outputs: (ctx) => [path.join(ctx.dir, "assets.json")],
     produces: ["assets"],
     /* Two values, not three: the blocks it would be built from, and this step's
        own version. **No model**, so no `generator` on the artefact and no
@@ -2387,7 +2342,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   arc: {
     name: "arc",
     label: "Writing the arc",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     /**
      * **Added 2026-08-29, and it fixes a live bug rather than only enabling the
@@ -2472,7 +2426,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   tweets: {
     name: "tweets",
     label: "Writing the thread",
-    outputs: (ctx) => [path.join(ctx.dir, "tweets.json")],
     produces: ["tweets"],
     /* Was `threadIsCurrent(ctx.dir)`, which did these same three comparisons by
        hand and read the article's directory rather than the store — deleted in
@@ -2533,7 +2486,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   glossary: {
     name: "glossary",
     label: "Finding the terms",
-    outputs: (ctx) => [path.join(ctx.dir, "glossary.json")],
     produces: ["glossary"],
     /* The first step through the new seam, and the shape the other two follow.
        Three values — the blocks it would be written from, the prompt that would
@@ -2641,7 +2593,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   quotes: {
     name: "quotes",
     label: "Choosing the quotes",
-    outputs: (ctx) => [path.join(ctx.dir, "quotes.json")],
     produces: ["quotes"],
     /**
      * Three values, not four — **the profile is deliberately not in here**, and
@@ -2742,7 +2693,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   ideas: {
     name: "ideas",
     label: "Finding the ideas",
-    outputs: (ctx) => [path.join(ctx.dir, "ideas.json")],
     produces: ["ideas"],
     /**
      * Four values, where most stamped steps declare three.
@@ -2860,7 +2810,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   timeline: {
     name: "timeline",
     label: "Reading the dates",
-    outputs: (ctx) => [path.join(ctx.dir, "timeline.json")],
     produces: ["timeline"],
     /**
      * **Three values, and the third is one no other step hashes: the
@@ -3011,7 +2960,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   quiz: {
     name: "quiz",
     label: "Writing the questions",
-    outputs: (ctx) => [path.join(ctx.dir, "quiz.json")],
     produces: ["quiz"],
     /**
      * `articleWithIdsFingerprint`, the one `ideas` and `sketch` use — the
@@ -3121,7 +3069,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   sketch: {
     name: "sketch",
     label: "Drawing the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "sketch.json")],
     produces: ["sketch"],
     /**
      * The blocks, the tree, the prompt, the model and the reader — all five.
@@ -3254,7 +3201,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   illustrated: {
     name: "illustrated",
     label: "Painting the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "illustrated.json")],
     produces: ["illustrated"],
     /**
      * The Sketch, this stage's prompt, and the model that writes the brief.
@@ -3408,6 +3354,104 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         detail:
           `${stored} plate(s) painted` + (missing > 0 ? `, ${missing} failed` : "") +
           ` — ${run.illustrated.style}`,
+      };
+    },
+  },
+  /* Stage 5n — the debate. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, and in
+     FORCE_ONLY_WHEN_NAMED, for the reasons every mode step after `arc` has plus
+     one none of them has: **what this step returns is not in the article**. It
+     reads the blocks, the tree and the metadata, and it comes back with pages
+     off the open web, so re-fetching the article is no reason at all to buy the
+     search again.
+
+     **It is not an `ArticleStage`** — no row in `STAGE_EFFORT` or
+     `ARTICLE_RENDERER`, and `sharesArticleCache` therefore answers false for it,
+     which is both the safe answer and the true one: it is on chat/completions
+     and shares no Anthropic cached prefix with anything.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
+  debate: {
+    name: "debate",
+    label: "Asking the web",
+    produces: ["debate"],
+    /**
+     * `articleWithIdsFingerprint`, the one `ideas`, `sketch` and `quiz` use —
+     * the blocks, the tree and a metadata head that carries `URL:`.
+     *
+     * The URL is doing more here than printing at the top of a prompt: pass A
+     * asks the *web* about that address, and it is what every returned citation
+     * is compared against to keep the article out of its own debate. An article
+     * that moved is a different search.
+     *
+     * **Not the dated fingerprint**, unlike `timeline`: no publication date
+     * appears in either prompt, so hashing one would spend up to $0.27 every
+     * time a publisher re-dated a post. And **no `profileHash`**, like
+     * `timeline` and `quiz`: who is reading does not change what the web said.
+     */
+    stamp: async (ctx, store) => {
+      /* `tryReadArticle`, where `run` below takes `readArticle` — the same
+         asymmetry every stamped stage here has, and for the same reason. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        /* **`article.meta`, `null` and all — never a stub**, for the reason
+           `quiz` and `timeline` state above: `generateDebate` builds a stub for
+           the PROMPT and hands the fingerprint the real value, and hashing the
+           stub here would make every article without metadata report stale for
+           ever with nothing red. */
+        inputHash: debateFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: DEBATE_PROMPT_VERSION,
+        /* `modelFor("debate")` rather than `CAPABLE_MODEL`, and it is the only
+           row here that differs: this step is on the chat wire, where
+           `SPIDERYARN_DEBATE_MODEL` can override the model — and a stamp that
+           named the default while the override wrote the artefact would report
+           every run stale. src/models.ts § `resolveModel`. */
+        model: modelFor("debate"),
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateDebate({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+      const { direct, claims } = run.debate;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "debate",
+          model: run.model,
+          ms: run.elapsedMs,
+          /* **The alarm, and the only place a runaway shows up outside the
+             `ai_calls` ledger.** No request parameter caps spend here: Stage 0b
+             watched a cap of four results cost thirty-six searches. A run
+             logging 36 is a prompt that has drifted toward thoroughness. */
+          webSearches: run.webSearches,
+          /* Per group, never summed, or this line cannot say which of the two
+             searches lost rows. Counts and hostnames only — never a URL, never
+             an extract, never a quotation. docs/project/logging.md. */
+          directReturned: direct.counts.returnedSources,
+          directReported: direct.counts.reportedRows,
+          directKept: direct.counts.keptRows,
+          directOverCap: direct.counts.omittedOverCap,
+          /* `directnessUnverified` is the one to watch and it is *expected* to
+             be large: it is the rule that a page in group one must name this
+             article, and most pages a search returns do not. A run where it is
+             zero and `directKept` is high on an obscure article is the rule
+             failing open, not the web being kind. */
+          directLost: direct.counts.lost,
+          claimsReturned: claims.counts.returnedSources,
+          claimsReported: claims.counts.reportedRows,
+          claimsKept: claims.counts.keptRows,
+          claimsOverCap: claims.counts.omittedOverCap,
+          claimsLost: claims.counts.lost,
+        },
+        `debate ${ctx.slug}: ${direct.counts.keptRows} direct, ${claims.counts.keptRows} on its claims`,
+      );
+      return {
+        parts: { debate: run.debate },
+        detail:
+          `${direct.counts.keptRows} about this piece, ` +
+          `${claims.counts.keptRows} about what it claims`,
       };
     },
   },

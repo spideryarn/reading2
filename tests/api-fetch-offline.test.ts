@@ -46,9 +46,21 @@ const readCache = vi.fn();
 const writeCache = vi.fn();
 const invalidateCache = vi.fn();
 const slugsHeld = vi.fn();
+/**
+ * The ticket `apiFetch` reserves before it sends, and then hands to the write.
+ *
+ * Mocked as the identity of the request rather than as a real queue place: this
+ * file is about the *order of operations* in `apiFetch`, and what it needs from
+ * a ticket is to be able to say "the one taken for this URL, for this owner"
+ * when the write goes past.
+ */
+const ticketFor = vi.fn(async (url: string, userId: string | null) =>
+  userId ? { userId, url, epoch: 0, seq: 1 } : null,
+);
 vi.mock("../src/web/lib/offline-store.js", () => ({
   readCached: readCache,
   writeCached: writeCache,
+  reserveTicket: ticketFor,
   invalidate: invalidateCache,
   cachedSlugs: slugsHeld,
   rememberUser: vi.fn(),
@@ -221,8 +233,15 @@ describe("what gets written", () => {
        on the caller's critical path, so it lands a turn or two later. */
     await vi.waitFor(() =>
       /* The slug is the fourth argument, and it is what makes eviction work in
-         whole articles rather than in loose responses. */
-      expect(writeCache).toHaveBeenCalledWith("/api/article/x", { a: 1 }, "user-1", "x"),
+         whole articles rather than in loose responses. The third is the ticket
+         reserved before the request went out; what matters about it here is
+         whose drawer it was taken for. */
+      expect(writeCache).toHaveBeenCalledWith(
+        "/api/article/x",
+        { a: 1 },
+        expect.objectContaining({ userId: "user-1", url: "/api/article/x" }),
+        "x",
+      ),
     );
   });
 
@@ -248,7 +267,12 @@ describe("what gets written", () => {
 
     await apiFetch("/api/article/x");
     await vi.waitFor(() => expect(writeCache).toHaveBeenCalled());
-    expect(writeCache).toHaveBeenCalledWith("/api/article/x", { a: 1 }, "user-a", "x");
+    expect(writeCache).toHaveBeenCalledWith(
+      "/api/article/x",
+      { a: 1 },
+      expect.objectContaining({ userId: "user-a" }),
+      "x",
+    );
   });
 
   /**
@@ -273,7 +297,12 @@ describe("what gets written", () => {
 
     await apiFetch("/api/article/x");
     await vi.waitFor(() => expect(writeCache).toHaveBeenCalled());
-    expect(writeCache).toHaveBeenCalledWith("/api/article/x", { a: 1 }, "user-b", "x");
+    expect(writeCache).toHaveBeenCalledWith(
+      "/api/article/x",
+      { a: 1 },
+      expect.objectContaining({ userId: "user-b" }),
+      "x",
+    );
   });
 
   it("reads a saved copy from the partition of the reader who asked, when the transport fails", async () => {

@@ -22,10 +22,22 @@ Every command below is real and was run today. Article slugs live in `data/`; `c
 good one to test with because it is long (22,500 words, 360 rows, 92,703px tall) and long is where
 the costs show up.
 
+**And 360 rows is not long enough.** Everything on this page was measured at 360 or 551 blocks until
+2026-09-05, when the same clicks on a **2,046-block** article turned out to cost twenty-three times
+as much rather than eleven — a quadratic that no amount of care at 551 blocks would have found. If
+you are chasing a complaint that names length, measure two articles and read the **ratio**;
+a single article gives you a number and no slope. See § Clicking.
+
 ```bash
 # The reading view at rest. --local-sign-in gets you past the gate with no human.
 npx tsx scripts/measure-cpu.ts --local-sign-in \
   --url "http://localhost:5273/read/constitution?perf=1" --settle 20 --seconds 30
+
+# What a CLICK costs, which is a different gesture from a scroll and has its own
+# budget. Prints click-to-next-painted-frame per mode switch. See § Clicking.
+npx tsx scripts/measure-cpu.ts --local-sign-in \
+  --url "http://localhost:5273/read/constitution?perf=1" --settle 25 \
+  --modes "Hierarchy,Summary,Outline,Plain" --repeats 3
 
 # The same page while somebody scrolls it. Real wheel events, through the compositor.
 npx tsx scripts/measure-cpu.ts --local-sign-in \
@@ -727,6 +739,15 @@ None of `TableView`'s 29 props depends on `at`. Both are now `memo`ised — the 
 `src/web` — and four inline arrows at the call site in `App.tsx` became `useCallback`s so the memo
 could hold. [260904a](../plans/260904a-more-scroll-cpu-wins.md).
 
+**And one prop left on 2026-09-05, which is the same lesson from the other end.** `navDepth` — the
+column ← / → are aimed at — changed on every movement of the pointer, so moving the mouse across the
+table reconciled all of it to change one underline in the header row. The header row has no height
+now, the aim is drawn by tinting the column, and that is `data-aim` on `.reader` plus a rule in
+`styles.css` — one attribute write, no render.
+[keyboard.md § The aim is visible before you press anything](keyboard.md#the-aim-is-visible-before-you-press-anything).
+**A `memo` is only as good as the props that reach it**, and a prop that changes with the pointer is
+the cheapest kind to notice and the easiest to leave in place.
+
 **Both sides measured with the same harness and the same input** — 417 wheel events, 50,040px of
 travel, every run. "Before" is a detached worktree at `HEAD`, built and served on its own port.
 
@@ -906,6 +927,117 @@ gate, a `MutationObserver` scoped to one open block), shelf search (already debo
 chat streaming (already below `Reader`), keyboard and touch (one scan per key or completed swipe),
 the summary panel (runs on target change, not on scroll). No runaway observer loop exists.
 
+## Clicking, 2026-09-05 — and everything above this line is about scrolling
+
+Greg, 2026-09-05 (Sentry `SPIDERYARN-READING2-1M`):
+
+> The interface feels kind of sluggish when clicking around, changing modes and stuff like that for
+> a really long article.
+
+**Nothing on this page described a click.** Four rounds of work, every number a scroll — because the
+first three complaints were about scrolling. A scroll is judged by its worst frame over thirty
+seconds; a click is judged by how long it takes for anything to happen at all, and the two do not
+measure each other.
+
+`measure-cpu.ts --modes "Hierarchy,Summary,Outline,Plain" --repeats 3` is the instrument, new that
+day. The unit is **click to next painted frame** — two `requestAnimationFrame`s after `btn.click()`
+returns, so the handler's synchronous work and the frame that shows it are both inside it.
+
+**Scope of every number below, as a dated example rather than a fact:** run 2026-09-05 on the
+Hetzner box, production build served by `vite preview`, `SPIDERYARN_STORE=postgres`, signed in as
+`dev-admin@spideryarn.local` via `--sign-in-via` against a dev server on another port. Slugs
+`m1-kuhn-spya-a2zrjb` (2,046 blocks) and `scaling-hypothesis` (186 blocks) in the local store. The
+bundle hash was checked on every rebuild, because this page records a day lost to `vite preview`
+serving one bundle to both ports. Three other agents were on the box, which is what the spread in
+the numbers is.
+
+### The other axis nothing here had varied: length
+
+Every measurement above was taken on 360 or 551 blocks. Run the same clicks on **2,046 blocks**
+(152,077 words, 47,398 nodes, 560,860px tall) against a 186-block control, production build:
+
+| mode switch | 186 blocks | 2,046 blocks | ratio |
+|---|---:|---:|---:|
+| **Hierarchy** | 203ms | **4,698ms** | **23x** |
+| Summary | 185ms | 2,693ms | 15x |
+| Outline | 99ms | 1,308ms | 13x |
+| Plain | 86ms | 860ms | 10x |
+
+Eleven times the blocks, twenty-three times the time. **Length is a dimension this page had not
+varied, and it hid a quadratic.** If you measure only the familiar article you will not find these.
+
+**Read those as a severe length-correlated cost, not as a scaling curve.** Two articles of different
+structure, two warm samples each, in a fixed cycle — so "Hierarchy" is always *Plain→Hierarchy*, and
+the two long-article samples were 5,567ms and 3,829ms, a 45% spread. The multi-second reproduction is
+overwhelming; the exact 23x is not a durable estimate. GPT Sol, 2026-09-05.
+
+**And the split was the opposite of 2026-09-03's.** Script 60.4% of the window against layout 3.0%
+and style 9.8% — where the scroll work had found script at 22% and layout plus style at 28%. A
+profiler pointed here on the strength of that precedent looks in the wrong place.
+
+### Two native DOM calls were 52.8% of all script
+
+| profile, self time | before | after fix 1 | after fix 2 |
+|---|---:|---:|---:|
+| `querySelector` | **38.1%** | *gone* | gone |
+| `get ready` | 14.7% | 21.5% | *gone* |
+| `getBoundingClientRect` | 4.5% | 5.9% | **29.9%** |
+
+1. **`sections.map(s => document.querySelector('tr[data-block="…"]'))`**, in `useReadingPosition`
+   and `useColumnContext`. One document scan per section is `sections x nodes`, which is the
+   quadratic. Now one `querySelectorAll` into a `Map` — [`rows.ts`](../../src/web/rows.ts).
+2. **`document.fonts.ready`**, read in `Spine`, `dock-fit` and `OutlinePanel` to re-measure after a
+   font swap. Reading that getter is not free, and **`Spine`'s effect re-runs on `layoutKey`, so it
+   re-read it on every mode switch** — GPT Sol attributed the whole 2,727ms node to that one call
+   site. The other two are cold (`dock-fit`'s effect depends on a `useCallback(…, [])` and runs once;
+   `OutlinePanel` mounts only in Outline) and were changed for consistency. A draft of this section
+   said all three ran per switch; that was wrong, and it is the kind of wrong that sends the next
+   person to optimise two things that cost nothing. Now the `loadingdone` event, which is cheaper
+   *and* covers later font batches the one-shot promise misses —
+   [`fonts.ts`](../../src/web/fonts.ts).
+
+Result, taking the worse of two post-fix runs: Hierarchy **−39%**, Summary −33%, Outline −63%;
+main-thread busy 82% → 66.5%. `Plain` did not move. The two post-fix runs put Summary at 1,554ms and
+2,049ms, which is the run-to-run spread on a shared box and the reason none of these is quoted to
+three figures.
+
+**A frame vanishing from the profile is the strongest evidence available here**, and it is what
+proved fix 2's premise — `get ready` was never directly shown to be `document.fonts.ready`, and
+changing exactly those three reads is what removed it.
+
+**But the profiler oversold fix 2**: it put `get ready` at 21.5% of script, and removing it moved
+the wall clock by about 8%. Believe the smaller number. This page already says a `--cpu-profile` run
+is for *finding* a cost and never the run you quote; this is the first time that has been shown as a
+size error rather than an argument.
+
+### What is left, and it is a design decision rather than a patch
+
+`getBoundingClientRect` is now 29.9%, and **the mechanism is forced synchronous layout, not the call
+count.** Three passes measure the whole article on every mode switch — `Spine.measure` takes a rect
+for all 2,046 rows, `useReadingPosition` and `useColumnContext` one per section — and each is
+separated from the last by a React render that writes to the DOM, so each flushes layout of a
+560,860px document afresh.
+
+Sharing **one** measurement pass between the three consumers is the safe half and probably most of
+it. Caching offsets is the large half and is item 4 on § Still open, where the warning still stands:
+a cache goes stale on a late image or a font swap, and **wrong position is worse than slow
+position.**
+
+Full working, with every command and date:
+[260905d](../plans/260905d-mode-switching-is-sluggish-on-a-very-long-article.md).
+
+### A third way to measure the wrong thing, found here
+
+**A `PerformanceObserver` delivers in a later task.** The first version of `--modes` read its
+`longtask` entries immediately after the paint, so the *same* Hierarchy switch reported `tasks: 0`
+on one repeat and a 2,878ms task on the next — and `tasks: 0` reads as **"nothing blocked the main
+thread"**, on a switch that blocked it for five seconds. Collection now waits 150ms, after the
+headline number is taken. [silent-success.md](../reusable/silent-success.md), again.
+
+And a smaller one worth knowing: **the first click of a `--modes` run is a click on the mode the
+page loaded in**, which costs 20-30ms and looks like the fastest switch in the table. The report
+prints `first` and `later mean` separately for exactly that reason.
+
 ## What we still do not know
 
 Said plainly, because the fixes above are all real and none of them has been shown to be *the* 5.5%:
@@ -964,7 +1096,7 @@ Said plainly, because the fixes above are all real and none of them has been sho
   Supabase.
 
   ```bash
-  npm run build && SPIDERYARN_STORE=postgres npx vite preview --port 5299 --strictPort
+  npm run build && npx vite preview --port 5299 --strictPort
   npx tsx scripts/measure-cpu.ts --local-sign-in --email <owner> \
     --sign-in-via http://localhost:5273/ \
     --url "http://localhost:5299/read/<slug>" --settle 20 --seconds 25 --scroll
@@ -975,7 +1107,7 @@ Said plainly, because the fixes above are all real and none of them has been sho
   `configurePreviewServer` in [`vite.config.ts`](../../vite.config.ts) now puts the API in front of
   `vite preview` so a built bundle *can* be measured. **`npm run build` works against any store** —
   it proves the client resolves, bundles and parses, and it never boots a store at all. It is the
-  `vite preview` step that needs `SPIDERYARN_STORE=postgres` and Postgres up
+  `vite preview` step that needs Postgres up
   ([supabase-local.md](supabase-local.md)), because preview really does serve API requests and Vite
   runs it with `NODE_ENV=production`, so the boot guard in
   [`src/store/index.ts`](../../src/store/index.ts) refuses the filesystem store — rightly, since

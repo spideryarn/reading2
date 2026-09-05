@@ -90,7 +90,7 @@ import { loadEnvLocal } from "../src/env.js";
 import type { RawManifest } from "../src/fetch.js";
 import { mintId } from "../src/ids.js";
 import { environmentOwnerId } from "../src/owner.js";
-import { STEPS, contextPaths } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import { mintAttempt } from "../src/store/jobs.js";
@@ -104,12 +104,10 @@ loadEnvLocal();
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-session-isolation.test.ts",
   tables: ["spideryarn.raw_sources", "spideryarn.article_revisions", "spideryarn.jobs"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * **The owner `currentOwnerId()` will answer with**, and it has to be that one.
  *
@@ -148,33 +146,29 @@ function repeatableReadPool(): Pool {
 let rrPool: Pool | undefined;
 let rrDb: Db | undefined;
 
-if (reachable) {
-  rrPool = repeatableReadPool();
-  rrDb = drizzle(rrPool, { schema });
-}
+rrPool = repeatableReadPool();
+rrDb = drizzle(rrPool, { schema });
 
 afterAll(async () => {
-  if (reachable) {
-    const db = getDb();
-    if (mine.slugs.length) {
-      await db.delete(jobs).where(inArray(jobs.slug, mine.slugs));
-      const rows = await db
-        .select({ id: articles.id })
-        .from(articles)
-        .where(inArray(articles.slug, mine.slugs));
-      const ids = rows.map((r) => r.id);
-      if (ids.length) {
-        await db.update(articles).set({ currentRevisionId: null }).where(inArray(articles.id, ids));
-        await db.delete(articleRevisions).where(inArray(articleRevisions.articleId, ids));
-        await db.delete(articles).where(inArray(articles.id, ids));
-      }
+  const db = getDb();
+  if (mine.slugs.length) {
+    await db.delete(jobs).where(inArray(jobs.slug, mine.slugs));
+    const rows = await db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(inArray(articles.slug, mine.slugs));
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      await db.update(articles).set({ currentRevisionId: null }).where(inArray(articles.id, ids));
+      await db.delete(articleRevisions).where(inArray(articleRevisions.articleId, ids));
+      await db.delete(articles).where(inArray(articles.id, ids));
     }
-    for (const sha of mine.shas) {
-      await db.delete(rawSources).where(eq(rawSources.sha256, sha));
-    }
-    await rrPool?.end();
-    await closeDb();
   }
+  for (const sha of mine.shas) {
+    await db.delete(rawSources).where(eq(rawSources.sha256, sha));
+  }
+  await rrPool?.end();
+  await closeDb();
 });
 
 /** A digest nothing in the database can already be holding. */
@@ -240,11 +234,8 @@ function manifestFor(storedSha256: string, storedBytes = 4096): RawManifest {
 
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
-  const { dir, htmlFile } = contextPaths(slug);
   return {
     slug,
-    dir,
-    htmlFile,
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -289,7 +280,7 @@ function watchingIsolation(real: Db, seen: string[]): Db {
   }) as Db;
 }
 
-when("the transaction the pipeline commits in", () => {
+describe("the transaction the pipeline commits in", () => {
   it("is opened on a connection that defaults to repeatable read", async () => {
     /* **The rig, asserted.** Everything below is about a pin overriding a wrong
        ambient default; if the pool were an ordinary one, `read committed` would

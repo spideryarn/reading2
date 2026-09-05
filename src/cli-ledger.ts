@@ -1,10 +1,19 @@
 /**
- * **Run a CLI command with the ledger open**, so that `npm run hierarchy` is money
- * that appears in `npm run cost` rather than money that vanishes.
+ * **Run a CLI command with the ledger open**, so that a paid command line is
+ * money that appears in `npm run cost` rather than money that vanishes.
  *
- * One line at each stage's `isMain`, rather than a `collectSpend` folded into
- * seven bespoke `main()` bodies. Leaving CLI calls unscoped is why `recordSpend`
+ * One line at each CLI's `isMain`, rather than a `collectSpend` folded into
+ * bespoke `main()` bodies. Leaving CLI calls unscoped is why `recordSpend`
  * warns about them, and a warning on every local run is a warning nobody reads.
+ *
+ * **There is one caller left, and that is the point of the file rather than a
+ * sign it is dying.** The stage CLIs went through the queue on 2026-09-05
+ * (`scripts/stage.ts`), where `runStep` opens a `scopeKind: "job_step"`
+ * collector per step — so a stage run from a terminal is scoped by the same
+ * mechanism that scopes it when a reader presses Add, and a CLI that *also*
+ * wrapped the run in `withLedger("cli", …)` would scope one purchase twice.
+ * What is left is `npm run eval:pdf-read`, which is not a stage runner at all
+ * but the PDF extraction-quality tool, and which spends per chunk.
  *
  * ## This did not work until the store stopped dragging the read layer in
  *
@@ -39,7 +48,8 @@ import { costStore } from "./store/ai-calls.js";
  *
  * Three things had to be remembered separately, and the two that were forgotten
  * cost money: the entrypoint guard, `withLedger("cli", …)` around it, and
- * `loadEnvLocal()` before it. `npm run labels` and `npm run pdf` each spent for
+ * `loadEnvLocal()` before it. `npm run labels` and `npm run pdf` (now
+ * `npm run eval:pdf-read`) each spent for
  * weeks with no ledger open — docs/plans/260828aj-simplification-wave-2.md §0.1 — and
  * `npm run pdf` also answered *"OPENROUTER_API_KEY is not set"* with the key
  * sitting unread in `.env.local`. Every one of those is a line somebody did not
@@ -60,16 +70,23 @@ import { costStore } from "./store/ai-calls.js";
  * wrong.
  *
  * The CLIs in `tests/paid-cli-ledger.test.ts` still call `loadEnvLocal()` at the
- * top of `main` themselves, and that gate still requires it, because
- * `src/hierarchy.ts` is still on the old tail. The call memoises, so the second
- * one does nothing. When it moves too, the in-`main` calls and the rule that
- * checks for them can go, and this line becomes the only one.
+ * top of `main` themselves, and that gate still requires it. The call memoises,
+ * so the second one does nothing.
  *
- * **There are three of them now, not eight.** The seven article-reading stage
- * CLIs — `arc`, `tweets`, `glossary`, `ideas`, `quotes`, `timeline`, `quiz` —
- * were deleted on 2026-09-01: re-running one stage against one article is a
- * job (`{ slug, steps, force }`), and a second way to do it was a second thing
- * to keep in step. docs/plans/260831b-finish-the-database-move.md § sub-stage I.
+ * **This paragraph used to end *"when `src/hierarchy.ts` moves too, the
+ * in-`main` calls and the rule that checks for them can go"*. It moved, on
+ * 2026-09-05, and they stayed** — deliberately. The rule is stated over
+ * `PAID_CLIS`, not over `stageCli`, so it covers the *next* CLI on the day
+ * somebody lists it rather than on the day somebody remembers this note. The
+ * cost of keeping it is one memoised call.
+ *
+ * **There is one of them now, and there were eight.** The seven article-reading
+ * stage CLIs — `arc`, `tweets`, `glossary`, `ideas`, `quotes`, `timeline`,
+ * `quiz` — were deleted on 2026-09-01: re-running one stage against one article
+ * is a job (`{ slug, steps, force }`), and a second way to do it was a second
+ * thing to keep in step. docs/plans/260831b-finish-the-database-move.md §
+ * sub-stage I. `hierarchy` and `labels` followed on 2026-09-05, by the two
+ * routes described above.
  *
  * `await`ed by the caller rather than `void`ed, so flushing the ledger and any
  * failure in it stay part of the command finishing (§0.1).

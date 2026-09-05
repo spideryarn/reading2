@@ -26,12 +26,15 @@
  *    has since landed, and its contract lives in [jobs.ts](jobs.ts), not here:
  *    a second `JobStore` was declared in this file and never implemented, so it
  *    drifted into declaring a different `claim`, `get` and expiry sweep from the
- *    real one, and it has been deleted. Chat and searches belong to this
- *    group and have **no interface here yet**: they still write straight to the
- *    filesystem, which is why `postgres` mode currently serves them from files.
- *    That is item 10 of docs/plans/260826e-postgres-storage-implementation.md, not an
- *    oversight — but this list said `ChatStore` and `SearchStore` were declared
- *    here when they were not, which is worse than saying nothing.
+ *    real one, and it has been deleted. Chat and searches belong to this group
+ *    and their interfaces are `ChatStore` and `SearchStore`, below.
+ *
+ *    **Which of these is wired to Postgres is not recorded here**, because that
+ *    sentence has already been wrong in both directions — first claiming the two
+ *    were declared here when they were not, then saying they had no interface
+ *    here four hours before `05b9983a` added both. [index.ts](index.ts) is where
+ *    the wiring is decided and the only place that can answer it.
+ *    docs/plans/260905b-improve-the-codebase-third-sweep.md has the history.
  *
  * ## What is deliberately NOT in here
  *
@@ -75,6 +78,7 @@ import type {
   SearchRun,
   ShelfState,
   ArcFound,
+  DebateFound,
   IdeasFound,
   IllustratedFound,
   SketchFound,
@@ -256,6 +260,32 @@ export interface ArticleReader {
    * this app after a selection. `timeline` made the same call.
    */
   loadQuiz(slug: string): Promise<QuizFound>;
+
+  /**
+   * What the rest of the web says about this piece, plus whether the artefact
+   * still describes the article.
+   *
+   * Staleness is answered as `loadIdeas` answers it — at read time, against the
+   * blocks, the tree and the **cited** metadata head, because pass B sends
+   * `articleWithIds`. Not against the publication date: no date appears in
+   * either prompt, so hashing one would spend up to $0.27 every time a publisher
+   * re-dated a post.
+   *
+   * **`searchedAt` is on the artefact and is deliberately not a third staleness
+   * fact.** Debate is time-sensitive research and a shared link outlives it, so
+   * the panel says *"Searched on …"* — but age is displayed provenance, not
+   * invalidity. A visitor opening a year-old article must be able to see how old
+   * the search is without the artefact declaring itself unusable.
+   *
+   * **A 404 is the ordinary case**, like the quiz and the sketch and unlike the
+   * timeline: `debate` is off `DEFAULT_INGEST_STEPS`, so most articles have
+   * never had one, and the panel's job on a 404 is to offer the button. An
+   * artefact with two EMPTY groups, on the other hand, is a perfectly good
+   * answer and the commonest one — most pieces have no critical reception at
+   * all — so it is a 200 with a sentence, never a 404. `SHAPE.debate`
+   * (src/store/artifacts.ts) makes the same call at the store boundary.
+   */
+  loadDebate(slug: string): Promise<DebateFound>;
 
   /**
    * The arc, plus whether it still describes the article.
@@ -749,6 +779,17 @@ export interface ChatStore {
        * from the answer they are replacing. See `ChatMessage.stance`.
        */
       stance?: RememberStance;
+      /**
+       * The reader pressed the "?" rather than typing — written onto the
+       * **user** message, in the same write as the pending reply.
+       *
+       * The mirror of `stance` above it, and it is a different rule rather than
+       * the same one: `retry` and `edit` take no stance because theirs comes
+       * from the answer they are replacing, and they take no `help` because
+       * theirs comes from the **question** they are re-asking, which is the row
+       * `withRetry` and `withEdit` already hand back. See `ChatMessage.help`.
+       */
+      help?: true;
     },
     now?: () => string,
   ): Promise<Turn>;
@@ -857,8 +898,9 @@ export interface SearchStore {
    * so both stores share one rule as well as one hash.
    *
    * **A method rather than a field on what `load` returns**, so a caller that
-   * only wants the list does not pay for a scan of every block. The read seam
-   * asks for both together (`readSearches`).
+   * only wants the list does not pay for a scan of every block. The routes that
+   * need both ask for both in one response, and say why where they do it
+   * (`refereeCriteria` and `refereeClaims` in src/routes.ts).
    *
    * `undefined` when the article has no readable blocks. That is not "current"
    * — `isStale` counts it as stale, because not knowing and knowing it is fine
@@ -1040,7 +1082,7 @@ export interface RefereeClaimsStore {
    *
    * There is no `wantedId` and no retry rule, because there is nothing to
    * collide with: a second run is a run, and the answer it overwrites was about
-   * the same paper. src/referee-claims-store.ts § What differs.
+   * the same paper. src/store/pg-referee-claims.ts § One run per article.
    */
   begin(slug: string, now?: () => string): Promise<ClaimsRun>;
 
@@ -1095,10 +1137,11 @@ export interface GlossaryLookupStore {
  *
  * Not article-scoped, unlike everything else in this file — there is one
  * profile per reader, which today means one profile, full stop
- * (docs/project/auth.md). The filesystem adapter is a thin wrapper over
- * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, which already
- * does the normalising, capping and atomic write; the Postgres adapter is
- * `reader_profiles`, one row per `owner_id`.
+ * (docs/project/auth.md). There was a filesystem adapter — a thin wrapper over
+ * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, over one
+ * `data/reader.json` — and it went on 2026-09-05 with the rest of the
+ * filesystem store. `src/profile.ts` kept the normalising, capping and hashing
+ * and lost the file; the adapter is `reader_profiles`, one row per `owner_id`.
  *
  * **It holds the reader's settings too**, since 2026-08-31 — the switch below
  * is on the same row rather than in a store of its own, for the reason
@@ -1349,16 +1392,70 @@ export interface VisibilityStore {
 /* -------------------------------------------------------- the AI ledger -- */
 
 /**
- * What a read of the ledger came back with — the rows, **and how many lines it
- * could not read**.
+ * What a read of the ledger came back with — the rows, **and the two different
+ * ways they can be fewer than the calls that were actually made**.
  *
- * Two fields rather than one because a total nobody can tell is short is worse
- * than no total. A truncated JSONL tail or a row that will not parse has to
- * reach the report rather than quietly reduce it.
+ * Three fields rather than one because a total nobody can tell is short is worse
+ * than no total, and because the two shortfalls are not the same fact:
+ *
+ * - **`unreadable`** — *a row exists and could not be parsed.* A truncated
+ *   JSONL tail, a hand-edited line, a row whose `cost_source` disagrees with its
+ *   own numbers. The money happened and the evidence is damaged. Always `0` from
+ *   Postgres, where a row either parsed on the way in or was never written.
+ * - **`lateCalls`** — *a row that should exist was never written at all.* The
+ *   money happened and there is no evidence whatsoever.
+ *
+ * They must not be added together into one "incomplete" count: a reader chasing
+ * the first goes and looks at the file, and a reader chasing the second has
+ * nothing to look at and must go to the logs. See `totalLedger` in
+ * [ai-calls.ts](ai-calls.ts), which is the only sanctioned way to turn this into
+ * money, and refuses to hand back a figure called a total when either is set.
+ *
+ * ## Why `lateCalls` is here at all, and what it does not mean
+ *
+ * The ledger table cannot know about a call that is still in flight. A row is
+ * written when a call *finishes* — `beginSpend` mints its id and adds it to the
+ * collector's `active` map before the request goes out, and `recordSpend` is
+ * what turns it into a row (src/ai-spend.ts). `collectSpend` sets `closed` on
+ * its box **before** draining the writes, deliberately, so anything finishing
+ * after the report has already been taken gets a warn line and a bump of
+ * `lateCalls()` and **no row, ever**. That is money spent that is in no total,
+ * and from the reading end absence is unknowable: the query comes back short,
+ * `unreadable: 0`, looking exactly like a cheaper job.
+ *
+ * So the only honest source is the process-side counter, and the store reads it.
+ * **Two things it is not**, both of which have to be said out loud or the number
+ * will be misread:
+ *
+ * 1. **It is not attributable to this read.** `lateCalls()` is process-global
+ *    and monotonic — a late call cannot be attributed to a job, because the
+ *    whole content of the failure is that nothing was written down about it.
+ *    So a non-zero value means *"a call somewhere in this process was never
+ *    recorded; this total may be short"*, never *"this job is short by n"*.
+ *    Once it is non-zero every later read in that process carries the caveat.
+ *    That is the conservative direction, and it is the price of not having the
+ *    row.
+ * 2. **It only sees this process.** `npm run cost` is a fresh process reading a
+ *    ledger the server wrote, so it will read `0` however many calls the server
+ *    lost. The caveat reaches the caller that ran the work — which is the one
+ *    that printed the wrong bill — and cannot reach anybody else.
+ *
+ * **The real fix is a row at call-open time**, so that a started call is on disk
+ * before it can be lost and a finish updates it — scoped in
+ * docs/plans/260827q-ai-cost-tracking.md. This is the honest stopgap until then:
+ * it cannot recover the money, but it stops a short figure being quoted as a
+ * whole one.
  */
 export interface LedgerRead {
   rows: AiCallRow[];
+  /** Rows that exist and would not parse. See above; never merged with the next. */
   unreadable: number;
+  /**
+   * Calls that finished after their collector had reported and so were never
+   * written — **process-wide, and not attributable to this read**. Read from
+   * `lateCalls()` in [../ai-spend.ts](../ai-spend.ts) at the moment of the query.
+   */
+  lateCalls: number;
 }
 
 /**
@@ -1390,8 +1487,13 @@ export interface CostStore {
   read(since?: string, until?: string): Promise<LedgerRead>;
   /**
    * Every call made by one pipeline job, across all the advances that ran it —
-   * **and how much of the ledger could not be read while looking**, because a
-   * job total that is short must be able to say so.
+   * **and both ways the answer can be short**, because a job total that is short
+   * must be able to say so. See `LedgerRead`: rows that would not parse, and
+   * rows that were never written because the call outlived its collector.
+   *
+   * Turn the result into money with `totalLedger`, never by summing the rows: a
+   * figure read straight off `rows` is one that cannot tell you it is short, and
+   * that is the bug this returns three fields to prevent.
    */
   forJob(jobId: string): Promise<LedgerRead>;
   /** How big the ledger has got, in bytes, or `null` where that is not a question. */

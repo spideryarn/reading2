@@ -1,0 +1,223 @@
+{
+  "slug": "unal-biotec-bilingual-title",
+  "sample": 2,
+  "prompt": "5837a306a4da",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T09:10:35.501Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "ARTÍCULO DE INVESTIGACIÓN",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Efecto inhibidor de los extractos oleaginosos de Coffea arabica y Ananas comosus sobre Enterococcus faecalis",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Inhibiting effect on oleaginous extracts of Coffea arabica and Ananas comosus on Enterococcus faecalis",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Nelson Alfonso Vega Contreras*, María Angélica Farfan Casadiego**, Angie Lisandra García Pabón***",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "DOI: 10.15446/rev.colomb.biote.v27n1.119003",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "RESUMEN",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "La resistencia de los microorganismos a los agentes antimicrobianos representa un desafío crítico para la salud pública. Entre estos, Enterococcus faecalis destaca como una bacteria grampositiva, anaerobia facultativa y oportunista, reconocida como uno de los principales causantes de infecciones nosocomiales. El presente estudio tuvo como objetivo evaluar el efecto inhibidor de los extractos oleaginosos obtenidos de la cáscara de café (Coffea arabica) y las hojas de la corona de piña (Ananas comosus) sobre el crecimiento de E. faecalis, con el fin de explorar alternativas naturales para su control. Metodológicamente, en la investigación se recolectaron 6 kg de hojas de corona de piña y cáscara de café; las hojas fueron deshidratadas en horno y luego molidas hasta obtener una harina fina. La extracción de los compuestos oleaginosos se realizó mediante el método Soxhlet, La identificación de compuestos fenólicos se llevó a cabo mediante cromatografía líquida. En cuanto a la evaluación de la actividad antimicrobiana, se utilizó el método de difusión en disco sobre agar Mueller-Hinton, empleando oxacilina como control positivo y DMSO como control negativo. Los resultados se expresaron en milímetros de los halos de inhibición generados por cada concentración de los extractos. A concentración del 100%, el extracto de A. comosus presentó un halo de inhibición de 2,34 mm, mientras que el de C. arabica alcanzó los 3,11 mm, siendo esta la concentración más efectividad. Se concluyó que los extractos de ambas fuentes vegetales presentan actividad antimicrobiana contra E. faecalis, y el análisis ANOVA confirmó diferencias significativas entre los tratamientos aplicados.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Palabras clave: antimicrobianos, compuestos fenólicos, extractos vegetales, microorganismos, residuos.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "ABSTRACT",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "The resistance of microorganisms to antimicrobial agents represents a critical challenge for public health. Among these, Enterococcus faecalis stands out as a gram-positive, facultative anaerobic and opportunistic bacterium, recognized as one of the main causes of nosocomial infections. The present study aimed to evaluate the inhibitory effect of oleaginous extracts obtained from coffee husk (Coffea arabica) and pineapple crown leaves (Ananas comosus) on the growth of E. faecalis, in order to explore natural alternatives for its control. Methodologically, in the research 6 kg of pineapple crown leaves and coffee husk were collected; the leaves were dehydrated in an oven and then ground to",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "*. Universidad Francisco de Paula Santander, Correo electrónico nelsonalfonsovc@ufps.edu.co, ORCID: https://orcid.org/0000-0002-5013-2146, Colombia",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "** Universidad Francisco de Paula Santander, Correo electrónico: mariaangelicafaca@ufps.edu.co, ORCID : http://orcid.org/0009-0009-4333-6544 , Colombia",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "*** Universidad Francisco de Paula Santander, Correo electrónico: angielisandragapa@ufps.edu.co, ORCID http://orcid.org/0009-0009-8619-8364. Colombia",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "cover",
+      "text": "Licencia Creative Commons Atribución 4.0 Internacional.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "obtain a fine flour. The extraction of oleaginous compounds was carried out by the Soxhlet method. The identification of phenolic compounds was carried out by liquid chromatography. As for the evaluation of antimicrobial activity, the disc diffusion method was used on Mueller-Hinton agar, using oxacillin as a positive control and DMSO as a negative control. The results were expressed in millimeters of the inhibition halos generated by each concentration of the extracts. At 100% concentration, the A. comosus extract presented an inhibition halo of 2.34 mm, while that of C. arabica reached 3.11 mm, this being the most effective concentration. It was concluded that extracts from both plant sources showed antimicrobial activity against E. faecalis, and ANOVA analysis confirmed significant differences between the treatments applied.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Keywords: antimicrobials, phenolic compounds, plant extracts, microorganisms, residues.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Recibido: febrero 23 de 2025 Aprobado: abril 25 de 2025",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading2",
+      "text": "INTRODUCCIÓN",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "La resistencia a los antibióticos es de las principales preocupaciones de la salud pública a nivel mundial (Singaravelu, 2019; Li et al., 2025). Este fenómeno ha sido reconocido por la Organización Mundial de la Salud, como una de las mayores amenazas para la salud humana (OMS, 2020), debido a su impacto en la eficacia de los tratamientos y al aumento de la morbilidad y mortalidad asociadas a infecciones bacterianas (Spellberg et al., 2011). Entre los microorganismos que han desarrollado resistencia a múltiples antibióticos destaca el género Enterococcus, considerado uno de los principales patógenos nosocomiales (Almeida-Santos et al., 2025). Su resistencia intrínseca a la mayoría de los antibióticos dificulta significativamente su tratamiento (Cercenado, 2011), y lo convierte en un agente causal de entre el 5% y el 15% de los casos de enfermedades como la endocarditis (Escola et al., 2020). La Organización Mundial de la Salud ha clasificado Enterococcus faecalis como un patógeno de alta prioridad debido a su resistencia a múltiples fármacos, lo que limita significativamente las opciones terapéuticas disponibles. Este microorganismo representa un desafío creciente en la medicina moderna, ya que está asociado con infecciones graves y de difícil tratamiento (Aguirre & Huatuco, 2014), Se estima que aproximadamente el 80% de las infecciones por Enterococcus son causadas por E. faecalis , es importante resaltar que, aunque forma parte de la microbiota normal del tracto gastrointestinal, genitourinario y la saliva, puede actuar como patógeno oportunista y provocar complicaciones severas en ciertas condiciones (Rufasto et al., 2023). Estos factores subrayen la urgencia de desarrollar nuevas estrategias para su control. Esta situación ha impulsado la búsqueda de alternativas terapéuticas eficaces y seguras, entre las cuales los extractos naturales han emergido como una opción prometedora debido a su amplia gama de compuestos bioactivos con propiedades antimicrobianas (Tril et al., 2014). Esta actividad está relacionada principalmente con el alto contenido de compuestos fenólicos, autores como (Vega et al., 2020), (Vega et al., 2024) y (Pérez y Tuberquia, 2023) han demostrado en sus investigaciones que residuos como la piña (Ananas comosus) y el café (Coffea arabica), poseen actividad antimicrobiana que puede inhibir el crecimiento de microorganismos patógenos. El consumo de estos alimentos se limita a su pulpa, desechando su cáscara y la corona en el caso de la piña. Estos residuos poseen una gran cantidad de beneficios que pueden ser aprovechados en la industria alimentaria y farmacéutica, entre otros (Cerquera & Ibarra, 2022). En consecuencia, para el aprovechamiento de estos residuos orgánicos, el presente estudio evaluó el efecto inhibidor de los extractos oleaginosos de Coffea arabica y Ananas comosus sobre Enterococcus faecalis.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading2",
+      "text": "MATERIALES Y METODOS",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading3",
+      "text": "FASE I: Recolección, secado y molienda",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Se siguió la metodología planteada por (Cangussu et al., 2021), con algunas modificaciones para lo cual se recolectaron 6kg de la cascarilla de café (Coffea arabica) y de coronas de la piña (Annanas comosus) a partir de los desechos encontrados en la central de abastos, seguidamente se llevó a cabo el proceso de secado con las hojas de la corona de piña (Annanas comosus), en la cual se utilizó un horno de secado especializado capaz de deshidratar los alimentos, se ajustó a una temperatura constante de 60°C por un tiempo de 72h (Johny et al., 2023). Durante esta fase se controló y registro el tiempo de secado necesario para obtener una deshidratación adecuada y calcular el porcentaje humedad perdida de la muestra inicial (%Hhb) aplicando la ecuación 1, (Subdirección de metrología física, 2022). Posteriormente se llevó a cabo la molienda y tamizado de las hojas de (Annanas comosus), y la cascarilla de (Coffea arabica). La molienda se realizó con el fin de obtener una harina fina o polvo fino.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "figure",
+      "text": "%Hhb = (mh − ms) / mh x100\n(Ecuación 1)",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading3",
+      "text": "FASE II: Extracción, rendimiento e identificación de compuestos fenólicos",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "La extracción de los compuestos fenólicos de la cascarilla de café (Coffea arabica) y la corona de piña (Ananas comosus) se realizó mediante el método Soxhlet, utilizando una extracción sólido-líquido. Para cada proceso, se empleó 1 L de etanol al 96% como solvente. Al finalizar la extracción, se llevó a cabo una destilación simple con el objetivo de concentrar y purificar el extracto oleaginoso. Posteriormente, las muestras obtenidas se almacenaron en frascos ámbar para su conservación. El rendimiento del proceso se calculó utilizando la ecuación 2 descrita por (Fuentes & Luis 2013).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "figure",
+      "text": "%R = (mi − mf) / mi x100\n(Ecuación 2)",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "La identificación de compuestos fenólicos se llevó a cabo mediante el análisis de cromatografía liquida de ultra-alta resolución con detector de masas Orbitrap (UHPLC-ESI-ORBITRAP-HRMS), las preparaciones de las muestras analizadas se disolvieron en una muestra en mezcla de metanol: Agua (1:1 v/v) con ácido fórmico 0.2% v/v, vórtex (5 min) y sonicación (5 min) y posterior inyección al equipo cromatográfico. Como estándares de referencia se utilizaron las xantinas: cafeína (Part N° C8960-250G, Sigma-Aldrich), teobromina (Part N° T4500-25G, Sigma-Aldrich) y teofilina (Part N° T1633-25G, Sigma-Aldrich); las catequinas: (±)-catequina (C) (Part N° C1788-500MG, Sigma-Aldrich), (-)-epigalocateqina galato (EGCG) (Part N° E4143-50MG, Sigma-Aldrich), (-)-epicateqina (EC) (Part N° E1753-1G, Sigma-Aldrich), (-)-epicateqina galato (ECG) (Part N° E3893-10MG, Sigma-Aldrich), (-)-epigalocateqina (EGC) (Part N° E3768-5MG, Sigma-Aldrich); los flavonoides: ácido caféico (Part N° C0625, Sigma-Aldrich), ácido p-cumárico (Part N° C9008, Sigma-Aldrich), ácido rosmarínico (Part N° 536954-5G, Sigma-Aldrich), quercetina (Part N° Q4951-10G, Sigma-Aldrich), naringenina (Part N° N5893-1G, Sigma-Aldrich), luteolina (Part N° L9283-10MG, Sigma-Aldrich), kaempferol (Part N° K0133-50MG, Sigma-Aldrich), pinocembrina (Part N° P5239, Sigma-Aldrich), apigenina (Part N° A3145-25MG, Sigma-Aldrich); las antocianinas: cianidina 3-rutinosido (Part N° G36428, Sigma-Aldrich), pelargonidina 3-glucósido (Part N° 53489, Sigma-Aldrich).Se utilizó un Cromatógrafo líquido de ultra-alta eficiencia (UHPLC), Dionex Ultimate 3000 (Thermo Scientific, Sunnyvale, CA, EE.UU.), equipado con una bomba binaria de gradiente (HP G3400RS), un inyector automático de muestras (WPS 300TRS) y una unidad termostada para la columna (TCC 3000). La interfaz del LC-MS fue la electronebulización (ESI) y el espectrómetro de masas fue de alta resolución con un sistema de detección de corrientes de iones Orbitrap. Operado en modo positivo con un voltaje de capilar de 3,5 kV. La fase móvil fue A: una solución de ácido fórmico 0,2% v/v en agua, y B: ácido fórmico 0,2% v/v en acetonitrilo. La condición inicial de gradiente fue de 100% A, cambiando linealmente hasta 100% B (8 min); se mantuvo durante 4 min; el retornó a las condiciones iniciales en 1 min; el tiempo total de corrida fue de 13 min, con 3 min para post-corrida. La identificación de los compuestos se realizó usando el modo de adquisición full scan y la extracción de corrientes iónicas (EIC) correspondientes a los [M+H]+ de compuestos de interés, medición de masas con exactitud y precisión de Δppm < 1 y usando una solución-mix estándar de los compuestos (material de referencia certificado), para la cuantificación de los analitos de interés se usó el método de estandarización externa.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading3",
+      "text": "FASE III: Análisis microbiológicos",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Para el análisis microbiológico del efecto antimicrobiano se realizaron pruebas de difusión en agar Müller Hinton, las cuales se realizaron por triplicado con la utilización del método de Kirby Bauer (Alhamadani y Oudah, 2022). Seguidamente, en el proceso de preparación de la suspensión bacteriológica se empleó la escala de McFarland (Kuete et al., 2006), como referencia estándar para determinar la concentración de la bacteria para la cual, se midió la absorbancia a una longitud de onda de 625nm, comúnmente utilizada para para este propósito, asimismo se tomaron alícuotas de 100 µL (1x108 UFC/ml) de E. faecalis, las cuales fueron inoculadas en cada una de las placas Petri con agar Müller Hinton, sumergiendo así, un hisopo estéril en la suspensión bacteriana para distribuirlo uniformemente en tres direcciones sobre el agar, se dejó secar la placa a temperatura ambiente para que cualquier exceso de humedad superficial. Para el control positivo se diluyó 5ml de agua destilada en 1g de Oxacilina, obteniendo una concentración apropiada de 0,1% de antibiótico. Para la preparación de los tratamientos tabla 1, se procedió a diluir los extractos en dimetilsulfóxido (DMSO) y se prepararon las concentraciones en tubos de Eppendorf estériles. Seguidamente, los discos de papel filtro se añadieron con una pinza estéril, los cuales eran embebidos con 10 µL cada uno con las concentraciones de los tratamientos a (25%, 50%,75% y 100%). Se incubaron las placas en posición invertidas dentro de los 15 min posteriores de la aplicación de los extractos a evaluar, a una temperatura de 35±2°C durante 24h, pasado el tiempo de incubación se examinó cada placa y se midieron los diámetros (mm) de los halos de inhibición de crecimiento alrededor de cada disco, utilizando una regla milimétrica abarcando así, el diámetro del halo.",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "Efecto inhibidor de los extractos oleaginosos de Coffea arabica y Ananas comosus sobre Enterococcus faecalis",
+  "recall": 0.973,
+  "quality": [
+    "Pages 1, 2, 3: 3 run(s) are missing from the transcription, the longest 13 words — “92 rev colomb biotecnol vol xxvii no 1 enero junio 2025 93 102”.",
+    "Pages 1, 2, 3: the output contains markup, which the prompt forbids — “**, Angie Lisandra García Pabón**”.",
+    "Pages 1, 2, 3: 2 number(s) or address(es) in the output are on none of these pages — x100, x100."
+  ],
+  "usage": {
+    "input": 22464,
+    "output": 9453
+  }
+}

@@ -45,10 +45,33 @@ asked. In a shared tree, name your files on both commands —
 - **At the end of every stage, as an obligatory review.** Not optional, and not skippable because
   the stage felt small.
 
+**Two rounds per stage, then you decide.** The cadence above is right; what goes wrong is that
+nothing ends it. Refusing costs a reviewer nothing and P2s are infinite, so chains here have run to
+round seven and round twelve without converging. After two rounds, settle it yourself and write
+*"Sol still objects to X; overruled because Y"* in the plan doc — an overruled P0 or P1 goes to
+Fable or Greg first, not straight past.
+
+After round two, **discovery closes** — but any established P0 or P1 whose final fix was not in the
+round-two snapshot still gets a narrowly scoped check *of that fix*, and if it comes back still
+open, settle or overrule it through Fable or Greg before landing. This does not reopen general
+discovery.
+
+Say "whose fix was not in the snapshot" rather than "newly found": the sequence that gets missed is
+a round-one P1, an inadequate first fix, round two reporting it still open, and a *second* fix after
+round two that nothing checks — and the overrule clause never fires, because you believe you fixed
+it rather than overrode it.
+
+Write the prompt the way [review-prompt-template.md](review-prompt-template.md) says — a durable
+revision or an explicit untracked-file list rather than a `/tmp` path, your suspicions last, a
+fixed severity scale, and an ID on every finding.
+
 Hand it the evidence — the scoped diff, the failing output, the script that produced the number —
 not just your account of it, and tell it to run one test file itself: its sandbox allows that, and
-a finding it reproduced outranks one it reasoned to. Check each finding yourself; some are wrong.
-Check a verdict actually arrived, exit code *and* answer file. Mechanics in
+a finding it reproduced outranks one it reasoned to. **A test that needs nothing outside the tree**
+— the reviewer has no network, not even loopback, so anything touching Postgres or a local service
+is **yours to run and hand over as raw output**, and a review promised more comes back with those
+assertions quietly skipped. Check each finding yourself; some are wrong. Check a verdict actually
+arrived, exit code *and* answer file. Mechanics in
 [codex-cli-as-subagent.md](codex-cli-as-subagent.md).
 
 ## Delegate
@@ -66,12 +89,34 @@ A subagent starts with nothing but your prompt. Name the files, say what the sta
 as what it is for, say what done looks like, and ask for the conclusion rather than the material.
 Run them in parallel only when their file sets don't overlap.
 
+**Parallel subagents share one scratchpad.** The directory is per *session*, and subagents inherit
+the parent's path, so "session-specific, isolated" is true of the session and false of the agents
+inside it — one overwrote another's helper script mid-task, which looks exactly like the script
+being wrong. Give each a unique file prefix. Where two must edit one file, say "small targeted
+edits, re-read immediately before editing, never rewrite".
+
 Subagents all reading the same code can agree confidently without anyone having touched real
 evidence. Send one to run the thing, read the logs, or reproduce it.
 
 **When a subagent fails, re-dispatch it.** An empty, stale or wrong report means running it again, or
 handing it to a different model — not doing its work yourself. Several failures in a row is the
 environment being broken; stop and ask rather than taking the whole job back.
+
+**A reviewing subagent is read-only by convention, not by construction.** Measured 2026-09-04: an
+`Explore`-type subagent has no `Edit` or `Write`, and its prompt forbids creating files — but its
+`Bash` runs as the user with the repo writable, no seccomp, and MCP tools reaching Supabase and
+Vercel. So the only thing between it and `git commit` or `apply_migration` is a sentence it chooses
+to obey, and on the same day another one wrote a file anyway and said so. Write "do not change any
+file" into every reviewing brief, and do not lean on the agent type as though it were a boundary.
+GPT Sol is the exception, and the reason to prefer it for review: its sandbox refuses the write
+whatever the model intends.
+
+**Send a spike to Sol as well as to a Claude subagent.** A `--sandbox workspace-write` run in a
+worktree of its own is already supported and, over hundreds of runs, has never been used — every one
+was a review. It is the right shape for *after* a review, when a fix wants proving: the deliverable
+is a diff **plus a red→green transcript**, read as evidence, never applied unread. Keep it separate
+from the review itself, which stays read-only for the reasons in
+[codex-cli-as-subagent.md](codex-cli-as-subagent.md).
 
 ## What the work turns up
 

@@ -54,7 +54,8 @@ until you know what they are for.
  │             │ interoception d·66 c·61                        │
  │             │ …                   │                         │
  │             ├─────────────────────┤                         │
- │             │ Find more · Start   │                         │
+ │             │ ☐ use my profile    │                         │
+ │             │ 🔍 Find more        │                         │
  ├─────────────┴─────────────────────┴─────────────────────────┤
  │ ⊞Hierarchy ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …            │
  └─────────────────────────────────────────────────────────────┘
@@ -92,7 +93,7 @@ until you know what they are for.
 
 Code: [`src/glossary.ts`](../../src/glossary.ts) (stage 5d — the model call, the dedup, the
 occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching rule, shared),
-[`src/api.ts`](../../src/api.ts) § `loadGlossary`, [`src/routes.ts`](../../src/routes.ts),
+[`src/store/pg.ts`](../../src/store/pg.ts) § `loadGlossary`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx),
 [`src/web/useGlossary.ts`](../../src/web/useGlossary.ts),
 [`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` at the end of
@@ -200,9 +201,22 @@ was a cap per call plus a "Load More" that feeds the already-extracted entries b
 not repeat itself.
 
 So: `BATCH_SIZE = 20`, `suggestedCount(words)` scales the ask and clamps to it, and **running the
-step again appends**. `passes` on the artefact counts the calls, and the panel shows it — a list that
-took three calls to build is a different object from one that took one, and it is the only way to see
-that "Find more" did anything.
+step again appends**. `passes` on the artefact counts the calls. The panel used to print it under the
+list, on the argument that it was the only way to see that *Find more* had done anything; that
+stopped being true once the head grew a term count and the threshold row grew *n of m*, both of which
+move when a pass lands and both of which are the number the reader was actually waiting for. It went
+on 2026-09-05 — [above](#there-was-a-start-again-beside-it-and-it-went). It is still on the artefact
+and in the export.
+
+**The same day, the same line went from everywhere else it was shown to a reader**, on Greg's *"also
+do the same for Quotes (and any other modes as needed)"*: the quotes panel's foot
+([`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx) § `Foot`) and the dashed chip in the
+reading view's controls that held the tree's version
+([`src/web/App.tsx`](../../src/web/App.tsx)). Those were the only three. Two survivors, both
+deliberate: [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) § `StageRow`, which is where an
+owner is *meant* to look, and the thread page's *"Written by …"*
+([`src/web/Tweets.tsx`](../../src/web/Tweets.tsx)), which sits on a page of its own, carries when and
+how long as well, and reads as a byline rather than as a build stamp. ⟨Fable⟩
 
 The second pass is given their FORBIDDEN checklist almost verbatim, because a plain "don't repeat
 these" is not enough: the model's idea of a repeat is looser than ours, and it will happily return
@@ -513,19 +527,18 @@ Postgres store seam rather than on the streaming, is in
 store should do it then**, which is why this note is here rather than only in the plan.
 
 **Its answers live apart from the glossary, keyed by entry id** — one row per `(article, entry)` in
-Postgres ([`src/store/pg-lookups.ts`](../../src/store/pg-lookups.ts)), and
-`data/<slug>/glossary-lookups.json` on the filesystem store
-([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. **Both
-halves exist and both are wired**; the sentence above about the Postgres seam is about *streaming*
-and nothing else. It has been read as saying lookups are files-only, which they have not been since
-the seam landed — checked against the code and against the deployed store, 2026-09-04. A lookup
-is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and
-sharing a file with the generating stage is unfixable rather than merely racy, because that stage
-holds its read across a minute-long model call. Worse, `glossary.json` is written with a bare
-`writeFile`, and a truncated one reads as `null` — which the panel reports as *"Nobody has found the
-terms for this one yet"*, the whole glossary gone and nothing saying so. The sidecar is
-temp-and-rename and serialised, both copied from [`src/comments.ts`](../../src/comments.ts).
-`loadGlossary` attaches them at read time, so the panel still just sees `entry.lookup`.
+Postgres ([`src/store/pg-lookups.ts`](../../src/store/pg-lookups.ts)) — never inside `glossary.json`.
+Until 2026-09-05 there was a second, file-backed half too: `data/<slug>/glossary-lookups.json`,
+written and read by `saveLookup` and a serialised queue in
+[`src/glossary-lookups.ts`](../../src/glossary-lookups.ts). That sidecar was deleted along with the
+rest of the filesystem store; `loadLookups` survives only as a fixture reader for
+`tests/helpers/seed-reader-state.ts`. A lookup is *reader state*, which by this repo's own rule lives
+beside the artefact rather than in it; sharing a file with the generating stage would have been
+unfixable rather than merely racy, because that stage holds its read across a minute-long model call.
+Worse, `glossary.json` is written with a bare `writeFile`, and a truncated one reads as `null` — which
+the panel reports as *"Nobody has found the terms for this one yet"*, the whole glossary gone and
+nothing saying so. `loadGlossary` attaches lookups at read time, so the panel still just sees
+`entry.lookup`.
 
 **It is `explain` with a different selection** — the same function comments use
 ([`src/explain.ts`](../../src/explain.ts)), with the form of the term the article really uses as the
@@ -691,7 +704,7 @@ reasons, in the order they were found:
    deduplicated wholesale, so `article_revisions.glossary` holds the lot
    ([`schema.ts`](../../src/db/schema.ts) § `glossary`). That comment already names the condition —
    *"if a reader ever edits or annotates one, that is the day this becomes a table"*.
-2. **[Find more terms](#finding-more-and-starting-again) recomputes and merges**, so a reader's entry
+2. **[Find more terms](#finding-more) recomputes and merges**, so a reader's entry
    could be merged away by a button two lines further down the same panel.
 3. **A shared article publishes the whole glossary blob**
    ([`public-reader.ts`](../../src/store/public-reader.ts)), and the public DTO strips only
@@ -936,30 +949,78 @@ The bar is on screen with its number, the foot line says how many it is holding 
 it left is one gesture — a term is not lost when the control that hid it is the control in your
 hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md).
 
-## Finding more, and starting again
+## Finding more
 
-These are genuinely different operations, which is why they are two buttons rather than one with a
-modifier:
+One button in the foot, and one thing it does:
 
 | | What it does | How |
 |---|---|---|
 | **Find more** | another pass, told what it already has, appended to the list | `force: ["glossary"]` on the job — the step is current, so nothing else would run it |
-| **Start again** | throw the list away and find a new one | `DELETE /api/glossary/:slug`, then an ordinary run |
 
-The delete exists **because** running the step again appends. Without it there is no way at all to
-say "this list is wrong" — a reader who disliked what the model found could only fix it by changing
-the article underneath it. It is destructive, so the panel asks first, and `deleteGlossary` refuses
-to touch the committed `example/` fixture. That guard was load-bearing while `articleDir` fell
-through to `example/` for any slug with no output of its own, including one that does not exist —
-the one committed directory in the repo was a `DELETE` away from any unknown article. Since stage 1a
-`candidateDirs` resolves `example/` for the fixture's own slug and no other, so what the guard now
-stops is a `DELETE` addressed to `example` itself, which is nobody's to write to.
+### There was a *Start again* beside it, and it went
+
+Greg, 2026-09-05:
+
+> we can probably get rid of Start again button and the "claude-sonnet-5 · glossary/3 · one pass" at
+> the bottom, those are all confusing and unnecessary.
+
+It threw the list away — `DELETE /api/glossary/:slug`, then an ordinary run — and it existed
+**because** running the step again appends: without it there was no way at all to say "this list is
+wrong". Three things had made that argument weaker than it reads.
+
+- **The glossary was the only mode carrying a reset.** Ideas, quotes and the timeline all *replace*
+  on re-run, so re-running one already is starting again, and nobody has asked for a way back there
+  ([`src/routes.ts`](../../src/routes.ts), the comment beside the `ideas` route).
+- **"Too long, too noisy" is the threshold's job now**, and has been since it started hiding rather
+  than grouping — one gesture, no model call
+  ([260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md)).
+- **Some recovery survives**, because `existingFor` refuses to append when the source hash, the
+  prompt version or the profile differs. An edit, a prompt bump or the *use my profile* checkbox
+  therefore rewrites rather than appends — and `idsByTerm` inherits the ids, so the reader's
+  `?term=` links survive it.
+
+Against that, a destructive button, an inline confirm and a `danger` style sat in a band meant to
+stay quiet, on every visit, for an action used roughly never. ⟨Fable, 2026-09-05⟩
+
+**What we gave up, stated plainly**, because the third bullet reads stronger than it is and a
+cross-family review said so. Recovery now needs an *input* to change. A bad glossary under the same
+article, the same prompt and the same profile cannot be rewritten at all: *Find more* keeps every
+existing entry and is forbidden from returning close replacements, the threshold can hide a noisy
+entry but cannot correct a wrong definition, and a reader with no profile has no checkbox to flip.
+Editing the article or waiting for a prompt bump is not an affordance. This is an **accepted loss**,
+not an equivalent path — the judgment is that the case is rare enough not to be worth permanent
+destructive chrome in the reading band, and the route below is what a future Metadata action would
+call. ⟨Sol, 2026-09-05⟩
+
+**`DELETE /api/glossary/:slug` stays, with no caller in the client**, and so do its two suites —
+[`tests/store-glossary-delete-pg.test.ts`](../../tests/store-glossary-delete-pg.test.ts) and
+[`tests/glossary-delete-then-rebuild.test.ts`](../../tests/glossary-delete-then-rebuild.test.ts). It
+is the Postgres-safe half and it costs nothing to keep; if the capability is ever missed, the
+Metadata page is where it belongs, as an owner's article-management action rather than a button in
+the reading band.
+
+It is an **API-only capability**, not a dormant one: the route is still owner-authenticated and a
+`curl` reaches it, which is why its 409 sentence says *try again* and names no button. The two
+suites exercise the store and the coordinator rather than the route's *transport*, so that much is
+uncovered while nothing drives it — named here rather than papered over with a test written for a
+caller that does not exist. The case for deleting the route outright is real (attack surface, a
+contract to maintain, tests for something no reader can reach, and git keeps the implementation);
+it was weighed and lost to Fable's, and this paragraph is what the next person needs to reopen it.
+⟨Sol, 2026-09-05⟩
+
+`deleteGlossary` still refuses to touch the committed `example/` fixture. That guard was load-bearing
+while `articleDir` fell through to `example/` for any slug with no output of its own, including one
+that does not exist — the one committed directory in the repo was a `DELETE` away from any unknown
+article. Since stage 1a, `candidateDirs` resolves `example/` for the fixture's own slug and no other,
+so what the guard now stops is a `DELETE` addressed to `example` itself, which is nobody's to write
+to.
 
 **In Postgres the delete can also answer 409**, if a queued or running job already holds a draft for
 the article — deleting the published glossary underneath a job in flight would otherwise be
-overwritten right back when that job publishes. The reader is told a job is running and to press
-Start again once it finishes.
-[260903e-glossary-delete-in-postgres.md](../plans/260903e-glossary-delete-in-postgres.md).
+overwritten right back when that job publishes.
+[260903e-glossary-delete-in-postgres.md](../plans/260903e-glossary-delete-in-postgres.md). Its
+reader-facing sentence still says to press *Start again*, and nothing can reach it from the client
+now; it is left as it is rather than rewritten for a caller that does not exist.
 
 **A stale glossary is not appended to.** The article underneath it moved, so the old entries describe
 a piece that no longer exists and folding new ones in would produce a list half-describing each. That

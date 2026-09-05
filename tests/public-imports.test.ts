@@ -8,12 +8,22 @@
  * > `src/store/index.ts`, `src/store/pg.ts`, writer modules, or any AI/gateway
  * > root.
  *
- * The first three are about **leaks**: `src/api.ts` runs the meta through
- * `titleFor()`, `pg.ts`'s `blocksQuery` selects per-block `note` and its
+ * The first three are about **leaks**: `pg.ts` runs the meta through
+ * `titleFor()` — the reader's own name for the article, which is theirs and not
+ * a stranger's to see — its `blocksQuery` selects per-block `note`, and its
  * glossary read joins `glossary_lookups`. Every one of those is correct for the
  * owner and is somebody's private data here. The last two are about **money**:
  * Greg's rule is that no logged-out visitor causes a paid call, and a module
  * that cannot be reached cannot be called by mistake.
+ *
+ * **`src/api.ts` was the first of the three named until 2026-09-05**, when it
+ * was deleted with the filesystem store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * `titleFor` moved to `src/library-scalars.ts`, and that module is
+ * deliberately **not** on the forbidden list: it is a leaf of pure functions,
+ * `src/store/public-reader.ts` already imports `headingTitleOf` from it, and
+ * the leak was never the function — it was applying the owner's shelf override,
+ * which only `pg.ts` can read.
  *
  * ## Two things this test is honest about
  *
@@ -42,6 +52,12 @@
  * walker can see a dirty graph" are checked in the same run, and a walker
  * broken into always returning nothing fails rather than passing twice. That is
  * docs/reusable/silent-success.md applied to the check itself.
+ *
+ * It named `src/api.ts` among the four it demands, and that entry moved to
+ * `src/store/pg.ts` rather than being dropped: the control needs one module
+ * from each of the three forbidden groups plus the owner, and `pg.ts` is the
+ * owner-read `routes.ts` reaches now. Deleting the row instead would have left
+ * the control checking one group fewer, silently.
  */
 
 import { readFileSync } from "node:fs";
@@ -61,7 +77,7 @@ import { graphFrom, PUBLIC_ENTRIES, publicFiles, ROOT } from "./helpers/import-g
  * **The owner's read layer.** Each one returns something the public payload must
  * not contain, and each one is correct where it lives.
  */
-const OWNER_READS = ["src/api.ts", "src/store/index.ts", "src/store/pg.ts"];
+const OWNER_READS = ["src/store/index.ts", "src/store/pg.ts"];
 
 /**
  * **The owner himself.** `currentOwnerId()` is the runtime tripwire — on an
@@ -201,7 +217,7 @@ describe("the public API's import graph", () => {
   it("but the authenticated API reaches all of them, which is how we know the walk works", () => {
     const authenticated = graphFrom("src/routes.ts");
     const reached = authenticated.filter((f) => FORBIDDEN.includes(f));
-    for (const named of ["src/api.ts", "src/store/index.ts", "src/owner.ts", "src/ai-call.ts"]) {
+    for (const named of ["src/store/pg.ts", "src/store/index.ts", "src/owner.ts", "src/ai-call.ts"]) {
       expect(reached, named).toContain(named);
     }
   });
@@ -242,7 +258,7 @@ describe("the public API's import graph", () => {
  * - **`tests/owner-isolation.test.ts`** greps for `eq(articles.slug, …)`. That
  *   query never mentions `articles` at all — a child table is keyed by
  *   `article_id`, and the id is one the public read already legitimately holds.
- * - **The module graph above** forbids `api.ts`, `store/index.ts`, `pg.ts`,
+ * - **The module graph above** forbids `store/index.ts`, `pg.ts`,
  *   `owner.ts`, the writers and the gateway. `db/schema.ts` is on none of those
  *   lists and must not be: it is how any query names a table.
  * - **`tests/public-dto.test.ts`** asserts the keys of what a projection
@@ -277,7 +293,7 @@ describe("the public API's tables", () => {
   }
 
   /**
-   * The five the public surface may name.
+   * The six the public surface may name.
    *
    * `articles` and `article_revisions` are the work itself; `revision_blocks` is
    * its prose; `block_identities` is the spine those ids hang on.
@@ -305,14 +321,39 @@ describe("the public API's tables", () => {
    *    src/store/pg-comments.ts, is **not** what serves it. That was the first
    *    proposal and GPT Sol blocked it.
    *
-   * A sixth line needs the same three sentences written about it, or it should
-   * not be here.
+   * **`searchRuns` is the sixth, on the same day**, and here are its three
+   * sentences. Greg decided that *"only owner can create new searches; everyone
+   * else can see the ones they have already created"*
+   * (docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4), and:
+   *
+   *  - the read is `publicSearchesQuery`, which names its columns and repeats
+   *    `publicSlug` in its own `where`;
+   *  - it refuses unfinished and failed runs in SQL (`PUBLIC_SEARCHES_WHERE`),
+   *    so the filtering is not a `map` somebody can widen;
+   *  - and the owner's `list` in src/store/pg-searches.ts is not what serves
+   *    it.
+   *
+   * It has a fourth of its own, because this table carries a column the wire
+   * must not: `source_hash` is selected and turns into the derived `stale`
+   * boolean before it reaches the DTO, which is the one place in this feature
+   * where a selected column is deliberately not a promise about the payload.
+   * src/store/public-reader.ts says so at the line where it stops.
+   *
+   * A seventh line needs the same three sentences written about it, or it
+   * should not be here.
    *
    * `article_visibility_changes` is deliberately **not** here. It is written by
    * the owner's switch and read by nobody yet, and when something does read it
    * that will be an owner-facing page, not this one.
    */
-  const ALLOWED = ["articles", "articleRevisions", "revisionBlocks", "blockIdentities", "comments"];
+  const ALLOWED = [
+    "articles",
+    "articleRevisions",
+    "revisionBlocks",
+    "blockIdentities",
+    "comments",
+    "searchRuns",
+  ];
 
   /**
    * **Detected through the import, not by grepping for the word.**
@@ -341,7 +382,7 @@ describe("the public API's tables", () => {
    * a second arm below for the snake_case names, which is where raw SQL would
    * spell them.
    */
-  it("imports only the four tables the article itself lives in", () => {
+  it("imports only the tables the allowlist names", () => {
     const tables = everyTable();
     /* The schema really does export the dangerous ones, so this is not passing
        for want of anything to find. */
@@ -457,7 +498,7 @@ describe("the public API's tables", () => {
    * still pass, and it would be passing over a public surface that had stopped
    * reading anything.
    */
-  it("and does name the four it is allowed, so the rule is not vacuous", () => {
+  it("and does name the ones it is allowed, so the rule is not vacuous", () => {
     const reader = readFileSync(path.join(ROOT, "src/store/public-reader.ts"), "utf8");
     for (const table of ["articles", "articleRevisions", "revisionBlocks"]) {
       expect(reader, table).toMatch(new RegExp(`\\b${table}\\b`));

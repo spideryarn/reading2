@@ -89,8 +89,8 @@ import { readTiers } from "../store/pg-tiers.js";
 import { PUBLIC_ORIGIN } from "../urls.js";
 import { StripeConfigError, assertLivemode, isProductionDeployment, stripeClient } from "./stripe.js";
 import { type SyncResult, syncSubscriptionFromStripe } from "./sync.js";
-import { isTerminalStatus } from "./tiers.js";
-import type { TierRow } from "./tiers.js";
+import { subscriptionState } from "./tiers.js";
+import type { SubscriptionColumns, TierRow } from "./tiers.js";
 
 const logger = log("http");
 
@@ -369,17 +369,27 @@ function currencyToCharge(tier: TierRow, asked: string | undefined): string | un
 
 /* --------------------------------------------------------------- the row -- */
 
-/** The columns these routes decide from. */
+/**
+ * The columns these routes decide from.
+ *
+ * **The four subscription-derived columns, not just the id and the status.**
+ * `subscriptionState` (./tiers.ts) reads all of them because the row that made
+ * the summary and this route disagree carried a status, a price and a period
+ * with no subscription id behind them — reading two of the four would have made
+ * the shared predicate a shorter question here than it is there, which is the
+ * fault it exists to remove.
+ */
 const ACCOUNT_COLUMNS = {
   stripeCustomerId: billingAccounts.stripeCustomerId,
   stripeSubscriptionId: billingAccounts.stripeSubscriptionId,
   status: billingAccounts.status,
+  priceId: billingAccounts.priceId,
+  currentPeriodStart: billingAccounts.currentPeriodStart,
+  currentPeriodEnd: billingAccounts.currentPeriodEnd,
 } as const;
 
-interface Account {
+interface Account extends SubscriptionColumns {
   readonly stripeCustomerId: string | null;
-  readonly stripeSubscriptionId: string | null;
-  readonly status: string | null;
 }
 
 /**
@@ -417,18 +427,6 @@ async function readAccount(ownerId: OwnerId): Promise<Account | undefined> {
   return row;
 }
 
-/**
- * Does this account already have a subscription that selling another would
- * duplicate?
- *
- * A subscription id with a status that is **not terminal**. A null status beside
- * a subscription id counts as not terminal on purpose: it is a row nothing has
- * synced, and sending that reader to the Portal shows them what they have,
- * whereas selling them a second subscription charges them twice.
- */
-function hasOpenSubscription(account: Account): boolean {
-  return Boolean(account.stripeSubscriptionId) && !isTerminalStatus(account.status);
-}
 
 /**
  * Create a Stripe customer for this owner and write the mapping down, or adopt
@@ -507,17 +505,40 @@ export async function startCheckout(
     const currency = currencyToCharge(tier, request.currency);
 
     const account = await anchorAndRead(ownerId);
-    if (hasOpenSubscription(account)) {
+    /* **The same function `/api/billing/usage` decides from** — ./tiers.ts,
+       which has the row that made two spellings of this question disagree and
+       the second subscription that would have followed. Anything but `sellable`
+       goes to the Portal, which is the fail-closed direction: a reader sent to
+       look at what they have costs an email, and a second concurrently-billed
+       subscription costs them money. */
+    const state = subscriptionState(account);
+    if (state.kind !== "sellable") {
+      if (state.kind === "contradictory") {
+        /* `error`, not `info`: `billing_accounts_subscription_fields_need_subscription`
+           (src/db/schema.ts) says this row cannot exist, so seeing one means the
+           constraint is gone or something wrote round it. */
+        logger.error(
+          { ownerId, why: state.why },
+          "this billing row contradicts itself, so checkout became the portal rather than a sale",
+        );
+      } else {
+        logger.info(
+          { ownerId, status: account.status },
+          "this account already has a subscription, so checkout became the portal",
+        );
+      }
       /* The schema's `billing_accounts_subscription_needs_customer` check means a
-         subscription id cannot exist without a customer, so this is not a maybe. */
+         subscription id cannot exist without a customer — and the contradictory
+         case has no subscription id to have brought one, so this branch is
+         reachable for it in a way it is not for `open`. Loud either way: what it
+         must never do is fall through and sell. */
       const customerId = account.stripeCustomerId;
       if (!customerId) {
-        throw new Error(`${ownerId} has a subscription with no Stripe customer, which the schema forbids`);
+        throw new Error(
+          `${ownerId} has subscription facts with no Stripe customer to manage them at ` +
+            `(${state.kind}), which the schema forbids`,
+        );
       }
-      logger.info(
-        { ownerId, status: account.status },
-        "this account already has a subscription, so checkout became the portal",
-      );
       return { kind: "portal", url: await portalUrl(stripe, customerId) } satisfies CheckoutStarted;
     }
 

@@ -28,13 +28,71 @@
  * destination writes to the file descriptor and never touches that method, so
  * every assertion read `undefined`. It failed loudly, which is the only reason
  * it is worth writing down.
+ *
+ * ## The ledger half moved to Postgres in the hinge, 2026-09-05
+ *
+ * It read a JSONL file: the child was given `SPIDERYARN_LEDGER` pointing at a
+ * throwaway path, and `costStore` handed it `fsCostStore` because
+ * `SPIDERYARN_STORE` was unset. That selection is gone with the flag
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F), so the rows are `spideryarn.ai_calls` and this file is in the
+ * `private-postgres` lane.
+ *
+ * **The child reaches the run's private database and not the developer's**, and
+ * the mechanism is worth knowing before somebody "simplifies" it: the child
+ * inherits `process.env`, which the lane's setup has already pointed at the
+ * minted database — and it inherits `SPIDERYARN_ENV_PINNED` too, which is what
+ * stops `.env.local` handing the shared one straight back inside the child
+ * ([`src/env.ts`](../src/env.ts) § `PINNED`, written for exactly this).
+ *
+ * **The owner is `ADMIN_USER_ID_LOCAL`**, through `authed.ts`, because
+ * `ai_calls.owner_id` is a foreign key into `auth.users` and the private
+ * database seeds the local accounts and nothing else.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { closeDb, getDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
+import { pgReady } from "./helpers/pg-ready.js";
+
+loadEnvLocal();
+
+/**
+ * `owner_id` is the foreign key that decides whether a row can exist at all,
+ * and `scope_kind` is what the three cases below read. A probe naming only the
+ * table would let a half-migrated database fail inside the store with a bare
+ * `42703`. tests/helpers/pg-ready.ts § what to name.
+ */
+await pgReady({
+  suite: "tests/request-spend.test.ts",
+  tables: ["spideryarn.ai_calls", "auth.users"],
+  columns: [{ table: "spideryarn.ai_calls", column: "scope_kind" }],
+});
+
+const { sql } = await import("drizzle-orm");
+
+/** Every row this file's child left behind, and nothing else's. */
+async function ledgerRows(): Promise<Record<string, unknown>[]> {
+  const rows = await getDb().execute(
+    sql`select run_id, scope_kind, purpose, wire, owner_id
+          from spideryarn.ai_calls
+         where owner_id = ${ADMIN_USER_ID_LOCAL}::uuid and purpose = 'dictation'
+         order by started_at`,
+  );
+  return rows.rows as Record<string, unknown>[];
+}
+
+/** Anything an earlier run left, so the count below is this run's. */
+async function forgetLedgerRows(): Promise<void> {
+  await getDb().execute(
+    sql`delete from spideryarn.ai_calls
+         where owner_id = ${ADMIN_USER_ID_LOCAL}::uuid and purpose = 'dictation'`,
+  );
+}
 
 const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -48,10 +106,11 @@ const AUDIO = `${"A".repeat(3000)}AA==`;
 const COST = 0.000123;
 
 let stdout = "";
-let ledger = "";
 let stderr = "";
+let rows: Record<string, unknown>[] = [];
 
-beforeAll(() => {
+beforeAll(async () => {
+  await forgetLedgerRows();
   const body = `void (async () => {
     const AUDIO = ${JSON.stringify(AUDIO)};
 
@@ -126,19 +185,12 @@ beforeAll(() => {
     await request({ audio: "not base64!" });
   })();`;
 
-  /* A path per run, removed below — so nothing accumulates and two runs cannot
-     read each other's rows. */
-  const ledgerPath = path.join(tmpdir(), `spya-ledger-${process.pid}-${Date.now()}.jsonl`);
   const env: NodeJS.ProcessEnv = { ...process.env };
   /* Neither the suite's LOG_LEVEL nor NODE_ENV=test may decide what this
      measures: "test" makes the logger silent, and every assertion below would
      then be satisfied by a child that printed nothing. */
   delete env.LOG_LEVEL;
   env.NODE_ENV = "development";
-  /* And the ledger goes somewhere disposable. `NODE_ENV=development` is what
-     makes the logger speak, and it is also what would send four fixture requests
-     into the developer's own `data/_ai-calls.jsonl` — src/store/ai-calls-fs.ts. */
-  env.SPIDERYARN_LEDGER = ledgerPath;
   /* The gateway refuses without a key, and that refusal would look exactly like
      the failure under test. Nothing is sent anywhere — `fetch` is replaced. */
   env.OPENROUTER_API_KEY = "test-key-not-a-real-one";
@@ -150,17 +202,13 @@ beforeAll(() => {
   });
   stdout = child.stdout ?? "";
   stderr = child.stderr ?? "";
-  ledger = readFileSync(ledgerPath, "utf8");
-  rmSync(ledgerPath, { force: true });
+  rows = await ledgerRows();
 }, 120_000);
 
-/** The rows the child's requests actually left behind. */
-function ledgerRows(): Record<string, unknown>[] {
-  return ledger
-    .split("\n")
-    .filter((l) => l.trim() !== "")
-    .map((l) => JSON.parse(l) as Record<string, unknown>);
-}
+afterAll(async () => {
+  await forgetLedgerRows();
+  await closeDb();
+});
 
 describe("the ledger a request leaves behind", () => {
   it("has a row per call, written before the request finished", () => {
@@ -177,10 +225,9 @@ describe("the ledger a request leaves behind", () => {
        tests/ai-spend.test.ts, where a slow sink is checked to have finished
        before `collectSpend` returned — and that one does go red. Found by
        mutating the code and watching this test not notice. */
-    const rows = ledgerRows();
     expect(rows).toHaveLength(3);
-    expect(rows.every((r) => r.scopeKind === "request")).toBe(true);
-    expect(rows.every((r) => r.job === "dictation")).toBe(true);
+    expect(rows.every((r) => r.scope_kind === "request")).toBe(true);
+    expect(rows.every((r) => r.purpose === "dictation")).toBe(true);
     expect(rows.every((r) => r.wire === "chat")).toBe(true);
   });
 
@@ -189,13 +236,13 @@ describe("the ledger a request leaves behind", () => {
        owner has to be resolved when the call is recorded rather than when the
        box was opened. If that ever regresses, these rows do not exist at all —
        which is why the count above is asserted too. */
-    for (const r of ledgerRows()) expect(typeof r.ownerId).toBe("string");
+    for (const r of rows) expect(typeof r.owner_id).toBe("string");
   });
 
   it("gives the three requests three different run ids", () => {
     /* One collector per request. If `handleApi` ever opened one per process,
        every reader's spend would land under whoever's request came first. */
-    expect(new Set(ledgerRows().map((r) => r.runId)).size).toBe(3);
+    expect(new Set(rows.map((r) => r.run_id)).size).toBe(3);
   });
 });
 

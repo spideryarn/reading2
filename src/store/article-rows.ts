@@ -237,6 +237,45 @@ export const ARTICLE_TABLE_COVERAGE = {
         "own spending rather than anything of theirs.",
     },
   },
+  /**
+   * **The quota ledger, which started reaching an article on 2026-09-05.**
+   *
+   * It follows `ai_calls` and `realtime_sessions` above, and it is here at all
+   * because of one column: `ingest_events.article_id`, added so that usage could
+   * ask whether the article a charge produced is public right now — a public one
+   * costs half a slot (src/billing/half-units.ts). Before that column this table
+   * did not reach an article and this guard had nothing to say about it.
+   */
+  ingest_events: {
+    rollback: {
+      exported: false,
+      why:
+        "The ingest quota's ledger — one row per *attempt to spend*, carrying when " +
+        "a slot was reserved and whether it was charged or given back. It is an " +
+        "abuse boundary against model spend, not article state " +
+        "(docs/project/billing.md § The quota), and it is deliberately Postgres-" +
+        "only: there is no filesystem quota and there will not be one, so a " +
+        "rollback to data/<slug>/ has nothing that could read it back. It is also " +
+        "not one-to-one with an article — a re-added URL adopts the same article " +
+        "and charges again — so there is no single row an article's directory " +
+        "could hold.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The ingest quota's ledger: our accounting of what adding this article " +
+        "cost *us*, not anything the reader wrote or the pipeline produced. An " +
+        "export is one article's data out (docs/project/export.md), and handing a " +
+        "reader rows about slots and settlements would be answering a question " +
+        "they did not ask with a number they cannot act on. It would also be " +
+        "incomplete twice over: `article_id` is null for every row charged before " +
+        "the column existed and for every row whose article was later deleted, and " +
+        "an administrator's ingests are never written here at all. This changes " +
+        "the day the ledger holds something the reader is owed — a receipt, a " +
+        "per-article cost they are billed on — rather than the day it merely gets " +
+        "another column.",
+    },
+  },
   article_visibility_changes: {
     rollback: {
       exported: false,

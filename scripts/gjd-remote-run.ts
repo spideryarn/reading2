@@ -150,3 +150,87 @@ export function sshInvocation(opts: {
   }
   return { args: [...opts.sshOpts, opts.host, command], interactive: false };
 }
+
+/**
+ * What a `--wait` launch does with the terminal, once the session exists.
+ *
+ * **It attaches by default**, the same as a launch with no `--wait` — Greg,
+ * 2026-09-04, reversing the original decision. The pane is worth sitting in
+ * because it is the pane Claude will appear in: `waitPreamble` above and the
+ * `claude` line are consecutive lines of one job script in one tmux pane, so an
+ * attached client reads "waiting 15h", then "the wait is over", and then Claude
+ * takes that same pane over. Nothing has to be re-attached for that to happen,
+ * and it already worked that way for anyone who ran `resume`.
+ *
+ * The argument against, which was the original decision and is now overridden:
+ * a tab held for fifteen hours is a tab you stop trusting, and it is a tab you
+ * cannot type anything else into. The transport is less of a problem than it
+ * sounds — mosh is the default and rides through a closed lid — so what
+ * `--no-attach` is really for on a long wait is getting your shell back, and
+ * queueing several waited jobs from one of them.
+ *
+ * **No terminal is not a failure here**, and that is why this is a decision
+ * rather than an `if`. `attachHandover` DIES when there is no controlling
+ * terminal, telling you to pass `--no-attach` — right for a session that is
+ * running, wrong for one that is asleep: a cron job or another agent's
+ * subprocess launching a waited job has done nothing wrong, and its session is
+ * sitting on the box waiting, exactly as asked. So it says so and exits 0.
+ */
+export type WaitHandover = { kind: "attach" } | { kind: "stay"; why: "asked" | "no-terminal" };
+
+export function waitHandover(o: { attach: boolean; terminal: boolean }): WaitHandover {
+  if (!o.attach) return { kind: "stay", why: "asked" };
+  if (!o.terminal) return { kind: "stay", why: "no-terminal" };
+  return { kind: "attach" };
+}
+
+/**
+ * Is there a terminal to hand `tmux attach` at all?
+ *
+ * **`interactiveStdin()` alone cannot answer this**, and reading it as if it
+ * could was the first version of this change. It returns the descriptor the
+ * attach should USE, and its `"inherit"` means only "nothing has taken stdin
+ * away from me" — it never looks at whether stdin is a terminal, because until
+ * now every caller was a command that would go on to die usefully if it wasn't.
+ * So `gjd-remote new-claude --wait 2h -p "…" </dev/null` from a cron job or an
+ * agent's subprocess came back `"inherit"`, took the attach path, and failed
+ * out of `tmux attach` with a non-zero exit over a session that had been
+ * created exactly as asked. Found by GPT Sol reviewing this change, 2026-09-04.
+ *
+ * A number is an already-opened `/dev/tty`, so it is a terminal by
+ * construction. `"inherit"` is only as good as the stdin it inherits.
+ */
+export function haveTerminal(o: { keyboard: number | "inherit" | null; stdinIsTty: boolean }): boolean {
+  if (o.keyboard === null) return false;
+  if (o.keyboard === "inherit") return o.stdinIsTty;
+  return true;
+}
+
+/**
+ * The first positional argument, with `--` respected.
+ *
+ * `rest.find((a) => !a.startsWith("-"))` was what `resume` used, and it is
+ * wrong in the one direction that matters here: a tmux session name may begin
+ * with a hyphen, and that filter silently skips it — so `gjd-remote resume
+ * -odd` ignored the argument entirely and attached to the newest session
+ * instead. Sol's point. Attaching to something other than what was named is a
+ * worse outcome than an error, and it looks exactly like success.
+ *
+ * `--` ends the options, POSIX-style, so `resume -- -odd` says what it means.
+ * Everything after it is positional even if it looks like a flag.
+ *
+ * **Scanned left to right, not `indexOf("--")` first.** That was the first
+ * version and Sol found two ways it was wrong: `resume gateA --` returned
+ * `undefined` and attached to the newest session instead of `gateA`, and
+ * `resume gateA -- other` returned `other`. A separator only speaks for what
+ * comes after it, so a name already found before it wins.
+ */
+export function positionalName(argv: readonly string[]): string | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === undefined) continue;
+    if (a === "--") return argv[i + 1];
+    if (!a.startsWith("-")) return a;
+  }
+  return undefined;
+}

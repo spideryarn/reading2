@@ -101,7 +101,6 @@ loadEnvLocal();
  * no second reader. It is why src/store/index.ts now refuses to boot on
  * `files` in production, and why that refusal is a throw rather than a warning.
  */
-process.env.SPIDERYARN_STORE = "postgres";
 
 const ALICE = "00000000-0000-4000-8000-0000000000a1" as OwnerId;
 const BOB = "00000000-0000-4000-8000-0000000000b2" as OwnerId;
@@ -445,7 +444,7 @@ describe("every article lookup names an owner", () => {
  *    its own?
  * 3. Does the listing's **generated SQL** carry `visibility = 'public'` in its
  *    `where`? Read off the statement, not off a constant beside it.
- * 4. Are the selected columns exactly the seven a card needs?
+ * 4. Are the selected columns exactly the eight a card needs?
  * 5. Is every text column bounded, so 200 rows is a bound on bytes too?
  * 6. Is the answer bounded and totally ordered?
  *
@@ -556,7 +555,16 @@ describe("the one query that lists articles for nobody in particular", () => {
   const PERMITTED = [
     {
       file: "src/store/public-reader.ts",
-      fns: ["publicCurrentRevisionQuery", "publicCommentsQuery"],
+      fns: [
+        "publicCurrentRevisionQuery",
+        "publicCommentsQuery",
+        /* Added 2026-09-04, and for the identical reason as the line above it:
+           the join back to `articles` exists so that `publicSlug` is re-applied
+           to a `search_runs` read rather than an article id being trusted from
+           an earlier statement.
+           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+        "publicSearchesQuery",
+      ],
     },
     { file: LISTING.file, fns: [LISTING.fn] },
   ];
@@ -883,7 +891,7 @@ describe("the one query that lists articles for nobody in particular", () => {
   });
 
   /**
-   * **Exactly seven columns, spelled out.**
+   * **Exactly eight columns, spelled out.**
    *
    * The danger `publicCurrentRevisionQuery` names is a public query that one day
    * does `select({ article: articles })` and picks up `owner_id`,
@@ -923,7 +931,7 @@ describe("the one query that lists articles for nobody in particular", () => {
     return items;
   };
 
-  it("selects exactly the seven columns a card needs, and nothing else", () => {
+  it("selects exactly the eight columns a card needs, and nothing else", () => {
     expect(selectItems()).toEqual([
       '"spideryarn"."articles"."slug"',
       '"spideryarn"."articles"."public_at"',
@@ -932,6 +940,12 @@ describe("the one query that lists articles for nobody in particular", () => {
          matched loosely because its body is multi-line SQL, tightly on the alias
          because that is the name the row comes back under. */
       expect.stringMatching(/^case[\s\S]*end as "heading_title"$/),
+      /* **The eighth, added 2026-09-04**, and it is a fact about the document
+         rather than about its owner: `article_revisions.byline` is what stage 2
+         read off the publisher's page. There is still no column here naming the
+         reader who shared it, and the reason that matters is in
+         src/public-library-types.ts § `byline`. */
+      `left("spideryarn"."article_revisions"."byline", ${PUBLIC_CARD_CHARS.byline}) as "byline"`,
       `left("spideryarn"."article_revisions"."root_gist", ${PUBLIC_CARD_CHARS.gist}) as "root_gist"`,
       `left("spideryarn"."article_revisions"."site_name", ${PUBLIC_CARD_CHARS.siteName}) as "site_name"`,
       '"spideryarn"."article_revisions"."word_count"',
@@ -1048,12 +1062,10 @@ const OUTSIDER = "00000000-0000-4000-8000-0000000000b1" as OwnerId;
 /* Probes for `owner_id` and not merely for the schema: the migration that
    added it is what this suite is about, and a database one behind should be
    told to migrate rather than fail with a column error. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/owner-isolation.test.ts",
   columns: [{ table: "spideryarn.articles", column: "owner_id" }],
 });
-
-const when = reachable ? describe : describe.skip;
 
 const SLUG = "test-owner-isolation";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000f7";
@@ -1062,7 +1074,7 @@ const BLOCK_ID = "spya-wnaaqa";
 /** Distinctive enough that a hit on it cannot be a coincidence. */
 const RARE = "thaumaturgical";
 
-when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
+describe("one owner's article, asked for by another", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     await clean();
     const db = getDb();
@@ -1348,7 +1360,7 @@ const theEnvironmentsOwner = currentOwnerId();
  * So: two HTTP requests to the same route, differing only in whose token the
  * verifier vouches for, and they must not see each other's profile.
  */
-when("the same route asked by two different people", { timeout: 20_000 }, () => {
+describe("the same route asked by two different people", { timeout: 20_000 }, () => {
   /**
    * The one who writes has to be the seeded development owner: `owner_id`
    * references `auth.users(id)` (drizzle/0001), and only that one exists. The
@@ -1515,6 +1527,7 @@ interface ListedSpec {
   title?: string | null;
   gist?: string;
   siteName?: string;
+  byline?: string;
   headings?: readonly Heading[];
 }
 
@@ -1546,6 +1559,7 @@ const LISTED: readonly (ListedSpec & { article: string; revision: string; shortI
       title: "T".repeat(OVERSIZED),
       gist: "G".repeat(OVERSIZED),
       siteName: "S".repeat(OVERSIZED),
+      byline: "B".repeat(OVERSIZED),
     },
     /* **The `<h1>` fallback, with two ways to get it wrong beside it.** No title
        at all, an `<h2>` *before* the `<h1>` so a predicate that lost its
@@ -1585,7 +1599,7 @@ const LISTED: readonly (ListedSpec & { article: string; revision: string; shortI
 
 const listSlug = (key: ListedKey) => `test-listing-${key}-${LIST_RUN}`;
 
-when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, () => {
+describe("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     await cleanListing();
     const db = getDb();
@@ -1626,6 +1640,7 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
         sectionCount: 0,
         rootGist: row.gist ?? `What ${row.key} is about.`,
         siteName: row.siteName ?? "example.test",
+        byline: row.byline ?? "A. Writer",
         /* The bar the article read sets, put under this row's control: a
            revision with no tree is not a readable article, and neither is one
            with no blocks. */
@@ -1764,6 +1779,9 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
     const card = (await shelfNow()).find((e) => e.slug === listSlug("theirs-public"));
     expect(card).toBeDefined();
     expect(Object.keys(card ?? {}).sort()).toEqual([
+      /* `byline` is the *article's* author, off the publisher's page. The owner
+         of this row is `LIST_OWNER_B` and the line below is what says so. */
+      "byline",
       "gist",
       "publicAt",
       "siteName",
@@ -1806,12 +1824,13 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
    * **Red first:** removing the `left()` from `title` on 2026-09-04 failed this
    * at 5000 against 300.
    */
-  it("and cuts an enormous title, gist and site name down to the card's size", async () => {
+  it("and cuts an enormous title, gist, site name and byline down to the card's size", async () => {
     const card = (await shelfNow()).find((e) => e.slug === listSlug("oversized"));
     expect(card).toBeDefined();
     expect(card?.title).toHaveLength(PUBLIC_CARD_CHARS.title);
     expect(card?.gist).toHaveLength(PUBLIC_CARD_CHARS.gist);
     expect(card?.siteName).toHaveLength(PUBLIC_CARD_CHARS.siteName);
+    expect(card?.byline).toHaveLength(PUBLIC_CARD_CHARS.byline);
   });
 
   /**
@@ -1859,7 +1878,13 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
 
   /** Ask the route, exactly as `handleApi` does, with nobody signed in. */
   async function shelfNow(): Promise<
-    { slug: string; title: string; gist: string | null; siteName: string | null }[]
+    {
+      slug: string;
+      title: string;
+      byline: string | null;
+      gist: string | null;
+      siteName: string | null;
+    }[]
   > {
     const { servePublicApi } = await import("../src/public/routes.js");
     let status = 0;
@@ -1887,7 +1912,13 @@ when("the shelf of public articles, asked for by nobody", { timeout: 30_000 }, (
 
     expect(status).toBe(200);
     const body = JSON.parse(text) as {
-      entries: { slug: string; title: string; gist: string | null; siteName: string | null }[];
+      entries: {
+        slug: string;
+        title: string;
+        byline: string | null;
+        gist: string | null;
+        siteName: string | null;
+      }[];
       truncated: boolean;
     };
     /* The cap is 200 and this fixture is eight rows, so a `true` here means the
@@ -1945,7 +1976,7 @@ const CAP_ROWS = Array.from({ length: CAP + 1 }, (_, i) => ({
   slug: `test-cap-${String(i).padStart(3, "0")}-${CAP_RUN}`,
 }));
 
-when("two hundred cards, and the two hundred and first", { timeout: 60_000 }, () => {
+describe("two hundred cards, and the two hundred and first", { timeout: 60_000 }, () => {
   /** How many public readable articles the cloned database already had. */
   let others = 0;
 
@@ -2110,6 +2141,13 @@ async function cleanListing(): Promise<void> {
     await db.delete(articleRevisions).where(eq(articleRevisions.articleId, row.article));
     await db.delete(articles).where(eq(articles.id, row.article));
   }
+  /* **And the billing anchor, which sharing an article now creates.** Since
+     2026-09-05 a public article costs half a slot, so `pgVisibilityStore.set`
+     takes the owner's `billing_accounts` lock — and creates the row if there is
+     none — before it touches the article. `billing_accounts_owner_fk` then
+     refuses the `auth.users` delete below. src/store/pg-billing.ts § *The lock
+     order*. */
+  await db.execute(sql`delete from spideryarn.billing_accounts where owner_id = ${LIST_OWNER_B}`);
   /* The second account goes last, after every row that references it. Left
      behind it would be an `auth.users` row nothing owns, which the next run's
      `on conflict do nothing` would silently reuse — harmless, and still worth

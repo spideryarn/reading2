@@ -323,6 +323,18 @@ top-level key comes back `200` with no complaint. Only an observable difference 
 proves anything — the provider pin is believed here because the *named upstream changed*, not
 because the call succeeded.
 
+**And its dual, which is the one that costs money: OpenRouter honouring a field is not evidence that
+the field bounded the spend.** A result cap is not a spend cap. `openrouter:web_search`'s
+`max_total_results` is enforced exactly — a probe on 2026-09-05 asked for 4 and got 4 — and in the
+same call the provider ran **36 searches** to produce them, at $0.10. Nothing in the request bounds
+the number of searches, and the number of searches is what is billed; `max_uses` is no better, a
+probe asking for 2 got 6 ([`src/converse.ts`](../../src/converse.ts) § `webSearchTool`). What drove
+the 36 was a prompt ordering the model to *be thorough* — which bought no extra evidence, because the
+results were capped anyway. **So a prompt for a searching call is a cost control**, and the honest
+bounds are an abort deadline and `webSearches` on the ledger row as the alarm. Measured while
+planning Debate mode; the numbers and the method are in
+[260905f](../plans/260905f-debate-mode-stage-0-spike-results.md) § Stage 0b.
+
 ## What it cost
 
 **One vendor now sits in front of the whole app.** Before this, an OpenRouter outage cost the reader
@@ -390,14 +402,21 @@ CHECK (byok_upstream_nanos IS NULL
 `is_byok IS TRUE` and not a bare `is_byok`: the column is nullable, a Postgres CHECK passes on
 `UNKNOWN`, and "the provider did not say" is not "no". The same three conditions appear twice more —
 `normaliseByokUpstream` in [`src/ai-spend.ts`](../../src/ai-spend.ts), which is the only place a
-`SpendRecord`'s figure becomes this column, and the filesystem reader's validation. **They must not
-drift apart**: a row the database refuses is a call that lands in no ledger at all, because the sink
+`SpendRecord`'s figure becomes this column, and — until 2026-09-05 — the filesystem reader's
+validation. **The two that are left must not drift apart**: a row the database refuses is a call that lands in no ledger at all, because the sink
 warns rather than throws.
 
-**The JSONL ledger cannot be migrated**, being append-only, so every line ever written still says
-`upstreamInferenceNanos`. `translateByokUpstream` in
-[`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) converts it on read under the same
-condition — carried over on a BYOK line, nulled on any other, because there it *was* the duplicate.
+> **The JSONL ledger is gone.** `src/store/ai-calls-fs.ts` and the file at `data/_ai-calls.jsonl`
+> were deleted on 2026-09-05, stage G of
+> [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
+> `spideryarn.ai_calls` is the only ledger. The three paragraphs below are kept because the
+> *predicate* they are about is still live in two places — the CHECK above and `normaliseByokUpstream`
+> — and because the reason the third copy went wrong is the reason those two are named together.
+> Read them as history, in the past tense.
+
+**The JSONL ledger could not be migrated**, being append-only, so every line ever written still said
+`upstreamInferenceNanos`. `translateByokUpstream` in `src/store/ai-calls-fs.ts` converted it on read
+under the same condition — carried over on a BYOK line, nulled on any other, because there it *was* the duplicate.
 Without that the whole historical file would read as damage. **All three conditions, not just
 `isByok`**: it tested one of them until 2026-09-03, and a BYOK line for which no `cost` figure ever
 arrived backfills to `cost_source: 'none'`, kept its upstream value, failed the reader's own
@@ -424,12 +443,18 @@ evidence and contains no complete ingest.
 line meaningless, and a permanent "thousands of calls reported no cost" warning burying the one
 signal that would show a real unpriced problem.
 
-Since 2026-09-02 [`costStore`](../../src/store/ai-calls.ts) hands out the **filesystem** adapter to
-anything running under the test harness, whatever `SPIDERYARN_STORE` says. Redirecting rather than
-refusing, because a store that threw under test would stop the route suites exercising the metering
-lifecycle at all — which is the half of the ledger those tests are the only cover for. The focused
-`pgCostStore` tests still go to Postgres, by importing the adapter directly and cleaning up after
-themselves. `tests/cost-store-under-test.test.ts` is what says the redirect is still there.
+From 2026-09-02 to 2026-09-05, [`costStore`](../../src/store/ai-calls.ts) answered that by handing
+the **filesystem** adapter to anything running under the test harness, whatever the store flag
+said — redirecting rather than refusing, because a store that threw under test would stop the route
+suites exercising the metering lifecycle at all.
+
+**It is now a database rather than a branch.** The `private-postgres` vitest lane mints a database
+for the run and drops it afterwards ([testing.md](testing.md)), so a fixture row goes through the
+real Postgres adapter into somewhere no report can see. That is what the redirect was standing in
+for, and it is stronger where it counts: while the redirect was in place **no route suite had ever
+put a row through `pgCostStore`**, which is the only adapter that deploys.
+[`tests/cost-store-under-test.test.ts`](../../tests/cost-store-under-test.test.ts) is what says the
+rows land in the private database and not in the developer's own.
 
 **And the report names its database**, not just its table: `npm run cost` prints
 `postgres: spideryarn.ai_calls at <host>/<db>`, password stripped. Local and remote Postgres are
@@ -538,9 +563,19 @@ Three properties of that write are load-bearing and none of them is obvious:
   request's own line as `aiWriteFailures`. The old app rethrew, which meant a Postgres hiccup could
   take down a reader-facing feature — [logging.md](logging.md) quotes it as the thing not to copy.
 
-**A CLI stage run is in the ledger too**, via one line at each stage's `isMain`
-([`src/cli-ledger.ts`](../../src/cli-ledger.ts)) — so `npm run hierarchy` is money that appears in
-`npm run cost`. `evals/` is not: it calls models outside both gateways, and the report says so on
+**A CLI stage run is in the ledger too** — but since 2026-09-05 by a different mechanism, and the
+difference is worth a sentence because it is why `src/cli-ledger.ts` now has one caller rather than
+eight. The stage commands go through the queue
+([setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue)), and
+`runStep` opens a `scopeKind: "job_step"` collector per step — so a stage driven from a terminal is
+scoped by the same thing that scopes it when a reader presses Add, and a CLI that *also* wrapped the
+run in `withLedger("cli", …)` would put one purchase in two scopes. Verified on the local database
+after the move: every call from `npm run ingest`, `npm run hierarchy` and the rest landed as
+`job_step` with a job id and a slug, and none as `cli`.
+
+`withLedger("cli", …)` is still what a CLI that is *not* a stage runner needs, via
+[`src/cli-ledger.ts`](../../src/cli-ledger.ts), and there is one: `npm run eval:pdf-read`.
+`evals/` is not in the ledger: it calls models outside both gateways, and the report says so on
 every run rather than being quietly partial.
 
 **That sentence was false for two of the eight until 2026-08-28.** `npm run labels` and

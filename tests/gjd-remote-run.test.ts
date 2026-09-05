@@ -12,7 +12,15 @@
  * See docs/reusable/silent-success.md and docs/project/hetzner-remote-server-box.md.
  */
 import { describe, expect, it } from "vitest";
-import { MAX_WAIT_SECONDS, parseDuration, sshInvocation, waitPreamble } from "../scripts/gjd-remote-run.js";
+import {
+  MAX_WAIT_SECONDS,
+  haveTerminal,
+  parseDuration,
+  positionalName,
+  sshInvocation,
+  waitHandover,
+  waitPreamble,
+} from "../scripts/gjd-remote-run.js";
 
 /** The seconds, or the reason it was refused — so a table can assert either. */
 const seconds = (raw: string) => {
@@ -160,5 +168,116 @@ describe("sshInvocation", () => {
   it("passes the command through untouched, quotes and all", () => {
     const nasty = `printf '%s\\n' "a b" $HOME \`id -u\``;
     expect(sshInvocation({ host, sshOpts, words: [nasty] }).args.at(-1)).toBe(nasty);
+  });
+});
+
+/**
+ * `--wait` attaches, and the interesting case is the one where it cannot.
+ *
+ * Until 2026-09-04 a waited launch never attached, so none of this arose. Now
+ * it takes the same path every other launch takes, and that path DIES off a
+ * terminal — the message tells you to add `--no-attach`. For a session that is
+ * running that is the right answer; for one that is asleep on the box it turns
+ * a cron job's perfectly good launch into a non-zero exit over a session that
+ * was created exactly as asked. Hence a third outcome rather than two.
+ */
+describe("waitHandover", () => {
+  it("attaches by default, like every other launch", () => {
+    expect(waitHandover({ attach: true, terminal: true })).toEqual({ kind: "attach" });
+  });
+
+  it("stays put for --no-attach, terminal or not", () => {
+    expect(waitHandover({ attach: false, terminal: true })).toEqual({ kind: "stay", why: "asked" });
+    expect(waitHandover({ attach: false, terminal: false })).toEqual({ kind: "stay", why: "asked" });
+  });
+
+  // The one that must never become a die(): the session exists and is waiting,
+  // and the only thing missing is somebody to watch it.
+  it("stays put with no terminal, and says that is why", () => {
+    expect(waitHandover({ attach: true, terminal: false })).toEqual({ kind: "stay", why: "no-terminal" });
+  });
+});
+
+/**
+ * The seam the three cases above cannot reach: deciding whether there IS a
+ * terminal.
+ *
+ * This is where the change was wrong first time round. `waitHandover`'s table
+ * was right and the value being fed into it was not, so every test passed over
+ * a launch that exited non-zero on a box with no tty. Sol's review, 2026-09-04.
+ */
+describe("haveTerminal", () => {
+  it("takes an opened /dev/tty as a terminal, whatever stdin is", () => {
+    expect(haveTerminal({ keyboard: 7, stdinIsTty: false })).toBe(true);
+    expect(haveTerminal({ keyboard: 7, stdinIsTty: true })).toBe(true);
+  });
+
+  // The bug: "inherit" is not a promise about stdin, only about who owns it.
+  it("does not take 'inherit' as proof — it asks what is being inherited", () => {
+    expect(haveTerminal({ keyboard: "inherit", stdinIsTty: true })).toBe(true);
+    expect(haveTerminal({ keyboard: "inherit", stdinIsTty: false })).toBe(false);
+  });
+
+  it("has no terminal when /dev/tty would not open", () => {
+    expect(haveTerminal({ keyboard: null, stdinIsTty: false })).toBe(false);
+    // stdin claiming to be a tty cannot rescue a process with no controlling
+    // terminal — the null is the answer from /dev/tty itself.
+    expect(haveTerminal({ keyboard: null, stdinIsTty: true })).toBe(false);
+  });
+
+  // fd 0 is a number like any other, and the check must not confuse it with
+  // "inherit" or treat it as falsy.
+  it("treats fd 0 as the terminal it is", () => {
+    expect(haveTerminal({ keyboard: 0, stdinIsTty: false })).toBe(true);
+  });
+});
+
+/**
+ * **The other half of the 2026-09-05 addressing bug.**
+ *
+ * A tmux session name may begin with a hyphen, and `resume` picked its argument
+ * with `rest.find((a) => !a.startsWith("-"))` — which skips such a name
+ * silently and falls back to the newest session. Attaching to something other
+ * than what was named looks exactly like success, which is the family this repo
+ * keeps writing comments about. Found by GPT Sol.
+ */
+describe("positionalName", () => {
+  it("takes the first argument that is not an option", () => {
+    expect(positionalName(["gateA"])).toBe("gateA");
+    expect(positionalName(["--ssh", "gateA"])).toBe("gateA");
+    expect(positionalName(["gateA", "--ssh"])).toBe("gateA");
+  });
+
+  it("has nothing to say about an empty argv", () => {
+    expect(positionalName([])).toBeUndefined();
+    expect(positionalName(["--ssh"])).toBeUndefined();
+  });
+
+  it("takes a name that starts with a hyphen when `--` says it is a name", () => {
+    expect(positionalName(["--", "-odd"])).toBe("-odd");
+    expect(positionalName(["--ssh", "--", "-odd"])).toBe("-odd");
+  });
+
+  /** Everything after `--` is positional, flag-shaped or not. */
+  it("does not read an option after the separator", () => {
+    expect(positionalName(["--", "--ssh"])).toBe("--ssh");
+  });
+
+  it("says nothing rather than guessing when `--` ends the line", () => {
+    expect(positionalName(["--"])).toBeUndefined();
+  });
+
+  /**
+   * LEFT TO RIGHT. The first version looked for `--` anywhere first, so a
+   * trailing one threw away a name that had already been given — `resume gateA
+   * --` returned undefined and attached to the newest session, which is the
+   * silent wrong-target this function exists to prevent. Both found by Sol.
+   */
+  it("keeps a name that came before a trailing separator", () => {
+    expect(positionalName(["gateA", "--"])).toBe("gateA");
+  });
+
+  it("does not let a later separator override a name already given", () => {
+    expect(positionalName(["gateA", "--", "other"])).toBe("gateA");
   });
 });

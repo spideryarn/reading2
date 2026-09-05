@@ -12,12 +12,44 @@
  * that recognises a failure by a sentence somebody else's file writes is only
  * as good as its last reading of that file, so the tests that matter here throw
  * the failure for real and ask what it was called.
+ *
+ * ## The store here is a fake, and it always was one
+ *
+ * Four cases point a real stage at a store and let it fail. Until 2026-09-05 that
+ * store was a `createFsArtifactStore` over a `mkdtemp` directory, with the
+ * manifest and the page written into it as files. `failureKindOf` never asks
+ * where anything was written — the `store-agnostic-fake` verdict in
+ * [store-migration-registry.ts](store-migration-registry.ts) — so it is
+ * `memoryArtefacts()` now, and stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * can delete `src/store/artifacts-fs.ts` without this file noticing.
+ *
+ * **One case got stronger rather than merely moving.** *calls a missing source
+ * URL `ours`* was handed the global `fsArtifacts`, which resolves through
+ * `dataRoot()` — the repository root on a laptop. A developer with a
+ * `data/a-slug/meta.json` lying about would have had that case reading a real
+ * article's metadata and testing the opposite thing, silently. An empty store
+ * has no metadata by construction.
+ *
+ * **Mutation.** Run 2026-09-05. (1) `if (err instanceof NoBlocksProduced)` in
+ * src/pipeline.ts made unreachable — the classification this file exists for,
+ * deleted: **1 of 31 red**, *calls an extraction that produced no blocks
+ * `blocked`* on *expected undefined to be 'blocked'*. (2) `memoryArtefacts().read`
+ * made to answer `null` for everything: **4 red**, and they are exactly the four
+ * cases that drive a real stage — *expected 'No extracted HTML for "a-slug"' to
+ * match /no blocks at all/*, two `ours` where `blocked` and `bug` were wanted,
+ * and *expected 'No fetched document for "a-slug"' to match /Readability/*. That
+ * second arm is the one worth having: it says the four stage-driving cases are
+ * reading the store rather than reaching a conclusion some other way.
+ *
+ * **Blind to.** Where an artefact physically lives; and the *blob* half of the
+ * two source-document cases is still a real store, deliberately — `fsBlobs` is
+ * selected by credentials rather than by `SPIDERYARN_STORE` and is outside this
+ * migration, and a genuine object is what makes "longer than its manifest
+ * claims" a real condition rather than a stub's opinion.
  */
 import { describe, expect, it } from "vitest";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { partsOf } from "../src/arc.js";
@@ -36,7 +68,7 @@ import {
 } from "../src/messages.js";
 import { sanitise } from "../src/monitoring-scrub.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
-import { createFsArtifactStore, fsArtifacts } from "../src/store/artifacts-fs.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { storeRawSource } from "../src/store/blobs.js";
 import {
   budgetFor,
@@ -80,12 +112,18 @@ function cardHtml(job: Job): string {
   );
 }
 
-/** A step context pointing at a scratch directory instead of `data/<slug>`. */
-function ctx(dir: string, over: Partial<StepContext> = {}): StepContext {
+/**
+ * A step context for the fixture article.
+ *
+ * **It took a scratch directory until 2026-09-05**, for `StepContext.dir`, and
+ * the four cases below each minted one with `mkdtemp` so that a stage writing
+ * into `data/<slug>` could not reach the real repository. `dir` and `htmlFile`
+ * went with the filesystem store, and with them the last reason any of this
+ * touched a disk: what a stage may read is the `ArtifactStore` it is handed.
+ */
+function ctx(over: Partial<StepContext> = {}): StepContext {
   return {
     slug: "a-slug",
-    dir,
-    htmlFile: path.join(dir, "a-slug.html"),
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -103,6 +141,11 @@ async function threw(run: () => unknown): Promise<unknown> {
   throw new Error("expected that to fail, and it did not");
 }
 
+/**
+ * **No mutation involving the store: no store reaches this block.** It asks
+ * `jobWorthRetrying` about a `Job` object built inline, and both arms in the
+ * header leave it green.
+ */
 describe("whether a failed job is worth retrying", () => {
   it("offers a retry when nothing said otherwise", () => {
     // Every job persisted before this field existed, plus the ones a restart
@@ -121,6 +164,10 @@ describe("whether a failed job is worth retrying", () => {
   });
 });
 
+/**
+ * **No mutation involving the store: no store reaches this block.** Every case
+ * hands `failureKindOf` an error it constructed on the line above.
+ */
 describe("what a failure says about itself", () => {
   it("says nothing about an ordinary error", () => {
     expect(failureKindOf(new Error("the disk is full"))).toBeUndefined();
@@ -144,6 +191,11 @@ describe("what a failure says about itself", () => {
   });
 });
 
+/**
+ * **No mutation involving the store: no store reaches this block.** It renders
+ * `JobCard` and greps the HTML, and its own comment below names the mutation it
+ * does care about — deleting the `jobWorthRetrying` call from the component.
+ */
 describe("the card the reader actually sees", () => {
   /* The rule being pure and correct is not the feature. Something has to ask
      it, and with the call deleted from JobCard every test above this line stays
@@ -185,6 +237,11 @@ describe("the card the reader actually sees", () => {
   });
 });
 
+/**
+ * **No mutation of its own: this is the block the header's two arms are about.**
+ * Four of its cases drive a real stage against the fake store, and they are
+ * exactly the four that go red when `memoryArtefacts().read` stops answering.
+ */
 describe("the failures a retry cannot change", () => {
   it("calls an answer too long for one response `blocked`", () => {
     expect(failureKindOf(new TooLongForOnePass("table of contents", 200_000))).toBe("blocked");
@@ -213,7 +270,14 @@ describe("the failures a retry cannot change", () => {
     // Retry copies the same absent URL, so it fails in the same place. The
     // article's meta.json has none and none was given: nothing about a second
     // attempt is different.
-    const err = await threw(() => STEPS.fetch.run(ctx("/nowhere"), fsArtifacts, nullCheckpointStore()));
+    /* **An empty store, not `fsArtifacts`.** This case is about an article with
+       no source URL anywhere, and the global filesystem store answers out of
+       `dataRoot()` — the repository root on a laptop — so it was one
+       `data/a-slug/meta.json` away from testing the opposite thing on somebody's
+       machine. An empty store has no metadata by construction. */
+    const err = await threw(() =>
+      STEPS.fetch.run(ctx(), memoryArtefacts(), nullCheckpointStore()),
+    );
     expect((err as Error).message).toMatch(/No source URL/);
     expect(failureKindOf(err)).toBe("ours");
   });
@@ -241,37 +305,34 @@ describe("the failures a retry cannot change", () => {
    * `runBlocks` call and drops the `catch` around it turns this red.
    */
   it("calls an extraction that produced no blocks `blocked`", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-blocks-"));
-    try {
-      const htmlFile = path.join(dir, "a-slug.html");
-      /* Stage 2's output for a page that never gave up its prose: a
-         JS-rendered shell, which is a shape a real fetch returns. */
-      await writeFile(
-        htmlFile,
-        '<!doctype html><html><body>\n<div id="app"></div><script>window.__PAYWALL__ = true;</script>\n</body></html>',
-      );
-      /* A store over the scratch directory rather than `fsArtifacts`, which
-         would send the baseline read at `data/a-slug/` in the real repo. */
-      const store = createFsArtifactStore(() => ({ dir, htmlFile }));
+    /* Stage 2's output for a page that never gave up its prose: a
+       JS-rendered shell, which is a shape a real fetch returns. **In the
+       store, not in a file**, because that is where stage 3 reads it — a
+       store of its own rather than `fsArtifacts`, which would send the
+       baseline read at `data/a-slug/` in the real repo. */
+    const store = memoryArtefacts();
+    store.plant(
+      "a-slug",
+      "extract",
+      "extractedHtml",
+      '<!doctype html><html><body>\n<div id="app"></div><script>window.__PAYWALL__ = true;</script>\n</body></html>',
+    );
 
-      const err = await threw(() => STEPS.blocks.run(ctx(dir), store, nullCheckpointStore()));
-      expect((err as Error).message).toMatch(/no blocks at all/);
-      expect(failureKindOf(err)).toBe("blocked");
-      /* Both halves, because the kind is only half the feature: the card is
-         what the reader sees, and a rule nothing consults changes nothing. */
-      expect(jobWorthRetrying(failed(failureKindOf(err)))).toBe(false);
-      expect(cardHtml(failed(failureKindOf(err)))).not.toContain("Retry");
-      /* **And the reader is told which way out there is.** The diagnostic above
-         is four sentences about stages and block ids; what the reader needs out
-         of it is that the page yielded no text and that the address it came
-         from is the thing to look at. Until 2026-09-03 they got `stepGaveUp`'s
-         generic `blocked` sentence and neither. */
-      const reader = readerFailureOf(err, "Splitting it into blocks");
-      expect(reader.message).not.toContain("[jb-step-no]");
-      expect(reader.message).toMatch(/paywall/i);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    const err = await threw(() => STEPS.blocks.run(ctx(), store, nullCheckpointStore()));
+    expect((err as Error).message).toMatch(/no blocks at all/);
+    expect(failureKindOf(err)).toBe("blocked");
+    /* Both halves, because the kind is only half the feature: the card is
+       what the reader sees, and a rule nothing consults changes nothing. */
+    expect(jobWorthRetrying(failed(failureKindOf(err)))).toBe(false);
+    expect(cardHtml(failed(failureKindOf(err)))).not.toContain("Retry");
+    /* **And the reader is told which way out there is.** The diagnostic above
+       is four sentences about stages and block ids; what the reader needs out
+       of it is that the page yielded no text and that the address it came
+       from is the thing to look at. Until 2026-09-03 they got `stepGaveUp`'s
+       generic `blocked` sentence and neither. */
+    const reader = readerFailureOf(err, "Splitting it into blocks");
+    expect(reader.message).not.toContain("[jb-step-no]");
+    expect(reader.message).toMatch(/paywall/i);
   });
 
   /**
@@ -285,48 +346,38 @@ describe("the failures a retry cannot change", () => {
    * commonest of its three reasons (src/fetch.ts § `missingObjectAdvice`).
    */
   it("tells the reader a missing source document needs adding again", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-raw-gone-"));
-    try {
-      const htmlFile = path.join(dir, "a-slug.html");
-      const store = createFsArtifactStore(() => ({ dir, htmlFile }));
-      await writeFile(
-        path.join(dir, "raw.json"),
-        JSON.stringify({
-          kind: "html",
-          file: "raw.html",
-          requestedUrl: "https://example.com/a-piece",
-          url: "https://example.com/a-piece",
-          contentType: "text/html",
-          encoding: "utf-8",
-          bytes: 12,
-          /* A hash of nothing anybody stored, so the object is absent rather
-             than corrupt. Sixty-four hex characters, which is what
-             `canonicalKey` builds a name from. */
-          sha256: "b".repeat(64),
-          storedSha256: "b".repeat(64),
-          storedBytes: 12,
-          fetchedAt: new Date().toISOString(),
-        }),
-        "utf8",
-      );
-      const err = await threw(() =>
-        STEPS.extract.run(
-          ctx(dir, { url: "https://example.com/a-piece" }),
-          store,
-          nullCheckpointStore(),
-        ),
-      );
-      expect(failureKindOf(err)).toBe("blocked");
-      const reader = readerFailureOf(err, "Extracting the article");
-      expect(reader.message).not.toContain("[jb-step-no]");
-      /* The reader's move, and the one thing this failure knows. */
-      expect(reader.message).toMatch(/again/i);
-      /* And none of the diagnostic's own furniture: an object key, a file path,
-         a plan reference. docs/project/copy.md § Who is reading this. */
-      expect(reader.message).not.toMatch(/storedSha256|blobStore|SUPABASE|src\//);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    const store = memoryArtefacts();
+    store.plant("a-slug", "fetch", "raw", {
+      kind: "html",
+      file: "raw.html",
+      requestedUrl: "https://example.com/a-piece",
+      url: "https://example.com/a-piece",
+      contentType: "text/html",
+      encoding: "utf-8",
+      bytes: 12,
+      /* A hash of nothing anybody stored, so the object is absent rather
+         than corrupt. Sixty-four hex characters, which is what
+         `canonicalKey` builds a name from. */
+      sha256: "b".repeat(64),
+      storedSha256: "b".repeat(64),
+      storedBytes: 12,
+      fetchedAt: new Date().toISOString(),
+    });
+    const err = await threw(() =>
+      STEPS.extract.run(
+        ctx({ url: "https://example.com/a-piece" }),
+        store,
+        nullCheckpointStore(),
+      ),
+    );
+    expect(failureKindOf(err)).toBe("blocked");
+    const reader = readerFailureOf(err, "Extracting the article");
+    expect(reader.message).not.toContain("[jb-step-no]");
+    /* The reader's move, and the one thing this failure knows. */
+    expect(reader.message).toMatch(/again/i);
+    /* And none of the diagnostic's own furniture: an object key, a file path,
+       a plan reference. docs/project/copy.md § Who is reading this. */
+    expect(reader.message).not.toMatch(/storedSha256|blobStore|SUPABASE|src\//);
   });
 
   /**
@@ -346,51 +397,45 @@ describe("the failures a retry cannot change", () => {
    * Cheaper to build than a hash mismatch and the same reason string.
    */
   it("tells the reader a damaged source document is not theirs to fix", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-raw-corrupt-"));
-    try {
-      const htmlFile = path.join(dir, "a-slug.html");
-      const store = createFsArtifactStore(() => ({ dir, htmlFile }));
-      const page = new TextEncoder().encode("<html><body><p>real bytes, wrongly described</p></body></html>");
-      const put = await storeRawSource(page, "html");
-      await writeFile(
-        path.join(dir, "raw.json"),
-        JSON.stringify({
-          kind: "html",
-          file: "raw.html",
-          requestedUrl: "https://example.com/a-piece",
-          url: "https://example.com/a-piece",
-          contentType: "text/html",
-          encoding: "utf-8",
-          bytes: page.byteLength,
-          sha256: put.sha256,
-          storedSha256: put.sha256,
-          /* Shorter than what is really under that name, so the read's bound
-             throws and `overlongObject` classifies it `corrupt`. */
-          storedBytes: 1,
-          fetchedAt: new Date().toISOString(),
-        }),
-        "utf8",
-      );
-      const err = await threw(() =>
-        STEPS.extract.run(
-          ctx(dir, { url: "https://example.com/a-piece" }),
-          store,
-          nullCheckpointStore(),
-        ),
-      );
-      /* `bug`, not `blocked`: all three non-retryable kinds withhold the button,
-         and this is the one where the reader has no move at all. */
-      expect(failureKindOf(err)).toBe("bug");
-      const reader = readerFailureOf(err, "Extracting the article");
-      expect(reader.message).toContain("[jb-source-damaged]");
-      /* The whole of the split, and the assertion that would have gone red
-         against the old shared sentence: it must not send them round the loop
-         that cannot terminate. */
-      expect(reader.message).toMatch(/will not replace it/i);
-      expect(reader.message).not.toMatch(/storedSha256|blobStore|SUPABASE|src\//);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    const store = memoryArtefacts();
+    const page = new TextEncoder().encode("<html><body><p>real bytes, wrongly described</p></body></html>");
+    /* **The blob store here is the real one and stays real.** `fsBlobs` is
+       selected by credentials rather than by `SPIDERYARN_STORE` and is out of
+       this migration's scope; what the case needs is a genuine object whose
+       length disagrees with the manifest beside it. */
+    const put = await storeRawSource(page, "html");
+    store.plant("a-slug", "fetch", "raw", {
+      kind: "html",
+      file: "raw.html",
+      requestedUrl: "https://example.com/a-piece",
+      url: "https://example.com/a-piece",
+      contentType: "text/html",
+      encoding: "utf-8",
+      bytes: page.byteLength,
+      sha256: put.sha256,
+      storedSha256: put.sha256,
+      /* Shorter than what is really under that name, so the read's bound
+         throws and `overlongObject` classifies it `corrupt`. */
+      storedBytes: 1,
+      fetchedAt: new Date().toISOString(),
+    });
+    const err = await threw(() =>
+      STEPS.extract.run(
+        ctx({ url: "https://example.com/a-piece" }),
+        store,
+        nullCheckpointStore(),
+      ),
+    );
+    /* `bug`, not `blocked`: all three non-retryable kinds withhold the button,
+       and this is the one where the reader has no move at all. */
+    expect(failureKindOf(err)).toBe("bug");
+    const reader = readerFailureOf(err, "Extracting the article");
+    expect(reader.message).toContain("[jb-source-damaged]");
+    /* The whole of the split, and the assertion that would have gone red
+       against the old shared sentence: it must not send them round the loop
+       that cannot terminate. */
+    expect(reader.message).toMatch(/will not replace it/i);
+    expect(reader.message).not.toMatch(/storedSha256|blobStore|SUPABASE|src\//);
   });
 
   it("calls a page Readability will not parse `blocked`", async () => {
@@ -404,52 +449,42 @@ describe("the failures a retry cannot change", () => {
     // being `{ authored }` — a prefix match is not proof that every character
     // came from us. This test still runs the real extractor, because what it is
     // now holding is that the real path throws that class at all.
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-extract-"));
-    try {
-      /* **The manifest and the object, not `raw.html`.** Since 2026-08-31 stage
-         1 leaves nothing in the article's directory: it puts the document in the
-         content-addressed `sources` bucket and returns a manifest naming it by
-         hash, and stage 2 reads the manifest from the store and the bytes by
-         address (docs/plans/260831b-finish-the-database-move.md § Stage 2c). A fixture
-         that wrote `raw.html` would now fail before Readability ever saw the
-         page — which is how this test found out, with the wrong sentence. */
-      const htmlFile = path.join(dir, "a-slug.html");
-      const store = createFsArtifactStore(() => ({ dir, htmlFile }));
-      const page = new TextEncoder().encode("");
-      const put = await storeRawSource(page, "html");
-      await writeFile(
-        path.join(dir, "raw.json"),
-        JSON.stringify({
-          kind: "html",
-          file: "raw.html",
-          requestedUrl: "https://example.com/a-piece",
-          url: "https://example.com/a-piece",
-          contentType: "text/html",
-          encoding: "utf-8",
-          bytes: page.byteLength,
-          sha256: put.sha256,
-          storedSha256: put.sha256,
-          storedBytes: page.byteLength,
-          fetchedAt: new Date().toISOString(),
-        }),
-        "utf8",
-      );
-      const err = await threw(() =>
-        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), store, nullCheckpointStore()),
-      );
-      expect((err as Error).message).toMatch(/Readability/);
-      expect(failureKindOf(err)).toBe("blocked");
-      /* **And the reader is not shown that sentence**, which says "Readability"
-         — a library they have never heard of. What they get instead is its own
-         sentence, declared at the seam: until 2026-09-03 it was `stepGaveUp`'s
-         generic `blocked` copy, which named the step and nothing else. */
-      const reader = readerFailureOf(err, "Extracting the article");
-      expect(reader.message).not.toMatch(/Readability/);
-      expect(reader.message).not.toContain("[jb-step-no]");
-      expect(reader.message).toMatch(/no article/i);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    /* **The manifest and the object, not `raw.html`.** Since 2026-08-31 stage
+       1 leaves nothing in the article's directory: it puts the document in the
+       content-addressed `sources` bucket and returns a manifest naming it by
+       hash, and stage 2 reads the manifest from the store and the bytes by
+       address (docs/plans/260831b-finish-the-database-move.md § Stage 2c). A fixture
+       that wrote `raw.html` would now fail before Readability ever saw the
+       page — which is how this test found out, with the wrong sentence. */
+    const store = memoryArtefacts();
+    const page = new TextEncoder().encode("");
+    const put = await storeRawSource(page, "html");
+    store.plant("a-slug", "fetch", "raw", {
+      kind: "html",
+      file: "raw.html",
+      requestedUrl: "https://example.com/a-piece",
+      url: "https://example.com/a-piece",
+      contentType: "text/html",
+      encoding: "utf-8",
+      bytes: page.byteLength,
+      sha256: put.sha256,
+      storedSha256: put.sha256,
+      storedBytes: page.byteLength,
+      fetchedAt: new Date().toISOString(),
+    });
+    const err = await threw(() =>
+      STEPS.extract.run(ctx({ url: "https://example.com/a-piece" }), store, nullCheckpointStore()),
+    );
+    expect((err as Error).message).toMatch(/Readability/);
+    expect(failureKindOf(err)).toBe("blocked");
+    /* **And the reader is not shown that sentence**, which says "Readability"
+       — a library they have never heard of. What they get instead is its own
+       sentence, declared at the seam: until 2026-09-03 it was `stepGaveUp`'s
+       generic `blocked` copy, which named the step and nothing else. */
+    const reader = readerFailureOf(err, "Extracting the article");
+    expect(reader.message).not.toMatch(/Readability/);
+    expect(reader.message).not.toContain("[jb-step-no]");
+    expect(reader.message).toMatch(/no article/i);
   });
 });
 
@@ -462,6 +497,12 @@ describe("the failures a retry cannot change", () => {
  * sentence being shape-checked before it is published rather than trusted.
  *
  * src/job-failure.ts § Two strings, not one.
+ */
+/**
+ * **No mutation involving the store: no store reaches this block.** It calls
+ * `readerFailureOf` on errors it builds itself, which is the point its own
+ * header makes — the function is asked directly because two of its properties
+ * have no visible symptom through a stage.
  */
 describe("which sentence the reader gets", () => {
   const STEP = "Writing the questions";

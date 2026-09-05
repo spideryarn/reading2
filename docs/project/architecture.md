@@ -116,6 +116,7 @@ artefacts on disk, not by reaching into another stage's code.
 | 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
 | 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + hierarchy agent** | `blocks.json` |
 | 4 | hierarchy — the deeply-nested table of contents, see [hierarchy.md](hierarchy.md) | **blocks + hierarchy agent** | `tree.json` (structure) |
+| 4.5 | **assets** — fetch the article's own images and host them, so a hotlink cannot rot and no reader announces themselves to the publisher's CDN ([article-images.md](article-images.md)). The one stage that calls no model | **fetch agent** ([`src/collect-assets.ts`](../../src/collect-assets.ts)) | `assets.json`, plus objects in Storage |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
 | 5c | the thread — the article as numbered posts ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
@@ -152,7 +153,7 @@ away when it happened. [export.md](export.md) is the way data leaves: the zip a 
 one article, and the `db:export` rollback it shares its queries with.
 
 **Moved, as of 2026-09-01.** Every store — reader and pipeline alike — is Postgres under
-`SPIDERYARN_STORE=postgres`, which is what production runs: a pipeline job commits each step's
+Postgres, which since 2026-09-05 is the only store there is: a pipeline job commits each step's
 product into a draft revision and publishes it in one transaction with the job's own finish, rather
 than writing the filesystem layout below. Under the `files` default — a laptop with the flag unset —
 the same stages write that layout, unchanged, until stage 4 deletes it.
@@ -254,7 +255,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - One process, one command: `npm run dev`. The API is currently mounted as **Vite dev middleware**
   ([`vite.config.ts`](../../vite.config.ts)) rather than as a separate server, so there is nothing to
   run in a second terminal while the ideas are still moving. The reads live in
-  [`src/api.ts`](../../src/api.ts) as a plain transport-free `loadArticle(slug)` — that is the seam a
+  `src/api.ts` as a plain transport-free `loadArticle(slug)` — that is the seam a
   standalone Node server wraps when one is needed, so choosing Express or Hono stays a deferred
   decision rather than a revisited one.
 - `loadArticle` looks in `data/<slug>/`, and in [`example/`](../../example/README.md) — the
@@ -262,7 +263,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   `data/example/` still supersedes the fixture with no code change. It used to fall back to the
   fixture for *every* slug, which meant an article with no tree yet, or no article at all, was
   answered with the fixture's prose under the reader's own address; the reasoning for taking that
-  away is on `candidateDirs` in [`src/api.ts`](../../src/api.ts), and the security half of it is in
+  away is on `candidateDirs` in `src/api.ts`, and the security half of it is in
   [security.md § Why it survived being looked at](security.md#why-it-survived-being-looked-at).
 - API is thin: `GET /api/article/<slug>` returns `meta + blocks + tree`. The client has everything
   it needs for every zoom level in one payload; zooming must never hit the network. `GET /api/library`
@@ -311,19 +312,64 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   rather than two. The eight article-reading stages had a folder-reading command line of their own
   until 2026-09-01, and it was a second path to the same place — the queue's is the one that
   exercises the store writes.
-- Anything expensive should be cached on a content hash. Seven stages do it, and copy *their* choice
-  of hash input rather than only the idea — the rule is that a fingerprint covers **everything the
-  stage's prompt reads** — for six of the seven that is the blocks, the tree and the head, and there
-  are two head functions because there are two heads
-  ([`src/source-hash.ts`](../../src/source-hash.ts)); for `assets` it is the blocks alone. [database.md](database.md#the-filesystem-era-files-under-dataslug).
+- **Anything expensive should be cached on a content hash, and not everything is.** *Which* stages
+  do it has been said three different ways in this repo — "two of seven" in `AGENTS.md`, "seven
+  stages do it" here — and neither was right. Counted from
+  [`src/pipeline.ts`](../../src/pipeline.ts) on 2026-09-05, by the predicate *the step declares a
+  `stamp()` that `stepIsDone` compares against what the store holds*: **ten of the fourteen in
+  `STEP_ORDER`** —
+  `assets`, and the nine model modes `arc`, `tweets`, `glossary`, `quotes`, `ideas`, `timeline`,
+  `quiz`, `sketch`, `illustrated`. Copy *their* choice of hash input rather than only the idea: a
+  fingerprint covers **everything the stage's prompt reads**, which for the nine is the blocks, the
+  tree and the head — and there are two head functions because there are two heads
+  ([`src/source-hash.ts`](../../src/source-hash.ts)) — and for `assets` the blocks alone, because it
+  has no prompt.
+  [database.md](database.md#the-filesystem-era-files-under-dataslug).
+- **The other four decide freshness some other way, and none of them is a content hash.** They are
+  the front of the pipeline, which is what `npm run ingest`, `npm run extract`, `npm run blocks` and
+  `npm run hierarchy` re-run, so this is the paragraph to read before trusting a skip:
+  - `fetch` and `extract` — **existence**. The step's `produces` are in the store, so it is done.
+  - `blocks` — **structural**, and it is the interesting one: `blocksMatchTheirHtml` re-splits the
+    stored HTML and compares it block for block against the stored blocks. No stamp to go stale, and
+    it notices a change nothing wrote a hash about.
+  - `hierarchy` — **existence**. It *writes* an `inputHash` (its labels file's own `sourceHash`), and
+    nothing reads it back for freshness, because the step declares no `stamp()`.
+  And a fifth thing that looks like it belongs on that list and does not: **`pdf` is not a step.**
+  It is one branch of `extract`, and its per-chunk cache is not step freshness at all — since
+  2026-09-01 it is `checkpoints` rows keyed on an `articles` row
+  ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)).
+
+  **The stage commands resume, since 2026-09-05, and that has a sharp edge.** They had none before:
+  the old file-writing CLIs had no article row and passed `nullCheckpointStore()`, so a killed run
+  paid for its chunks and batches again. Going through the queue gives every run the article's own
+  checkpoints. But `force` is a flag on the *step*, not on the purchase — so a forced re-run finds
+  its structure and label batches already checkpointed and replays them. Measured: two consecutive
+  `npm run hierarchy -- <slug> --force` on an unchanged article bought two model calls and then
+  **none**. **Re-labelling after a prompt change is therefore not `--force`**, whatever route you
+  come by; a reader's Refresh in the browser behaves the same, because this is the queue's rule
+  rather than the command's.
+  [setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue).
+- **Process-wide mutable state must have process lifetime, which a module-level variable does not.**
+  Saving anything the server imports makes Vite re-evaluate that module *in place*, so a lock, an
+  index or a registry held in a module variable becomes a second empty copy while requests from the
+  first are still running — the fence still holds within a module and there are now two. Anything of
+  that kind goes through [`src/process-state.ts`](../../src/process-state.ts). The story that bought
+  this — eleven restarts of one eight-minute call, at $5.43 — is
+  [ingest-queue.md § On the filesystem, "one process" had to be made true](ingest-queue.md#on-the-filesystem-one-process-had-to-be-made-true),
+  told there for the queue; the rule is general.
 - **A cache whose key is deterministic must be written atomically and read tolerantly**, and the two
   are one rule. `writeFile` truncates before it writes, so a killed process leaves a file that exists
   and does not parse; the key does not change between runs, so every later run finds that same file
-  and fails the same way, for ever. Write beside the target and `rename` (`writeAtomic` in
-  [`src/hierarchy.ts`](../../src/hierarchy.ts), [`src/labels.ts`](../../src/labels.ts),
-  [`src/pdf-read.ts`](../../src/pdf-read.ts)); treat an entry that will not parse as a miss and say so
-  in the log. It wedged one article's PDF extract permanently —
+  and fails the same way, for ever. Write beside the target and `rename`; treat an entry that will
+  not parse as a miss and say so in the log. It wedged one article's PDF extract permanently —
   [260828e-pdf-chunk-cache-corrupt-entry.md](../postmortems/260828e-pdf-chunk-cache-corrupt-entry.md).
+
+  **There is no `writeAtomic` left to point at, and the rule stands anyway.** The two copies — in
+  `src/hierarchy.ts` and `src/labels.ts`, deliberately duplicated — belonged to command lines writing
+  artefacts into a directory, and both went with those commands on 2026-09-05. Postgres removes the
+  window rather than guarding it: stage 4's three artefacts are one write inside one transaction, and
+  a half-written set is not a state that exists. Keep the rule for the next thing that caches into a
+  file, which will be something outside the store.
 - What the model calls cost, and the three prompt caches that stop us paying for the article twice,
   are in [prompt-caching.md](prompt-caching.md).
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through

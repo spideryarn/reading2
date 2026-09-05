@@ -50,10 +50,18 @@
  * ## The model is stubbed; the stages are not
  *
  * `streamMessage` is replaced by one that answers from a script, so the real
- * `generateGlossary` and `generateIdeas` run end to end over real files — which
- * is the only way `previous` reaching `existingFor` **and** `idsByTerm` gets
- * exercised. The scripted answers are plain data, not promises resolved by the
- * test at a convenient moment.
+ * `generateGlossary` and `generateIdeas` run end to end over a real article —
+ * which is the only way `previous` reaching `existingFor` **and** `idsByTerm`
+ * gets exercised. The scripted answers are plain data, not promises resolved by
+ * the test at a convenient moment.
+ *
+ * ## The first half is a store, not a filesystem, since 2026-09-05
+ *
+ * It ran over `createFsArtifactStore` until the filesystem store was deleted
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § G), and its subject was never files. The section's own header says what
+ * changed, which of the four states each mechanism now stands for, and the one
+ * case that keeps a file on disk on purpose.
  *
  * ## The Postgres half needs a database and says so out loud
  *
@@ -73,9 +81,9 @@ import type { Block, Glossary, Ideas, OwnerId } from "../src/types.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
+import { type MemoryArtifactStore, memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { mintId } from "../src/ids.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
@@ -337,24 +345,36 @@ afterEach(() => {
   calls.length = 0;
 });
 
-/* ----------------------------------------------------------- the filesystem -- */
+/* ------------------------------------------------- a store beside the files -- */
 
-describe("the previous artefact, over the filesystem store", () => {
+/**
+ * **`createFsArtifactStore` over a copy of `example/` until 2026-09-05**, when
+ * the filesystem store was deleted
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § G). Nothing here was ever asking about files: these cases need a store that
+ * can hold the previous run's glossary or ideas so `previousGlossaryFrom` and
+ * `previousIdeasFrom` have something to read, and something that can hold one
+ * which is *there and unusable*, which on a disk was a truncated file and is
+ * `plant` now (helpers/memory-artefacts.ts).
+ *
+ * **The directory stays, and one case is the reason.** `articleIn(dir)` reads
+ * the blocks the stages are run over, and *asks the store, and does not fall
+ * back to reading the file itself* needs the artefact to be sitting on disk
+ * exactly where the old code read it from while the store says there is none.
+ * So the two helpers below write the file **and** put the artefact in the
+ * store; the file is the decoy, and the store is the answer.
+ */
+describe("the previous artefact, as the store answers it", () => {
   const cleanUp: string[] = [];
   afterAll(async () => {
     for (const root of cleanUp) await rm(root, { recursive: true, force: true });
   });
 
-  /** A copy of the fixture with a store pointed at it, cleaned up afterwards. */
+  /** A copy of the fixture with a store beside it, cleaned up afterwards. */
   async function workspace(prefix: string) {
     const a = await anArticle(prefix);
     cleanUp.push(a.root);
-    const htmlFile = path.join(a.root, "a.html");
-    return {
-      ...a,
-      htmlFile,
-      store: createFsArtifactStore(() => ({ dir: a.dir, htmlFile })),
-    };
+    return { ...a, store: memoryArtefacts() };
   }
 
   /**
@@ -364,11 +384,12 @@ describe("the previous artefact, over the filesystem store", () => {
    * stores it, through the artefact store in the pipeline, which since
    * 2026-09-01 is the only caller there is
    * (docs/plans/260831b-finish-the-database-move.md § stage 2, § sub-stage I).
-   * Over the filesystem store those are the same bytes in the same place, so everything
-   * below that reads `glossary.json` back is still reading what a real caller
-   * put there rather than a fixture this file invented for itself.
+   * So everything below that reads the previous glossary back is still reading
+   * what a real caller put there rather than a fixture this file invented for
+   * itself. The file beside it is the decoy described above.
    */
   async function glossaryInto(
+    store: MemoryArtifactStore,
     dir: string,
     opts: { previous: Glossary | null; profile?: string | null },
   ) {
@@ -379,6 +400,7 @@ describe("the previous artefact, over the filesystem store", () => {
       JSON.stringify(run.glossary, null, 2),
       "utf-8",
     );
+    store.plant("a", "glossary", "glossary", run.glossary);
     return run;
   }
 
@@ -388,13 +410,16 @@ describe("the previous artefact, over the filesystem store", () => {
    * `generateIdeas` wrote `<dir>/ideas.json` itself until stage 2 took the
    * directory away from it — there is no path inside a stage any more, so the
    * caller stores the artefact, through the artefact store in the pipeline.
-   * Everything below that reads `ideas.json`
-   * back is therefore still reading what a real caller put there.
    */
-  async function ideasInto(dir: string, opts: { previous: Ideas | null }) {
+  async function ideasInto(
+    store: MemoryArtifactStore,
+    dir: string,
+    opts: { previous: Ideas | null },
+  ) {
     const { generateIdeas } = await import("../src/ideas.js");
     const run = await generateIdeas({ article: await articleIn(dir), ...opts });
     await writeFile(path.join(dir, "ideas.json"), JSON.stringify(run.ideas, null, 2), "utf-8");
+    store.plant("a", "ideas", "ideas", run.ideas);
     return run;
   }
 
@@ -405,7 +430,7 @@ describe("the previous artefact, over the filesystem store", () => {
     const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const first = await glossaryInto(dir, { previous: null });
+    const first = await glossaryInto(store, dir, { previous: null });
     expect(first.glossary.passes).toBe(1);
     const before = first.glossary.entries.map((e) => `${e.name}=${e.id}`).sort();
 
@@ -417,7 +442,7 @@ describe("the previous artefact, over the filesystem store", () => {
     const previous = await previousGlossaryFrom(store, "a");
     expect(previous?.entries).toHaveLength(2);
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const second = await glossaryInto(dir, { previous, profile: "a physicist" });
+    const second = await glossaryInto(store, dir, { previous, profile: "a physicist" });
 
     expect(second.glossary.passes).toBe(1);
     /* The exact ids against the exact names, not a count of survivors: two runs
@@ -430,14 +455,14 @@ describe("the previous artefact, over the filesystem store", () => {
     const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const first = await glossaryInto(dir, { previous: null });
+    const first = await glossaryInto(store, dir, { previous: null });
 
     /* The second half of the file's job, and the one every id assertion above
        is blind to. "Find more terms" is a re-run of this step, and a change
        that kept the ids while quietly turning it into "replace the glossary"
        would pass all of them. docs/project/glossary.md § Finding more. */
     answers.push(glossaryAnswer("Noema"));
-    const second = await glossaryInto(dir, {
+    const second = await glossaryInto(store, dir, {
       previous: await previousGlossaryFrom(store, "a"),
     });
 
@@ -459,29 +484,38 @@ describe("the previous artefact, over the filesystem store", () => {
     );
 
     answers.push(glossaryAnswer("Corrigibility"));
-    await glossaryInto(dir, { previous: null });
+    const first = await glossaryInto(store, dir, { previous: null });
 
-    /* Cut off halfway, which is what a `writeFile` killed in the middle leaves.
-       Every entry id the reader's `?term=` links name is still in those bytes —
-       that is the point: the file is unusable, not empty, and somebody with a
-       backup can put it back. */
-    const file = path.join(dir, "glossary.json");
-    const whole = await readFile(file, "utf-8");
-    await writeFile(file, whole.slice(0, whole.length >> 1), "utf-8");
+    /* Cut off halfway, which is what a `writeFile` killed in the middle left.
+       Every entry id the reader's `?term=` links name is still in those
+       characters — that is the point: the artefact is unusable, not empty, and
+       somebody with a backup can put it back.
+
+       **The half-written file is gone and the state it produced is not.** No
+       store left can hand back a fragment of an artefact — a JSONB column
+       cannot be half-written, and the memory fake serialises whole values — so
+       what this plants is a value of entirely the wrong type where an artefact
+       was expected, which is the same `whyUnusable` answer the truncated bytes
+       produced and the same `unusable` the stage has to tell apart from
+       `absent`. `plant`, because `write` refuses a bad shape and that is what
+       `write` is for. */
+    const whole = JSON.stringify(first.glossary);
+    store.plant("a", "glossary", "glossary", whole.slice(0, whole.length >> 1));
 
     await expect(previousGlossaryFrom(store, "a")).rejects.toBeInstanceOf(
       GlossaryBaselineUnusable,
     );
   });
 
-  it("refuses when the previous glossary parses but is of the wrong shape", async () => {
-    const { dir, store } = await workspace("spya-gloss-shape-");
+  it("refuses when the previous glossary is of the wrong shape", async () => {
+    const { store } = await workspace("spya-gloss-shape-");
     const { GlossaryBaselineUnusable, previousGlossaryFrom } = await import("../src/glossary.js");
 
-    /* Valid JSON, and `SHAPE.glossary` says no. This is the *only* shape of
-       unusable Postgres can have — a JSONB column cannot be half-written — so
-       it is the case that keeps the two stores honest about the same rule. */
-    await writeFile(path.join(dir, "glossary.json"), '{"entries":"not an array"}', "utf-8");
+    /* A perfectly good value, and `SHAPE.glossary` says no. This is the *only*
+       shape of unusable Postgres can have — a JSONB column cannot be
+       half-written — so it is the case that keeps every store honest about the
+       same rule. */
+    store.plant("a", "glossary", "glossary", { entries: "not an array" });
 
     await expect(previousGlossaryFrom(store, "a")).rejects.toBeInstanceOf(
       GlossaryBaselineUnusable,
@@ -493,23 +527,21 @@ describe("the previous artefact, over the filesystem store", () => {
     const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const first = await glossaryInto(dir, { previous: null });
+    const first = await glossaryInto(store, dir, { previous: null });
 
     /* A `sourceHash` from a different article. The entries describe text that
        is no longer there, so refusing to inherit is **correct** — and it must
-       not go down the same road as a file that cannot be read. */
-    const stale = JSON.parse(await readFile(path.join(dir, "glossary.json"), "utf-8")) as Glossary;
-    await writeFile(
-      path.join(dir, "glossary.json"),
-      JSON.stringify({ ...stale, sourceHash: "a-hash-from-somewhere-else" }),
-      "utf-8",
-    );
+       not go down the same road as an artefact that cannot be read. */
+    store.plant("a", "glossary", "glossary", {
+      ...first.glossary,
+      sourceHash: "a-hash-from-somewhere-else",
+    });
 
     const previous = await previousGlossaryFrom(store, "a");
     expect(previous?.sourceHash).toBe("a-hash-from-somewhere-else");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const second = await glossaryInto(dir, { previous });
+    const second = await glossaryInto(store, dir, { previous });
     // A fresh list: not appended to, and not inheriting the old identity.
     expect(second.glossary.passes).toBe(1);
     expect(idOf(second.glossary, "Corrigibility")).not.toBe(
@@ -538,11 +570,13 @@ describe("the previous artefact, over the filesystem store", () => {
     const { previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    await glossaryInto(dir, { previous: null });
+    await glossaryInto(store, dir, { previous: null });
 
-    /* The glossary is sitting on disk exactly where the old code read it from.
-       A store that says there is none must win, or the seam is decorative and
-       landing D will take the files away without anything noticing. */
+    /* The glossary is sitting on disk exactly where the old code read it from —
+       which is what `glossaryInto`'s file write is for and the only reason it
+       still happens. A store that says there is none must win, or the seam is
+       decorative and the files could go without anything noticing. They did go,
+       on 2026-09-05, and this is what said in advance that it was safe. */
     const empty: ArtifactStore = {
       ...store,
       readBaseline: () => Promise.resolve({ state: "absent" as const }),
@@ -559,7 +593,7 @@ describe("the previous artefact, over the filesystem store", () => {
     const block = quotable(blocks);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const first = await ideasInto(dir, { previous: null });
+    const first = await ideasInto(store, dir, { previous: null });
     const before = first.ideas.ideas[0]?.id;
     expect(before).toBeTruthy();
 
@@ -567,7 +601,7 @@ describe("the previous artefact, over the filesystem store", () => {
     expect(previous?.ideas).toHaveLength(1);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const second = await ideasInto(dir, { previous });
+    const second = await ideasInto(store, dir, { previous });
     /* The same name, so `idsByName` can match it — which is exactly as far as
        this stage's promise goes, and src/ideas.ts § `idsByName` says why it
        deliberately goes no further. */
@@ -581,19 +615,21 @@ describe("the previous artefact, over the filesystem store", () => {
     );
 
     answers.push(ideasAnswer(quotable(blocks), "Writing is a test of thought"));
-    await ideasInto(dir, { previous: null });
+    const first = await ideasInto(store, dir, { previous: null });
 
-    const file = path.join(dir, "ideas.json");
-    const whole = await readFile(file, "utf-8");
-    await writeFile(file, whole.slice(0, whole.length >> 1), "utf-8");
+    /* The same substitution as the glossary's, for the same reason: half an
+       artefact is a thing only a file could be, and what it produced —
+       *present and unusable* — is planted directly. */
+    const whole = JSON.stringify(first.ideas);
+    store.plant("a", "ideas", "ideas", whole.slice(0, whole.length >> 1));
 
     await expect(previousIdeasFrom(store, "a")).rejects.toBeInstanceOf(IdeasBaselineUnusable);
   });
 
-  it("refuses when the previous ideas parse but are of the wrong shape", async () => {
-    const { dir, store } = await workspace("spya-ideas-shape-");
+  it("refuses when the previous ideas are of the wrong shape", async () => {
+    const { store } = await workspace("spya-ideas-shape-");
     const { IdeasBaselineUnusable, previousIdeasFrom } = await import("../src/ideas.js");
-    await writeFile(path.join(dir, "ideas.json"), '{"ideas":{"one":true}}', "utf-8");
+    store.plant("a", "ideas", "ideas", { ideas: { one: true } });
     await expect(previousIdeasFrom(store, "a")).rejects.toBeInstanceOf(IdeasBaselineUnusable);
   });
 
@@ -603,20 +639,18 @@ describe("the previous artefact, over the filesystem store", () => {
     const block = quotable(blocks);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const first = await ideasInto(dir, { previous: null });
+    const first = await ideasInto(store, dir, { previous: null });
 
-    const stale = JSON.parse(await readFile(path.join(dir, "ideas.json"), "utf-8")) as Ideas;
-    await writeFile(
-      path.join(dir, "ideas.json"),
-      JSON.stringify({ ...stale, sourceHash: "a-hash-from-somewhere-else" }),
-      "utf-8",
-    );
+    store.plant("a", "ideas", "ideas", {
+      ...first.ideas,
+      sourceHash: "a-hash-from-somewhere-else",
+    });
 
     const previous = await previousIdeasFrom(store, "a");
     expect(previous?.sourceHash).toBe("a-hash-from-somewhere-else");
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const second = await ideasInto(dir, { previous });
+    const second = await ideasInto(store, dir, { previous });
     expect(second.ideas.ideas[0]?.id).not.toBe(first.ideas.ideas[0]?.id);
   });
 
@@ -626,25 +660,28 @@ describe("the previous artefact, over the filesystem store", () => {
     await expect(previousIdeasFrom(store, "a")).resolves.toBeNull();
   });
 
-  /* ------------------------------ what a baseline has to carry, on disk -- */
+  /* ------------------------------ what a baseline has to carry, in a store -- */
 
   /**
    * One assertion over the whole table rather than a line of `expect` each,
    * because a sequence stops at the first failure and these ten are ten
    * separate ways to be wrong. Reading three of them only after fixing the
    * first is how a rewrite fixes one and calls it done.
+   *
+   * Each row was a `writeFile` over the artefact's file until 2026-09-05 and is
+   * a `plant` now — the same act, and the hatch exists precisely because `write`
+   * refuses nine of these ten.
    */
   async function refusals(
-    dir: string,
-    store: ArtifactStore,
-    file: string,
+    store: MemoryArtifactStore,
+    kind: "glossary" | "ideas",
     items: "entries" | "ideas",
     artefact: Record<string, unknown>,
     read: (s: ArtifactStore, slug: string) => Promise<unknown>,
   ): Promise<{ why: string; got: string }[]> {
     const out: { why: string; got: string }[] = [];
     for (const { why, apply } of [...BREAKAGES, CONTROL]) {
-      await writeFile(path.join(dir, file), JSON.stringify(apply(artefact, items)), "utf-8");
+      store.plant("a", kind, kind, apply(artefact, items));
       out.push({ why, got: await outcomeOf(() => read(store, "a")) });
     }
     return out;
@@ -658,10 +695,10 @@ describe("the previous artefact, over the filesystem store", () => {
        real artefact rather than one hand-written to satisfy the reader, and
        every row differs from a passing case by exactly the thing named. */
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const real = (await glossaryInto(dir, { previous: null })).glossary;
+    const real = (await glossaryInto(store, dir, { previous: null })).glossary;
 
     expect(
-      await refusals(dir, store, "glossary.json", "entries", { ...real }, previousGlossaryFrom),
+      await refusals(store, "glossary", "entries", { ...real }, previousGlossaryFrom),
     ).toEqual(REFUSED_BUT_THE_CONTROL);
   });
 
@@ -670,11 +707,11 @@ describe("the previous artefact, over the filesystem store", () => {
     const { previousIdeasFrom } = await import("../src/ideas.js");
 
     answers.push(ideasAnswer(quotable(blocks), "Writing is a test of thought", "Prose is a tool"));
-    const real = (await ideasInto(dir, { previous: null })).ideas;
+    const real = (await ideasInto(store, dir, { previous: null })).ideas;
     expect(real.ideas).toHaveLength(2);
 
     expect(
-      await refusals(dir, store, "ideas.json", "ideas", { ...real }, previousIdeasFrom),
+      await refusals(store, "ideas", "ideas", { ...real }, previousIdeasFrom),
     ).toEqual(REFUSED_BUT_THE_CONTROL);
   });
 
@@ -684,9 +721,11 @@ describe("the previous artefact, over the filesystem store", () => {
    *
    * A guard that stops the stage *after* it has spent a model call and
    * overwritten the artefact has destroyed the thing it was protecting. The
-   * assertion is three-part on purpose: it threw, no request went out, and the
-   * bytes on disk are the ones that were there — because any one of those alone
-   * is satisfiable by a stage that failed for some other reason.
+   * assertion is three-part on purpose: it threw, no request went out, and what
+   * the store holds is what it held — because any one of those alone is
+   * satisfiable by a stage that failed for some other reason. The third part
+   * read the bytes back off the file until 2026-09-05 and asks the store now,
+   * which is the same question of the thing that now holds the answer.
    */
   it("refuses a broken glossary before the model call and before the write", async () => {
     const { dir, store } = await workspace("spya-gloss-before-");
@@ -695,11 +734,10 @@ describe("the previous artefact, over the filesystem store", () => {
     );
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const real = (await glossaryInto(dir, { previous: null })).glossary;
+    const real = (await glossaryInto(store, dir, { previous: null })).glossary;
 
-    const file = path.join(dir, "glossary.json");
-    await writeFile(file, JSON.stringify(without({ ...real }, "sourceHash")), "utf-8");
-    const before = await readFile(file, "utf-8");
+    const before = without({ ...real }, "sourceHash");
+    store.plant("a", "glossary", "glossary", before);
     calls.length = 0;
 
     /* The pipeline's own order: read the baseline, and only then call the
@@ -710,7 +748,7 @@ describe("the previous artefact, over the filesystem store", () => {
       GlossaryBaselineUnusable,
     );
     expect(calls).toHaveLength(0);
-    expect(await readFile(file, "utf-8")).toBe(before);
+    expect(await store.read("a", "glossary", "glossary")).toEqual(before);
   });
 
   it("refuses broken ideas before the model call and before the write", async () => {
@@ -720,19 +758,17 @@ describe("the previous artefact, over the filesystem store", () => {
     );
 
     answers.push(ideasAnswer(quotable(blocks), "Writing is a test of thought", "Prose is a tool"));
-    const real = (await ideasInto(dir, { previous: null })).ideas;
+    const real = (await ideasInto(store, dir, { previous: null })).ideas;
 
-    const file = path.join(dir, "ideas.json");
     const artefact: Record<string, unknown> = { ...real };
     const list = artefact.ideas as Record<string, unknown>[];
     const broken = withItem(artefact, "ideas", 1, (e) => ({ ...e, id: list[0]!.id }));
-    await writeFile(file, JSON.stringify(broken), "utf-8");
-    const before = await readFile(file, "utf-8");
+    store.plant("a", "ideas", "ideas", broken);
     calls.length = 0;
 
     await expect(previousIdeasFrom(store, "a")).rejects.toBeInstanceOf(IdeasBaselineUnusable);
     expect(calls).toHaveLength(0);
-    expect(await readFile(file, "utf-8")).toBe(before);
+    expect(await store.read("a", "ideas", "ideas")).toEqual(broken);
   });
 
   /**
@@ -745,9 +781,9 @@ describe("the previous artefact, over the filesystem store", () => {
    * arc here is the real shape: entries, no hash.
    */
   it("leaves an ordinary read of a kind that has no sourceHash alone", async () => {
-    const { dir, store } = await workspace("spya-arc-untouched-");
+    const { store } = await workspace("spya-arc-untouched-");
     const arc = { version: "arc/1", generator: "test", entries: [{ id: "one" }] };
-    await writeFile(path.join(dir, "arc.json"), JSON.stringify(arc), "utf-8");
+    store.plant("a", "arc", "arc", arc);
 
     expect(await store.read("a", "arc", "arc")).toMatchObject({ entries: [{ id: "one" }] });
     expect(await store.has("a", "arc", ["arc"])).toBe(true);
@@ -763,12 +799,11 @@ describe("the previous artefact, over the filesystem store", () => {
    * think about it.
    */
   it("refuses to answer a baseline question for a kind with no rule", async () => {
-    const { dir, store } = await workspace("spya-no-rule-");
-    await writeFile(
-      path.join(dir, "arc.json"),
-      JSON.stringify({ version: "arc/1", entries: [] }),
-      "utf-8",
-    );
+    const { store } = await workspace("spya-no-rule-");
+    /* Planted rather than absent, deliberately: `readBaseline` reaches the rule
+       only for an artefact it actually has, so an empty store would answer
+       `absent` and this row would pass without asking anything. */
+    store.plant("a", "arc", "arc", { version: "arc/1", entries: [] });
     await expect(store.readBaseline("a", "arc", "arc")).rejects.toThrow(/BASELINE/);
   });
 
@@ -793,62 +828,28 @@ loadEnvLocal();
  * the reporter will actually print. See tests/blocks-baseline.test.ts for the
  * six mechanisms that were measured before `process.stderr.write` was chosen.
  */
-let reachable = false;
-let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
-/** Which fix the reader needs, for `REQUIRE_POSTGRES=1`. tests/helpers/pg-ready.ts. */
-let kind: MissingKind = "no-url";
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  kind = "migration";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.article_revisions') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-    if (reachable) {
-      /* The two columns this file reads and writes, by name. A database missing
-         either fails every assertion below for a reason that has nothing to do
-         with the baseline. */
-      const cols = await pool.query(
-        "select column_name from information_schema.columns where table_schema = 'spideryarn' " +
-          "and table_name = 'article_revisions' and column_name in ('glossary', 'ideas')",
-      );
-      reachable = cols.rowCount === 2;
-      if (!reachable) {
-        why =
-          "article_revisions has no `glossary` and `ideas` columns — run `npm run db:migrate` " +
-          "(check its Target: line first) and these will run.";
-      }
-    }
-  } catch (err) {
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-}
-if (!reachable) {
-  process.stderr.write(
-    `\n  ⚠ the Postgres half of tests/glossary-ideas-baseline.test.ts is NOT RUNNING.\n` +
-      `    These assertions have not executed: ${why}\n\n`,
-  );
-  /* …and under REQUIRE_POSTGRES=1 that warning is not enough: fail. */
-  failIfPostgresRequired("tests/glossary-ideas-baseline.test.ts", why, kind);
-}
-const when = reachable ? describe : describe.skip;
+/**
+ * **The two columns this file reads and writes, by name.** A database missing
+ * either fails every assertion below for a reason that has nothing to do with
+ * the baseline — which is what `pgReady`'s `columns` is for. Forty lines of
+ * hand-rolled probe until 2026-09-05; it refuses now rather than skipping,
+ * because there is one store. tests/helpers/pg-ready.ts.
+ */
+await pgReady({
+  suite: "tests/glossary-ideas-baseline.test.ts",
+  tables: ["spideryarn.article_revisions"],
+  columns: [
+    { table: "spideryarn.article_revisions", column: "glossary" },
+    { table: "spideryarn.article_revisions", column: "ideas" },
+  ],
+});
 
 /** The transaction type, derived the way src/store/artifacts-pg.ts derives it. */
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** Thrown to unwind a fixture transaction; never an error anybody has to see. */
 class RollBack extends Error {}
 
-when("the previous artefact, over the Postgres store", () => {
+describe("the previous artefact, over the Postgres store", () => {
   const SLUG = "test-gloss-ideas-baseline";
   const FRESH_SLUG = "test-gloss-ideas-baseline-new";
 

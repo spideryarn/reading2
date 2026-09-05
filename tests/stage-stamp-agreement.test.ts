@@ -55,6 +55,37 @@
  * agree with each other across the metadata split rather than differing. That is
  * correct rather than an omission, and this file asserts it as a property so
  * that nobody "fixes" it into `articleFingerprint`.
+ *
+ * ## The store here is a fake, and the header above already said so
+ *
+ * *"No network, no directory reads — the store is the only thing either side is
+ * given"* is the `store-agnostic-fake` verdict in
+ * [store-migration-registry.ts](store-migration-registry.ts) written in this
+ * file's own words. Until 2026-09-05 the store that gave was a
+ * `createFsArtifactStore` over three copies of `example/`; it is
+ * `memoryArtefactsFrom` now, reading each of those same three copies once. The
+ * copies stay, because they are how the three fixtures' *inputs* differ — one
+ * with `meta.json`, one without, one with a publication date added. Stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * can now delete `src/store/artifacts-fs.ts` without this file noticing.
+ *
+ * **Mutation.** Run 2026-09-05. (1) `buildThread`'s `sourceHash` in src/tweets.ts
+ * made to fingerprint `(blocks, tree, null)` instead of `(blocks, tree, meta)` —
+ * an artefact stamped without the metadata its stamp folds in: **2 of 20 red**,
+ * *tweets, with metadata* on a hash mismatch and *and the metadata is actually
+ * in the hash* on *tweets ignores the metadata*. (2) `memoryArtefactsFrom` made
+ * to plant every kind but `meta`, so all three fixtures look metadata-less:
+ * **2 red** — *arc ignores the metadata* and *the artefact's own sourceHash
+ * ignores the publication date*, which are precisely the two properties that
+ * exist to stop the metadata quietly leaving the hash. The eighteen per-stage
+ * agreement cases stay green under arm 2, correctly: both sides then hash the
+ * same absent metadata, and that is the near-miss this file's own header warns
+ * about at length.
+ *
+ * **Blind to.** Everything the header already disclaims — above all a stub whose
+ * prompt carries a field no fingerprint represents, which is
+ * `tests/meta-fallback-fingerprint.test.ts`. And now also blind to the
+ * filesystem adapter's own behaviour, which is the point rather than a loss.
  */
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
@@ -68,7 +99,7 @@ import { readArticle } from "../src/article-input.js";
 import { isBodyEvidence } from "../src/block-policy.js";
 import { STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
+import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -171,10 +202,11 @@ async function fixtureAt(name: string, meta: MetaState): Promise<Fixture> {
        move a hash between this copy and `with-meta` is the date itself. */
     await writeFile(metaFile, JSON.stringify({ ...asIs, publishedAt: PUBLISHED_AT }, null, 2));
   }
-  const store = createFsArtifactStore((slug) => ({
-    dir: path.join(at, "data", slug),
-    htmlFile: path.join(at, "output", `${slug}.html`),
-  })) as ArtifactReads;
+  /* **The three copies on disk are how each fixture's *input* differs**, and
+     they still are: `meta.json` removed here, dated there. What changed on
+     2026-09-05 is that the copy is read once and then held in memory rather than
+     answered from through a filesystem store — see the note on the `describe`. */
+  const store: ArtifactReads = await memoryArtefactsFrom(at, SLUG);
   return { store, article: await readArticle(SLUG, store) };
 }
 
@@ -199,8 +231,6 @@ afterAll(async () => {
 function ctxFor(): StepContext {
   return {
     slug: SLUG,
-    dir: path.join(root, "nowhere", "data", SLUG),
-    htmlFile: path.join(root, "nowhere", "output", `${SLUG}.html`),
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -407,6 +437,11 @@ async function bothHashes(stage: Stage, fixture: Fixture) {
   return { wrote: artefact?.sourceHash, expected: stamp?.inputHash };
 }
 
+/**
+ * **No mutation of its own** — the file's only block, and the header's two arms
+ * are its evidence: 2 of its 20 cases red when a stage's `sourceHash` drops the
+ * metadata, and 2 when the store stops holding any.
+ */
 describe("the hash a stage writes is the hash its stamp expects", () => {
   for (const stage of STAGES) {
     it(`${stage}, with metadata`, async () => {

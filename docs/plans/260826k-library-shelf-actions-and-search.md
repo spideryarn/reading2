@@ -371,7 +371,7 @@ done:
 |---|---|---|
 | **BLOCKING** | `PATCH` wrote the title, *then* validated `archived` — so `{title:"x", archived:"no"}` renamed the article and answered 400. A request that reports failure and changes your data | Everything validated up front; `ShelfStore.patch` applies both fields in **one** write. A test asserts nothing changes when half the request is invalid |
 | **BLOCKING** | Re-run ignored the response entirely, so a refused job looked like a successful one | Checked, and reported through the shelf's error line |
-| **BLOCKING** | **Renaming did not rename the reading view's masthead** — the override was applied to the card only, while library.md promised the two agreed | `titleFor` in [`src/api.ts`](../../src/api.ts) is now the one place the precedence lives, called by `loadArticle` *and* `describeArticle`, in both stores |
+| **BLOCKING** | **Renaming did not rename the reading view's masthead** — the override was applied to the card only, while library.md promised the two agreed | `titleFor` in `src/api.ts` is now the one place the precedence lives, called by `loadArticle` *and* `describeArticle`, in both stores |
 | **BLOCKING** | No integration test proved migration 0004 applied or that any Postgres query worked | [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts), 18 tests, including that the generated `tsvector` is actually populated |
 | SHOULD FIX | The claimed search parity was false — stemming and stop words diverge on single words | The claim is corrected, in the contract and in the doc |
 | SHOULD FIX | The filesystem store wrote `shelf.json` for articles that do not exist, then answered 404 | Existence checked before any write |

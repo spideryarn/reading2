@@ -50,20 +50,7 @@
  * implementation. The slug allocation under test is store-agnostic code in
  * `src/jobs.ts`, but the article identity it decides is only expressible here.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import — `src/store/live.ts` reads
- * the flag once, at first import, and `src/jobs.ts` picks its `JobStore` off it
- * at module load (`const store: JobStore = STORE === "postgres" ? … `, ~121).
- * A plain assignment would leave the whole file driving the filesystem queue.
- * Same trick, same reason, as tests/enqueue-owns-the-article.test.ts.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq, like, sql } from "drizzle-orm";
 
@@ -90,19 +77,12 @@ import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 import { scratchArticleInPg } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/retry-keeps-the-checkpoints.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs", "spideryarn.checkpoints"],
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * **One suite at a time may hold a running job**, and this file holds several in
  * turn: every case claims a job in order to fail it. The concurrency cap is
@@ -113,9 +93,7 @@ const when = reachable ? describe : describe.skip;
  * full-suite run on 2026-09-03, green on the same cases run alone.
  * tests/helpers/run-lock.ts has the whole argument.
  */
-const runLock = reachable
-  ? await takeRunLock("tests/retry-keeps-the-checkpoints.test.ts")
-  : undefined;
+const runLock = await takeRunLock("tests/retry-keeps-the-checkpoints.test.ts");
 
 const OWNER = DEV_OWNER_ID;
 
@@ -156,7 +134,6 @@ async function anUpload(filename: string): Promise<{ id: string; filename: strin
 }
 
 beforeAll(async () => {
-  if (!reachable) return;
   /* **`VERCEL`, so `enqueue` does not start driving what it queues** — `pump`
      returns immediately when it is set (src/jobs.ts). Without it both attempts
      run a real `fetch` step against an address that does not exist, racing every
@@ -168,7 +145,6 @@ beforeAll(async () => {
 afterAll(async () => {
   if (vercel === undefined) delete process.env.VERCEL;
   else process.env.VERCEL = vercel;
-  if (!reachable) return;
   const db = getDb();
   /* Jobs first: a job row's `draft_revision_id` is a foreign key into the
      revision an article delete would be cascading away. */
@@ -275,7 +251,7 @@ async function twoAttempts(request: Parameters<typeof enqueue>[0]): Promise<{
   return { first, second: retried, firstArticle, secondArticle, served: found.has(KEY) };
 }
 
-when("Retry, and the checkpoints the failed attempt paid for", () => {
+describe("Retry, and the checkpoints the failed attempt paid for", () => {
   /**
    * **An upload.** `enqueue` mints unconditionally for one — there is no branch
    * in `src/jobs.ts` ~2350 that could adopt — so this is the case with no way to
@@ -530,7 +506,14 @@ when("Retry, and the checkpoints the failed attempt paid for", () => {
        holds the address — the shelf has no revision and the failed row is not
        active — so this mints its own name and reserves it. */
     const holder = await runAsOwner(OWNER, () =>
-      enqueue({ slug: `${STEM}-handback-live`, url, steps: ["fetch", "extract", "blocks"] }),
+      /* `hierarchy` alongside `blocks` because `enqueue` refuses the pair apart
+         (`unrunnableStepPlan`); the steps are incidental here — this job is
+         never run — and only have to differ from attempt 1's. */
+      enqueue({
+        slug: `${STEM}-handback-live`,
+        url,
+        steps: ["fetch", "extract", "blocks", "hierarchy"],
+      }),
     );
     expect(holder.slug, "the paste should have minted a name of its own").not.toBe(first.slug);
 

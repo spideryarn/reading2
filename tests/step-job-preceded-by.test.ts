@@ -14,7 +14,7 @@
  * The only caller in the tree — Illustrated asking for `["sketch"]` — is safe,
  * so this was a trap for the next caller rather than a live bug. Closed by
  * making the name true rather than by dropping it: `StepBefore<S>`
- * (src/pipeline.ts) is `STEP_ORDER` read as a type, so the wrong name is a
+ * (src/step-order.ts) is `STEP_ORDER` read as a type, so the wrong name is a
  * compile error at the call site.
  *
  * ## Which instrument reddens this

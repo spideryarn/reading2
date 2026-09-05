@@ -88,12 +88,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  */
 const HOISTED = vi.hoisted(() => {
   const previousLevel = process.env.LOG_LEVEL;
-  const previousStore = process.env.SPIDERYARN_STORE;
   if (previousLevel === undefined || ["silent", "fatal", "error"].includes(previousLevel)) {
     process.env.LOG_LEVEL = "warn";
   }
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousLevel, previousStore };
+  return { previousLevel };
 });
 
 import { eq } from "drizzle-orm";
@@ -106,7 +104,6 @@ import { advanceJobWith, claimSession } from "../src/jobs.js";
 import { errorFields, log } from "../src/log.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep } from "../src/pipeline.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 import type { JobEndTransition, StoreSession } from "../src/store/session.js";
@@ -119,17 +116,13 @@ import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-artic
    and does not reset `process.env` between them. */
 if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
 else process.env.LOG_LEVEL = HOISTED.previousLevel;
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/all-skipped-publication-log.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** One slug, one article, for the whole file. */
 const SLUG = "all-skipped-log-fixture";
@@ -165,7 +158,6 @@ function driverError(): Error {
 const SKIPPING_STEP = {
   name: "arc",
   label: STEPS.arc.label,
-  outputs: () => [],
   produces: ["arc"],
   run: () => {
     throw new Error("the step must not run: this fixture is about the door where none does");
@@ -237,19 +229,7 @@ async function sessionThatCannotPublish(job: Job, attempt: string): Promise<Stor
   };
 }
 
-describe("the store this claim is actually running on", () => {
-  it("is the Postgres one", () => {
-    /* The control on the control, and **not** gated on `reachable`: a flag that
-       failed to take would run this against the filesystem session, which is a
-       different `claimSession` branch and therefore a different test — and one
-       that would pass, since the coordinator's catch is the same on both sides.
-       A control that vanishes when the database is missing vanishes exactly when
-       it matters. */
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("a claim where every step skipped and the publication failed", () => {
+describe("a claim where every step skipped and the publication failed", () => {
   beforeAll(async () => {
     /* Owned by `DEV_OWNER_ID` explicitly, because that is who the claim runs as:
        the Postgres reader filters every article by owner, so a fixture seeded as

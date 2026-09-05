@@ -43,7 +43,6 @@
  */
 import { createHash } from "node:crypto";
 import {
-  type AiCallRow,
   type SpendReport,
   collectSpend,
   emptySpend,
@@ -59,9 +58,8 @@ import { mintId } from "./ids.js";
    is still what every laptop runs. Stage 4 deletes the branch and this import
    with it. Deliberately not routed through src/store/index.ts, which is the
    *reader's* store. */
-import { costStore, totalRows } from "./store/ai-calls.js";
-import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
-import { fsJobStore } from "./store/jobs-fs.js";
+import { costStore, totalLedger } from "./store/ai-calls.js";
+import type { LedgerRead } from "./store/contracts.js";
 import { pgJobStore } from "./store/pg-jobs.js";
 /* The refusal a publication answers with, by name, because the walk has to tell
    it apart from a database fault: one is a draft that is not fit to be an
@@ -77,22 +75,17 @@ import {
   type JobEnding,
   type JobStore,
 } from "./store/jobs.js";
-import { STORE } from "./store/live.js";
 import { failureKindOf, jobWorthRetrying, readerFailureOf } from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
-import { runInJob } from "./job-scope.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
-import { slugIsTaken } from "./store/slug-is-taken.js";
-import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
 import {
   articleExists,
-  contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
   type PipelineStep,
@@ -115,15 +108,17 @@ export type { Job, JobStep, StepName } from "./types.js";
 /**
  * **Where the job records live is no longer this file's business.**
  *
- * `data/_jobs/`, the in-memory `Map`, the serialised writes, the tombstones and
- * the load-from-disk all moved to src/store/jobs-fs.ts, unchanged, behind
- * `JobStore`. Selected here rather than in src/store/index.ts for the same
- * reason src/upload-records.ts selects its own: that file is the *reader's*
- * store and it imports fs.ts, which imports src/pipeline.ts, which this file
- * imports — asking from there would be an import cycle, and `npm run check`
- * gates on cycles.
+ * `data/_jobs/`, the in-memory `Map`, the serialised writes and the tombstones
+ * moved to src/store/jobs-fs.ts behind `JobStore`, and there was a flag here
+ * choosing between that and `pgJobStore` until 2026-09-05. There is one store
+ * now, so this is a binding rather than a choice.
+ *
+ * Bound here rather than in src/store/index.ts for the same reason
+ * src/upload-records.ts binds its own: that file is the *reader's* store and it
+ * imports fs.ts, which imports src/pipeline.ts, which this file imports — asking
+ * from there would be an import cycle, and `npm run check` gates on cycles.
  */
-const store: JobStore = STORE === "postgres" ? pgJobStore : fsJobStore;
+const store: JobStore = pgJobStore;
 
 /**
  * Abort handles for steps **this process** is running, so they can be stopped.
@@ -247,6 +242,15 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * checkpoints and a retry that lands on the same article
  * (src/pdf-read.ts § `CHUNK_CONCURRENCY`, `slugForRetry`) — and what the sum
  * above is really pinning is that the *ordinary* article still fits one.
+ *
+ * **`extract` stopped being the expensive half later the same day**, when
+ * `CHUNK_CONCURRENCY` went 16 → 100 and the 142-page paper's extract went
+ * 394s → 69s measured. The budget above is unchanged and is still a *ceiling*
+ * rather than a forecast — retries stack on top of a fan-out and no number
+ * bounds them — but the walk it describes now spends its first window on
+ * `hierarchy`, not on transcription. **It still takes two claims**, because
+ * `hierarchy` measured 658–778s and no arithmetic makes that share a window with
+ * anything.
  *
  * 420s was right for the one-step-per-request shape this replaces, where every
  * step got a fresh deadline. Under a claim that walks the whole job it is a
@@ -416,7 +420,8 @@ export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
  *
  * Read at call time rather than frozen at import, so a test can move it and a
  * deployment can set it without a rebuild — the rule src/store/data-root.ts
- * states for the same reason. A value that is not a positive whole number is
+ * stated for the same reason, before it was deleted 2026-09-05. A value that
+ * is not a positive whole number is
  * **ignored rather than obeyed**: `SPIDERYARN_JOB_CONCURRENCY=0` would stop
  * every ingest in the account and read exactly like the queue being wedged.
  */
@@ -486,8 +491,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
 
      *PDF* is `runPdfExtract`, and **no number can bound it**, which is why this
      is a ceiling and not a measurement. 250 pages plans ~84 chunks; at
-     `CHUNK_CONCURRENCY` 16 that is 270 s at the 45 s mean call and 588 s if
-     every wave hits the 98 s tail — and on top of *that* sit two retry layers
+     `CHUNK_CONCURRENCY` 100 — raised from 16 on 2026-09-04 — that is one wave
+     rather than six, and the real 142-page paper's extract went from **394 s to
+     248 s** measured. Not to 45 s, because one wave of calls is not one call:
+     the step is now bounded by its slowest chunk asked twice rather than by how
+     many waves it needs. What stops this being a bound at all is the same as it
+     ever was: on top of it sit two retry layers
      this file cannot see, `ATTEMPTS` for a chunk that fails its check and
      `TRANSPORT_ATTEMPTS` with backoff for one that never answered
      (src/pdf-read.ts). A first draft of this row said 600 s and read as though
@@ -582,8 +591,16 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   glossary: 120_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
      effort, with a shorter answer than the glossary's because a quote is copied
-     rather than composed. Never measured on its own. */
-  quotes: 120_000,
+     rather than composed. Never measured on its own.
+
+     **Raised from 120s on 2026-09-05, when `suggestedQuotes` doubled.** The one
+     measurement there has ever been is 11.9s for five quotes
+     (docs/project/quotes.md § The first real run), and the answer is what got
+     longer — so the old number is not wrong, it is a headroom claim about a
+     call half this size. Raising it costs sixty seconds before a genuinely hung
+     call is declared dead; not raising it risks killing a good one the reader
+     has already paid for. */
+  quotes: 180_000,
   /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read
@@ -640,6 +657,34 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      If the brief ever needs to be longer, the lever the plan names is the
      prompt: cap the vignette count and the length of the compositions. */
   illustrated: 600_000,
+  /* **A GUESS, and the honest label matters here more than usual**, because
+     nothing this step does is bounded by a parameter.
+     ⟨Stage 0/0b, 2026-09-05, docs/plans/260905f-debate-mode-stage-0-spike-results.md⟩
+     A bare probe — three or four searches, no article, no schema — took 10.0 to
+     10.3 s. This step is two of those in sequence, and the second carries the
+     whole article, so 120 s is roughly six times the only thing measured.
+
+     **What it does NOT bound is the spend, and it does not bound the runtime
+     either** (GPT Sol's F31). This number is consulted only *between* steps, to
+     decide whether to hand the claim back — see `advanceJobWith` — and the walk
+     runs its first runnable step **unconditionally**. A debate-only job, which
+     is how this step is normally asked for, therefore starts whatever is left
+     and runs until the claim-wide abort at `LEASE_MS - DEADLINE_MARGIN_MS` =
+     **740 s**. So 120 s is a *scheduling* number: it is what a long ingest asks
+     for before starting this step at the end of a queue, and nothing else.
+
+     `max_total_results` is enforced to the row and is not a budget either: an
+     adversarial probe with the cap at 4 ran **36 searches** for $0.10, because
+     nothing in the request caps the number of *searches* and searches are what
+     cost money. So what actually bounds a run is a prompt written for restraint
+     rather than thoroughness, the 740 s claim-wide abort, and `webSearches` on
+     the `ai_calls` ledger row as the alarm afterwards — and only the first of
+     those is a ceiling on spend at all.
+
+     Re-measure at the end of the stage rather than leaving this a guess: the
+     plan says so, and the first runs against the shelf are what will say
+     whether the article-carrying pass is 20 s or 60 s. */
+  debate: 120_000,
 };
 
 /**
@@ -706,6 +751,38 @@ export function cascadeForce(steps: StepName[], forced: Set<StepName>): Set<Step
     // steps the cascade is allowed to speak for.
     steps.slice(first).filter((name) => forced.has(name) || !FORCE_ONLY_WHEN_NAMED.has(name)),
   );
+}
+
+/**
+ * **A step list that would leave the article unpublishable — refused here, where
+ * it is still free.**
+ *
+ * `blocks` without `hierarchy` is the one such combination, and it is reachable:
+ * `POST /api/jobs` takes any subset of `STEP_ORDER`, so `{ steps: ["blocks"] }`
+ * is a request anybody with a session can make. It runs, it succeeds, and then
+ * `reasonsNotToPublish` (src/store/pg-revisions.ts) refuses the publication,
+ * because the `hierarchy` step-run's `input_hash` no longer equals `hashBlocks`
+ * of the blocks it is being published beside. The article is stuck until
+ * somebody works out that the fix is to re-run a step they never named.
+ * `cascadeForce` cannot rescue it: it only names steps **already in the job**.
+ *
+ * **Refused rather than repaired**, which was the choice. Quietly adding
+ * `hierarchy` would spend a model call — the slowest one in the pipeline, 228
+ * seconds measured — on behalf of a caller who did not ask for it and is not
+ * being billed for it, and it would make the job that ran different from the job
+ * that was requested. A 400 naming the missing step is the whole fix.
+ *
+ * A separate function rather than four lines inside `enqueue`, so it can be
+ * asserted without a store under it. GPT Sol found the trap reviewing stage A of
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md,
+ * 2026-09-05; it is production-reachable but not on any first-party UI path, so
+ * nothing had hit it.
+ */
+export function unrunnableStepPlan(steps: readonly StepName[]): string | undefined {
+  if (steps.includes("blocks") && !steps.includes("hierarchy")) {
+    return 'A job that runs "blocks" must run "hierarchy" too, or the article cannot be published: the tree is checked against the blocks it was built from, and hierarchy has no freshness check of its own to notice.';
+  }
+  return undefined;
 }
 
 /* ------------------------------------------------------------------ running -- */
@@ -794,6 +871,8 @@ async function runStep(
   job: Job,
   step: JobStep,
   controller: AbortController,
+  /** When this claimant stops, on `Date.now()`'s clock. `StepContext.deadlineAt`. */
+  deadlineAt: number,
   jlog: Log,
   /* The caller's progress write. It answers with the job row as it now stands —
      which is how the walk notices a Stop pressed on another instance — but that
@@ -806,20 +885,25 @@ async function runStep(
      where the whole argument for its existence lives. `undefined` in production. */
   onStepSpend: AdvanceParts["onStepSpend"],
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
-  const { dir, htmlFile } = contextPaths(job.slug);
-
+  /* **A `contextPaths(job.slug)` stood here until 2026-09-05**, filling
+     `dir` and `htmlFile` on every step of every job under either store, and
+     nothing downstream read either one. Both went with the filesystem store;
+     a step is told where its artefacts go by the `ArtifactStore` it is handed
+     and by nothing else. */
   const ctx: StepContext = {
     slug: job.slug,
     ...(job.url ? { url: job.url } : {}),
     ...(job.upload ? { upload: job.upload } : {}),
-    dir,
-    htmlFile,
     // In memory only. Persisting at this rate would be two writes a second
     // per running job, to record something nobody reads afterwards.
     report: (detail: string) => {
       step.detail = detail;
     },
     signal: controller.signal,
+    /* The same instant the abort timer above is set for, passed rather than
+       recomputed: a step that can decline to start work it cannot finish needs
+       to know *when*, not only *that*. See `StepContext.deadlineAt`. */
+    deadlineAt,
     /* Mark the article when any *other* step of this job is in the same cache
        group — in either direction. The list used to be `slice(i + 1)`, later
        steps only, which marked the stage that writes the entry and never the one
@@ -1147,8 +1231,12 @@ async function jobSpend(job: Job, jlog: Log): Promise<Record<string, unknown>> {
     jlog.warn({ ...errorFields(err) }, "could not read what this job cost");
     return { aiCostStatus: "unavailable" };
   }
-  const { rows, unreadable } = read;
-  return jobSpendFields(rows, unreadable);
+  /* **The whole read goes through, not the rows.** It used to be destructured
+     here into `(rows, unreadable)`, which quietly threw away the third field the
+     day one arrived — and the third field is the one that says a row was never
+     written at all. `LedgerRead` travels intact so that the arithmetic below
+     cannot be handed a total with its caveat already removed. */
+  return jobSpendFields(read);
 }
 
 /**
@@ -1157,16 +1245,43 @@ async function jobSpend(job: Job, jlog: Log): Promise<Record<string, unknown>> {
  * Exported for [tests/job-spend-fields.test.ts](../tests/job-spend-fields.test.ts),
  * for the same reason `by` in scripts/ai-cost.ts is: every bug this line has had
  * was in **what the number includes**, and none of them showed up in a type.
+ *
+ * **It takes the whole `LedgerRead`**, not rows and a count, since 2026-09-04.
+ * There are two ways the read can be short and they are different facts — a row
+ * that will not parse, and a row that was never written because the call
+ * outlived its collector — so the totalling goes through `totalLedger`, which
+ * will not hand back a figure called a total while either is set. The failure
+ * that forced it: a job whose calls were still in flight when the collector
+ * closed read back as a complete, plausible, smaller bill, and one run printed
+ * `$2.7331` when the real figure was higher. The fix that would actually recover
+ * the money is a row written at call-open time —
+ * docs/plans/260827q-ai-cost-tracking.md.
  */
-export function jobSpendFields(
-  rows: readonly AiCallRow[],
-  unreadable: number,
-): Record<string, unknown> {
+export function jobSpendFields(read: LedgerRead): Record<string, unknown> {
+  const total = totalLedger(read);
+  /* **The caveat is computed before the empty check, and printed on both
+     sides of it.** A job every one of whose calls went missing has no rows *and*
+     is the worst case: without this, "spent nothing" and "we cannot see what it
+     spent" are the same empty object.
+
+     Two counts and never one. `partial` outranks `may-be-short` because an
+     unreadable line is a row we know is there and cannot count, while a late
+     call is process-wide and may have belonged to another job — but both counts
+     are emitted whenever they are non-zero, because they send a reader to two
+     different places: the ledger file, and the warn lines. */
+  const short = total.complete
+    ? {}
+    : {
+        aiCostStatus: total.shortfall.unreadable > 0 ? "partial" : "may-be-short",
+        ...(total.shortfall.unreadable > 0 ? { aiUnreadable: total.shortfall.unreadable } : {}),
+        ...(total.shortfall.lateCalls > 0 ? { aiLateCalls: total.shortfall.lateCalls } : {}),
+      };
+  const rows = read.rows;
   if (rows.length === 0) {
-    /* An unreadable ledger and a job that spent nothing must not look the same,
-       so a damaged ledger says so even when it has no rows to show for this
-       job. */
-    return unreadable > 0 ? { aiCostStatus: "partial", aiUnreadable: unreadable } : {};
+    /* An incomplete ledger and a job that spent nothing must not look the same,
+       so a ledger with a hole in it says so even when it has no rows to show for
+       this job. */
+    return short;
   }
   /* **All three pockets.** `computed` was dropped here until 2026-09-02 — zero
      at the time, because our own arithmetic is only ever used by the declared
@@ -1177,7 +1292,9 @@ export function jobSpendFields(
      docs/project/ai-gateway.md, and the `byok_upstream_nanos` trap — which was
      spelt `upstream_inference_nanos` until 2026-09-02, and the rename is the
      point: the old name did not say that adding it is conditional. */
-  const { credits, upstream, computed, unpriced } = totalRows(rows);
+  const { credits, upstream, computed, unpriced } = total.complete
+    ? total.money
+    : total.atLeast;
   const nanos = credits + upstream + computed;
   return {
     aiCalls: rows.length,
@@ -1192,11 +1309,13 @@ export function jobSpendFields(
     ...(computed > 0 ? { aiComputedNanos: computed } : {}),
     ...(unpriced > 0 ? { aiUnpriced: unpriced } : {}),
     /* **The total is short and this is the only place that can say so.** A
-       damaged line is a call that happened and cannot be read; a partial total
-       presented as a whole one is the failure this ledger exists to prevent.
-       GPT Sol raised it — the first version dropped `unreadable` on the floor
-       between the store and this line. */
-    ...(unreadable > 0 ? { aiCostStatus: "partial", aiUnreadable: unreadable } : {}),
+       damaged line is a call that happened and cannot be read; a late one is a
+       call that happened and left no line at all. A partial total presented as a
+       whole one is the failure this ledger exists to prevent. GPT Sol raised the
+       first half — the first version dropped `unreadable` on the floor between
+       the store and this line — and the second half is the same fault arriving
+       from the other side, found on 2026-09-04. */
+    ...short,
   };
 }
 
@@ -1730,16 +1849,13 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
  * filesystem session needs nothing awaited to build, and this signature was
  * async for the interface's sake before it was async for a reason.
  *
- * ## The filesystem side, which is unchanged
+ * ## There is no filesystem side any more
  *
- * **Gated on the live store, and nothing else.** With `SPIDERYARN_STORE` unset
- * the session is byte-for-byte what it was: no draft, no publication, no
- * database. That is what every laptop runs and what `data/` is for, and the flip
- * must not alter it — tests/claim-session-files.test.ts is that half of
- * the claim, and it proves it by taking `DATABASE_URL` away, so any database
- * call at all would throw. `pipelineStore` — the aliased `fsArtifacts` import at
- * the top of this file — is the artefact store that branch writes through, and
- * nothing else uses it.
+ * This was `if (STORE !== "postgres") return fsStoreSession(…)` until
+ * 2026-09-05, and that branch was what every laptop ran: no draft, no
+ * publication, no database. It went with the flag. What is left is the one
+ * session, and `tests/claim-session-postgres.test.ts` is the proof that this
+ * line opens it.
  *
  * **Exported so a test can drive the real one.** `advanceJobWith` takes a
  * session because a test must be able to supply fake *steps* — the thirteen real
@@ -1750,7 +1866,6 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
  * it says it selects.
  */
 export async function claimSession(job: Job, attempt: string): Promise<StoreSession> {
-  if (STORE !== "postgres") return fsStoreSession({ artifacts: pipelineStore, jobs: store });
   return await openPgStoreSession({
     slug: job.slug,
     job: { id: job.id, attemptId: attempt },
@@ -1972,25 +2087,22 @@ export async function advanceJobWith(
       return { job: outcome.job, ran: null, busy: true, done: false };
   }
 
-  /**
-   * **Everything the claim covers happens in here, and that is not a wrapper.**
+  /*
+   * **A `runInJob(outcome.job.id, …)` wrapped this call until 2026-09-05.**
+   * It put the job's id in an `AsyncLocalStorage` for the whole of the claimed
+   * body — the session, every step, and the settlement — and the one reader was
+   * the filesystem store's data root, which picked `/tmp/spideryarn/<owner>/<job>/`
+   * on a deployed instance so that a failed job's warm `/tmp` could not be
+   * served as the next job's article. There is no scratch directory now and no
+   * reader of the scope, so `src/job-scope.ts` went with it.
    *
-   * `runInJob` puts this job's id in scope for the whole of the claimed body —
-   * the session, every step, and the settlement — and `dataRoot()` reads it to
-   * pick `/tmp/spideryarn/<owner>/<job>/` on a deployed instance
-   * (src/store/data-root.ts). It was written on 2026-08-30 and **nothing called
-   * it**: the bundle had `currentJobId()` and an `AsyncLocalStorage` and no way
-   * to fill it, so a deployed step reached `dataRoot()` with no scope and threw
-   * before it started. Every import on production failed at step one, in 16ms.
+   * Worth keeping the accident it was written for, because it is this repo's
+   * dominant shape: the wrapper existed for a day and **nothing called it** —
+   * the bundle had `currentJobId()` and an `AsyncLocalStorage` and no way to
+   * fill it, so every deployed import failed at step one, in 16ms.
    * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md critical 1.
-   *
-   * Here rather than in the route, deliberately: the route is not where the job
-   * is known to be *ours*, and a scope opened around a claim that was refused
-   * would name a job somebody else is inside.
    */
-  return await runInJob(outcome.job.id, () =>
-    walkClaim(outcome.job, attempt, owner, parts, claimedMs),
-  );
+  return await walkClaim(outcome.job, attempt, owner, parts, claimedMs);
 }
 
 /**
@@ -2332,6 +2444,7 @@ async function walkClaim(
         job,
         step,
         controller,
+        deadlineAt,
         jlog,
         note,
         session,
@@ -2737,6 +2850,26 @@ export interface EnqueueRequest {
    * that says a job was queued.
    */
   retryOf?: string;
+  /**
+   * **Whether to start driving the job in this process.** Defaults to true,
+   * which is what every route wants: a reader who presses Add should not have
+   * to keep a tab open for anything to happen.
+   *
+   * `false` is for a caller that drives the job itself — `scripts/stage.ts` and
+   * `evals/cost/run.ts`, both of which run `advanceJob` in a loop and watch what
+   * each step does. Without it the pump and the caller's loop race for the
+   * single running slot, and the caller's `busy` backoff turns a one-second step
+   * into a five-second one, with the step's own report going to the pump.
+   *
+   * **It replaces a lie.** Both callers used to set `VERCEL=1` around the
+   * `enqueue` call, because `pump` returns immediately when it is set — so a
+   * process on a laptop claimed to be running on Vercel in order to get one
+   * `if` to go the other way. That is fine until something else reads `VERCEL`,
+   * and three things already do. Naming the thing we actually want costs one
+   * field. GPT Sol / stage E of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+   */
+  pump?: boolean;
 }
 
 /**
@@ -2754,6 +2887,11 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   if (names.length === 0) {
     throw Object.assign(new Error("A job needs at least one step."), { status: 400 });
   }
+  /* Before the owner check and before anything is reserved, because this is a
+     property of the request alone. `unrunnableStepPlan` says why it refuses
+     rather than quietly adding the missing step. */
+  const unrunnable = unrunnableStepPlan(names);
+  if (unrunnable) throw Object.assign(new Error(unrunnable), { status: 400 });
   const owner = currentOwnerId();
   const forced = cascadeForce(names, new Set(request.force ?? []));
   /* **`request.url`, not the URL the loop reads off disk below.** They differ
@@ -2762,6 +2900,13 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
      *request*, or two callers asking for the same thing would hash differently
      depending on what happened to be on disk when each of them asked. */
   const workKey = workKeyFor(names, forced, request.profile, request.upload, request.url);
+  /* **Every exit from this function honours it**, including the two that hand
+     back somebody else's job — a caller driving its own loop does not want a
+     second driver on a job it is about to take over either. See `pump` on
+     `EnqueueRequest`. */
+  const drive = (id: string): void => {
+    if (request.pump !== false) pump(id, owner);
+  };
 
   /**
    * **A slug-named request must target an article this reader owns.**
@@ -2783,18 +2928,32 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * 403 would confirm that the article exists. Nothing distinguishes "somebody
    * else has it" from "nobody has it" on the wire.
    *
-   * **A slug nobody has at all is allowed through.** It is not a cross-owner
-   * blocker — `articles.slug` carries a random short id nobody can guess, so no
-   * other reader can ever come to want this name — and the job blocks only
-   * itself. Refusing it would be a second, unrelated rule about what a slug may
-   * name.
+   * **A slug nobody has at all is refused too, since 2026-09-05, and that
+   * reverses a decision made here.** It used to be allowed through on the
+   * grounds that it is not a cross-owner blocker — `articles.slug` carries a
+   * random short id nobody can guess, so no other reader can ever come to want
+   * this name, and the job blocks only itself. True, and beside the point: what
+   * a bare-slug request *means* is "run something on my existing article", and
+   * letting it name an article that does not exist makes a typo into a purchase.
+   * `npm run blocks -- typoo` created an `articles` row, failed the step inside
+   * it, and left the row and a failed revision on the reader's shelf — measured
+   * 2026-09-03, and the reason this line moved out of
+   * [`scripts/stage.ts`](../scripts/stage.ts), where it was first written as a
+   * pre-check. The invariant belongs at the choke point every caller passes
+   * through, not in one of them.
    *
-   * **The filesystem store cannot be asked this and does not need to be.** It
-   * has no owner column, so it has no second reader, and a store with no second
-   * reader cannot express "somebody who is not the owner"
-   * (docs/project/database.md) — `articleExists` there is a path read that
-   * answers for everybody. `src/store/index.ts` refuses to boot on it in
-   * production, so there is no B to keep out.
+   * **The answer stays indistinguishable**, because `articleExists` is
+   * owner-scoped: "nobody has it" and "somebody else has it" reach this line by
+   * the same route and leave it by the same sentence. That is the existing
+   * privacy rule, kept rather than weakened —
+   * `slugIsTaken`, the one bare global lookup, is no longer consulted here at
+   * all, so the two cases are now identical rather than merely alike.
+   *
+   * **Unconditional since 2026-09-05.** It used to carry `STORE === "postgres"`
+   * as well, because the filesystem store had no owner column and so no second
+   * reader, and a store with no second reader cannot express "somebody who is
+   * not the owner" (docs/project/database.md). There is one store, and it has
+   * the column.
    *
    * **It costs one indexed query, and `urlForSlug` in the loop below makes the
    * same one.** Left as two rather than threaded together, because they answer
@@ -2803,8 +2962,8 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * URL", which is exactly the conflation this check must not inherit.
    * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1f.
    */
-  if (STORE === "postgres" && !request.url && !request.upload) {
-    if (!(await articleExists(request.slug)) && (await slugIsTaken(request.slug))) {
+  if (!request.url && !request.upload) {
+    if (!(await articleExists(request.slug))) {
       /* The same sentence `GET /api/article/:slug` answers with for a slug
          that is not yours (src/routes.ts), so the two cannot be told apart. */
       throw Object.assign(new Error("No such article."), { status: 404 });
@@ -2939,7 +3098,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          off, and takes the next step when the first releases — which is the
          same arrangement as a pump plus an open browser tab, and the whole
          reason the claim exists. */
-      pump(outcome.job.id, owner);
+      drive(outcome.job.id);
       return outcome.job;
     }
 
@@ -2982,7 +3141,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * **A retry inserts nothing at all: it is handed the holder.** See
        * `handBackToARetry` for why a retry cannot take the repair above.
        */
-      if (request.retryOf) return handBackToARetry(outcome.job, owner);
+      if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
         : { kind: "adopted", slug: outcome.job.slug };
@@ -3014,7 +3173,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * spend the whole budget on a 409 about there being too many articles
        * called something there is exactly one of. See `handBackToARetry`.
        */
-      if (request.retryOf) return handBackToARetry(outcome.job, owner);
+      if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
         : { kind: "minted", slug: slugWithShortId(request.slug) };
@@ -3042,7 +3201,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       `job queued: ${slug} — ${names.join(", ")}${forced.size ? ` (forced: ${[...forced].join(", ")})` : ""}`,
     );
 
-    pump(job.id, owner);
+    drive(job.id);
     return job;
   }
 }
@@ -3118,7 +3277,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
  * refusal rather than a fallback: an unreachable branch that stops is better
  * than an unreachable branch that leaks.
  */
-function handBackToARetry(holder: Job, owner: OwnerId): Job {
+function handBackToARetry(holder: Job, owner: OwnerId, drive: (id: string) => void): Job {
   if (holder.ownerId !== owner) {
     /* Made of words we chose and a slug, which src/log.ts permits. */
     throw Object.assign(
@@ -3131,8 +3290,10 @@ function handBackToARetry(holder: Job, owner: OwnerId): Job {
     `retry handed back the active job on ${holder.slug}`,
   );
   /* The same pump `sameWork` gives, and for the same reason: the job we are
-     handing back may have nobody driving it. */
-  pump(holder.id, owner);
+     handing back may have nobody driving it — and it is the *caller's* `drive`
+     rather than `pump` itself, so a caller that asked for `pump: false` gets no
+     second driver on this path either. */
+  drive(holder.id);
   return holder;
 }
 

@@ -193,8 +193,8 @@ The test suite is **not hermetic**, and the worktree is empty of everything
 gitignored, so the gate materialises `data/` **and `output/`** in it and links
 `.env.local`.
 
-For its first day it copied only `data/`. `output/` is the other half of the same
-filesystem artefact store ([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)),
+For its first day it copied only `data/`. `output/` was the other half of the same
+filesystem artefact store (`src/store/artifacts-fs.ts`, deleted 2026-09-05),
 fourteen test files read from it, and the result was **13 failures and 202
 cascade-skips at every commit** — so the `test` gate could not go green, and
 `--force-gate=test` became the only way anybody deployed. Measured on two
@@ -442,6 +442,13 @@ that compiles the client.
 This is the same shape as [linting.md](linting.md): TypeScript 7 removed the API
 ESLint needed, and it removed the one Vercel's builder needs too.
 
+**Which is why `npm run build:api` alone refuses after a commit.** The API build
+compiles `dist/index.html` into the serverless function, so a stale client shell
+would ship a stale page with no other symptom. It checks `dist/build.json`
+against the current HEAD and stops — *"Client shell is not from this build …"* —
+and the thing that most often invalidates the shell is **your own commit**, made
+between the two halves. Run `npm run build`, which does both passes in order.
+
 ### Everything that bundle imports at module scope is paid for by every request
 
 `api/index.js` answers a request by `await import`ing the whole 3.5 MB
@@ -602,8 +609,8 @@ is read by nothing.
 
 | | |
 |---|---|
-| `SPIDERYARN_STORE=postgres` | which store serves reads. **Unset means `files`**, and on a host with no durable disk that is an empty shelf and a 200 |
-| `DATABASE_URL` | **set on Production, 2026-08-27** — `/api/health` reports `store: postgres` and reads work. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two. **Production only, deliberately, as of 2026-08-27** — there is one remote database and no staging copy, so putting it on Preview would point every branch build at the real data. A preview therefore still has no database, and `SPIDERYARN_STORE=postgres` *is* set there, so a preview fails at the store rather than serving an empty shelf. That is the intended failure until somebody decides otherwise |
+| `SPIDERYARN_STORE=postgres` | **Take this out.** It chose which store served reads until 2026-09-05; there is one store now and [`src/store/live.ts`](../../src/store/live.ts) throws on any value but `postgres`, so it is tolerated rather than needed. Removing it from Preview and Production is what unblocks stage I of [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md), and only Greg can do it |
+| `DATABASE_URL` | **set on Production, 2026-08-27** — `/api/health` reports `store: postgres` and reads work. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two. **Production only, deliberately, as of 2026-08-27** — there is one remote database and no staging copy, so putting it on Preview would point every branch build at the real data. A preview therefore still has no database, so it fails at the store rather than serving an empty shelf. That is the intended failure until somebody decides otherwise |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production and, since 2026-08-27, Preview.** It was Production-only until then (measured 2026-08-26), which meant a preview deployment used to check anything failed for a reason unrelated to whatever you were checking |
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
@@ -664,14 +671,41 @@ Not every variable is required, deliberately. `breaks: null` means one of two th
 - **Nothing needs it.** `LOG_LEVEL` has a default in [`src/log.ts`](../../src/log.ts).
 - **Something else already says it better.** A missing `DATABASE_URL` is reported by the `ssl` block
   with its reason attached; a missing `PGSSLROOTCERT` surfaces as `TLS mode is …, not verified`,
-  which is the truer statement, since the certificate can also be present and unused. And a missing
-  `SPIDERYARN_STORE` never reaches this handler at all — [`src/store/index.ts`](../../src/store/index.ts)
-  throws at *import* when a filesystem store is live in production, and this module imports it. The
-  `STORE !== "postgres"` warning below is therefore a local-development signal, not a production one.
+  which is the truer statement, since the certificate can also be present and unused. `EXPECTED` has
+  had no entry for `SPIDERYARN_STORE` since 2026-09-05; there is one store, and the flag is now
+  reported by the `retired` block below instead.
 
 The rule, then: **warn here only about what nothing else notices.** Warning twice about one fault
 teaches whoever reads the list to skim it, and then the next real line gets skimmed too — which is
 how a `false` sat in this response for a day.
+
+### `retired`: the mirror of `env`, and it is not a warning
+
+`EXPECTED` asks *"is this set, and what breaks if it is not"*. Since 2026-09-05 there is a second,
+much shorter list — `RETIRED` in [`src/vercel-health.ts`](../../src/vercel-health.ts) — asking the
+opposite: *"is this **still** set, and what should be done about it"*. It has one entry,
+`SPIDERYARN_STORE`, and the field naming it looks like this:
+
+```json
+{ "ok": true, "warnings": [],
+  "retired": [{ "name": "SPIDERYARN_STORE", "why": "…run `vercel env rm SPIDERYARN_STORE production`…" }] }
+```
+
+Two things about it are deliberate and easy to get wrong:
+
+- **It never goes in `warnings`.** Anything in `warnings` 503s this endpoint and
+  [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) turns it into a deploy-blocking
+  problem — so a leftover variable that decides nothing would take production unhealthy and stop
+  every deploy until somebody with a Vercel credential was free. A red that is not a fault is a red
+  people learn to force past.
+- **Absent is silent, not empty.** The field is omitted entirely when there is nothing to retire, so
+  **its disappearance is the signal**: when `npm run deploy` stops printing its `still to remove`
+  line, stage I of
+  [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) can start
+  and the tombstone comes out.
+
+Adding an entry is one line. Do it whenever a variable stops deciding anything but is still set on
+Vercel, and delete the entry in the same commit that stops tolerating it.
 
 ### Three ways the first version of that table still lied
 
@@ -967,10 +1001,10 @@ writes to a local filesystem, which a serverless host does not have:
   **It is not the upload path, and it is not PDFs.** Greg pasted an ordinary
   HTML article URL on 2026-08-28 and got the same string from step `fetch`. The
   same wall stops every URL and every document; stages 1 and 2 run fine on that
-  article locally, so nothing about the *content* is involved. `/var/data` comes
-  from [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts)'s
-  `path.resolve(import.meta.dirname, "..", "..")` — on a laptop that is the repo
-  root, and in a bundle at `/var/task/api-dist/vercel.js` it is `/var`. It
+  article locally, so nothing about the *content* is involved. `/var/data` came
+  from `artifacts-fs.ts`'s (deleted 2026-09-05)
+  `path.resolve(import.meta.dirname, "..", "..")` — on a laptop that was the repo
+  root, and in a bundle at `/var/task/api-dist/vercel.js` it was `/var`. It
   therefore cannot fail on anybody's machine.
 
   **`/tmp` is not the shortcut it looks like**, and this is written down because

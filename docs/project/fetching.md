@@ -1,9 +1,13 @@
 # Fetching — stage 1, and the things other people's servers do
 
 Getting the bytes, and knowing what they are. One module,
-[`src/fetch.ts`](../../src/fetch.ts), reached three ways: `npm run fetch` for a human diagnosing a
-URL, the [ingest queue](ingest-queue.md) for an article being added, and
-[`src/extract.ts`](../../src/extract.ts) for `npm run extract`.
+[`src/fetch.ts`](../../src/fetch.ts), reached one way: the [ingest queue](ingest-queue.md), whether
+an article is being added from a browser or from `npm run ingest -- <url>`
+([setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue)).
+
+It was reached three ways until 2026-09-05. `npm run fetch` was a human's way of diagnosing a URL,
+and it is gone — see [below](#npm-run-fetch-is-gone-and-what-went-with-it); `npm run extract` took a
+URL and fetched it through `fetchHtml`, and now takes a slug and reads what stage 1 stored.
 
 This is the stage most exposed to the outside world: nearly every failure in it is somebody else's
 misconfiguration arriving as a surprise, and the ones that hurt are the ones that *don't* look like
@@ -15,8 +19,9 @@ a sentence a person can act on.
 > — Greg, 2026-08-24, [architecture.md](architecture.md#intent)
 
 Where it sits: **stage 1** of [the pipeline](architecture.md#pipeline), feeding
-[content extraction](content-extraction.md). Run on its own with `npm run fetch -- <url>`, or let
-the [ingest queue](ingest-queue.md) run it.
+[content extraction](content-extraction.md). It is not runnable on its own — see
+[below](#npm-run-fetch-is-gone-and-what-went-with-it) for why a fetch-only job is a thing the queue
+cannot express. `npm run ingest -- <url>` runs it, and everything after it.
 
 ## What it does that a bare `fetch` doesn't
 
@@ -312,7 +317,7 @@ Three things follow, and all three are refusals rather than fallbacks:
   and stage 2 fell back to reading `raw.html`; nothing writes `raw.html` now, so the fallback had
   nothing to fall back to. Two articles in the local corpus were relying on it — `data/constitution`
   and `data/noema-mythology-of-conscious-ai`. The function survives for one caller,
-  `articleMetadata` in [`src/api.ts`](../../src/api.ts), which shows the metadata page where a
+  `articleMetadata` in `src/api.ts`, which shows the metadata page where a
   document came from. `slugIsSpokenFor` was the other until 2026-08-31, when every slug gained a
   short id and the collision question it answered stopped existing.
 - **An object that is absent, corrupt, or longer than the manifest says, throws** —
@@ -326,14 +331,48 @@ them back. They now fail loudly, with a sentence naming the article, the key, th
 fix — which is a re-fetch. The measurement, the two probes that produced it and the counts are in
 [260831e-a-write-path-with-no-reader.md](../postmortems/260831e-a-write-path-with-no-reader.md).
 
-**`npm run fetch -- <url> [dir]` still writes its files**, and that is deliberate rather than
-left over. The rule the conversion follows is *the generator stops writing and the caller writes*,
-and for a command line the caller is `main()` — every stage that still has one leaves the file it
-always left, and a `fetch` that printed a digest instead would be the one that broke the pattern.
-It also keeps a property people use: running it by hand under `SPIDERYARN_STORE=files` satisfies the
-queue's fetch step, because `writeRawFiles` writes `raw.json` at exactly the path
-`PATHS.fetch.raw` reads. It now prints the **object key** as well, which is how the split above
-stops being invisible. All of it dies at stage 4 with the filesystem store.
+### `npm run fetch` is gone, and what went with it
+
+**Retired 2026-09-05**, in stage E of
+[260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md). It took a
+URL and wrote `data/<slug>/raw.html` (or `raw.pdf`) with the `raw.json` manifest beside it, off
+`process.cwd()` and by hand — which satisfied the queue's fetch step under the filesystem store
+and, under Postgres, wrote files nothing reads.
+
+**A fetch-only job is not a thing the queue can express**, and that is the reason it became
+`npm run ingest -- <url>` rather than moving across as it stood. Publication happens once, when the
+job settles, and `reasonsNotToPublish` refuses a draft with no blocks and no tree
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)). So a fetch-only job on a **new**
+article fetches, pays, and fails at publication. On an **existing** one it is worse, because it
+*succeeds*: the draft carries the published revision's blocks and tree, so it publishes new raw bytes
+beside stale derived content and calls that a success. The workflow being given up — *write the fetch
+output now, let another process continue later* — worked only because a file was a durable handoff
+between two processes, and Postgres has no such handoff. Re-fetching cascades instead: **`npm run
+ingest -- <url> --force`** forces `fetch`, and `cascadeForce` forces every step after it. Without
+`--force`, an address already on the shelf is adopted and every step says `skipped` — which is the
+honest answer, and was the *whole* answer until GPT Sol pointed out on 2026-09-05 that the command as
+first written could not re-fetch at all.
+
+**And `fetch` on its own is refused by name.** Deleting the npm script removed the name;
+`scripts/stage.ts` takes any step, so `scripts/stage.ts fetch <slug> --force` was still exactly the
+incoherent job this section is about. It now stops with the sentence — a rule stated only in
+`package.json` is a rule the next argument list walks round.
+
+**Renamed rather than aliased**, so `npm run fetch` fails with *"Missing script"* instead of quietly
+doing something else.
+
+**The one real loss is the diagnostics.** That command printed the redirect chain, the type, the
+encoding, the network-vs-stored size, the object key and the credentials that chose the blob store —
+which is what made it the thing to reach for when a URL would not come in, and how the split
+described above stopped being invisible. `fetchDocument` still returns every one of those fields and
+nothing prints them today. `missingObjectAdvice` and `credentialsSeen` in
+[`src/fetch.ts`](../../src/fetch.ts) still report the credentials from inside the failure that needs
+them.
+
+`writeRawFiles` outlives the command by one caller —
+[`tests/stage2c-raw-bytes.test.ts`](../../tests/stage2c-raw-bytes.test.ts), which is still the only
+thing comparing what it writes against what `PATHS.fetch.raw` reads. It dies with the filesystem
+store.
 
 ## Not everything gets fetched: `RawManifest` has an origin
 

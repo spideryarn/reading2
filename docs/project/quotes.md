@@ -2,7 +2,9 @@
 
 The sentences of a piece that are worth carrying out of it, in the band between the spine and the
 prose. **Every row is the article's own text**, verified verbatim against the block it came from, and
-pressing one marks it in the prose and takes you there.
+**every row the panel is showing is marked in the prose** — pressing one rings it and takes you
+there. (The one exception is a row whose block a re-extraction took away.) See
+[§ Every visible quote is marked](#every-visible-quote-is-marked-and-the-bar-is-how-many).
 
 *The article's*, and deliberately not *the author's* — see [§ Whose words these are](#whose-words-these-are).
 Verification can prove the words are in the piece. It cannot prove who wrote them, and the promise
@@ -75,13 +77,15 @@ string" rule look like fussiness until you know what they are answers to.
 
 Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call, the verification),
 [`src/quote-match.ts`](../../src/quote-match.ts) (the matching rule, shared with search and ideas),
-[`src/api.ts`](../../src/api.ts) § `loadQuotes`, [`src/routes.ts`](../../src/routes.ts),
+[`src/store/pg.ts`](../../src/store/pg.ts) § `loadQuotes`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx),
-[`src/web/useQuotes.ts`](../../src/web/useQuotes.ts), `resolveQuote` in
+[`src/web/useQuotes.ts`](../../src/web/useQuotes.ts), `resolveQuotes` in
 [`src/web/search-hits.ts`](../../src/web/search-hits.ts), `QuotesBand` in
 [`src/web/App.tsx`](../../src/web/App.tsx), and `§ quotes mode` at the end of
 [`src/web/styles.css`](../../src/web/styles.css). Tests:
-[`tests/quotes.test.ts`](../../tests/quotes.test.ts).
+[`tests/quotes.test.ts`](../../tests/quotes.test.ts) (the stage),
+[`tests/quotes-panel.test.ts`](../../tests/quotes-panel.test.ts) (the orders and the bar),
+[`tests/quote-marks.test.ts`](../../tests/quote-marks.test.ts) (what the prose marks).
 
 ## The one safety property
 
@@ -265,6 +269,43 @@ default, display them in order."* The glossary defaults to `prioritised`; copyin
 first version, and a cross-family review pointed out that the glossary's later override is not
 permission to override an explicit decision about a different feature.
 
+### Every visible quote is marked, and the bar is how many
+
+Since 2026-09-05, and until then only the *selected* one was — so the mode drew nothing at all on the
+article until you pressed a row, and the slider changed the list without changing the page. Greg,
+in the feedback report that asked for it (SPIDERYARN-READING2-1Z):
+
+> skim through it just reading the stuff that is marked
+
+**What is marked is what the panel lists**, and that is one function — `markedQuotes` in
+[`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx), called by the panel and by `useQuotesMode` — so
+the rows and the washes cannot come apart, and the bar doubles as the highlight-density control. A
+row the bar has hidden with its wash still on the paragraph is the precise failure
+[threshold.ts](../../src/web/threshold.ts) exists to prevent.
+
+**One row can legitimately have no mark**, and only one: a quote naming a block the article no
+longer has. `resolveQuotes` drops it; the row stays in the list, unwashed, above a `stale` banner
+already saying the article moved. Hiding it instead would make the list quietly shorter than the
+artefact, which is the other failure ([silent-success.md](../reusable/silent-success.md)).
+
+Two things had to move with it, and both are about there now being sixteen marks where there was one:
+
+- **The quotes are one source.** `resolveQuotes` gives every quote the same `runId` (`QUOTES_RUN`)
+  and slot `0`, so the rail draws **one lane** and a paragraph gets one segment. The rail packs one
+  lane per run id in a ten-pixel gutter ([spine-marks.ts](../../src/web/spine-marks.ts)), so a run id
+  per quote would have been a sixteen-lane smear of 1.5px marks ordered sideways by an arbitrary
+  string. The individual quote's identity stays in `Found.key` — `quoteMarkKey`, one place.
+- **The pressed quote gets the ring**, `mark.hit[data-hit-open]`, which search has always had and
+  quotes did not need while there was one mark on the page. `Reader` holds a `quoteOpenKey` and the
+  band pushes it in the same layout effect as the marks, so no paint can show the ring on one quote
+  and the washes of another set.
+
+**Still slate, not yellow.** Greg's *"maybe a yellow highlighter pen"* is not built and is a decision
+he has not made: `mark.hit`'s low-chroma slate is deliberate, because the wash channel carries
+confidence and the hue channel carries *which search found it* (2026-08-26). Yellow means either
+borrowing that channel or adding a quotes-specific wash — a second way of drawing a marked passage,
+which is what this mode was built not to have.
+
 ### The bar hides what is below it
 
 Since 2026-09-03, and it took that from the glossary along with everything else here:
@@ -447,9 +488,15 @@ wrong — but worth knowing.
 
 ## What is still open
 
-- **One article is one article.** `0.80`, the `4–16` count and `medium` effort all rest on that
-  single run. `data/writes/quotes.json` still does not exist, so `quotes.json` is off `GATE_FIXTURES`
+- **One article is one article.** `0.80` and `medium` effort both rest on that single run.
+  `data/writes/quotes.json` still does not exist, so `quotes.json` is off `GATE_FIXTURES`
   and the filesystem-to-Postgres round trip is still asserting that an absent artefact stays absent.
+- **The count doubled on the strength of an argument, not a measurement.** `suggestedQuotes` asks
+  for one per ~300 words clamped 8–32, up from one per ~600 clamped 4–16, because the list became
+  the marks you skim by and Greg asked for "many more". Nobody has yet read a 32-quote list and said
+  whether the tail is worth having; the bar hides it, which is what makes the number affordable and
+  not what makes it right. `STEP_BUDGET_MS.quotes` went to 180s with it, also unmeasured — the one
+  timing there has ever been is 11.9 seconds for five quotes.
 - **`validateHits` (search) and `validateOccurrences` (ideas) have the same two bugs** this stage was
   fixed for: both call `findQuote` with the forgiving pass and both store the model's string. Their
   quotes are shown in a results list rather than presented as the author's chosen lines, so the harm

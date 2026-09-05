@@ -47,7 +47,7 @@
  * failure mode invented by the storage change. Every `ChatConflict` here is a
  * stale client, as it always was. The one real hole — a stale tab's edit
  * silently deleting turns it never saw — is closed by `expectedTailId` on the
- * destructive operation alone. See `requireTail` in src/store/fs.ts.
+ * destructive operation alone. See `requireTail` in src/chat.ts.
  *
  * **No model call happens inside any of these transactions.**
  *
@@ -62,7 +62,15 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, gt, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
-import { titleFrom, withEdit, withRetry, withSpokenTurn, withTurn } from "../chat.js";
+import {
+  CHAT_SWEPT,
+  requireTail,
+  titleFrom,
+  withEdit,
+  withRetry,
+  withSpokenTurn,
+  withTurn,
+} from "../chat.js";
 import { getDb } from "../db/client.js";
 import { chatMessages, chatThreads } from "../db/schema.js";
 import { log } from "../log.js";
@@ -78,7 +86,6 @@ import type {
 import { isThreadKind } from "../types.js";
 import { MissingAttempt, type ChatStore, type SweepOptions } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
-import { CHAT_SWEPT, requireTail } from "./fs.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow } from "./pg.js";
 
@@ -136,6 +143,10 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
        key on a chat answer, and tests/store-roundtrip.test.ts compares the two
        byte for byte. Same rule as every field above it. */
     ...(row.stance === null ? {} : { stance: row.stance as RememberStance }),
+    /* `true` or nothing at all, exactly like `stopped` and `interrupted` above —
+       the filesystem store has no key on an ordinary question and
+       tests/store-roundtrip.test.ts compares the two byte for byte. */
+    ...(row.help ? { help: true as const } : {}),
   };
 }
 
@@ -271,6 +282,12 @@ function messageRow(
        errored, was stopped, or was swept still has to say which instruction
        produced it, and the retry of that row has to have something to inherit. */
     stance: message.stance ?? null,
+    /* **The write half, and it has to be listed here too.** `toMessage` names it
+       on the way out; without this line it is never written in the first place,
+       nothing complains — the field is optional on `ChatMessage` — and every "?"
+       press loses its metadata between the route and the database. Same class of
+       silent loss as `tools`, which is how that column came to exist. */
+    help: message.help ?? false,
     createdAt: new Date(message.createdAt),
     ...(attempt === undefined ? {} : { attemptId: attempt, attemptStartedAt: DB_NOW }),
   };
@@ -543,7 +560,7 @@ const rawPgChatStore: ChatStore = {
       const threads = await threadsFor(articleId, tx);
       /* Checked against the list read INSIDE the lock. Checking a copy read
          earlier would be checking what the client saw against what the client
-         saw. See `requireTail` in src/store/fs.ts for why only the destructive
+         saw. See `requireTail` in src/chat.ts for why only the destructive
          operation carries this guard. */
       if (opts.expectedTailId !== undefined) {
         requireTail(threads, threadId, opts.expectedTailId);

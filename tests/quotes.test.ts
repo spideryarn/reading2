@@ -94,10 +94,23 @@ function drops(over: Partial<Dropped> = {}): Dropped {
 
 describe("suggestedQuotes", () => {
   it("clamps at both ends and scales in between", () => {
-    expect(suggestedQuotes(0)).toBe(4);
-    expect(suggestedQuotes(600)).toBe(4);
-    expect(suggestedQuotes(4800)).toBe(8);
+    expect(suggestedQuotes(0)).toBe(8);
+    expect(suggestedQuotes(600)).toBe(8);
+    expect(suggestedQuotes(4800)).toBe(16);
     expect(suggestedQuotes(200_000)).toBe(MAX_QUOTES);
+  });
+
+  it("asks for many more than it did, because the bar is what hides them", () => {
+    /* Greg, 2026-09-05 (SPIDERYARN-READING2-1Z), on a mode that now marks every
+       visible quote in the prose: he wants "many more" of them, so that a
+       reader can skim the piece by its marks. The density doubled — one per
+       ~300 words rather than ~600 — and the ceiling with it.
+
+       The floor moved too, and that is the half worth pinning: a short piece
+       used to get four marks in a whole article, which is not a highlighted
+       article, it is four highlights. */
+    expect(MAX_QUOTES).toBe(32);
+    expect(suggestedQuotes(4192)).toBeGreaterThan(8);
   });
 });
 

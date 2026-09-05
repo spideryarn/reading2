@@ -1,5 +1,5 @@
 /**
- * **The reader's thirteen middle-band modes, named once, in a module that
+ * **The reader's fourteen middle-band modes, named once, in a module that
  * imports nothing.**
  *
  * This vocabulary was in src/web/params.ts, which is where it is used and where
@@ -39,7 +39,7 @@ export const MODES = [
   /* Renamed from `toc` on 2026-08-29, at Greg's request: the reader sees
      "Hierarchy" and the code now says the same word. It also ends a collision
      that had lasted as long as the list — `toc` was simultaneously this mode and
-     the *pipeline step* that builds tree.json (src/pipeline.ts § STEP_ORDER), so
+     the *pipeline step* that builds tree.json (src/step-order.ts § STEP_ORDER), so
      one word meant two things in one repo. The step keeps the name; the mode
      gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3.
 
@@ -137,6 +137,25 @@ export const MODES = [
      all, and drawing those like the dated ones would throw away the only thing
      the piece actually said. docs/plans/260831i-timeline-mode.md. */
   "timeline",
+  /* The fourteenth, 2026-09-05, and the first whose content is **not in the
+     article at all**: it goes out to the open web and comes back with what
+     other people have written — replies to this piece, and the argument around
+     the claims it makes. It costs this list one word like the eleven before it.
+
+     **`debate` and not `critiques` or `reception`**, which is Greg's pick and
+     the reason is that both obvious names promise something false on most of
+     the shelf: *reception* presumes the piece was noticed, *critiques* presumes
+     the response was hostile — so either reads wrong over a corroboration or the
+     author's own later correction, two of the most useful rows this mode can
+     produce.
+
+     `responses` was the runner-up and was refused on the code, for the reason
+     this list has now refused a name twice: `Response`, `respond()`, HTTP
+     responses and chat answers are all over `src/`, and one word meaning two
+     things is the collision `toc` → `hierarchy` above cost this repo a rename to
+     escape.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
+  "debate",
 ] as const;
 export type Mode = (typeof MODES)[number];
 

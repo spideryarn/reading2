@@ -8,7 +8,7 @@
  * lists": it is the two specific failures.
  *
  * 1. **A mode drifts out of the list.** `sharedInventory` sweeps `MODES` through
- *    `visitorGap`, so a fourteenth mode is covered whether or not whoever adds
+ *    `visitorGap`, so a fifteenth mode is covered whether or not whoever adds
  *    it opens the file. The sweep below is what says so, and the positive
  *    control is that the same call, with the same modes, produces *different*
  *    buckets under different artefacts — a partition that never moves looks
@@ -142,11 +142,18 @@ describe("the sweep over the modes", () => {
     }
   });
 
-  /* The six that cost a model call or are somebody's own work, whatever has
-     been generated. Written out rather than derived, deliberately: this is the
-     test asserting the policy, and a test that derives its expectation from the
-     code under test asserts nothing. */
-  const OWNERS_ONLY: Mode[] = ["chat", "search", "remember", "referee"];
+  /* The modes that cost a model call, whatever has been generated. Written out
+     rather than derived, deliberately: this is the test asserting the policy,
+     and a test that derives its expectation from the code under test asserts
+     nothing.
+
+     **`search` left this list on 2026-09-04** and has a case of its own below,
+     beside `comments`. It is the second row ever to move, and it moved for a
+     different reason from the first: comments crossed because Greg decided a
+     shared link should carry them, and search crossed because *reading* a
+     saved run costs nothing — the model call is in creating one, which is
+     still the owner's alone. */
+  const OWNERS_ONLY: Mode[] = ["chat", "remember", "referee"];
   it.each(OWNERS_ONLY)("keeps %s with the owner whatever exists", (mode) => {
     expect(keys(sharedInventory(NOTHING).withheld)).toContain(mode);
     expect(keys(sharedInventory(EVERYTHING).withheld)).toContain(mode);
@@ -220,6 +227,28 @@ describe("the sweep over the modes", () => {
     expect(row?.detail).toContain("what the model");
   });
 
+  /**
+   * **And `search` crossed the same day, from the other list.**
+   *
+   * The same three-way assertion `comments` gets above, and for the same
+   * reason: the failure worth naming is a row in two columns at once.
+   *
+   * Unlike comments this row is **swept out of `MODES`** rather than written in
+   * `ALWAYS_SHARED`, because search is a mode and `POLICY.search` is what
+   * decides it — so what this really pins is that the policy said `available`.
+   * Both halves of Greg's decision are here: the row is shared, and the
+   * sentence beside it has to say the visitor cannot ask a new one, or an owner
+   * reading *Search* in the shared column would reasonably conclude a stranger
+   * can spend their money.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+   */
+  it("puts the owner's saved searches on the shared side, and only there", () => {
+    const { shared, withheld, ifBuilt } = sharedInventory(EVERYTHING);
+    expect(keys(shared)).toContain("search");
+    expect(keys(withheld)).not.toContain("search");
+    expect(keys(ifBuilt)).not.toContain("search");
+  });
+
   /* Every row says something, and nothing says the same thing twice. A label
      with no tooltip is a row the owner cannot act on; two rows with one
      sentence is the copy having been pasted. */
@@ -270,6 +299,12 @@ const WIRE_ROW = {
      switch, so its inventory row is Diagram's. It has no row of its own.
      docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch. */
   sketch: "diagram",
+  /* Search **is** a mode, so unlike comments its row is swept out of `MODES`
+     rather than written in `ALWAYS_SHARED` — which is the whole difference
+     between the two stages seen from this table. `POLICY.search` became
+     `available` on 2026-09-04 and the row moved column by itself.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+  searches: "search",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {

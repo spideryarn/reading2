@@ -23,7 +23,7 @@ prose. `GET`/`POST /api/referee/claims/:slug`,
 [`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) for what a referee sees.
 
 **Claims runs in the store that deploys, as of 2026-09-01.** It was files-only for a day: under
-`SPIDERYARN_STORE=postgres` every method refused with a 501, so on a deployed server *"Pull the
+Postgres — which is what deploys — every method refused with a 501, so on a deployed server *"Pull the
 paper's claims"* could not load, start or persist a run — which is how the cross-family review found
 it ([260831an-referee-mode-submodes-review-sol.md](../plans/260831an-referee-mode-submodes-review-sol.md),
 finding 4). Both adapters are real now and [`src/store/index.ts`](../../src/store/index.ts) picks
@@ -560,10 +560,14 @@ still in turn five's fence; but nothing later, because a search run at turn five
 written at turn two is a rule that can be satisfied by waiting. What the pool still does **not**
 prove is that the page is about the person it is filed under: a hallucinated name paired with a real
 URL from an earlier search passes. Closing that means matching the person's name against the search
-result's own title and snippet — now feasible, since the Exa probe shows the wire supplies both, but
-it needs `Citation` to carry the snippet through [`types.ts`](../../src/types.ts),
-[`openrouter-stream.ts`](../../src/openrouter-stream.ts) and the thread store. That is the first
-follow-up job here.
+result's own title and snippet — now feasible, since the Exa probe shows the wire supplies both.
+**Half of that landed on 2026-09-05 for Debate**: `SearchEvidence` in
+[`types.ts`](../../src/types.ts) and `collectSearchEvidence` in
+[`openrouter-stream.ts`](../../src/openrouter-stream.ts) keep the extract, opt-in, so nothing here
+changed and nothing here stores one yet. It was deliberately *not* done by widening `Citation`, which
+would have started storing page extracts on every chat message and comment
+([260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) § Stage 1). What is
+left for Candidates is the thread store and the match itself. That is the first follow-up job here.
 
 **What was dropped is counted on screen, and so is what the cap never read.** *The model named
 nobody* and *the model named eleven people and none of them could be shown* are different sentences

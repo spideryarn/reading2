@@ -155,6 +155,7 @@ const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
+const { useDebate } = await import("../src/web/useDebate.js");
 const { resetActivations } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
@@ -220,6 +221,29 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
 }
 
 /**
+ * **Debate, and it is the one where being wrong costs the most.**
+ *
+ * Here for `TimelineBand`'s reason and one of its own. Every other mode in this
+ * file spends one model call; Debate spends **two, and both of them go out to
+ * the open web** — up to ~$0.27 a run, rising with the length of the article,
+ * and it is the newest thing in `MODE_TARGET` (src/web/activation.ts). So the
+ * sentence at the top of this file — *arriving at a mode does not run it* — is
+ * worth more here than anywhere, and the only thing holding it is one call to
+ * `useAutoRun` in useDebate.ts.
+ *
+ * Remove that call, or drop `debate` from `MODE_TARGET`, and every other test
+ * in this file stays green.
+ */
+function DebateBand({ slug }: { slug: string }): ReactElement {
+  const view = useDebate(slug);
+  return createElement(
+    "div",
+    { "data-band": "debate" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+/**
  * What `Reader` hands the glossary band: a read that has already come back
  * empty. Posed rather than run — the fetch is `useGlossaryRead`'s, one level up,
  * and this file is about what the band does with the answer.
@@ -260,6 +284,7 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
     mode === "quotes" ? createElement(QuotesBand, { slug }) : null,
     mode === "timeline" ? createElement(TimelineBand, { slug }) : null,
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
+    mode === "debate" ? createElement(DebateBand, { slug }) : null,
     /* **The switch on**, because three of the five modes this file presses —
        Quotes, Timeline and Remember — went behind it on 2026-09-03, and a bar
        with the default answer draws no Quotes button for `press("Quotes")` to
@@ -321,8 +346,9 @@ function pressTheButton(): Promise<void> {
 
 function bandSays(): string | null {
   return (
-    host.querySelector('[data-band="ideas"], [data-band="quotes"], [data-band="timeline"]')
-      ?.textContent ?? null
+    host.querySelector(
+      '[data-band="ideas"], [data-band="quotes"], [data-band="timeline"], [data-band="debate"]',
+    )?.textContent ?? null
   );
 }
 
@@ -471,6 +497,16 @@ describe("a press", () => {
 
     expect(artefactGets("timeline").length).toBeGreaterThan(0);
     expect(posts).toEqual([{ slug: "constitution", steps: ["timeline"] }]);
+  });
+
+  /* The fourth positive control, and the dearest. See DebateBand above. */
+  it("runs the debate, which is two web searches and nothing else here presses", async () => {
+    await open("plain");
+    await press("Debate");
+    await settle();
+
+    expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["debate"] }]);
   });
 
   it("runs it when the mode pressed is the one already open", async () => {

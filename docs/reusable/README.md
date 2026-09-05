@@ -29,8 +29,11 @@ inventing a process.
 | [write-tutorial.md](write-tutorial.md) | explaining how something works to somebody who has never read the code — mental models first, spiral passes, diagrams you actually look at |
 | [edit-important-docs.md](edit-important-docs.md) | changing a doc whose wording is a rule — one small set of changes at a time, before/after, approval before each |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | a GPT/Codex subagent for cross-family review or delegated work, via [`scripts/run-codex.ts`](../../scripts/run-codex.ts) |
+| [review-prompt-template.md](review-prompt-template.md) | writing the prompt for that review — name the candidate durably, suspicions last, a severity scale, an ID on every finding |
 | [playwright-browser-control.md](playwright-browser-control.md) | driving a browser from a script, with no eyes — on the remote box, where the Chrome extension cannot follow ([browser-control.md](../project/browser-control.md) is which mechanism goes where) |
 | [long-waits.md](long-waits.md) | waiting hours rather than minutes — which mechanism survives what, and the two that outlive the session |
+| [gjd-remote.md](gjd-remote.md) | driving the always-on box — the commands you actually type, and what bites when you run it from a repo that has never heard of it ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) is the whole of it) |
+| [diagnose-box-resources.md](diagnose-box-resources.md) | a shared box is slow, or something got OOM-killed — measure, attribute, and add swap without disrupting anyone |
 
 ## Traps, before you meet them
 

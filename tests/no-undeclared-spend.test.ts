@@ -272,7 +272,12 @@ function trackedSources(): string[] {
   const untracked = ls(["--others", "--exclude-standard"]).filter(
     (f) => !/^scratch-[^/]*$/.test(f),
   );
-  return [...tracked, ...untracked];
+  /* **On disk, because `--cached` lists a file that has been deleted and not yet
+     staged**, and reading it throws ENOENT before a single case is registered —
+     which reads as a broken gate rather than as somebody mid-deletion. A file
+     that is gone can reach no provider, so skipping it weakens nothing. Watched
+     happening 2026-09-05, deleting three suites with the store flag. */
+  return [...tracked, ...untracked].filter((f) => existsSync(path.join(ROOT, f)));
 }
 
 /** Babel's own options, in one place — TS and TSX both. */

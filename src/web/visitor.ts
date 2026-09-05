@@ -144,7 +144,7 @@ type VisitorPolicy =
  * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2.
  *
  * A total `Record<Mode, …>` makes that impossible rather than unlikely: a
- * fourteenth mode does not fall anywhere, it fails to compile until somebody
+ * fifteenth mode does not fall anywhere, it fails to compile until somebody
  * decides. Every "stated rather than defaulted into" comment below is therefore
  * stronger than it was, not weaker — the row it defends is now required.
  * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T1.3.
@@ -177,7 +177,29 @@ const POLICY: Record<Mode, VisitorPolicy> = {
   ideas: { kind: "artefact", key: "ideas" },
   quotes: { kind: "artefact", key: "quotes" },
 
-  search: { kind: "owners-only" },
+  /**
+   * **Search became `available` on 2026-09-04**, and it is `available` rather
+   * than `{ kind: "artefact" }` for the reason GPT Sol gave when it talked this
+   * plan out of a `none-yet` gap:
+   *
+   * > "No saved items yet" is content inside an accessible panel, not something
+   * > preventing access.
+   *
+   * An article nobody has searched is an empty panel, not a boundary — the same
+   * call `comments` produced one stage earlier, and the reason `VisitorGap`
+   * gained no member for either.
+   *
+   * What a visitor gets is the owner's finished runs, their ticks, their
+   * colours and their marks in the prose; what they do not get is the composer,
+   * the retry, the recolour, the delete, or the words matcher. Greg,
+   * 2026-09-04 — *"Only owner can create new searches. Everyone else can see
+   * the ones they have already created."* The enforcement is a `SearchAccess`
+   * union whose visitor arm carries none of those verbs
+   * (src/web/SearchPanel.tsx), plus the pin on `?match=`, plus the fact that
+   * `useSearch` is mounted in `SearchBand` alone.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+   */
+  search: { kind: "available" },
   chat: { kind: "owners-only" },
   remember: { kind: "owners-only" },
   /**
@@ -254,6 +276,28 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * docs/plans/260831an-referee-mode-for-peer-reviewers.md.
    */
   referee: { kind: "owners-only" },
+  /**
+   * **`owners-only` in Stage 3, and it is a staging decision rather than the
+   * final answer.**
+   *
+   * Debate is meant to be shareable — it is the one artefact whose whole value
+   * is that somebody else can check it, and `searchedAt` crosses both DTOs
+   * deliberately so a visitor can see how old the search is. What is not built
+   * yet is the thing a visitor's row must not bypass: `PUBLIC_PROJECTIONS`, the
+   * public DTO, and `publicCitationUrl` re-judging every row's URL at the
+   * boundary — a refusal there drops the whole row, because a row with no
+   * source violates this mode's own invariant.
+   *
+   * So this says `owners-only` until Stage 4 builds that contract, and then it
+   * becomes `{ kind: "artefact", key: "debate" }`. Writing the visitor branch
+   * first is exactly what a GPT Sol review (F23) refused: a "green" panel
+   * implemented against a sanitisation boundary that did not exist.
+   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4.
+   *
+   * It also spends, and more than most: two metered web-search calls, up to
+   * ~$0.27 a run and rising with the length of the article.
+   */
+  debate: { kind: "owners-only" },
 };
 
 /**

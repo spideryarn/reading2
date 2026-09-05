@@ -8,11 +8,26 @@
 #
 # Measured 2026-09-02 on codex 0.152.1: under this profile `npx vitest run <one file>` passes,
 # `node --import tsx <script>` and `npx tsc --noEmit` run, a write to src/ is refused with EROFS.
-# `npm run typecheck` still fails — the tsx CLI listens on a unix socket and the sandbox denies
-# that in every mode — and the full suite is out of reach (it writes to data/ and needs Postgres
-# over loopback). Both are fine: a reviewer wants one red test, not a green suite.
+# `npm run typecheck` still fails, and the full suite is out of reach. Both are fine: a reviewer
+# wants one red test, not a green suite.
+#
+# Corrected 2026-09-04: those two limits are not properties of the sandbox, as this comment used to
+# say — they are properties of *this profile*, which grants no network at all, not even loopback.
+# The tsx CLI's unix socket and the Postgres connection both follow from that, and — measured with
+# the network proxy off — a profile with `[permissions.<name>.network] enabled = true` runs both.
+# No allowlisted configuration tested delivered them. We deliberately do not add
+# one: with `"/" = "read"` it would make the reviewer a process that can read .env.local and reach
+# the internet. The measurements, including why the host allowlist is not a usable middle ground,
+# are in docs/reusable/codex-cli-as-subagent.md § What network would buy.
 #
 # docs/reusable/codex-cli-as-subagent.md § The review profile.
+
+# `default_permissions` is required as soon as a `[permissions]` table exists: without it codex
+# refuses to load ANY config in this directory, and every `codex` in the checkout exits 1 before the
+# model. `:workspace` is codex's built-in workspace-write profile, the posture a human's interactive
+# session wants; the wrapper overrides it with `review` or an explicit `--sandbox`, and measured
+# 2026-09-05 neither is loosened by this line -- both still refuse a write to the tree.
+default_permissions = ":workspace"
 
 [permissions.review.filesystem]
 "/" = "read"

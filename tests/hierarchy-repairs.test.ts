@@ -69,7 +69,7 @@ const BLOCKS: Block[] = [
   block("spya-ffffff", "A closing paragraph"),
 ];
 
-const report = (): BuildReport => ({ repairs: [], droppedChildren: [], droppedHeadings: [] });
+const report = (): BuildReport => ({ repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] });
 
 /** Every leaf's block, in tree order — what the reader can actually reach. */
 function leafBlocks(tree: ReturnType<typeof buildTree>): string[] {
@@ -436,15 +436,25 @@ describe("the review's findings", () => {
           title: "Left",
           gist: "A point.",
           range: ["spya-aaaaaa", "spya-cccccc"],
-          // Stops one block short of "Left", so block 2 changes hands.
-          children: [{ title: "Left inner", gist: "A point.", range: ["spya-aaaaaa", "spya-bbbbbb"] }],
+          /* Two children, and the *last* of them stops one block short of
+             "Left", so block 2 changes hands. **Two rather than one**: a sole
+             child covering its parent's whole range is now spliced away
+             (src/hierarchy.ts § `collapseRestatedRungs`), which would delete
+             the very fault this test is about. */
+          children: [
+            { title: "Left head", gist: "A point.", range: ["spya-aaaaaa", "spya-aaaaaa"] },
+            { title: "Left inner", gist: "A point.", range: ["spya-bbbbbb", "spya-bbbbbb"] },
+          ],
         },
         {
           title: "Right",
           gist: "A point.",
           range: ["spya-dddddd", "spya-ffffff"],
-          // Starts one block late inside "Right", so block 3 changes hands.
-          children: [{ title: "Right inner", gist: "A point.", range: ["spya-eeeeee", "spya-ffffff"] }],
+          // Its *first* child starts one block late inside "Right", so block 3 changes hands.
+          children: [
+            { title: "Right inner", gist: "A point.", range: ["spya-eeeeee", "spya-eeeeee"] },
+            { title: "Right tail", gist: "A point.", range: ["spya-ffffff", "spya-ffffff"] },
+          ],
         },
       ],
     };
@@ -855,6 +865,7 @@ describe("any proposal whose ranges resolve comes back as a valid tree", () => {
     let silent = 0;
     let withRepairs = 0;
     let withDrops = 0;
+    let withCollapses = 0;
     for (let t = 0; t < 3000; t++) {
       const n = 1 + pick(12);
       const blocks = manyBlocks(n);
@@ -868,7 +879,12 @@ describe("any proposal whose ranges resolve comes back as a valid tree", () => {
       expect(problems, `invalid tree from ${JSON.stringify(root)}`).toEqual([]);
       // Every block reachable, exactly once — what a gap and an overlap each break.
       expect(leafBlocks(tree).sort()).toEqual(blocks.map((b) => b.id).sort());
-      const mended = r.repairs.length > 0 || r.droppedChildren.length > 0;
+      /* **A collapsed rung counts as mending**, and it has to. A proposal that
+         does not tile as written can now be resolved by splicing a redundant
+         rung away rather than by moving a boundary, and a derivation that
+         reported nothing at all is exactly what this loop exists to catch. */
+      const mended =
+        r.repairs.length > 0 || r.droppedChildren.length > 0 || r.collapsedRungs.length > 0;
       if (!tilesAsWritten(root, blocks)) {
         faulty++;
         if (!mended) {
@@ -895,17 +911,41 @@ describe("any proposal whose ranges resolve comes back as a valid tree", () => {
       }
       if (r.repairs.length) withRepairs++;
       if (r.droppedChildren.length) withDrops++;
+      if (r.collapsedRungs.length) withCollapses++;
+      /* **And nothing this built may hold a rung that restates its parent.**
+         `checkTree` says so above; this asserts the same thing from the
+         report's side, so a collapse that silently stopped iterating would
+         redden here rather than pass as "nothing to do". */
+      for (const n of Object.values(tree.nodes)) {
+        for (const childId of n.children) {
+          const c = tree.nodes[childId]!;
+          if (c.children.length === 0) continue;
+          expect(
+            c.range[0] === n.range[0] && c.range[1] === n.range[1],
+            `restated rung ${n.id} -> ${c.id} from ${JSON.stringify(root)}`,
+          ).toBe(false);
+        }
+      }
     }
 
     /* **The control.** These are not incidental: if the generator drifts into
        producing well-formed answers the assertions above pass while testing
        nothing, and that is the likelier way this rots. The observed figures at
-       this seed are ~37% faulty, ~37% repaired and ~10% with a dropped child;
-       the bounds are loose so an unrelated change to the fixture does not fail
-       the suite, but they are far enough above zero to prove the fuzz bites. */
+       this seed are ~36% faulty, ~17% repaired, ~4% with a dropped child and
+       ~29% with a collapsed rung; the bounds are loose so an unrelated change to
+       the fixture does not fail the suite, but they are far enough above zero to
+       prove the fuzz bites.
+
+       **The repaired figure more than halved on 2026-09-05**, from ~37% to
+       ~17%, and that is the collapse rather than a weaker fuzz: a boundary
+       fault recorded on a rung that is then spliced away is discarded with it,
+       and this generator proposes a single child often enough that most of what
+       used to be counted was exactly that (src/hierarchy.ts §
+       `collapseRestatedRungs`). `withCollapses` is where those went. */
     expect(faulty).toBeGreaterThan(500);
-    expect(withRepairs).toBeGreaterThan(500);
-    expect(withDrops).toBeGreaterThan(100);
+    expect(withRepairs).toBeGreaterThan(300);
+    expect(withDrops).toBeGreaterThan(50);
+    expect(withCollapses).toBeGreaterThan(300);
     expect(silent).toBe(0);
   });
 

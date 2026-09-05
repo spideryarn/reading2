@@ -1,15 +1,19 @@
 /**
- * **The live-conversation journal's two stores** —
- * [realtime-sessions-fs.ts](../src/store/realtime-sessions-fs.ts) and
+ * **The live-conversation journal** —
  * [realtime-sessions-pg.ts](../src/store/realtime-sessions-pg.ts).
  *
- * What is actually being checked is that the two **agree**, because they are
- * chosen by a flag at boot and the other is never consulted — so a difference
- * between them is a difference between a laptop and production, which is the
- * shape of bug this directory keeps producing (see
+ * A second, filesystem journal stood beside it until 2026-09-05, and this file
+ * was written to prove the two **agreed** — a difference between them was a
+ * difference between a laptop and production, which is the shape of bug this
+ * directory kept producing (see
  * docs/postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md).
- * The three behaviours worth agreeing about are all "a second write must not
- * undo the first":
+ * There is one store now, so `bothStores` runs once; it stays a function rather
+ * than being inlined because what it holds is the contract, and the next
+ * adapter to be asked for it should be handed to it rather than copied out of
+ * it.
+ *
+ * The three behaviours it pins are all "a second write must not undo the
+ * first":
  *
  * - `issue` refuses a duplicate id rather than overwriting, because a collision
  *   would mean two conversations given one identity and the older one's reports
@@ -19,23 +23,14 @@
  * - `close` keeps the **first** close, because a `pagehide` beacon and an
  *   explicit hang-up both fire on the ordinary way out.
  *
- * ## The Postgres half skips loudly, and today it always skips
+ * ## No database is a failure, not a skip
  *
- * `npm run db:migrate` refuses on this box: the shared local Postgres carries a
- * ledger row for a peer's migration that is not yet on `dev`, and the guard is
- * right to refuse. So
- * drizzle/20260902150952_realtime_sessions_and_usage.sql has not been applied
- * anywhere, and the suite below says so by name rather than failing with a
- * confusing `relation does not exist`. **Run `npm run db:migrate` and then
- * `npx vitest run tests/store-realtime-sessions.test.ts` once that clears** —
- * that is the outstanding verification for this stage.
+ * `pgReady` below throws when the table or `accepts_until` is missing, naming
+ * the migration to run. There is no skip mechanism left in this file — a green
+ * run means these seven cases executed. tests/helpers/pg-ready.ts.
  */
 
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { RealtimeSession, RealtimeSessionStore } from "../src/store/contracts.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -78,11 +73,12 @@ function session(over: Partial<RealtimeSession> = {}): RealtimeSession {
 }
 
 /**
- * The behaviour both adapters owe, run against whichever is handed in.
+ * The behaviour a journal adapter owes, run against whichever is handed in.
  *
- * One function rather than two copies, because the point of this file is that
- * they agree — and two copies of an assertion are two places for them to stop
- * agreeing without anything going red.
+ * It is called once now that there is one store. Kept as a function because
+ * what it holds is the contract rather than one adapter's behaviour — when two
+ * of them existed, two copies of these assertions would have been two places
+ * for them to stop agreeing without anything going red.
  */
 function bothStores(name: string, store: () => RealtimeSessionStore, id: (n: number) => string) {
   describe(name, () => {
@@ -156,46 +152,7 @@ function bothStores(name: string, store: () => RealtimeSessionStore, id: (n: num
   });
 }
 
-/* ------------------------------------------------------ the filesystem -- */
-
-let scratch: string;
-const realJournal = process.env.SPIDERYARN_REALTIME_JOURNAL;
-
-beforeAll(async () => {
-  scratch = await mkdtemp(path.join(tmpdir(), "spideryarn-sessions-"));
-});
-
-/**
- * A fresh file per test, so one test's rows cannot make another's `issue`
- * collide. Cheaper and clearer than deleting by id, which the filesystem
- * contract deliberately does not offer — nothing deletes a session.
- *
- * **`beforeEach`, not `afterEach`, and that distinction cost a red test.** With
- * the redirect in `afterEach` the very first test ran against the shared
- * `data/_realtime-sessions.test.json` — writing its fixtures into the file every
- * other suite uses, and then colliding with its own leftovers on the next run.
- * A redirect that only takes effect after the first write is not a redirect;
- * `ai-calls-fs.ts` has a comment about the same trap one layer down.
- */
-beforeEach(() => {
-  process.env.SPIDERYARN_REALTIME_JOURNAL = path.join(scratch, `${Math.random()}.json`);
-});
-
-afterAll(async () => {
-  await rm(scratch, { recursive: true, force: true });
-  if (realJournal === undefined) delete process.env.SPIDERYARN_REALTIME_JOURNAL;
-  else process.env.SPIDERYARN_REALTIME_JOURNAL = realJournal;
-});
-
-const { fsRealtimeSessionStore } = await import("../src/store/realtime-sessions-fs.js");
-
-bothStores(
-  "the filesystem journal",
-  () => fsRealtimeSessionStore,
-  (n) => `00000000-0000-4000-8000-00000000f10${n}`,
-);
-
-/* -------------------------------------------------------- and Postgres -- */
+/* ----------------------------------------------------------- Postgres -- */
 
 /* **The column asked for is `accepts_until`, not just the table.** It is the one
    that carries the whole point — a server-owned deadline rather than the token's
@@ -203,67 +160,59 @@ bothStores(
    db:migrate" rather than fail with a confusing column error from inside the
    store. Four other suites name a column here for the same reason; see
    tests/helpers/pg-ready.ts. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-realtime-sessions.test.ts",
   tables: ["spideryarn.realtime_sessions"],
   columns: [{ table: "spideryarn.realtime_sessions", column: "accepts_until" }],
   max: 2,
 });
 
-if (reachable) {
-  const { pgRealtimeSessionStore } = await import("../src/store/realtime-sessions-pg.js");
+const { pgRealtimeSessionStore } = await import("../src/store/realtime-sessions-pg.js");
 
-  beforeAll(async () => {
-    /* **`realtime_sessions.owner_id` is a foreign key into `auth.users`**, so a
-       made-up uuid is a `23503`, not a row. This was invisible until the
-       migration landed: the whole block skipped for want of the table, and a
-       test that has never run is not evidence
-       (docs/reusable/silent-success.md). All seven failed the first time they
-       were allowed to execute.
+beforeAll(async () => {
+  /* **`realtime_sessions.owner_id` is a foreign key into `auth.users`**, so a
+     made-up uuid is a `23503`, not a row. This was invisible until the
+     migration landed: the whole block skipped for want of the table, and a
+     test that has never run is not evidence
+     (docs/reusable/silent-success.md). All seven failed the first time they
+     were allowed to execute.
 
-       **Through `seedAuthUser`, never by hand.** Four of `auth.users`' token
-       columns are nullable with no default, GoTrue scans them into non-null Go
-       strings, and one row with them NULL makes `GET /auth/v1/admin/users`
-       answer 500 for the **whole database** — every other suite and the dev
-       server's /admin page with it. tests/helpers/seed-auth-user.ts has the
-       reproduction. */
-    const { getDb } = await import("../src/db/client.js");
-    const { seedAuthUser } = await import("./helpers/seed-auth-user.js");
-    for (const id of [OWNER, STRANGER]) {
-      await seedAuthUser(getDb(), {
-        id,
-        email: `${id}@realtime-sessions.test`,
-        onConflictDoNothing: true,
-      });
-    }
-  });
-
-  afterAll(async () => {
-    /* **Explicit cleanup, because these rows are real.** Nothing deletes a
-       session through the contract — a billing parent is not something the app
-       removes — so the tidying has to go round it, exactly as
-       tests/store-ai-calls.test.ts does for the ledger rows it writes. */
-    const { getDb, closeDb } = await import("../src/db/client.js");
-    const { realtimeSessions } = await import("../src/db/schema.js");
-    const { eq } = await import("drizzle-orm");
-    await getDb().delete(realtimeSessions).where(eq(realtimeSessions.ownerId, OWNER));
-    /* The seeded accounts go too, and after the sessions that point at them —
-       a left-behind `auth.users` row is not inert here, it is the 500 above
-       waiting for the next suite to run. */
-    const { sql } = await import("drizzle-orm");
-    await getDb().execute(sql`delete from auth.users where id in (${OWNER}, ${STRANGER})`);
-    await closeDb();
-  });
-
-  bothStores(
-    "the Postgres journal",
-    () => pgRealtimeSessionStore,
-    (n) => `00000000-0000-4000-8000-00000000f20${n}`,
-  );
-} else {
-  describe.skip("the Postgres journal", () => {
-    it("is skipped", () => {
-      expect(true).toBe(true);
+     **Through `seedAuthUser`, never by hand.** Four of `auth.users`' token
+     columns are nullable with no default, GoTrue scans them into non-null Go
+     strings, and one row with them NULL makes `GET /auth/v1/admin/users`
+     answer 500 for the **whole database** — every other suite and the dev
+     server's /admin page with it. tests/helpers/seed-auth-user.ts has the
+     reproduction. */
+  const { getDb } = await import("../src/db/client.js");
+  const { seedAuthUser } = await import("./helpers/seed-auth-user.js");
+  for (const id of [OWNER, STRANGER]) {
+    await seedAuthUser(getDb(), {
+      id,
+      email: `${id}@realtime-sessions.test`,
+      onConflictDoNothing: true,
     });
-  });
-}
+  }
+});
+
+afterAll(async () => {
+  /* **Explicit cleanup, because these rows are real.** Nothing deletes a
+     session through the contract — a billing parent is not something the app
+     removes — so the tidying has to go round it, exactly as
+     tests/store-ai-calls.test.ts does for the ledger rows it writes. */
+  const { getDb, closeDb } = await import("../src/db/client.js");
+  const { realtimeSessions } = await import("../src/db/schema.js");
+  const { eq } = await import("drizzle-orm");
+  await getDb().delete(realtimeSessions).where(eq(realtimeSessions.ownerId, OWNER));
+  /* The seeded accounts go too, and after the sessions that point at them —
+     a left-behind `auth.users` row is not inert here, it is the 500 above
+     waiting for the next suite to run. */
+  const { sql } = await import("drizzle-orm");
+  await getDb().execute(sql`delete from auth.users where id in (${OWNER}, ${STRANGER})`);
+  await closeDb();
+});
+
+bothStores(
+  "the Postgres journal",
+  () => pgRealtimeSessionStore,
+  (n) => `00000000-0000-4000-8000-00000000f20${n}`,
+);

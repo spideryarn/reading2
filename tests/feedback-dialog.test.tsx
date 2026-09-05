@@ -14,11 +14,13 @@
  * Escape, top-layer painting — is the platform's, and a test asserting the
  * platform works would be testing the wrong thing.
  */
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ADMIN_EMAIL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
+import { CONTACT_EMAIL } from "../src/site-text.js";
 import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
@@ -110,7 +112,6 @@ function show(open: boolean) {
       createElement(FeedbackDialog, {
         open,
         onClose: () => {},
-        readerEmail: "reader@example.com",
         where: { url: "https://www.spideryarn.com/read/a-piece?q=footnotes", slug: "a-piece" },
       }),
     );
@@ -122,6 +123,34 @@ function mount() {
   document.body.append(host);
   root = createRoot(host);
   show(true);
+}
+
+/**
+ * **Mount it the way `FeedbackButton` does — with `open` in a parent's state.**
+ *
+ * `mount()` above pins `open` at `true` and hands the dialog an `onClose` that
+ * does nothing, which is right for every test about what gets posted and wrong
+ * for the one test about *closing*: with the prop nailed open, nothing can shut.
+ *
+ * Returns the `<dialog>` so a test can read the real `open` attribute the stub
+ * at the top of this file maintains.
+ */
+function mountControlled(): HTMLDialogElement {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    return createElement(FeedbackDialog, {
+      open,
+      onClose: () => setOpen(false),
+      where: { url: "https://www.spideryarn.com/read/a-piece", slug: "a-piece" },
+    });
+  }
+  act(() => root.render(createElement(Harness)));
+  const dialog = host.querySelector("dialog");
+  if (!dialog) throw new Error("no dialog");
+  return dialog;
 }
 
 /** Shut it the way Escape or the backdrop does, then open it again. */
@@ -615,6 +644,95 @@ describe("the feedback dialog", () => {
        the report by email. */
     expect(host.querySelector<HTMLAnchorElement>('a[href^="mailto:"]')).not.toBeNull();
   });
+
+  /* ---- one address on the site, and it is not a person's ---------------- */
+
+  /**
+   * **The dialog no longer reads the reader their own address back.**
+   *
+   * Greg, 2026-09-05, having filed the report from inside this dialog:
+   *
+   * > In the feedback box, it has the following: "It is sent as
+   * > greg@gregdetre.com, so we can reply.". Remove that sentence, and remove
+   * > any other mentions in the UI of my personal email address … The only
+   * > email address we should include on the site is hello@spideryarn.com.
+   *
+   * The sentence interpolated whoever was signed in, so on his screen it was his
+   * own address staring back. Nothing is lost by it going: the report still
+   * travels with the account's address — the *server* attaches it from the
+   * verified session, never the browser (src/feedback.ts) — and the hover card
+   * on the Feedback button is where a reader is told so
+   * (src/web/FeedbackButton.tsx, tests/feedback-button-tooltip.test.tsx).
+   */
+  it("does not read the reader their own address back", () => {
+    mount();
+    expect(host.textContent).not.toContain("so we can reply");
+    expect(host.querySelector(".fb-email")).toBeNull();
+  });
+
+  /**
+   * **The failed-send fallback points at the site's inbox.**
+   *
+   * It was `ADMIN_EMAIL` — the constant that decides who sees `/admin` — so the
+   * one screen in the app that asks a reader to send us an email named a person
+   * rather than the product. `hello@spideryarn.com` is the site's one address
+   * (src/site-text.ts, docs/project/website-text.md § The contact address), and
+   * `ADMIN_EMAIL` goes on meaning what it always meant: an identity for logs and
+   * for the seed, never something a reader is shown.
+   */
+  it("offers the site's address when a send fails, not a personal one", async () => {
+    mount();
+    type("It broke.");
+    answer = async () => {
+      throw new Error("offline");
+    };
+    send();
+    await act(async () => {});
+
+    const link = host.querySelector<HTMLAnchorElement>('a[href^="mailto:"]');
+    expect(link?.getAttribute("href")).toContain(`mailto:${CONTACT_EMAIL}`);
+    expect(host.textContent).toContain(CONTACT_EMAIL);
+    expect(host.textContent).not.toContain(ADMIN_EMAIL);
+  });
+
+  /* ---- the button says it is working ------------------------------------ */
+
+  /**
+   * **Send spins while the report is in flight, and cannot be pressed again.**
+   *
+   * Greg, 2026-09-05: *"When I click the send button in the feedback dialog,
+   * show a loading spinner while it's sending."* It already did — `.cmt-spinner`
+   * has been on this button since 2026-09-01 — and nothing pinned it, so a
+   * refactor of the four-way label below could have dropped it with every test
+   * in this file still green. That is what this is here for.
+   *
+   * The answer is held open deliberately: a `Promise` that has not settled is
+   * the only way to stand inside the `sending` stage and look at it.
+   */
+  it("spins on Send while the report is in flight", async () => {
+    mount();
+    type("It broke.");
+    const flight: { land: (() => void) | null } = { land: null };
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        flight.land = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    await act(async () => {});
+
+    const button = host.querySelector<HTMLButtonElement>("button.fb-send");
+    expect(button?.textContent).toContain("Sending");
+    /* The app's one spinner — docs/project/icons.md#the-loading-spinner. */
+    expect(button?.querySelector(".cmt-spinner")).not.toBeNull();
+    /* And it is not pressable meanwhile. The ref latch is what stops two clicks
+       in one frame (above); this is the half a reader can see. */
+    expect(button?.disabled).toBe(true);
+
+    await act(async () => {
+      flight.land?.();
+    });
+    expect(host.querySelector("button.fb-send")?.textContent).not.toContain("Sending");
+  });
 });
 
 /**
@@ -638,6 +756,235 @@ describe("the feedback dialog", () => {
  * with a stylesheet that still looks right — `.cmt-dialog` learnt this once
  * already, with its ✕.
  */
+describe("the thank-you, and getting out of it", () => {
+  /** The sentence in the `.fb-done` panel, whitespace-collapsed. */
+  function thanks(): string {
+    const panel = host.querySelector(".fb-done p");
+    if (!panel) throw new Error("no thank-you panel");
+    return (panel.textContent ?? "").replace(/\s+/g, " ").trim();
+  }
+
+  /** File a report, having optionally pressed one of the two kind toggles. */
+  async function fileOne(label?: string) {
+    if (label) pick(label);
+    type("Something happened.");
+    send();
+    await act(async () => {});
+  }
+
+  /* **Matched loosely, on one distinguishing word each.** copy.md's rule is that
+     tests match the code and not the prose, precisely so copy stays rewritable;
+     there is no bracketed code here to match on, because a thank-you is not a
+     failure. So each assertion names the one thing that must survive a rewrite —
+     that a problem is answered with sympathy, a suggestion with thanks for the
+     suggestion — and leaves the rest of the sentence free. */
+  it("is sorry about a problem, and says it will look into it", async () => {
+    mount();
+    await fileOne("A problem");
+    expect(thanks().toLowerCase()).toContain("sorry");
+    expect(thanks().toLowerCase()).toContain("look into it");
+  });
+
+  it("thanks a suggestion for the suggestion", async () => {
+    mount();
+    await fileOne("A suggestion");
+    expect(thanks().toLowerCase()).toContain("suggestion");
+    expect(thanks().toLowerCase()).not.toContain("sorry");
+  });
+
+  it("still thanks a report whose reader picked neither", async () => {
+    mount();
+    await fileOne();
+    expect(thanks().toLowerCase()).toContain("thank you");
+    expect(thanks().toLowerCase()).not.toContain("sorry");
+  });
+
+  /**
+   * **Close is instant, and this is what "instant" turned out to mean.**
+   *
+   * Greg, 2026-09-05: *"when I click close on the thank you that is filed, there
+   * shouldn't be a delay, it should happen instantly."*
+   *
+   * Nothing was slow. The button called `discard()` and `onClose()` together, so
+   * one commit emptied the form *and* asked for the dialog to shut — and the
+   * emptied form is what the browser painted, because the shutting was a passive
+   * effect and those run after the paint. The reader saw a blank feedback form
+   * flash up in place of the thank-you they were dismissing.
+   *
+   * **jsdom cannot see a paint**, so a test that waited a microtask and read
+   * `dialog.open` was green before the fix as well as after — it was written,
+   * watched pass against the bug, and thrown away. docs/reusable/silent-success.md.
+   * What *is* observable is the order the DOM changes in, so that is what this
+   * pins: at the moment `close()` is called, the thank-you must still be on
+   * screen. Under the old arrangement the form had already replaced it.
+   */
+  it("shuts before it empties the panel, so nothing is drawn on the way out", async () => {
+    mountControlled();
+    type("Something happened.");
+    send();
+    await act(async () => {});
+
+    const proto = window.HTMLDialogElement.prototype;
+    const real = proto.close;
+    const onScreenWhenItShut: boolean[] = [];
+    proto.close = function close(this: HTMLDialogElement) {
+      onScreenWhenItShut.push(host.querySelector(".fb-done") !== null);
+      real.call(this);
+    };
+    try {
+      const button = host.querySelector<HTMLButtonElement>(".fb-done button");
+      if (!button) throw new Error("no Close");
+      act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    } finally {
+      proto.close = real;
+    }
+
+    expect(onScreenWhenItShut).toEqual([true]);
+    /* And it did empty afterwards — otherwise the assertion above is satisfied
+       by a Close button that does nothing at all. */
+    expect(firstBox().value).toBe("");
+  });
+
+  /**
+   * **Words typed after Send are not the report that was filed**, so dismissing
+   * the thank-you must not delete them.
+   *
+   * The box stays editable while the request is in the air, so a reader can add
+   * a sentence between pressing Send and the answer arriving — and that sentence
+   * was never in the POST. GPT Sol established this as a P0 on 2026-09-05 and
+   * reproduced it in a harness of its own: the POST carried `A`, and after the
+   * dismissal the box was empty rather than holding `A+B`.
+   *
+   * It predates this change — the old Close button called the same `discard()` —
+   * but this change would have widened it from the button to every dismissal, so
+   * it is closed here rather than inherited.
+   */
+  it("keeps a sentence added after Send, and starts a new report for it", async () => {
+    mountControlled();
+    type("The first thing.");
+    /* Send, and answer it only after the reader has typed more. */
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    type("The first thing. And another.");
+    act(() => release?.());
+    await act(async () => {});
+
+    /* What went is what was in the box when Send was pressed. */
+    expect(body().body).toBe("The first thing.");
+
+    const button = host.querySelector<HTMLButtonElement>(".fb-done button");
+    if (!button) throw new Error("no Close");
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(firstBox().value).toBe("The first thing. And another.");
+    /* And it is a new report, not a second send of the one already filed. */
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(idOf(1)).not.toBe(idOf(0));
+    expect(body().body).toBe("The first thing. And another.");
+  });
+
+  /**
+   * **A report filed while nobody was looking is not dismissed.**
+   *
+   * Close the dialog mid-flight and the request goes on; when it lands, `stage`
+   * becomes `sent` with `open` already false. Without the `thanksSeen` guard the
+   * reset effect fires there, and the reader reopens onto an empty box with no
+   * way to tell whether their report went.
+   */
+  it("shows the thank-you next time when the send landed after they left", async () => {
+    mountControlled();
+    type("Something happened.");
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    /* Out of the dialog before the answer comes back. */
+    const shut = host.querySelector<HTMLButtonElement>(".fb-close");
+    if (!shut) throw new Error("no ✕");
+    act(() => shut.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    act(() => release?.());
+    await act(async () => {});
+
+    expect(host.querySelector(".fb-done")).not.toBeNull();
+  });
+
+  /**
+   * **A picture still being re-encoded when the report is dismissed does not
+   * turn up attached to the next one.**
+   *
+   * `discard()` cleared `shot` but left `shotGeneration` alone, so the late
+   * conversion still passed its own currency check and wrote the old report's
+   * image into a freshly minted one. GPT Sol established it as a P1 on
+   * 2026-09-05 and reproduced it; it predates this change.
+   */
+  it("does not attach a late picture to the report after it", async () => {
+    mountControlled();
+    type("Something happened.");
+
+    /* Send, and hold the request open — the form is still on screen and still
+       accepts a picture while `stage` is `sending`. */
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+
+    const input = host.querySelector<HTMLInputElement>('.fb-shot-pick input[type="file"]');
+    if (!input) throw new Error("no file input");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["x"], "shot.png", { type: "image/png" })],
+    });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+
+    /* The report lands and the reader dismisses the thank-you, all while the
+       picture is still being re-encoded. */
+    act(() => release?.());
+    await act(async () => {});
+    const button = host.querySelector<HTMLButtonElement>(".fb-done button");
+    if (!button) throw new Error("no Close");
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    /* Only now does the conversion finish. It belongs to a report that is filed
+       and gone, so it must not land on the one that replaced it. */
+    await act(async () => {
+      finishShot?.("bGF0ZQ==");
+    });
+
+    expect(host.querySelector(".fb-shot-have")).toBeNull();
+  });
+
+  /**
+   * **Every way out of the thank-you starts the next report**, not only the
+   * button — Escape, the ✕ and the backdrop all merely flip `open`.
+   *
+   * Before the reordering above, those three left `stage` at `sent`: the next
+   * press of Feedback opened on a stale thank-you for a report filed some time
+   * ago, with the old draft still behind it.
+   */
+  it("does not come back showing the last report's thank-you", async () => {
+    mount();
+    type("Something happened.");
+    send();
+    await act(async () => {});
+    expect(host.querySelector(".fb-done")).not.toBeNull();
+
+    reopen();
+
+    expect(host.querySelector(".fb-done")).toBeNull();
+    expect(firstBox().value).toBe("");
+  });
+});
+
 describe("the keyboard, and the button under it", () => {
   it("keeps Send out of the part that scrolls", () => {
     mount();

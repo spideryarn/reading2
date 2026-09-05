@@ -35,8 +35,8 @@
  * never on an absence. Neither failure is a leak, so no security test would go
  * near them; this file is what says the two conditions are load-bearing.
  *
- * The `file://` case is the same class one step along. `npm run pdf --
- * <file.pdf>` records `url: "file:///Users/greg/…"` (src/pdf-read.ts § `main`),
+ * The `file://` case is the same class one step along. `npm run eval:pdf-read
+ * -- <file.pdf>` records `url: "file:///Users/greg/…"` (src/pdf-read.ts § `main`),
  * which is not an address a reader can follow and *is* a home directory printed
  * on the page.
  */

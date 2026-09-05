@@ -39,17 +39,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once, and a static `import` is hoisted above every statement.
- * The same block, for the same reason, as tests/quiz-mark-route.test.ts.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { eq, sql } from "drizzle-orm";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
@@ -84,31 +73,16 @@ const COLOUR_SLUG = "test-routes-colour-fixture";
  */
 const MISSING = "test-routes-no-such-article";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/routes.test.ts",
   tables: ["spideryarn.articles", "spideryarn.comments", "spideryarn.search_runs"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { commentStore, readerStore, searchStore, shelfStore, STORE } = await import(
+const { commentStore, readerStore, searchStore, shelfStore } = await import(
   "../src/store/index.js"
 );
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this file working — the filesystem
-       store answers `loadComments` out of a JSON file, and every case below
-       would go on passing about a store nobody deploys. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * The five articles, seeded once.
@@ -153,7 +127,6 @@ let QUOTE2 = "";
 const AT2 = 30;
 
 beforeAll(async () => {
-  if (!reachable) return;
   fixture = await scratchArticleInPg(SLUG, {
     ownerId: TEST_OWNER,
     mutate: async (dir) => {
@@ -179,15 +152,13 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  if (reachable) {
-    /* **The reader profile is the one row this file writes that no article
-       owns**, so nothing cascades it away — see § *the reader routes*. Deleted
-       here, and then asserted gone, because "we tidied up" is a claim and the
-       read is the result. */
-    await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
-    expect(await asTestOwner(() => readerStore.readProfile())).toBeNull();
-    expect(await asTestOwner(() => readerStore.readExperimental())).toBeNull();
-  }
+  /* **The reader profile is the one row this file writes that no article
+     owns**, so nothing cascades it away — see § *the reader routes*. Deleted
+     here, and then asserted gone, because "we tidied up" is a claim and the
+     read is the result. */
+  await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
+  expect(await asTestOwner(() => readerStore.readProfile())).toBeNull();
+  expect(await asTestOwner(() => readerStore.readExperimental())).toBeNull();
   await fixture?.remove();
   await shelfArticle?.remove();
   await purposeArticle?.remove();
@@ -209,7 +180,6 @@ async function commentsOn(slug: string): Promise<Awaited<ReturnType<typeof comme
  * the reader state written on it.
  */
 afterEach(async () => {
-  if (!reachable) return;
   await asTestOwner(async () => {
     for (const c of await commentStore.load(SLUG)) await commentStore.remove(SLUG, c.id);
   });
@@ -343,7 +313,7 @@ async function callStreaming(
  * move without rewriting the handler — the same limit `quiz-mark-route`
  * records against the same claim.
  */
-when("asking a question is a stream, and refusing one is not", () => {
+describe("asking a question is a stream, and refusing one is not", () => {
   /* The two shapes, and they must not be able to swap places. A failure the
      server can see before it starts writing is an HTTP status the client can
      read with `r.ok`; a failure after that can only be a frame. If validation
@@ -377,7 +347,7 @@ when("asking a question is a stream, and refusing one is not", () => {
   });
 });
 
-when("the library route", () => {
+describe("the library route", () => {
   /**
    * **The fixture-visibility control for the whole file.**
    *
@@ -428,7 +398,7 @@ when("the library route", () => {
  * answered `{ opens: 0 }` for every one of these, and the two cases that assert
  * exactly that would have passed while asserting nothing.
  */
-when("the shelf routes", () => {
+describe("the shelf routes", () => {
   /** What the shelf now says, as the reader the request ran as. */
   const shelfState = (slug: string) => asTestOwner(() => shelfStore.read(slug));
 
@@ -634,24 +604,33 @@ when("the shelf routes", () => {
  * `.onConflictDoUpdate({ … })` replaced with `.onConflictDoNothing()` — the
  * upsert the file's own header argues for, turned into the *"keep serving the
  * FIRST thing the reader ever typed, for ever, while every write after it
- * reported success"* version. **1 failed of 127**: *keeps the profile and the
- * switch out of each other's way*, `expected null to be 'A physicist.'` — the
- * only case that writes the row twice under two different columns, so the only
- * one whose second write meets a conflict.
+ * reported success"* version. **2 failed of 129**, watched 2026-09-04: *treats
+ * null and blank as clearing it*, whose `GET` after the clearing `PATCH` still
+ * answers `profile: "A physicist.", hasProfile: true`; and *keeps the profile
+ * and the switch out of each other's way*, `expected null to be 'A
+ * physicist.'`. Those are the two cases that write the row twice, and so the
+ * only two whose second write meets a conflict at all.
  *
- * **Blind to.** Only one case failed, and the one that did *not* is the
- * interesting half. *Treats null and
- * blank as clearing it* writes the profile twice and stayed green, because
- * `writeProfile` **returns its own argument** and `PATCH /api/reader` answers
- * with that: the reply is computed, not read back, so a write that did nothing
- * still answers with what it was told. Only the assertions that go round
- * through `GET` can see this at all. Also blind to whether two servers can lose
- * each other's edit, which is the property the upsert exists for and which one
- * process cannot show; and to `writeExperimental`'s `coalesce` — *does not move
- * the date when it is switched on twice* covers the behaviour, but no mutation
- * here reaches the SQL that makes it true.
+ * **It was 1 of 127 until B3, and the case that did not fail is the whole
+ * lesson.** *Treats null and blank as clearing it* asserted only the two echoed
+ * `PATCH` replies, and `writeProfile` **returns its own argument** while
+ * `PATCH /api/reader` answers with that — the reply is computed rather than
+ * read back, so an upsert that wrote nothing whatever still answered
+ * `profile: null`, which is exactly what a case named for *clearing* wanted to
+ * see. B2 recorded that as a finding and left it green; B3 sends it round
+ * through `GET`, for the same reason the identical `recolour` hole was closed
+ * rather than written up.
+ *
+ * **Blind to.** Whether two servers can lose each other's edit, which is the
+ * property the upsert exists for and which one process cannot show; and to
+ * `writeExperimental`'s `coalesce` — *does not move the date when it is
+ * switched on twice* covers the behaviour, but no mutation here reaches the SQL
+ * that makes it true. And still to the *reply* on any write that is not written
+ * twice: every other `PATCH` assertion in this block reads the echo, so a store
+ * that dropped a first write would be visible only through the `GET` that
+ * follows it.
  */
-when("the reader routes", () => {
+describe("the reader routes", () => {
   /** The one row this block writes, gone — so each case starts from nothing. */
   beforeEach(async () => {
     await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
@@ -701,15 +680,44 @@ when("the reader routes", () => {
   });
 
   it("treats null and blank as clearing it", async () => {
+    /* **Every clearing claim goes round through `GET`, and that is the whole
+       point of the case.** `writeProfile` **returns its own argument** and
+       `PATCH /api/reader` answers with that, so the two echoed replies below
+       are computed rather than read back: an upsert that wrote nothing at all
+       would answer `profile: null` just as cheerfully as one that cleared the
+       row. Only a read can tell those apart, and this case is *named* for the
+       clearing. B2 recorded that as a finding and left it green; B3 closes it,
+       for the same reason the identical `recolour` hole was closed rather than
+       written up. */
     await call("PATCH", "/api/reader", { profile: "A physicist." });
+    /* The row is really there before it is cleared — otherwise "it is gone
+       afterwards" is a sentence about a row that never existed, and every
+       assertion below passes over a write that did nothing. */
+    expect((await call("GET", "/api/reader")).body).toMatchObject({
+      profile: "A physicist.",
+      hasProfile: true,
+    });
+
     expect((await call("PATCH", "/api/reader", { profile: null })).body).toEqual({
       profile: null,
       experimentalSince: null,
     });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({
+      profile: null,
+      hasProfile: false,
+    });
+
     await call("PATCH", "/api/reader", { profile: "A physicist." });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({ profile: "A physicist." });
     expect((await call("PATCH", "/api/reader", { profile: "   " })).body).toEqual({
       profile: null,
       experimentalSince: null,
+    });
+    /* Whitespace is *clearing*, not storing three spaces — and the row says so
+       rather than the reply. */
+    expect((await call("GET", "/api/reader")).body).toMatchObject({
+      profile: null,
+      hasProfile: false,
     });
   });
 
@@ -914,7 +922,7 @@ when("the reader routes", () => {
  * decided by pattern matching before anything is read. The library read itself
  * is mutated in *the library route* above.
  */
-when("the library route, continued", () => {
+describe("the library route, continued", () => {
   it("does not answer to a path that merely starts with it", async () => {
     // `/api/library/anything` quietly serving the whole shelf would be the
     // kind of thing nobody notices until something depends on it.
@@ -986,7 +994,7 @@ when("the library route, continued", () => {
  * coming back with HTTP 200, and no store the app can reach today has a path to
  * join, so this block is now about the refusal rather than about the escape.
  */
-when("a slug that is not a slug", () => {
+describe("a slug that is not a slug", () => {
   // Deep enough to climb out of any checkout, then somewhere absolute.
   const TRAVERSAL = `${encodeURIComponent("../".repeat(12))}private%2Ftmp%2Fanything`;
 
@@ -1055,7 +1063,7 @@ when("a slug that is not a slug", () => {
  * slug 404 as well, which the block above catches. The move is what closed the
  * class, and this case is now a guard against somebody reopening it.
  */
-when("what a failure is reported as", () => {
+describe("what a failure is reported as", () => {
   // Every one of these used to come back 404, which sent the reader looking for
   // a missing article instead of the thing that was actually wrong.
   it("calls a malformed body 400, not 404", async () => {
@@ -1116,7 +1124,7 @@ when("what a failure is reported as", () => {
  * `commentStore.load` is watched going red in *making a comment costs nothing*
  * below, so it is known to be able to see a row.
  */
-when("the anchor offset must be a real offset", () => {
+describe("the anchor offset must be a real offset", () => {
   // A negative start silently drew the mark a few characters left of the words
   // it belonged to. Refusing it at the door is cheaper than defending every
   // reader of the value. See src/web/annotate.ts § resolveMark.
@@ -1173,7 +1181,7 @@ when("the anchor offset must be a real offset", () => {
  * `keep` entirely would pass. And to the *clearing* of `attempt_id` beside the
  * status, which nothing here reads back.
  */
-when("a pending comment nobody is answering", () => {
+describe("a pending comment nobody is answering", () => {
   /* A `pending` row now has to be *made* pending, because creating one is free
      and lands as `none`. `beginAnswer` is the only thing that writes `pending`
      — which is exactly the property the sweep depends on — and it refuses a
@@ -1264,7 +1272,7 @@ when("a pending comment nobody is answering", () => {
   });
 });
 
-when("making a comment costs nothing", () => {
+describe("making a comment costs nothing", () => {
   /* **A real block, and a quote really inside it.** The route checks the anchor
      against the article, so a made-up passage is a 400 rather than a stored
      comment nothing can draw. These three come from `example/blocks.json`,
@@ -1287,14 +1295,24 @@ when("making a comment costs nothing", () => {
      comes back out through the store, and nothing in between is mocked.
 
      **Mutation.** `src/store/pg-comments.ts` § `create`, its `fields` object's
-     `body: input.body ?? null` replaced by `body: null` — the route's own
-     trimming still runs, so its 201 and its echoed body are unchanged and only
-     the row is wrong. **3 failed of 127**: *stores the reader's words, and reads
-     them back through the store* and *refuses a body patch that never says what
-     the body is* here, and *never touches a bookmark, because a bookmark is not
-     a lost answer* in the block above. All three `expected undefined to be …`.
-     That is the divergence this case exists for, stated exactly — the route
-     right, the store wrong, and each side's own tests green.
+     `body: input.body ?? null` replaced by `body: null`. **3 failed of 129**,
+     watched 2026-09-04: *stores the reader's words, and reads them back through
+     the store* and *refuses a body patch that never says what the body is*
+     here, and *never touches a bookmark, because a bookmark is not a lost
+     answer* in the block above. All three `expected undefined to be …`.
+
+     **This note used to say the route's 201 and echoed body were unchanged, so
+     that "only the row is wrong". That is false, and the run says so.**
+     `create` is `INSERT … RETURNING` put through `toComment`, and src/routes.ts
+     answers with that result — so the echo loses the body too, and *stores the
+     reader's words* fails on the route's own reply (`r.body.comment?.body`)
+     three lines above the store read-back it was supposed to be evidence for.
+     The mutation is real and it reaches SQL; what it does **not** show is the
+     route-right/store-wrong divergence this case was written for. The two cases
+     that do read a row are the other two: *refuses a body patch…* goes through
+     `commentsOn`, and *never touches a bookmark…* through `GET`, and neither
+     touches the create response at all. GPT Sol found the reasoning wrong in
+     its review of B2; B3 re-ran it rather than reasoning it out again.
 
      **Blind to.** Everything about the anchor: `blockId`, `quote` and `start`
      are asserted through the route's *reply* rather than through the row, so a
@@ -1473,14 +1491,33 @@ when("making a comment costs nothing", () => {
  * Read the other way round, that is the trap
  * docs/plans/260903f-… names: *the seeder ships the artefact your oracle asserts*.
  *
- * **No mutation, and this is the judgement.** Its three cases are `isSlug`, a
- * 404 and a 404, and the only store call under them is `loadTweets` answering
- * "nothing here" — which is what every plausible break of it also answers.
- * Breaking the read makes an absent thread look absent. The block that *can*
- * move a `loadArticle`-family read is *a slug that is not a slug*, which has the
- * positive case, and its mutation is recorded there.
+ * **Mutation.** `src/store/pg.ts` § `loadTweets`, its
+ * `const thread = found.revision.tweets as TweetThread | null` replaced by
+ * `null` — the read that has stopped reading. **1 failed of 129**, watched
+ * 2026-09-04: *hands back the thread of an article that has one*, `expected 404
+ * to be 200`. The two 404 cases stayed green under it, which is the point.
+ *
+ * **B2 waived a mutation here, and the argument does not hold.** It said the
+ * block's only store call was `loadTweets` answering *"nothing here"*, which is
+ * what every plausible break of it also answers. But only `SLUG` had its
+ * `tweets.json` taken out on the way in: the other four `scratchArticleInPg`
+ * articles kept theirs, so a read that lost track of *which* article — or which
+ * revision — it was asked about answers with **another article's thread**, which
+ * is not "nothing here". GPT Sol, reviewing B2, 2026-09-04. The positive case
+ * the file already had everything for is now here, and the pair of slugs is what
+ * makes the distinction visible: one answers 404 and the other answers a thread,
+ * in one run against one database.
+ *
+ * **Blind to.** *Which* thread. Every `scratchArticleInPg` article is a clone of
+ * the same corpus article, so the four that kept a thread all carry the same
+ * one — a read that fetched `SEARCH_SLUG`'s thread for `SHELF` would be
+ * invisible here, and what the pair above can see is only a read that lost the
+ * slug badly enough to answer for the article that has none. And to `stale`:
+ * its type is asserted and its value is not, so the fingerprint arithmetic
+ * (`tweetsStale`, the tree and the metadata head) is `tests/store-parity.test.ts`'s
+ * to speak for.
  */
-when("the tweets route", () => {
+describe("the tweets route", () => {
 
   it("refuses a slug that could climb out of data/", async () => {
     // Not theoretical: `part()` percent-decodes, so `%2E%2E%2F` arrives as
@@ -1499,6 +1536,39 @@ when("the tweets route", () => {
     const r = await call("GET", `/api/tweets/${SLUG}`);
     expect(r.status).toBe(404);
     expect(r.body.error).toMatch(/steps.*tweets/);
+  });
+
+  it("hands back the thread of an article that has one", async () => {
+    /* **The positive half, and the block had none until B3.**
+
+       Without it the block's whole claim was two 404s, and a `loadTweets` that
+       had stopped reading anything at all would answer both of them correctly —
+       "nothing here" is what a broken read says too. B2 waived a mutation on
+       exactly that reasoning; the reasoning does not hold, because only `SLUG`
+       had its `tweets.json` taken out on the way in. The other four
+       `scratchArticleInPg` articles kept theirs, so a read that lost track of
+       *which* article it was asked about would hand this thread back for `SLUG`
+       as well — which is not "nothing here", and which the pair of cases can now
+       see: one slug answers 404 and the other answers a thread, in the same
+       lane, in the same run.
+
+       `SHELF` rather than a sixth fixture: the shelf block writes opens on it
+       and nothing writes its artefacts, so its thread is the corpus's own. */
+    const r = await call("GET", `/api/tweets/${SHELF}`);
+    expect(r.status).toBe(200);
+    const body = r.body as unknown as {
+      thread?: { tweets?: { text: string }[] };
+      stale?: unknown;
+      profileChanged?: unknown;
+    };
+    expect(body.thread?.tweets?.length).toBeGreaterThan(0);
+    expect(typeof body.thread?.tweets?.[0]?.text).toBe("string");
+    /* Both flags present and boolean. A read that answered with the thread
+       alone would leave the panel unable to say *the article has moved under
+       this* — and a missing field reads as `false`, which is the reassuring
+       answer. `ThreadResponse` in src/types.ts. */
+    expect(typeof body.stale).toBe("boolean");
+    expect(typeof body.profileChanged).toBe("boolean");
   });
 
   it("does not answer to POST", async () => {
@@ -1527,19 +1597,24 @@ when("the tweets route", () => {
  * **Mutation.** `src/store/pg-searches.ts` § `remove`, its
  * `and(eq(searchRuns.articleId, articleId), eq(searchRuns.id, runId))` reduced
  * to the `articleId` term alone, so a delete takes every run on the article
- * rather than the one named. **Stayed green, 127 passed.** Every case here has
- * exactly one run on the article, so "delete this one" and "delete all of them"
- * are the same statement — and the two cases that call `remove` at all are
- * asserting the run is *gone*, which both spellings achieve. It is the same
- * shape as the ordering greens elsewhere in stage B: the file exercises the
- * call and not the necessity of its predicate. The one two-run case in the file
- * is in the block below, and it is a `recolour` rather than a `remove`.
+ * rather than the one named. **1 failed of 129**, watched 2026-09-04: *deletes
+ * the run it was given, and leaves the reader's other search standing*,
+ * `expected [] to deeply equal [ 'spya-qks0vp' ]`.
  *
- * **Blind to.** Which run is deleted, per the above; and to everything about
- * `finish` — nothing here reads a completed run back out of the store, only out
- * of the frames.
+ * **It stayed green at 127, and the reason was that every case here had one
+ * run.** With one run on the article "delete this one" and "delete all of them"
+ * are the same statement, and the two cases that called `remove` were both
+ * asserting the run was *gone* — which both spellings achieve. B2 recorded that
+ * as a finding; B3 adds the second run, which is the same repair the two-run
+ * `recolour` case in the block below already got, and it is a few lines.
+ *
+ * **Blind to.** The *owner* scope on `remove`, for the reason every owner-term
+ * mutation in this file is blind — one seeded owner in a private database, and
+ * `tests/owner-isolation.test.ts` is what speaks for that predicate. And to
+ * everything about `finish`: nothing here reads a completed run back out of the
+ * store, only out of the frames.
  */
-when("POST /api/search/:slug is a stream too", () => {
+describe("POST /api/search/:slug is a stream too", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(async () => {
     /* The runs a previous case left, rather than a directory removed and
@@ -1700,6 +1775,36 @@ when("POST /api/search/:slug is a stream too", () => {
     expect(frames.some((f) => f.event === "done")).toBe(false);
     expect(await asTestOwner(() => searchStore.load(SEARCH_SLUG))).toHaveLength(0);
   });
+
+  it("deletes the run it was given, and leaves the reader's other search standing", async () => {
+    /* **Two runs, because with one run on the article "delete this one" and
+       "delete all of them" are the same statement.** Every other case in this
+       block has exactly one, so dropping `eq(searchRuns.id, runId)` from the
+       delete in `src/store/pg-searches.ts` § `remove` left all 127 of them
+       green — the file could not tell *this* run from *these* runs. B2 recorded
+       that as a finding; this is the case that closes it, and it is the same
+       repair the two-run `recolour` case in the block below already got.
+
+       Driven through `DELETE /api/search/:slug/:id` rather than through the
+       store, so the route that carries the id is in the path too — this is the
+       only case in the file that reaches that method. */
+    const keep = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to keep"));
+    const doomed = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to delete"));
+    expect(keep.run.id).not.toBe(doomed.run.id);
+
+    const r = await call("DELETE", `/api/search/${SEARCH_SLUG}/${doomed.run.id}`);
+    expect(r.status).toBe(200);
+    /* The surviving list by **id**, not by length: taking both and taking
+       neither are each a wrong number, and taking the wrong one is the right
+       number. */
+    expect((r.body as unknown as { runs: { id: string }[] }).runs.map((run) => run.id)).toEqual([
+      keep.run.id,
+    ]);
+    /* And out of the store, not only out of the list the route computed. */
+    expect((await asTestOwner(() => searchStore.load(SEARCH_SLUG))).map((run) => run.id)).toEqual([
+      keep.run.id,
+    ]);
+  });
 });
 
 /**
@@ -1734,7 +1839,7 @@ when("POST /api/search/:slug is a stream too", () => {
  * subject and happens above the store: every 400 here is decided before a
  * statement runs.
  */
-when("PATCH /api/search/:slug/:id", () => {
+describe("PATCH /api/search/:slug/:id", () => {
   /* The runs a previous case saved, rather than a removed directory. */
   beforeEach(async () => {
     await asTestOwner(async () => {
@@ -1848,7 +1953,7 @@ when("PATCH /api/search/:slug/:id", () => {
  * assertion would still hold. If one ever needs a real row to reach its
  * validation, that is itself worth knowing.
  */
-when("no PATCH route answers a malformed body with a 500", () => {
+describe("no PATCH route answers a malformed body with a 500", () => {
   const PATCH_ROUTES = [
     "/api/library/a-slug",
     "/api/reader",
@@ -1890,7 +1995,7 @@ when("no PATCH route answers a malformed body with a 500", () => {
  * stated in its own header: there is no store between the request and the
  * refusal to break.
  */
-when("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
+describe("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
   for (const body of ["null", "[]", '"3"', "7"]) {
     it(`answers ${body} with 400, not 500`, async () => {
       const r = await call("PATCH", "/api/chat/test-routes-colour-fixture/t1", body);
@@ -1933,7 +2038,7 @@ when("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => 
  * but every claims check inside the real verifier — `role`, `is_anonymous`, the
  * `sub` shape — is `tests/auth.test.ts`'s, not this file's.
  */
-when("the gate", () => {
+describe("the gate", () => {
   it("refuses a request with no Authorization header", async () => {
     /* GET, because a 401 on a POST could equally be validation failing first —
        and the order matters: the gate runs before any body is read, so a
@@ -1970,7 +2075,7 @@ when("the gate", () => {
  * administrator (`TEST_SUB`, which `isAdmin` says yes to) — so the interesting
  * case needs a verifier of its own. See src/admin.ts and docs/project/admin.md.
  */
-when("the admin gate", () => {
+describe("the admin gate", () => {
   /** Somebody else entirely, signed in perfectly properly. */
   const asSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
     ok: true,
@@ -2051,25 +2156,61 @@ when("the admin gate", () => {
    * `send(res, 200, { users: await adminStore.listUsersAcrossOwners() })`
    * replaced with `send(res, 200, { users: [] })` — the page a store failure
    * would draw, and the exact thing the *"not an empty list"* comments above are
-   * about. **2 failed of 127**: this case and *says nothing about users in three
-   * refusals*, both `expected 0 to be greater than 0`. The list being non-empty
-   * is what tells a working page from a dead one, so it is asserted rather than
-   * the 200 alone — a 200 carrying nothing is precisely the refusal wearing the
-   * answer's clothes.
+   * about. **2 failed of 129**, watched 2026-09-04: this case and *says nothing
+   * about users in three refusals*, both `expected 0 to be greater than 0`.
    *
-   * **Blind to.** Everything in the list. It comes out of GoTrue over HTTP
-   * joined to counts from this run's private database, and nothing here reads a
-   * field — `tests/admin-store.test.ts` is what asserts the shapes and the
-   * runtime types, and `tests/admin-users-merge.test.ts` the join.
+   * **Blind to.** Everything below the call. This is a **call-site mutation**:
+   * it deletes the `await` rather than breaking anything inside the store, so
+   * **no SQL runs at all** and it proves only that the route refuses to answer
+   * with an empty list. It is the same shape stage B already recorded against
+   * `list-reconciles-expired` — a file whose watched reds all stopped at a call
+   * site — recurring in the next file, which is why the mutation below exists.
+   * GPT Sol, reviewing B2, 2026-09-04.
+   *
+   * **Mutation.** `src/store/pg-admin.ts` § `adminQueries`, the `shelf`
+   * aggregate's `live` count inverted — `filter (where archived_at is null)` to
+   * `is not null`, the wrong side of the one predicate that decides whether an
+   * article is on the shelf or off it. **1 failed of 129**, watched 2026-09-04:
+   * this case, `expected 0 to be greater than 0` on `me?.articles`. That one
+   * reaches Postgres: the count is a grouped aggregate over *this run's private
+   * database*, joined to the account by owner id, and this file's own five
+   * seeded articles are what it is counting.
+   *
+   * **Blind to.** Every other field on the row, and the arithmetic of this one —
+   * `toBeGreaterThan(0)` says the join arrived, not that it is right.
+   * `tests/admin-store.test.ts` asserts the shapes and the runtime types,
+   * `tests/admin-queries.test.ts` pins what each builder means in SQL, and
+   * `tests/admin-users-merge.test.ts` the join itself. And blind to the GoTrue
+   * half entirely: the accounts are an HTTP call, and no mutation in this file
+   * can reach it.
    */
   it("lets the administrator reach the route, and gets the list", async () => {
     const r = await call("GET", "/api/admin/users");
     expect(r.status).toBe(200);
-    const users = (r.body as unknown as { users: unknown[] }).users;
+    const users = (r.body as unknown as { users: { id: string; articles?: unknown }[] }).users;
     /* At least one: the accounts come from the Auth service, and the private
        lane's own setup seeds the local administrator among them. Zero would be
        a list that had arrived from nowhere. */
     expect(users.length).toBeGreaterThan(0);
+    /* **And one number off the row, which is what makes this case reach a
+       statement at all.**
+
+       The list is two halves joined by owner id: the accounts are an HTTP call
+       to GoTrue, the counts are aggregates over *this run's private database*.
+       Asserting only the length asks the first half and never the second — so
+       every mutation this case could see was a mutation of the route's own call
+       site, proving the route rejects an empty list and nothing whatever about
+       the store. GPT Sol's review of B2, 2026-09-04.
+
+       This file seeds five articles under `TEST_OWNER`, and `acceptAny`
+       authenticates as that same local administrator, so the administrator's own
+       row must count them. `toBeGreaterThan(0)` rather than `toBe(5)`: the
+       private database is this run's, but a peer copy of this file is not the
+       only thing that could put an article in it, and the claim here is that the
+       join arrived — `tests/admin-store.test.ts` is what pins the arithmetic. */
+    const me = users.find((u) => u.id === TEST_OWNER);
+    expect(me, "the administrator is not in their own list").toBeDefined();
+    expect(me?.articles).toBeGreaterThan(0);
   });
 
   /* **The feedback routes, named rather than left to the prefix.** The case

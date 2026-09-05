@@ -2,7 +2,7 @@
  * Pipeline stage 4 — build the deeply-nested table of contents / granularity
  * tree over a block sequence. See docs/project/hierarchy.md.
  *
- *   npm run hierarchy -- output/noema-mythology-of-conscious-ai.blocks.json
+ *   npm run hierarchy -- <slug> [--force]
  *
  * The model proposes INTERNAL nodes only. Leaves are generated here,
  * mechanically, one per block — which removes the whole class of partition
@@ -27,15 +27,11 @@
  * **The stage reads no path and writes no file.** It is handed the blocks and
  * hands back the three artefacts in one object; the caller stores them. The
  * pipeline gives that object to the artefact store as a single `parts` map, and
- * `main()` below is the only thing left that turns them into files.
+ * since 2026-09-05 nothing in this file turns them into files at all.
  * docs/plans/260831b-finish-the-database-move.md § Stage 2.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { createHash } from "node:crypto";
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   messagesWireBody,
   streamMessage,
@@ -43,125 +39,49 @@ import {
   type MessagesBody,
 } from "./messages-stream.js";
 import { CAPABLE_MODEL, type Effort } from "./models.js";
-import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
-import { isBodyEvidence, isStructural } from "./block-policy.js";
+import { isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
 import { COVERAGE_FLOOR, generateLabels, isHeading, mergeLabels, type LabelsFile } from "./labels.js";
-import { hashBlocks } from "./source-hash.js";
-import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
+import { checkpointKey, hashBlocks } from "./source-hash.js";
+import type { CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
+import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
-import { parseJsonAnswer, parseJsonFrom } from "./parse-json.js";
-import { withLedger } from "./cli-ledger.js";
+import { parseJsonAnswer } from "./parse-json.js";
+import { PRODUCTION_EFFORT as EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
+/* **The one value import that points at the cascade**, and the reason three
+   things were hoisted out of this file into leaves: everything under
+   `hierarchy-deepen.ts` may name this module's *types* and none of its values.
+   src/hierarchy-prompt.ts. */
+import {
+  DeepenFailed,
+  deepeningEnabled,
+  deepenTree,
+  describeFailure,
+  liveExpansionExecutor,
+  saveDeepenRecords,
+  type DeepenStats,
+  type ExpansionExecutor,
+} from "./hierarchy-deepen.js";
 import { log } from "./log.js";
 
-/* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
-   longer asks for them, and a tree written by toc/1 is a different artefact.
-
-   Bumped to 4 for the heading snap (`snapStartsToHeadings`), which is not a
-   prompt change at all: the wire request is byte-identical. The stamp still has
-   to move, because it is what the structure *checkpoint* is keyed on, and the
-   same answer now builds a different tree — a document part-way through the
-   stage would otherwise resume onto the old boundaries and nothing would say
-   so. One replayed call per article in flight, and that is the whole cost. */
-export const PROMPT_VERSION = "toc/4";
-
 /**
- * How hard the model thinks before it starts writing.
+ * **The three values that moved to [`hierarchy-prompt.ts`](hierarchy-prompt.ts),
+ * re-exported so that nothing which imports them from here had to change.**
  *
- * **`"low"` since 2026-09-04, and this setting has now been wrong in both
- * directions twice before that.**
- *
- * The history, because it is the argument. It was `"high"` originally, by
- * default rather than by decision. The max_tokens postmortem forced it down to
- * `"medium"`: raising `max_tokens` from 32,000 to 77,100 failed again, having
- * spent roughly 64,000 tokens on thinking, because at `"high"` adaptive thinking
- * **expands into whatever room it is given**. `max_tokens` is a ceiling, not a
- * leash; `effort` is the leash. Moving the nav labels out to src/labels.ts then
- * bought enough room to put it back to `"high"`, and the comment here argued
- * that case well.
- *
- * It went wrong the same way a third time. On 2026-08-30 Stephen Wolfram's
- * "Towards a theory of bugs" was sized for a 52,225-token budget — 12,225 for
- * the answer, 40,000 of `THINKING_HEADROOM` — and came back truncated having
- * spent 2,825 on the answer and 49,400 on reasoning. Those two sum to 52,225
- * **exactly**. The reasoning did not overrun the reservation; it expanded to
- * fill the ceiling, which is what it does at `"high"` and what it will do at
- * any ceiling. So no value of `THINKING_HEADROOM` fixes this, and neither does
- * a better answer estimate: both make the room bigger and the thinking takes
- * the room. Greg's call, the same day.
- *
- * **The measurement that was owed has now been taken, and it says `"low"`.**
- * 2026-09-04. The three paragraphs above said this setting had never been
- * measured for quality, only chosen off a failure mode. That is no longer true,
- * and the evidence points one way in three independent runs:
- *
- * - **Blind judging, eight of eight.** Two evals, two judge families (GPT Sol
- *   and Fable), two draw sets — `low` preferred over `medium` every time, with
- *   the free heading tree placing second. evals/results/hierarchy-effort-2026-09-03.md
- *   and evals/results/hierarchy-cheap-models-2026-09-03.md.
- * - **The same reliability, not worse.** Pooled across three articles both
- *   efforts produced a tree 6 times in 7, and the one article that beat them
- *   beat *both*. The earlier "low failed 1 in 8 where medium failed 0 in 10"
- *   reading came from one document.
- * - **Cheaper and faster, on the long articles that matter.** 2026-09-04, on
- *   the 360-block constitution: $0.264 against $0.293 and 150s against 172s,
- *   for the same seven depth-1 parts. On the 184-block gwern essay: $0.135
- *   against $0.234 — 42% less — and **eight parts against six**.
- *
- * **The failure modes are not commensurable, and that is the argument.**
- * `medium`'s named fault is *welding*: it fuses two of the author's own
- * sections under one title. That is valid, silent, shipped, and paid by every
- * reader of that article — nothing in the pipeline can detect it, and the
- * six-versus-eight parts above is it happening again. `low`'s fault is a tiling
- * violation, which `buildTree` throws on, the job card reports, and a Retry
- * recovers. A loud failure that costs one retry is a better trade than a quiet
- * one that costs every reader a worse map.
- *
- * **What is still not measured**: `high` against either, for this stage. It has
- * never been run and is unlikely to be worth the money now, given that the
- * argument for lowering was a failure mode and the argument for lowering
- * further is a quality result.
- *
- * **If you run any of these comparisons, read `repairedBlocks` and
- * `largestRepair` alongside the score.** Since `0062f74` a tree that does not
- * tile is snapped shut and repaired rather than thrown away, so an arm can
- * score `ok` having been repaired into shape — and a boundary one paragraph out
- * and a section handed forty of its neighbour's blocks would otherwise look
- * identical. `evals/hierarchy-structure/run.ts` records both.
- *
- * See docs/plans/260904c-hierarchy-structure-in-waves.md § Product decisions,
- * docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
+ * `PROMPT_VERSION`, `PRODUCTION_EFFORT` and `renderBlocks` are read as *values*
+ * by `hierarchy-expand.ts`, and this file imports the cascade — so leaving them
+ * here closed the cycle `npm run cycles` refuses. The reasoning behind each of
+ * the three travelled with it; only the address changed, and not one of the
+ * values did. See that file's header.
  */
-const EFFORT = "low" as const;
-
-/**
- * **What production actually thinks at, for anything that needs to say so.**
- *
- * Exported on 2026-09-03 because `evals/hierarchy-structure/arms.ts` had typed
- * the number in again, and drifted: it called `"high"` the incumbent for the
- * eight days after the max_tokens postmortem moved this to `"medium"`. Every
- * paid arm in that harness was therefore scored against a recipe the pipeline
- * does not run, and `smart-low` — declared as isolating the single variable
- * `effort` — was quietly answering high-vs-low instead of the medium-vs-low
- * question production has. GPT Sol found it by reading both files at once,
- * which is the only way a restated constant is ever found.
- *
- * *(That arm is `smart-medium` since 2026-09-04: production moved to `low`, so
- * the arm isolating effort had to move the other way or become a second copy of
- * the incumbent. The name in the paragraph above is the one it had at the time.)*
- *
- * `structureRequest` below already hands this out to callers who have blocks;
- * `evals/cost` reads it that way and stayed correct throughout. This export is
- * for the callers who only want the number.
- */
-export { EFFORT as PRODUCTION_EFFORT };
+export { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
 
 const SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
@@ -204,11 +124,27 @@ GISTS (internal nodes)
   handholds — and ordinary words for everything else. A gist is read at a glance
   and has to land first time: plainer than the article, never further from it.
 
+QUESTIONS (the root and depth-1 nodes only)
+
+- Exactly ONE question on the root and on each depth-1 node. Omit it entirely
+  on deeper nodes.
+- It is the question this node's text answers and its gist does NOT. The reader
+  has the gist beside it; the question is what sends them into the prose for
+  the rest of the answer.
+- It must need the argument to answer, not a fact to look up: "why", "how", or
+  "what follows if" — never "which example", "who said", or anything one
+  sentence settles.
+- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- The root's question is the one the whole piece exists to answer.
+- Under 15 words, ending in "?". The article's own words for what it names,
+  ordinary words for the rest, exactly as with gists.
+
 OUTPUT
 
 JSON only, no prose, no code fence:
 
-{"root": {"title": "...", "gist": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
+{"root": {"title": "...", "gist": "...", "question": "...",
+          "range": ["<firstBlockId>", "<lastBlockId>"],
           "sourceHeading": "...", "children": [ ... ]}}
 
 Use only block ids that appear in the input. Do not invent ids.`;
@@ -216,37 +152,106 @@ Use only block ids that appear in the input. Do not invent ids.`;
 export interface ModelNode {
   title: string;
   gist?: string;
+  /** One Socratic question, asked for on the root and depth-1 nodes only. */
+  question?: string;
   range: [string, string];
   sourceHeading?: string;
   children?: ModelNode[];
 }
 
 /**
- * The article, as the structure model sees it.
+ * **The question a node keeps, or nothing.** SPIDERYARN-READING2-1V.
  *
- * **A supplement's prose is withheld, and its id is not.** On the ordinary path
- * `generateHierarchy` hands this only the body, so the branch never fires — but the
- * split falls back to the whole article whenever the apparatus is not one
- * trailing run (src/supplement.ts), and on that path this function is the only
- * thing between a bibliography and the largest prompt the pipeline sends. A
- * marker alone was the shape of the original bug: `NOT-GISTABLE` is written from
- * `gistable`, and a prose footnote *is* gistable, so a note went out unmarked
- * and in full. Marking it would not have been a fix either — the text is what
- * must not travel. GPT Sol's review of stage 3, 2026-08-28.
+ * Greg, 2026-09-05: *"Tweak the prompt that generates the Summary mode to be a
+ * bit more in the form of Socratic questions that encourage the reader to read
+ * the actual text to get the full answers."*
  *
- * The **id stays**, because the model's ranges have to tile the whole article
- * and a block it cannot name is a block no node can cover. `NOT-GISTABLE` is
- * reused rather than a new marker invented: SYSTEM above already explains it,
- * and a word the prompt never defines is a word the model gets to interpret.
+ * Why this is a **second field** rather than a change to the gist is the whole
+ * design decision, and it is in
+ * docs/plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md.
+ * The short version: the gist is not only shown in Summary mode, it is shown in
+ * ten places — the zoom columns, the shelf card, the spine tooltip — **and it is
+ * fed back in as context to the later structure waves**
+ * (src/hierarchy-expand.ts § `chainRung`). Making it Socratic would change a
+ * shelf blurb into a question and degrade the input the cascade builds on.
+ *
+ * **Depth is enforced here rather than trusted from the prompt.** The prompt
+ * asks for the root and depth 1; a model that writes fifty of them anyway would
+ * otherwise fill a long article's Summary panel with a question per section,
+ * which is the noise this feature is scoped to avoid. Enforcing it in code
+ * means the scope is a fact rather than a request.
+ *
+ * **Punctuation is normalised, never read for meaning.** The first real run of
+ * the toc/5 prompt (noema, 141 blocks, 2026-09-05 — the plan doc has the whole
+ * output) wrote six questions, and **one of the six came back with no `?` on
+ * the end**: *"What should conscious AI mean for how we see ourselves"*. A rule
+ * that required the mark would have thrown that away over punctuation, and
+ * thrown it away invisibly. So a missing mark is added.
+ *
+ * The first fix for that went one step too far the other way and **dropped
+ * anything ending in `.` or `!` as a "statement"**. GPT Sol killed it, rightly:
+ * a terminal full stop is not evidence of mood. *"How did this affect the
+ * U.S."* is a question that rule discarded, and *"It closes by concluding
+ * something"* is a statement it happily kept. It made the *invisible* mistake
+ * on the good input and the visible one on the bad — exactly backwards.
+ *
+ * So the rule is syntactic and does one thing: strip any trailing `.`/`!` and
+ * end with a single `?`.
+ *
+ * **The failure the prompt actually names — *"never the gist with a question
+ * mark on it"* — is caught by comparing it with the gist**, which is the only
+ * check here that means what it says. Punctuation and case are ignored, so a
+ * gist echoed back with a `?` bolted on is caught however it is dressed.
+ *
+ * Nothing mechanical can catch a *lookup* question dressed as a Socratic one;
+ * that is what the prompt is for and what reading the output is for.
+ *
+ * Dropping is counted into `droppedQuestions` rather than done quietly —
+ * a line that silently fails to appear looks exactly like a model that chose
+ * not to write one (docs/reusable/silent-success.md).
+ *
+ * Absence is ordinary and always was: every tree built before this field
+ * existed has none, and `SummaryPanel` draws the row exactly as it did. That is
+ * why this is not in `tree-invariants.ts` § the gist rule, which is stated in
+ * both directions precisely because a *missing gist* must never pass as
+ * deliberate.
  */
-function renderBlocks(blocks: Block[]): string {
-  return blocks
-    .map((b, i) => {
-      if (!isBodyEvidence(b)) return `[${i}] ${b.id} <${b.tag}> NOT-GISTABLE: (withheld)`;
-      const mark = b.gistable ? "" : " NOT-GISTABLE";
-      return `[${i}] ${b.id} <${b.tag}>${mark}: ${b.text}`;
-    })
-    .join("\n\n");
+export const MAX_QUESTION_DEPTH = 1;
+
+/** Lower-cased, terminal punctuation and repeated spaces gone — for comparing
+    two sentences on their words alone. */
+function bareWords(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[.!?]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function questionFor(mn: ModelNode, depth: number): string | undefined {
+  if (depth > MAX_QUESTION_DEPTH) return undefined;
+  if (typeof mn.question !== "string") return undefined;
+  const q = mn.question.trim();
+  /* Truthiness is not the test: a string of spaces is truthy and trims to
+     nothing, which is how a gist of three spaces once rendered as a blank
+     internal node (src/hierarchy-expand.ts § `gist` is required). */
+  if (q === "") return undefined;
+  /* The gist, asked again. Two lines saying one thing is the duplication this
+     whole feature exists to avoid, so it is dropped rather than drawn. */
+  if (mn.gist !== undefined && bareWords(q) === bareWords(mn.gist)) return undefined;
+  if (q.endsWith("?")) return q;
+  /* **Only `!` is stripped, never `.`** — a trailing full stop is as likely to
+     belong to an abbreviation as to a sentence, and stripping it turned GPT
+     Sol's example *"How did this affect the U.S."* into *"the U.S?"*. So the
+     mark is appended to whatever is there.
+
+     The cost, named rather than hidden: a genuine statement that is not the
+     gist comes out as *"…something.?"*. That is ugly and **visible**, which is
+     the right way round — the rule it replaced lost good questions silently
+     (docs/reusable/silent-success.md). The prompt asks for a question, the
+     gist check above catches the failure it actually warns about, and six of
+     six on the first real run were questions. */
+  return `${q.replace(/!+$/, "")}?`;
 }
 
 /**
@@ -530,17 +535,23 @@ export function canonicalStructureRequest(params: MessagesBody): Record<string, 
 }
 
 /**
- * The key itself: sixteen hex characters, which is what both existing
- * checkpoint callers mint and what `CHECKPOINT_KEY_RE` is happiest with.
+ * The key itself — **and it lives in [`source-hash.ts`](source-hash.ts) now**,
+ * under the name it always deserved: it has nothing to do with the structure
+ * call, and the scoped expansion checkpoint (src/hierarchy-deepen.ts) mints its
+ * key with the identical two lines.
  *
- * `JSON.stringify` over an object this module builds, so the key order is fixed
- * by the literals above rather than by chance. Re-ordering those literals would
- * change every key — which costs one call per article and nothing else, since a
- * key that does not match is simply a miss.
+ * Re-exported here under the old name so that nothing which already imported
+ * `structureKey` from this module had to change — the same move `structureHash`
+ * and `hashBlocks` each made, for the same reason. There is one implementation
+ * and two names; **new callers should say `checkpointKey`.**
+ *
+ * The hoist is not cosmetic. `src/hierarchy-deepen.ts` needs this function, and
+ * `src/hierarchy.ts` will import *it* when stage 5 wires the cascade into
+ * `generateHierarchy` — so a version of it that only existed here would be a
+ * value import closing `hierarchy → hierarchy-deepen → hierarchy`, and
+ * `npm run cycles` is a gate at zero rather than advice.
  */
-export function structureKey(canonical: unknown): string {
-  return createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex").slice(0, 16);
-}
+export { checkpointKey as structureKey } from "./source-hash.js";
 
 /**
  * One structure answer, kept so a later attempt does not buy it again.
@@ -846,6 +857,38 @@ export interface BuildReport {
    * loses only the mark saying the author wrote it.
    */
   droppedHeadings: string[];
+  /**
+   * **Rungs that restated their parent and were spliced away**, by position in
+   * the model's proposal — see `collapseRestatedRungs`.
+   *
+   * **A field here rather than another `kind` of `PartitionRepair`, and the
+   * alternative is wrong for an arithmetic reason.** A repair is a *boundary
+   * that moved*, and `size` is how many blocks changed hands; `repairedBlocks`
+   * sums those, `largestRepair` maxes them, and both are the numbers anyone
+   * reads. A collapse moves **no** blocks — the parent's range and the
+   * discarded child's are identical, which is the whole definition of the
+   * shape — so it would have to enter as a repair of size 0. That is a repair
+   * that inflates `repairedRanges` while contributing nothing to the two
+   * figures that say what a repair cost, which is precisely the way to make a
+   * count stop meaning anything (see `repairedBlockCount`). It is a different
+   * kind of loss, so it gets its own figure, exactly as `droppedChildren` did
+   * and for the same reason.
+   *
+   * Normally 0, and reported at 0 like the two above.
+   */
+  collapsedRungs: string[];
+  /**
+   * **Socratic questions the model wrote that the tree did not keep**, by
+   * position in the model's proposal — see `questionFor`. Either the node was
+   * deeper than `MAX_QUESTION_DEPTH`, or the string was not a question.
+   *
+   * Counted rather than dropped quietly, for `droppedHeadings`' reason. A
+   * question is an optional field on an optional line: if the prompt drifts and
+   * every one of them stops ending in "?", Summary mode loses the feature
+   * entirely and looks exactly as it did before it existed. This is the only
+   * number that would say so. Normally 0.
+   */
+  droppedQuestions: string[];
 }
 
 export interface PartitionRepair {
@@ -863,7 +906,9 @@ export interface PartitionRepair {
    * `heading` is the odd one out and deliberately a `kind` rather than a
    * quiet mend: **the model's two claims agreed and were both one block late**,
    * putting the section's own heading in the section before it, so nothing
-   * above can see it. `snapStartsToHeadings` has the measurement it comes from.
+   * above can see it. src/heading-snap.ts has the measurement it comes from,
+   * and is the one derivation rule this file and src/hierarchy-cascade.ts
+   * literally share.
    */
   kind: "gap" | "overlap" | "short" | "over" | "heading";
   /**
@@ -935,8 +980,8 @@ export interface PartitionRepair {
  *
  * ⟨GPT Sol's review of the heading snap, 2026-09-04, finding 1⟩ A boundary can
  * now be recorded **twice at two coordinates**: `recordBoundaryFaults` records
- * it where the model named it, and `snapStartsToHeadings` records it where it
- * ended up. Grouping by `at` cannot see those as one movement, so their sizes
+ * it where the model named it, and `snapStartsToHeadings` (src/heading-snap.ts)
+ * records it where it ended up. Grouping by `at` cannot see those as one movement, so their sizes
  * are summed — and their *blocks* overlap, because a snap moving back inside
  * ground a `gap` already covers moves nothing new. The union per boundary is
  * `max(gap, snap)` for a gap and `gap + snap` for an overlap. On the 142-page
@@ -1199,10 +1244,13 @@ function planChildRanges(
      up, so running it afterwards would compare the answer with a value we chose
      ourselves — a section moved back onto its heading would report a phantom
      `overlap` against its own correct start, and the snap would be invisible in
-     the telemetry that exists to watch it. `snapStartsToHeadings` records its
-     own repairs; nothing else measures it. */
+     the telemetry that exists to watch it. The snap (src/heading-snap.ts)
+     returns its own repairs; nothing else measures it. **It is shared with
+     `normaliseExpansion`**, which derives the cascade's tilings and had no snap
+     at all until 2026-09-05 — two rules over one tree, where a boundary moved
+     or did not depending on which call had produced the parent. */
   recordBoundaryFaults(kept, spans, parent, where, repairs);
-  snapStartsToHeadings(children, kept, blocks, where, repairs);
+  repairs.push(...snapStartsToHeadings(children, kept, blocks, where));
 
   const plans: ChildPlan[] = children.map(() => ({ keep: false }));
   for (const [k, child] of kept.entries()) {
@@ -1220,112 +1268,6 @@ function planChildRanges(
 
   return plans;
 }
-
-/**
- * **A section that begins one paragraph below the heading it names is moved
- * back onto it.**
- *
- * Measured on a 142-page Kuhn paper, 2026-09-04 (Fable): of the model's 82
- * non-root nodes, 24 started *on* a heading block and **53 on the block
- * immediately after one**, and every unbacked `sourceHeading` claim reproduced
- * was at that offset. The model was not overruling the author — it named the
- * author's heading correctly and put the boundary one block late. The heading
- * then fell into the previous section's tail, this file believed the start, and
- * `buildTree` dropped the claim as out of range. `droppedHeadings: 59` was
- * counting that.
- *
- * So the answer is code rather than a prompt line: a prompt can be ignored, and
- * the model was already doing what a prompt would have asked for.
- *
- * ## Why the claim has to match
- *
- * The obvious rule — snap any start that sits one block after a heading — takes
- * headings the model deliberately left in the section before it. The fixture is
- * already in tests/hierarchy-repairs.test.ts: a model that puts "The First
- * Part" inside child 1 and starts child 2 on the paragraph beneath it has
- * proposed a boundary, and moving that heading forward would invent a different
- * one. **Requiring the child's own `sourceHeading` to name a heading in the run
- * makes this self-evidencing** — it only ever honours a claim the answer
- * already made, which is also why it can be a repair rather than a heuristic.
- * The `typeof` guard is not decoration: `sourceHeading` is model output behind
- * a cast, and `sameHeading` throws inside `.replace` on a number.
- *
- * ## The run, and the floor under it
- *
- * Headings come in runs — an `h2` directly beneath an `h1` — and the section
- * begins at the *first* of the run, not the nearest, because the `h1` above it
- * introduces the same prose. The floor is the previous kept child's start: a
- * section cannot begin where its predecessor begins, so a run reaching back to
- * a heading the previous section starts on is entered at the first block after
- * it. That is the real case of a sub-section under a part title, not a corner.
- *
- * The first kept child is never snapped — it is pinned to its parent's start,
- * because nothing else can supply that block.
- *
- * Mutates `kept` in place, and records one `PartitionRepair` per boundary it
- * moved. `at` is where the boundary *ended up*, as everywhere else, which is
- * what lets `repairedBlockCount` see the pin it cascades into one level down as
- * the same movement rather than a second one.
- */
-function snapStartsToHeadings(
-  children: ModelNode[],
-  kept: KeptChild[],
-  blocks: Block[],
-  where: string,
-  repairs: PartitionRepair[],
-): void {
-  const heading = (i: number) => blocks[i]?.kind === "heading";
-  for (let k = 1; k < kept.length; k++) {
-    const child = kept[k]!;
-    const start = child.start;
-    // Already on a heading, or not one block after one: nothing to do. This is
-    // the no-op on every document the model gets right.
-    if (heading(start) || !heading(start - 1)) continue;
-
-    const claim = children[child.childIndex]?.sourceHeading;
-    if (typeof claim !== "string" || claim.trim() === "") continue;
-
-    let first = start - 1;
-    while (heading(first - 1)) first -= 1;
-    // The floor: never back onto, or past, the previous section's own start.
-    first = Math.max(first, kept[k - 1]!.start + 1);
-    /* **And never past a heading the previous section itself names.** The floor
-       above stops the run reaching a heading the previous section *starts on*,
-       which is not the same thing. A section can begin on a preamble and quote
-       the `h1` further down; taking that `h1` forward would strip its
-       provenance and leave its title and gist describing prose its own heading
-       is no longer in. One matched heading justifies moving that heading, not
-       every heading above it. ⟨GPT Sol, finding 2⟩ */
-    const prior = children[kept[k - 1]!.childIndex]?.sourceHeading;
-    if (typeof prior === "string" && prior.trim() !== "") {
-      for (let j = start - 1; j >= first; j--) {
-        if (sameHeading(blocks[j]!.text, prior)) {
-          first = j + 1;
-          break;
-        }
-      }
-    }
-    if (first >= start) continue;
-
-    /* The claim must name one of the headings actually being moved. Read with
-       `sameHeading`, the same tolerant comparison `buildTree` and `checkTree`
-       use to decide whether a claim is backed — a match by any other rule would
-       move a boundary to make a badge that then gets dropped anyway. */
-    const named = blocks.slice(first, start).some((b) => sameHeading(b.text, claim));
-    if (!named) continue;
-
-    repairs.push({
-      where: `${where} > child ${child.childIndex + 1}`,
-      kind: "heading",
-      at: first,
-      size: start - first,
-    });
-    child.start = first;
-  }
-}
-
-/** One kept child: where it sits in the model's proposal, and where it starts. */
-type KeptChild = { childIndex: number; start: number };
 
 /**
  * **What the model got wrong, measured against the tiling derived from it** —
@@ -1413,6 +1355,186 @@ function recordBoundaryFaults(
 }
 
 /**
+ * **A rung that restates its parent buys the reader nothing, so it is spliced
+ * away** — the grandchildren come up, the redundant node goes, and this repeats
+ * until no child covers the whole of the node it hangs under.
+ *
+ * ## What the shape is, and why it is not a judgment call
+ *
+ * Two adjacent gist columns of identical extent, neither marked `continuation`,
+ * so both render in full and both are fisheye items. One rung finer buys a
+ * restatement of the same paragraphs, against
+ * [granularity-zoom.md](../docs/project/granularity-zoom.md)'s promise that
+ * level N is a compression of level N+1.
+ *
+ * Measured on 2026-09-05 across every saved tree under `evals/` and `data/`:
+ * 243 unary internal nodes, and **all 243 have a child covering the parent's
+ * whole range** — not one covers only part of it. 35 of them have an internal
+ * child and are the rungs this removes; the other 208 have a *leaf* child,
+ * which is the ordinary, correct shape of a one-block section and is why the
+ * rule is phrased over ranges rather than over `children.length`.
+ * docs/plans/260904d-deepen-fat-sections.md § The unary internal node was a bug
+ * in `buildTree`.
+ *
+ * ## It collapses, it never refuses
+ *
+ * `planChildRanges`'s whole design is that it derives and that nothing about it
+ * can refuse — the day it refused instead cost four of thirteen articles. So
+ * this is a splice, not a rejection, and it is deliberately asymmetric with
+ * `normaliseExpansion` (src/hierarchy-cascade.ts), which goes on **refusing** a
+ * one-child answer. The disposition differs because the recourse does: a scoped
+ * cascade call can be retried and a better answer is worth asking for, and a
+ * whole-document answer cannot be retried mid-build.
+ *
+ * ## Why here rather than inside `planChildRanges`
+ *
+ * `planChildRanges` derives *ranges*, one plan per proposed child of one node.
+ * This is a *structural* edit that reaches a level further down — it needs the
+ * discarded rung's own children, which that function is never shown — so it
+ * sits between the derivation and the recursion, which is the only place that
+ * holds both.
+ *
+ * ## The parent's title and gist survive
+ *
+ * A product call, and the corpus is one-sided: in the nine cases where the two
+ * titles differ, the parent is the coarser name every time — *"Writing at
+ * Work"* over *"The Pressure to Write"*, *"The Disappearing Writers"* over
+ * *"Few People Who Can Write"* — which is what that rung is for. The caller
+ * adopts the discarded rung's `sourceHeading` where it has none of its own,
+ * which is sound because both nodes hold the same range: a claim backed for one
+ * is backed for the other, and an unbacked one is dropped anyway.
+ *
+ * ## Two things the loop is careful about
+ *
+ * **Boundary faults from a discarded rung are thrown away with it.** They name
+ * a node the finished tree does not hold, and they measure a boundary that the
+ * next iteration re-derives from scratch against the same parent range —
+ * keeping them would charge the article twice for one slip and point `where` at
+ * nothing. **Dropped children are kept**, because a section the model proposed
+ * and we did not store is a real loss whether or not the rung above it survived.
+ *
+ * Returns the children to actually build, their plans, and the `where` prefix
+ * they should be numbered from — which is the *discarded* rung's position, so
+ * every message and every counter still names a child by where it sits in the
+ * model's own proposal.
+ */
+/** Whether a rung about to be spliced away was carrying a question. */
+function redundantQuestion(node: ModelNode): boolean {
+  return typeof node.question === "string" && node.question.trim() !== "";
+}
+
+function collapseRestatedRungs(
+  children: ModelNode[],
+  parent: readonly [number, number],
+  index: Map<string, number>,
+  blocks: Block[],
+  where: string,
+  repairs: PartitionRepair[],
+  droppedChildren: string[],
+  collapsedRungs: string[],
+  droppedQuestions: string[],
+): { children: ModelNode[]; plans: ChildPlan[] | null; where: string; absorbed: ModelNode[] } {
+  /* In range: both came out of `index`, which is built over `blocks`. */
+  const wholeStart = blocks[parent[0]]!.id;
+  const wholeEnd = blocks[parent[1]]!.id;
+  const absorbed: ModelNode[] = [];
+  let here = children;
+  let at = where;
+
+  for (;;) {
+    const faults: PartitionRepair[] = [];
+    const plans = planChildRanges(here, parent, index, blocks, at, faults, droppedChildren);
+    /* **The rule as a range statement**: no child may cover its parent's whole
+       range. With ordered starts and derived ends that coincides with "exactly
+       one child kept" — the first kept child is pinned to the parent's start
+       and the last one ends at its end — but the range form is the one that
+       survives contact with the leaf-growing step below and with a one-block
+       section, which legitimately grows a single leaf over the whole of itself. */
+    const rung = plans?.findIndex(
+      (p) => p.keep && p.range[0] === wholeStart && p.range[1] === wholeEnd,
+    );
+    if (plans === null || rung === undefined || rung === -1) {
+      repairs.push(...faults);
+      return { children: here, plans, where: at, absorbed };
+    }
+
+    const redundant = here[rung]!;
+    at = `${at} > child ${rung + 1}`;
+    collapsedRungs.push(at);
+    /* **A collapsed rung takes its question with it**, and its children come up
+       to stand in its place carrying none — the model wrote theirs one level
+       deeper, where `questionFor` keeps none. So this article has a part with
+       no question, which is fine (absence is ordinary) and would otherwise be
+       *unaccounted for*: without this line `droppedQuestions` reads 0 while a
+       question the model wrote is nowhere on screen. GPT Sol's F2, 2026-09-05.
+
+       Counted rather than repaired. Repairing it means asking the model for a
+       question one level deeper than it needs on every article, to cover a
+       rung that is collapsed rarely — the plan doc says why that trade is not
+       worth making yet. */
+    if (redundantQuestion(redundant)) droppedQuestions.push(at);
+    absorbed.push(redundant);
+    here = redundant.children ?? [];
+    /* Nothing underneath it: this node becomes the deepest internal one and
+       grows the leaves the discarded rung would have grown. Terminates because
+       every pass descends one level into a finite proposal. */
+    if (here.length === 0) return { children: here, plans: null, where: at, absorbed };
+  }
+}
+
+/**
+ * **The `sourceHeading` a proposed node may keep — its claim, if a heading
+ * block inside its range backs it up.** An authored heading the node does not
+ * contain is dropped, not thrown on.
+ *
+ * `sourceHeading` is provenance, not structure. Its only consumer is the `§`
+ * badge that tells the reader the author wrote this heading and we did not
+ * (src/web/TableView.tsx, ContextList.tsx, Spine.tsx) — so an unbacked claim is
+ * a badge that would lie, and the whole cost of dropping it is that one node
+ * stops claiming an authorship it never had. Throwing, by contrast, costs the
+ * reader the article: four structure calls in four made the same wrong claim on
+ * the same document, which makes a refusal not an occasional loss but a
+ * guaranteed failure loop for it
+ * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
+ *
+ * **Read with `sameHeading`, over the same range, so this is a repair and not a
+ * second opinion.** `checkTree` asks the identical question later, against the
+ * full block array; this one asks it against `body`, which within a node's
+ * range is a subset. So anything kept here is kept there, and the invariant can
+ * no longer fail on a claim this let past — which is the property that makes
+ * the repair worth having rather than a disagreement waiting to surface
+ * downstream (src/tree-invariants.ts).
+ *
+ * `wrote` is `!== undefined`, not "is a usable string": a number, or a string
+ * of spaces, is a claim this stage threw away too, and counting only the
+ * well-formed ones would make "nothing is repaired quietly" false in exactly
+ * the case that says the model's output has gone strange. GPT Sol's review.
+ *
+ * The `typeof` guard is not decoration: `mn` is model output behind a cast, and
+ * a number here would reach `sameHeading` and throw inside a `.replace` on a
+ * string that is not one.
+ */
+function backedHeading(
+  mn: ModelNode,
+  lo: number | undefined,
+  hi: number | undefined,
+  blocks: Block[],
+): { wrote: boolean; kept: string | undefined } {
+  const wrote = mn.sourceHeading !== undefined && mn.sourceHeading !== null;
+  const claim =
+    typeof mn.sourceHeading === "string" && mn.sourceHeading.trim() !== ""
+      ? mn.sourceHeading
+      : undefined;
+  const backed =
+    claim !== undefined &&
+    lo !== undefined &&
+    hi !== undefined &&
+    lo <= hi &&
+    blocks.slice(lo, hi + 1).some((b) => b.kind === "heading" && sameHeading(b.text, claim));
+  return { wrote, kept: backed ? claim : undefined };
+}
+
+/**
  * Flatten the model's nested proposal into the stored map, and grow the leaf
  * layer underneath it. Every block gets exactly one leaf; a leaf carries a
  * navLabel only if its block is gistable and the model wrote one.
@@ -1434,6 +1556,8 @@ export function buildTree(
   const repairs = report?.repairs ?? [];
   const droppedChildren = report?.droppedChildren ?? [];
   const dropped = report?.droppedHeadings ?? [];
+  const collapsed = report?.collapsedRungs ?? [];
+  const droppedQuestions = report?.droppedQuestions ?? [];
   const nodes: Record<NodeId, TreeNode> = {};
   let counter = 0;
   const nextId = () => `n${String(++counter).padStart(4, "0")}`;
@@ -1469,47 +1593,17 @@ export function buildTree(
     const lo = index.get(range[0]);
     const hi = index.get(range[1]);
 
-    /**
-     * **An authored heading the node does not contain is dropped, not thrown on.**
-     *
-     * `sourceHeading` is provenance, not structure. Its only consumer is the
-     * `§` badge that tells the reader the author wrote this heading and we did
-     * not (src/web/TableView.tsx, ContextList.tsx, Spine.tsx) — so an unbacked
-     * claim is a badge that would lie, and the whole cost of dropping it is
-     * that one node stops claiming an authorship it never had. Throwing, by
-     * contrast, costs the reader the article: four structure calls in four made
-     * the same wrong claim on the same document, which makes a refusal not an
-     * occasional loss but a guaranteed failure loop for it
-     * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
-     *
-     * **Read with `sameHeading`, over the same range, so this is a repair and
-     * not a second opinion.** `checkTree` asks the identical question later,
-     * against the full block array; this one asks it against `body`, which
-     * within a node's range is a subset. So anything kept here is kept there,
-     * and the invariant can no longer fail on a claim this line let past —
-     * which is the property that makes the repair worth having rather than a
-     * disagreement waiting to surface downstream (src/tree-invariants.ts).
-     *
-     * The `typeof` guard is not decoration: `mn` is model output behind a cast,
-     * and a number here would reach `sameHeading` and throw inside a `.replace`
-     * on a string that is not one.
-     */
-    const wrote = mn.sourceHeading !== undefined && mn.sourceHeading !== null;
-    const claim =
-      typeof mn.sourceHeading === "string" && mn.sourceHeading.trim() !== ""
-        ? mn.sourceHeading
-        : undefined;
-    const backed =
-      claim !== undefined &&
-      lo !== undefined &&
-      hi !== undefined &&
-      lo <= hi &&
-      blocks.slice(lo, hi + 1).some((b) => b.kind === "heading" && sameHeading(b.text, claim));
-    /* `wrote`, not `claim`: a number, or a string of spaces, is a claim this
-       stage threw away too, and counting only the well-formed ones would make
-       "nothing is repaired quietly" false in exactly the case that says the
-       model's output has gone strange. GPT Sol's review. */
-    if (wrote && !backed) dropped.push(where);
+    /* An authored heading the node does not contain is dropped, not thrown on
+       — `backedHeading` has the whole argument, and the cascade's own copy of
+       this question is in src/hierarchy-cascade.ts. */
+    const heading = backedHeading(mn, lo, hi, blocks);
+    if (heading.wrote && heading.kept === undefined) dropped.push(where);
+
+    /* A question the model wrote and this node does not keep — too deep, or not
+       a question at all. Counted for the same reason `droppedHeadings` is: the
+       loss is invisible on screen. `questionFor` has the rules. */
+    const question = questionFor(mn, depth);
+    if (mn.question !== undefined && question === undefined) droppedQuestions.push(where);
 
     const node: TreeNode = {
       id,
@@ -1519,7 +1613,8 @@ export function buildTree(
       range,
       title: mn.title,
       ...(mn.gist ? { gist: mn.gist } : {}),
-      ...(backed ? { sourceHeading: claim } : {}),
+      ...(question !== undefined ? { question } : {}),
+      ...(heading.kept !== undefined ? { sourceHeading: heading.kept } : {}),
     };
     nodes[id] = node;
     if (lo !== undefined && hi !== undefined && lo > hi) {
@@ -1557,26 +1652,59 @@ export function buildTree(
        * messages for those, and planning around an endpoint that means nothing
        * would bury them.
        */
-      const plans =
+      const settled =
         lo !== undefined && hi !== undefined
-          ? planChildRanges(mn.children, [lo, hi], index, blocks, where, repairs, droppedChildren)
-          : null;
-      /* `flatMap`, because a plan can say a child is not built at all. `where`
-         still counts children by their position in the *model's* proposal, so
-         a dropped child does not renumber its siblings in any message or
-         report — the numbers a reader compares against the answer stay put. */
-      node.children = mn.children.flatMap((c, i) => {
-        const plan = plans?.[i];
-        if (plan !== undefined && !plan.keep) return [];
-        return [visit(c, id, depth + 1, `${where} > child ${i + 1}`, plan?.range)];
-      });
-      /* Kept, and it should now never fire on a planned node: a list of ordered
-         split points tiles its parent by construction. That is the point of
-         leaving it here — it is the standing proof that `planChildRanges` is
-         total, and the day it fires is the day that stopped being true. It
-         still does real work on the nodes that were not planned. */
-      assertChildrenPartition(node, nodes, index, where);
-      return id;
+          ? collapseRestatedRungs(
+              mn.children,
+              [lo, hi],
+              index,
+              blocks,
+              where,
+              repairs,
+              droppedChildren,
+              collapsed,
+              droppedQuestions,
+            )
+          : { children: mn.children, plans: null, where, absorbed: [] as ModelNode[] };
+
+      /* **A discarded rung's `sourceHeading` comes up with its children, where
+         this node has none of its own.** Both held the same range, so a claim
+         backed for one is backed for the other, and an unbacked one is simply
+         not adopted — the same question, asked with the same `backedHeading`.
+
+         An unadopted claim is deliberately **not** counted in `droppedHeadings`,
+         which means "the node kept its title and lost only the mark" and is
+         false for a node that no longer exists. The loss is counted once, as
+         the collapse. */
+      for (const rung of settled.absorbed) {
+        if (node.sourceHeading !== undefined) break;
+        const claimed = backedHeading(rung, lo, hi, blocks).kept;
+        if (claimed !== undefined) node.sourceHeading = claimed;
+      }
+
+      /* Empty only when every proposed child was a restatement of this node and
+         the innermost of them had nothing under it: fall through and grow the
+         leaves the discarded rungs would have grown. */
+      if (settled.children.length > 0) {
+        /* `flatMap`, because a plan can say a child is not built at all.
+           `settled.where` still counts children by their position in the
+           *model's* proposal — through any collapsed rung, so the path stays
+           the one a reader can follow in the answer — and a dropped child does
+           not renumber its siblings in any message or report. */
+        node.children = settled.children.flatMap((c, i) => {
+          const plan = settled.plans?.[i];
+          if (plan !== undefined && !plan.keep) return [];
+          return [visit(c, id, depth + 1, `${settled.where} > child ${i + 1}`, plan?.range)];
+        });
+        /* Kept, and it should now never fire on a planned node: a list of
+           ordered split points tiles its parent by construction. That is the
+           point of leaving it here — it is the standing proof that
+           `planChildRanges` is total, and the day it fires is the day that
+           stopped being true. It still does real work on the nodes that were
+           not planned. */
+        assertChildrenPartition(node, nodes, index, where);
+        return id;
+      }
     }
 
     // Deepest internal node — grow its leaves.
@@ -1691,10 +1819,9 @@ export function buildTree(
   return { version: PROMPT_VERSION, generator: CAPABLE_MODEL, slug, rootId, nodes };
 }
 
-/** The slug a blocks.json path implies — `foo.blocks.json` and `foo.json` both give `foo`. */
-export function slugForBlocksPath(blocksPath: string): string {
-  return path.basename(blocksPath).replace(/\.blocks\.json$/, "").replace(/\.json$/, "");
-}
+/* **`slugForBlocksPath` went on 2026-09-05**, with the command line that was its
+   only caller: it turned `foo.blocks.json` into `foo`. `npm run hierarchy` takes
+   the slug itself now, and there is no path to read one out of. */
 
 /**
  * **Stage 4's three artefacts, and all three are required.**
@@ -1827,6 +1954,26 @@ export interface HierarchyRun {
    */
   droppedChildren: number;
   droppedHeadings: number;
+  /**
+   * **Socratic questions the model wrote that the tree did not keep** — too
+   * deep, or not a question. src/hierarchy.ts § `questionFor`.
+   *
+   * Reported at 0 like the others, and it is the only figure that would show a
+   * drifting prompt quietly turning the Summary panel's second line off:
+   * absent questions and unwritten ones look identical on screen.
+   */
+  droppedQuestions: number;
+  /**
+   * **Rungs that restated their parent and were spliced away** — a node whose
+   * sole child covered the whole of it, which would have shown the reader the
+   * same paragraphs twice at two levels. src/hierarchy.ts §
+   * `collapseRestatedRungs`.
+   *
+   * Reported at 0 like the three above. It is not a `repairedRanges`, because
+   * a collapse moves no blocks; see `BuildReport.collapsedRungs` for why that
+   * distinction is arithmetic rather than tidiness.
+   */
+  collapsedRungs: number;
   labelled: number;
   internal: number;
   /**
@@ -1861,6 +2008,27 @@ export interface HierarchyRun {
    */
   structureResumed: boolean;
   /**
+   * **What the deepening wave did**, or `null` where it was not run at all —
+   * which is every reader today, because the flag is off
+   * (src/hierarchy-deepen.ts § `DEEPEN_ENV`).
+   *
+   * `null` and a stats object of zeros are different facts and the difference is
+   * the one worth having: the first says nobody asked for a deepening, the
+   * second says one was asked for and found nothing eligible. Reported at zero
+   * like `strandedSupplement` and for the same reason.
+   */
+  deepen: DeepenStats | null;
+  /**
+   * **The wave was run and it threw**, so this tree is the one wave 1 produced.
+   *
+   * Its own boolean rather than an absent `deepen`, because those are the two
+   * cases that must not be confused: a run with `deepen: null` was never asked
+   * to deepen, and a run with this true was, and could not. The article is
+   * correct either way — which is exactly why it needs a number, or the failure
+   * has no symptom at all. docs/reusable/silent-success.md.
+   */
+  deepenFailed: boolean;
+  /**
    * Paragraphs left with no nav label — **normally 0, and it is reported at 0
    * as well as above it.**
    *
@@ -1874,47 +2042,36 @@ export interface HierarchyRun {
   labelsDropped: number;
   inputTokens: number;
   outputTokens: number;
-  /* From the label pass only — the structure call is one call per article and
-     is deliberately not cached, so there is nothing for it to read. See
-     docs/plans/260826g-prompt-caching.md on why a prefix used once is worth 1.25× and
-     no more. */
+  /* From the label pass and the deepening wave. **Not the structure call**,
+     which is one call per article and is deliberately not cached, so there is
+     nothing for it to read — see docs/plans/260826g-prompt-caching.md on why a
+     prefix used once is worth 1.25× and no more. The wave is the other way
+     round: its calls share `EXPAND_SYSTEM` plus the frozen outline, so on a cold
+     cache all of them write and on a resumed article none of them calls at all
+     (src/hierarchy-deepen.ts § `runExpansionWave`, "No warm-up"). */
   cacheReadTokens: number;
   cacheWriteTokens: number;
   elapsedMs: number;
 }
 
-/**
- * Write JSON so that it is either wholly there or not there at all.
- *
- * **`main()`'s, and nothing else's.** The stage itself no longer writes: it
- * returns `HierarchyArtefacts` and the pipeline hands all three to the store in one
- * call. This is the command line's own writer, and the three files it produces
- * are the same three files in the same three places.
- *
- * `writeFile` truncates its target before it writes, so a process killed at the
- * wrong moment leaves a file that exists and is not valid JSON — and existence
- * is exactly what src/pipeline.ts uses to decide a step is done. Writing beside
- * the target and renaming closes that window: `rename` within a directory is
- * atomic, so no reader ever sees a partial file.
- *
- * The temp name carries the process id so two runs over one directory cannot
- * write to the same scratch file. That should not happen — the queue serialises
- * jobs per slug — but a `.tmp` collision would corrupt both, silently, and the
- * pid costs nothing.
- */
-async function writeAtomic(file: string, value: unknown): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-  await rename(tmp, file);
-}
+/* **`writeAtomic` went on 2026-09-05**, with `main()`, which was its only
+   caller. It wrote beside the target and renamed, because `writeFile` truncates
+   before it has anything to put there and the filesystem store read *existence*
+   as "this step is done" — so a process killed mid-write left a `tree.json` that
+   existed and was not JSON. Under Postgres the three artefacts are one write
+   inside one transaction, where a partial set is not a state that exists.
+   src/labels.ts had the deliberately-duplicated twin, and it went the same day. */
 
 /**
  * Stage 4 over a block sequence: the structure in one call, the nav labels in
  * parallel batches after it, then the tree, the labels file and this stage's
  * copy of the blocks — **returned, not written.**
  *
- * Exported because two callers run this stage and they must not drift —
- * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
+ * Exported because the ingest queue in the server process runs it
+ * (src/pipeline.ts), and because the stage has to be testable without one. It
+ * had a second caller — a `main()` at the foot of this file — until stage E of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * moved every stage CLI into `scripts/stage.ts` and through the queue.
  *
  * **The blocks come in, the artefacts go out, and the stage knows nothing about
  * where either lives.** It used to open a path and write a directory, which
@@ -1923,7 +2080,9 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
  * the seven article-reading stages. docs/plans/260831b-finish-the-database-move.md.
  *
  * **Two model passes, one pipeline step, and nothing returned until both are
- * done.** The split exists so the unbounded half can be batched
+ * done** — three when the deepening wave is switched on, which runs between the
+ * structure call and the labels (`deepenTree`, off for every reader today). The
+ * split exists so the unbounded half can be batched
  * (docs/plans/260826h-toc-scaling.md), not so it can be published separately — a tree
  * stored with a third of its labels missing is a valid-looking artefact that
  * quietly describes part of an article, which is
@@ -1935,7 +2094,9 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
  * `onProgress` reports what is arriving. For the structure call there is nothing
  * useful to say about *what* has been written — the JSON is unparseable until it
  * is complete — so it reports that something is still coming. The label pass can
- * do better, and counts finished sections.
+ * do better, and counts finished sections. The deepening wave, where it runs at
+ * all, reports nothing: it is off for every reader, and a progress line for a
+ * pass nobody asked for is worse than none.
  */
 export async function generateHierarchy(opts: {
   blocks: Block[];
@@ -1943,7 +2104,9 @@ export async function generateHierarchy(opts: {
   slug: string;
   /**
    * Where each finished **label batch** goes as it lands — passed straight down
-   * to `generateLabels`, which is the only thing here that checkpoints.
+   * to `generateLabels`. It was the only thing here that checkpointed until the
+   * structure call and the deepening wave gained rows of their own; this option
+   * is still the label pass's alone.
    *
    * It was a directory until 2026-09-01, and the store was not the seam this
    * call could go through because it is keyed on an `articleId` no stage was
@@ -1961,6 +2124,33 @@ export async function generateHierarchy(opts: {
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
+  /**
+   * **Whether to run the deepening wave.** Defaults to `deepeningEnabled()`,
+   * which is the `SPIDERYARN_DEEPEN_HIERARCHY` environment switch, which is off.
+   *
+   * Passed explicitly by a test and by an eval arm; production passes nothing and
+   * gets the switch. Two levers rather than one because the environment is how a
+   * *deployment* turns it on without a rebuild, and an argument is how a test
+   * turns it on without touching the process every other test shares.
+   * docs/plans/260904d-deepen-fat-sections.md § stage 8.
+   */
+  deepen?: boolean;
+  /**
+   * The seam the deepening wave talks to a model through. Defaults to
+   * `liveExpansionExecutor`, which streams. A test passes a function that
+   * returns a string, and no network happens anywhere.
+   */
+  expansionExecutor?: ExpansionExecutor;
+  /**
+   * **The wall clock this step has to be finished by** — `claimedMs + leaseMs -
+   * DEADLINE_MARGIN_MS`, which the queue already computes (src/jobs.ts).
+   *
+   * Only the deepening reads it, and only to decide whether to *start* another
+   * call: a wave that cannot finish stops between calls with everything it has
+   * bought written down, rather than being killed in the middle of one. Omitted,
+   * the wave runs to completion, which is what a command line and a test want.
+   */
+  deadlineAt?: number;
 }): Promise<HierarchyRun> {
   const { blocks, slug } = opts;
   const structural = blocks.filter((b) => isStructural(b)).length;
@@ -2026,12 +2216,25 @@ export async function generateHierarchy(opts: {
    * guarantee about the file. `checkTree` is pure and takes microseconds.
    * docs/postmortems/260830a-the-article-with-one-heading.md.
    */
-  const treeFrom = (answer: string): { tree: Tree; built: BuildReport } => {
+  const treeFrom = (answer: string): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
     const { root } = parseJson(answer);
-    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
+    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
     let tree: Tree;
+    /**
+     * **The tree before the apparatus is appended**, kept because the deepening
+     * wave has to be given this one and not the other.
+     *
+     * A supplement is a depth-one node of leaves carrying `treatment:
+     * "supplement"`, and `ModelNode` — which is what a deepening pass converts a
+     * tree back into — has nowhere to put that. So the appended node would come
+     * back as an ordinary childless node with its treatment gone, and the wave
+     * would take it for a section and try to divide a bibliography.
+     * src/hierarchy-deepen.ts § `deepenTree`, src/supplement.ts.
+     */
+    let bodyTree: Tree;
     try {
-      tree = appendSupplement(buildTree(root, {}, body, slug, built), groups);
+      bodyTree = buildTree(root, {}, body, slug, built);
+      tree = appendSupplement(bodyTree, groups);
     } catch (err) {
       /**
        * **A run that threw still says what it had mended on the way**, because
@@ -2069,7 +2272,7 @@ export async function generateHierarchy(opts: {
     /* The report goes back with the tree because `HierarchyRun` reports what was
        mended in the tree it is returning — which, on a resumed run, is the
        stored answer's build rather than a fresh one's. */
-    return { tree, built };
+    return { tree, bodyTree, built };
   };
 
   /**
@@ -2087,7 +2290,7 @@ export async function generateHierarchy(opts: {
    * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md
    * is what happens when the instrumentation covers only the throwing case.
    */
-  const structureFingerprint = structureKey(canonicalStructureRequest(params));
+  const structureFingerprint = checkpointKey(canonicalStructureRequest(params));
   let raw: string | null = null;
   try {
     const stored = await opts.checkpoints.read<unknown>(slug, "hierarchy-structure", [
@@ -2129,7 +2332,7 @@ export async function generateHierarchy(opts: {
    * of being wrong in this direction is one call; the cost of the other is an
    * article that can never be built again.**
    */
-  let cached: { tree: Tree; built: BuildReport } | null = null;
+  let cached: { tree: Tree; bodyTree: Tree; built: BuildReport } | null = null;
   if (raw !== null) {
     try {
       cached = treeFrom(raw);
@@ -2228,7 +2431,9 @@ export async function generateHierarchy(opts: {
   /* Built already if it came out of the checkpoint — the gate up there is this
      same function, because an answer that cannot become a tree has to read as a
      miss rather than as a resumption. */
-  const { tree: structure, built } = cached ?? treeFrom(raw);
+  const wave1 = cached ?? treeFrom(raw);
+  let structure = wave1.tree;
+  const built = wave1.built;
 
   /**
    * **Kept only now, and the lateness is the design.**
@@ -2259,6 +2464,119 @@ export async function generateHierarchy(opts: {
       log("pipeline").warn(
         { slug, key: structureFingerprint, err },
         "could not save the structure checkpoint; a later attempt will ask for the tree again",
+      );
+    }
+  }
+
+  /**
+   * **The deepening wave — off by default, and inert for every reader until it
+   * is not.**
+   *
+   * One additional scoped call per fat section, seeded from the tree
+   * `buildTree` has just derived rather than from the answer that produced it,
+   * because a scoped call must be shown the range the finished tree will give
+   * its node. All of the reasoning is in src/hierarchy-deepen.ts § `deepenTree`;
+   * what belongs *here* is the four decisions about where it sits in the step.
+   *
+   * **After the structure checkpoint's write**, so a wave that fails cannot
+   * cost the article the tree it has just paid two dollars for.
+   *
+   * **Before `generateLabels`**, necessarily: `labels.json` stamps
+   * `structureHash(tree)`, so a tree deepened after the labels were written
+   * would be stale at birth and nothing anywhere would say so
+   * (docs/project/hierarchy.md § Two passes). It also means the labels are cut
+   * along the deepened tree's own section boundaries, which is the same rule
+   * that has always applied, and it is most of why a deepened book costs
+   * several times what it costs today.
+   *
+   * **On the body tree, and the result is rebuilt from scratch.** The second
+   * `buildTree` is free — it is pure, takes milliseconds, and deriving
+   * already-derived ranges a second time derives the same ones — and it buys the
+   * thing that matters: every check `buildTree` and `assertTreeSound` make runs
+   * **once, over the finished tree**, with no second validation path to keep in
+   * step.
+   *
+   * **A failed wave is not a failed article.** The deepening is an enhancement;
+   * losing it costs the reader the level this plan is about, and losing the
+   * article costs them the article. So a throw here is a `warn` and the wave-1
+   * tree, with `deepen.failed` on the run so that an operator can see the
+   * difference between *"nothing was eligible"* and *"it broke"* —
+   * docs/reusable/silent-success.md. What was paid for is not lost either: each
+   * call's row was written the moment its answer stood up, and the reader's next
+   * Retry resumes onto them.
+   */
+  const deepening = opts.deepen ?? deepeningEnabled();
+  let deepen: DeepenStats | null = null;
+  let deepenFailed = false;
+  if (deepening) {
+    try {
+      const deepened = await deepenTree({
+        tree: wave1.bodyTree,
+        blocks: body,
+        slug,
+        checkpoints: opts.checkpoints,
+        execute: opts.expansionExecutor ?? liveExpansionExecutor(opts.signal),
+        ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+        ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+      });
+      deepen = deepened.stats;
+      /* **The per-candidate records, kept where a second run can be compared
+         with them** — and nowhere at all unless somebody named a directory
+         (src/hierarchy-deepen.ts § `DEEPEN_RECORDS_ENV`). Three of the five
+         questions the live run exists to answer are per-node rates across
+         repeats, and until 2026-09-05 every one of those records was built and
+         then dropped here. */
+      await saveDeepenRecords(slug, deepened);
+      if (deepened.root !== null) {
+        /* A report of its own, merged in below rather than written into
+           `built`'s array while the build is deciding what to put there. Over
+           already-derived ranges it should come back empty; a number in it is
+           worth seeing rather than hiding, which is why it is merged and not
+           dropped. */
+        const rebuilt: BuildReport = {
+          repairs: [],
+          droppedChildren: [],
+          droppedHeadings: [],
+          collapsedRungs: [],
+          droppedQuestions: [],
+        };
+        const deeper = appendSupplement(
+          buildTree(deepened.root, {}, body, slug, rebuilt),
+          groups,
+        );
+        assertTreeSound(blocks, deeper);
+        structure = deeper;
+        for (const from of [deepened.report, rebuilt]) {
+          built.repairs.push(...from.repairs);
+          built.droppedChildren.push(...from.droppedChildren);
+          built.droppedHeadings.push(...from.droppedHeadings);
+          built.collapsedRungs.push(...from.collapsedRungs);
+          built.droppedQuestions.push(...from.droppedQuestions);
+        }
+      }
+    } catch (err) {
+      deepenFailed = true;
+      /**
+       * **The failure's own records, before the fallback.**
+       *
+       * A wave that dies fatally took wave 1's governor decisions, its paid
+       * peers' records, the gate's report and the token accounting with it — and
+       * for a run whose whole purpose is to answer five questions, a failure
+       * nobody can read is nearly as bad as no run. So the partial telemetry
+       * travels on the error and lands in a file marked `failed`.
+       * ⟨GPT Sol's second review of stage 5a, finding 5.⟩
+       *
+       * Only a `DeepenFailed` carries one. Anything else thrown here — the
+       * second `buildTree`, `assertTreeSound` — happened *after* the success
+       * path had already written its file.
+       */
+      if (err instanceof DeepenFailed) {
+        await saveDeepenRecords(slug, err.partial, { reason: describeFailure(err.cause) });
+      }
+      log("pipeline").warn(
+        { slug, err },
+        "the deepening wave failed; keeping the table of contents wave 1 produced",
       );
     }
   }
@@ -2399,8 +2717,12 @@ export async function generateHierarchy(opts: {
        this stage produces, so nothing can write two of the three and forget the
        third. That is worth having and it is not atomicity.
 
-     The ordering survives in exactly one place — `main()` below, which really
-     does write three files. GPT Sol, 2026-08-31. */
+     The ordering used to survive in one place — a `main()` at the foot of this
+     file, which really did write three files. That CLI went on 2026-09-05 with
+     stage E of
+     docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+     so nothing writes the three by hand any more and the ordering is now purely
+     the store's. GPT Sol, 2026-08-31; the CLI's removal, 2026-09-05. */
 
   return {
     parts,
@@ -2427,174 +2749,61 @@ export async function generateHierarchy(opts: {
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedChildren: built.droppedChildren.length,
     droppedHeadings: built.droppedHeadings.length,
+    collapsedRungs: built.collapsedRungs.length,
+    droppedQuestions: built.droppedQuestions.length,
     labelled: Object.values(parts.tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
     labelCalls: labelRun.calls,
     labelsResumed: labelRun.resumed,
     structureResumed,
+    deepen,
+    deepenFailed,
     labelsDropped: labelRun.dropped.length,
-    /* Both passes together. What this number answers is "what did a tree cost",
-       and a structure figure alone would now understate it by most of the bill. */
-    inputTokens: structureUsage.input_tokens + labelRun.inputTokens,
-    outputTokens: structureUsage.output_tokens + labelRun.outputTokens,
-    cacheReadTokens: labelRun.cacheReadTokens,
-    cacheWriteTokens: labelRun.cacheWriteTokens,
+    /* **All three passes together.** What this number answers is "what did a
+       tree cost", and a structure figure alone would now understate it by most
+       of the bill.
+
+       The deepening term is zero on every run with the flag off, because
+       `deepen` is `null` there — so an undeepened run's four figures are
+       arithmetically identical to what it reported before the wave was metered,
+       and `tests/hierarchy-deepen-tokens.test.ts` is the gate on that. What it
+       cannot recover is a wave that *threw*: `deepenTree` returns nothing to add
+       up, and `deepenFailed` beside these says the AI-spend ledger under task
+       `hierarchy` is where that attempt's money is. */
+    inputTokens:
+      structureUsage.input_tokens + labelRun.inputTokens + (deepen?.usage.inputTokens ?? 0),
+    outputTokens:
+      structureUsage.output_tokens + labelRun.outputTokens + (deepen?.usage.outputTokens ?? 0),
+    cacheReadTokens: labelRun.cacheReadTokens + (deepen?.usage.cacheReadTokens ?? 0),
+    cacheWriteTokens: labelRun.cacheWriteTokens + (deepen?.usage.cacheWriteTokens ?? 0),
     elapsedMs: Date.now() - started,
   };
 }
 
-/**
- * `npm run hierarchy -- <blocks.json> [outDir]` — **the only caller that still turns
- * these artefacts into files.**
+/* **`npm run hierarchy` used to be here, and it is `scripts/stage.ts` now.**
  *
- * It reads the blocks itself and writes the three files itself, which is what
- * "every stage stays runnable on its own" costs now that the stage neither
- * reads a path nor writes a directory. The files are the same three files, in
- * the same three places, with the same contents.
+ * It took a `blocks.json` path, read it, called `generateHierarchy` with
+ * `nullCheckpointStore()` and wrote `labels.json`, `blocks.json` and
+ * `tree.json` into a directory — three separate writes, in an order chosen so
+ * that the tree, which every reader starts from, appeared only once the other
+ * two were already there. Under Postgres they are one write inside one
+ * transaction and there is no ordering left to get wrong.
+ *
+ * `npm run hierarchy -- <slug> [--force]` runs the same stage through the queue.
+ * Two things a person used to get here are worth naming as losses: the long
+ * per-run report (`Nodes:`, `Repaired:`, `Notes:`, the token counts), of which
+ * the queue keeps the one-line `detail`; and re-labelling on its own, which was
+ * `npm run labels` and has no replacement at all. `--force` is not one: it is a
+ * *step* flag, so the step runs again and then replays its structure and label
+ * batches out of `checkpoints` — measured 2026-09-05, two consecutive forced
+ * runs on an unchanged article, the first buying two model calls and the second
+ * **none**. So `--force` re-runs the step and not the purchase, and an earlier
+ * version of this sentence claiming "the extra structure call is the honest
+ * price" was wrong in the expensive direction. `scripts/stage.ts` has the
+ * contract and the measurement.
+ *
+ * **`withLedger("cli", …)` went with it, and that is not an oversight.** The
+ * job runner opens a `job_step` spend collector per step, so a CLI wrapping the
+ * whole run in a second `"cli"` scope would scope the same money twice.
  */
-async function main(): Promise<void> {
-  const blocksPath = process.argv[2];
-  if (!blocksPath) {
-    console.error("Usage: tsx src/hierarchy.ts <blocks.json> [outDir]");
-    process.exit(1);
-  }
-  const slug = slugForBlocksPath(blocksPath);
-  const outDir = process.argv[3] ?? path.join("data", slug);
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. Without it
-     this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`.
-
-     **Before the first `await`**, which is why it sits above the read rather
-     than beside the call it is for: "the file is read before the work starts"
-     is the property, and a rule that has to make an exception for which awaits
-     are harmless is not a rule. src/labels.ts § `main` makes the same point,
-     and tests/paid-cli-ledger.test.ts is what caught this one going below the
-     blocks read when stage 4 stopped reading them itself. */
-  loadEnvLocal();
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. Nothing
-     in this file logs, but a CLI's uncaught throw is printed, and the same text
-     reaches the log when a stage throws (src/jobs.ts § `errorFields`).
-     src/parse-json.ts. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(blocksPath, "utf-8"),
-    "blocks.json",
-  );
-  // Before the call, not after: this is the only thing on screen for the two
-  // minutes the model takes.
-  console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
-  /* **Nothing is remembered between runs of this command**, and it used to be:
-     the checkpoint landed in the output directory, so a run killed eight batches
-     into a book resumed rather than paying again. The batches are rows keyed on
-     an `articles` row now, and this command does not have one —
-     src/store/checkpoints.ts § nullCheckpointStore. The queue, which is how an
-     article really gets a tree, does have one and does resume. */
-  const run = await generateHierarchy({
-    blocks,
-    slug,
-    checkpoints: nullCheckpointStore(),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  /* **Labels, blocks, then the tree — and here the ordering is still real.**
-     These are three separate writes into a directory other things read, and the
-     filesystem store answers "is this step done?" with "do its files exist?".
-     Each is written beside its target and renamed, so it appears whole or not at
-     all, and the tree — the file every reader starts from — appears only once the
-     other two are already there.
-     The stage itself no longer does any of this: it returns all three and the
-     pipeline stores them in one call, where a partial set is not a state that
-     exists. See the note at the end of `generateHierarchy`. */
-  /* **Made here now.** `generateHierarchy` used to create this directory before
-     the first label batch could checkpoint into it; the batches are rows and it
-     does not, so the one caller that still writes files makes its own. Without
-     it `npm run hierarchy -- blocks.json some/new/dir` fails on the first
-     write. */
-  await mkdir(outDir, { recursive: true });
-  await writeAtomic(path.join(outDir, "labels.json"), run.parts.labels);
-  await writeAtomic(path.join(outDir, "blocks.json"), run.parts.blocks);
-  await writeAtomic(path.join(outDir, "tree.json"), run.parts.tree);
-
-  console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
-  console.log(
-    `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)` +
-      /* Said either way, for the reason the labels line below gives at length:
-         on this command line there is no `articleId` to key on, so it is always
-         "bought", and a line that only speaks when it is interesting cannot say
-         the uninteresting thing. */
-      `, tree ${run.structureResumed ? "resumed from a checkpoint" : "bought"}`,
-  );
-  /* **Said even when it is zero**, which on this command line it always is —
-     the stage commands have no `articleId` to key on and pass
-     `nullCheckpointStore()` (src/store/checkpoints.ts). That is the point: this
-     is the number `generateHierarchy`'s own docstring promises will tell a
-     caller that meant to checkpoint and did not, and a number printed only when
-     it is interesting cannot say the uninteresting thing. It was suppressed at
-     zero until 2026-09-04, and the sibling suppression at the other end left
-     the chunk checkpoints inert for the whole life of the feature
-     (recommendation 2 of
-     docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). */
-  console.log(
-    `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s) ` +
-      `(${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`,
-  );
-  /* Only when it happened, unlike the two lines below — the ratio above already
-     says it every run, and this line is the *reason* for a ratio under one. A
-     dropped label is a leaf that renders as nothing at all, so the run that
-     produced it is the last moment anybody is looking. */
-  if (run.labelsDropped > 0) {
-    console.log(
-      `Dropped:   ${run.labelsDropped} paragraph(s) came back unlabelled twice and were left ` +
-        `bare — see "dropped" in labels.json`,
-    );
-  }
-  /* **Said out loud, every run, including when it is zero.** `strandedSupplement`
-     is the count of apparatus blocks the split refused to place — non-zero means
-     no supplement node was built and the tree is exactly what it would have been
-     without this stage: a correct article with the feature silently absent. A
-     number computed and never printed is the same as no number
-     (docs/reusable/silent-success.md). GPT Sol's review of stage 4, 2026-08-28. */
-  console.log(
-    run.strandedSupplement > 0
-      ? `Notes:     NOT GROUPED — ${run.strandedSupplement} supplement block(s) are not one ` +
-          `trailing run, so no Notes node was built`
-      : `Notes:     ${run.supplementNodes} node(s) over ${run.supplementBlocks} block(s)`,
-  );
-  /* Printed every run, including at zero, for the reason the Notes line above
-     is. These are the two places stage 4 now forgives the model, and a number
-     computed and never shown is the same as no number. */
-  /* The size goes on the same line as the count, because the count on its own
-     stopped meaning anything the day the size bound was lifted: one repair can
-     be a paragraph or it can be a section handed forty blocks that belonged to
-     its neighbour. src/hierarchy.ts § `planChildRanges`.
-
-     **These are now the only thing standing between a slipped boundary and a
-     tree that is misaligned throughout**, since nothing about the tiling
-     refuses an answer any more. `repairedBlocks` against `blocks` above is the
-     fraction of the article that changed hands, and it is the number to read
-     first. */
-  console.log(
-    `Repaired:  ${run.repairedRanges} misaligned boundary(ies)` +
-      (run.repairedRanges > 0
-        ? ` moving ${run.repairedBlocks} block(s), largest ${run.largestRepair}`
-        : "") +
-      `, ${run.droppedChildren} dropped section(s)` +
-      `, ${run.droppedHeadings} unbacked heading claim(s)`,
-  );
-  console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
-  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`\nWrote:     ${path.resolve(outDir)}/tree.json`);
-  console.log(`Validate:  npm run validate-tree -- ${outDir}`);
-  console.log(`Eval:      npm run eval:hierarchy -- ${outDir}`);
-}
-
-/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
-   also matches when a *different* entry file with the same basename imports this
-   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
-   effect of the import, which is the one thing this guard exists to prevent. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void withLedger("cli", main);

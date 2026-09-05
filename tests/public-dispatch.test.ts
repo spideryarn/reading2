@@ -23,15 +23,36 @@
  * end inside `/api/public/` rather than falling through into the authenticated
  * table, and every one of those answers carries `Cache-Control: no-store`.
  *
- * **No database.** These tests are about dispatch, so they run under the default
- * filesystem store, where the public reads refuse with a 501 — which is itself
- * the evidence that the route matched and the handler ran. The reads themselves
- * are tested against real Postgres in tests/public-visibility-pg.test.ts.
+ * **No database, and the evidence that a route matched is the reader itself.**
+ *
+ * These tests are about dispatch, so they need a witness that a route matched
+ * and its reader ran. That witness has now been wrong twice, in the same shape,
+ * and the second time is the one to remember:
+ *
+ * - Until 2026-09-05 it was **501** — the filesystem store declining a feature
+ *   it had no `visibility` column for. Real evidence, because only the reader
+ *   could produce it.
+ * - The hinge deleted that store, so the reads reached a poisoned
+ *   `DATABASE_URL` and answered **500**, and the cases were re-expressed on
+ *   that. **500 is not evidence of anything.** `handleApi` maps *any*
+ *   unexpected throw in this namespace to 500 with `handled: true`, so all five
+ *   cases passed with the reader never running at all — a control that had
+ *   become a constant. GPT Sol's review of the hinge, 2026-09-05.
+ *
+ * So the witness is `readerRan` below: the route's own `read`, spied on, made to
+ * fail with a **sentinel** nothing else can produce, and asserted to have been
+ * **called with the right argument**. A 404 means the pattern missed, a 401
+ * means the request went to the authenticated gate, and a 500 whose body is not
+ * the sentinel means something else threw first — three different failures, all
+ * distinguishable, none of them satisfiable by an empty `if`.
+ *
+ * The reads themselves are tested against real Postgres in
+ * tests/public-visibility-pg.test.ts.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type AuthedUser, requireUser, type VerifiedUser } from "../src/auth.js";
 import { runInRequest } from "../src/owner.js";
@@ -117,7 +138,7 @@ describe("the authenticated dispatcher's one parameter", () => {
    */
   it("will not accept a hand-built user, and the typecheck says so", () => {
     const impostor: AuthedUser = {
-      id: "00000000-0000-4000-8000-0000000000ed" as AuthedUser["id"],
+      id: "d15a0001-0000-4000-8000-000000000001" as AuthedUser["id"],
       email: "someone@example.test",
     };
     // @ts-expect-error an AuthedUser is not a VerifiedUser — that is the brand
@@ -146,7 +167,7 @@ describe("the authenticated dispatcher's one parameter", () => {
   });
 
   it("refuses an object that merely looks like a user", async () => {
-    const impostor = { id: "00000000-0000-4000-8000-0000000000ed", email: "x@example.test" };
+    const impostor = { id: "d15a0001-0000-4000-8000-000000000001", email: "x@example.test" };
     await expect(
       runInRequest(() => serveAuthenticatedApi(impostor as never, envelope("/api/library"))),
     ).rejects.toThrow(/did not come from requireUser/);
@@ -299,22 +320,60 @@ describe("the authenticated dispatcher's one parameter", () => {
   });
 });
 
+/**
+ * A string no other failure in this process can produce, so a body carrying it
+ * came from the reader this test replaced and from nowhere else.
+ */
+const SENTINEL = "spya-public-dispatch-reader-ran-4f2a91";
+
+/** The status `handleApi` gives an unexpected throw. Not evidence on its own. */
+const THREW = 500;
+
+/**
+ * **Replace one public route's reader with a sentinel throw, and hand back the
+ * spy.**
+ *
+ * The spy is the witness in both directions: *that* it ran, and *what it was
+ * given* — a route matching `/api/public/article/example` and calling its reader
+ * with `"nonsense"` would be a dispatch bug this file exists to catch, and a
+ * call-count assertion alone would not see it.
+ *
+ * `PUBLIC_ROUTES` is the array the dispatcher walks, so spying on the object in
+ * it is spying on the thing production uses. Restored by
+ * `vi.restoreAllMocks()` in the `afterEach` below.
+ */
+function readerRan(name: string) {
+  const route = PUBLIC_ROUTES.find((r) => r.name === name);
+  if (!route) throw new Error(`no public route called ${name} — this test is out of date`);
+  const spy = vi.spyOn(route as unknown as { read: (...args: unknown[]) => Promise<unknown> }, "read");
+  spy.mockRejectedValue(new Error(SENTINEL));
+  return spy;
+}
+
 describe("the closed public namespace", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   /**
    * A route that exists, reached with no `Authorization` header at all — which
    * is the only case that matters, and the one that would otherwise be
    * exercised for the first time by a stranger.
    *
-   * 501 rather than 200 because these tests run under the default filesystem
-   * store, which has no `visibility` column. What it proves is the dispatch: a
-   * 401 would mean the request went to the gate, a 404 would mean it fell
-   * through to the authenticated table's catch-all, and it is neither.
+   * What it proves is the dispatch: a 401 would mean the request went to the
+   * gate, a 404 would mean it fell through to the authenticated table's
+   * catch-all, and it is neither.
    */
   it("answers an anonymous request without consulting the gate", async () => {
+    const read = readerRan("article");
     const r = await call("GET", "/api/public/article/example");
     expect(r.handled).toBe(true);
-    expect(r.status).toBe(501);
-    expect(r.body.error).toMatch(/needs Postgres/);
+    /* **The reader, with the slug.** A 401 would mean the gate saw this and a
+       404 that the pattern missed; both are ruled out by the reader having run
+       at all, and the argument rules out a route that matched the wrong thing. */
+    expect(read).toHaveBeenCalledWith("example");
+    expect(r.status).toBe(THREW);
+    expect(JSON.stringify(r.body)).toContain(SENTINEL);
   });
 
   it("and answers a signed-in one exactly the same way", async () => {
@@ -342,6 +401,25 @@ describe("the closed public namespace", () => {
       "/api/public/library/anything",
       "/api/public/libraries",
       "/api/public/article",
+      /* **The slug route's own near misses, and they were missing until
+         2026-09-05.** The collection route had suffix cases from the day it
+         arrived; the slug route had none, so `publicRoute`'s trailing `$` was
+         pinned by nothing. Measured: delete that `$` from
+         `src/public/route-names.ts` and **all 26 cases in this file stay green**
+         while `/api/public/article/example/extra` reaches the article reader
+         with `"example"`. `readerRan` proves a canonical path matches and
+         supplies the right argument; only these prove a non-canonical one does
+         not. GPT Sol, 2026-09-05.
+
+         **The trailing `$` is what these pin. The leading `^` is not, and cannot
+         be from here** — measured, rather than assumed: removing it leaves all
+         26 green, because `isPublicNamespace` is a `startsWith` on
+         `/api/public/`, so a path with anything in front of that never reaches
+         the dispatcher at all. Saying so is more useful than implying a check
+         that is not there. */
+      "/api/public/article/example/extra",
+      "/api/public/article/example/",
+      "/api/public/articles/example",
       "/api/public/glossary/example",
       "/api/public/../library",
       /* **A route that used to exist**, deleted 2026-09-02 with its reader, its
@@ -568,25 +646,29 @@ describe("the closed public namespace", () => {
    * the case above is not passing because every path 401s.
    */
   it("while the exact spelling still reaches the public handler", async () => {
+    const read = readerRan("article");
     const r = await call("GET", "/api/public/article/example");
-    expect(r.status).toBe(501);
+    expect(read).toHaveBeenCalledWith("example");
+    expect(r.status).toBe(THREW);
   });
 
   /**
    * **The collection route reaches the handler too**, and by the same evidence.
    *
-   * 501 is the filesystem store refusing, which is what a route that matched and
-   * ran looks like in this file — a 404 would mean the pattern missed. Said
-   * separately from the sweeps above because those prove what the route
-   * *refuses*; this is the one line that proves it is reachable at all, and
-   * without it every refusal above could be passing over a route that matches
-   * nothing.
+   * Its reader running is what a route that matched looks like — a 404 would
+   * mean the pattern missed. Said separately from the sweeps above because those
+   * prove what the route *refuses*; this is the one line that proves it is
+   * reachable at all, and without it every refusal above could be passing over a
+   * route that matches nothing.
    */
   it("and the slugless collection route reaches the public handler as well", async () => {
+    const read = readerRan("library");
     const r = await call("GET", "/api/public/library");
     expect(r.handled).toBe(true);
-    expect(r.status).toBe(501);
-    expect(r.body.error).toMatch(/needs Postgres/);
+    /* No argument: a collection route's reader takes none, which is the half of
+       the contract `PUBLIC_ROUTES`' two kinds exist to keep apart. */
+    expect(read).toHaveBeenCalledWith();
+    expect(r.status).toBe(THREW);
     expect(r.headers["Cache-Control"]).toBe("no-store");
   });
 
@@ -633,8 +715,10 @@ describe("the closed public namespace", () => {
   it("survives the rewrite the deployed site actually uses", async () => {
     const restored = originalUrl("/api/index?__spy_path=public%2Farticle%2Fexample");
     expect(restored).toBe("/api/public/article/example");
+    const read = readerRan("article");
     const r = await call("GET", restored ?? "");
-    expect(r.status).toBe(501);
+    expect(read).toHaveBeenCalledWith("example");
+    expect(r.status).toBe(THREW);
     expect(r.headers["Cache-Control"]).toBe("no-store");
   });
 
@@ -655,10 +739,15 @@ describe("the closed public namespace", () => {
    * saying so is more useful than implying a check that is not there.
    */
   it("still routes a public GET that carries a query string", async () => {
+    const read = readerRan("article");
     const withState = await call("GET", "/api/public/article/example?at=spya-k3m9qt&zoom=2");
-    /* 501 rather than 404: it matched `ARTICLE`, ran the handler, and refused on
-       the store. The bare form answers identically. */
-    expect(withState.status).toBe(501);
+    /* **The slug, without the query string on the end of it.** That is the
+       failure this case is really about: hand `servePublicApi` `url` instead of
+       `path` and `ARTICLE` stops matching, so the reader never runs — and if it
+       matched too loosely it would run with `example?at=spya-k3m9qt&zoom=2`.
+       A status could not tell those two apart; the argument can. */
+    expect(read).toHaveBeenCalledWith("example");
+    expect(withState.status).toBe(THREW);
     const bare = await call("GET", "/api/public/article/example");
     expect(withState.status).toBe(bare.status);
   });

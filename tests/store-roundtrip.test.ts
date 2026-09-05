@@ -215,65 +215,63 @@ let slugs: readonly string[] = [];
 const unpublishable: string[] = [];
 
 /* The ten-second connect timeout and the warning both live in the helper. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-roundtrip.test.ts",
   tables: ["spideryarn.revision_blocks"],
 });
 
-if (reachable) {
-  const { readdir } = await import("node:fs/promises");
-  const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
-  const found: string[] = [];
-  for (const entry of entries) {
-    // `_` is the queue's; `test-` is another test file's fixture, created and
-    // removed concurrently — see tests/store-parity.test.ts for the full note.
-    if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) {
-      continue;
-    }
-    /* `ENOENT` only — a peer suite's fixture on its way out is the one error
-       worth reading as "no files"; anything else means the scan is not seeing
-       what is there, and an article dropping out of the corpus in silence is
-       how this suite stops round-tripping the thing it was written for. Same
-       rule, same reason, in tests/store-artefact-manifest.test.ts. */
-    const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
-      (err: NodeJS.ErrnoException) => {
-        if (err.code === "ENOENT") return [] as string[];
-        throw err;
-      },
-    );
-    if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
-
-    /* **An article that cannot be published cannot be exported**, and there is
-       one in `data/`. `labels.json` is stage 4's output, and one written
-       before it recorded a `sourceHash` gives the publication gate nothing to
-       check the ToC against — so `publishRevision` refuses, correctly, and
-       `exportArticle` then finds no current revision. `db:import` never met
-       this because it wrote `hashBlocks(blocks)` into every step row whether
-       or not the artefact could support the claim.
-
-       Excluded by asking the question rather than by naming `constitution`,
-       so a regenerated fixture rejoins the corpus on its own. What was
-       excluded, and why, is asserted below. */
-    /* **A missing `labels.json` is a different fact from a legacy one**, and
-       collapsing them would report an accidental deletion as "predates
-       sourceHash". An article with a tree and no labels file is broken and
-       should fail loudly rather than be quietly dropped from the corpus, so
-       it stays in and whatever reads it says so. GPT Sol, 2026-08-28. */
-    if (!files.includes("labels.json")) {
-      found.push(entry.name);
-      continue;
-    }
-    const labels = (await readJsonIfPresent(
-      path.join(ROOT, "data", entry.name, "labels.json"),
-    )) as { sourceHash?: string } | undefined;
-    if (!labels?.sourceHash) {
-      unpublishable.push(entry.name);
-      continue;
-    }
-    found.push(entry.name);
+const { readdir } = await import("node:fs/promises");
+const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
+const found: string[] = [];
+for (const entry of entries) {
+  // `_` is the queue's; `test-` is another test file's fixture, created and
+  // removed concurrently — see tests/store-parity.test.ts for the full note.
+  if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) {
+    continue;
   }
-  slugs = found;
+  /* `ENOENT` only — a peer suite's fixture on its way out is the one error
+     worth reading as "no files"; anything else means the scan is not seeing
+     what is there, and an article dropping out of the corpus in silence is
+     how this suite stops round-tripping the thing it was written for. Same
+     rule, same reason, in tests/store-artefact-manifest.test.ts. */
+  const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
+    (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return [] as string[];
+      throw err;
+    },
+  );
+  if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
+
+  /* **An article that cannot be published cannot be exported**, and there is
+     one in `data/`. `labels.json` is stage 4's output, and one written
+     before it recorded a `sourceHash` gives the publication gate nothing to
+     check the ToC against — so `publishRevision` refuses, correctly, and
+     `exportArticle` then finds no current revision. `db:import` never met
+     this because it wrote `hashBlocks(blocks)` into every step row whether
+     or not the artefact could support the claim.
+
+     Excluded by asking the question rather than by naming `constitution`,
+     so a regenerated fixture rejoins the corpus on its own. What was
+     excluded, and why, is asserted below. */
+  /* **A missing `labels.json` is a different fact from a legacy one**, and
+     collapsing them would report an accidental deletion as "predates
+     sourceHash". An article with a tree and no labels file is broken and
+     should fail loudly rather than be quietly dropped from the corpus, so
+     it stays in and whatever reads it says so. GPT Sol, 2026-08-28. */
+  if (!files.includes("labels.json")) {
+    found.push(entry.name);
+    continue;
+  }
+  const labels = (await readJsonIfPresent(
+    path.join(ROOT, "data", entry.name, "labels.json"),
+  )) as { sourceHash?: string } | undefined;
+  if (!labels?.sourceHash) {
+    unpublishable.push(entry.name);
+    continue;
+  }
+  found.push(entry.name);
 }
+slugs = found;
 
 /* **At module scope, not in the `beforeAll` below.** This suite loads every real
    article in `data/`, and so does tests/store-parity.test.ts. One at a time —
@@ -285,13 +283,11 @@ if (reachable) {
    margin. A top-level `await` puts the wait in vitest's *import* phase, which
    has no hook timeout. tests/helpers/corpus-lock.ts § "Take it at MODULE SCOPE";
    docs/plans/260902c-make-the-test-suite-pass-reliably.md § "Cause 4". */
-if (reachable) await takeCorpusLock("tests/store-roundtrip.test.ts");
-
-const when = reachable ? describe : describe.skip;
+await takeCorpusLock("tests/store-roundtrip.test.ts");
 
 let out = "";
 
-when("a round trip through Postgres", () => {
+describe("a round trip through Postgres", () => {
   beforeAll(async () => {
     /* **From nothing, the same as parity, and for the same reason.** Loading
        over a published revision means `beginDraftIn` carries its columns,

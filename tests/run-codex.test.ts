@@ -21,11 +21,11 @@ import {
   writeFileSync, writeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   authHint, authPlan, buildCodexArgs, childEnv, combinedLog, formatAnswer, isCredentialFailure,
-  parseArgs, readAnswerForConsole, reviewProfileDefined, runCodex, shouldFallBack,
+  parseArgs, readAnswerForConsole, reviewProfileDefined, runCodex, shouldFallBack, untrustedCheckoutHint,
 } from "../scripts/run-codex.js";
 
 /**
@@ -147,6 +147,37 @@ describe("reviewProfileDefined", () => {
 
   it("is satisfied by this repo", () => {
     expect(reviewProfileDefined(".")).toBe(true);
+  });
+});
+
+describe("untrustedCheckoutHint", () => {
+  // The failure it exists for: codex refuses the profile because it never read the file that
+  // defines it — the checkout is not a trusted project — and its message names the table as
+  // missing, which sends you to add a table that is already there.
+  const codexSaid = "Error: default_permissions requires a `[permissions]` table";
+
+  it("names the trust stanza when the table is there and codex says it is not", () => {
+    const note = untrustedCheckoutHint(codexSaid, "review", ".");
+    expect(note).toContain("trust_level = \"trusted\"");
+    expect(note).toContain(`[projects."${resolve(".")}"]`);
+  });
+
+  it("says nothing when the phrase is prose rather than codex's own error line", () => {
+    // The activity log is mostly the contents of the files codex read, and this repo's docs quote
+    // this string. A run that failed for any other reason must not be sent to edit its trust config.
+    const doc = "the wrapper gets default_permissions requires a [permissions] table at exit 1";
+    expect(untrustedCheckoutHint(doc, "review", ".")).toBe("");
+  });
+
+  it("says nothing for a sandbox that never selects the profile, or an empty log", () => {
+    expect(untrustedCheckoutHint(codexSaid, "read-only", ".")).toBe("");
+    expect(untrustedCheckoutHint("", "review", ".")).toBe("");
+  });
+
+  it("says nothing when the repo really has no table — that is the wrapper's own refusal", () => {
+    const dir = mkdtempSync(join(tmpdir(), "untrusted-hint-"));
+    expect(untrustedCheckoutHint(codexSaid, "review", dir)).toBe("");
+    rmSync(dir, { recursive: true });
   });
 });
 

@@ -32,8 +32,13 @@
  * mousemove hands it straight back. Both ends of the ladder are reachable —
  * Greg, 2026-08-26: "I need to be able to hit left all the way to be able to
  * select L0 (the Argument), and to be able to hit right all the way to select
- * the Text" — which is why the arc column is a rung of its own rather than an
- * alias for Parts, and why the prose and the leaf column beside it share one.
+ * the Text" — which is why the prose and the leaf column beside it share one
+ * rung rather than needing two presses to leave. **The L0 half of that was
+ * reversed on 2026-09-05**, Greg: "let's get rid of the 'Arg' button and
+ * functionality altogether"; the later instruction wins, so ← now stops at
+ * Parts and the arc is no longer a rung
+ * (docs/plans/260905d-declutter-the-reading-view-top-bars.md). The arc
+ * artefact itself is untouched — Outline mode still renders it.
  * See navPlan. Off the ends the keys go back to the browser, which uses them to
  * pan a table wider than the window.
  *
@@ -135,12 +140,14 @@ export function stepTarget(
  * one the ladder does not carry — the spine means L1 whether or not the Parts
  * column survived the fit.
  *
- * The one substitution is the arc. When stage 5b has run, the L0 column draws
- * one cell per part rather than one cell for the article
- * (tree.ts § the arc), so L0 steps by part — the same stride as Parts, which is
- * exactly what "left all the way" is asking for: the argument's own column, not
- * a rung that dead-ends because the root is a single cell. Without the arc that
- * is what L0 is, and it is left off the ladder for having nowhere to go.
+ * **Depth 0 is never a rung, and there used to be one exception.** Until
+ * 2026-09-05 the L0 column drew the arc — one cell per part rather than one
+ * cell for the article — so it borrowed the parts' row starts and stepped by
+ * part, which was the only thing that made "left all the way to the Argument"
+ * anything but a dead end. That column is gone (layout.ts § `offerableGists`),
+ * so the substitution went with it and depth 0 is back to what it always was
+ * off the arc: the root, one item, nowhere to step. It falls off the ladder on
+ * the ordinary rule below, without a special case.
  */
 export interface NavPlan {
   /** The rungs ← / → step between, coarsest first. */
@@ -153,7 +160,6 @@ export function navPlan(
   geometry: Geometry,
   columns: number[],
   showText: boolean,
-  hasArc: boolean,
 ): NavPlan {
   const { cells, leafDepth } = geometry;
   /* Through `navigableItems`, so ↓ steps over the whole of the apparatus in one
@@ -164,11 +170,7 @@ export function navPlan(
      what breaks them apart. */
   const startsOf = (column: readonly Cell[]): number[] =>
     navigableItems(column, geometry.supplementOf).map((item) => item.startRow);
-  // The arc's cells are the parts' cells, by construction — so borrow the row
-  // starts rather than recomputing them, and the two columns cannot drift.
-  const starts: number[][] = cells.map((column, d) =>
-    startsOf(d === 0 && hasArc ? (cells[1] ?? column) : column),
-  );
+  const starts: number[][] = cells.map(startsOf);
   const visible = new Set(columns);
   // The prose column is the finest granularity there is, and it means the same
   // stride as the leaf column beside it: one paragraph. Same rung, not a second.

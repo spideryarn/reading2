@@ -337,14 +337,15 @@ export function ControlTip({
  * `.tip-soon`). Sized here rather than by adding a rule to styles.css, which
  * would be a fifth spelling of the same thing.
  *
- * `foreground/85` and NOT `ink-soft`, which is what the eye wants and what the
- * other tooltips use: `--ink-soft` is declared in styles.css but is not one of
- * the four reading-view names bridged into Tailwind's theme (tailwind.css), so
- * `tw:text-ink-soft` compiles to nothing at all and the text would simply
- * inherit — no error, no missing class, just the wrong colour.
+ * `ink-soft`, which is what the eye wants and what the other tooltips use.
+ * **This said `foreground/85` until 2026-09-05, and that was a bug rather than a
+ * preference**: `--ink-soft` was declared in styles.css but missing from the
+ * `@theme inline` bridge, so `tw:text-ink-soft` compiled to nothing at all and
+ * the text simply inherited — no error, no missing class, just the wrong
+ * colour. The workaround is not needed now the bridge has the name
+ * (docs/plans/260905f-…). Note the two are not equivalent: `--ink-soft` is an
+ * opaque grey, `foreground/85` composites over whatever is behind it.
  */
 export function TipNote({ children }: { children: ReactNode }) {
-  return (
-    <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-foreground/85">{children}</span>
-  );
+  return <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-ink-soft">{children}</span>;
 }

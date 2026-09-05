@@ -21,19 +21,18 @@
  * counter is a cost gate, not a validity one.
  */
 import { createHash } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchedDocument } from "../src/fetch.js";
 import { readerFailureOf } from "../src/job-failure.js";
-import { contextPaths, STEPS } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import { canonicalKey, stagingKey } from "../src/source.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { MAX_PAGES } from "../src/uploads.js";
 import { claimUpload, forgetUpload, mintUpload, readUpload } from "../src/upload-records.js";
 import { getDb } from "../src/db/client.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /**
@@ -92,6 +91,19 @@ vi.mock("../src/fetch.js", async (importOriginal) => {
 
 const blobs = blobStore();
 
+/**
+ * **A store, because `run` takes one — and the refusals never reach it.**
+ *
+ * The whole claim of this file is that an over-long PDF is turned away *before*
+ * anything is stored, so the interesting cases write no artefact at all; the
+ * two controls assert on the manifest the step returns rather than on anything
+ * read back. It was `fsArtifacts` under the repository's own `data/` until
+ * 2026-09-05, which is the only reason each context needed a directory swept up
+ * after it. The blob store is the one storage this file really is about, and it
+ * is untouched.
+ */
+const artefacts = memoryArtefacts();
+
 /** This file's own `auth.users` row — tests/fixture-ids.test.ts. */
 const OWNER = "00000000-0000-4000-8000-0000000000dd";
 
@@ -135,14 +147,10 @@ async function readyToVerify(bytes: Uint8Array) {
   await blobs.putIfAbsent(stagingKey(id), bytes, CONTENT_TYPE.pdf);
 
   const slug = `test-long-pdf-${id.slice(0, 8)}`;
-  const { dir, htmlFile } = contextPaths(slug);
-  rubbish.push(() => rm(dir, { recursive: true, force: true }));
   return {
     id,
     ctx: {
       slug,
-      dir,
-      htmlFile,
       upload: { id, filename: "paper.pdf" },
       report: () => {},
       signal: new AbortController().signal,
@@ -153,12 +161,8 @@ async function readyToVerify(bytes: Uint8Array) {
 
 /** A context for the fetched half. No upload, an address, and nothing else different. */
 function urlContext(slug: string, signal = new AbortController().signal) {
-  const { dir, htmlFile } = contextPaths(slug);
-  rubbish.push(() => rm(dir, { recursive: true, force: true }));
   return {
     slug,
-    dir,
-    htmlFile,
     url: "https://example.test/paper.pdf",
     report: () => {},
     signal,
@@ -188,7 +192,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     const { ctx } = await readyToVerify(bytes);
 
     const thrown = await STEPS.fetch
-      .run(ctx, fsArtifacts, nullCheckpointStore())
+      .run(ctx, artefacts, nullCheckpointStore())
       .then(() => null)
       .catch((err: unknown) => err);
     expect(thrown, "the fetch step accepted a PDF over the cap").not.toBeNull();
@@ -205,7 +209,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     const bytes = await pdfWithPages(MAX_PAGES + 7);
     const { id, ctx } = await readyToVerify(bytes);
 
-    await expect(STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore())).rejects.toThrow();
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow();
 
     /* `verified` is terminal (src/source.ts § `NEXT`), which is the whole
        reason the check has to happen before the promotion rather than after
@@ -224,7 +228,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     const ctx = urlContext("test-long-pdf-url");
 
     const thrown = await STEPS.fetch
-      .run(ctx, fsArtifacts, nullCheckpointStore())
+      .run(ctx, artefacts, nullCheckpointStore())
       .then(() => null)
       .catch((err: unknown) => err);
     expect(thrown, "the fetch step accepted a PDF over the cap").not.toBeNull();
@@ -248,7 +252,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     stubbed.doc = aFetchedPdf(bytes);
     const ctx = urlContext("test-short-pdf-url");
 
-    const product = await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
     expect(stubbed.stored).toBe(1);
     expect(product.parts?.raw?.storedSha256).toBe(shaOf(bytes));
@@ -259,7 +263,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     const bytes = await pdfWithPages(MAX_PAGES - 8);
     const { id, ctx } = await readyToVerify(bytes);
 
-    const product = await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
     expect(product.parts?.raw?.kind).toBe("pdf");
     expect(product.parts?.raw?.storedSha256).toBe(shaOf(bytes));
     expect((await readUpload(id))?.status).toBe("verified");
@@ -279,7 +283,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     const bytes = new TextEncoder().encode("%PDF-1.4\nnot really\n%%EOF\n");
     const { ctx } = await readyToVerify(bytes);
 
-    const product = await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
     expect(product.parts?.raw?.kind).toBe("pdf");
   });
 
@@ -310,7 +314,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     const overdue = AbortSignal.abort(new Error("this claimant is out of time"));
     const ctx = urlContext("test-abandoned-pdf-url", overdue);
 
-    await expect(STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore())).rejects.toThrow(
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(
       /out of time/,
     );
     expect(stubbed.stored, "stored a document nobody was still waiting for").toBe(0);
@@ -321,7 +325,7 @@ describe("a PDF longer than the cap, refused in stage 1", () => {
     const bytes = await pdfWithPages(3);
     const { ctx } = await readyToVerify(bytes);
 
-    await expect(STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore())).rejects.toThrow(
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(
       TypeError,
     );
     expect(await blobs.head(canonicalKey(shaOf(bytes), "pdf"))).toBeNull();

@@ -73,14 +73,12 @@ const legacyAnswered = (id: string, answer = "an old explanation") =>
     .set({ status: "done", answer })
     .where(and(eq(commentsTable.articleId, ARTICLE_ID), eq(commentsTable.id, id)));
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-comments.test.ts",
   tables: ["spideryarn.comments"],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the Postgres comment store", () => {
+describe("the Postgres comment store", () => {
   beforeAll(async () => {
     const db = getDb();
     await db
@@ -190,6 +188,12 @@ when("the Postgres comment store", () => {
     const read = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-bqd456");
     expect(read?.valence).toBe(-80);
     expect(read?.criterionId).toBe(CRITERION_ID);
+    /* And nothing else on the row is carrying it. A placement that reached
+       `start` — an offset, non-negative by its own CHECK — or any other number
+       field would be a different bug with the same symptom. Ported from
+       tests/store-comments-parity.test.ts when that file went with the
+       filesystem store, 2026-09-05. */
+    expect(read?.start, "the valence reached the anchor").toBe(12);
   });
 
   it("keeps a placement of zero, and leaves an ordinary note with neither field", async () => {
@@ -242,6 +246,49 @@ when("the Postgres comment store", () => {
     ).rejects.toBeInstanceOf(CommentIdTaken);
     const read = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-bqd789");
     expect(read?.valence).toBe(-80);
+  });
+
+  it("refuses a stored id whose placement has been taken off, rather than clearing it", async () => {
+    /* **Ported from tests/store-comments-parity.test.ts on 2026-09-05**, when
+       that file went with the filesystem store. It was step 4 of that file's
+       script and the one case with no second home: `refuses a re-score` above
+       sends a *different* number, and this sends **none at all**.
+
+       The two are a different line of the same expression. `create`'s repeat
+       branch compares `stored.criterionId === input.criterionId &&
+       stored.valence === input.valence` (src/store/pg-comments.ts), so a stored
+       `-80` against an absent field must compare unequal and refuse. Written
+       as `?? undefined` on the filesystem side, and as a plain `===` here,
+       which is why both halves needed a test: a `!=` here, or a `??` that
+       coalesced the stored side too, would clear a judgement the referee made
+       and report the create as the harmless repeat it is not.
+
+       (The id has no `1` in it, and that is not an accident: `isSpideryarnId`
+       rejects `i`, `l`, `o` and `1`, and `create` answers an id it rejects by
+       **minting its own** rather than refusing — so `spya-bqd901` here made the
+       second call a fresh comment and this test fail for a reason that had
+       nothing to do with placements. docs/project/block-ids.md.) */
+    await pgCommentStore.create(SLUG, {
+      id: "spya-bqd923",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+      criterionId: CRITERION_ID,
+      valence: -80,
+    });
+    await expect(
+      pgCommentStore.create(SLUG, {
+        id: "spya-bqd923",
+        blockId: BLOCK_ID,
+        quote: "a stretch of prose",
+        start: 12,
+      }),
+    ).rejects.toBeInstanceOf(CommentIdTaken);
+    // And the refusal left the judgement where it was, rather than 409ing after
+    // writing — which a test that only looked at the throw would not notice.
+    const read = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-bqd923");
+    expect(read?.valence).toBe(-80);
+    expect(read?.criterionId).toBe(CRITERION_ID);
   });
 
   it("carries the placement through a retry of the model call", async () => {
@@ -310,6 +357,27 @@ when("the Postgres comment store", () => {
     const stored = await pgCommentStore.create(SLUG, {
       blockId: BLOCK_ID,
       quote: "another",
+      start: 0,
+    });
+    expect(stored.id).toMatch(/^spya-[a-z][a-z0-9]{5}$/);
+  });
+
+  it("mints its own id when the client's is malformed, rather than storing it", async () => {
+    /* Ported from tests/comments.test.ts on 2026-09-05, when the filesystem
+       comment store was deleted
+       (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+       the stage-G section). `pg-comments.ts` spells this
+       `isSpideryarnId(input.id) ? input.id : undefined` and nothing here drove
+       it — the case above only says an *absent* id is minted, which the same
+       line satisfies with the check deleted.
+
+       `../../etc/passwd` rather than a merely odd string, because a comment id
+       reaches `?note=` and the export's filenames: a store that trusted one
+       would be trusting a path. */
+    const stored = await pgCommentStore.create(SLUG, {
+      id: "../../etc/passwd",
+      blockId: BLOCK_ID,
+      quote: "a third",
       start: 0,
     });
     expect(stored.id).toMatch(/^spya-[a-z][a-z0-9]{5}$/);

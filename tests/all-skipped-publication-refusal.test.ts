@@ -77,15 +77,6 @@ import path from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-/* `SPIDERYARN_STORE=postgres` before a single import is evaluated — src/store/live.ts
-   reads the flag once, at first import, and imports are hoisted above ordinary
-   statements. The reasoning in full is in tests/store-pg-session.test.ts. */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
-
 import { closeDb, getDb } from "../src/db/client.js";
 import {
   articleRevisions,
@@ -103,7 +94,6 @@ import { STEPS } from "../src/pipeline.js";
 import type { PipelineStep } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { STORAGE_BUSY, STORAGE_FAILED } from "../src/messages.js";
-import { STORE } from "../src/store/live.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
@@ -117,8 +107,6 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put the flag back straight away — vitest reuses a worker across files, and the
    modules above have already captured it. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
@@ -151,7 +139,7 @@ const ARC_R2 = "the arc R2 published";
 
 let runLock: HeldRunLock | undefined;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/all-skipped-publication-refusal.test.ts",
   tables: [
     "spideryarn.jobs",
@@ -162,31 +150,27 @@ const { reachable } = await pgReady({
   ],
 });
 
-if (reachable) {
-  /* The sweep runs on the lock's own connection, so it is covered by the key —
-     and through `takeRunLockAndSetUp`, so a statement that throws gives the key
-     back. This is module scope: no `afterAll` has been registered yet, so
-     nothing else would. tests/helpers/lock-lifecycle.ts. */
-  runLock = await takeRunLockAndSetUp(
-    "tests/all-skipped-publication-refusal.test.ts",
-    async (lockClient) => {
-      await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-      await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-      await lockClient.query(
-        "update spideryarn.articles set current_revision_id = null where slug like $1",
-        [SLUG_RUBBLE],
-      );
-      await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-      await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-      await seedAuthUser(lockClient, {
-        id: OWNER,
-        email: `all-skipped-refusal-${OWNER}@example.invalid`,
-      });
-    },
-  );
-}
-
-const when = reachable ? describe : describe.skip;
+/* The sweep runs on the lock's own connection, so it is covered by the key —
+   and through `takeRunLockAndSetUp`, so a statement that throws gives the key
+   back. This is module scope: no `afterAll` has been registered yet, so
+   nothing else would. tests/helpers/lock-lifecycle.ts. */
+runLock = await takeRunLockAndSetUp(
+  "tests/all-skipped-publication-refusal.test.ts",
+  async (lockClient) => {
+    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query(
+      "update spideryarn.articles set current_revision_id = null where slug like $1",
+      [SLUG_RUBBLE],
+    );
+    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+    await seedAuthUser(lockClient, {
+      id: OWNER,
+      email: `all-skipped-refusal-${OWNER}@example.invalid`,
+    });
+  },
+);
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -363,7 +347,6 @@ function fakeArc(): PipelineStep<"arc"> {
   return {
     name: "arc",
     label: "Reading the shape of the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     async run() {
       throw new Error("the arc step must not run: the fixture published a current one");
@@ -492,16 +475,14 @@ const mine = (name: string, body: () => Promise<void>) => it(name, () => runAsOw
 
 /* ------------------------------------------------------------------ tests -- */
 
-when("a claim where every step skips and the publication does not happen", () => {
+describe("a claim where every step skips and the publication does not happen", () => {
   afterEach(async () => {
-    if (!reachable) return;
     await db()
       .delete(jobsTable)
       .where(and(eq(jobsTable.ownerId, OWNER), inArray(jobsTable.status, ["queued", "running"])));
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     /* Release last, and whatever the cleanup did: one failed statement used to
        skip it, leaving the key held until the worker exited and every peer
        suite waiting on it. tests/helpers/lock-lifecycle.ts. */
@@ -539,8 +520,6 @@ when("a claim where every step skips and the publication does not happen", () =>
    * consequences Sol listed.
    */
   mine("ends the job with the refusal, fails the draft and lets the pointer go", async () => {
-    expect(STORE, "the vi.hoisted flag did not reach src/store/live.ts").toBe("postgres");
-
     const slug = `${SLUG_PREFIX}moved`;
     const fixture = await publishR1(slug);
     const jobId = await queueJob(slug, ["arc"]);

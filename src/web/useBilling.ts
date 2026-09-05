@@ -33,6 +33,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isPurchase } from "../billing-plan.js";
 import type { BillingSummary } from "../billing-plan.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -65,6 +66,37 @@ export interface UseBilling {
   reload(): void;
 }
 
+/**
+ * The body, once it has been checked to be the answer this bundle understands.
+ *
+ * **`readJson<BillingSummary>` was a cast, and a cast is not a check** — it is
+ * `JSON.parse(text) as T` and nothing else (./lib/api.ts). So every guarantee
+ * the type makes held only while the server was the version this client was
+ * built against, and during a deploy it is not: a browser holding yesterday's
+ * bundle gets today's route, and a rollback runs it the other way round for as
+ * long as it takes. A reply carrying the `canCheckout`/`offers` pair `purchase`
+ * replaced on 2026-09-04 has no `purchase` at all, and `summary.purchase.kind`
+ * on `undefined` throws **inside a render** — which blanks the whole billing
+ * area rather than showing the plan that did arrive. GPT Sol, 2026-09-04.
+ *
+ * Throwing puts it on the read's existing failure path: `summary` is left alone
+ * and a line appears saying what is on screen may be out of date, which is the
+ * same treatment a 500 gets and the right one for "this answer cannot be drawn".
+ * The message is a reader's sentence rather than a developer's, because it is
+ * rendered.
+ *
+ * `isPurchase` (../billing-plan.ts) is the whole of the checking, deliberately:
+ * the non-empty tuple, and which of the four doors this is, are the invariants
+ * the components read straight off without asking.
+ */
+function checkedSummary(body: unknown): BillingSummary {
+  const summary = body as BillingSummary | null;
+  if (!summary || !isPurchase(summary.purchase)) {
+    throw new Error("This page and the server are out of step — reload to read your plan again.");
+  }
+  return summary;
+}
+
 export function useBilling(): UseBilling {
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +115,10 @@ export function useBilling(): UseBilling {
   useEffect(() => {
     const mine = ++generation.current;
     apiFetch("/api/billing/usage")
-      .then((r) => readJson<BillingSummary>(r))
+      .then((r) => readJson<unknown>(r))
       .then((body) => {
         if (mine !== generation.current) return;
-        setSummary(body);
+        setSummary(checkedSummary(body));
         setError(null);
       })
       .catch((e: Error) => {

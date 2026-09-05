@@ -95,6 +95,29 @@ the bridge at the top of `tailwind.css` maps `--color-muted` to `--muted`, the s
 `tw:text-muted-foreground` is. All 88 call sites in `src/web` are already the right one, so that
 check arrives with a clean baseline, which is the only time one is cheap to add.
 
+### And the other direction: a utility nothing generates
+
+[`tests/tailwind-utilities-resolve.test.ts`](../../tests/tailwind-utilities-resolve.test.ts) is the
+complement. `css-tokens` catches a *stylesheet* reading a token nothing defines; this catches a
+*component* writing a `tw:` class nothing compiles — **a Tailwind v4 utility whose theme key is
+missing emits no rule at all**, so the class stays on the element, the build succeeds, and the
+property falls back to its own default: text inherits, a background goes transparent, a border
+colour becomes `currentColor`. Every one of those looks designed rather than broken. Four names were
+missing from the bridge for weeks and twenty utilities were dead, including the whole visual
+treatment of `SharedNotice`
+([260905f](../plans/260905f-twenty-tailwind-utilities-that-compiled-to-nothing.md)).
+
+Every input comes from Tailwind itself — its `compile()` over the real `tailwind.css`, its own
+scanner over the `@source` that file names, its resolver per candidate — because the alternative is
+a hand-written model of which utilities are colours, and `text-sm`, `border-t`, `divide-y` and
+`bg-transparent` all disprove it. **A test that has to be taught the answer can be taught the wrong
+one**, which is how the bug got in.
+
+Adding a theme key is not free: **`--color-x` enables every colour-shaped utility, not the one you
+wanted**. `--color-rule` makes `tw:text-rule` legal, and that is words in a hairline colour. The
+`tw:text-` half of `css-tokens.test.ts` is what stops it, so a new name in the bridge means checking
+that guard covers it.
+
 **The file's header says what it does not prove**, and that matters more than the list above.
 It is a text scanner: it cannot see scope or reachability, cannot see what is actually behind the
 text, and cannot judge a fallback that is present and still wrong. Each half also asserts it can
@@ -142,7 +165,7 @@ self-hosted from `@fontsource-variable/geist`, imported at the top of
 |---|---|
 | `--font-sans` | Geist — the family itself. Nothing should name this directly; use one of the two below |
 | `--font-reading` | the article, and the reader's own words in a comment |
-| `--font-ui` | chrome: controls, masthead facts, column headers |
+| `--font-ui` | chrome: controls, masthead facts. The table's column headers wore it until 2026-09-05, when that row lost its height — it is still in the DOM for the fisheye panels' geometry and for a screen reader, and sets no type at all |
 | `--font-mono` | Geist Mono — counts, and anything that wants to line up |
 | `--font-id` | Courier — block ids, and only block ids (Greg's ask) |
 | `--font-brand` | Trebuchet MS — the wordmark, and only the wordmark |
@@ -170,17 +193,23 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
 - **65ch**, the reading measure — which the previous app really did ship, as `max-w-[65ch]`. Since
   2026-09-04 it also **sits in the middle of whatever cell it is given**, in every mode and at every
   width — Greg: *"Always centre the Text view within its column when visible, no matter which mode
-  is active."* Four rules carry it and each is commented where it lives, in
+  is active."* Three rules carry it and each is commented where it lives, in
   [`styles.css`](../../src/web/styles.css): § text centres `.prose`; § the gutter moves the reader's
-  icon column the same distance; § the title over the column puts the masthead on the prose's own
-  left edge wherever the two share a box; and § the header over the article's column does the same
-  for `Text verbatim`, which is the only column heading that moves — the gist columns are not
-  centred and theirs are right where they are. **Everything that names the text follows it; nothing
+  icon column the same distance; and § the title over the column puts the masthead on the prose's own
+  left edge wherever the two share a box. (There was a fourth, § the header over the article's
+  column, which did the same for `Text verbatim`. The column-header row lost its height on
+  2026-09-05 and its labels became `.sr-only` spans, so there is no heading left to align and the
+  rule went with it.) **Everything that names the text follows it; nothing
   that names the row does** — the search bar and `row-active` stay at the cell's edge on purpose,
-  and the footnotes opt out as a block, both for reasons given in place. All four are self-limiting:
+  and the footnotes opt out as a block, both for reasons given in place. All three are self-limiting:
   below about 900px the measure is wider than the cell and none of them does anything. The separate
   mechanism that centres the whole *table* when the article is the only thing on the page is
-  § plain, centred, and `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts).
+  § plain, centred, and `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) — **its
+  masthead follows the prose too, and learning that it did not was the expensive part.** Two correct
+  changes landing on two branches, one moving the prose within its cell and one widening the cell,
+  each left that rule re-centring a box it no longer described; the errors added rather than
+  cancelling and the title ended up 22.5px out. Neither branch's tests could see it, because neither
+  branch was wrong. [260904b-gutter-help-button-and-detached-streaming-chat.md § the merge](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md#the-merge).
 - **Space above a heading exceeds space below it** — `mt-6` against `mb-4` in their document
   viewer. We had lost this; every block here is a table row and every row had the same padding, so
   a heading sat exactly halfway between the section it ended and the one it introduced. It is back,
@@ -437,8 +466,18 @@ the **columns**, and the fix is not CSS at all — it is arithmetic in
 fit beside the prose. `styles.css` § **a narrow window** and § **a short viewport** at the end of the
 file are only what is left over after that: the wordmark and the two bars that were silently clipping
 their own controls. **Two more used to be on that list and are not any more**, and both left for the
-better reason. Since 2026-08-31 the prose gutter is 2.1rem of icons at every width, so there is
-nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)); and
+better reason. Since 2026-08-31 the prose gutter is icons at every width, so there is
+nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)) —
+3.7rem of them since 2026-09-04, when the targets grew to WCAG's 24px
+([260904b-gutter-help-button-and-detached-streaming-chat.md](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md)),
+and back to 2.2rem — one 24px column — the day after, when the gutter stopped
+reserving room and started measuring it: it is a size container, and a
+`@container` query draws as many controls as the row has space for, with a "…"
+for whatever is left over
+([260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md)).
+**That is the one place in this stylesheet where a container query decides what
+is drawn**, and it is worth knowing about before reaching for a media query for
+something a box already knows; and
 since 2026-09-03 the mode band going full-screen is a *class*, not a query — `App.tsx` writes
 `band-covers` on `.reader` from `fit.modeW === 0`. That one could never have been a width: the
 crossover is the window minus the rail, so it moves with `?spine=0`, and the `@media (max-width:
@@ -447,6 +486,13 @@ over an article the table had just been squeezed to make room for (styles.css §
 room). That is the shape to aim for — a breakpoint disappears when the wide layout stops being
 extravagant or when somebody who knows the answer writes it down, not when the narrow one gets
 another rule.
+
+**And it happened again on 2026-09-05, in the first of those two ways.** § a narrow window carried
+four `display: none` rules taking the controls bar's labels, the `↑↓` readout, the `fit`/`auto` and
+`reading`/`outline` chips and the tree version off a phone. The wide bar was then cut down to the
+granularity pills and nothing else
+([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), so the two widths agree by
+construction and the four rules had nothing left to hide.
 
 Three things worth carrying to whatever is built next:
 
@@ -518,17 +564,37 @@ Three things to know before touching any of it:
 The plan, the review that found three of these, and the install path they exist for:
 [docs/plans/260828av-mobile-screen-real-estate.md](../plans/260828av-mobile-screen-real-estate.md).
 
+## The stacking order, which is real even though it is not a scale
+
+**Do not read a number off this list and reuse it.** The values are not a scale and were not
+designed; what is load-bearing is the *order*, and only in a few places where one thing has to clear
+another. Those places, with the reason:
+
+- **The tooltip is frontmost, at 100.** A tooltip is always about the thing you are pointing at, so
+  anything in front of it is a hover that appears to do nothing. It has to clear the spine and both
+  sticky bars.
+- **The dock and its drawer sit above the mode band and the spine** (96/95, scrim 92), because the
+  drawer is a surface you open *over* the reading view. The offline strip is 97, above the dock,
+  since a strip the dock covers cannot tell you the thing it exists to tell you.
+- **The spine is 45 and the mode band 44**, both above the reading column's own sticky furniture.
+- Dialogs — comment, chat, annotate — share 70.
+
+Two things that deliberately escape all of this: the figure **lightbox** and the **feedback dialog**
+are native modal `<dialog>` elements in the browser's top layer, which is above every z-index on the
+page by definition. That is the cheapest answer available for anything that must cover *everything*,
+and it is worth reaching for again rather than minting a bigger number.
+
+The full inventory is 28 declarations from 0 to 100, counted on 2026-09-04 with
+`grep -nE '^\s*z-index:' src/web/styles.css` — a dated example rather than a fact to maintain here.
+Run it before assuming a gap is free.
+
 ## What is not written down yet
 
 The honest list. Each of these currently lives only as values in `styles.css`, and someone will
 eventually have to decide whether they are a system or an accident:
 
-- **The z-index budget.** Nine values between 1 and 80, and their ordering is real — the spine is
-  45, the tooltip 80 *because* it must clear the spine and both sticky bars. Written as a comment
-  on one line of `styles.css`, nowhere else. This is the most likely thing to break next. The one
-  thing that had to cover *everything* — the figure lightbox — sidesteps it entirely by being a
-  native modal `<dialog>` in the top layer, which is the cheapest answer available and is worth
-  reaching for again.
+- **The z-index budget.** Still not a system, but no longer unwritten — see
+  [the stacking order](#the-stacking-order-which-is-real-even-though-it-is-not-a-scale) below.
 - **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
   settled — see [Controls](#controls-one-height-one-radius-one-hover) above — but that is one row
   of one page agreeing with itself, not a scale, and it should not be read as one.
@@ -569,7 +635,10 @@ eventually have to decide whether they are a system or an accident:
   variant, toggle state and icon size on one page against the real ground, with contrast ratios
   computed in the browser from *resolved* values. Look at it after changing anything in
   `tokens.css`. It catches what tests cannot: a token change where every component still renders,
-  nothing throws, and one variant nobody looked at is now unreadable
+  nothing throws, and one variant nobody looked at is now unreadable. **Linked from `/admin` and
+  shown only to the administrator** since 2026-09-05 — a courtesy rather than a gate, since the page
+  is in every reader's bundle and the address answers 200 whoever asks
+  ([admin.md](admin.md#the-clients-list-of-addresses-and-why-it-is-a-map-of-every-route))
 - [../plans/260825a-shadcn-migration.md](../plans/260825a-shadcn-migration.md) — how the Tailwind half got here
 - [../reusable/css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md) —
   `position: sticky` declared correctly and doing nothing

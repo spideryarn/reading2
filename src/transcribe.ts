@@ -37,6 +37,7 @@
  * rule that keeps a reader's question and the article's prose out of the log
  * covers a transcript exactly as well. docs/project/logging.md.
  */
+import { stripFillers } from "./dictation-fillers.js";
 import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import { providerHttpFailure } from "./messages.js";
@@ -58,9 +59,10 @@ import {
   type AudioFormat,
   MAX_AUDIO_BASE64,
   isAudioFormat,
+  tooLongMessage,
 } from "./dictation-limits.js";
 
-export { MAX_AUDIO_BASE64, isAudioFormat };
+export { MAX_AUDIO_BASE64, isAudioFormat, tooLongMessage };
 export type { AudioFormat };
 
 import { type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
@@ -361,16 +363,33 @@ export async function transcribeWith(
             ? providerHttpFailure(err.status).message
             : "The transcription service could not transcribe that. [mic-upstream]",
         ),
-        { status: err.status === 429 ? 429 : 502 },
+        /* **401 and 402 keep their own status**, and that is not cosmetic: the
+           browser decides whether to offer a Retry from the status alone
+           (`retryable` in `web/dictation-upload.ts`), and flattening a dead key
+           or an exhausted balance into 502 made both look like a service that
+           had merely broken. The reader would then be invited to press a button
+           that cannot work, which is the mistake docs/project/copy.md singles
+           out. GPT Sol's code review, R2. */
+        {
+          status:
+            err.status === 429 || err.status === 402 || err.status === 401
+              ? err.status
+              : 502,
+        },
       );
     }
     line.error(
       { ...errorFields(err), model, ms: since(started) },
       "dictation call did not complete",
     );
+    /* **Its own code, because it is its own sentence.** Until 2026-09-05 this
+       and the refusal below both said `[mic-upstream]`, so a reader quoting
+       four characters named two branches — a service that answered "no" and a
+       service that did not answer at all, which are different things to look
+       into. `tests/dictation-codes.test.ts`. */
     throw Object.assign(
       new Error(
-        "The transcription service could not be reached. [mic-upstream]",
+        "The transcription service could not be reached. [mic-no-upstream]",
       ),
       { status: 502 },
     );
@@ -423,7 +442,15 @@ export async function transcribeWith(
     );
   }
 
-  const cleaned = tidy(text);
+  /* **`tidy` undoes what the model did to the transcript; `stripFillers`
+     removes what the *reader* said and did not mean.** Two functions and not
+     one, because they answer to different people: `tidy` is repairing our own
+     request's side effects (a chat model wraps its answer in quotation marks),
+     and this is a product decision about a reader's words, made deterministically
+     so that it cannot become a paraphrase. `src/dictation-fillers.ts` has the
+     argument, including why it is not a line in `SYSTEM` above. */
+  const spoken = tidy(text);
+  const cleaned = stripFillers(spoken);
   line.info(
     {
       model,
@@ -433,6 +460,12 @@ export async function transcribeWith(
       // and nothing coming back reads as a broken microphone from the client.
       audioKb: Math.round((audio.length * 3) / 4 / 1024),
       chars: cleaned.length,
+      /* **Whether the stripper fired**, as a count of characters and never a
+         word of it. A filler pass that quietly stopped matching would return a
+         slightly worse transcript and have no other symptom —
+         docs/reusable/silent-success.md, which is the class this feature's
+         vocabulary already fell into once. */
+      fillerChars: spoken.length - cleaned.length,
       vocabularyChars: vocabulary.length,
       /* Its own field, because it is the half of `ms` that is ours to fix. */
       vocabularyMs,

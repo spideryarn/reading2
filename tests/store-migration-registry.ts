@@ -24,6 +24,12 @@
  * deciding a lane means testing an assumption about a clean database, which
  * cannot be done before there is one.
  *
+ * A third joined them in stage B3, for the same reason and one more:
+ * `STORE_CONVERSIONS` records *that a file was converted and how much
+ * evidence it left*, which is **historical and monotone** where a
+ * `STORE_MIGRATION` entry is a description of outstanding work that ought to
+ * die when the work does. Its own docstring has the argument.
+ *
  * ## Where the entries come from, and what is deliberately absent
  *
  * Two witnesses, neither subsuming the other:
@@ -65,11 +71,16 @@
  * rows is a `database-integration`, not collateral. The mechanisms, all five
  * measured rather than assumed:
  *
- * - **`ledger-redirect`** — `selected()` in [`src/store/ai-calls.ts`](../src/store/ai-calls.ts)
- *   returns `fsCostStore` whenever `NODE_ENV === "test"`, whatever the flag
- *   says. Any suite that drives a request through `handleApi` therefore writes
- *   ledger rows to a file. Stage C collapses that to `export const costStore =
- *   guardedLedger`.
+ * - **`ledger-redirect`** — until 2026-09-05, `selected()` in
+ *   [`src/store/ai-calls.ts`](../src/store/ai-calls.ts) returned `fsCostStore`
+ *   whenever `NODE_ENV === "test"`, whatever the flag said, so any suite driving
+ *   a request through `handleApi` wrote ledger rows to a file. **Stage C removed
+ *   that line and nothing else about the selection**, so the mechanism now
+ *   reaches only the files that leave `SPIDERYARN_STORE` unset and take
+ *   `fsCostStore` from the `files` branch — which survives until stage F. The
+ *   twenty-two that pin the flag record into the run's private database instead,
+ *   and for them this mechanism is history rather than outstanding work; the
+ *   entries are left saying so rather than rewritten one by one.
  * - **`step-context-paths`** — `runStep` in [`src/jobs.ts`](../src/jobs.ts)
  *   calls `contextPaths(job.slug)` **unconditionally**, on every step of every
  *   job, under either store; that is `fsLocations` and therefore `dataRoot`.
@@ -81,10 +92,28 @@
  *   `copyArtefacts` **from a `createFsArtifactStore`**. Every suite that seeds
  *   an article this way inherits both touches. One helper, stage D's, decides
  *   all of them.
+ *
+ *   **Half resolved on 2026-09-05, and the twenty entries below are left saying
+ *   what they said.** The loader's *source* is now
+ *   [`helpers/fixture-artefacts.ts`](helpers/fixture-artefacts.ts), a reader over
+ *   the fixture tree, so the `artifacts-fs` half of this mechanism is gone for
+ *   every one of them — measured with the ad-hoc witness on four of the twenty,
+ *   which went from `artifacts-fs:createFsArtifactStore` + `copy-artefacts` to
+ *   `copy-artefacts` alone. The **`copy-artefacts` half remains**, because the
+ *   loader still drives `copyArtefacts` and always will: it is what makes the
+ *   fixture go into Postgres through the production write path. That module's
+ *   fate is stage G's — it is on the instrumented list because it lived beside
+ *   the adapters, not because a fixture loader is condemned. Rewriting twenty
+ *   reasons to say half of each is now history would be twenty copies of this
+ *   paragraph; the entries stay, and this is where the fact lives.
  * - **`shared-symbol`** — [`src/store/pg-chat.ts`](../src/store/pg-chat.ts)
- *   imports `requireTail` and `CHAT_SWEPT` from `src/store/fs.ts`. A surviving
- *   Postgres adapter depends on a condemned module; those two symbols have to
- *   move house before `fs.ts` can go, and that move resolves the reach.
+ *   imported `requireTail` and `CHAT_SWEPT` from `src/store/fs.ts`: a surviving
+ *   Postgres adapter depending on a condemned module. **Resolved in stage G on
+ *   2026-09-05** — both moved to [`src/chat.ts`](../src/chat.ts), which already
+ *   owned `ChatConflict` and every other `ChatThread[]` operation, on the
+ *   precedent of `COMMENT_SWEPT` in `src/comments.ts`. The entries keeping this
+ *   mechanism stay as the record of why they were classified that way; the
+ *   reach itself is gone.
  * - **`import-only`** — the file imports the app, the app imports an adapter,
  *   and nothing calls it. Recorded only for entries the dynamic witness never
  *   saw; see `evidence` below.
@@ -97,14 +126,16 @@
  * graph plus the file's own docstring, which is weaker evidence. The guard
  * holds the two apart, so this field cannot quietly become decorative.
  *
- * All but one are files that **did not exist when the witness ran**, at
+ * They are files that **did not exist when the witness ran**, at
  * 2026-09-03T09:19Z, and arrived over the following day; re-running witness 2
  * is what upgrades them, and the list grows whenever a suite lands between two
- * runs. The exception is
- * `tests/slug.test.ts`, which is here on the grep's authority: it
- * reads a condemned file's *source text*, which is invisible to an import walk
- * and executes nothing, so both witnesses are structurally blind to it and only
- * a human verdict covers it.
+ * runs. There was one exception until 2026-09-05 — `tests/slug.test.ts`, here on
+ * the grep's authority because it read a condemned file's *source text*, which
+ * is invisible to an import walk and executes nothing, so both witnesses were
+ * structurally blind to it and only a human verdict covered it. Stage G's `jobs`
+ * group deleted that case with `src/store/jobs-fs.ts`; the empty *Invisible to
+ * an import walk* section at the foot of this map says what happened and why the
+ * heading stays.
  *
  * ## Counts are perishable
  *
@@ -156,33 +187,6 @@ interface EntryCommon {
   readonly reason: string;
   /** Omitted means `"dynamic"`, which is the ordinary case. */
   readonly evidence?: Evidence;
-  /**
-   * The date this file was converted onto Postgres in stage B, if it was.
-   *
-   * **This records only *that* the conversion happened.** The evidence for it —
-   * which mutation was run, what the run printed, what it does not cover —
-   * lives in the test file, beside the assertion it bears on, and is
-   * deliberately not copied here: one fact, one home, and the copy in a
-   * registry read by whoever is thinking about categories would drift from the
-   * original read by whoever is thinking about the test.
-   *
-   * What this field buys is that the drift is *checkable*. Without it, "which
-   * files were converted" could only be asked of the prose, and
-   * [store-migration-registry.test.ts](store-migration-registry.test.ts) §
-   * *every converted file shows its working* would be grepping for English —
-   * which is how the evidence went missing from the first ten in the first
-   * place, and how a grep for the word "mutation" then falsely accused five
-   * files that had it and nearly missed three more.
-   *
-   * **A `reason` may cite the mutation in a clause; it may not be where the
-   * record lives.** Two entries were found on 2026-09-04 whose mutation was
-   * written here and nowhere else, which the guard cannot see and a reader of
-   * the test cannot either. The line is between *"mutation watched red:
-   * `failureKind` deleted from `finishIn`"* — a sentence explaining a verdict,
-   * which belongs here — and the run's output and what it does not cover,
-   * which belong beside the assertion.
-   */
-  readonly convertedInB?: string;
 }
 
 /**
@@ -207,6 +211,29 @@ export type StoreEntry =
  */
 export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   /**
+   * **Written on 2026-09-05, after the witness ran**, so it is here for the
+   * ordinary reason the header gives: re-running witness 2 is what upgrades it.
+   *
+   * It is not resting on the import graph alone, though. The ad-hoc witness was
+   * pointed at it —
+   * `npx tsx scripts/store-migration-witness.ts --files tests/tree-redundant-rung.test.ts` —
+   * and reported "ran, touched nothing" under full instrumentation. `evidence`
+   * still says `static-only` because that is what the field means: the stored
+   * `touched` map does not name this file, and the guard holds the two apart so
+   * the field cannot become decorative.
+   */
+  "tests/tree-redundant-rung.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Pure-function tests of `buildTree` and `checkTree`: a model proposal in, a tree out, with " +
+      "block fixtures written in the file. It imports src/hierarchy.js, which is how the import " +
+      "graph reaches a condemned module — that file also holds stage 4's CLI and its checkpoint " +
+      "plumbing — but nothing here selects a store, reads a path or writes a byte, and the " +
+      "instrumented run confirms it executes no condemned function.",
+  },
+  /**
    * **Arrived from `dev` on 2026-09-04 and the hole check caught it**, which is
    * why that check walks the import graph live instead of reading a stored
    * answer. It reaches a condemned module through `src/jobs.js`; it never runs
@@ -229,6 +256,38 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "a store or calls one, so the hinge changes it in no way.",
   },
   /**
+   * **Arrived from `dev` on 2026-09-05 with Debate mode, and the hole check
+   * caught it** — which is the second time that check has earned its keep by
+   * walking the import graph live rather than reading the stored answer. The
+   * witness JSON was measured at 02:10 that morning and this file did not exist.
+   *
+   * Measured rather than reasoned, on the `tree-redundant-rung.test.ts`
+   * precedent above:
+   * `npx tsx scripts/store-migration-witness.ts --files tests/debate-step-registration.test.ts`
+   * reported **"ran, touched nothing"** under full instrumentation, and the
+   * instrument's own `--self-check` passed immediately before — twelve control
+   * files, all eight modules still hooked at method level, 24 sites. An
+   * instrument that had quietly stopped hooking anything reports exactly the
+   * same "touched nothing", which is why the self-check comes first and is
+   * named here rather than assumed.
+   *
+   * `evidence` stays `static-only` because that is what the field means: the
+   * stored `touched` map does not name this file. The guard holds the two apart
+   * so the field cannot become decorative.
+   */
+  "tests/debate-step-registration.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Debate's step registration, asked as effects: the stamp field names inside the artefact, " +
+      "the `STAMP_SOURCE` row, and a model resolved through `modelFor` rather than compared " +
+      "against `CAPABLE_MODEL`. It reaches a condemned module through src/pipeline.js, which is " +
+      "how most of this map's files reach one, and it runs against `memoryArtefactsFrom` " +
+      "(tests/helpers/memory-artefacts.ts) rather than any store — the stage D helper written " +
+      "for exactly this. Nothing here selects a store, reads a path or writes a byte.",
+  },
+  /**
    * **The entry the dynamic witness could not produce**, and the reason the
    * registry does not take its silence as proof.
    *
@@ -246,10 +305,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     mechanisms: ["shared-symbol"],
     evidence: "static-only",
     reason:
-      "The Postgres artefact store's own suite, which borrows `PATHS` from the filesystem adapter " +
-      "so that the two agree about what an artefact of each kind is called. A constant, read and " +
-      "never called. The names have to move somewhere neutral before `artifacts-fs.ts` goes, and " +
-      "then this file is Postgres-only — the same move `pg-chat.ts`'s two symbols need.",
+      "**Settled in stage G, 2026-09-05, and the prediction was wrong about the remedy.** It " +
+      "borrowed `PATHS` from the filesystem adapter so that the two maps agreed about what an " +
+      "artefact of each kind is called — a constant, read and never called, which is why the " +
+      "witness could not see it. This entry expected the names to move somewhere neutral. They " +
+      "did not need to: the comparison was between two **derived** maps, and the sibling " +
+      "assertion holds `STORAGE` against `STEPS[step].produces` in `src/pipeline.ts`, which is " +
+      "where a step actually declares what it makes. That is strictly the better oracle, and it " +
+      "catches one thing the pair could not — a `PATHS` entry no step produces was invisible to " +
+      "a comparison of the two. So `cover the same (step, kind) pairs` was deleted rather than " +
+      "relocated. The file also gained two cases ported from `tests/step-context-paths.test.ts` " +
+      "as that file died: the artefact counts each of `extract` and `hierarchy` declares, and " +
+      "`stepIsDone` over an empty store.",
   },
 
   "tests/a-claim-that-lost-its-draft.test.ts": {
@@ -258,21 +325,28 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     reason:
       "Pins `JobDraftGone` — a claimant whose draft is deleted mid-step must end the job rather " +
       "than log `lost the claim`. It already pins the flag to postgres and takes the run lock; " +
-      "every filesystem touch is the ledger the redirect hands it plus the `dir` string `runStep` " +
-      "computes before calling the step. **But it imports `DATA_ROOT_ENV` from `data-root.ts` to " +
-      "point itself at a scratch root, so stage G has to touch it** — the store use is incidental, " +
-      "the import is not.",
+      "every filesystem touch was the ledger the redirect hands it plus the `dir` string `runStep` " +
+      "computed before calling the step. It imported `DATA_ROOT_ENV` to point itself at a scratch " +
+      "root, so stage G had to touch it. **And what stage G found there is worth more than the " +
+      "edit**: the root's comment read *\"no step here writes to a disk, and this proves it\"* and " +
+      "**nothing ever read the directory back** — no `readdir`, no assertion, in any case. It " +
+      "proved nothing, and it cited `claim-session-postgres`, the file that actually asserted on " +
+      "its roots. The machinery is gone and a note stands where it was; a comment claiming an " +
+      "assertion that is not there is this job's dominant failure, found here by accident.",
   },
   "tests/acquire-extract-blocks-end-to-end.test.ts": {
     category: "store-agnostic-fake",
     reason:
-      "Asks whether stages 1, 2 and 3 *join* — that the manifest stage 1 returns is the one stage " +
-      "2 resolves. It runs `fsArtifacts` under a scratch `SPIDERYARN_DATA_ROOT` purely because a " +
-      "store is needed for `previousBlocksFrom` and `assertIdsCarried`; nothing in the claim is " +
-      "about where the artefacts landed.",
+      "**Done in stage G, 2026-09-05, and the prediction held: 5 cases in, 5 out.** It asks " +
+      "whether stages 1, 2 and 3 *join* — that the manifest stage 1 returns is the one stage 2 " +
+      "resolves. It ran `fsArtifacts` under a scratch `SPIDERYARN_DATA_ROOT` purely because a " +
+      "store is needed for `previousBlocksFrom` and `assertIdsCarried`; nothing in the claim was " +
+      "about where the artefacts landed, and it is `memoryArtefacts()` now. **One correction " +
+      "worth keeping**: the scratch root was doing even less than this entry credited it with — " +
+      "`fsBlobs` resolves `data/_blobs` off the repository root and ignores the override, so the " +
+      "bytes never went where the variable said.",
   },
   "tests/all-skipped-publication-log.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
@@ -294,14 +368,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Runs against Postgres by hoisted flag with a real draft and a real lineage conflict; the " +
       "four filesystem sites are the test ledger and `contextPaths`, neither of which it asked for.",
   },
-  "tests/api.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "Its subject is `candidateDirs` — the rule that `data/<slug>/` answers a slug and `example/` " +
-      "answers only its own. That rule exists solely because the filesystem reader has two places " +
-      "to look, and `src/api.ts` is what `fsArticleReader` is made of, so the describe block dies " +
-      "with the adapter it protects.",
-  },
   "tests/artefact-copy.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
@@ -319,12 +385,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "are `runStep` building a `StepContext` for a step that writes nothing to disk.",
   },
   "tests/block-roles.test.ts": {
-    category: "store-agnostic-fake",
+    category: "filesystem-adapter-behaviour",
     reason:
-      "Counts notes, supplement blocks and markers across the committed corpus after a real " +
-      "`runExtract` and `splitIntoBlocks`. It needs somewhere to put the blocks so the projection " +
-      "can be read back, and a temp-directory artefact store is the cheapest somewhere; the three " +
-      "fields it is about are carried by the DTO, not by the store.",
+      "**Re-classified in stage D on 2026-09-05, from `store-agnostic-fake`, after reading it.** " +
+      "Most of the file counts notes, supplement blocks and markers across the committed corpus " +
+      "after a real `runExtract` and `splitIntoBlocks`, and none of that touches a store. Its one " +
+      "store-touching case is *survives the filesystem artefact store, field for field*, and that " +
+      "case is a **serialisation round trip**: write the artefact, read it back, and check " +
+      "`role`, `treatment` and `noteId` all came home. Handing it an in-memory fake would make it " +
+      "`toEqual` against the object it just put in — a case that cannot fail, which is worse than " +
+      "the reach it removes. The claim itself is not lost: " +
+      "`tests/store-block-roles-pg.test.ts` is the same round trip through Postgres, and this " +
+      "case dies with the adapter in stage G.",
   },
   "tests/blocks-baseline.test.ts": {
     category: "store-agnostic-fake",
@@ -332,7 +404,14 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Stage 3 must get the previous run's blocks from a store rather than from a path, and must " +
       "tell absent from unreadable. It runs the same five mutations against both stores; the " +
       "filesystem arm is a constructed store handed straight to `previousBlocksFrom`, so a narrow " +
-      "fake substitutes for it without touching the claim.",
+      "fake substitutes for it without touching the claim. **Stage D looked at it on 2026-09-05 " +
+      "and left it, for a reason worth having in front of whoever picks it up.** Six of its seven " +
+      "filesystem cases take `helpers/memory-artefacts.ts` unchanged; the seventh — *refuses when " +
+      "stage 4's copy is over the size this store can read* — is about the 32 MiB ceiling in " +
+      "`DECODERS`, which Postgres has no equivalent of and a fake cannot have without copying the " +
+      "table. Converting six of seven leaves the import and frees nothing, so the unit of work is " +
+      "either stage G's per-assertion inventory or moving that one case to " +
+      "`tests/pipeline-artifact-store.test.ts`, where the adapter's own surface already lives.",
   },
   "tests/candidates-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -342,8 +421,39 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`chat_threads_kind` CHECK is in play, and seeds through `scratchArticleInPg`. Its three " +
       "filesystem sites are the seeder's copy step and one ledger row from the stubbed model call.",
   },
+  /**
+   * **Written 2026-09-05, after the witness ran**, so `static-only` for the
+   * ordinary reason the header gives. Modelled line for line on
+   * `chat-anchor-route.test.ts`, which is the entry after next, and it reaches
+   * what it reaches by the same two doors.
+   */
+  "tests/chat-help-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_messages.help` at the route: what the wire may carry, and that a retry of a help " +
+      "question is still answered as one. It pins `postgres` before any import and seeds through " +
+      "`scratchArticleInPg`; what it still reaches is the seeder's copy step and the ledger row " +
+      "the stubbed model call records.",
+  },
+  /**
+   * **Written 2026-09-05.** A pure prompt-wording test, and it reaches a
+   * condemned module only by naming `src/converse.js` in an `import` — the same
+   * shape as `help-prompt.test.ts` below and as `tree-redundant-rung.test.ts` at
+   * the top of this list.
+   */
+  "tests/chat-search-triggers.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Report 1X: the chat system prompt's search triggers, read off " +
+      "`buildConverseMessages(...)[0].content` with fixture blocks written in the file. No " +
+      "network, no store, no path. It imports src/converse.js, which is how the graph reaches a " +
+      "condemned module, and executes none of it beyond building a message array.",
+  },
   "tests/chat-anchor-route.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -370,7 +480,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "articles in Postgres for exactly this migration; what is left is the seeder's own copy.",
   },
   "tests/chat-live-ticket-route.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
     reason:
@@ -382,7 +491,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "row now. What is left is the seeder's copy step; the model is stubbed, so no ledger row.",
   },
   "tests/chat-live-turn.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -404,7 +512,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the other converted suites cite for why the flag must be set in `vi.hoisted`.",
   },
   "tests/chat-spoken-route.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
     reason:
@@ -416,25 +523,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "through `chatStore.load` inside `asTestOwner`, over an article `scratchArticleInPg` " +
       "seeded. What is left is the seeder's copy step; no model is called, so no ledger row.",
   },
-  "tests/claim-session-files.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "Exists to say that with the flag unset none of Postgres happens — it removes `DATABASE_URL` " +
-      "so any Postgres call would throw loudly. Its subject is the `if (STORE !== \"postgres\")` " +
-      "line in `claimSession` that the hinge deletes, so it goes in the same commit as that line " +
-      "and not before.",
-  },
   "tests/claim-session-postgres.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "step-context-paths", "condemned-symbol-import"],
     reason:
       "The flip's acceptance test: `claimSession` picks the Postgres session and a job published " +
-      "through it reaches the shelf. It gives every claim its own empty scratch root and asserts " +
-      "the roots are **still empty** afterwards — so its filesystem contact is an assertion that " +
-      "nothing was written there, which is the opposite of a dependency. **Those assertions are " +
-      "load-bearing and it imports `DATA_ROOT_ENV` to make them**, so stage G must re-express them " +
-      "rather than delete them: with no filesystem store there is no root to prove empty, and the " +
-      "claim quietly stops being tested.",
+      "through it reaches the shelf. It gave every claim its own empty scratch root and asserted " +
+      "the roots were **still empty** afterwards — so its filesystem contact was an assertion that " +
+      "nothing was written there, which is the opposite of a dependency. This entry asked that " +
+      "stage G **re-express those eleven assertions rather than delete them**, and that is what " +
+      "happened on 2026-09-05: `assertScratchUntouched(root)` is `assertNothingOnDisk(slug)`, " +
+      "which asks whether `data/<slug>/` and `output/<slug>.html` exist under the repository " +
+      "root — where the deleted `dataRoot()` resolved on a laptop, and where a rebuilt " +
+      "`path.resolve(import.meta.dirname, \"..\", \"..\")` would land. All eleven call sites " +
+      "kept, and the new form is stronger in one direction: the temp root only ever proved that " +
+      "nothing was written *to the root it had pinned*.",
   },
   "tests/comment-referee-mark.test.ts": {
     category: "shared-mechanism-collateral",
@@ -445,21 +548,55 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "already, because `comments.criterion_id` and `comments.valence` are columns; the seeder is " +
       "its only filesystem reach.",
   },
-  "tests/cost-store-under-test.test.ts": {
-    category: "filesystem-adapter-behaviour",
+  /* **`tests/data-root.test.ts` is deleted**, 2026-09-05, in stage G's last
+     adapter group, with `src/store/data-root.ts`, `src/store/artifacts-fs.ts`
+     and `src/job-scope.ts`. Its entry said the prediction that held: *"its
+     `/var` and warm-`/tmp` arguments have nowhere to go once no path is
+     computed at all"*. Every one of its cases was `chooseDataRoot`,
+     `findRepoRoot`, `dataRoot` or `fsLocations`, so there was nothing in it to
+     relocate. The one thing worth naming is its path-traversal case, *refuses
+     an id that could climb out of the scratch directory*: `segment()` refused
+     `..`, `a/b`, `""` and `.` as a job id, and it was the only guard on a job
+     id anywhere. It is not homeless — **no job id is concatenated into a path
+     any more**, so the property has ceased to exist rather than lost its
+     coverage. Slugs are a different question and `assertSlug` still answers it
+     (`tests/slug.test.ts`). */
+  /**
+   * **Arrived 2026-09-05 with the empty-block id fix**, and the hole check
+   * caught it the same way it caught `step-job-preceded-by`: a new test file
+   * that reaches a condemned module through an import it needs for one
+   * assertion. Classified by reading it rather than by re-running witness 2,
+   * which takes the box's Postgres lanes with it and would have been a twelve
+   * minute run beside other agents' suites.
+   */
+  "tests/empty-blocks-keep-their-ids.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
     reason:
-      "Its single assertion is that `selected()` hands back the **filesystem** ledger under the " +
-      "test harness whatever the flag says. That is the redirect stage C deletes, so this file " +
-      "dies with stage C rather than with stage G — it is the one adapter test on a different " +
-      "clock from the rest, and the plan already names its replacement.",
+      "Block ids surviving a re-extraction, per docs/project/block-ids.md. Its last case asks the " +
+      "real `STEPS.blocks.isDone` — hence the `src/pipeline.js` import the graph follows — but " +
+      "hands it a hand-built `ArtifactReads` of three artefacts, and `blocksMatchTheirHtml` reads " +
+      "through that object and nothing else. Every other case calls `splitIntoBlocks` on a string. " +
+      "No store is selected and none is constructed, so the hinge changes it in no way.",
   },
-  "tests/data-root.test.ts": {
-    category: "filesystem-adapter-behaviour",
+  /**
+   * **`evidence: "static-only"`, because this file arrived after the witness
+   * ran** — 2026-09-05 against 2026-09-03T09:19Z — so its name is not in the
+   * stored `touched` map and cannot be, until witness 2 is re-run. The verdict
+   * rests on the import graph and on the file's own seeder call, which is the
+   * same standing as its several neighbours here.
+   */
+  "tests/enqueue-drives-what-it-queues.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
     reason:
-      "`chooseDataRoot`, `findRepoRoot` and the deliberate throw when a deployment has no job in " +
-      "scope. `src/store/data-root.ts` is itself on the condemned list, so this is the adapter " +
-      "test for a module rather than for a store object — and its `/var` and warm-`/tmp` arguments " +
-      "have nowhere to go once no path is computed at all.",
+      "`enqueue` drives what it queues unless the caller passes `pump: false`, asserted as an " +
+      "effect — queue a `fetch` step on a seeded article and look a moment later at whether " +
+      "anything moved it. The claim is about the queue and only exists in Postgres; the seeder is " +
+      "the whole of its filesystem contact. Arrived 2026-09-05 with the parameter, which replaced " +
+      "three callers setting `VERCEL=1` to make one `if` go the other way.",
   },
   "tests/enqueue-owns-the-article.test.ts": {
     category: "shared-mechanism-collateral",
@@ -476,7 +613,13 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "The four states stages 5d and 5f must tell apart — absent, hash-mismatched, unreadable, " +
       "throwing — where confusing the third with either of the first two silently replaces a " +
       "glossary instead of appending to it. The filesystem arm is a constructed store handed to " +
-      "`previousGlossaryFrom`; the Postgres arm already carries the same cases.",
+      "`previousGlossaryFrom`; the Postgres arm already carries the same cases. **Stage D checked " +
+      "it on 2026-09-05 and found nothing standing in the way**, unlike its neighbour " +
+      "`blocks-baseline`: every write in its filesystem arm is a shape or parse manipulation that " +
+      "`helpers/memory-artefacts.ts`'s `plant` reproduces, and there is no ceiling case. It is " +
+      "unconverted because the stage stopped, not because it cannot be — about fifteen `writeFile` " +
+      "sites, and `articleIn(dir)` reads the article off the same directory, so the fixture tree " +
+      "stays either way.",
   },
   "tests/helpers-load-article.test.ts": {
     category: "database-integration",
@@ -501,6 +644,49 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * file's own subject** — the same position, and the same classification, as
    * the eval-parity entry below it.
    */
+  /**
+   * **Written on 2026-09-05, after the witness ran**, so it carries
+   * `evidence: "static-only"` for the reason the header gives — re-running
+   * witness 2 is what upgrades it, and the whole-suite run was deliberately not
+   * repeated for one new file.
+   *
+   * It is not resting on the import graph alone. The ad-hoc witness was pointed
+   * at it —
+   * `npx tsx scripts/store-migration-witness.ts --files tests/helpers-store-fakes.test.ts` —
+   * and reported **"ran, touched nothing"** under full instrumentation. The
+   * graph reaches `artifacts-fs` from here only through
+   * `helpers/memory-artefacts.ts` → `src/pipeline.ts`, whose `contextPaths` this
+   * file never calls.
+   */
+  "tests/helpers-store-fakes.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The two stand-in stores stage D introduced, tested for the two properties the suites using " +
+      "them cannot reach: the fixture reader's size ceiling, and that the memory fake hands back " +
+      "copies rather than its own objects. Both were P1s from that stage's cross-family review, " +
+      "and both were invisible from the ten suites — the corpus is 27× under any ceiling, and " +
+      "every caller happened to write back through the reference it read. **Nothing here needs " +
+      "doing when the filesystem store goes**: neither helper imports a condemned module, and the " +
+      "graph only reaches one through `src/pipeline.ts`, which this file never asks for a path.",
+  },
+  /**
+   * **Written 2026-09-05.** Report 1S's addendum, and the property that costs
+   * money if it breaks: everything above the `cache_control` breakpoint has to
+   * be byte-identical between a help turn and an ordinary one. Its second half
+   * drives `converse` with a stubbed `fetch` to say the same thing about the
+   * tool definitions.
+   */
+  "tests/help-prompt.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Fixture blocks written in the file, `fetch` stubbed, and the assertions are on the message " +
+      "array and the serialised request body. It imports src/converse.js, which is how the graph " +
+      "reaches a condemned module; nothing here selects a store, reads a path or writes a byte.",
+  },
   "tests/hierarchy-cascade.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -511,6 +697,74 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "and a recipe, with no model, no network and no store; it reaches a condemned module only " +
       "because `src/hierarchy.ts` imports the app to reach `generateHierarchy`. Nothing here " +
       "changes when the filesystem store goes.",
+  },
+  /**
+   * **The cascade's other half, and the same verdict for the same reason.**
+   * Landed 2026-09-05 with stage 4 of
+   * docs/plans/260904d-deepen-fat-sections.md, long after the witness ran, so
+   * `static-only` is the state of the evidence rather than a preference —
+   * re-running witness 2 is what upgrades it.
+   */
+  "tests/hierarchy-expand.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The scoped expansion call's protocol: the prompt's heading precedence, the request's " +
+      "cache order, the strict reading of an answer, and the record of what was decided about " +
+      "each candidate. It makes no model call and constructs no store; its only file read is " +
+      "three committed JSON fixtures under `evals/results/`, by an absolute path off " +
+      "`import.meta.url`. It reaches a condemned module only because `src/hierarchy.ts` imports " +
+      "the app to reach `generateHierarchy`. Nothing here changes when the filesystem store goes.",
+  },
+  /**
+   * **The third of the cascade's files, and the first that touches a store at
+   * all** — which is why the reason below says what kind. Landed 2026-09-05
+   * with the second half of stage 4 of
+   * docs/plans/260904d-deepen-fat-sections.md, after the witness ran, so
+   * `static-only` is the state of the evidence rather than a preference.
+   */
+  "tests/hierarchy-deepen.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The scoped expansion checkpoint: the canonical request the key is a digest of, the gate " +
+      "a stored answer has to pass, and a whole wave run against a fake executor. It does use a " +
+      "checkpoint store — `memoryCheckpoints`, the in-memory fake — and never a real one, so " +
+      "there is no database, no blobs and no filesystem here; `SPIDERYARN_STORE` changes nothing " +
+      "about it. It reaches a condemned module only because `src/hierarchy.ts` imports the app " +
+      "to reach `generateHierarchy`. Nothing here changes when the filesystem store goes.",
+  },
+  /**
+   * **Stage 5's two files, landed 2026-09-05**, and the same verdict as the
+   * three above for the same reason — they reach a condemned module only through
+   * `src/hierarchy.ts`, which imports the app to reach `generateHierarchy`.
+   * `static-only` is the state of the evidence rather than a preference: both
+   * arrived long after witness 2 ran, and re-running it is what upgrades them.
+   */
+  "tests/hierarchy-prompt-hoist.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Three constants and a renderer, pinned where they landed after being hoisted out of " +
+      "`src/hierarchy.ts` into a leaf so that the deepening wave could be imported without " +
+      "closing a cycle. It builds one request in memory and hashes it; there is no store, no " +
+      "network and no filesystem. Nothing here changes when the filesystem store goes.",
+  },
+  "tests/hierarchy-deepen-wave.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The deepening wave end to end against a fake executor: which sections a mechanical bound " +
+      "selects, that the result does not depend on the order the calls come back in, that a wave " +
+      "declines to start a call it cannot finish, and that the whole thing is off by default. The " +
+      "two model calls `generateHierarchy` would make are mocked at the module boundary and the " +
+      "only stores it constructs are `nullCheckpointStore` and `memoryCheckpoints`, so there is " +
+      "no database, no blobs and no filesystem. Nothing here changes when the filesystem store " +
+      "goes.",
   },
   /**
    * **Arrived from `dev` after the registry was written, and the hole check
@@ -562,23 +816,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "into a new draft. It talks to `pgArticleReader` directly and never consults the flag; the " +
       "seed is its only filesystem reach.",
   },
-  "tests/illustrated-step-registration.test.ts": {
-    category: "store-agnostic-fake",
-    reason:
-      "Asks the `illustrated` step's registration as effects: that its fingerprint is the Sketch " +
-      "rather than the article, and that it refuses rather than illustrating a stale scene. It " +
-      "writes the product through a temp-directory store only so `stampFor` has something to " +
-      "answer from.",
-  },
-  "tests/job-failure.test.ts": {
-    category: "store-agnostic-fake",
-    reason:
-      "Which ingest failures are worth another go — and most cases throw the failure for real " +
-      "rather than recognising a sentence. The store is a temp directory the real stage is pointed " +
-      "at so it can get far enough to fail; `failureKindOf` never asks where anything was written.",
-  },
   "tests/jobs-commit-path.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** Pins the path as well as the result: it wraps the " +
@@ -594,34 +832,29 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the end of stage B, and converted files drop out of it then rather than being given a " +
       "verdict that no longer describes any outstanding work.",
   },
-  "tests/jobs-fs-adapter.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    evidence: "static-only",
-    reason:
-      "**Split out of `tests/jobs.test.ts` on 2026-09-04**, at the start of stage B, because that " +
-      "file deserved two verdicts at once and this map classifies whole files. Twelve cases whose " +
-      "subject is the filesystem implementation rather than the queue: `sweepStopped`, the restart " +
-      "sweep Postgres answers with a lease instead; `writeOnce`'s temp-file-and-rename, asserted " +
-      "by the absence of `<id>.json.<pid>.<n>.tmp`; the begun-and-never-finished marker read " +
-      "through the real runner; and `STEPS[name].outputs(ctx)` over `StepContext.dir` / " +
-      "`htmlFile`. **Two subjects, so two deletion moments** — the first three die with " +
-      "`src/store/jobs-fs.ts` and `artifacts-fs.ts` in stage G, the last with " +
-      "`step-context-paths`, and the file's own header says which is which so neither is orphaned " +
-      "by the other's commit. That header also names what already covers the Postgres side of " +
-      "each, so stage G's *port or enumerate every surviving assertion* starts from a list rather " +
-      "than a blank page. Arrived after the witness ran, hence `static-only`; it stays on the " +
-      "filesystem store deliberately and has no `TEST_LANES` entry.",
-  },
-  "tests/jobs-fs-load.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "The two behaviours that live only in `data/_jobs/`'s cold-start reader: stamping an " +
-      "ownerless record with this installation's owner, and bringing a job's enqueue ticket back " +
-      "with it. Both are properties of a directory being read at process start, which Postgres " +
-      "does not have and does not need.",
-  },
+  /* **`tests/jobs-fs-adapter.test.ts` and `tests/jobs-fs-load.test.ts` stood
+     here until stage G's `jobs` group, 2026-09-05.** Both entries went with
+     `src/store/jobs-fs.ts`, and what became of each is worth one line, because
+     the two had different fates:
+
+     - **`jobs-fs-load`** was deleted outright. All six of its cases were
+       `loadFromDisk` / `reloadForTests` cold-start properties — stamping an
+       ownerless record with this installation's owner, bringing a job's work key
+       and `reservesName` back with it, writing an enqueued job out as `queued`.
+       Postgres has no cold start: `jobs.owner_id` is `not null`, and the ticket
+       is two columns that survive a restart by being columns. The one claim with
+       a live home moved there long ago — *queues a job it was handed as running,
+       in the outcome as well as the store* is `tests/store-jobs-parity.test.ts`.
+     - **`jobs-fs-adapter`** was split rather than deleted. Its `sweepStopped`
+       block died with the adapter; its `what a step counts as done` block
+       became `tests/step-context-paths.test.ts`, because that block's subject
+       was `StepContext.dir` / `htmlFile` and not the job store — which is
+       exactly what the file's own header asked for in advance, and the reason
+       it wrote the request down. **That file lasted one day**: the same stage's
+       last group removed those two fields, and the block's surviving claim is
+       in `tests/store-artefacts-pg.test.ts` now. Both halves of the promise
+       kept, in order, by two different groups. */
   "tests/jobs-walk.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** *Claim once, keep the same attempt while walking, " +
@@ -638,12 +871,13 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "product, because `publishRevisionIn` refuses a tree that ran against `unstamped`.",
   },
   "tests/jobs.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**, and it was the largest of them — though less by " +
-      "depth than by breadth, because eight of its ten blocks are pure functions with no store " +
-      "under them at all. **It was split first**: `sweepStopped`, `writeOnce`'s temp file, the " +
+      "depth than by breadth, because most of its blocks are pure functions with no store " +
+      "under them at all: eight of the ten it had **on 2026-09-04**, which is a dated count and " +
+      "not a live inventory — `describe(\"unrunnableStepPlan\")` arrived later, with Stage E. " +
+      "**It was split first**: `sweepStopped`, `writeOnce`'s temp file, the " +
       "interrupted marker and `STEPS[name].outputs` went to " +
       "`tests/jobs-fs-adapter.test.ts`, because their subject is the adapter rather than the " +
       "queue and this map cannot give one file two verdicts. What is left — the queue's " +
@@ -668,40 +902,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`store-migration-witness.json` is re-run at the end of stage B, at which point converted " +
       "files drop out of it entirely.",
   },
-  "tests/late-step-on-a-cold-instance.test.ts": {
-    category: "store-agnostic-fake",
-    reason:
-      "The 2026-08-30 production failure written down: a single-step job on a deployed instance " +
-      "has an empty scratch directory, so a late step must read the article from the store and not " +
-      "from `ctx.dir`. The store is given the article and `ctx.dir` deliberately is not — which is " +
-      "precisely the shape a narrow `ArtifactReads` fake wants.",
-  },
-  "tests/list-reconciles-expired.test.ts": {
-    convertedInB: "2026-09-04",
-    category: "database-integration",
-    reason:
-      "**Converted in stage B on 2026-09-04.** `listJobs` must settle expired leases in the same " +
-      "call it answers from, scoped to the reader who asked, and cost nothing when no job is " +
-      "running — the reader who closed the tab is the one `/advance` can never reach. It used to " +
-      "leave the flag unset so it could not skip itself green; the property is preserved by an " +
-      "ungated `expect(STORE).toBe('postgres')` beside the `pgReady` gate. `expireLeaseForTests` " +
-      "became a write to `lease_expires_at` on the database's own clock, and the three sweeps it " +
-      "spies on are now `pgJobStore.settleExpired`. **Still `database-integration` rather than " +
-      "collateral**: it seeds two `auth.users` rows and no article, so no loader copy and no " +
-      "ledger row are left to name a mechanism for.",
-  },
   "tests/live-session-routes.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
       "The order at the ticket — OpenAI mints, we journal, and only then does the token go out — " +
       "plus a retried report that must not become a second row. The journal is now Postgres: the " +
       "flag is pinned before any import, one article is seeded under `TEST_OWNER`, and every " +
-      "read-back is `realtimeSessionStore.find`. **The ledger deliberately did not move** — " +
-      "`selected()` in `ai-calls.ts` returns the filesystem ledger whenever `NODE_ENV` is `test`, " +
-      "so `SPIDERYARN_LEDGER` still redirects a disposable JSONL and the collapse-on-read " +
-      "assertion is unchanged; that redirect is stage C's. Two assertions were re-expressed: the " +
+      "read-back is `realtimeSessionStore.find`. **The ledger followed in stage C**, and this file " +
+      "was the one the stage-C freeze had missed: it read its rows back out of the JSONL, so " +
+      "removing the redirect turned four cases red. Its `ledger()` helper now asks `costStore` and " +
+      "scopes on the session id, and the collapse-on-read half — which was about an append-only " +
+      "file with no unique key — is covered on the store it is a fact about, by " +
+      "tests/store-ai-calls.test.ts. Two assertions were re-expressed in stage B: the " +
       "journal-write failure is provoked by a `vi.spyOn` rejection on `issue` rather than by a " +
       "path that cannot be written, and *nothing was journalled* is a row count rather than the " +
       "size of a parsed JSON object. Mutation watched red: the `is null` earliest-wins predicate " +
@@ -717,29 +930,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "itself, or both arms pass with the lock doing nothing. Like the loader's own suite it is " +
       "stage D's to edit, not collateral.",
   },
-  "tests/metadata-visibility-fs.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "One assertion, and it is that the filesystem store leaves `sharing` **absent** rather than " +
-      "guessing `private` — written down because `private` shipped for an hour with a reasoned " +
-      "comment defending it. The whole statement is about a store with no `visibility` column, so " +
-      "it goes when that store goes.",
-  },
-  "tests/one-article-for-one-address.test.ts": {
-    convertedInB: "2026-09-04",
-    category: "database-integration",
-    reason:
-      "**Converted in stage B on 2026-09-04.** The repair branch in `enqueue` after " +
-      "`jobs_active_source` refuses the second insert — it re-runs the whole allocation rather " +
-      "than adopting the holder's slug, because the loser's `reservesName` is stale the moment it " +
-      "is refused. It ran on files only so that there was no database to be unavailable, and the " +
-      "branch really is store-independent; what changes is that the refusal it repairs is now the " +
-      "real partial unique index rather than the filesystem adapter's imitation of it. **Still " +
-      "`database-integration` rather than collateral**: no article is seeded and no step runs, so " +
-      "nothing filesystem is left to name a mechanism for.",
-  },
   "tests/owner-jobs.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
     reason:
@@ -770,21 +961,23 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/pipeline-artifact-store.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "The declaration agrees with the paths, the paths round-trip the artefacts, and a truncated " +
-      "file stops reporting itself finished — the bug where `stepIsDone` asked whether files " +
-      "*exist*. Every claim is about `PATHS`, `pathFor` and `has()` parsing, which are the " +
-      "filesystem adapter's own surface.",
-  },
-  "tests/pipeline-slug-claim-files.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "The `STORE !== \"postgres\"` halves of `articleExists` and `urlForSlug`, answering from " +
-      "`data/<slug>/meta.json` under a scratch root. Two files rather than two describes because " +
-      "`STORE` is a module-load constant — and the hinge deletes exactly the branch this one " +
-      "guards.",
+      "**Done in stage G, 2026-09-05, and this entry was one of stage A's three over-condemnings.** " +
+      "It read *\"every claim is about `PATHS`, `pathFor` and `has()` parsing\"*; the file was " +
+      "**75 executed cases and 67 survive**, on `memoryArtefacts()`. (The freeze's *\"~18 of 54\"* " +
+      "was counting `it()` **sites**, three of which are loops of 7, 11 and 6 — a second way to be " +
+      "wrong about the same file.) Eight died: the four-case block holding `produces` against " +
+      "`outputs` through `PATHS`, which needs a second list; `pathFor` against a literal path; the " +
+      "`{ not json` arm, since nothing decodes text into an artefact; and two aliasing cases — see " +
+      "below, because they are the finding. **The two `blocks` cases that were pure aliasing would " +
+      "have asserted the opposite of the truth if ported.** On disk `extract/extractedHtml` and " +
+      "`blocks/stampedHtml` were one file, so wiping the ids clobbered both; under two columns " +
+      "`blocksMatchTheirHtml` re-derives with the stored blocks as baseline and `splitIntoBlocks` " +
+      "**carries the old ids over** — measured, byte-identical document back. One deleted, one " +
+      "replaced by `not done once stage 3's document has lost an id its blocks name`. And the file " +
+      "was reading its fixtures out of the gitignored `data/writes/…` and writing into the real " +
+      "`data/raw-shape/`; both now go through the committed corpus.",
   },
   "tests/quiz-mark-route.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -804,16 +997,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "file to Postgres never moved its ledger at all. The 2026-09-03 witness agrees: it recorded " +
       "`ai-calls-fs:fsCostStore.record` here. Stage C is what takes it.",
   },
-  "tests/quiz-step-registration.test.ts": {
-    category: "store-agnostic-fake",
-    reason:
-      "The two registration bugs that write a perfectly good artefact and redden nothing — stamp " +
-      "fields spelled with the in-memory names, and a `STAMP_SOURCE` row saying `null`. It runs " +
-      "the real stage and then asks the store what stamp it recorded, so any store that records " +
-      "stamps will do.",
-  },
   "tests/referee-claims-omitted.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` because " +
@@ -826,7 +1010,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "deleting the `claimsOmitted` spread from `finish` in src/store/pg-referee-claims.ts.",
   },
   "tests/referee-claims-routes.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -841,7 +1024,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "run survives a GET — deleting `lt(created_at, cutoff)`, which had left the file green.",
   },
   "tests/referee-criteria-routes.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -859,13 +1041,16 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/referee-criteria-store.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "Three things of different kinds: `withCriterion` as a pure decision, a **filesystem** round " +
-      "trip with a negative valence in it, and parity against Postgres. The middle one is the " +
-      "adapter's own, and the negative-valence journey it completes is only worth walking twice " +
-      "while two adapters exist.",
+      "**Edited in stage G, 2026-09-05, not deleted.** Three things of different kinds: " +
+      "`withCriterion` as a pure decision, a **filesystem** round trip with a negative valence in " +
+      "it, and parity against Postgres. The middle block went — seven cases driving " +
+      "`beginCriterion`/`finishCriterion`/`loadCriteria` at `data/<slug>/referee-criteria.json`, " +
+      "whose -80-out-of-the-bytes-on-disk claim has a Postgres counterpart in " +
+      "`tests/store-parity-referee.test.ts`. The eight pure `withCriterion` cases and the " +
+      "ownership 404 are untouched, and the parity walk kept its steps as a Postgres walk. " +
+      "20 cases to 13.",
   },
   "tests/referee-mirror-route.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -888,7 +1073,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "existing separately is the thing the hinge makes moot.",
   },
   "tests/referee-scan-route.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -939,7 +1123,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "filesystem store goes.",
   },
   "tests/retry-is-only-for-a-failed-job.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** Retry spends money and the client had never been " +
@@ -957,7 +1140,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "of stage B and stops seeing this file reach a condemned module.",
   },
   "tests/routes.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B2 on 2026-09-04** — the HTTP surface itself, and the broadest reach " +
@@ -971,69 +1153,76 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "isolation is a seeded owner under `asTestOwner` and a database postcondition in `afterAll`; " +
       "the three admin cases that asserted **501 because filesystem** now assert 200 and a list, " +
       "which stage F does not touch; and an orphaned `pending` comment is one whose lease has run " +
-      "out, which brought a case with it. Ten mutations, seven red and three green — the greens " +
-      "are the library's owner predicate, the search store's `remove` id predicate, and the two " +
-      "slug guards that are belt and braces over each other. **Still `database-integration` " +
+      "out, which brought a case with it. **The tally that used to stand here is gone rather than " +
+      "corrected**, and that is the rule above being applied to this entry: it read *ten " +
+      "mutations, seven red and three green* against thirteen runs, because slug runs and " +
+      "recolour runs collapse differently depending on whether you count markers or executions — " +
+      "and within a day B3 closed two of the greens, gave the tweets block a real mutation and " +
+      "the admin block a second, so every number in the sentence was wrong. A count of mutations " +
+      "is a copy of a fact whose home is the test file; the file says what it ran, and " +
+      "`STORE_CONVERSIONS` is what checks the evidence has not shrunk since. **Still " +
+      "`database-integration` " +
       "rather than collateral**, and that is the honest verdict rather than an un-updated one: " +
       "the entry should simply leave this map when `tests/store-migration-witness.json` is re-run " +
       "at the end of stage B.",
   },
-  "tests/second-job-queues.test.ts": {
-    convertedInB: "2026-09-04",
-    category: "database-integration",
-    reason:
-      "**Converted in stage B on 2026-09-04.** Greg's *always append to the per-article queue* — " +
-      "a second, different job on one article answers 202 with a new id rather than the old " +
-      "`ARTICLE_IS_BUSY` 409. The status code and the body are the route's, so it still goes " +
-      "through `handleApi`; `fsJobStore` and `forgetForTests` are now `pgJobStore` and a delete " +
-      "by slug. **Still `database-integration` rather than collateral**, and that is the honest " +
-      "verdict rather than an un-updated one: it now needs a database and reaches no condemned " +
-      "module at all, since no step runs (`VERCEL` is set, so `pump` returns) and no article is " +
-      "seeded. There is no loader copy and no ledger row left to name a mechanism for.\n\n" +
-      "**And this file is thinly covered by design, which this entry used not to say.** Its only " +
-      "store-level mutation — `row.workKey === ticket.workKey` deleted from `tryEnqueue`'s re-read " +
-      "classifier — **stays green**, because that branch runs only on an insert conflict and every " +
-      "case here inserts cleanly. The claim the file exists for, that a second *different* job gets " +
-      "a new id rather than a 409, is enforced by the `jobs_active_work` partial unique index, and " +
-      "**no TypeScript mutation can reach an index**: loosening it is a migration. The one red " +
-      "mutation available goes red as a 500, not on the id assertion. The file's evidence is in the " +
-      "file; what belongs here is the warning that it is thinner than the sentence above sounds.",
-  },
   "tests/shelf.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "Archive, rename and open-counting against real files under `data/`, `because that is what " +
-      "the code under test actually reads` — `src/shelf.ts` is what `fsShelfStore` is made of. " +
-      "The one claim worth keeping is *a renamed title survives a re-extraction*, and Postgres " +
-      "keeps it in a column rather than in an override file.",
+      "**Edited in stage G, 2026-09-05, not deleted.** Archive, rename and open-counting against " +
+      "real files under `data/` — `src/shelf.ts` is what `fsShelfStore` was made of, and that " +
+      "module is now dead in `src/` but not yet removed, so its own cases stay and this file is " +
+      "what would notice a quiet removal. What went is the five cases that read the *shelf* back " +
+      "through `listArticles`/`articleMetadata` off `src/api.ts`; every one has a counterpart in " +
+      "`tests/store-shelf-pg.test.ts` § the shelf's writes. 19 cases to 13.",
   },
   "tests/source-store.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "Three sections, and only the middle one is condemned: a grep that the route reaches the " +
-      "seam, the **filesystem** adapter doing what the route used to do under a scratch root, and " +
-      "the Postgres adapter refusing a dangling reference rather than reporting the article " +
-      "sourceless. Section 2 goes with the adapter; 1 and 3 stay.",
-  },
-  "tests/stage-stamp-agreement.test.ts": {
-    category: "store-agnostic-fake",
-    reason:
-      "For every article-reading stage, the `sourceHash` written into the artefact must equal the " +
-      "`inputHash` its `stamp` computes — nothing anywhere else compares the two definitions, and " +
-      "a disagreement re-buys a model call on every job for ever. `no network, no directory reads " +
-      "— the store is the only thing either side is given`, which is the fake's whole job " +
-      "description.",
+      "**Done in stage G, 2026-09-05, and the prediction held exactly.** Three sections, and only " +
+      "the middle one was condemned: a grep that the route reaches the seam, the **filesystem** " +
+      "adapter doing what the route used to do under a scratch root, and the Postgres adapter " +
+      "refusing a dangling reference rather than reporting the article sourceless. Section 2 went " +
+      "with the adapter, 20 cases to 14, and **every one of its six has a Postgres counterpart** " +
+      "in section 3. Section 1's source-text bans were trimmed rather than kept whole: " +
+      "`not.toContain(\"readFile(\")` and the file-wide `node:fs/promises` ban survive because " +
+      "they can still redden, and the `fsLocations(` / `readRaw(` bans went — a `not.toContain` " +
+      "of a deleted symbol is a check nothing can fail.",
   },
   "tests/stage2c-raw-bytes.test.ts": {
-    category: "store-agnostic-fake",
+    /* **Was `store-agnostic-fake` until 2026-09-05, and the prose below said so
+       for a while after the value did not.** Stage D's write-up and this reason
+       both reported the re-classification; the field kept the old value, so the
+       one thing in this file that is *executable* disagreed with the two things
+       that are not. That is the failure the registry exists to prevent, caught
+       by the cross-family review rather than by anything here — the guard checks
+       that entries exist and are reasoned, never that a reason and its category
+       agree. Worth knowing before trusting a category you have only read about. */
+    category: "filesystem-adapter-behaviour",
     reason:
       "Stage 1 hands stage 2 a content address, and every case names its own `fsBlobs(dir)` so " +
       "that *absent* is a fact about a directory the test made rather than about whatever " +
-      "`.env.local` said. `fsBlobs` is out of scope for this migration; the `createFsArtifactStore` " +
-      "beside it is the replaceable part.",
+      "`.env.local` said. `fsBlobs` is out of scope for this migration. **Stage D read the " +
+      "`createFsArtifactStore` beside it and did not replace it**, against this entry's own " +
+      "earlier sentence: its one case is *writes a raw.json the filesystem artefact store reads " +
+      "back as the manifest*, whose entire claim is that the file `writeRawFiles` writes is the " +
+      "file `PATHS.fetch.raw` reads — two constants in two modules that nothing else compares. A " +
+      "fake with no paths in it cannot hold that, so the case is filesystem-adapter behaviour " +
+      "wearing a store-agnostic file's clothes, and it dies in stage G with `writeRawFiles` and " +
+      "the filesystem CLI path it documents.",
   },
+  /* **`tests/step-context-paths.test.ts` lived one day**: created on 2026-09-05
+     in stage G's `jobs` group and deleted on 2026-09-05 in stage G's last
+     adapter group, which is the same stage keeping its own promise. Its entry
+     said *"it dies when `StepContext.dir` does, and the claim to port then is
+     that a step must declare every artefact it writes: in Postgres that is
+     `produces`, and `tests/store-artefacts-pg.test.ts` is where it would go"*.
+     That is exactly where it went — § `has both of extract's and all three of
+     hierarchy's`, with the block's `stepIsDone`-over-an-empty-store case beside
+     it. The three path assertions died with `STEPS[…].outputs`, which had no
+     caller in `src/` after `src/api.ts` went and was being kept alive by this
+     file alone. */
   "tests/step-failure-seam.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
@@ -1053,10 +1242,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/store-ai-calls.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "Both ledgers, and the assertion it exists for is that `credits_used_nanos` comes back a " +
-      "`number` rather than the string `node-pg` hands back for `int8`. The `fsCostStore` half " +
-      "goes with `ai-calls-fs.ts`; the Postgres half and `totalRows` are the survivors, and the " +
-      "two SQL sums it holds against each other are worth keeping intact through the edit.",
+      "**Done in stage G, 2026-09-05, and the prediction held with one correction.** The " +
+      "assertion it exists for is that `credits_used_nanos` comes back a `number` rather than " +
+      "the string `node-pg` hands back for `int8`. The `fsCostStore` half went with " +
+      "`ai-calls-fs.ts`; the Postgres half and `totalRows` survived, 25 cases to 13, and the two " +
+      "SQL sums it holds against each other came through intact. The correction is that the " +
+      "filesystem half was not all JSONL trivia: two of its twelve cases — the half-open range " +
+      "on `read(since, until)` and `forJob` — were `CostStore` contract behaviour with no second " +
+      "home anywhere, so they were rewritten against `pgCostStore` rather than dropped. Both " +
+      "were watched going red before being believed. 13 cases to 15.",
   },
   "tests/store-block-roles-pg.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1070,10 +1264,13 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/store-carry-forward.test.ts": {
     category: "database-integration",
     reason:
-      "A re-extraction must not take the reader's paid-for artefacts with it — free on a " +
-      "directory, and the reason `beginRevision` copies the published revision into the draft. It " +
-      "keeps a real `data/` directory alongside the Postgres article so both stores answer the " +
-      "same question; that filesystem half is what the edit removes.",
+      "**Edited in stage G, 2026-09-05.** A re-extraction must not take the reader's paid-for " +
+      "artefacts with it — free on a directory, and the reason `beginRevision` copies the " +
+      "published revision into the draft. One case asked the same question of both stores; the " +
+      "filesystem half went with `src/api.ts`. What it bought is named in the case's own comment: " +
+      "the files asked the step's own `stamp` and so got `assets` right for free, which is the " +
+      "second opinion `pg.ts`'s hand-written `isCurrent` switch was checked against. The Postgres " +
+      "half still reddens if `case \"assets\"` is deleted.",
   },
   "tests/store-chat-pg.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1084,21 +1281,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "filesystem site is `requireTail`, which `src/store/pg-chat.ts` imports from `fs.ts`; that " +
       "is a live coupling between a surviving adapter and a condemned module, and it has to be " +
       "broken before `fs.ts` can be deleted at all.",
-  },
-  "tests/store-chat-tail-guard.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "`expectedTailId` has to be checked *with* the edit rather than before it, or a `begin` lands " +
-      "in the gap and the edit deletes it. Its own header says `this file is the filesystem side` " +
-      "and names where the Postgres side lives, so it is the adapter's copy of a two-copy claim.",
-  },
-  "tests/store-comments-parity.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "The two comment operations the placement parity walk does not cover: `create` refusing a " +
-      "re-score under a stored id, and `beginAnswer` carrying the placement across a store that " +
-      "**rebuilds the row field by field**. Both failures are the filesystem writer's shape, and " +
-      "there is nothing left to compare once there is one store.",
   },
   "tests/store-export-raw.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1111,9 +1293,9 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   },
   "tests/retry-keeps-the-checkpoints.test.ts": {
     category: "database-integration",
-    /* It landed on 2026-09-03, after the witness ran, so the verdict rests on
-       the import graph and the file's own docstring until witness 2 is re-run. */
-    evidence: "static-only",
+    /* It landed on 2026-09-03, after that day's witness ran, so the verdict
+       rested on the import graph and the file's own docstring. The 2026-09-04
+       re-run watched it, which is what took the `static-only` off. */
     reason:
       "Whether the Retry button lands on the article the failed attempt paid for — the question " +
       "`tests/checkpoints-durable-resume.test.ts` assumed away by building both attempts' " +
@@ -1124,25 +1306,43 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/store-jobs-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "The two job stores under one set of cases, and it is honest about the filesystem adapter " +
-      "being one process — its single-running rule and attempt tokens are variables in memory. " +
-      "The refusals are the valuable half and every one of them survives in the Postgres arm; the " +
-      "parity framing does not.",
+      "**The verdict was always about the arm, not the file, and stage G's `jobs` group settled " +
+      "it that way on 2026-09-05: four lines out of `ADAPTERS`, and the file lives.** The reason " +
+      "written in stage A said the refusals *survive in the Postgres arm* and only *the parity " +
+      "framing* does not — which is right, and is why this is the file the plan names when it " +
+      "says that applying stage G's brief literally would delete coverage " +
+      "(docs/plans/260903f-… § *Applied literally, G's own brief deletes coverage*). Fifty-three " +
+      "cases run against Postgres inside the `describe(adapter.name)` loop and every one of them " +
+      "is a **literal assertion** — the fence, `settleExpired`, the running cap, queue order, name " +
+      "reservation — not a comparison of one store with another. Deleting the file to remove one " +
+      "entry would have lost all fifty-three. **Kept as `filesystem-adapter-behaviour` rather " +
+      "than re-categorised**, on the precedent this map's header states for `fixture-loader`: an " +
+      "entry records why a file was classified as it was, and the map shrinks when " +
+      "`store-migration-witness.json` is re-run, not by rewriting verdicts one at a time. The " +
+      "reach itself is gone.",
   },
   "tests/store-parity-referee.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "Written after Claims shipped with one adapter and returned 501 in production, to compare " +
-      "the two stores step by step through every referee write. It is the parity file that would " +
-      "have caught that, and parity is precisely the property that stops existing at the hinge.",
+      "**Edited in stage G, 2026-09-05, not deleted.** Written after Claims shipped with one " +
+      "adapter and returned 501 in production, to compare the two stores step by step through " +
+      "every referee write. Parity stopped existing at the hinge; the literals did not, and they " +
+      "are what this file was really holding. Two have no second home anywhere: a valence of −80 " +
+      "beside a confidence of 55 (the `clampConfidence` trap) and the only guard on " +
+      "`CLAIMS_ORPHAN_GRACE_MS` outside `tests/store-pg-referee-claims.test.ts`. The two walks " +
+      "kept their steps and now assert at each one whose comment names what it can break.",
   },
   "tests/store-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "*The test the whole migration rests on* — every read compared as the wire form the client " +
-      "receives, with every revision deleted first so a carried column cannot fake a match. Its " +
-      "filesystem arm is the reference the Postgres arm is checked against, and deleting it before " +
-      "the adapter goes would remove the only cross-check on the very last conversions.",
+      "**Edited in stage G, 2026-09-05, not deleted.** *The test the whole migration rested on* — " +
+      "every read compared as the wire form the client receives, with every revision deleted first " +
+      "so a carried column could not fake a match. The comparisons went with the filesystem arm; " +
+      "the corpus load through the production write path stayed, and with it every assertion that " +
+      "was ever about Postgres alone: built-from-nothing, the publication gate refusing " +
+      "`constitution`, `url`/`fetchedAt` from stage 1 or nowhere, the card dated from `raw.json`, " +
+      "`ADDED_AT` ordering over three rolled-back rows, the search exclusion, and the 400 on a " +
+      "traversal slug. What was dropped is listed in the plan § G3 landed.",
   },
   "tests/store-pg-session.test.ts": {
     category: "database-integration",
@@ -1156,25 +1356,25 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/store-reader-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "The experimental switch across two genuinely different implementations — `coalesce(…, " +
-      "now())` inside an upsert against a decision made in a write queue, with no shared code for " +
-      "a test to lean on. It also creates its own `auth.users` row rather than writing the " +
+      "**Edited in stage G, 2026-09-05: four lines, not a deletion.** The experimental switch was " +
+      "two genuinely different implementations — `coalesce(…, now())` inside an upsert against a " +
+      "decision made in a write queue — and only the `stores` array lost an entry. All six cases " +
+      "now run against Postgres, including *keeps both when the two writes are started at once*, " +
+      "which has no second home. It creates its own `auth.users` row rather than writing the " +
       "development owner's profile, which is the habit the conversions should copy.",
-  },
-  "tests/store-reader-state-parity.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "Chat, searches and lookups compared as a **scripted sequence** rather than an end state, " +
-      "with ids normalised to `#0`, `#1` by first appearance so an ordering bug shows up as a " +
-      "renumbering. Both halves of every comparison are stores; one of them is going away.",
   },
   "tests/store-realtime-sessions.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "Three *a second write must not undo the first* rules — duplicate `issue`, earliest " +
-      "`markConnected`, first `close` — held across both journals. Its Postgres half currently " +
-      "always skips because `20260902150952_realtime_sessions_and_usage.sql` is unapplied " +
-      "everywhere, so today it is a filesystem-only suite wearing a parity coat.",
+      "**Done in stage G, 2026-09-05.** Three *a second write must not undo the first* rules — " +
+      "duplicate `issue`, earliest `markConnected`, first `close` — held across both journals; " +
+      "the filesystem arm of `bothStores` went with the module and the seven cases now run once, " +
+      "against `pgRealtimeSessionStore`. 14 cases to 7, none lost. **The old wording here said " +
+      "its Postgres half *always skips* because `20260902150952_realtime_sessions_and_usage.sql` " +
+      "was unapplied everywhere, so it was a filesystem-only suite wearing a parity coat.** That " +
+      "was true when it was written and stopped being true in stage F, which rewrote the " +
+      "readiness handling: `pgReady` throws now and there is no skip mechanism left in the file. " +
+      "The same sentence was in the file's own header and was wrong in both places.",
   },
   "tests/store-roundtrip.test.ts": {
     category: "database-integration",
@@ -1183,6 +1383,37 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Its export target is `src/store/export.ts`, which survives — what dies is the *source* " +
       "side, where the corpus is read in through a filesystem artefact store, and the comparison " +
       "needs a new left-hand side rather than a new claim.",
+  },
+  /**
+   * **A stage-B fix *added* a filesystem reach to a file that had none**, which
+   * is the one direction nobody was watching for, and it is why the witness is
+   * re-run rather than reasoned about.
+   *
+   * The 2026-09-03 witness has no record of this file touching the store. The
+   * 2026-09-04 re-run does. Nothing about the shelf changed: `17d2f00d`, the
+   * commit that converted the last thirteen suites, gave this one
+   * `scratchArticleInPg` seeding to fix an order dependency, and that helper
+   * clones its corpus article through `copyArtefacts` over a
+   * `createFsArtifactStore`. So the reach arrived with the remedy.
+   *
+   * Two consequences worth keeping. A witness delta is **not** a conversion
+   * oracle in either direction — this is the "appeared" case, and the plan
+   * already records the "disappeared" one. And `fixture-loader` is a mechanism
+   * that keeps recruiting: every suite stage B moved onto the seeder inherited
+   * it, so stage D's decision about one helper is what settles this entry.
+   */
+  "tests/store-shelf-reads.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    reason:
+      "Counts the statements `listArticles` runs and inspects which tables they name — a constant " +
+      "number whatever the shelf holds, and none of them `revision_blocks`. Entirely Postgres, " +
+      "and it was not on this list at all until 2026-09-04: `17d2f00d` seeded it through " +
+      "`scratchArticleInPg` to stop it depending on another file's rows, and that seeder copies " +
+      "the corpus article with `copyArtefacts` from a `createFsArtifactStore`. Its whole " +
+      "filesystem contact is those two calls, made by the helper on its behalf, so stage D's " +
+      "loader decision takes it without anybody opening the file. **Not a stage-B conversion** — " +
+      "it was already a Postgres suite, and no mutation evidence is claimed for it.",
   },
   "tests/store-session-isolation.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1203,21 +1434,32 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/store-uploads-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
-      "The claim race under two implementations with no shared code — `open(…, \"wx\")` atomic at " +
-      "the kernel against a conditional `UPDATE` and `rowCount` — plus the `null`-versus-absent " +
-      "shape that would serialise onto a wire whose client type forbids it. The shape assertion " +
-      "belongs to the surviving adapter; the race comparison does not.",
+      "**Done in stage G, 2026-09-05, and the prediction was half right.** The claim race ran " +
+      "under two implementations with no shared code — `open(…, \"wx\")` atomic at the kernel " +
+      "against a conditional `UPDATE` and `rowCount` — plus the `null`-versus-absent shape that " +
+      "would serialise onto a wire whose client type forbids it. The shape assertion belongs to " +
+      "the surviving adapter, as predicted. **The race comparison was not dropped with the " +
+      "comparison**: `lets exactly one of two simultaneous claims win` is the only thing in the " +
+      "tree that would notice `eq(uploads.status, \"pending\")` leaving that `WHERE`, which was " +
+      "watched happening. This file is also the only one that asks `pgUploadStore` for its " +
+      "contract: `an-upload-is-queued-only-once-its-bytes-arrive` calls `create` to seed a row " +
+      "and `store-guarded` checks the wrapper, but neither asserts behaviour. 22 cases to 11 — " +
+      "every case kept, each run once.",
   },
   "tests/store-wiring.test.ts": {
-    category: "store-agnostic-fake",
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
     reason:
-      "What `src/routes.ts` **hands** the store: the attempt token a Postgres `finish` refuses to " +
-      "go without, and the sweep's `keep` set of bare row ids rather than composite keys. It " +
-      "wraps the real filesystem store as a spy substrate and asserts the call, so the substrate " +
-      "is interchangeable and the assertions are not.",
+      "**Converted in the hinge, 2026-09-05, and the old entry's claim held.** What `src/routes.ts` " +
+      "**hands** the store: the attempt token a Postgres `finish` refuses to go without, and the " +
+      "sweep's `keep` set of bare row ids rather than composite keys. It wrapped the real " +
+      "filesystem store as a spy substrate and was filed `store-agnostic-fake` on the grounds that " +
+      "the substrate was interchangeable — which was true, and is why the move is a fixture swap " +
+      "and not a rewrite. What was not true is that it needed no database: the substrate it wrapped " +
+      "was chosen by the flag, so five of its seven cases went red the moment the flag went. The " +
+      "article is `scratchArticleInPg` now instead of a copied `example/` directory.",
   },
   "tests/term-lookup.test.ts": {
-    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
@@ -1235,7 +1477,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
   "tests/the-query-string-does-not-decide-the-route.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["shared-symbol", "fixture-loader"],
     reason:
@@ -1246,49 +1487,33 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "pins `postgres` before any import and seeds through `scratchArticleInPg`, so the same " +
       "sentence means rows joined to an owned article. What is left is the seeder's copy step and " +
       "**one symbol**: this route's GET always calls `sweepChat`, and the *Postgres* sweep writes " +
-      "`CHAT_SWEPT`, which is declared in `src/store/fs.ts` and imported by `src/store/pg-chat.ts`. " +
+      "`CHAT_SWEPT` — declared in `src/store/fs.ts` when this was written, and moved to " +
+      "`src/chat.ts` in stage G on 2026-09-05, which is what the prediction below asked for. " +
       "Named by GPT Sol's review of the batch, and it is the second of the two symbols " +
       "`store-artefacts-pg`'s entry above predicted would need somewhere neutral to live — " +
       "**deleting `fs.ts` moves this string, it does not remove it.** No model is called here, so " +
       "no ledger row.",
   },
-  "tests/two-servers-one-queue.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "Reproduces the eleven concurrent `hierarchy` runs of 2026-08-30 with `vi.resetModules()` " +
-      "and two imports, because the filesystem fence is a variable in one module's memory and a " +
-      "dev-server restart makes a second copy. Its own header says the Postgres adapter's absence " +
-      "is the point — one `update … where status = 'queued'` cannot have this bug — so the file " +
-      "is about a hazard the migration abolishes.",
-  },
-  "tests/tweets.test.ts": {
-    category: "store-agnostic-fake",
-    reason:
-      "The deterministic half of stage 5c — character counting, numbering the model's array, " +
-      "staleness against the blocks, and how many posts to ask for. The store appears only so " +
-      "`stepIsDone` has a stamp to read; nothing here is a claim about storage.",
-  },
+  /* **`tests/two-servers-one-queue.test.ts` stood here until stage G's `jobs`
+     group, 2026-09-05.** It reproduced the eleven concurrent `hierarchy` runs of
+     2026-08-30 (docs/postmortems/260902c-the-truncation-retry-cost-storm.md)
+     with `vi.resetModules()` and two imports, because the filesystem fence was a
+     variable in one module's memory and a dev-server restart made a second copy.
+     **Deleted rather than converted, and its own header is the authority**: it
+     said the Postgres adapter's absence was the point, because a store whose
+     state is in the database makes "another copy" and "another request in this
+     copy" the same question, and `tests/store-jobs-parity.test.ts` already asks
+     it of that store. The hazard is abolished by `claimIn`'s single
+     `update … where id = $id and status = 'queued'`, not covered elsewhere. */
   "tests/upload-acquire.test.ts": {
     category: "database-integration",
     reason:
       "The first place that has the bytes, so the checks are built to fail honestly: a magic-byte " +
       "refusal on a right-sized plausible file, and a checksum refusal on a **same-length** " +
-      "substitution. It drives the real upload record lifecycle, which selects its adapter by " +
-      "flag, so the whole harness lands on Postgres at the hinge.",
-  },
-  "tests/upload-records.test.ts": {
-    convertedInB: "2026-09-04",
-    category: "database-integration",
-    reason:
-      "**Converted in stage B on 2026-09-04**, and the flag's death moved it without changing a " +
-      "claim, exactly as this entry predicted. One upload attempt's life — claiming exactly once " +
-      "so a double-click cannot buy two transcriptions, an expired grant reading as expired " +
-      "without a rewrite, and a second refusal staying silent. It wrote into the real " +
-      "`data/_uploads/`; it now writes `spideryarn.uploads` rows and seeds its reader into " +
-      "`auth.users`, because `uploads.owner_id` is a foreign key. **Still `database-integration` " +
-      "rather than collateral**: nothing filesystem survives the conversion — the issuer is a " +
-      "stand-in, so not even the bucket is touched — and there is no shared mechanism left to " +
-      "name.",
+      "substitution. It drives the real upload record lifecycle, which selected its adapter by " +
+      "flag, so the whole harness landed on Postgres at the hinge. **Stage G, 2026-09-05:** its " +
+      "`fsArtifacts` became `memoryArtefacts()` and its `contextPaths(slug)` went with " +
+      "`StepContext.dir`; 9 cases in, 9 out, nothing about the claim touched.",
   },
   "tests/uploads-api.test.ts": {
     category: "database-integration",
@@ -1299,13 +1524,22 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "read, and that isolation problem gets sharper, not softer, on a shared database.",
   },
 
-  /* ---- Static-only: the dynamic witness never saw these ------------------- */
+  /* ---- Arrivals the 2026-09-03 witness was too early to see ---------------
+     Written as a static-only bucket, and it is no longer one. Re-running the
+     witness on 2026-09-04 watched four of these execute a condemned function,
+     so they carry no `evidence` field any more — the field's guard is what
+     said so, by refusing the `static-only` claim the moment the dynamic
+     record existed. The heading stays because the *grouping* is still true
+     and still useful: these are the files that landed between two witness
+     runs, which is the way a hole opens. Two more of the same class were in
+     the main list above and were upgraded the same way. */
 
   "tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts": {
     category: "database-integration",
-    evidence: "static-only",
     reason:
-      "Arrived after the witness ran. The readiness gate: `POST /api/jobs {uploadId}` must HEAD " +
+      "Arrived after the 2026-09-03 witness ran and was carried on the import graph alone until " +
+      "the 2026-09-04 re-run watched it execute one, which is what took its `static-only` off. " +
+      "The readiness gate: `POST /api/jobs {uploadId}` must HEAD " +
       "the staging object before it claims anything, because the reader now reaches " +
       "`/add/upload/<id>` at byte zero and a reload of it used to queue a job over a file that " +
       "was not there — which `acquireUpload` refuses terminally. It drives the real route, the " +
@@ -1313,15 +1547,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`src/store/blobs.ts` and needs neither changed.",
   },
   "tests/article-cache-call-site.test.ts": {
-    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths", "fixture-loader"],
-    evidence: "static-only",
     reason:
-      "**Converted in stage B on 2026-09-04.** Arrived after the witness ran. Asks the only " +
+      "**Converted in stage B on 2026-09-04.** Arrived after the 2026-09-03 witness ran, and the " +
+      "2026-09-04 re-run watched it — so the `static-only` came off, and the two mechanisms named " +
+      "above are now measured rather than derived. Asks the only " +
       "question that would have gone red on the conditional-cache postmortem: run a two-mode job " +
       "through the real walk and read the `StepContext.cacheArticle` each step is actually " +
-      "handed. It hoisted `delete process.env.SPIDERYARN_STORE` and drove `fsJobStore`, " +
+      "handed. It hoisted the store flag away and drove `fsJobStore`, " +
       "`fsArtifacts` and `fsStoreSession`; it now pins `postgres` and takes its session from " +
       "`claimSession`, so every step's product is committed into the claim's own draft and the " +
       "job publishes. **Collateral rather than `database-integration`, and this one really is**: " +
@@ -1332,12 +1566,12 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   "tests/glossary-delete-then-rebuild.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
-    evidence: "static-only",
     reason:
       "Arrived after the witness ran, with the glossary-delete work off `dev`. It drives a real " +
       "claim, `openPgStoreSession`, `advanceJobWith` and a real publication, then reads back on " +
-      "another connection — entirely Postgres, and its static reach into `artifacts-fs` is " +
-      "`src/jobs.ts`, which is `runStep` computing paths. Re-run witness 2 to confirm.",
+      "another connection — entirely Postgres, and its reach into `artifacts-fs` is " +
+      "`src/jobs.ts`, which is `runStep` computing paths. The 2026-09-04 re-run confirmed it, so " +
+      "the verdict is no longer the graph's alone.",
   },
   "tests/pdf-page-cap-message.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1382,15 +1616,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   },
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
     category: "database-integration",
-    evidence: "static-only",
     reason:
-      "Arrived after the witness ran, with the page-cap move " +
+      "Arrived after the 2026-09-03 witness ran and was upgraded off `static-only` by the " +
+      "2026-09-04 re-run, which watched it reach `artifacts-fs`. It came with the page-cap move " +
       "(docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 4). It drives the " +
       "real `fetch` step through both of its halves — real upload records, the real blob store, " +
       "`fsArtifacts` — to prove an over-long PDF is refused before anything is stored and the " +
       "upload record ends `rejected`. It moves with `src/upload-records.ts` and " +
       "`src/store/blobs.ts`, like `upload-acquire.test.ts` whose harness it follows. The URL half " +
-      "mocks `src/fetch.js` for `fetchDocument` only, because `fetchDocument` refuses loopback.",
+      "mocks `src/fetch.js` for `fetchDocument` only, because `fetchDocument` refuses loopback. " +
+      "**Stage G, 2026-09-05:** `fsArtifacts` became `memoryArtefacts()` and `contextPaths` went " +
+      "with `StepContext.dir`; 8 cases in, 8 out.",
   },
   "tests/pdf-read-failure-sentences.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1421,6 +1657,30 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`cli-ledger.ts` import its page-cap siblings have, and no paid call is made so no ledger " +
       "row is written. Re-run witness 2 to confirm.",
   },
+  /**
+   * **The mock is the whole answer here**, and it is worth a line because the
+   * static reach looks alarming and is not. The graph walks
+   * `src/transcribe.ts` → `src/vocabulary-sources.ts` → `src/store/index.ts` and
+   * then fans out across the condemned filesystem modules — but this file
+   * `vi.mock`s `src/store/index.js` outright, so the hinge module is never
+   * evaluated and not one of them is ever loaded, let alone called. Witness 1
+   * buckets it `flag-selection-only` with no path that avoids a flag reader,
+   * which is the mildest reach it records.
+   */
+  "tests/feedback-dictation-vocabulary.test.tsx": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with the feedback-reports batch — it answers Greg's " +
+      "report that the Feedback dialog's microphone misspells `Spideryarn`, by pinning the two " +
+      "joins in front of the server: that the dialog hands `useDictation` a `context`, and that " +
+      "the upload puts it in the body. A jsdom React test that stubs `fetch` and mocks " +
+      "`src/store/index.js`, `src/web/lib/api.js` and `useDictation`; no database, no blobs, no " +
+      "path read. Its whole static reach is `src/transcribe.ts` importing " +
+      "`src/vocabulary-sources.ts`, which imports the store hinge this file has already " +
+      "replaced. Re-run witness 2 to confirm.",
+  },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -1434,17 +1694,253 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
 
   /* ---- Invisible to an import walk, found by the grep --------------------- */
 
-  "tests/slug.test.ts": {
-    category: "store-agnostic-fake",
-    evidence: "static-only",
-    reason:
-      "Its subject is `assertSlug` being deliberately looser than `isSlug`, and it is here for a " +
-      "reason no graph walk can see: one case `readFileSync`s **`src/store/jobs-fs.ts` as source " +
-      "text** to check the `_`-prefixed path it builds. So it goes red purely because a file was " +
-      "deleted, with nothing about slugs having changed — the oracle moves wherever that rule " +
-      "moves. Never executes a condemned function, which is why the dynamic witness files it " +
-      "under ran-and-touched-nothing.",
-  },
+  /* **This section is empty, and it is kept for the header's sake.**
+     `tests/slug.test.ts` was its only member: one case `readFileSync`d
+     `src/store/jobs-fs.ts` **as source text** to check the `_jobs` path it built
+     from a hardcoded `JOBS_DIR`, which no import walk can see and no call
+     instrument can watch — the whole reason a hand-written verdict was needed
+     for it. Stage G's `jobs` group deleted those three lines on 2026-09-05, in
+     the same commit as the module.
+
+     **The property was not relocated to `src/store/pg-jobs.ts`, deliberately.**
+     `jobs.slug` is a text column there: no `path.join`, no directory, and so
+     nothing for a slug to escape into. The inbound half — `assertSlug("_jobs")`
+     throws, case-folded — is the whole of the rule now and stays in that file,
+     with a comment where the deleted lines were.
+
+     The heading survives the entry because the *class* does: a test that reads a
+     condemned file's source is invisible to both witnesses, and the next one
+     will need a line here. scripts/store-migration-witness.ts § the blind spots
+     says the same thing from the other end. */
+};
+
+/* ------------------------------------------------------------------------- */
+
+/**
+ * **What a conversion left behind, per file** — the record that outlives the
+ * `STORE_MIGRATION` entry.
+ *
+ * ## Why this is a second map rather than a field on the first
+ *
+ * The two facts have different lifetimes, and that is the whole argument.
+ * `STORE_MIGRATION` says *how each current filesystem reach will be
+ * eliminated*: it describes remediation still outstanding, it shrinks as the
+ * work lands, and an entry that stops being true should be deleted. A
+ * conversion is **historical and monotone** — it happened, on a date, and no
+ * later stage un-happens it. A `convertedInB` field on the first map made the
+ * second fact a passenger on the first one's lifetime, so the moment stage B's
+ * re-run took four converted files off `STORE_MIGRATION` their evidence record
+ * went with them and the guard stopped checking them. Resolved this way by GPT
+ * Sol, 2026-09-04, reviewing the fork written down in the plan.
+ *
+ * **The two maps are deliberately not disjoint, and that is measured rather
+ * than tolerated.** Twenty-two of these twenty-six still appear in
+ * `STORE_MIGRATION`, because a suite converted onto Postgres can still reach
+ * the filesystem through machinery it never asked for — the fixture loader,
+ * above all. Forcing an either/or would push somebody to delete a true entry
+ * from one map to satisfy the other.
+ *
+ * **`stage` rather than a field named for one stage.** `convertedInB` was
+ * already the wrong name the day it was written: C, D and E convert too, and
+ * whoever converts under D would either lie in a field called `InB` or add a
+ * second field beside it.
+ *
+ * ## What is recorded here, and what is deliberately not
+ *
+ * **This records only *that* the conversion happened, and how much evidence it
+ * left.** Which mutation was run, what the run printed, what it does not cover
+ * — all of that lives in the test file, beside the assertion it bears on, and
+ * is deliberately not copied here: one fact, one home, and a copy in a registry
+ * read by whoever is thinking about categories would drift from the original
+ * read by whoever is thinking about the test.
+ *
+ * **A `reason` in `STORE_MIGRATION` may cite a mutation in a clause; it may not
+ * be where the record lives.** Two entries were found on 2026-09-04 whose
+ * mutation was written there and nowhere else, which the guard cannot see and a
+ * reader of the test cannot either. The line is between *"mutation watched red:
+ * `failureKind` deleted from `finishIn`"* — a sentence explaining a verdict,
+ * which belongs in a reason — and the run's output and what it does not cover,
+ * which belong beside the assertion.
+ *
+ * ## The counts, which are the frozen cohort and not a threshold
+ *
+ * The plan's answer to the guard's third hole was *"the fix is not a fourth
+ * threshold"*, and these are not one. A threshold is a number somebody picked;
+ * these are a **measurement of each file taken at its conversion**, so the
+ * guard compares a file against its own past rather than against a floor
+ * somebody guessed. That is what makes each individual marker load-bearing: the
+ * hole Sol reproduced was that renaming ten of eleven markers left the file
+ * satisfying *"at least one of each, somewhere"*, and no rule of that shape can
+ * see a marker go missing.
+ *
+ * Directions chosen so the honest edit is always the green one:
+ *
+ * - `mutations` / `blindSpots` are **floors**. Evidence is monotone, so adding
+ *   a mutation is free and removing one is loud.
+ * - `blocksWithoutJudgement` is a **ceiling**, and a ratchet. See below.
+ */
+export interface Conversion {
+  /** ISO date the conversion landed. */
+  readonly date: string;
+  /** The plan stage that did it — `"B"`, `"B2"`, and later `"C"`, `"D"`, `"E"`. */
+  readonly stage: string;
+  /**
+   * Anchored `**Mutation.**` markers the file carried when it converted.
+   * A floor: the guard fails if the file now has fewer.
+   */
+  readonly mutations: number;
+  /** Anchored `**Blind to.**` markers, same day, same rule. */
+  readonly blindSpots: number;
+  /**
+   * **The arrears on stage B3's per-`describe` rule, and a ratchet.**
+   *
+   * The rule the plan states is *one mutation per store-touching `describe`,
+   * and the blocks that need none say why in their own headers*. Measured
+   * against the tree on 2026-09-04, **that convention is B2's, not B's**: of
+   * `routes.test.ts`'s 18 top-level blocks, 15 carry a `**Mutation.**` or a
+   * `**No mutation…**` judgement; of the other 25 files' 82 blocks, **9 do**.
+   * The stage-B files write their evidence per *file* — often in the file's own
+   * header docstring — rather than per block.
+   *
+   * So the rule cannot be switched on as an equality today without reddening
+   * 25 suites at once, and this number is the honest way to hold it anyway: the
+   * count of this file's top-level blocks carrying no judgement, frozen, and
+   * checked as a **maximum**. A block added to a converted file without a
+   * judgement pushes the count up and fails; writing a judgement for an
+   * existing block pushes it down and the record is edited to match. **A new
+   * conversion records `0`** and is therefore born under the full rule.
+   *
+   * The debt it names is 76 blocks across 26 files, measured 2026-09-04 by
+   * running the guard. Paying it down is what turns this field into a line of
+   * zeroes and the ratchet into the equality.
+   */
+  readonly blocksWithoutJudgement: number;
+}
+
+/**
+ * Every file a stage of this plan converted onto Postgres, keyed by
+ * repository-relative path, alphabetical.
+ *
+ * Twenty-six on 2026-09-04: stage B's twenty-five, plus `routes.test.ts`, which
+ * was large enough to become its own stage B2.
+ */
+export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
+  "tests/all-skipped-publication-log.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 1 },
+  "tests/article-cache-call-site.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
+  "tests/chat-anchor-route.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 3 },
+  "tests/chat-live-ticket-route.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 3, blocksWithoutJudgement: 4 },
+  "tests/chat-live-turn.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 3 },
+  "tests/chat-spoken-route.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 4, blindSpots: 2, blocksWithoutJudgement: 4 },
+  /**
+   * **Stage C's whole cohort**, frozen before the work started from the dynamic
+   * witness crossed with `TEST_LANES`: of the twenty-seven files that reached
+   * `ai-calls-fs` at run time, this was the only one the redirect's removal
+   * could break, because it is the only one that both pinned the flag to
+   * `postgres` and lived in the lane where `DATABASE_URL` is poisoned.
+   *
+   * **The freeze was one file short, and the run is what said so.** With the
+   * line removed, `tests/live-session-routes.test.ts` went red too — four cases
+   * — because it read its ledger rows back out of a JSONL rather than out of the
+   * store. It is recorded above under stage B and its entry is not amended: the
+   * counts there are what that file carries, and this sentence is where the
+   * stage-C edit to it is written down.
+   */
+  "tests/cost-store-under-test.test.ts":
+    { date: "2026-09-05", stage: "C", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 0 },
+  /**
+   * **Stage D's cohort, and its shape is different from B's and C's.**
+   *
+   * D's lever is not a set of files: it is one import in one helper.
+   * [helpers/load-article.ts](helpers/load-article.ts) built a
+   * `createFsArtifactStore` over the fixture root and handed it to
+   * `copyArtefacts` as the **source**, and 56 test files executed
+   * `createFsArtifactStore` at run time while only 14 named it — the other ~42
+   * inherited it from that line, through `scratchArticleInPg`. So the entry
+   * below for a *helper* is the largest single conversion in this plan, and the
+   * ~42 files it frees are not listed here because **none of them was edited**.
+   * `STORE_CONVERSIONS` records files that were changed and what evidence they
+   * carry; a file freed by somebody else's change has nothing to show.
+   *
+   * The other six are the `store-agnostic-fake` rows that named the store
+   * directly. Each was handed a filesystem store over a `mkdtemp` directory
+   * because that was the cheapest store to construct, and each now takes
+   * [helpers/memory-artefacts.ts](helpers/memory-artefacts.ts).
+   */
+  "tests/helpers/load-article.ts":
+    { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
+  "tests/illustrated-step-registration.test.ts":
+    { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
+  "tests/job-failure.test.ts":
+    { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
+  "tests/jobs-commit-path.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 2, blocksWithoutJudgement: 2 },
+  "tests/jobs-walk.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 3, blocksWithoutJudgement: 2 },
+  "tests/jobs.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 4, blocksWithoutJudgement: 9 },
+  "tests/late-step-on-a-cold-instance.test.ts":
+    { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
+  "tests/list-reconciles-expired.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 3, blindSpots: 2, blocksWithoutJudgement: 1 },
+  "tests/live-session-routes.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 6 },
+  "tests/one-article-for-one-address.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
+  "tests/owner-jobs.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 2 },
+  "tests/quiz-mark-route.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 4, blindSpots: 2, blocksWithoutJudgement: 4 },
+  "tests/quiz-step-registration.test.ts":
+    { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
+  "tests/referee-claims-omitted.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 2 },
+  "tests/referee-claims-routes.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 1 },
+  "tests/referee-criteria-routes.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 4, blindSpots: 4, blocksWithoutJudgement: 1 },
+  "tests/referee-mirror-route.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 1 },
+  "tests/referee-scan-route.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 3 },
+  "tests/retry-is-only-for-a-failed-job.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 2, blocksWithoutJudgement: 2 },
+  /**
+   * **Stage B2, and the only file in the tree that writes evidence the way the
+   * rule asks for it** — fifteen of its eighteen top-level blocks carry a
+   * `**Mutation.**` or a `**No mutation…**` judgement, against nine of the
+   * other twenty-five files' eighty-two. The three that do not are the store
+   * self-check at the top and the two body-validation tables, whose headers
+   * argue in prose that there is no store between the request and the refusal
+   * but do not say `**No mutation…**`.
+   *
+   * Counted after B3 closed its two greens, 2026-09-04: the search store's
+   * `remove` gained a second run, the tweets waiver became a real mutation and
+   * the admin block a second one, so twelve rather than the ten it converted
+   * with. Recorded at what the file carries now rather than at what it carried
+   * first, because the floor is only worth what the last measurement was.
+   */
+  "tests/routes.test.ts":
+    { date: "2026-09-04", stage: "B2", mutations: 12, blindSpots: 12, blocksWithoutJudgement: 3 },
+  "tests/second-job-queues.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
+  "tests/stage-stamp-agreement.test.ts":
+    { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
+  "tests/step-failure-seam.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 6 },
+  "tests/term-lookup.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 3 },
+  "tests/the-query-string-does-not-decide-the-route.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
+  "tests/tweets.test.ts":
+    { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
+  "tests/upload-records.test.ts":
+    { date: "2026-09-04", stage: "B", mutations: 3, blindSpots: 3, blocksWithoutJudgement: 5 },
 };
 
 /* ------------------------------------------------------------------------- */
@@ -1662,6 +2158,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      by the same guard for the same reason. It calls `pgReady`, seeds its own
      owner and its own two tiers, and its oracle is rows it writes itself — so
      the private lane is right and nothing in it needs the shared stack. */
+  /* Stage 5's, 2026-09-05: a public article costs half a slot. It calls
+     `pgReady`, seeds its own owner and writes its own articles and ledger rows,
+     and its oracle is those rows — so the private lane is right and nothing in
+     it needs the shared stack. */
+  "tests/billing-half-units.test.ts": "private-postgres",
   "tests/billing-quota-adjustment.test.ts": "private-postgres",
   "tests/billing-quota-race.test.ts": "private-postgres",
   "tests/billing-settlement.test.ts": "private-postgres",
@@ -1697,6 +2198,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      indistinguishable from a regression. No GoTrue and no Storage: the article
      is the committed corpus and the provider is stubbed. */
   "tests/chat-live-turn.test.ts": "private-postgres",
+  /* Written 2026-09-05 for `chat_messages.help`. Same shape and same reasons as
+     `chat-anchor-route.test.ts` beside it: `postgres` pinned before any import,
+     the article seeded through `scratchArticleInPg`, the model stubbed. It
+     reads conversations back with `chatStore.load` after every post and asserts
+     on the first thread in the list, which is an assertion a neighbouring run
+     writing to the same `chat_threads` could falsify without touching this
+     file. */
+  "tests/chat-help-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
      rather than from the writes: three cases go and look in the store, and two
@@ -1712,11 +2221,22 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/comment-referee-mark.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
+  /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,
+     so a settled call becomes a real row and a late one becomes nothing — which
+     is the asymmetry `lateCalls` exists to report and cannot be shown against a
+     store nothing selects. It was written against `fsCostStore` for a day and
+     the import-graph guard is what said so. */
+  "tests/cost-ledger-shortfall.test.ts": "private-postgres",
+  /* Stage C, 2026-09-05. A `unit`-lane file until the redirect it asserted
+     went away; what it asserts now is *which database* the ledger lands in,
+     and that needs one. */
+  "tests/cost-store-under-test.test.ts": "private-postgres",
   "tests/db-error-scrub.test.ts": "private-postgres",
   "tests/db-referee-criteria.test.ts": "private-postgres",
   "tests/db-schema-drift.test.ts": "private-postgres",
   "tests/db-schema.test.ts": "private-postgres",
   "tests/db-transaction-errors.test.ts": "private-postgres",
+  "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
@@ -1789,6 +2309,15 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `auth.users` rows over SQL and touches no Auth service, so `shared-services`
      would buy nothing while the private clone keeps the seeded pair out of the
      stack `tests/admin-store.test.ts` reports on. */
+  /* Arrived in this lane in stage G, 2026-09-05, when the shelf it measures
+     stopped being a walk of `data/`. It seeds 300 published revisions with no
+     library scalars **under an owner of its own** and reads the one aggregated
+     warning `scalarsForShelf` emits for them, in a child with
+     `NODE_ENV=development` because the logger is silent under `test`. Nothing
+     about it wants a Supabase service; it wants 300 rows nobody else can see,
+     which is what this lane is. `tests/request-spend.test.ts` is the same
+     child-plus-private-database arrangement. */
+  "tests/library-log-volume.test.ts": "private-postgres",
   "tests/list-reconciles-expired.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from a count: one
      case asserts that a ticket OpenAI refused journalled **nothing**, by
@@ -1861,6 +2390,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/referee-mirror-route.test.ts": "private-postgres",
   "tests/referee-routes-postgres.test.ts": "private-postgres",
   "tests/referee-scan-route.test.ts": "private-postgres",
+  /* Converted in the hinge, 2026-09-05: its child wrote a JSONL ledger through
+     `fsCostStore`, which `costStore` chose because the flag was unset. The rows
+     are `spideryarn.ai_calls` now, and the child reaches the private database
+     because it inherits both `DATABASE_URL` and `SPIDERYARN_ENV_PINNED`. */
+  "tests/request-spend.test.ts": "private-postgres",
   "tests/remember-route.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
@@ -1933,7 +2467,6 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-carry-forward.test.ts": "private-postgres",
   "tests/store-chat-pg.test.ts": "private-postgres",
   "tests/store-checkpoints.test.ts": "private-postgres",
-  "tests/store-comments-parity.test.ts": "private-postgres",
   "tests/store-comments.test.ts": "private-postgres",
   "tests/store-export-bundle.test.ts": "private-postgres",
   "tests/store-export-covers-tables.test.ts": "private-postgres",
@@ -1951,7 +2484,6 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-publish-guards.test.ts": "private-postgres",
   "tests/store-raw-source-race.test.ts": "private-postgres",
   "tests/store-reader-parity.test.ts": "private-postgres",
-  "tests/store-reader-state-parity.test.ts": "private-postgres",
   "tests/store-realtime-sessions.test.ts": "private-postgres",
   "tests/store-revision-policy.test.ts": "private-postgres",
   "tests/store-roundtrip.test.ts": "private-postgres",
@@ -1963,6 +2495,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-step-fence.test.ts": "private-postgres",
   "tests/store-transaction-isolation.test.ts": "private-postgres",
   "tests/store-uploads-parity.test.ts": "private-postgres",
+  /* Converted in the hinge, 2026-09-05. It wraps whichever store `routes.ts`
+     hands things to and asserts the call; that was the filesystem one because
+     the flag was unset, and it is `pgChatStore`/`pgSearchStore` now. */
+  "tests/store-wiring.test.ts": "private-postgres",
   "tests/store-writes-land-in-postgres.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. It seeds one corpus article under a
      throwaway slug with an extra glossary entry the text never matches, and
@@ -2034,10 +2570,6 @@ export const LANES_BEYOND_THE_SCAN: Readonly<Record<string, string>> = {
     "Sol, 2026-09-04. Serialising it inside a run is what this lane buys; two " +
     "separate `npm test` invocations still share the bucket - see " +
     "docs/project/testing.md.",
-  "tests/upload-acquire.test.ts":
-    "Reaches Supabase Storage, not Postgres. It derives canonical keys from fixed " +
-    "fixture bytes and writes them, which is the same shared-name collision as " +
-    "raw-source-store.test.ts, one step milder. GPT Sol, 2026-09-04.",
   "tests/uploads-api.test.ts":
     "Reaches Supabase Storage, not Postgres. It writes staging objects through " +
     "blobStore() so that the readiness gate has something to find, and removes them " +
@@ -2137,12 +2669,26 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     "00000000-0000-4000-8000-00000000ad01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000ad02": { kind: "seeded" },
   },
+  /* Arrived in the hinge, 2026-09-05, and the guard asked for it the moment it
+     did. `mintUpload` wrote to the filesystem store while `SPIDERYARN_STORE` was
+     unset — a directory has no foreign keys, so this uuid needed no row behind
+     it. It writes through `pgUploadStore` now and `uploads_owner_fk` refuses
+     without one; `seedAuthUser` in `beforeAll`, deleted again in `afterAll`. */
+  "tests/upload-acquire.test.ts": {
+    "33333333-3333-4333-8333-333333333333": { kind: "seeded" },
+  },
   /* Stage 3b's own reader. `seedAuthUser` in `beforeAll`, and every row it
      writes — the billing account, the ingest events — hangs off the
      `auth.users` foreign key, so there is nothing here that would work without
      the row. */
   "tests/billing-quota-adjustment.test.ts": {
     "0b1113b0-0000-4000-8000-00000000e3b0": { kind: "seeded" },
+  },
+  /* Stage 5's reader. `seedAuthUser` in `beforeEach`, and every row it writes —
+     the articles, the billing account, the ingest events — hangs off the
+     `auth.users` foreign key. */
+  "tests/billing-half-units.test.ts": {
+    "0b110a1f-0000-4000-8000-0000000000a1": { kind: "seeded" },
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },
@@ -2153,6 +2699,15 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/db-schema.test.ts": {
     "11111111-1111-1111-1111-111111111111": { kind: "seeded" },
     "22222222-2222-2222-2222-222222222222": { kind: "seeded" },
+  },
+  /* Arrived in stage G, 2026-09-05, when the file moved from a walk of 300
+     temporary directories to 300 rows. Written under, heavily: it inserts 300
+     articles and their revisions, and the owner is its own rather than the
+     ambient one precisely so that a peer's fixture article cannot join the shelf
+     it counts. `seedAuthUser` in `beforeAll`; every row deleted again in
+     `afterAll`. */
+  "tests/library-log-volume.test.ts": {
+    "00000000-0000-4000-8000-00000000106f": { kind: "seeded" },
   },
   /* Both arrived with the stage B conversion, 2026-09-04, and both are written
      under: each of them owns abandoned jobs, and the file's sharpest case is
@@ -2203,6 +2758,18 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
 
   /* ---- no row needed, and why -------------------------------------------- */
+
+  "tests/billing-tiers.test.ts": {
+    "b1111111-0000-4000-8000-000000000001": {
+      kind: "no-row-needed",
+      why:
+        "the owner id handed to `standingFor` and `tiersToOffer`, both pure — this file builds " +
+        "billing rows and tier rows as plain objects and asserts what they are offered. Nothing " +
+        "here opens a database, so the id is never on the writing side of the auth.users key. " +
+        "If this file ever gains a Postgres lane, the same owner starts being written under and " +
+        "this verdict has to become `seeded`.",
+    },
+  },
 
   "tests/export-route.test.ts": {
     "0e5c0001-0000-4000-8000-0000000000b9": {

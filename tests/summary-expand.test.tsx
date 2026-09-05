@@ -492,3 +492,85 @@ describe("an article with nothing to outline", () => {
     expect(host.querySelector(".summ-quiet")).toBeNull();
   });
 });
+
+/**
+ * **The Socratic question sits under the claim, and only on the rows that have
+ * one.** SPIDERYARN-READING2-1V — Greg, 2026-09-05:
+ *
+ * > Tweak the prompt that generates the Summary mode to be a bit more in the
+ * > form of Socratic questions that encourage the reader to read the actual
+ * > text to get the full answers
+ *
+ * *"A bit more"* is what these assertions are really about. The gist stays —
+ * a reader deciding whether to descend needs to know what the section says,
+ * which is vision.md's *scan before you commit* — and the question is an extra
+ * line beside it, not a replacement for it. A version that swapped one for the
+ * other would satisfy the word "Socratic" and lose the panel's whole job.
+ *
+ * The absence case is the other half, and it is the common one: every article
+ * whose hierarchy was built before 2026-09-05 has no questions at all, and the
+ * panel has to look exactly as it always did rather than drawing a gap or a
+ * "no question" line. A missing gist says so on screen; a missing question
+ * must not (src/types.ts § `TreeNode.question`).
+ */
+describe("the Socratic question in the panel", () => {
+  const asked = (): SummaryNode => {
+    const t = tree();
+    t.question = "Why should any of this change how you read?";
+    const parts = t.children;
+    if (parts[0]) parts[0].question = "How does the first part earn its claim?";
+    if (parts[1]) parts[1].question = "What follows if the second part is right?";
+    return t;
+  };
+
+  const questions = () => [...host.querySelectorAll(".summ-question")].map((p) => p.textContent);
+
+  /**
+   * **This case asserted the opposite until the evening of the same day.** It
+   * required the gist to survive beside the question, with the message *"a
+   * question replaced a gist instead of joining it — the panel stopped saying
+   * what the article says"*. That was a faithful reading of 1V, and it caught
+   * the change when the change came, which is what it was for.
+   *
+   * SPIDERYARN-READING2-24 reversed it, from Greg, having read the shipped
+   * version: *"the intent wasn't that we would show both the gist and the
+   * Socratic question, the intent was that we would show only the Socratic
+   * question when we have one."* The old assertion is not weakened here, it is
+   * inverted — the gists must be **gone** — because "either would do" is how a
+   * rule stops holding anything.
+   *
+   * The rest of the rule lives in tests/summary-question-replaces-gist.test.tsx.
+   */
+  it("draws one on the article and one on each part, INSTEAD of their gists", () => {
+    act(() => {
+      root.render(
+        createElement(SummaryPanel, {
+          root: asked(),
+          deep: 1,
+          onDeep: () => {},
+          atRow: null,
+          onJump: () => {},
+        }),
+      );
+    });
+
+    expect(questions()).toEqual([
+      "Why should any of this change how you read?",
+      "How does the first part earn its claim?",
+      "What follows if the second part is right?",
+    ]);
+    expect(
+      [...host.querySelectorAll(".summ-text")].map((p) => p.textContent),
+      "a gist was drawn beside a question — SPIDERYARN-READING2-24 asks for the question alone",
+    ).toEqual([]);
+  });
+
+  it("draws nothing at all for an article built before the field existed", () => {
+    /* `beforeEach` already rendered exactly that tree. */
+    expect(questions()).toEqual([]);
+    expect(
+      host.textContent,
+      "an article with no questions grew a placeholder where a question would go",
+    ).not.toContain("?");
+  });
+});

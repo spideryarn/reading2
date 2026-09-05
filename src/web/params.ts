@@ -18,6 +18,11 @@
  * `limitUrlUpdates`).
  *
  * A note on where position is *not* kept: not `localStorage`, and not the hash.
+ * (`last-view.ts` keeps a *copy* of this query string per slug since
+ * 2026-09-05, so that reopening an article at a bare address puts you back where
+ * you were. It is read once, before anything paints, to choose the address you
+ * arrive at — and never again, so nothing here has a second source of truth to
+ * reconcile with.)
  * The hash would make the browser jump to the block itself, before our own
  * offset-for-the-sticky-bars scroll runs, so you would see it land twice. It
  * would also mean two unsynchronised state systems — `hashchange` for position,
@@ -106,7 +111,9 @@ export const parseAsDepths = createParser<number[]>({
    a time. Clicking a gist to jump is the one scroll that pushes, because it is
    a deliberate act too; that override lives at the call site in TableView. */
 
-/** Reading mode (text column on) vs outline mode. */
+/** Reading mode (text column on) vs outline mode. Read-only since 2026-09-05:
+    the `Text` pill that wrote it went with the controls bar, so `?text=0` is
+    something a reader arrives with — docs/project/url-state.md. */
 export const textParam = parseAsBit
   .withDefault(true)
   .withOptions({ history: "push" });
@@ -114,20 +121,19 @@ export const textParam = parseAsBit
 /**
  * Whether the bird's-eye rail down the left is on screen — see Spine.tsx.
  *
- * **No default, deliberately** — the same call `colsParam` makes below, for
- * nearly the same reason. Absent means *nobody has touched this*, and the rail
- * follows the window and the mode exactly as it always did: off in outline
- * mode, where the table already is a whole-article overview, and labelled only
- * when the labels are free (layout.ts § fitView). Giving it a default here
- * would make "the reader hid the rail" indistinguishable from "outline mode
- * dropped it", and those want opposite things when the text comes back.
+ * **No default, deliberately** — the same call `colsParam` makes below.
+ * Absent means *nobody has touched this*, which since 2026-09-05 resolves to
+ * *on* (layout.ts § `spine`): the pill that used to write this went with the
+ * rest of the controls bar, so a rail nobody can ask for has to be there by
+ * default. `?spine=0` is the only thing that takes it away, and the third state
+ * survives because App.tsx puts `null` back — not `true` — when Search or Ideas
+ * opens with the rail hidden, and "nobody has touched this" is what that means.
  *
- * It only says on or off. Whether an on rail shows its labels or collapses to
- * ticks stays with the window width, because that is a question about how much
- * room there is rather than about what the reader wants to see.
+ * It only says on or off; there is one rail, 12px wide at every window size.
  *
  * `push`, like `cols` and `text`: hiding a whole column of the view is a
- * deliberate act, and Back should undo it.
+ * deliberate act, and Back should undo it. Nothing in the UI writes it any
+ * more, so in practice it arrives in the URL — docs/project/url-state.md.
  */
 export const spineParam = parseAsBit.withOptions({ history: "push" });
 
@@ -364,8 +370,12 @@ export const termParam = parseAsBlockId.withOptions({ history: "replace" });
 export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * Which quote is selected, and therefore which passage is marked in the prose
- * and painted down the rail.
+ * Which quote is selected, and therefore which marked passage wears the ring.
+ *
+ * **Not which passage is marked**, since 2026-09-05: every quote the panel is
+ * showing is washed in the prose and drawn in the rail, and the selection is
+ * only which of them the reader pressed (`mark.hit[data-hit-open]`).
+ * docs/project/quotes.md § Every visible quote is marked.
  *
  * A quote's id is minted by `mintId`, so it is a block id by construction and
  * the same parser validates it for free — and the same "a mangled link degrades

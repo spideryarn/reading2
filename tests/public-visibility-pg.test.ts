@@ -43,10 +43,13 @@ import {
   articleVisibilityChanges,
   articles,
   blockIdentities,
+  comments,
+  refereeCriteria,
   revisionBlocks,
+  searchRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
@@ -60,7 +63,6 @@ loadEnvLocal();
  * once at module load in src/store/live.ts, which is why every import of the
  * route layer in this file is dynamic and everything else is not.
  */
-process.env.SPIDERYARN_STORE = "postgres";
 
 const SLUG = "test-public-visibility";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000ea";
@@ -101,6 +103,42 @@ const PRIVATE_PROFILE_HASH = "profilehash-nobodyelsesbusiness";
 const PUBLIC_TERM = "Integrated information theory";
 const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure.";
 const PUBLIC_TWEET = "The first post of the thread.";
+
+/* ── The owner's own work, which crosses since 2026-09-04 ────────────────────
+   Four strings a visitor must see and six rows they must not. Real prose in
+   both directions: a suite where the things that should cross are empty proves
+   only that nothing crossed, which is what the payload looks like when the
+   whole feature is broken.
+   docs/plans/260904c-more-modes-on-a-shared-link.md § Stages 3 and 4. */
+const PUBLIC_NOTE = "The bit I keep coming back to.";
+const PUBLIC_COMMENT_ANSWER = "Because the example is doing the arguing.";
+const PUBLIC_CRITERION = "anywhere the argument turns on a number";
+const PUBLIC_HIT_REASON = "It is the sentence the claim rests on.";
+/** A referee's placement, a failed run's message, an unfinished one's words. */
+const REFEREE_NOTE = "Overstated for the evidence given — a peer review, not a reading note.";
+const PENDING_NOTE = "Asked a moment ago and still out.";
+const FAILED_ERROR = "the model refused";
+const FAILED_CRITERION = "a question whose model call failed";
+const PENDING_CRITERION = "a question still out with the model";
+/** The palette slot the owner pinned, so the visitor's marks wear their colour. */
+const PINNED_COLOUR = 3;
+
+/* ── A second article, private, with work of its own on it ───────────────────
+   The whole case for widening `tests/public-imports.test.ts`'s table allowlist
+   was that the two new queries **repeat `publicSlug` in their own `where`**
+   rather than reading a child table by an article id an earlier statement
+   found. Nothing else in this suite can tell those apart: with one article in
+   the fixture, a query filtering on nothing at all returns the same rows as one
+   filtering correctly.
+
+   So there is a neighbour. It is never published, it has a comment and a saved
+   search, and the assertions on the *shared* article's payload look for its
+   words. Delete either predicate and this is what goes red. */
+const NEIGHBOUR_ID = "00000000-0000-4000-8000-0000000000ed";
+const NEIGHBOUR_SLUG = "test-public-visibility-neighbour";
+const NEIGHBOUR_BLOCK = "spya-nbrqaa";
+const NEIGHBOUR_NOTE = "A note on an article that was never shared with anybody.";
+const NEIGHBOUR_CRITERION = "a question asked of a piece nobody else can read";
 
 /**
  * **The artefacts slice 1b carries**, each stuffed with the provenance it
@@ -196,44 +234,16 @@ const OWNER = currentOwnerId();
  * — an unmigrated database would otherwise fail every case with a confusing
  * 42703 instead of saying what to run.
  */
-let reachable = false;
-/** What is missing and which fix it needs, for `REQUIRE_POSTGRES=1`. */
-let why = "DATABASE_URL is not set — run npm run db:start";
-let kind: MissingKind = "no-url";
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  why = "";
-  kind = "migration";
-  try {
-    const probe = await pool.query(
-      `select exists (
-         select 1 from information_schema.columns
-         where table_schema = 'spideryarn'
-           and table_name = 'articles'
-           and column_name = 'visibility'
-       ) as ready`,
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "spideryarn.articles.visibility is missing — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    kind = "unreachable";
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-}
-
-/* A skip is the right default and the wrong answer for a run that exists to
-   prove a machine has a database. tests/helpers/pg-ready.ts. */
-if (!reachable) failIfPostgresRequired("tests/public-visibility-pg.test.ts", why, kind);
-
-const when = reachable ? describe : describe.skip;
+/**
+ * **The column this suite is about**, rather than the schema in general: an
+ * unmigrated database would otherwise fail every case with a confusing 42703
+ * instead of saying what to run. Hand-rolled until 2026-09-05, and a skip until
+ * then too. tests/helpers/pg-ready.ts.
+ */
+await pgReady({
+  suite: "tests/public-visibility-pg.test.ts",
+  columns: [{ table: "spideryarn.articles", column: "visibility" }],
+});
 
 /** A verifier that vouches for exactly one person. src/auth.ts § `Verifier`. */
 const asPerson = (sub: string): Verifier => async () => ({
@@ -354,7 +364,7 @@ async function articleRow() {
  * is a queue. The same exposure every pg suite here has; see
  * tests/store-shelf-pg.test.ts on why two seconds was not enough either.
  */
-when("sharing one article", { timeout: 60_000 }, () => {
+describe("sharing one article", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     await clean();
     const db = getDb();
@@ -441,6 +451,184 @@ when("sharing one article", { timeout: 60_000 }, () => {
         note: PRIVATE_NOTE,
       },
     ]);
+
+    /* **The reader's own work on the piece**, in both directions. Four rows a
+       visitor must be shown and six they must not, on one article, so that the
+       filters are exercised against rows sitting beside the ones that pass —
+       a fixture holding only the forbidden kind cannot tell a working predicate
+       from a broken read.
+       docs/plans/260904c-more-modes-on-a-shared-link.md § Stages 3 and 4. */
+    await db.insert(refereeCriteria).values({
+      articleId: ARTICLE_ID,
+      id: "spya-crt2aa",
+      ownerId: OWNER,
+      kind: "single",
+      criterion: "is the evidence proportionate to the claim",
+      status: "done",
+    });
+    await db.insert(comments).values([
+      {
+        articleId: ARTICLE_ID,
+        id: "spya-cmt23z",
+        ownerId: OWNER,
+        blockId: BLOCK_ID,
+        quote: "The prose a visitor is here for.",
+        start: 0,
+        body: PUBLIC_NOTE,
+        status: "done",
+        answer: PUBLIC_COMMENT_ANSWER,
+        /* Two citations, one of which the public URL policy must refuse. */
+        citations: [
+          { url: "https://example.com/paper?id=7", title: "The paper" },
+          { url: "http://localhost:5273/private" },
+        ],
+        /* Operational columns, set so that a widened projection would show. */
+        model: "some-model",
+        searches: 3,
+      },
+      {
+        /* **A referee's placement.** Its `body` is a peer review, and dropping
+           `criterionId` from the DTO would publish it with its context removed
+           rather than not publish it. The row has to go. */
+        articleId: ARTICLE_ID,
+        id: "spya-cmt24z",
+        ownerId: OWNER,
+        blockId: BLOCK_ID,
+        quote: "The prose a visitor is here for.",
+        start: 0,
+        body: REFEREE_NOTE,
+        status: "done",
+        criterionId: "spya-crt2aa",
+        valence: -50,
+      },
+      {
+        /* A model call still in flight: nothing a visitor could act on. */
+        articleId: ARTICLE_ID,
+        id: "spya-cmt25z",
+        ownerId: OWNER,
+        blockId: BLOCK_ID,
+        quote: "The prose a visitor is here for.",
+        start: 0,
+        body: PENDING_NOTE,
+        status: "pending",
+      },
+      {
+        /* And one that failed, whose only content is our error. */
+        articleId: ARTICLE_ID,
+        id: "spya-cmt26z",
+        ownerId: OWNER,
+        blockId: BLOCK_ID,
+        quote: "The prose a visitor is here for.",
+        start: 0,
+        status: "error",
+        error: FAILED_ERROR,
+      },
+    ]);
+
+    /* **The fingerprint the owner's own read computes**, so that `stale: false`
+       below means *the visitor and the owner agree about this article* rather
+       than *the derivation returned false*. Taken from `sourceHashFor` rather
+       than from `hashBlocks` here, deliberately: the claim worth pinning is
+       that the two reads hash the same rows in the same order, and a test
+       computing it a second way would be pinning its own arithmetic.
+
+       **Imported dynamically**, for the reason this file's header gives about
+       the route layer: `STORE` is read once at module load, and a static import
+       of `store/pg.js` at the top of this file reaches it before
+       `process.env.SPIDERYARN_STORE` is set two lines down — which turns every
+       request in the suite into a 501. Found by doing it. */
+    const { sourceHashFor } = await import("../src/store/pg.js");
+    const fingerprint = await sourceHashFor(ARTICLE_ID);
+    await db.insert(searchRuns).values([
+      {
+        articleId: ARTICLE_ID,
+        id: "spya-run23z",
+        ownerId: OWNER,
+        criterion: PUBLIC_CRITERION,
+        status: "done",
+        colour: PINNED_COLOUR,
+        sourceHash: fingerprint ?? null,
+        hits: [
+          {
+            blockId: BLOCK_ID,
+            quote: "The prose a visitor is here for.",
+            confidence: 88,
+            reasoning: PUBLIC_HIT_REASON,
+            start: 0,
+          },
+        ],
+        model: "some-model",
+      },
+      {
+        /* Answered against a text that has since moved. Same shape, one
+           different hash — which is the whole of what `stale` is. */
+        articleId: ARTICLE_ID,
+        id: "spya-run24z",
+        ownerId: OWNER,
+        criterion: "a question answered before the article changed",
+        status: "done",
+        sourceHash: "0123456789abcdef",
+        hits: [],
+      },
+      {
+        /* Imported before runs recorded what they answered — no hash at all,
+           and *cannot tell* has to fall on the side that says so. */
+        articleId: ARTICLE_ID,
+        id: "spya-run25z",
+        ownerId: OWNER,
+        criterion: "a question from before we recorded fingerprints",
+        status: "done",
+        hits: [],
+      },
+      {
+        articleId: ARTICLE_ID,
+        id: "spya-run26z",
+        ownerId: OWNER,
+        criterion: PENDING_CRITERION,
+        status: "pending",
+        hits: [],
+      },
+      {
+        articleId: ARTICLE_ID,
+        id: "spya-run27z",
+        ownerId: OWNER,
+        criterion: FAILED_CRITERION,
+        status: "error",
+        error: FAILED_ERROR,
+        hits: [],
+      },
+    ]);
+
+    /* **The neighbour**, private for the whole of this suite. No revision and
+       no blocks: nothing reads them, and a comment needs only an article and a
+       `block_identities` row to point at. See its constants above. */
+    await db.insert(articles).values({
+      id: NEIGHBOUR_ID,
+      ownerId: OWNER,
+      slug: NEIGHBOUR_SLUG,
+    });
+    await db.insert(blockIdentities).values({
+      articleId: NEIGHBOUR_ID,
+      blockId: NEIGHBOUR_BLOCK,
+    });
+    await db.insert(comments).values({
+      articleId: NEIGHBOUR_ID,
+      id: "spya-cmt77z",
+      ownerId: OWNER,
+      blockId: NEIGHBOUR_BLOCK,
+      quote: "a passage of the other piece",
+      start: 0,
+      body: NEIGHBOUR_NOTE,
+      status: "done",
+    });
+    await db.insert(searchRuns).values({
+      articleId: NEIGHBOUR_ID,
+      id: "spya-run77z",
+      ownerId: OWNER,
+      criterion: NEIGHBOUR_CRITERION,
+      status: "done",
+      hits: [],
+    });
   });
 
   afterAll(async () => {
@@ -700,6 +888,98 @@ when("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
+   * **The owner's comments, over a real table, with the rows that must not
+   * cross sitting beside them.**
+   *
+   * The three filters this exercises are all in SQL rather than in a `map`
+   * (`PUBLIC_COMMENTS_WHERE`), and every one of them is invisible from the
+   * client: a referee's note, an unfinished model call and a failed one all
+   * look like ordinary comments in a projection. The fixture has one of each,
+   * on the same article as the one that should cross, so a broken predicate is
+   * a wrong list rather than an empty one.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+   */
+  it("serves the owner's finished comments, and none of the three kinds that must not go", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    const body = r.body as { comments: { id: string; body?: string; answer?: string;
+      citations?: { url: string }[] }[] };
+
+    /* Exactly one, named — not "at least one", which four rows in a table make
+       easy to satisfy by accident. */
+    expect(body.comments.map((c) => c.id)).toEqual(["spya-cmt23z"]);
+    expect(body.comments[0]?.body).toBe(PUBLIC_NOTE);
+    expect(body.comments[0]?.answer).toBe(PUBLIC_COMMENT_ANSWER);
+
+    /* And the three by their own words, so a failure names which filter broke
+       rather than only that the count was wrong. */
+    expect(r.text, "the referee's placement").not.toContain(REFEREE_NOTE);
+    expect(r.text, "the unfinished call").not.toContain(PENDING_NOTE);
+    expect(r.text, "our own error message").not.toContain(FAILED_ERROR);
+
+    /* The citation policy, over the wire this time: the ordinary address
+       survives with its query string, and the loopback one is dropped rather
+       than blanked. */
+    expect(body.comments[0]?.citations?.map((c) => c.url)).toEqual([
+      "https://example.com/paper?id=7",
+    ]);
+
+    /* **And nothing from the article next door**, which is what the join back
+       to `articles` and the repeated `publicSlug` are for. Without them this
+       read is *"every finished comment in the database"*, and the count above
+       would not notice. */
+    expect(r.text, "the neighbour's note").not.toContain(NEIGHBOUR_NOTE);
+  });
+
+  /**
+   * **The owner's saved searches, and the two run states that must not cross.**
+   *
+   * The same shape as the comments case, and one thing more that no other test
+   * in this feature can reach: **`stale` is computed against the fingerprint of
+   * the blocks this very read fetched**, so this is where the visitor's answer
+   * and the owner's are checked to agree.
+   *
+   * All three arms of that are here, and the first is the one that matters:
+   * a run whose hash matches must come back **not stale**. Get the hash inputs
+   * wrong — the sanitised blocks instead of the raw rows, the wrong order, the
+   * wrong revision — and every arm returns `true`, every saved search on every
+   * shared article wears *older version*, and nothing anywhere goes red. There
+   * is no symptom except a warning that reads as a fact about the article.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+   */
+  it("serves the owner's finished searches, with staleness worked out both ways", async () => {
+    const r = await call("GET", `/api/public/article/${SLUG}`);
+    const body = r.body as { searches: { id: string; criterion: string; stale: boolean;
+      colour?: number; hits: { quote: string; reasoning: string }[] }[] };
+
+    expect(body.searches.map((s) => s.id)).toEqual(["spya-run23z", "spya-run24z", "spya-run25z"]);
+
+    const [fresh, moved, unknown] = body.searches;
+    /* **The positive control.** Without this line a derivation hardwired to
+       `true` passes the two below it. */
+    expect(fresh?.stale, "a run answered against these very blocks").toBe(false);
+    expect(moved?.stale, "a run answered against a different text").toBe(true);
+    expect(unknown?.stale, "a run that never recorded what it answered").toBe(true);
+
+    /* The reader's own question and the passage it found really are there. */
+    expect(fresh?.criterion).toBe(PUBLIC_CRITERION);
+    expect(fresh?.hits[0]?.reasoning).toBe(PUBLIC_HIT_REASON);
+    expect(fresh?.hits[0]?.quote).toBe("The prose a visitor is here for.");
+    /* And the colour the owner pinned, so the visitor's marks are the colours
+       the owner chose rather than whatever the hash gives them. */
+    expect(fresh?.colour).toBe(PINNED_COLOUR);
+
+    /* The two states that must not cross, by their own words. */
+    expect(r.text, "a run still out with the model").not.toContain(PENDING_CRITERION);
+    expect(r.text, "a run whose model call failed").not.toContain(FAILED_CRITERION);
+    /* And the fingerprint itself stops at the mapping — it was selected, it was
+       used, and it does not leave. tests/public-reads.test.ts is the other half
+       and asserts the column *is* fetched. */
+    expect(r.text, "the fingerprint").not.toContain("0123456789abcdef");
+    /* And the neighbour's, for the reason the comments case gives. */
+    expect(r.text, "the neighbour's question").not.toContain(NEIGHBOUR_CRITERION);
+  });
+
+  /**
    * **And the deleted metadata path is still 404 for an article that *is*
    * shared** — which is the control on the case above.
    *
@@ -844,10 +1124,16 @@ when("sharing one article", { timeout: 60_000 }, () => {
        * question is whether the columns the projection publishes are the
        * columns this field reports, and only a row answers that.
        *
-       * The owner's sharing dialog lists these five
+       * The owner's sharing dialog lists them
        * (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md),
-       * and the two `false`s are the half that matters — an inventory that said
+       * and the `false`s are the half that matters — an inventory that said
        * *arc* here would name a rung of Outline this article does not have.
+       *
+       * **Not a count.** This said *"these five"* while `PublicArtefacts` held
+       * seven, because timeline and sketch arrived on 2026-09-04 and a number
+       * written into prose does not move with the type. The object below does
+       * have to move with it, and does — it is a whole-value assertion, so a
+       * new artefact fails here rather than passing with the field ignored.
        */
       available: {
         arc: false,
@@ -1588,7 +1874,7 @@ const BONELESS_ID = "00000000-0000-4000-8000-0000000b04e0";
 const BONELESS_REVISION = "00000000-0000-4000-8000-0000000b04e1";
 const BONELESS_SLUG = "test-public-head-no-blocks";
 
-when("a public article whose revision has no blocks", { timeout: 60_000 }, () => {
+describe("a public article whose revision has no blocks", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const db = getDb();
     await cleanBoneless();
@@ -1674,7 +1960,7 @@ const TITLELESS_SLUG = "test-public-head-no-title";
    has a check constraint on it — "notitl" is refused for three of those four. */
 const TITLELESS_BLOCK = "spya-ntxhqz";
 
-when("a public article with neither a title nor an <h1>", { timeout: 60_000 }, () => {
+describe("a public article with neither a title nor an <h1>", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const db = getDb();
     await cleanTitleless();
@@ -1806,7 +2092,7 @@ const HEADED_SLUG = "test-public-head-h1-fallback";
 /** What both implementations must find: the first `h1` *by ordinal*. */
 const HEADED_H1 = "The first level-one heading";
 
-when("a public article whose only title is its first <h1>", { timeout: 60_000 }, () => {
+describe("a public article whose only title is its first <h1>", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const db = getDb();
     await cleanHeaded();
@@ -1957,6 +2243,16 @@ async function cleanBoneless() {
 async function clean() {
   const db = getDb();
   await db.delete(articleVisibilityChanges).where(eq(articleVisibilityChanges.articleId, ARTICLE_ID));
+  /* **Before the blocks**, because a comment points at a `block_identities` row
+     and a criterion is pointed at by a comment. Deleting in the other order
+     leaves the suite red on a foreign key rather than on anything it is about. */
+  for (const id of [ARTICLE_ID, NEIGHBOUR_ID]) {
+    await db.delete(searchRuns).where(eq(searchRuns.articleId, id));
+    await db.delete(comments).where(eq(comments.articleId, id));
+    await db.delete(refereeCriteria).where(eq(refereeCriteria.articleId, id));
+  }
+  await db.delete(blockIdentities).where(eq(blockIdentities.articleId, NEIGHBOUR_ID));
+  await db.delete(articles).where(eq(articles.id, NEIGHBOUR_ID));
   await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, ARTICLE_ID));
   await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, ARTICLE_ID));
   await db.delete(blockIdentities).where(eq(blockIdentities.articleId, ARTICLE_ID));

@@ -54,6 +54,7 @@ import { describe, expect, it } from "vitest";
 import {
   LANES_BEYOND_THE_SCAN,
   OWNER_AUDIT,
+  STORE_CONVERSIONS,
   STORE_MIGRATION,
   TEST_LANES,
 } from "./store-migration-registry.js";
@@ -103,6 +104,73 @@ function staticUniverse(): { reaching: ReadonlySet<string>; reports: StaticRepor
   };
 }
 
+/**
+ * **Top-level `describe`-like blocks that account for no mutation.**
+ *
+ * A block "accounts for" one when it, or the comment immediately above it,
+ * carries a line-anchored `**Mutation.**` or a `**No mutation…**` judgement.
+ * The five waivers in [routes.test.ts](routes.test.ts) are where that second
+ * form comes from; this enforces their convention rather than inventing one.
+ *
+ * **A syntactic scan, and it says so.** The opener is *a name, then `(`, then a
+ * string literal, at column zero*, which catches `describe(` and any alias
+ * beside it. It was written when most of these files opened their blocks with a
+ * `when` bound to `reachable ? describe : describe.skip`, so a rule written
+ * against the word `describe` would have seen one block in `routes.test.ts` and
+ * missed the other seventeen. That alias is gone (2026-09-05) and the breadth is
+ * kept: the next alias will not announce itself either. It closes on the first `})` at
+ * column zero. Both of those are true of every file in `STORE_CONVERSIONS`
+ * today and neither is true by construction; a file that indents its blocks
+ * would be read as having none, which shows up as the arrears count falling to
+ * zero rather than as a silent pass, because the case's own control asserts the
+ * scan still finds some.
+ */
+const BLOCK_OPENER =
+  /^([A-Za-z_$][\w$]*)(?:\.(?:skip|only|each|concurrent|sequential))?\s*\(\s*["'`]/;
+const NOT_A_BLOCK =
+  /^(?:it|test|expect|console|import|require|vi|beforeAll|afterAll|beforeEach|afterEach)$/;
+const JUDGEMENT = /^[ \t]*(?:\/\*+|\*+)?[ \t]*\*\*(?:Mutation\.|No mutation)/;
+
+/** The line index of the block's closing `})` at column zero, or the last line. */
+function blockEndsAt(lines: string[], opensAt: number): number {
+  for (let j = opensAt + 1; j < lines.length; j++) {
+    if (/^\}\)/.test(lines[j] ?? "")) return j;
+  }
+  return lines.length - 1;
+}
+
+/**
+ * The contiguous comment run immediately above a line, which is where a
+ * judgement written for the block rather than for one of its cases lives.
+ */
+function commentAbove(lines: string[], opensAt: number): string[] {
+  const header: string[] = [];
+  for (let k = opensAt - 1; k >= 0; k--) {
+    const t = (lines[k] ?? "").trim();
+    if (t === "") {
+      if (header.length > 0) break;
+      continue;
+    }
+    if (!(t.startsWith("*") || t.startsWith("//") || t.startsWith("/*"))) break;
+    header.unshift(lines[k] ?? "");
+  }
+  return header;
+}
+
+function blocksWithoutJudgement(lines: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const opener = BLOCK_OPENER.exec(lines[i] ?? "");
+    if (!opener || NOT_A_BLOCK.test(opener[1] ?? "")) continue;
+
+    const end = blockEndsAt(lines, i);
+    const whole = [...commentAbove(lines, i), ...lines.slice(i, end + 1)];
+    if (!whole.some((l) => JUDGEMENT.test(l))) out.push(`line ${i + 1}`);
+    i = end;
+  }
+  return out;
+}
+
 describe("the store-migration registry", () => {
   it("has an entry for every file the dynamic witness watched touch the filesystem store", () => {
     /* The control. An empty or truncated witness would satisfy the assertion
@@ -111,7 +179,18 @@ describe("the store-migration registry", () => {
        witness is expected to be re-run. */
     expect(Object.keys(witness.touched).length).toBeGreaterThan(50);
 
-    const missing = Object.keys(witness.touched).filter((f) => !(f in STORE_MIGRATION));
+    /* **A file that has been deleted needs no entry**, and asking for one is how
+       this guard would fire on the very commits it is meant to encourage. The
+       witness is a dated measurement (its own header says so) and the tree moves
+       under it: the hinge deleted `claim-session-files` and
+       `pipeline-slug-claim-files` on 2026-09-05, in the same commit as the
+       `STORE !== "postgres"` lines that were their subject, which is exactly what
+       stage G's pairing rule asks for. Existence is checked separately, below —
+       an entry naming a file that is gone is still a failure, so this direction
+       cannot hide a stale registry. */
+    const missing = Object.keys(witness.touched).filter(
+      (f) => !(f in STORE_MIGRATION) && existsSync(path.join(REPO, f)),
+    );
     expect(missing, `witnessed as touching the filesystem store, with no registry entry`).toEqual(
       [],
     );
@@ -187,7 +266,8 @@ describe("the store-migration registry", () => {
   });
 
   /**
-   * **Every converted file shows its working.**
+   * **Every converted file shows its working** — and the version below is the
+   * fourth, because the first three all under-reported while staying green.
    *
    * Stage B's rule is that a conversion is proved by a mutation: break
    * something in the Postgres store, run the suite, watch what happens, put the
@@ -196,77 +276,199 @@ describe("the store-migration registry", () => {
    * the first ten conversions had *reported* that evidence and not kept it, so
    * nothing in the tree distinguished "watched red" from "reported green".
    *
-   * This is the guard for that, and it is deliberately narrow. It checks the
-   * **citation exists**, never that it is true — a mutation nobody ran can
-   * still be written down. What it makes impossible is the specific thing that
-   * happened: a batch landing with the evidence in a subagent's report and
-   * nowhere else.
+   * ## The three holes, all one shape
    *
-   * Two markers, because they are two different claims and only the second one
-   * costs anything to write honestly. `**Mutation.**` says what was broken and
-   * what the run printed; `**Blind to.**` says what the mutation is silent
-   * about. A file may carry several of each.
+   * 1. the body of a marker stopped at the next `**`, so ordinary bold prose
+   *    read as an eight-character body and good writing failed;
+   * 2. the body scan looked 900 characters ahead, so a marker further than that
+   *    from its terminator was **silently not counted** while the file passed
+   *    on its first one;
+   * 3. **the rule itself was a proxy.** It asked for one marker of each kind
+   *    *anywhere in the file*. [routes.test.ts](routes.test.ts)'s own header
+   *    contains the sentence *"Search for `**Mutation.**`"* — the instruction
+   *    telling a reader where the evidence is — so the file offered eleven
+   *    markers for ten mutations. GPT Sol renamed all ten real mutation markers
+   *    and nine of the ten blind-spot markers in a scratch copy, **and the
+   *    guard still passed**, satisfied by the instruction plus one orphan.
+   *
+   * The [silent-success](../docs/reusable/silent-success.md) class, three times,
+   * in the guard written to catch that class.
+   *
+   * ## What is checked now
+   *
+   * - **Markers are anchored at line start.** Prose *about* a marker is not a
+   *   marker, which kills hole 3 without asking anybody to stop writing the
+   *   instruction.
+   * - **Set equality, both ways**, against `STORE_CONVERSIONS`. Every file in
+   *   the record carries both markers; **every test file in the tree carrying
+   *   either marker is in the record.** That is the real completeness check,
+   *   and the `> 20` count is demoted to the anti-empty control underneath it.
+   * - **Counts against the file's own frozen measurement**, so that each
+   *   individual marker is load-bearing rather than interchangeable. This is
+   *   what makes Sol's rename fail on the *ninth* marker as well as the tenth.
+   * - **Order**, which is as much of pairing as the tree will bear — see the
+   *   case's own comment.
+   *
+   * ## What it still cannot catch, said out loud
+   *
+   * **A conversion where both the markers and the record entry are omitted.**
+   * No snapshot guard can see an event nothing in the snapshot mentions; that
+   * needs an independent oracle, and the plan's answer is a **frozen target
+   * cohort per stage**, derived before the stage's conversions start. B's 26
+   * exist already; C, D and E's must be frozen the same way.
+   *
+   * **And not by witness delta**, which is the obvious cheap oracle and is a
+   * trap in both directions. Removing a shared mechanism can stop a file
+   * touching the store without that file having been converted — and the
+   * reverse happened on 2026-09-04, when a stage-B fix *added* a filesystem
+   * reach to `tests/store-shelf-reads.test.ts` by seeding it through the
+   * fixture loader.
+   *
+   * It also checks that the **citation exists**, never that it is true. A
+   * mutation nobody ran can still be written down.
    */
   /**
-   * Each marker, and the prose between it and whatever ends it.
+   * A marker, only when it opens its line.
    *
-   * **Written as a scan rather than as one regex, and the reason is a bug this
-   * had twice.** The first version stopped a marker's body at the next `**`,
-   * which in files that bold things mid-sentence captured *"Deleting"* — eight
-   * characters — and would have failed good prose as too short, teaching
-   * authors to strip emphasis out to satisfy a guard. The second stopped at the
-   * next marker or `*​/` but only looked 900 characters ahead, so a second
-   * marker further than that from its terminator matched nothing and was
-   * **silently not counted** while the file still passed on its first one.
-   *
-   * A scan has no window and therefore no cliff. Noticed by the agent using it,
-   * which is the only reason the second one did not survive.
+   * `/*` is allowed in front of it because `referee-mirror-route.test.ts`
+   * writes `/* **Mutation.** …` on one line, and a leading `*` because every
+   * other file writes it as a JSDoc continuation. What is *not* allowed is any
+   * other text, which is the whole fix for hole 3.
    */
-  function markersIn(source: string): { kind: string; body: string }[] {
-    const hits = [...source.matchAll(/\*\*(Mutation|Blind to)\.\*\*/g)];
+  const MARKER_LINE = /^[ \t]*(?:\/\*+|\*+)?[ \t]*\*\*(Mutation|Blind to)\.\*\*/;
+
+  type MarkerKind = "Mutation" | "Blind to";
+
+  /**
+   * Each anchored marker, in document order, and the prose between it and
+   * whatever ends it.
+   *
+   * **Written as a line scan rather than as one regex**, which is what holes 1
+   * and 2 cost. A scan has no window and therefore no cliff.
+   */
+  function markersIn(source: string): { kind: MarkerKind; line: number; body: string }[] {
+    const hits: { kind: MarkerKind; line: number; start: number; after: number }[] = [];
+    let offset = 0;
+    for (const [i, line] of source.split("\n").entries()) {
+      const m = MARKER_LINE.exec(line);
+      if (m) {
+        const tag = `**${m[1]}.**`;
+        const at = offset + line.indexOf(tag);
+        hits.push({ kind: m[1] as MarkerKind, line: i + 1, start: at, after: at + tag.length });
+      }
+      offset += line.length + 1;
+    }
     return hits.map((hit, i) => {
-      const from = (hit.index ?? 0) + hit[0].length;
-      const nextMarker = hits[i + 1]?.index ?? source.length;
-      const closes = source.indexOf("*/", from);
-      const to = Math.min(nextMarker, closes === -1 ? source.length : closes);
+      const next = hits[i + 1]?.start ?? source.length;
+      const closes = source.indexOf("*/", hit.after);
+      const to = Math.min(next, closes === -1 ? source.length : closes);
       return {
-        kind: hit[1] ?? "",
+        kind: hit.kind,
+        line: hit.line,
         /* Strip the leading `*` of each comment line, then collapse. */
-        body: source.slice(from, to).replace(/^\s*\*/gm, " ").replace(/\s+/g, " ").trim(),
+        body: source
+          .slice(hit.after, to)
+          .replace(/^\s*\*/gm, " ")
+          .replace(/\s+/g, " ")
+          .trim(),
       };
     });
   }
 
-  it("makes every converted file show its working", () => {
-    const converted = Object.entries(STORE_MIGRATION)
-      .filter(([, e]) => e.convertedInB !== undefined)
-      .map(([f]) => f);
+  /**
+   * **Against the file's own measurement, not against a threshold.**
+   *
+   * The plan's answer to hole 3 was that the fix is not a fourth threshold, and
+   * this is not one: `STORE_CONVERSIONS` froze what each file carried on the
+   * day it converted, so the comparison is a file against its own past. That is
+   * what makes an individual marker load-bearing — *at least one of each*
+   * cannot see nine of ten go missing, and this does.
+   *
+   * A floor rather than a pin, because evidence is monotone: adding a mutation
+   * later is free, and only losing one is loud.
+   */
+  function evidenceLost(
+    file: string,
+    record: { mutations: number; blindSpots: number },
+    mutations: number,
+    blind: number,
+  ): string | undefined {
+    if (mutations >= record.mutations && blind >= record.blindSpots) return undefined;
+    return (
+      `${file}: ${mutations}/${record.mutations} mutation, ${blind}/${record.blindSpots} blind-to`
+    );
+  }
 
-    /* The control. Every assertion below is vacuous over an empty list, and
-       `convertedInB` is a field somebody has to remember to set — so a rename
-       that silently emptied this would look exactly like a clean run. 25 is
-       what stage B had converted when this guard was written; the floor is
-       under it rather than on it, because B2 adds one more and stage G removes
-       files wholesale. */
-    expect(converted.length, "no entry is marked as converted, so nothing below was checked")
+  /**
+   * **Order, which is as much of pairing as the tree will bear.**
+   *
+   * The rule stage B3 asked for is *each `**Mutation.**` is followed by a
+   * `**Blind to.**` before the next `**Mutation.**`*. Measured against the 26
+   * files on 2026-09-04, **eight of them break it legitimately**: they write
+   * "Mutation 1 — …; Mutation 2 — …" and then a `**Blind to.**` that speaks
+   * about both, which is better prose than two notes saying the same thing. So
+   * the enforceable residue is that the sequence **opens with a Mutation and
+   * closes with a Blind to** — equivalently, no blind spot floats before the
+   * mutation it qualifies, and no mutation reaches the end of the file
+   * unanswered.
+   *
+   * Weaker than one-to-one, and it is the *counts* above that stop a marker
+   * being deleted. Written down rather than quietly substituted.
+   */
+  function orderProblem(
+    file: string,
+    found: { kind: MarkerKind; line: number }[],
+  ): string | undefined {
+    const first = found[0];
+    const last = found[found.length - 1];
+    if (first?.kind !== "Mutation") {
+      return `${file}: first marker is a \`${first?.kind}\` at line ${first?.line}`;
+    }
+    if (last?.kind !== "Blind to") {
+      return (
+        `${file}: last marker is a \`${last?.kind}\` at line ${last?.line}, so a mutation ends ` +
+        "the file with nothing saying what it misses"
+      );
+    }
+    return undefined;
+  }
+
+  it("makes every converted file show its working", () => {
+    const converted = Object.keys(STORE_CONVERSIONS);
+
+    /* **The anti-empty control, and nothing more than that.** It used to be the
+       completeness check by default, standing in for one that did not exist;
+       the real one is the second direction of set equality in the case below.
+       Kept because every assertion here is vacuous over an empty list, and a
+       rename that silently emptied the record would otherwise look exactly like
+       a clean run. 26 is what B and B2 converted; the floor is under it rather
+       than on it, because stage G removes files wholesale. */
+    expect(converted.length, "no file is recorded as converted, so nothing below was checked")
       .toBeGreaterThan(20);
 
     const missing: string[] = [];
+    const shrunk: string[] = [];
+    const outOfOrder: string[] = [];
     const thin: string[] = [];
     const texts = new Map<string, string[]>();
 
     for (const file of converted) {
-      const source = readFileSync(path.join(REPO, file), "utf8");
-      const found = markersIn(source);
+      const record = STORE_CONVERSIONS[file];
+      if (record === undefined) continue;
+      const found = markersIn(readFileSync(path.join(REPO, file), "utf8"));
       const mutations = found.filter((m) => m.kind === "Mutation");
       const blind = found.filter((m) => m.kind === "Blind to");
 
       if (mutations.length === 0 || blind.length === 0) {
-        missing.push(
-          `${file} (${mutations.length} mutation, ${blind.length} blind-to)`,
-        );
+        missing.push(`${file} (${mutations.length} mutation, ${blind.length} blind-to)`);
         continue;
       }
+
+      const lost = evidenceLost(file, record, mutations.length, blind.length);
+      if (lost !== undefined) shrunk.push(lost);
+
+      const misordered = orderProblem(file, found);
+      if (misordered !== undefined) outOfOrder.push(misordered);
 
       /* Same floor and the same reasoning as `reason` above: roughly one
          clause. It catches the marker added to satisfy this test and left
@@ -278,6 +480,15 @@ describe("the store-migration registry", () => {
     }
 
     expect(missing, "converted files with no mutation evidence written into them").toEqual([]);
+    expect(
+      shrunk,
+      "files carrying less evidence than STORE_CONVERSIONS recorded at their conversion — a " +
+        "marker was renamed, deleted, or unanchored from the start of its line",
+    ).toEqual([]);
+    expect(
+      outOfOrder,
+      "files whose markers do not open with a `**Mutation.**` and close with a `**Blind to.**`",
+    ).toEqual([]);
     expect(thin, "mutation evidence too short to say anything specific").toEqual([]);
 
     /* Exact duplicates across *different* files only. A file may legitimately
@@ -290,6 +501,87 @@ describe("the store-migration registry", () => {
     expect(copied, "mutation evidence shared word for word between files").toEqual([]);
   });
 
+  it("finds no mutation evidence outside the conversion record", () => {
+    /* **The second direction, and the one the `> 20` control was standing in
+       for.** The first case catches *record written, evidence forgotten*; this
+       catches *evidence written, record forgotten* — a conversion that landed
+       with its markers in the test file and nothing in `STORE_CONVERSIONS`,
+       which is exactly what happens when the map shrinks under somebody and
+       they add the entry to whichever map is still in front of them.
+
+       Every `.test.ts` in the tree, not the converted ones, because the point
+       is to find a file the record does not know about. */
+    const scanned = allTestFiles();
+
+    /* The control. `allTestFiles` walking nothing would make the difference
+       below empty, which is what a clean tree looks like from outside. */
+    expect(scanned.length, "the test-file walk found nothing to scan").toBeGreaterThan(100);
+
+    const carrying = scanned.filter((f) =>
+      markersIn(readFileSync(path.join(REPO, f), "utf8")).length > 0,
+    );
+    expect(carrying.length, "no test file in the tree carries a marker at all").toBeGreaterThan(20);
+
+    const unrecorded = carrying.filter((f) => !(f in STORE_CONVERSIONS)).sort();
+    expect(
+      unrecorded,
+      "test files carrying mutation evidence with no entry in STORE_CONVERSIONS — record the " +
+        "conversion, with the date, the stage, and the marker counts the file actually carries",
+    ).toEqual([]);
+  });
+
+  it("will not let a converted file grow a block that accounts for no mutation", () => {
+    /* **Stage B3's per-`describe` rule, held as a ratchet because it cannot yet
+       be held as an equality.**
+
+       The rule: *one mutation per store-touching `describe`, and the blocks
+       that need none say why in their own headers.* Measured against the tree
+       on 2026-09-04, **that convention is B2's and not B's** — 15 of
+       `routes.test.ts`'s 18 top-level blocks carry a `**Mutation.**` or a
+       `**No mutation…**` judgement, against 9 of the other 25 files' 82. The
+       stage-B suites write their evidence per *file*, often in the file's own
+       header docstring. Switching the rule on as an equality today would redden
+       25 suites at once and could only be paid off by editing all of them.
+
+       So `blocksWithoutJudgement` freezes each file's arrears and this checks
+       it as a **maximum**. A block added to a converted file without a
+       judgement fails; a judgement written for an existing block lowers the
+       number, and the record is edited down to match. **A new conversion
+       records 0**, so C, D and E are born under the full rule.
+
+       The debt is 76 blocks over 26 files on 2026-09-04, and this comment is
+       the receipt. */
+    const gaps: string[] = [];
+    let counted = 0;
+
+    for (const [file, record] of Object.entries(STORE_CONVERSIONS)) {
+      const without = blocksWithoutJudgement(
+        readFileSync(path.join(REPO, file), "utf8").split("\n"),
+      );
+      counted += without.length;
+      if (without.length > record.blocksWithoutJudgement) {
+        gaps.push(
+          `${file}: ${without.length} of its top-level blocks account for no mutation, and the ` +
+            `record allows ${record.blocksWithoutJudgement} — ${without.join(", ")}`,
+        );
+      }
+    }
+
+    /* The control, and it is a real one: a block scan that matched nothing
+       would make every file look compliant. The number is the arrears, so it
+       falls as the debt is paid — the floor is well under today's 77 and this
+       line goes when it reaches zero. */
+    expect(counted, "the block scan found no unaccounted block anywhere, which it should").
+      toBeGreaterThan(20);
+
+    expect(
+      gaps,
+      "converted files with more unaccounted top-level blocks than STORE_CONVERSIONS records — " +
+        "give the new block a `**Mutation.**` or an explicit `**No mutation…**` judgement in its " +
+        "own header",
+    ).toEqual([]);
+  });
+
   it(
     "leaves no file that the import graph can reach and nothing accounts for",
     { timeout: 180_000 },
@@ -298,10 +590,22 @@ describe("the store-migration registry", () => {
 
       /* Controls first. Both differences below are empty when the inputs are
          empty, so an unread witness or a walk that parsed nothing would pass
-         silently — which is the exact shape this whole plan exists to stop. */
-      expect(reports.length, "the graph walk produced no reports at all").toBeGreaterThan(100);
+         silently — which is the exact shape this whole plan exists to stop.
+
+         **The first two floors were 100 until 2026-09-05**, and they fell
+         because the condemned list did: stage G's last adapter group deleted
+         `src/store/artifacts-fs.ts` and `src/store/data-root.ts`, leaving
+         `TARGETS` naming `src/store/copy-artefacts.ts` alone — which is not
+         condemned at all, since stage D gave it a store-agnostic
+         `ArtifactSource`. Measured the same day: **42 files reach it, 41 of
+         them through `tests/helpers/load-article.ts` and one directly**, and
+         nothing reaches it type-only. So 20 is a floor under a walk that is
+         doing its job rather than a number with an argument behind it; the
+         control being defended is still "the walk parsed something", and the
+         instrument itself is retired with the tombstone in stage I. */
+      expect(reports.length, "the graph walk produced no reports at all").toBeGreaterThan(20);
       expect(reaching.size, "the graph walk found nothing reaching a condemned module")
-        .toBeGreaterThan(100);
+        .toBeGreaterThan(20);
       expect(
         witness.ranAndTouchedNothing.length,
         "the witness recorded nothing as having run and touched nothing",
@@ -341,10 +645,24 @@ describe("the store-migration registry", () => {
        spot; there were two, and the claim was in the JSON.
 
        This assertion is what stops a future edit quietly dropping either. An
-       unexplained absence is indistinguishable from an oversight. */
+       unexplained absence is indistinguishable from an oversight.
+
+       **The first blind spot is retired, and the check is inverted rather than
+       deleted.** `tests/store-fs-write-chains.test.ts` went with `ai-calls-fs`
+       and `realtime-sessions-fs` in stage G, 2026-09-05 — its whole subject was
+       a module-scope lock in two modules that no longer exist. The witness JSON
+       is a dated measurement and still records the blind spot, correctly, as
+       what was true on 2026-09-03; what has to stay true is that the record and
+       the tree agree about which of those two states we are in. So the file's
+       *absence* is now what is asserted: if somebody reinstates it, this goes
+       red and the blind spot is live again. */
     expect(witness.knownBlindSpots.join(" ")).toMatch(/store-fs-write-chains/);
     expect(witness.knownBlindSpots.join(" ")).toMatch(/CALLS, NOT READS/);
-    expect(existsSync(path.join(REPO, "tests/store-fs-write-chains.test.ts"))).toBe(true);
+    expect(
+      existsSync(path.join(REPO, "tests/store-fs-write-chains.test.ts")),
+      "deleted in stage G with the two modules it was about — if it is back, the witness's " +
+        "first blind spot is live again and this assertion should be flipped back",
+    ).toBe(false);
     /* And the file the second blind spot hid is now classified, not merely
        described — the record and the remedy have to travel together. */
     expect(Object.keys(STORE_MIGRATION)).toContain("tests/store-artefacts-pg.test.ts");

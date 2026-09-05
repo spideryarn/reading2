@@ -149,7 +149,8 @@ export function useClaims(slug: string): ClaimsApi {
     setError(null);
     /* A spinner with nothing under it, immediately — and note what this throws
        away: the previous answer. That is the same call `begin` makes on the
-       server (src/referee-claims-store.ts § What differs), and it is deliberate.
+       server (src/store/pg-referee-claims.ts § One run per article), and it is
+       deliberate.
        Yesterday's claims under today's spinner is the one state a referee cannot
        interpret. */
     setRun({ status: "pending", createdAt: new Date().toISOString(), claims: [] });

@@ -30,9 +30,14 @@ import {
   isEntitledStatus,
   offerableTiers,
   quotaRules,
+  subscriptionState,
   tierForPrice,
+  tiersToOffer,
 } from "../src/billing/tiers.js";
-import type { TierRow } from "../src/billing/tiers.js";
+import type { Standing, SubscriptionColumns, TierRow } from "../src/billing/tiers.js";
+import { standingFor } from "../src/billing/summary.js";
+import type { OwnerId } from "../src/owner.js";
+import { entitlementFromRow } from "../src/store/pg-billing.js";
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { readTiers } from "../src/store/pg-tiers.js";
@@ -132,6 +137,248 @@ describe("which price sells which tier", () => {
       tier({ sortOrder: 10 }),
     ]);
     expect(offered.map((t) => t.id)).toEqual(["reader", "researcher"]);
+  });
+});
+
+/**
+ * **What may be sold to whom** — the gate that used to be a boolean.
+ *
+ * `canCheckout` meant *has no open subscription*, so a paying Reader was drawn
+ * no button on either page while Stripe's Portal would have taken the switch
+ * (docs/project/billing.md § *Reader → Researcher*). These are the cases that
+ * make it tier-aware, and every one of them is over fixture rows: no database,
+ * because the decision is arithmetic on the catalogue and nothing else.
+ */
+/**
+ * **May another subscription be sold beside this row?** — the one question that
+ * spends money, and the one that used to be asked in two places in two ways.
+ *
+ * The summary and `startCheckout` each wrote out *a subscription id with a
+ * non-terminal status*, while `entitlementFromRow` asks something else entirely
+ * and **never reads the id at all**. A row where the two disagreed was
+ * schema-valid until 2026-09-05, and it offered a paying Reader the Reader plan
+ * through a Checkout Session — GPT Sol, 2026-09-04. These are over fixture rows:
+ * the decision is a function of five columns and nothing else.
+ */
+describe("whether a row already holds a subscription", () => {
+  const EMPTY: SubscriptionColumns = {
+    stripeSubscriptionId: null,
+    status: null,
+    priceId: null,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+  };
+  const PERIOD_NOW = { start: new Date("2026-09-01T00:00:00Z"), end: new Date("2026-10-01T00:00:00Z") };
+
+  it("sells to a reader with no row at all, and to one with an empty row", () => {
+    expect(subscriptionState(undefined).kind).toBe("sellable");
+    expect(subscriptionState(EMPTY).kind).toBe("sellable");
+  });
+
+  it("sells again once a subscription is over", () => {
+    expect(
+      subscriptionState({ ...EMPTY, stripeSubscriptionId: "sub_1", status: "canceled" }).kind,
+    ).toBe("sellable");
+  });
+
+  it("refuses to sell beside a subscription Stripe may still collect on", () => {
+    for (const status of ["active", "past_due", "unpaid", "incomplete", "trialing", null]) {
+      expect(
+        subscriptionState({ ...EMPTY, stripeSubscriptionId: "sub_1", status }).kind,
+        `status ${status}`,
+      ).toBe("open");
+    }
+  });
+
+  /**
+   * **The row that would have charged somebody twice.** Every one of the four
+   * subscription-derived columns on its own, because the defect needed only
+   * `status` and a check that named fewer than all four would leave the next one
+   * open.
+   */
+  it("refuses to decide anything from a row with no subscription behind its facts", () => {
+    const facts: Partial<SubscriptionColumns>[] = [
+      { status: "active" },
+      { priceId: "price_reader" },
+      { currentPeriodStart: PERIOD_NOW.start },
+      { currentPeriodEnd: PERIOD_NOW.end },
+    ];
+    for (const fact of facts) {
+      const state = subscriptionState({ ...EMPTY, ...fact });
+      expect(state.kind, JSON.stringify(fact)).toBe("contradictory");
+      /* And it says which column, because the log line is what somebody reads
+         when this turns up in production. */
+      if (state.kind === "contradictory") {
+        expect(state.why).toContain(Object.keys(fact)[0] as string);
+      }
+    }
+  });
+});
+
+/**
+ * **The wiring**: the same row, through the function `/api/billing/usage`
+ * actually calls, and out the other side as a `Purchase`.
+ *
+ * `standingFor` is the seam the two questions meet at, so this is where a
+ * disagreement between them would show up. The database refuses the
+ * contradictory row now (tests/billing-usage-route.test.ts), which is why the
+ * end-to-end version of this case asserts the refusal rather than the answer —
+ * and why the fail-closed behaviour is pinned here, over a fixture, where the
+ * state is still reachable.
+ */
+describe("what a billing row is offered, end to end through the decision", () => {
+  /* Its own id, not a memorable one. `…beef` was already claimed by
+     tests/public-dispatch.test.ts, and tests/fixture-ids.test.ts refuses a
+     uuid two files both spell out — the collision is invisible until two
+     suites touch the same row and one of them starts failing for the other
+     one's reasons. Nothing here depends on the value. */
+  const OWNER = "b1111111-0000-4000-8000-000000000001" as OwnerId;
+  const READER = tier({ sortOrder: 10, stripePriceId: "price_reader" });
+  const RESEARCHER = tier({
+    id: "researcher",
+    productName: "Spideryarn Researcher",
+    ingestsPerPeriod: 150,
+    lookupKey: "spideryarn_researcher_monthly",
+    stripePriceId: "price_researcher",
+    sortOrder: 20,
+  });
+  const CATALOGUE = [READER, RESEARCHER];
+  const NOW = new Date("2026-09-15T00:00:00Z");
+
+  /** A `billing_accounts` row, with the columns entitlement and selling read. */
+  function row(over: Record<string, unknown> = {}) {
+    return {
+      status: "active",
+      priceId: "price_reader",
+      currentPeriodStart: new Date("2026-09-01T00:00:00Z"),
+      currentPeriodEnd: new Date("2026-10-01T00:00:00Z"),
+      stripeSubscriptionId: "sub_1",
+      stripeCustomerId: "cus_1",
+      quotaLimitDelta: null,
+      quotaPeriodStart: null,
+      ...over,
+    };
+  }
+
+  const offerFor = (over: Record<string, unknown> = {}) => {
+    const account = row(over);
+    return tiersToOffer(CATALOGUE, standingFor(account, CATALOGUE, entitlementFromRow(account, CATALOGUE, NOW), OWNER));
+  };
+
+  it("offers a paying Reader the tier above, out of a paid month", () => {
+    expect(offerFor()).toMatchObject({ kind: "switch", from: "paid" });
+  });
+
+  it("says a trialling Reader's switch is out of a trial", () => {
+    /* Which is what makes the sentence beside the button a different sentence —
+       `switchingPlan`, src/billing-plan.ts. */
+    expect(offerFor({ status: "trialing" })).toMatchObject({ kind: "switch", from: "trial" });
+  });
+
+  /**
+   * **Nothing at all for the row the database now refuses.** Not `checkout`, and
+   * certainly not a list with Reader in it: entitlement reads this row as a
+   * paying Reader, so offering them Reader again is a second subscription for a
+   * plan they already have. Watched failing through the route on 2026-09-05,
+   * which answered `checkout` over `["reader", "researcher"]`.
+   */
+  it("offers nothing at all when the row claims a plan with no subscription behind it", () => {
+    expect(offerFor({ stripeSubscriptionId: null })).toEqual({ kind: "none" });
+  });
+});
+
+describe("what may be sold to a reader in a given standing", () => {
+  const READER = tier({ sortOrder: 10 });
+  const RESEARCHER = tier({
+    id: "researcher",
+    productName: "Spideryarn Researcher",
+    ingestsPerPeriod: 150,
+    lookupKey: "spideryarn_researcher_monthly",
+    stripePriceId: "price_researcher",
+    sortOrder: 20,
+  });
+  const CATALOGUE = [READER, RESEARCHER];
+  const idsOf = (purchase: ReturnType<typeof tiersToOffer>): string[] =>
+    purchase.kind === "checkout" || purchase.kind === "switch"
+      ? purchase.tiers.map((t) => t.id)
+      : [];
+
+  it("sells everything on the shelf to somebody with no subscription", () => {
+    const purchase = tiersToOffer(CATALOGUE, { kind: "unsubscribed" });
+    expect(purchase.kind).toBe("checkout");
+    expect(idsOf(purchase)).toEqual(["reader", "researcher"]);
+  });
+
+  /* The case the whole change is for. */
+  it("offers a Reader the tier above and not the one they are on", () => {
+    const purchase = tiersToOffer(CATALOGUE, { kind: "subscribed", on: READER, from: "paid" });
+    expect(purchase.kind).toBe("switch");
+    expect(idsOf(purchase)).toEqual(["researcher"]);
+  });
+
+  it("offers the largest tier nothing, and says so as its own answer", () => {
+    expect(tiersToOffer(CATALOGUE, { kind: "subscribed", on: RESEARCHER, from: "paid" })).toEqual({
+      kind: "top",
+    });
+  });
+
+  /**
+   * **A tie is not higher.** Two tiers allowing the same number are two ways to
+   * pay for the same thing, and a button that takes money and changes nothing is
+   * worse than no button.
+   */
+  it("does not offer a sideways move to a tier that allows the same", () => {
+    const twin = tier({ id: "twin", stripePriceId: "price_twin", sortOrder: 15 });
+    expect(
+      tiersToOffer([READER, twin], { kind: "subscribed", on: READER, from: "paid" }).kind,
+    ).toBe("top");
+  });
+
+  /**
+   * **The trap the row parameter exists for, held by the compiler.**
+   *
+   * `Entitlement.limit` carries the prorated override a mid-period plan change
+   * leaves behind — a Researcher who switched up on day 27 is entitled to 33
+   * this month against a tier that sells 150 — and ranking *that* number against
+   * the catalogue would offer them the plan they are already on. Taking a row
+   * makes the wrong number unpassable, and this is where that stays true: widen
+   * the parameter to `number | TierRow` and the `@ts-expect-error` below has
+   * nothing to suppress, so `npm run typecheck` goes red (it covers `tests/`,
+   * where `vitest` never type-checks anything).
+   */
+  it("refuses an allowance where it wants the tier, so a prorated number cannot rank", () => {
+    // @ts-expect-error — an allowance is not a tier, and that is the point
+    const wrong: Standing = { kind: "subscribed", on: 150 };
+    expect(wrong.kind).toBe("subscribed");
+  });
+
+  /**
+   * Nothing is sold beside a subscription that entitles nothing — `unpaid`,
+   * `incomplete`, or one whose period we cannot read. That is exactly what the
+   * old boolean did for those accounts, kept.
+   */
+  it("sells nothing beside a subscription it cannot resolve", () => {
+    expect(tiersToOffer(CATALOGUE, { kind: "unresolved" })).toEqual({ kind: "none" });
+  });
+
+  /* `none`, not `checkout` with an empty list: the emptiness is in the type. */
+  it("answers none rather than an empty offer when nothing is on sale", () => {
+    expect(tiersToOffer([tier({ stripePriceId: null })], { kind: "unsubscribed" })).toEqual({
+      kind: "none",
+    });
+  });
+
+  /**
+   * **Ascending, because nothing downstream will put it right.** `PlanCards`
+   * draws plans in the order it is handed them and promotes nothing, so a
+   * filter that reordered would read as unrelated offers rather than a ladder.
+   */
+  it("leaves the order alone, so what survives is still cheapest first", () => {
+    const jumbled = [RESEARCHER, READER];
+    expect(idsOf(tiersToOffer(jumbled, { kind: "unsubscribed" }))).toEqual([
+      "reader",
+      "researcher",
+    ]);
   });
 });
 
@@ -251,12 +498,10 @@ describe("currenciesOffered", () => {
 
 /* -------------------------------------------------------------------------- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/billing-tiers.test.ts",
   tables: ["spideryarn.billing_tiers", "spideryarn.billing_tier_prices"],
 });
-const dbIt = reachable ? it : it.skip;
-
 /**
  * **The invariants that used to be compile-time, against the real rows.**
  *
@@ -266,7 +511,7 @@ const dbIt = reachable ? it : it.skip;
  * claim. What is left here is what a CHECK cannot say.
  */
 describe("the seeded tiers", () => {
-  dbIt("has tiers at all, and each is priced in at least one currency", async () => {
+  it("has tiers at all, and each is priced in at least one currency", async () => {
     const tiers = await readTiers();
     expect(tiers.length).toBeGreaterThan(0);
     for (const t of tiers) {
@@ -279,7 +524,7 @@ describe("the seeded tiers", () => {
    * CHECK.** A dearer tier that allowed fewer ingests would be a pricing page
    * nobody could read, and it is exactly the mistake an editable table invites.
    */
-  dbIt("charges more for more", async () => {
+  it("charges more for more", async () => {
     const tiers = (await readTiers()).filter((t) => t.active && t.amounts.usd !== undefined);
     const byPrice = [...tiers].sort((a, b) => (a.amounts.usd ?? 0) - (b.amounts.usd ?? 0));
     for (let i = 1; i < byPrice.length; i++) {
@@ -297,7 +542,7 @@ describe("the seeded tiers", () => {
    * to the base currency — so a customer somewhere would be shown somebody
    * else's price, and nothing but this would say so.
    */
-  dbIt("prices every active tier in every currency we offer", async () => {
+  it("prices every active tier in every currency we offer", async () => {
     const tiers = (await readTiers()).filter((t) => t.active);
     const currencies = currenciesOffered(tiers);
     for (const t of tiers) {
@@ -309,7 +554,7 @@ describe("the seeded tiers", () => {
 
   /* Whole units. A price ending in 37 pence is a converted number that escaped
      rather than a chosen one — see billing.md on why amounts are chosen. */
-  dbIt("prices in round numbers", async () => {
+  it("prices in round numbers", async () => {
     for (const t of await readTiers()) {
       for (const [currency, amount] of Object.entries(t.amounts)) {
         expect(amount % 50, `${t.id} in ${currency} is ${amount}`).toBe(0);

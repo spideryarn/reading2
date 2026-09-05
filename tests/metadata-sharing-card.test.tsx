@@ -21,6 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, PublicArtefacts } from "../src/types.js";
+import { SHARING_INVENTORY_UNKNOWN } from "../src/messages.js";
 import { CARD } from "../src/web/card.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -237,7 +238,11 @@ describe("the sharing card, on the page that owns it", () => {
     await open();
 
     expect(host.textContent).toContain("Only you can read this");
-    expect(host.textContent).toContain("We could not work out what a shared link would carry");
+    expect(host.textContent).toContain(SHARING_INVENTORY_UNKNOWN);
+    /* And the sentence still explains rather than merely refusing: the
+       constant assertion above proves the right message was reached for,
+       and moves with it; this one holds what the message has to say. */
+    expect(SHARING_INVENTORY_UNKNOWN).toContain("reload the page to try again");
     expect(host.textContent).not.toContain("Share with anyone");
   });
 
@@ -303,7 +308,14 @@ describe("the sharing card, on the page that owns it", () => {
       expect.arrayContaining(["Ideas", "Quotes", "The arc"]),
     );
     expect(under("Anyone who opens it gets these")).not.toContain("The arc");
-    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Search"]));
+    /* **`Search` moved out of this column on 2026-09-04**, so `Chat` and
+       `Remember` are what is left of the modes that cost a model call. The
+       assertion is kept at two names rather than one for the reason it had two
+       to begin with: a single label could be satisfied by a column drawing one
+       chip and losing the rest.
+       docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Remember"]));
+    expect(under("Anyone who opens it gets these")).toContain("Search");
   });
 
   /**
@@ -454,7 +466,14 @@ describe("the sharing card, on the page that owns it", () => {
         quotes: false,
         timeline: false,
         sketch: false,
-      },
+        /* Annotated like `ALL_BUILT` above and for the same reason: an untyped
+           literal here goes a field short the day another artefact is added,
+           the parser rejects it, and the card silently draws "we could not work
+           out what a shared link would carry" — so this test would go on
+           asserting a box round a *failure* state. That is what happened on
+           2026-09-04 when `sketch` arrived. GPT Sol found this one still
+           untyped after the other two were fixed. */
+      } satisfies PublicArtefacts,
     };
 
     await open();

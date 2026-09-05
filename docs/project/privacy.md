@@ -146,6 +146,54 @@ language, a cookie banner (there is nothing to consent to — no analytics, no t
 and every sentence beginning "we value your privacy". Those belong in terms of service if they
 belong anywhere, and none of them is what would go wrong here.
 
+## If something here is yours
+
+The one section on the page written to somebody who does not have an account, and the last one for
+that reason. **Greg chose "build a minimal takedown route" on 2026-09-04**, over doing nothing and
+over a form with a queue behind it.
+
+**Why it exists.** Spideryarn republishes the extracted text of somebody else's article. The owner
+ticks a box confirming they have the right to; that box is not a rights *check* — it moves
+responsibility onto the owner — and the platform's actual protection is that plus a way for the
+wronged party to complain. [public-shelf.md](public-shelf.md) is what made that stop being
+theoretical: a shared article used to be reachable by link and is now **findable**.
+
+**It is a section, not a route**, and the argument is written beside it in
+[`PrivacyPage.tsx`](../../src/web/PrivacyPage.tsx). A page of its own costs an arm in `parseRoute`, a
+member of the `Route` union, a case in `page-title.ts`, two arms of `App.tsx` and a component — and,
+worse, a second public address making claims about what we do that has to stay true alongside this
+one. The words belong beside *What you add is your responsibility*, which is the same fact told to
+the other party, and beside *Deleting things*, which is already "email us and we do it by hand".
+Findability comes from the link rather than from the page's name.
+
+**Reachable from the two surfaces a stranger meets a republished article on**, and from nowhere
+else: the foot of `/read/public`, and the visitor's own details page for one article. Not the
+reading view — a report link in the prose chrome would shout at every reader of an article that is
+almost certainly shared legitimately, and that bar is measured by `stickyOffset`
+([`src/web/scroll.ts`](../../src/web/scroll.ts)), so anything added to it moves where every deep link
+lands. `TAKEDOWN_LINK` in [`src/messages.ts`](../../src/messages.ts) is one sentence doing both jobs
+— the link text *and* the whole of the offer — so there is no lead-in prose to keep in step with it.
+
+**What the section promises is bounded on purpose**: one mailbox, one pair of hands, days rather than
+hours, nothing out of hours. It asks for the address of the Spideryarn page first, because a message
+that does not name one cannot be acted on. And it says what *taken down* means here — the article
+goes private, which takes it off the shelf and stops the shared link opening it, while the reader's
+own copy stays until somebody asks for it to be erased. A complainant finding that out afterwards
+would be worse than being told.
+
+**What was deliberately not built**: no form, no table, no queue, no moderation view, and nothing
+that changes an article's visibility without a person deciding. The mechanism for taking something
+down is the owner's own sharing switch; an administrator's override of it is a much larger decision
+than this section, and [admin.md](admin.md) is where it would have to be argued.
+
+**The anchor is a mechanism, not markup.** `navigate` scrolls to the top on every navigation and a
+client-rendered page has nothing under the fragment for a browser to find on a cold load, so
+`PrivacyPage` scrolls its own section into view. The id and the address are one constant —
+`TAKEDOWN_SECTION_ID` in [`src/web/router.ts`](../../src/web/router.ts) — because two string literals
+in two files is a link that lands at the top of a long policy and tells nobody it missed.
+[`tests/takedown-privacy-section.test.tsx`](../../tests/takedown-privacy-section.test.tsx) drives
+both arms of it.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
@@ -161,16 +209,33 @@ that too. The page says "the **default** models", because
 **Everything else on the page is prose that a person has to re-read.** Go and look at it when any of
 these moves:
 
-- **what a shared article carries**, which changed on 2026-09-04 and is the only claim on the page
-  that has ever gone from true to false. The paragraph under *Who can see your shelf* said *"Your
-  notes, your comments and your conversations are not shared"*; two thirds of that stopped being
-  true when Greg decided a public link carries the reader's comments and the model's answers to
-  them ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)). **Conversations are still
-  private, and the page says so separately** rather than quietly dropping all three — somebody who
-  read the old sentence should be able to find out which half of it survived. The page does not
-  enumerate the rest: the Access & Sharing card derives the full inventory at the moment of sharing
+- **what a shared article carries**, which changed twice on 2026-09-04 and is the only claim on the
+  page that has ever gone from true to false. The paragraph under *Who can see your shelf* said
+  *"Your notes, your comments and your conversations are not shared"*; two thirds of that stopped
+  being true when Greg decided a public link carries the reader's comments and the model's answers
+  to them, and their **saved searches** a few hours later — the questions they typed, in their own
+  words, and the passages those found
+  ([260904c](../plans/260904c-more-modes-on-a-shared-link.md), stages 3 and 4).
+  **Conversations are still private, and the page says so separately** rather than quietly dropping
+  all three — somebody who read the old sentence should be able to find out which half of it
+  survived. The page does not enumerate the rest: the Access & Sharing card derives the full
+  inventory at the moment of sharing
   ([`shared-inventory.ts`](../../src/web/shared-inventory.ts)), and two lists of one fact is how one
   of them goes stale.
+
+  **Two constants went stale the same day and were only found by a review**, which is the part worth
+  remembering rather than the fix. `SHARED_LINK_CARRIES` — the visitor's own sentence — still ended
+  *"It never carries the comments, conversations, searches or notes of whoever added it"*, so the
+  page told a reader that the comments in the drawer beside it had not been shared. And
+  `NOT_SHARED_NOTE`, the one-line summary under the owner's third column, still said a shared link
+  carries the piece *"never your own work on it"*, on a card whose first column had begun listing
+  *Your comments and notes*. GPT Sol found both.
+
+  The lesson is about the shape rather than the words: **a sentence that enumerates what does not
+  cross is a promise with no test behind it**, and a hand-written summary of a derived list is worse
+  — the list moves and the summary does not. `NOT_SHARED_NOTE` was deleted rather than reworded, and
+  the note that replaced it on the *other* column (`SHARED_NOTE`, *"nothing a visitor does can spend
+  a model call"*) is one `tests/public-network-trace.test.tsx` actually enforces.
 
 - a new **subprocessor** arrives, or one goes — the list is Supabase, Vercel, OpenRouter, OpenAI,
   Google, Sentry, Stripe
@@ -193,6 +258,9 @@ these moves:
   and the bytes are content-addressed, so two readers who add the same document share one object),
   and `ai_calls` outlives its article by design because it is the spend ledger.
   [database.md](database.md) and [`src/db/schema.ts`](../../src/db/schema.ts) § `rawSources`
+- **the takedown section** — the section above. Its heading is `TAKEDOWN_HEADING` and its anchor is
+  `TAKEDOWN_SECTION_ID`, both pinned; the prose in it is not, and is the thing to re-read if we ever
+  start doing more than reading that mailbox by hand
 - **payments** go live, which changes decision 4
 - **what a bug report carries** — the section above; the two consents are a
   schema `CHECK` and a browser gesture respectively, and neither is a preference

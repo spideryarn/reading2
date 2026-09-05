@@ -13,8 +13,11 @@
  * Both directions of wrong are silent. Answering `true` when the module was
  * merely imported runs a stage as a side effect of an `import`, which is the one
  * thing the guard exists to prevent. Answering `false` when it *is* the entry
- * file makes `npm run fetch <url>` exit 0 having done nothing, with no message,
- * which is worse — there is nothing to notice.
+ * file makes a command exit 0 having done nothing, with no message, which is
+ * worse — there is nothing to notice. The case that produced this file was
+ * `npm run fetch <url>`, before that command became `npm run ingest` and moved
+ * out of `src/fetch.ts` altogether (2026-09-05); the guard is unchanged and so
+ * is every input below.
  *
  * ## Every case here is proved against a broken implementation
  *

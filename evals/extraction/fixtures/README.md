@@ -1,9 +1,14 @@
-# `evals/extraction/fixtures/` — twenty-one pages Readability has to get right
+# `evals/extraction/fixtures/` — thirty-five pages Readability has to get right
 
-Captured **2026-08-28** and **2026-08-30**, hashed, and committed. Run by hand, not by `npm test` — see
-[evals/README.md](../../README.md) and
+Captured **2026-08-28**, **2026-08-30** and **2026-09-04**, hashed, and committed. Run by hand, not by
+`npm test` — see [evals/README.md](../../README.md) and
 [../../../docs/plans/260827ab-readability-repair-pass.md](../../../docs/plans/260827ab-readability-repair-pass.md),
-which is the plan these were chosen for.
+which is the plan the first twenty-one were chosen for. The fourteen added 2026-09-04 (below, "The
+nine added 2026-09-04" and "The five added 2026-09-04, on Greg's copyright decision") were chosen for
+[../../../docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md](../../../docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md)
+instead, and sit in `corpus.mts`'s `EXTRA_FIXTURES`, not `CORPUS` — see the comment there for why:
+`CORPUS` is the denominator of a published figure in the first plan, and these fixtures would change
+it retroactively if they were added there.
 
 ```bash
 npx tsx evals/extraction/corpus.mts            # stock Readability vs what stage 2 ships, all of them
@@ -130,6 +135,57 @@ zero `<p>` in the source — comes out with **266 of them**. A search across per
 archives, mailing-list archives and legacy academic pages turned up no live instance of the failure
 in that form. The reader-facing symptom it used to cause is alive; the mechanism has moved to `<pre>`
 and to layout tables, which is what `whitman.html` and `hacker_howto.html` are for.
+
+## The nine added 2026-09-04, from the corpus trawl
+
+Before this trawl, the corpus had **zero government/legal, zero non-Latin-script, zero bot-wall, and
+zero case that isolates the code-whitespace bug on its own** — the gaps named in
+[../../../docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md](../../../docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md#what-the-trawl-found).
+54 pages were fetched plain, the same way as the first twenty-one — no JavaScript, browser-ish
+`User-Agent` — and each of the nine below was checked to hold its own distinctive text before it was
+hashed, the same check `hacker_howto.html`'s HTTP 408 near-miss (above) established. They are
+registered in `corpus.mts`'s `EXTRA_FIXTURES`, not `CORPUS`, for the same reason `acx_footnotes.html`
+is: captured for a different investigation than the readability-repair-pass table, so adding them to
+`CORPUS` would silently move that plan's published denominator.
+
+| file | source | licence | what it is here to break |
+|---|---|---|---|
+| `python_docs_itertools.html` | [docs.python.org](https://docs.python.org/3/library/itertools.html) | PSF licence | The code-whitespace-collapse bug at its worst: every token of the 30-recipes section is wrapped in its own `<span class="k">`/`<span class="nf">` etc., so a naive `\s+` collapse mangles every code sample, plus a 30-recipes-in-one-block giant-block failure |
+| `rfc8259_json.html` | [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc8259) | IETF Trust, no cache restriction | The same code-mangling bug on ABNF grammar, on a *short* RFC — unlike the existing 295-section, 72k-word `rfc9110.html` |
+| `wiki_gdp_table.html` | [Wikipedia](https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)) | CC BY-SA 4.0 | **Total loss of a large data table.** None of the other twenty-nine fixtures loses a table entirely |
+| `plos_biology.html` | [PLOS Biology](https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.1002165) | CC BY 4.0 | 43% of blocks are reference-list buttons — the first journal-site furniture case; the existing academic fixtures (`ar5iv.html`, `arxiv_abs.html`, `wiki_transformer.html`) are LaTeXML, an abstract page and an encyclopedia respectively, none of them a journal's own furniture |
+| `medium_about.html` | [blog.medium.com](https://blog.medium.com/medium-a-new-place-on-the-internet-for-sharing-ideas-and-their-connections-2e04efc80d1a) | Medium's own generic 404-template text, not any author's article | **Silent success:** Readability confidently parses a 404 SPA shell as a short "article". Minimal copyright surface since the captured text is Medium's boilerplate, not a byline'd post |
+| `pmc_article.html` | [ncbi.nlm.nih.gov/pmc](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7280519/) | captured content is Google's reCAPTCHA challenge page, no NIH content at all | A second, mechanically different bot-wall from `medium_about.html`'s — a challenge page rather than an app shell — on a platform readers actually paste links from |
+| `distill_momentum.html` | [distill.pub](https://distill.pub/2017/momentum/) | CC BY 4.0 | Two novel patterns: the byline date lives in a custom `<dt-byline>` web-component's sibling markup rather than a plain `<time>`, and interactive canvas/SVG figures degrade when scripts don't run |
+| `wiki_ar_ai.html` | [Arabic Wikipedia](https://ar.wikipedia.org/wiki/%D8%B0%D9%83%D8%A7%D8%A1_%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A) | CC BY-SA 4.0 | **Fills the entire non-Latin-script/RTL gap** — zero such fixtures existed before this. A maintenance banner is the article's first block, and the page exercises the block-level `dir`/`lang` gap the trawl found missing |
+| `eurlex_regulation.html` | [EUR-Lex](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52022XC0504(01)) | EU institutions' documents are explicitly reusable under Commission Decision 2011/833/EU | Fills the entirely-absent government/legal category: a Commission Communication (*Ecodesign and Energy Labelling Working Plan 2022-2024*, 2022/C 182/01) buried under EUR-Lex's own multilingual-display chrome |
+
+## The five added 2026-09-04, on Greg's copyright decision
+
+Five more from the same trawl were held back at first — copyrighted third-party prose, or a licence
+that needed a check before committing — and reported to Greg rather than promoted silently. His
+answer, verbatim:
+
+> It's fine to include copyrighted material in the eval, as long as we attribute it to them. We're
+> not publishing or stealing it.
+>
+> — Greg, 2026-09-04
+
+So: these five are committed as test inputs in a private repo, the same footing the README already
+states for the first twenty-one (see "Why the HTML is committed and not just the URLs", above) — not
+published, not redistributed as content, kept only so the eval has bytes to measure against. What
+changes here is that the attribution has to be right, because it is now the condition of inclusion
+rather than a nice-to-have.
+
+| file | source | rights holder | what it is here to break |
+|---|---|---|---|
+| `blogger_bldgblog.html` | [bldgblog.blogspot.com](https://bldgblog.blogspot.com/) | © Geoff Manaugh, BLDGBLOG. The captured page carries no separate machine-readable copyright statement in its own HTML; attributed to the named author, on the same footing as `aaronson.html` and `acx.html` already are in this corpus | An index page gluing **20 distinct post-title entries** (confirmed: `class="post-title"` × 20, e.g. "A Burglar's Guide to TV") into one giant block — the inverse of the existing giant-block cases, which are single-article internal-structure failures, not an index page |
+| `hn_dropbox.html` | [news.ycombinator.com/item?id=8863](https://news.ycombinator.com/item?id=8863) | Hosted by Hacker News / Y Combinator; **copyright in each comment rests with the individual commenter who posted it**, not with Y Combinator or with this corpus. No single rights holder is attributed for the page as a whole | The classic "My YC app: Dropbox" thread: a nested comment tree, `<table>`-indented (71 indent cells), that Readability glues into one 23,038-character block — a different shape from the giant blocks above, live and unedited rather than internal document structure |
+| `quanta_year_physics.html` | [quantamagazine.org](https://www.quantamagazine.org/the-year-in-physics-20241217/) | © Quanta Magazine / Simons Foundation. The page's own footer reads "All Rights Reserved © 2026" and separately, "An editorially independent publication supported by the Simons Foundation" — both quoted from the captured HTML | Byline whitespace damage: `<em>By </em>` and `<span class='byline__author …'>Natalie Wolchover</span>` sit in separate elements across newlines, so the byline text node reads with embedded whitespace runs — the pattern no existing fixture documents at all |
+| `npr_ozy_style_feature.html` | [npr.org/sections/goatsandsoda](https://www.npr.org/sections/goatsandsoda/) | © NPR. No explicit copyright line was present in this snapshot's captured bytes (the page's footer script markup is there; the rendered copyright text is not) — attributed to NPR as the named, well-known publisher of the page, on the same footing as the news/government/legal fixtures already in this corpus | Raw `<iframe>` embed markup captured **as literal reading text**: an "Embed" widget's `<input value="...">` and a sibling `<code>` block both hold the literal string `<iframe src="https://www.npr.org/player/embed/…">`, which is exactly the text Readability would surface if it admits that widget |
+| `archwiki_install.html` | [wiki.archlinux.org/title/Installation_guide](https://wiki.archlinux.org/title/Installation_guide) | **GNU Free Documentation License 1.3 or later** — quoted directly from the page's own footer: *"Content is available under GNU Free Documentation License 1.3 or later unless otherwise noted."* Checked per Greg's instruction rather than assumed; this page is GFDL, not CC BY-SA | Twelve `Note`/`Tip` admonition boxes (`class="archwiki-template-box-note"` / `-tip`) whose label sits in a `<strong>` before a sibling `<ul>` rather than inline with the text it labels — the "admonition label detached from its body" shape, and the first MediaWiki instance in this corpus that isn't Wikipedia itself |
+
+Registered in `corpus.mts`'s `EXTRA_FIXTURES`, same as the nine above and for the same reason.
 
 ## The case that is missing, and it is the one that would falsify the fix
 
