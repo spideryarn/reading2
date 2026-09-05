@@ -16,7 +16,8 @@ import { navigate } from "./router.js";
 /**
  * `ref` is spelled out because `AnchorHTMLAttributes` does not include it, and
  * something depends on it: a `<Tooltip>` gives its trigger a ref, and the
- * homepage masthead's three links are triggers (Library.tsx). React 19 hands a
+ * homepage masthead's links — Profile, and Admin for the administrator — are
+ * triggers (Library.tsx). React 19 hands a
  * function component its `ref` as an ordinary prop, so the spread below already
  * carried it — but only by accident, with nothing to stop a later reader
  * replacing the spread with a list of named props and silently leaving Floating

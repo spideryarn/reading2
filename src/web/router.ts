@@ -958,6 +958,24 @@ function subscribe(onChange: () => void): () => void {
 }
 
 /**
+ * The same subscription `useAddress` uses, for a caller that wants to **hear**
+ * the address change without **re-rendering** when it does.
+ *
+ * There is exactly one such caller — `useLastView` in last-view.ts, which
+ * copies the query string into `localStorage` — and the distinction is the
+ * whole reason this is exported. `?at=` is rewritten about once a second while
+ * anybody scrolls, so a `useAddress()` high in the reading view would re-render
+ * the entire article on every one of those; the staleness work of 2026-09-04
+ * (§ `watchHistoryWrites` above) exists precisely to keep that subscription
+ * narrow. A listener that writes to storage and touches no state costs nothing.
+ *
+ * Returns its own unsubscriber, so it drops straight out of a `useEffect`.
+ */
+export function onAddressChange(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
+/**
  * Hear **every** write to the address bar, including the ones nuqs makes.
  *
  * `subscribe` above listens for `popstate` and our own `NAVIGATED`, and misses

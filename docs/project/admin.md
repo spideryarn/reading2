@@ -553,9 +553,16 @@ without a database; the aggregate itself is checked against a real one in
 
 ## The page itself
 
-`/admin` is an index with one entry. It exists rather than redirecting straight to the users table
-because Greg asked for the address, and because the second admin page then has somewhere to be
-listed rather than somewhere to be remembered.
+`/admin` is an index. It exists rather than redirecting straight to the users table because Greg
+asked for the address, and because the second and third entries then have somewhere to be listed
+rather than somewhere to be remembered.
+
+**The third of those is `/design`, and it is not an admin page.** It moved here off the shelf's
+masthead on 2026-09-05 — *"Move the Design link on the logged-in Homepage into /admin"* — because a
+page of colour tokens is developer furniture that every signed-in reader was being shown. The page
+itself is unchanged and ungated: anybody signed in can still type the address, which is fine because
+it reads no data at all, and because a drawn link was never a gate in the first place (§ The three
+refusals above). [design-css-overview.md](design-css-overview.md) is its written counterpart.
 
 `/admin/users` is [`DataTable`](../../src/web/lib/DataTable.tsx) with sort chips — the same seam the
 shelf's table uses, which is what Greg meant by *"using Tanstack Table"*: the columns are the page's
