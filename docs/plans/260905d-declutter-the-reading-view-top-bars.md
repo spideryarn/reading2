@@ -308,6 +308,48 @@ Files: `App.tsx`, `styles.css`, `scroll.ts`, `layout.ts`. Docs: `web-client.md`,
 **Done when** Plain, Summary, Chat and Glossary show no bar for an owner, a visitor still sees the
 read-only chip, and nothing on the page is positioned as though a bar were there.
 
+### Stage 5 — a mode stops saying its own name
+
+**Added 2026-09-05, after looking at the stage-2 screenshots rather than at the code.** Greg's ask
+had a clause I read too narrowly:
+
+> I think we can rely on the bottom bar to tell us what mode we're in, so for example "Summary" mode
+> doesn't need to say `Summary` at the top, nor o any other modes.
+
+I took that as the `MODE SUMMARY` chip on the controls bar, which stage 1 deleted. But the screenshot
+of Summary mode still says **Summary** at the top — in `.band-head`, the band's own title row — while
+the Dock says Summary at the bottom at the same time. So the clause is not yet satisfied, and the
+duplication he objected to is still on screen. Outline mode, by contrast, has no head at all and
+reads perfectly well, which is the existence proof.
+
+`.band-head` is one shared family across nine bands (`styles.css` § the title row every band has),
+so this is one rule and nine call sites rather than nine designs. What each row actually holds
+decides what happens to it — inventoried by reading the call sites, 2026-09-05:
+
+| Band | The row holds | After |
+|---|---|---|
+| Summary, Search | the icon and the mode's name, nothing else | the row goes entirely — a whole row of vertical space back |
+| Glossary, Timeline | name + a live count (`40 terms`, `12 events`) | the name goes, the count stays and becomes the row |
+| Remember (Quiz) | name + the Recall/Quiz sub-mode switch | the name goes, the switch stays |
+| Diagram | name + the scatter's caveat, deliberately put in this row on 2026-08-30 because *this row cannot wrap* and the strip can | the name goes, the caveat stays — and check the row still cannot wrap without the `h2`'s `flex: 1` |
+| Chat | **its `h2` is the open thread's title**, not the mode's name, plus the delete actions | untouched — it is the one exception, and the reason is that it was never naming the mode |
+
+So the rule is: **the mode's own name goes; the row survives wherever it carries something else.**
+
+The trap is in `.band-head h2`'s own comment. The `h2` carries `flex: 1` and `min-width: 0`, and it
+is what lets the other children sit where they do — a count pushed to the right is pushed by the
+heading. Removing the heading without replacing that flex behaviour will re-pack Glossary's and
+Timeline's counts against the left edge. `flex: none` on `.band-head` is also load-bearing and must
+survive: `tests/referee-band-fits.test.ts` records a fault where the one child that could shrink
+went to 0px with 321px of content in it.
+
+Files: the nine panel components, `styles.css` § the title row every band has. Docs: whichever of the
+mode docs describe their band's head.
+
+**Done when** no band names the mode the Dock is already naming, Chat still shows its thread title,
+Glossary's and Timeline's counts are still where they were, and Summary and Search have one fewer
+row.
+
 ## The reviews
 
 **Round 1, on the plan** — [`…-plan-review-sol.md`](260905d-declutter-top-bars-plan-review-sol.md),
