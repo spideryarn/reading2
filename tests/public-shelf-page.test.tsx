@@ -76,7 +76,9 @@ import {
   PUBLIC_SHELF_LEDE,
   PUBLIC_SHELF_RETRY,
   PUBLIC_SHELF_TRUNCATED,
+  TAKEDOWN_LINK,
 } from "../src/messages.js";
+import { TAKEDOWN_HREF } from "../src/web/router.js";
 
 /* React only treats `act()` as authoritative when this is set, and without it
    every render below logs "The current testing environment is not configured to
@@ -125,9 +127,10 @@ const { PublicLibraryPage } = await import("../src/web/PublicLibraryPage.js");
  * Two cards, and every field a card can draw is populated on the first and
  * absent on the second.
  *
- * The second exists because `gist`, `siteName` and `words` are all nullable on
- * the wire — a revision published before the scalar existed, an extraction with
- * no site name — and a card that assumed them renders `null words` rather than
+ * The second exists because `byline`, `gist`, `siteName` and `words` are all
+ * nullable on the wire — a revision published before the scalar existed, an
+ * extraction with no site name, a page whose author is nowhere in its markup —
+ * and a card that assumed them renders `null words` rather than
  * failing. It is second in the array as well as second by `publicAt`, so the
  * order assertion below is about the server's order rather than about chance.
  */
@@ -136,6 +139,11 @@ const TWO: PublicLibrary = {
     {
       slug: "cargocult-spya-rz663q",
       title: "Cargo Cult Science",
+      /* **The article's own author, not the reader who shared it.** The value
+         comes off `article_revisions.byline`, which extraction took from the
+         published page — src/public-library-types.ts § `byline` says what
+         would be wrong about the other reading. */
+      byline: "Richard P. Feynman",
       gist: "Feynman argues that science demands a rigorous, self-critical honesty.",
       siteName: "Caltech",
       words: 3822,
@@ -144,6 +152,7 @@ const TWO: PublicLibrary = {
     {
       slug: "a-bare-one-spya-000000",
       title: "A piece with nothing else on it",
+      byline: null,
       gist: null,
       siteName: null,
       words: null,
@@ -267,6 +276,28 @@ describe("the shelf of shared articles", () => {
     const page = await show();
     expect(page.querySelector("h1")?.textContent).toBe(PUBLIC_SHELF_HEADING);
     expect(page.textContent).toContain(PUBLIC_SHELF_LEDE);
+  });
+
+  /**
+   * **Who wrote the piece, on the card that offers it.**
+   *
+   * Greg, asked on 2026-09-04 whether a public article should show whose it is,
+   * said yes. The article page already did — the masthead's facts line and the
+   * visitor's details page both draw `PublicMeta.byline` — and this shelf did
+   * not, though it drew the site the piece was published on, which is the same
+   * class of fact about the same document.
+   *
+   * **It is the article's author and never the reader who shared it**, and the
+   * two are different people. Asserted here as well as stated in the type,
+   * because a card that started drawing an owner's name would be a page
+   * publishing our readers' identities to strangers, and that is not something
+   * a wording change should be able to do quietly.
+   */
+  it("and names the author of the piece, where the piece has one", async () => {
+    const page = await show();
+    expect(cards(page)[0]?.textContent).toContain("Richard P. Feynman");
+    /* The bare card is the control: absent, not "null" and not the slug. */
+    expect(cards(page)[1]?.textContent).not.toContain("Feynman");
   });
 });
 
@@ -405,5 +436,39 @@ describe("what the page asks the server for", () => {
     /* The half a URL list cannot see: the auth module is stubbed, so anything
        reaching for the reader would make no request at all. */
     expect(supabaseCalls).toEqual([]);
+  });
+});
+
+/**
+ * **The way to complain about something on this page.**
+ *
+ * The shelf is where a stranger *finds* a republished article, so it is one of
+ * the two places the takedown link has to be — the other being the article's own
+ * details page (tests/public-metadata-artefacts.test.tsx). It is one quiet line
+ * under the list rather than anything on a card: a card is an offer to read, and
+ * a report link on every one of them would read as a warning about each article.
+ *
+ * Asserted as an `href` rather than as words, because the words will be
+ * rewritten and the address is the thing that has to keep working —
+ * tests/takedown-privacy-section.test.tsx is what checks there is a section at
+ * the other end of it.
+ */
+describe("if something on the shelf is yours", () => {
+  it("offers a way to ask for it to be taken down", async () => {
+    const page = await show();
+    const hrefs = [...page.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain(TAKEDOWN_HREF);
+    expect(page.textContent).toContain(TAKEDOWN_LINK);
+  });
+
+  /**
+   * **And on an empty shelf too.** The link is about the page rather than about
+   * the list, and the empty state is the one arm where a "draw it under the
+   * cards" implementation quietly loses it.
+   */
+  it("and says so even when there is nothing on the shelf", async () => {
+    const page = await show(() => EMPTY);
+    const hrefs = [...page.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain(TAKEDOWN_HREF);
   });
 });

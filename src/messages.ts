@@ -2585,6 +2585,130 @@ export function publicShelfShared(when: string): string {
   return `Shared ${when}`;
 }
 
+/* ── The showcase, on the pages a stranger reads first ─────────────────────── */
+
+/**
+ * **The block on `/` and `/features` that sends a stranger to a real article** —
+ * src/web/PublicShowcase.tsx, and stage 4c of
+ * docs/plans/260904b-pricing-page-and-public-showcase.md.
+ *
+ * These three sentences are in this file rather than inline on the two pages,
+ * which is not what the marketing pages usually do (their copy carries a comment
+ * naming its source, docs/project/positioning.md § Whose words). The reason is
+ * that **two pages draw the same block**: a sentence written twice is two
+ * sentences that will differ by the second edit, and the drift both callers exist
+ * to avoid is exactly the drift `SHARING_ON` and its three dependants were pulled
+ * together to avoid. The provenance rule still applies and these are `[tissue]` —
+ * an agent's connecting words, approved as a class by Greg on 2026-09-04 for this
+ * plan, and the next dictation pass may replace them.
+ *
+ * **Every one of them has to be true when the block shows no articles at all**,
+ * which is the constraint that shaped them. The listing is fetched after the
+ * page draws and may fail, be empty, or be slow, and the heading and the sentence
+ * are already on screen by then. So neither says *here are three articles*, and
+ * neither claims anything about how many there are — the same rule the shelf's
+ * own copy follows above, for the same reason: say what the page holds, never
+ * how much of the world it holds.
+ *
+ * **All three lost a first draft to that rule**, which is why it is spelled out
+ * rather than assumed. GPT Sol's review of this stage, 2026-09-05:
+ *
+ * - The heading was *"See it on a real article."* — an invitation the block
+ *   cannot honour in exactly the states it is drawn in anyway, because a failed
+ *   read and an empty shelf both leave it standing over no article at all. A bare
+ *   plural naming what the shelf is made of is true in every state.
+ * - The link was *"All the shared articles →"*, and swapping *all* for *every*
+ *   is not a fix: both assert the shelf is the whole set, which the archived
+ *   filter, the readability bar and the row cap each falsify.
+ * - The lede opened by restating what sharing is, which was true but was also
+ *   the shelf's own first sentence written a second time.
+ */
+export const PUBLIC_SHOWCASE_HEADING = "Articles people have made public.";
+
+/**
+ * The sentence under it.
+ *
+ * **A fact about what a public article is, not about what is on the shelf right
+ * now.** It would be much better copy to say *"here are three people's
+ * articles"*, and it would be false for as long as the fetch is in the air and
+ * for ever if it fails.
+ *
+ * *"one"* is a category rather than a pointer into the list above it — *"one of
+ * these"* would be the pointer, and it is the version that stops being true the
+ * moment the list is empty.
+ *
+ * *"with no account"* rather than *"free"*, following `PUBLIC_SHELF_LEDE`: the
+ * fact worth stating is that there is nothing to press before reading, and *free*
+ * is a claim about price on a block that has nothing to do with the plans.
+ *
+ * It deliberately does **not** list what a public article carries — the outline,
+ * the glossary, the ideas, the quotes. Both pages already say that a few lines
+ * above (LandingPage.tsx's bento, FeaturesPage.tsx § the library), and a second
+ * copy here is a second inventory to keep in step with what a visitor actually
+ * gets, which is a list that has already grown once.
+ */
+export const PUBLIC_SHOWCASE_LEDE =
+  "Anybody can open one and read it, with no account and nothing to sign up for first.";
+
+/**
+ * The way to `/read/public` from the block — **and the only sentence that is
+ * drawn before the network is asked and survives it failing.**
+ *
+ * One constant rather than a line on each page, for the reason at the head of
+ * this section: the two callers must not come to call the same shelf two things.
+ * The arrow matches the two links already on those pages
+ * (*"Everything it does, with pictures →"*, *"Pricing, and what a month's
+ * allowance means →"*), so a third link in the same family does not read as a
+ * different kind of thing.
+ *
+ * **"Browse", because every quantifier is a claim this shelf cannot keep.** The
+ * first draft was *"All the shared articles →"*, and *all* and *every* are the
+ * same assertion: that what is behind the link is the whole set. It is not — the
+ * query drops an article that is archived, or whose revision has no readable
+ * blocks, or that falls past the row cap
+ * (src/store/public-library.ts § `publicLibraryQuery`) — so this is the claim
+ * `PUBLIC_SHELF_LEDE` above took two rewrites to stop making, arriving in a link
+ * label where nobody was looking for it. GPT Sol, 2026-09-05. A verb and a bare
+ * plural name the action and the page, which is all a link owes.
+ */
+export const PUBLIC_SHELF_BROWSE_LINK = "Browse shared articles →";
+
+/* ── If something here is yours ────────────────────────────────────────────── */
+
+/**
+ * **The link a person follows when a piece published here is theirs**, drawn on
+ * the two surfaces a stranger meets a republished article on: the foot of
+ * `/read/public`, and the visitor's own details page for one article
+ * (src/web/PublicLibraryPage.tsx, src/web/PublicPages.tsx). It goes to
+ * `TAKEDOWN_HREF` — a section on `/privacy` rather than a page of its own,
+ * argued in src/web/router.ts and again beside the section itself.
+ *
+ * **Written to somebody who does not have an account**, which is what makes it
+ * different from every other sentence in this file. "Yours" here means *you
+ * wrote it or you hold the rights to it* — not the owner's sense of "your
+ * articles", which is a reader's shelf. On the shelf page there is nothing else
+ * for the word to attach to; on the article page the sentence beside it settles
+ * it.
+ *
+ * **One sentence doing both jobs**, deliberately: it is the link text *and* the
+ * whole of the offer, so there is no lead-in prose to keep in step with it and
+ * no second wording to drift. Quiet rather than loud — a report link with a
+ * warning colour on every card would read as a warning about each article, and
+ * the piece it is next to is almost always shared perfectly legitimately.
+ */
+export const TAKEDOWN_LINK = "If something here is yours, ask us to take it down";
+
+/**
+ * The heading of the section at the other end of it, on `/privacy`.
+ *
+ * Here rather than inline in the page because two things need to agree on it —
+ * the page draws it, and tests/takedown-privacy-section.test.tsx checks that
+ * the anchor the link points at is the section that carries it. The rest of that
+ * page's prose is JSX, and stays JSX: it is a policy read top to bottom, not a
+ * set of strings other surfaces reuse (src/web/PrivacyPage.tsx § Prose in JSX).
+ */
+export const TAKEDOWN_HEADING = "If something here is yours";
+
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
 /** The switch, off. */
@@ -2821,6 +2945,56 @@ export const SHARED_LINK_CARRIES =
 export const SHARING_CANNOT_UNRING =
   "Turning this off takes it off the public list and refuses the next request for it. It cannot " +
   "take back a page somebody's browser already has, or anything they copied out of it.";
+
+/**
+ * **What taking it down costs, said as a consequence and not as a gate.**
+ *
+ * A public article counts as **half** an article against the allowance
+ * (src/billing/half-units.ts), so making one private again puts the other half
+ * back — and on the free tier, whose allowance is lifetime, there is no next
+ * month to rescue anybody from that.
+ *
+ * Three rules decided this sentence and all three are Fable's, 2026-09-04:
+ *
+ * - **Unsharing is never harder than sharing.** So there is no tick-box, no
+ *   second confirmation and no warning tint: a cost attached to taking something
+ *   down is a cost attached to acting on a complaint, and we built a takedown
+ *   route the same week that asks owners to do exactly that. It sits beside
+ *   `SHARING_CANNOT_UNRING` as one more fact about the press.
+ * - **It says reading is never limited**, because that is what somebody reading
+ *   the word *allowance* on a page about taking their own article down will
+ *   actually be worried about.
+ * - **Money never appears inside the sharing confirmation.** This is rendered in
+ *   the `shared` branch of AccessSharing.tsx and nowhere else. The confirmation
+ *   is where the rights tick-box lives, and a discount printed beside it makes
+ *   the inducement ours and weakens exactly the thing that tick-box is for.
+ *
+ * **No number in it**, which is a decision rather than an omission. The number
+ * would be this article's charged ledger rows, and reading those on the path
+ * that opens an article is the aggregate `readBillingSummary` gives a whole
+ * paragraph to avoiding (src/billing/summary.ts). A statement of consequence
+ * does not need the arithmetic; the count is on `/profile`, where the ledger is
+ * already being read.
+ *
+ * **And it is conditional, since 2026-09-05**, because for two owners it was
+ * simply false: an article added before billing launched has no ledger row at
+ * all, and one charged before `ingest_events.article_id` existed resolves to
+ * nothing and costs full price either way. Both were told that taking their
+ * article down would cost them, and it would not.
+ *
+ * That is worse here than an ordinary inaccuracy. This sentence is on the press
+ * a takedown asks an owner to make, and the rule above is that **unsharing is
+ * never harder than sharing** — a cost attached to taking something down is a
+ * cost attached to acting on a complaint. An *invented* cost is the sharpest
+ * version of exactly that. GPT Sol, 2026-09-05. The condition is stated in
+ * words rather than computed: knowing which owner is which means an aggregate
+ * on the path that opens an article, which is the thing this comment already
+ * refuses.
+ */
+export const UNSHARING_COSTS_ALLOWANCE =
+  "If this article counts against your allowance, being public halves what it costs — so making " +
+  "it private again uses that half back up. Nothing you have added goes anywhere, and reading is " +
+  "never limited.";
 
 /** The confirmation, which no other product asks for. */
 export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
@@ -3553,6 +3727,50 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */
 
+/** One article, as a refusal names it. Structural, so no import crosses here. */
+interface NamedArticle {
+  readonly title: string;
+}
+
+/**
+ * **The most articles an offer will name before it goes back to counting.**
+ *
+ * Three is where a sentence stops being readable, and the cases beyond it are
+ * rare: the offer needs `used − budget + 1` half-units freed, which is one for
+ * the ordinary refusal and only grows for a reader who has unshared their way
+ * well past the wall.
+ */
+const MOST_NAMED_ARTICLES = 3;
+
+/** In quotes, and short enough that the rest of the sentence survives it. */
+function quotedTitle(title: string): string {
+  const clean = title.replace(/\s+/g, " ").trim();
+  return `“${clean.length <= 60 ? clean : `${clean.slice(0, 59).trimEnd()}…`}”`;
+}
+
+/**
+ * *sharing “A”*, *sharing “A” and “B”*, *sharing “A”, “B” and “C”* — and, past
+ * {@link MOST_NAMED_ARTICLES}, a count with the qualifier that keeps it true.
+ *
+ * The qualifier is *counted against this allowance* rather than *of your
+ * articles*: the reader's library also holds articles with no ledger row, which
+ * sharing would not move, and nothing on screen tells the two apart.
+ */
+function sharingOffer(chosen: readonly [NamedArticle, ...NamedArticle[]]): string {
+  const [first, ...others] = chosen;
+  if (chosen.length > MOST_NAMED_ARTICLES) {
+    return `sharing ${chosen.length} of the articles counted against this allowance`;
+  }
+  const list = others.reduce(
+    (so_far, article, i) =>
+      i === others.length - 1
+        ? `${so_far} and ${quotedTitle(article.title)}`
+        : `${so_far}, ${quotedTitle(article.title)}`,
+    quotedTitle(first.title),
+  );
+  return `sharing ${list}`;
+}
+
 /**
  * The account has added everything its plan allows.
  *
@@ -3618,17 +3836,53 @@ export function ingestQuotaReached(quota: {
    * src/store/pg-billing.ts.
    */
   lapsed?: boolean;
+  /**
+   * **The articles this reader could share to make room** — absent when sharing
+   * every one of them still would not.
+   *
+   * A public article counts as half against the allowance, so sharing is a way
+   * out of this refusal as well as buying. **The list is computed and never
+   * assumed**: `Refused.shareToMakeRoom` (src/store/pg-billing.ts) groups the
+   * charged rows by article inside the entitlement window and takes the largest
+   * groups first, so the sentence appears only when it is true. It is therefore
+   * silent for the reader who has already shared everything, and for the reader
+   * whose charged rows all predate the discount and cannot be cheapened at all.
+   *
+   * **Copy cannot rescue a false offer; conditionality has to** (Fable,
+   * 2026-09-04), which is why this is data rather than a flag and why there is
+   * no unconditional version of the sentence.
+   *
+   * **And they are named rather than counted**, since 2026-09-05. *Sharing one
+   * of your articles would make room* is a true sentence about a set the reader
+   * cannot see: a grandfathered article carries no ledger row, looks exactly
+   * like the others, and sharing it moves nothing. Sharing is irreversible in
+   * the way that matters, so an offer that can send somebody to the wrong
+   * article is worse than no offer. `Refused.shareToMakeRoom` has the case.
+   *
+   * **All three refusals carry it.** Excluding `pay-lapsed` was the plan's first
+   * answer and was wrong as a class — a Reader who added three private articles
+   * and then lapsed is at six half-units against a free budget of six, and
+   * sharing one of them makes room. GPT Sol, 2026-09-04.
+   */
+  shareToMakeRoom?: readonly [NamedArticle, ...NamedArticle[]];
 }): ReaderFacingFailure {
   const kept =
     "Everything you have already added stays exactly where it is — reading is never limited.";
+
+  /* Leading space, and empty when there is nothing true to offer, so each arm
+     reads as one sentence stream rather than as a slot with a gap in it. */
+  const share =
+    quota.shareToMakeRoom === undefined
+      ? ""
+      : ` A public article counts as half, so ${sharingOffer(quota.shareToMakeRoom)} would make room.`;
 
   if (quota.lapsed) {
     return {
       kind: "blocked",
       message:
         `Your subscription has ended, so this account is back to the free allowance of ` +
-        `${quota.limit} articles — and those are already spent. Trying again will not help; ` +
-        `resubscribing is what adds more, and your profile page is where that starts. ${kept} ` +
+        `${quota.limit} articles — and those are already spent. Trying again will not help. ` +
+        `Resubscribing adds more, and your profile page is where that starts.${share} ${kept} ` +
         "[pay-lapsed]",
     };
   }
@@ -3637,9 +3891,15 @@ export function ingestQuotaReached(quota: {
     return {
       kind: "blocked",
       message:
-        `You have added all ${quota.limit} articles a free account can add. Trying again will not ` +
-        "help — the count will be the same. Adding more needs a subscription, and the pricing " +
-        `page sets one up. ${kept} [pay-free]`,
+        /* **The allowance is spent, rather than "you have added all N".** Once
+           a public article costs half a slot, six articles can sit against an
+           allowance of three and be refused — so a sentence claiming the reader
+           added exactly three is false for precisely the account reading it.
+           The limit is still named, because "you have reached your limit"
+           without the limit leaves nobody able to tell a plan from a fault. */
+        `A free account can add ${quota.limit} articles, and this account's allowance is spent. ` +
+        "Trying again will not help — the count will be the same. A subscription adds more, " +
+        `and the pricing page sets one up.${share} ${kept} [pay-free]`,
     };
   }
 
@@ -3655,8 +3915,11 @@ export function ingestQuotaReached(quota: {
   return {
     kind: "blocked",
     message:
-      `You have added all ${quota.limit} articles this billing period covers. Trying again will ` +
-      `not help until your allowance starts again on ${when}. ${kept} [pay-limit]`,
+      /* The same correction as the free arm above: the allowance is what is
+         spent, and how many articles it took to spend it is not this sentence's
+         business — unsharing can leave forty against an allowance of twenty. */
+      `This billing period covers ${quota.limit} articles, and the allowance is spent. Trying ` +
+      `again will not help until your allowance starts again on ${when}.${share} ${kept} [pay-limit]`,
   };
 }
 

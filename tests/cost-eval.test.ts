@@ -50,7 +50,6 @@ import {
   parseStepList,
   requiredAiJobsFor,
   verifyFixtures,
-  withoutTheInProcessPump,
 } from "../evals/cost/harness.js";
 import {
   aggregateByStep,
@@ -565,27 +564,13 @@ describe("localTarget", () => {
   });
 });
 
-describe("withoutTheInProcessPump", () => {
-  it("sets VERCEL for the call and puts the environment back", async () => {
-    const before = process.env.VERCEL;
-    let seen: string | undefined;
-    await withoutTheInProcessPump(async () => {
-      seen = process.env.VERCEL;
-    });
-    expect(seen).toBe("1");
-    expect(process.env.VERCEL).toBe(before);
-  });
-
-  it("puts it back even when the call throws", async () => {
-    const before = process.env.VERCEL;
-    await expect(
-      withoutTheInProcessPump(async () => {
-        throw new Error("enqueue failed");
-      }),
-    ).rejects.toThrow("enqueue failed");
-    expect(process.env.VERCEL).toBe(before);
-  });
-});
+/* **`withoutTheInProcessPump` was tested here and is gone**, 2026-09-05. It set
+   `VERCEL=1` across the `enqueue` call so that `pump` would return immediately,
+   and the two cases here checked that its `try/finally` put `process.env` back —
+   a test of a `try/finally`, which says nothing about whether the pump was
+   stopped. `enqueue` takes `pump: false` now (src/jobs.ts), the eval passes it,
+   and the effect is asserted in tests/enqueue-drives-what-it-queues.test.ts:
+   queue a job, look a moment later, see whether anything moved it. */
 
 describe("reading a finished job back", () => {
   it("reads the block count out of the step's own detail line", () => {

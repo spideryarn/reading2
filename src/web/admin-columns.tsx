@@ -230,9 +230,46 @@ function Ingests({ user }: { user: AdminUser }) {
     user.ingestWindow === "period"
       ? "in the current Stripe billing period"
       : "over the lifetime of the account";
+  /* **The plain fraction, while it is still a fraction.** With nothing shared
+     *and* no more ingests than the allowance, one ingest costs one article's
+     worth and `3 / 20` means what it has always meant.
+
+     **The second half of that condition is not redundant.** An account that
+     shared six articles and then made them all private again has nothing public
+     and twelve half-units against a budget of six, and `6 / 3` in this cell
+     would read as the wall having failed — the same rendering the half form
+     below exists to avoid, arrived at from the other direction. GPT Sol,
+     2026-09-05. */
+  if (user.ingestsShared === 0 && user.ingests <= user.ingestLimit) {
+    return (
+      <span title={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
+        {user.ingests} / {user.ingestLimit}
+      </span>
+    );
+  }
+  /* **And the honest pair once something is shared**, because the fraction stops
+     being one: a public article costs half a slot, so twelve ingests can sit
+     inside an allowance of three and `12 / 3` would read as the wall having
+     failed. The enforcement figure is in half-units and no rounding of it is
+     correct beside an article limit (src/billing-plan.ts § *Every number here is
+     a whole article*), so the cell shows the enforcement pair in its own unit
+     and names it. The arithmetic is done here from integer counts rather than
+     sent as a total — the server has no better claim on `× 2` than the page. */
+  const halfUnits = (user.ingests - user.ingestsShared) * 2 + user.ingestsShared;
+  const budget = user.ingestLimit * 2;
   return (
-    <span title={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
-      {user.ingests} / {user.ingestLimit}
+    <span
+      title={
+        `${user.ingests} added ${window}, ` +
+        /* *None of them public* is a different fact from *0 of them public*, and
+           it is the one that explains a cell like `12 / 6 half` on an account
+           with nothing shared: they were public when they were added. */
+        (user.ingestsShared === 0 ? "none of them public now" : `${user.ingestsShared} of them public`) +
+        `. A public article counts as half, so that is ${halfUnits} half-slots against an ` +
+        `allowance of ${user.ingestLimit} articles, which is ${budget}.`
+      }
+    >
+      {halfUnits} / {budget} half
     </span>
   );
 }
@@ -441,7 +478,9 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
            is deliberate: the two allowances are measured over different spans,
            so a column of `4 / 20` and `2 / 3` is two different questions in one
            list unless each cell says which it is answering. */
-        hint: "Articles added against the allowance — a paid period, or the account's lifetime",
+        hint:
+          "Articles added against the allowance — a paid period, or the account's lifetime. " +
+          "Shown in half-slots for an account with public articles, which count half",
         ends: ["fewest first", "most first"],
         numeric: true,
       },

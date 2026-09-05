@@ -3,26 +3,23 @@
  * stable id. See docs/project/architecture.md#pipeline and
  * docs/project/block-ids.md.
  *
- *   npm run blocks -- output/noema-mythology-of-conscious-ai.html
+ *   npm run blocks -- <slug> [--force]
  *
  * Ids go into the HTML itself (so `#spya-k3m9qt` anchors work with no
- * JavaScript) and into a `.blocks.json` beside it. Re-running is idempotent:
- * ids already present are kept, only missing ones are minted.
+ * JavaScript) and into the block rows beside it. Re-running is idempotent: ids
+ * already present are kept, only missing ones are minted.
  *
  * **`runBlocks` neither reads nor writes any of that.** It takes the HTML as a
- * string and returns the stamped HTML and the blocks; the pipeline gives them
- * to the artefact store and `main()` at the bottom of this file writes the two
- * files the command line above still produces.
+ * string and returns the stamped HTML and the blocks; both callers — the
+ * pipeline and `scripts/stage.ts`, which is the same pipeline driven from a
+ * terminal — hand them to the artefact store.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 /* jsdom is loaded on first use rather than imported here — src/jsdom-lazy.ts
    says why, and it is the largest single thing a cold `GET /api/library` used
    to pay for. `splitIntoBlocks` stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
-import { isMain } from "./is-main.js";
 /* The three strings stage 2 stamped into the DOM, from the file that writes
    them. See noteFieldsFor. */
 import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from "./notes.js";
@@ -1536,21 +1533,13 @@ function assertSomethingWasProduced(slug: string, produced: Block[]): void {
   throw new NoBlocksProduced(slug);
 }
 
-/**
- * Stage 3's baseline read for a caller that has files and no store — the CLI at
- * the bottom of this file, and nothing else.
- *
- * The swallowed error is why this is not the pipeline's path any more. "There
- * is no file" and "I could not read the file" are the same answer here, and the
- * second one costs every id in the article.
- */
-async function previousBlocksInFile(jsonFile: string): Promise<Block[] | undefined> {
-  try {
-    return JSON.parse(await readFile(jsonFile, "utf-8")).blocks as Block[];
-  } catch {
-    return undefined;
-  }
-}
+/* **`previousBlocksInFile` went on 2026-09-05**, with the command line that was
+   its only caller. It read the baseline out of a `blocks.json` and swallowed the
+   error, so *"there is no file"* and *"I could not read the file"* were one
+   answer — and the second costs every id in the article. That was tolerable for
+   a CLI holding files and no store, and it is not a shape the pipeline ever
+   used: `previousBlocksFrom` above reads the draft's own block rows.
+   docs/project/block-ids.md. */
 
 /**
  * Stage 3 as a function of its input: the article's HTML in, the stamped HTML
@@ -1624,52 +1613,17 @@ export function runBlocks(opts: {
   return { ...result, previousBlocks: previous?.length ?? 0 };
 }
 
-async function main() {
-  const input = process.argv[2];
-  if (!input) {
-    console.error("Usage: tsx src/blocks.ts <article.html> [blocks.json]");
-    process.exit(1);
-  }
-  const argOut = process.argv[3];
-  const jsonFile = argOut ?? `${input.replace(/\.html$/, "")}.blocks.json`;
-  /* The reading and the writing are the CLI's own now. On the filesystem stage
-     2's `extractedHtml` and stage 3's `stampedHtml` are the same path, so the
-     file named here is both — which is exactly the ambiguity `BLOCKS_INPUT_HTML`
-     exists to remove for the pipeline, and which the command line cannot have
-     an opinion about. */
-  const source = await readFile(input, "utf-8");
-  /* The CLI has files and no store, so it resolves its own baseline — and it is
-     the *only* caller allowed to, because it is the only one for which "the
-     file is not there" honestly means "there is nothing to carry". */
-  const { blocks, html, stats } = runBlocks({
-    slug: path.basename(input).replace(/\.html$/, ""),
-    extractedHtml: source,
-    previous: await previousBlocksInFile(jsonFile),
-  });
-
-  /* Nothing above this line has touched the disk, so a run the guards refused
-     leaves both artefacts exactly as the previous run left them. */
-  await writeFile(input, html, "utf-8");
-  /* `blocksArtefact`, not a bare `{ blocks }` — see its own comment. The stamp
-     is what makes a stale artefact visible at all; without it a blocks.json
-     written before DOMPurify existed is indistinguishable from one written this
-     morning, and "re-run stage 3 to clean them" is advice nothing ever asks
-     for. Re-running this stage *is* the migration: it rewrites the file anyway. */
-  await writeFile(jsonFile, JSON.stringify(blocksArtefact(blocks), null, 2), "utf-8");
-
-  const byKind = blocks.reduce<Record<string, number>>((acc, b) => {
-    acc[b.kind] = (acc[b.kind] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  console.log(`Blocks:    ${stats.total}  (${JSON.stringify(byKind)})`);
-  console.log(
-    `Ids:       ${stats.reused} reused, ${stats.carried} carried over, ${stats.minted} minted`,
-  );
-  console.log(`Links:     ${stats.retargeted} internal links repointed at our ids`);
-  console.log(`Gistable:  ${stats.gistable}  (${stats.total - stats.gistable} skipped)`);
-  console.log(`\nHTML:      ${path.resolve(input)}`);
-  console.log(`Blocks:    ${path.resolve(jsonFile)}`);
-}
-
-if (isMain(import.meta.url)) void main();
+/* **`npm run blocks` used to be here, and it is `scripts/stage.ts` now.**
+ *
+ * It took an HTML file, read it, ran `runBlocks` with `previousBlocksInFile` as
+ * the baseline, and wrote the stamped HTML back over its input and a
+ * `blocks.json` beside it — two paths off `process.cwd()`, which under Postgres
+ * are files nothing reads.
+ *
+ * `npm run blocks -- <slug> [--force]` runs the same `runBlocks` through the
+ * queue, against a draft revision that carries the published revision's block
+ * rows as its baseline. **That is what keeps the ids** — the property the old
+ * command kept by reading a file, kept now by the mechanism the product uses:
+ * three consecutive runs over one article, two of them forced, produced three
+ * revisions and one distinct id set (stage E, 2026-09-05).
+ */

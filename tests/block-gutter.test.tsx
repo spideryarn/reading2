@@ -33,6 +33,8 @@ let root: Root;
 let jumped: BlockId[];
 let opened: string[];
 let said: string[];
+let chatted: BlockId[];
+let helped: BlockId[];
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,6 +45,8 @@ beforeEach(() => {
   jumped = [];
   opened = [];
   said = [];
+  chatted = [];
+  helped = [];
   window.history.replaceState(null, "", "/read/example");
 });
 
@@ -53,7 +57,18 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function paint(comments?: Comment[], chatCount = 0): void {
+/**
+ * `slots` is how a visitor is painted: **absent callbacks**, not flags. The
+ * component decides what to draw from the handlers it was given and there is no
+ * second switch, so a test that lied about which is which would be testing a
+ * component this file does not have.
+ */
+function paint(
+  comments?: Comment[],
+  chatCount = 0,
+  slots: { chat?: boolean; help?: boolean } = {},
+): void {
+  const { chat = true, help = true } = slots;
   act(() => {
     root.render(
       <BlockGutter
@@ -62,7 +77,8 @@ function paint(comments?: Comment[], chatCount = 0): void {
         {...(comments ? { comments } : {})}
         chatCount={chatCount}
         onOpenComment={(id) => opened.push(id)}
-        onChatAbout={() => {}}
+        {...(chat ? { onChatAbout: (id: BlockId) => chatted.push(id) } : {})}
+        {...(help ? { onHelp: (id: BlockId) => helped.push(id) } : {})}
         onJump={(id) => jumped.push(id)}
         announce={(s) => said.push(s)}
       />,
@@ -273,5 +289,101 @@ describe("the chat button", () => {
   it("is present and unmarked on a block with none", () => {
     paint();
     expect(host.querySelector(".block-chat")?.classList.contains("has")).toBe(false);
+  });
+});
+
+/**
+ * The fourth cell of the pad — stage 2 of
+ * docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md, where
+ * it **opens a draft and spends nothing**. Everything here is about that being
+ * true and staying true: the button exists only where the callback does, it is
+ * its own callback rather than a second door into chat, and what it says to a
+ * reader and to a screen reader does not claim an answer is on its way.
+ */
+describe('the "?"', () => {
+  it("is drawn only where the callback is — a visitor gets no question mark", () => {
+    // The callback IS the capability; there is no boolean and nothing dimmed.
+    paint(undefined, 0, { help: false });
+    expect(host.querySelector(".blk-help")).toBeNull();
+    paint();
+    expect(host.querySelector(".blk-help")).not.toBeNull();
+  });
+
+  it("asks about THIS block, and does not open the free-text composer as well", () => {
+    paint();
+    act(() => {
+      (host.querySelector(".blk-help") as HTMLButtonElement).click();
+    });
+    expect(helped).toEqual([ID]);
+    // Two doors, two intents: pressing one must not fire the other, which is
+    // the failure a shared handler would produce and nothing else would show.
+    expect(chatted).toEqual([]);
+  });
+
+  it("keeps the press out of the row's own handler", () => {
+    // The <tr> under this gutter has a click handler of its own (TableView), so
+    // a press that propagates jumps the reader somewhere they did not ask to
+    // go. The other three slots all stop it; this one has to as well.
+    paint();
+    let bubbled = 0;
+    const spy = () => bubbled++;
+    document.body.addEventListener("click", spy);
+    try {
+      click(host.querySelector(".blk-help") as Element);
+    } finally {
+      document.body.removeEventListener("click", spy);
+    }
+    expect(helped).toEqual([ID]);
+    expect(bubbled).toBe(0);
+  });
+
+  it("says who is being asked, because pressing it spends", () => {
+    /* **This assertion has been red once on purpose and that was the point.**
+       Through stage 2 the button opened a composer and sent nothing, so the
+       copy read "Ask for help with this paragraph" — a promise of a question,
+       because "Explain this" would have reported an answer nobody had bought.
+       Stage 3 makes one press send, and this exact-string check is what stopped
+       the sentence staying true-sounding while the behaviour moved underneath
+       it. GPT Sol's condition on stage 2 being coherent alone; the red was
+       watched when the copy changed.
+
+       "the AI" rather than a bare verb, because that is the word the reader has
+       to see before the finger lands: this is the one control in the gutter
+       that costs money without a confirmation. */
+    paint();
+    const b = host.querySelector(".blk-help") as HTMLButtonElement;
+    expect(b.getAttribute("title")).toBe("Ask the AI for help with this paragraph");
+    /* Shorter, and divergent on purpose — the same split the permalink above
+       makes. A screen reader announces this on focus with three more buttons
+       queued behind it in the same gutter, so the accessible name stops at the
+       verb while the tooltip has room for the paragraph. */
+    expect(b.getAttribute("aria-label")).toBe("Ask the AI for help");
+    /* A `toContain("AI")` stood here and could never have contributed a
+       failure: the exact equality two lines up already decides it. GPT Sol,
+       2026-09-05 — the same species as the `(hover: none)` helper that read the
+       wrong block, and worth naming twice because it is the one that keeps
+       coming back. */
+  });
+
+  it("draws the same 12px ink as the other three", () => {
+    // Stage 1 grew the hit box to 24px and deliberately left the glyphs at 12.
+    // A fourth icon drawn larger would be the loudest thing in a column whose
+    // rule is that it stays quiet.
+    paint();
+    const svg = host.querySelector(".blk-help svg") as SVGElement;
+    expect(svg.getAttribute("width")).toBe("12");
+    /* `circle-question-mark`, because `CircleHelp` is lucide v1's alias for it
+       — the class is the glyph's own name and the import's is a synonym. */
+    expect(svg.getAttribute("class")).toContain("circle-question-mark");
+  });
+
+  it("comes last in the tab order, after the address, the mark and the chat", () => {
+    // Source order is tab order; the pad places by grid-area, so the two can
+    // disagree silently. Reading order down the article's own logic.
+    paint([comment("c1", 5)]);
+    const classes = [...host.querySelectorAll(".blk-gutter > *")].map(
+      (el) => el.className.split(" ")[0],
+    );
+    expect(classes).toEqual(["blk-permalink", "blk-cmt", "block-chat", "blk-help"]);
   });
 });

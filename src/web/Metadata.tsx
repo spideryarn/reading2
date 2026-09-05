@@ -1235,7 +1235,7 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
      metadata goes straight into the row, so a `javascript:` or `data:` value is
      reachable and an anchor here would be an active URL sink (src/urls.ts,
      docs/project/security.md; GPT Sol, 2026-08-31, the third of three sinks on
-     this field). A `file://` from `npm run pdf` lands here too.
+     this field). A `file://` from `npm run eval:pdf-read` lands here too.
 
      **Only the sentence changes; the address itself is never printed.** An
      earlier version of this line showed the refused value as inert text, on the

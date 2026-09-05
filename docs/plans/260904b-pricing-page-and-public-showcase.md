@@ -293,35 +293,42 @@ product.
   and a currency switcher (hosted Checkout picks the currency from the customer's location — which
   is why each Stripe price carries all three, [billing.md](../project/billing.md)).
 
-## Where this stands, 2026-09-04 evening
+## Where this stands, 2026-09-05
 
-**Important work left.** Three of six stages are on `dev` and the tree is green; what remains
-includes a promise the code has already broken.
+**Every stage is on `dev`.** What is left is three decisions, and all three are Greg's.
 
-| Stage | State |
+| Stage | On `dev` |
 |---|---|
-| 1 — buying from `/pricing` | **on `dev`** (`275a6230`, `fd081a15`) |
-| 2 — the pricing page rebuilt | **on `dev`** (`07412b79`) |
-| 3a — the listing's data and API | **on `dev`** (`80573d0c`, `1ef8ba6b`) |
-| 3b — `/read/public` itself | **built**, uncommitted — see the log |
-| 4 — showcase links, takedown route, byline | not started |
-| 4b — the upgrade path | **built**, uncommitted — see the log |
-| 5 — a public article counts half | not started; needs a migration |
+| 1 — buying from `/pricing` | `275a6230`, `fd081a15` |
+| 2 — the pricing page rebuilt | `07412b79` |
+| 3a — the listing's data and API | `80573d0c`, `1ef8ba6b` |
+| 3b — `/read/public` itself | `bb454bb4` |
+| 3c — the sharing copy that 3a owed | `56eecb43`, `ef0ac457` |
+| 4 — byline and a takedown route | `024633d4` |
+| 4b — a Reader can reach Researcher | `47345d3a`, `16d52565` |
+| 4c — showcase links on `/` and `/features` | `44c15900` |
+| 5 — a public article counts half | `e8f074b5` |
 
-**The one thing that is worse than not-yet-built.** Stage 3a shipped the listing's API while
-`src/messages.ts` was fenced by a neighbouring session, so `SHARING_ON` still tells an owner *"Anyone
-with the link can read this"* when the code now makes public articles enumerable. Nothing is exposed
-that Greg did not agree to expose — he is the only account holder — but **the app is saying something
-untrue**, and `PrivacyPage` now promises *"The sharing card lists exactly what will go out before you
-turn it on"* on top of it. This is the next thing to do, and it is small: the constants are agreed to
-be ours, and the wording is drafted in §1 above.
+**The three decisions, none of which an agent may take.**
 
-**What each remaining stage costs, honestly.** 3b is the cheapest — the route parses, both sides
-answer 404 deliberately, and it needs a page reusing the shelf's card with the owner verbs off.
-Stage 5 is the expensive one and the only one touching money: a migration adding `article_id` to
-`ingest_events`, a weighted `SUM` replacing a `COUNT`, and a warning at the unshare moment that is a
-gate rather than a nicety, because the free tier's window is lifetime and there is no next month to
-rescue anybody who unshares themselves over the wall.
+1. **Flip the showcase articles public**, in the production UI rather than by SQL, so the
+   `article_visibility_changes` row records that Greg confirmed the rights. The criterion grew two
+   clauses while this was built: pick articles with a **Sketch** drawn, because a visitor's Diagram
+   shows the Sketch and most articles have never had one; and know that the article carries **his
+   saved searches, in his own words**, which is the first shared artefact that is the reader's voice
+   rather than the model's.
+2. **The `CHECK` constraint can abort a deploy.** `billing_accounts_subscription_fields_need_subscription`
+   validates the rows already there, so if production holds an inconsistent billing row the migration
+   fails rather than passes. That is the right way round — such a row is an account that may be being
+   billed twice — but it is a deploy that can fail on him. `NOT VALID` plus a separate validation is
+   the alternative.
+3. **GPT Sol would have built the showcase cheaper**, as a link to `/read/public` rather than three
+   articles read from the listing. Greg's own sentence asked for a few articles to link to, so that is
+   what is built; the cheap version is a **subset** — delete the hook and the list — and needs no test
+   changes either way.
+
+**The one number still unread** is the count of non-Greg public rows in production (§1). Nothing has
+changed about it; nobody has looked.
 
 ## Stages
 
@@ -696,6 +703,223 @@ ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the
 - No rate limit beyond what the namespace has. Cluster C and S4 of that plan are still open.
 
 ## Log
+
+- **2026-09-05, stage 5 built** — a public article counts half, on a ledger that had no way of
+  saying which article a charge produced. Ten things worth knowing:
+  - **The three findings the design rested on were all confirmed by reading the code**, and one of
+    them was worse than the plan said. `ingest_events` had six columns and none named an article;
+    `jobs` really is hard-deleted (two `.delete(jobs)` sites in `pg-jobs.ts`); and `ai_calls.article_id`
+    really is a plain FK with `on delete set null`, so the precedent held.
+  - **The column is `drizzle/20260904235116_ingest_events_article_id.sql`**, generated with `--name`
+    and applied against `Target: postgresql://postgres@127.0.0.1:54362/postgres`. Verified by reading
+    `information_schema` and `pg_constraint` rather than the success line: `article_id uuid`,
+    nullable, `confdeltype = 'n'`.
+  - **`settleReservation` takes a discriminated `Settlement`**, and the compiler walked all four call
+    sites the moment the string went away — which is the whole argument for the union over an
+    optional argument. Proven red at `npm run typecheck` by weakening the union to
+    `{ kind: "succeeded"; articleId?: string } | "succeeded"`: two `@ts-expect-error` directives in
+    the new suite went *unused*, which is the failure this guard has.
+  - **The two units are branded types** (`Articles`, `HalfUnits`, `src/billing/half-units.ts`), and
+    branding *both* is what matters: a brand is assignable to `number`, so branding only the
+    half-unit side would still let a budget be passed where a tier's allowance belongs — which is
+    exactly the trap. The cost is `articles(…)` at the four boundaries where a plain number arrives.
+  - **The lock order needed an unlocked ownership probe in front of it**, which the design did not
+    anticipate. `lockBillingAccount` *writes* — it creates the anchor row — so putting it first in
+    `pgVisibilityStore.set` meant a stranger's `PUT` at somebody else's slug minted a billing row and
+    then 404ed. Caught by `tests/public-visibility-pg.test.ts` § *cannot be published by somebody who
+    does not own it*, which went **500 where 404 belongs** because the synthetic outsider has no
+    `auth.users` row for the foreign key. So the transaction now asks *is there anything here to
+    change* before it writes anything, and `lockedArticleQuery` remains the ownership check.
+  - **The anchor row is a real ordering fact and it reached a fixture.** `tests/owner-isolation.test.ts`
+    § the public-shelf teardown deletes its second account's `auth.users` row, which
+    `billing_accounts_owner_fk` now refuses — because sharing an article creates a billing anchor
+    where nothing created one before. The cleanup removes the billing row first, with the reason
+    written beside it. The two other suites that both share an article and delete an auth user were
+    checked and are unaffected.
+  - **`ingest_events` started reaching an article, so `ARTICLE_TABLE_COVERAGE` had to answer for it**
+    — the guard is derived from the schema, and the FK is what pulled the table into its view. The
+    verdict is **not exported, in both projections**, with the reason spelled out because
+    `manifest.json` derives its `omitted` list from that record: it is our accounting of what an
+    article cost *us*, it is Postgres-only so a rollback to `data/` has nothing to read it back, and
+    it is not one-to-one with an article. The entry names what would change that — a receipt, or a
+    per-article cost a reader is billed on.
+  - **`describePlan` grew a second shape rather than a rounding rule**, and `/admin/users` shows the
+    enforcement pair in half-slots and names the unit. Both because no rounding is correct:
+    `ceil(5/2)` says *"3 of 3 used"* while the wall still admits one. With nothing shared every
+    surface renders exactly what it rendered yesterday, which is the common case and the safest
+    diff. A precedence bug in the paid arm — `shared + a ? b : c` — was caught by an existing test
+    asserting the renewal date, not by a new one.
+  - **Red first, every claim, by mutating the mechanism and putting the text back.**
+    `PUBLIC_INGEST_COST` to 2 → six cases red (*expected 4 to be 3*, *expected 10 to be 5*, *expected
+    'refused' to be 'admitted'*); the `coalesce` dropped → three red (*expected { chargedFullPrice:
+    +0 } to deeply equal { chargedFullPrice: 1 }*); the wall loosened to `>` → five red (*expected
+    'admitted' to be 'refused'*); the offer grouped by row instead of by article, and again ordered
+    ascending → the offer case red both times (*to match object { shareToMakeRoom: 1 }*); the article
+    id dropped from the charge → two red (*expected null to be '8c8365…'*); the tier doubled before
+    the delta → the wall-level unit case red (*expected admitted to match { kind: 'refused', limit:
+    33 }*), and doubling inside `limitForPeriod` → also the pure one (*expected 183 to be 33*);
+    in-flight made half price → one red (*expected 1 to be 2*); the billing lock removed from the
+    visibility switch → the lock-order case red (*expected true to be false*); the offer made
+    unconditional → three red; and money planted in the sharing confirmation → the placement case red.
+  - **Two of the first tests were theatre and were rewritten.** *"charges a private article two
+    half-units and a public one one"* asserted `PRIVATE_INGEST_COST + PUBLIC_INGEST_COST`, so it
+    stayed green with the discount switched off — watched doing exactly that. And the offer case's
+    first fixture could not tell rows from articles, because at exactly the wall freeing one row is
+    always enough; it now needs three freed, from an article with three charged rows beside an
+    article with one.
+
+- **2026-09-05, GPT Sol reviewed stage 5's code. No money-charging or free-ingest defect** — it ran
+  an exhaustive check of the arithmetic and found the overdraft bounded at 7/6 and 41/40, with no
+  share/unshare/re-add cycle earning another ingest; the lock order, the join, the migration and the
+  branded units were all clean. What it found was three false sentences, one test gap and one
+  type-boundary gap, and all five are fixed:
+  - **The offer named a number and lost which articles could supply it.** Three charge-bearing
+    private articles at 6/6 beside one grandfathered article: *sharing one of your articles would
+    make room* is arithmetically right and points at four articles of which only three are meant.
+    The cheap fix — *"one of the articles counted against this allowance"* — is true and still not
+    actionable, because **nothing on any screen tells a charge-bearing article from a grandfathered
+    one**, so the reader cannot make the choice themselves and sharing is irreversible. So the query
+    returns the articles: `Refused.shareToMakeRoom` is a non-empty list of titles
+    (`coalesce(title_override, the revision's title, slug)`, the shelf's own expression), and the
+    sentence names up to three of them before going back to a qualified count. `/profile`'s
+    unconditional version is gone and asks the same query, only at the wall.
+  - **The unshare warning claimed a cost that does not exist** for a grandfathered article and for a
+    pre-migration charged row — and it sits on the press a takedown asks an owner to make, which is
+    the one place an invented cost is worst. Now conditional in words, with no new aggregate on the
+    path that opens an article.
+  - **The displayed numbers reverted to the invalid ratios.** Share six, then unshare all six: 12/6
+    with `used = 6` and nothing public, so `/profile` said *"6 of 3 articles used"*, `/admin/users`
+    said `6 / 3`, and the refusal said *"you have added all 3 articles a free account can add"*. A
+    ratio now needs `sharedHalfPrice === 0` **and** `used <= limit`; the refusals say the allowance
+    is spent rather than counting what was added; nothing claims a count *fits* an allowance it is
+    over.
+  - **The paid period filter for public rows had no behavioural test**, which is the one that could
+    have given away unbounded ingests. Proven before it was closed: reversing the paid bounds in the
+    public copy alone left `tests/billing-quota-sql.test.ts`, `billing-quota-race.test.ts` and
+    `billing-half-units.test.ts` green — 44 tests — with every paid public success dropped from
+    usage. The new case put rows at both bounds and asserted the wall: under the same mutation it
+    reads *expected { kind: 'refused' } to match { kind: 'admitted' }*.
+  - **The branding stopped short of its own comment.** `QuotaAdjustment.delta`,
+    `QuotaRules.maxAllowance` and `allowanceFor` were plain `number`, so a `HalfUnits` could reach a
+    delta or a clamp with no cast while the header claimed otherwise. All three are `Articles` now,
+    converted at four named boundaries, and a `@ts-expect-error` triple pins it — unbranding `delta`
+    makes `npm run typecheck` fail with *Unused '@ts-expect-error' directive*. It reached no further:
+    the wire shapes (`ReaderPlan`, `AdminUser`) stay plain numbers because `src/billing-plan.ts`
+    imports nothing, and the header now says where the brand stops instead of implying it does not.
+
+- **2026-09-05, GPT Sol reviewed stage 4c's code. No P0 and no P1**, and its verdict on the two
+  questions that mattered was that nothing here puts a request, a token or owner-scoped data on a
+  page a stranger renders, and that `/pricing` stays request-free — importing `PublicShowcase` has no
+  side effect, the fetch exists only inside its mounted effect. Three findings, all fixed:
+  - **P2, and it was a real hole in the test: `articlesLinked` compared strings.** A same-origin
+    *absolute* link — `https://spideryarn.com/read/a-slug`, which is how somebody pasting a
+    production URL writes it — is the identical destination and walked straight past
+    `startsWith("/read/")`. Every `href` is resolved through `new URL(href, location.origin)` now.
+    Sol also pointed out that the fresh-remount helper is **not** the hole, which is worth recording
+    because it looks like one.
+  - **P2, the other half of the same finding, and it is the more useful one: a rendered-DOM test
+    cannot prove that no slug is named in source.** It can only say *this listing produced these
+    links*, and the two come apart in exactly the case somebody would introduce — a hand-written
+    link to the one good article, added beside the derived list, which the DOM cases catch only
+    because the fixture happens not to name that slug. There is a source guard now, over all three
+    files, refusing a literal read address in an `href`; what it cannot see (a slug assembled at
+    runtime) is written at the test, and is what the DOM cases are for. **Watched failing**: an
+    `<a href="/read/scaling-hypothesis">` planted in `FeaturesPage.tsx` turned it red on
+    `expected [ 'href="/read/scaling-hypothesis' ] to deeply equal []`, and turned the derived-links
+    case red beside it.
+  - **P2, and the copy rule caught us in a link label.** *"All the shared articles →"* asserts the
+    shelf is the whole set, which the archived filter, the readability bar and the row cap each
+    falsify — the same claim `PUBLIC_SHELF_LEDE` took two rewrites to stop making, arriving where
+    nobody was looking for it, and swapping *all* for *every* is not a fix. It is
+    `PUBLIC_SHELF_BROWSE_LINK` now, *"Browse shared articles →"*.
+  - **P3: the heading was false in a state the tests already drive.** *"See it on a real article."*
+    stays on screen when the read fails and when the shelf is empty, over no article at all. A bare
+    plural — *"Articles people have made public."* — is true in every state, and the lede lost its
+    first sentence with it, which was the shelf's own opening written a second time.
+  - **Raised and knowingly accepted:** `LandingPage` is the signed-out answer for `/profile`,
+    `/design`, `/admin`, `/add/…` and an unshared `/read/<slug>`, so the listing is read on all of
+    them. One anonymous request nobody asked for; Sol agreed it leaks nothing, and a prop threaded
+    through five call sites to suppress it is more machinery than the request costs.
+  - **And Sol's verdict on the mechanism itself was against it**, which is recorded rather than
+    acted on because it is Greg's call: *"No — the per-article marketing mechanism is not worth its
+    complexity … Keep a simple static link to `/read/public` on `/` and `/features`, and let that
+    page be the showcase."* Its grounds are the 200-row response fetched to draw three lines, the
+    fallback URLs above, and the size of the proof. **The cheap version is a subset of what is
+    built**, not a rewrite: delete `useShowcaseEntries` and the `<ul>` and the heading, the sentence
+    and the link stay — which is exactly the page the failed-read case already asserts. The argument
+    the other way is that *showcase* was the word in the request: three real titles with real
+    bylines are evidence, and a link is a promise the reader must spend a click to test.
+
+- **2026-09-05, stage 4c built** — `/` and `/features` each draw one `PublicShowcase`
+  ([`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx)), and every link in it comes out
+  of `GET /api/public/library`. Five things worth knowing:
+  - **The mechanism was chosen against the two cheaper ones, and the argument is at the top of the
+    component.** Hardcoded slugs are the only option that can honour *"pick a few"* and are exactly
+    the failure the rule forbids; a deploy-time list is the same failure an hour later with a build
+    to run before anybody can fix it. What is lost is the *picking*: the listing is ordered by
+    `public_at` descending, so the three shown are the most recently shared. If choosing matters
+    more than the dead link does, the honest next step is a column the flip owns — a `showcase_at`
+    or a rank on `articles` — not a list in a component. **Named rather than built**, because a
+    column is a migration and Greg has not asked for one.
+  - **The third option — link to `/read/public` and let the shelf be the showcase — was rejected on
+    one argument.** It is by far the cheapest and it cannot go dead, but a link that says *see what
+    people have shared* shows nothing; a stranger reading three real titles with real bylines is the
+    difference between a claim and its evidence. The link is kept anyway, and is the part of the
+    block that is drawn before the network is asked.
+  - **`/pricing` gets nothing, and that is the constraint rather than a preference.**
+    `tests/pricing-page-current-plan.test.tsx` asserts a signed-out `/pricing` makes no request at
+    all; it is also the page a stranger is most often *sent*, where a showcase would be a link
+    because there is room. `/` and `/features` each already make a claim about public articles a few
+    lines above the block, which is what makes them the two that want one.
+  - **The fetch can only add.** Heading, sentence and the `/read/public` link are drawn before the
+    listing lands; a failure, an empty shelf and a 404 all leave a page one link short rather than an
+    apology on a marketing page. That is deliberately the opposite of `/read/public`, where the list
+    *is* the page — argued at both files.
+  - **Red first, three ways, and one of them was the test's own bug.** With the derived list replaced
+    by a curated one, `links only to articles the listing is currently returning` failed
+    `expected [ 'alpha', 'beta' ] to deeply equal [ 'beta' ]` on both pages — an article that had
+    stopped being public, still linked. The empty-shelf and the three-at-most cases went red on the
+    same mutation; an apology paragraph added to the block turned the silent-failure case red. And
+    the negative case was **green for the wrong reason at first**: it re-rendered into the same root,
+    so the mount-once effect never re-ran and the first listing's entries survived. It tears the root
+    down and rebuilds it now, which is what a page load does; the limit that leaves — a tab held open
+    across an unshare — is written at the helper.
+
+- **2026-09-05, stage 4b's review findings fixed** — GPT Sol read the `purchase` union and found two
+  money-path defects and three gaps. All six are closed, and none of them was wrong:
+  - **P1: a schema-valid row offered Checkout for a tier the customer already owned.**
+    `status = 'active'`, a known price, a readable period, `stripe_subscription_id` null.
+    `entitlementFromRow` said *paying Reader*; the sale gate reads the id and said *sell them
+    anything*, so `/profile` answered `checkout` over `["reader", "researcher"]` and pressing
+    *Get Reader* would have started a second, concurrently billed subscription. **The separation was
+    the fault**, so the summary and `startCheckout` now ask one function, `subscriptionState`
+    (`src/billing/tiers.ts`), which fails closed to the Portal on anything it cannot make sense of.
+    A `CHECK` went in beside it — `billing_accounts_subscription_fields_need_subscription`, one
+    ordinary additive migration — so the row cannot be written at all. Both halves, because a
+    constraint can be dropped and a migration can lag the code that matches it.
+  - **P1: all three claims in the switching sentence were false out of a trial.** `trialing` is an
+    entitled status and the Portal is `trial_update_behavior: "end_trial"`, so the press ends the
+    trial: no difference to invoice, the period restarts, and — because the period *start* moves —
+    `nextQuotaAdjustment` writes no delta and the whole new allowance arrives. Greg's call was
+    **separate copy rather than refusing the switch**, and it is argued at `switchingPlan`
+    (`src/billing-plan.ts`): the capability was never what was wrong, and refusing it would leave a
+    trialling reader at the Portal's own switch menu with no warning at all. The `switch` arm now
+    carries `from: "paid" | "trial"`, so the compiler asks for the words rather than the page
+    guessing.
+  - **P1 coverage: every client test stayed green when `startCheckout` posted the wrong tier.**
+    Mutated to send `{"tierId":"researcher"}` for every press, all 24 tests across the three client
+    files passed — a *Get Reader* button opening a $50 Checkout with nothing red. The tests now
+    record `RequestInit.body`, press each direct-purchase button, and assert the exact tier id;
+    pressing the switch button closes the acknowledged filter gap in the same pass.
+  - **P2: no Stripe key still produced buttons.** `readBillingSummary` emits `purchase: none` before
+    the ranking is reached. `manageable` is untouched, and the reason is written at the branch.
+  - **P2: the non-empty tuple was a compile-time claim about a wire value.** `isPurchase` checks the
+    discriminant, the non-empty list, and that a `switch` says which kind it is; `useBilling` throws
+    on a body it cannot draw, which lands on the billing read's existing error path. Before it, the
+    legacy `canCheckout`/`offers` body produced *TypeError: Cannot read properties of undefined
+    (reading 'kind')* inside a render.
+  - **P3: the ranking is quota upgrades only**, and now says so at `tiersToOffer` — including what it
+    deliberately does not do, which is find a cheaper deal at the same allowance.
 
 - **2026-09-04, stage 4b built** — the gate is tier-aware, and a paying Reader is offered
   Researcher on both pages. Seven things worth knowing:

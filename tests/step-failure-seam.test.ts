@@ -87,7 +87,7 @@
  * `claimIn`. And this file still cannot see a step whose product was never
  * written: nothing here asserts on a revision.
  */
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
  * `SPIDERYARN_STORE=postgres`, before **any** import runs. `src/store/live.ts`
@@ -126,6 +126,7 @@ import { pgJobStore } from "../src/store/pg-jobs.js";
 import { PublishRefused } from "../src/store/pg-revisions.js";
 import type { StoreSession } from "../src/store/session.js";
 import type { Job } from "../src/types.js";
+import { bareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 /* Put the flag back straight after the imports: vitest reuses a worker across
@@ -162,6 +163,19 @@ const SLUGS = [
   "test-seam-declared-retry",
   "test-seam-publish-refused",
 ];
+
+/**
+ * **An `articles` row per slug, before anything is queued** — added 2026-09-05.
+ *
+ * `enqueue` refuses a bare-slug request for an article the reader does not have
+ * (src/jobs.ts), and every case below queues one. The rows are what this suite
+ * always meant: its subject is what a *failing step* persists onto the job, and
+ * a job on an article that does not exist was never the question. See
+ * ./helpers/bare-article.ts.
+ */
+beforeAll(async () => {
+  if (reachable) await bareArticles(SLUGS);
+}, 60_000);
 
 afterEach(() => {
   vi.restoreAllMocks();

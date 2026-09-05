@@ -22,6 +22,7 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { articles } from "../src/billing/half-units.js";
 import { FREE, FREE_LIFETIME_INGESTS } from "../src/billing/tiers.js";
 import type { Entitlement, TierRow } from "../src/billing/tiers.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -83,7 +84,7 @@ const PERIOD = { start: "2026-09-01T00:00:00Z", end: "2026-10-01T00:00:00Z" };
 const PAID: Entitlement = {
   tier: "paid",
   tierId: "reader",
-  limit: READER_INGESTS,
+  limit: articles(READER_INGESTS),
   periodStart: new Date(PERIOD.start),
   periodEnd: new Date(PERIOD.end),
 };
@@ -207,7 +208,7 @@ describe("a barrier-synchronised burst cannot exceed the allowance", () => {
     expect((await reserveIngest(OWNER, undefined, PRICES)).kind).toBe("admitted");
     /* Nothing has succeeded — the job has not even been created — and the
        usage still has to include it, or N concurrent requests all read zero. */
-    expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 1 });
+    expect(await usageFor(OWNER, FREE)).toEqual(NOTHING_CHARGED(1));
   });
 });
 
@@ -247,7 +248,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
     const answer = await reserveIngest(OWNER, undefined, PRICES);
     expect(answer.kind).toBe("stale");
     /* And it took no slot on the way past. */
-    expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 0 });
+    expect(await usageFor(OWNER, FREE)).toEqual(NOTHING_CHARGED(0));
   });
 
   dbIt("treats a cancelled subscription as free rather than as Reader", async () => {
@@ -281,7 +282,7 @@ describe("releasing a slot that never became a job", () => {
     if (one.kind !== "admitted") throw new Error("expected an admission");
     expect(await releaseReservation(one.reservationId)).toBe(true);
     expect(await releaseReservation(one.reservationId)).toBe(false);
-    expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 0 });
+    expect(await usageFor(OWNER, FREE)).toEqual(NOTHING_CHARGED(0));
   });
 
   /**
@@ -308,11 +309,26 @@ describe("releasing a slot that never became a job", () => {
     try {
       expect(await releaseReservation(one.reservationId)).toBe(false);
       /* Still in flight, still counted. */
-      expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 1 });
+      expect(await usageFor(OWNER, FREE)).toEqual(NOTHING_CHARGED(1));
     } finally {
       await pool.query("delete from spideryarn.jobs where id = 'spya-nrgbe3'");
     }
   });
+});
+
+/**
+ * **Nothing charged, and `n` in flight** — the usage shape, spelled once.
+ *
+ * `Usage` became three counts rather than a total when a public article started
+ * costing half a slot (src/billing/half-units.ts), and none of the cases here has
+ * ever charged a row: they reserve, release and count. So the two full-price and
+ * half-price counts are zero in every one of them, and writing that out four
+ * times would be four chances to write the wrong zero.
+ */
+const NOTHING_CHARGED = (inFlight: number) => ({
+  chargedFullPrice: 0,
+  chargedHalfPrice: 0,
+  inFlight,
 });
 
 describe("the refusal says what a reader needs", () => {
@@ -324,7 +340,7 @@ describe("the refusal says what a reader needs", () => {
     expect(refused).toEqual({
       kind: "refused",
       used: FREE_LIFETIME_INGESTS,
-      limit: FREE_LIFETIME_INGESTS,
+      limit: articles(FREE_LIFETIME_INGESTS),
     });
     /* No `resetAt`: the free allowance is lifetime, and a date would promise a
        reset that never comes. */
@@ -344,7 +360,7 @@ describe("the refusal says what a reader needs", () => {
     expect(refused).toMatchObject({
       kind: "refused",
       used: READER_INGESTS,
-      limit: READER_INGESTS,
+      limit: articles(READER_INGESTS),
       resetAt: end,
     });
   });
@@ -364,8 +380,16 @@ describe("the period is half-open", () => {
     await at(PERIOD.end); // exactly the end — outside
     await at("2026-08-31T23:59:59Z"); // before — outside
 
-    expect(await usageFor(OWNER, PAID)).toEqual({ used: 1, inFlight: 0 });
+    expect(await usageFor(OWNER, PAID)).toEqual({
+      chargedFullPrice: 1,
+      chargedHalfPrice: 0,
+      inFlight: 0,
+    });
     /* And the free tier's allowance is lifetime, so it sees all three. */
-    expect(await usageFor(OWNER, FREE)).toEqual({ used: 3, inFlight: 0 });
+    expect(await usageFor(OWNER, FREE)).toEqual({
+      chargedFullPrice: 3,
+      chargedHalfPrice: 0,
+      inFlight: 0,
+    });
   });
 });

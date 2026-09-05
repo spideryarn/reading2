@@ -123,12 +123,15 @@
  * the rest, including when the answer is "the same as before".
  */
 
+import { articles } from "./half-units.js";
+import type { Articles } from "./half-units.js";
+
 /** What the tier table answers. Filled in by `quotaRules` in ./tiers.ts. */
 export interface QuotaRules {
   /** Ingests a period this price sells, or `null` for a price no tier sells. */
-  readonly allowanceFor: (priceId: string | null) => number | null;
+  readonly allowanceFor: (priceId: string | null) => Articles | null;
   /** The largest allowance any tier sells — the ceiling nothing may exceed. */
-  readonly maxAllowance: number;
+  readonly maxAllowance: Articles;
 }
 
 /**
@@ -149,7 +152,7 @@ export interface QuotaAdjustment {
    * Negative for an upgrade, positive for a downgrade, `null` for "nothing
    * happened, ask the tier".
    */
-  readonly delta: number | null;
+  readonly delta: Articles | null;
   /** The period that number belongs to. Null exactly when `delta` is. */
   readonly periodStart: Date | null;
 }
@@ -247,8 +250,10 @@ export function nextQuotaAdjustment(args: {
   const moved = (after - before) * fractionRemaining(incoming, now);
   const allowedNow = clamp(Math.floor(allowedBefore + moved), rules.maxAllowance);
   /* **Stored relative to the new tier**, so that raising that tier tomorrow
-     raises this account with it. */
-  return { delta: allowedNow - after, periodStart: incoming.periodStart };
+     raises this account with it. Branded here rather than left plain: the
+     column is a signed count of *whole ingests*, and the whole point of the
+     two units is that a half-unit cannot reach it by accident. */
+  return { delta: articles(allowedNow - after), periodStart: incoming.periodStart };
 }
 
 /**
@@ -285,20 +290,28 @@ function clamp(limit: number, maxAllowance: number): number {
  * restored from a backup, a period that moved for a reason nobody predicted —
  * none of them can meter somebody on a number belonging to another month.
  *
+ * **In articles, in and out, and that is load-bearing rather than tidy.** The
+ * stored delta is a signed count of *whole ingests*, so doubling the tier before
+ * this line and subtracting afterwards gives ninety-one articles to somebody
+ * entitled to thirty-three — see src/billing/half-units.ts, where the two units
+ * are kept apart by the type system for exactly this reason. The enforcement
+ * budget is derived from what this returns, at the admission seam, and never
+ * before it.
+ *
  * @param tierLimit what `billing_tiers.ingests_per_period` sells today.
  * @param periodStart the period the entitlement is being read for.
  */
 export function limitForPeriod(
-  tierLimit: number,
+  tierLimit: Articles,
   periodStart: Date,
   adjustment: QuotaAdjustment,
-  maxAllowance: number,
-): number {
+  maxAllowance: Articles,
+): Articles {
   if (adjustment.delta === null || adjustment.periodStart === null) return tierLimit;
   if (adjustment.periodStart.getTime() !== periodStart.getTime()) return tierLimit;
   /* Clamped here rather than only at the write, because this is the last place
      before a limit is enforced — and because the delta column carries no
      range constraint of its own: the bound it would need lives in another
      table. A hand-typed absurdity fails towards nothing, never towards more. */
-  return clamp(tierLimit + adjustment.delta, Math.max(maxAllowance, tierLimit));
+  return articles(clamp(tierLimit + adjustment.delta, Math.max(maxAllowance, tierLimit)));
 }

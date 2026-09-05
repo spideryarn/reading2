@@ -2,7 +2,26 @@
  * Pipeline stage 4b — the nav labels, one per gistable block, generated in
  * parallel batches once the tree's shape is fixed.
  *
- *   npm run labels -- data/constitution
+ * **There is no `npm run labels` any more**, and it was retired rather than
+ * converted (2026-09-05). There is no `labels` *step*, and adding one to
+ * preserve a debugging command would be a pipeline redesign: stage 4
+ * deliberately produces structure, gists, blocks and labels as one typed atomic
+ * result (docs/project/hierarchy.md), and a tree published without its labels is
+ * what that contract calls incomplete. `generateLabels` stays exported for
+ * `evals/` and for src/hierarchy.ts.
+ *
+ * **What that command was for has no replacement, and the plan thought it did.**
+ * It said re-labelling becomes `npm run hierarchy -- <slug> --force`, paying for
+ * an extra structure call as the honest price. Measured on 2026-09-05, that is
+ * not what happens: `force` makes the *step* run again rather than skip, and the
+ * step then finds its structure and its label batches in the article's
+ * `checkpoints` rows and replays both — two consecutive forced runs on an
+ * unchanged article bought two model calls and then none. **So changing the
+ * label prompt and re-running is not a thing any command does today.** The eval
+ * (`npm run eval:hierarchy`) is how a prompt change is judged; buying a genuinely
+ * fresh answer needs `force` to mean something to a checkpoint, which is a
+ * queue-wide decision and Greg's. GPT Sol found it in review; the measurement is
+ * in docs/project/setup-dev.md.
  *
  * **Why this is not part of src/hierarchy.ts's call any more.** A nav label is written
  * for every gistable block, so this is the one output in the whole pipeline that
@@ -31,13 +50,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { createHash } from "node:crypto";
-import { readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
-import { stageCli } from "./cli-ledger.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
-import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -50,7 +65,7 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
    Never a value and never any prose: a label is the reader's own document.
    docs/project/logging.md. */
 import { log } from "./log.js";
-import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
+import type { CheckpointStore } from "./store/checkpoints.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
@@ -614,12 +629,15 @@ export function oversizedSets(batches: Batch[], max = MAX_BATCH): SiblingSet[] {
  * an older version of this pipeline or edited by hand, and a mixed node would
  * make `walk` recurse straight past its leaf children without complaining.
  *
- * `checkCoverage` in src/hierarchy.ts would catch the result — but only on the path
- * that goes through `generateHierarchy`. `npm run labels -- <dir>` on its own merges
- * and writes `tree.json` without it, so on that path a lost block would reach
- * disk as a paragraph with no sidebar row and nothing anywhere saying why. That
- * is docs/reusable/silent-success.md, and the fix is to put the check where both
- * callers pass rather than to remember to call it twice.
+ * `checkCoverage` in src/hierarchy.ts would catch the result — but only on the
+ * path that goes through `generateHierarchy`. There was a second path,
+ * `npm run labels -- <dir>`, which merged and wrote `tree.json` without it, so a
+ * lost block reached disk as a paragraph with no sidebar row and nothing
+ * anywhere saying why. That is docs/reusable/silent-success.md, and the fix was
+ * to put the check where every caller passes rather than to remember to call it
+ * twice. **The second path was retired on 2026-09-05 and the check stays where
+ * it is** — being right about where a rule belongs is what made deleting a
+ * caller a non-event.
  */
 function assertCoversEveryBlock(batches: Batch[], blocks: Block[]): void {
   const wanted = blocks.filter((b) => isStructural(b)).map((b) => b.id);
@@ -1330,11 +1348,14 @@ export function detectShift(labels: Record<string, string>, batch: Batch): numbe
  * **It replaces rather than overlays**, and the difference is the whole reason
  * this comment is here. The first version kept a leaf's existing `navLabel` when
  * the new map had none for it, which reads like politeness and is a trap: a
- * re-run of `npm run labels` that covered less than the whole article would
- * write a tree mixing this run's labels with last week's, with nothing on disk
- * recording which was which. Replacing means an incomplete run produces a
- * visibly incomplete tree, and `assertEveryBlockLabelled` refuses to write one
- * at all. Found by an adversarial review, 2026-08-26.
+ * re-run that covered less than the whole article would write a tree mixing this
+ * run's labels with last week's, with nothing recording which was which.
+ * Replacing means an incomplete run produces a visibly incomplete tree, and
+ * `assertEveryBlockLabelled` refuses to write one at all. Found by an
+ * adversarial review, 2026-08-26, when the re-run in question was
+ * `npm run labels`; that command went on 2026-09-05, and every route that still
+ * reaches this function — the queue, from a browser or from `scripts/stage.ts` —
+ * arrives here the same way.
  */
 export function mergeLabels(tree: Tree, labels: Record<string, string>): Tree {
   const nodes: Record<NodeId, TreeNode> = {};
@@ -1358,12 +1379,15 @@ export function mergeLabels(tree: Tree, labels: Record<string, string>): Tree {
  * Every gistable block came back with a label — checked before anything is
  * written, on **both** paths into this stage.
  *
- * `generateHierarchy` has `checkCoverage` after its merge, but `npm run labels --
- * <dir>` does not go through `generateHierarchy`: it merges and rewrites `tree.json`
- * on its own. Leaving the only gate in the caller meant the advertised
- * standalone command was the one path with nothing between a short answer and
- * the disk. So the check lives here, at the end of the stage, where both callers
- * pass through — the same argument as `assertCoversEveryBlock`, one step later.
+ * `generateHierarchy` has `checkCoverage` after its merge, but `npm run labels
+ * -- <dir>` did not go through `generateHierarchy`: it merged and rewrote
+ * `tree.json` on its own. Leaving the only gate in the caller meant the
+ * advertised standalone command was the one path with nothing between a short
+ * answer and the disk. So the check lives here, at the end of the stage, where
+ * every caller passes through — the same argument as `assertCoversEveryBlock`,
+ * one step later. That command was retired on 2026-09-05; **"both paths" is now
+ * one**, and the check has not moved, because where a gate belongs is not a
+ * function of how many callers there happen to be this week.
  */
 export function assertEveryBlockLabelled(
   labels: Record<string, string>,
@@ -2465,116 +2489,20 @@ export async function allOrStop<T>(work: Promise<T>[], stop: () => void): Promis
   }
 }
 
-/**
- * Write JSON so that it is either wholly there or not there at all.
+/* **`writeAtomic` and `main()` went on 2026-09-05.**
  *
- * The twin of `writeAtomic` in src/hierarchy.ts, deliberately duplicated rather than
- * shared: src/hierarchy.ts already imports this file, so a shared helper would have to
- * move to a third module for four lines, and the two copies cannot drift in a
- * way that matters — either writes atomically or it does not, and there is no
- * middle behaviour to disagree about.
+ * `main()` was `npm run labels -- <dir>`: it read `tree.json` and `blocks.json`
+ * out of a directory, re-labelled, merged, and wrote the labels and the tree
+ * back — the tree second, and beside-then-renamed, because `writeFile`
+ * truncates its target before it has anything to put there and the filesystem
+ * store read *existence* as "this step is done". This command rewrote the tree
+ * of an article somebody might be reading, which made it the worse of the two
+ * places to get that wrong. Under Postgres stage 4's three artefacts are one
+ * write inside one transaction and a half-written set is not a state that
+ * exists. src/hierarchy.ts had the deliberately-duplicated twin and lost it the
+ * same day.
  *
- * **Only `main()` uses it now.** It used to write the checkpoint too, which is
- * what `readJsonIfPresent` and `serialise` were for — a whole-file manifest
- * rewritten by whichever of four parallel batches landed next, and serialised
- * so the last rename could not silently drop the other three. One row per batch
- * removes the interleaving rather than guarding it, so all three went on
- * 2026-09-01 along with `runId` and `clearCheckpoint`.
+ * `stageCli(import.meta.url, main)` went too. The job runner opens a `job_step`
+ * spend collector per step, so a CLI wrapping the whole run in a second `"cli"`
+ * scope would scope the same money twice — see `scripts/stage.ts`.
  */
-async function writeAtomic(file: string, value: unknown): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-  await rename(tmp, file);
-}
-
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/labels.ts <dir with tree.json and blocks.json>");
-    process.exit(1);
-  }
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. Without it
-     this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`.
-
-     **Before the first `await`**, which it was not until 2026-08-28: it sat
-     below the two artefact reads. Nothing was wrong with that — neither read
-     spends — but "the file is read before the work starts" is the property, and
-     a rule that has to make an exception for which awaits are harmless is not a
-     rule. tests/paid-cli-ledger.test.ts, and GPT Sol for the case that showed
-     the old rule could not tell this shape from a genuinely late call. */
-  loadEnvLocal();
-  const tree = JSON.parse(await readFile(path.join(dir, "tree.json"), "utf-8")) as Tree;
-  const { blocks } = JSON.parse(await readFile(path.join(dir, "blocks.json"), "utf-8")) as {
-    blocks: Block[];
-  };
-  console.log(`Labelling ${blocks.filter((b) => isStructural(b)).length} blocks with ${CAPABLE_MODEL}…`);
-  const run = await generateLabels({
-    tree,
-    blocks,
-    slug: path.basename(dir),
-    /* **Nothing is remembered between runs of this command.** The batches are
-       rows in the `checkpoints` table now, keyed on an `articles` row this
-       command does not have — src/store/checkpoints.ts § nullCheckpointStore.
-       The queue, which is how an article really gets labelled, does have one and
-       does resume. */
-    checkpoints: nullCheckpointStore(),
-    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
-  });
-
-  const merged = mergeLabels(tree, run.labels);
-  /* Beside-then-rename, and the tree second, for the same reason `main()` in
-     src/hierarchy.ts does it: `writeFile` truncates its target before it has anything
-     to put there, so a process killed mid-write leaves a `tree.json` that exists
-     and is not JSON — and existence is what src/pipeline.ts reads as "this step
-     is done". This command rewrites the tree of an article somebody may already
-     be reading, which makes it the worse of the two places to get this wrong.
-     Both of those are command lines writing separate files. The `hierarchy` *stage* no
-     longer writes anything: it returns its three artefacts and its caller stores
-     them in one go, where a half-written set is not a state that exists. */
-  await writeAtomic(path.join(dir, "labels.json"), run.file);
-  await writeAtomic(path.join(dir, "tree.json"), merged);
-
-  /* The resumed count is said at zero too — same reason as the sibling line in
-     src/hierarchy.ts, and this command line is in the same position: it has no
-     article to key on, so it passes `nullCheckpointStore()` and the honest
-     answer here is always "0 resumed". */
-  console.log(`\n\nBatches:   ${run.batches} (${run.resumed} resumed)`);
-  if (run.oversized > 0) {
-    console.log(
-      `Warning:   ${run.oversized} section(s) are bigger than one call should be. The batches ` +
-        `were not cut — siblings stay together — so those went out as single large calls. The ` +
-        `fix is upstream, in how the structure call cuts sections.`,
-    );
-  }
-  console.log(`Labelled:  ${Object.keys(run.labels).length} blocks`);
-  /* The one number in this stage that is invisible everywhere else: a dropped
-     label is a leaf with no row, which looks exactly like a leaf that was never
-     supposed to have one. docs/reusable/silent-success.md. */
-  if (run.dropped.length > 0) {
-    console.log(
-      `Dropped:   ${run.dropped.length} paragraph(s) left bare after a second ask ` +
-        `(${run.dropped.slice(0, 3).join(", ")})`,
-    );
-  }
-  console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out (this run's calls only)`);
-  /* Said out loud because the alternative is a pair of zeros in the cache
-     figures that a broken cache would produce too. */
-  console.log(
-    run.estimatedCacheable
-      ? `Cache:     ${run.cacheReadTokens} read, ${run.cacheWriteTokens} written over ${run.calls} call(s)`
-      : `Cache:     off — the shared prefix is under the model's ${CACHE_FLOOR_TOKENS}-token floor`,
-  );
-  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
-  console.log(`\nEval:      npm run eval:hierarchy -- ${dir}`);
-}
-
-/* **`stageCli`, not a bare `main()`.** Every batch here is a paid call, and
-   without the collector open they land nowhere: not in `npm run cost`, and
-   counted as unscoped by `unscopedCalls()` in src/ai-spend.ts. This was the only
-   thing separating `npm run labels` from the six stages that already had it —
-   tests/paid-cli-ledger.test.ts is what stops it happening again. Awaited rather
-   than `void`ed, so flushing the ledger and any failure in it stay part of the
-   command finishing. */
-await stageCli(import.meta.url, main);

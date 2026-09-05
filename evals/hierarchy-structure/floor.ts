@@ -40,6 +40,8 @@ interface RunLike {
       largest: number;
       droppedChildren: string[];
       droppedHeadings: string[];
+      /** Optional: run files written before 2026-09-05 do not carry it. */
+      collapsedRungs?: string[];
     };
   }[];
 }
@@ -85,6 +87,10 @@ const REPAIRED: Record<string, (r: NonNullable<RunLike["results"][number]["repai
   repairedBlocks: (r) => r.blocks,
   largestRepair: (r) => r.largest,
   droppedSections: (r) => r.droppedChildren.length,
+  /* Optional, and read as 0 when absent, because this parses run files older
+     than the field. A historical run reporting zero restated rungs is telling
+     the truth about what was measured then, which is what a floor wants. */
+  collapsedRungs: (r) => r.collapsedRungs?.length ?? 0,
 };
 
 /**
@@ -211,7 +217,18 @@ async function main(): Promise<void> {
          `Repaired:` line, which is at zero every run, this is a per-document
          table and a row of zeros on every document would bury the rest. */
       const repairedRows = repeats.filter((r) => r.repaired);
-      if (repairedRows.some((r) => r.repaired!.ranges > 0 || r.repaired!.droppedChildren.length > 0)) {
+      if (
+        repairedRows.some(
+          (r) =>
+            r.repaired!.ranges > 0 ||
+            r.repaired!.droppedChildren.length > 0 ||
+            /* A collapse-only arm mends no boundary and loses no section, so
+               without this clause its whole row is suppressed and the table
+               says the run needed no mending. ⟨GPT Sol's review of stage 3,
+               F1.⟩ */
+            (r.repaired!.collapsedRungs?.length ?? 0) > 0,
+        )
+      ) {
         for (const [name, read] of Object.entries(REPAIRED)) {
           const values = repairedRows.map((r) => read(r.repaired!));
           const lo = Math.min(...values);

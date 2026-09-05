@@ -40,7 +40,13 @@
  * running rather than routing around. The caller publishes.
  */
 import { STEPS, STEP_ORDER } from "../pipeline.js";
-import type { ArtifactKind, ArtifactParts, ArtifactStore, StepStamp } from "./artifacts.js";
+import type {
+  ArtifactKind,
+  ArtifactParts,
+  ArtifactSource,
+  ArtifactStore,
+  StepStamp,
+} from "./artifacts.js";
 import type { StepName } from "../types.js";
 
 /**
@@ -52,7 +58,7 @@ import type { StepName } from "../types.js";
  * artefact.
  */
 export async function readParts(
-  store: ArtifactStore,
+  store: ArtifactSource,
   slug: string,
   step: StepName,
 ): Promise<ArtifactParts> {
@@ -67,7 +73,7 @@ export async function readParts(
 }
 
 /** What `store` recorded about this step, or a stamp saying nothing. */
-async function stampOrEmpty(store: ArtifactStore, slug: string, step: StepName): Promise<StepStamp> {
+async function stampOrEmpty(store: ArtifactSource, slug: string, step: StepName): Promise<StepStamp> {
   return (await store.stampFor(slug, step)) ?? {};
 }
 
@@ -85,7 +91,20 @@ async function stampOrEmpty(store: ArtifactStore, slug: string, step: StepName):
  * (docs/reusable/silent-success.md), and an empty array is how a caller sees it.
  */
 export async function copyArtefacts(
-  from: ArtifactStore,
+  /* **`ArtifactSource`, not `ArtifactStore`, since 2026-09-05**, and the
+     widening is the point rather than tidying. The source half of this copy is
+     two method calls — `read` and `stampFor` — and demanding a whole store for
+     them meant the only thing that could be a source was something that could
+     also write. So the fixture loader's source had to be a
+     `createFsArtifactStore`, which is one import in one helper and was the
+     largest single thing keeping the filesystem store alive at run time:
+     56 test files executed it and 14 named it.
+     `tests/helpers/fixture-artefacts.ts` is now what goes here, and it cannot
+     write at all. Nothing about the copy itself changed, and `ArtifactStore` is
+     still assignable, so the fs-to-fs direction in `tests/artefact-copy.test.ts`
+     passes exactly as before.
+     docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § D. */
+  from: ArtifactSource,
   to: ArtifactStore,
   slug: string,
 ): Promise<StepName[]> {

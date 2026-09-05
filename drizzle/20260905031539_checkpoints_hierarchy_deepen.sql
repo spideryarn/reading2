@@ -1,0 +1,24 @@
+-- The scoped expansion call gets its own checkpoint namespace.
+--
+-- Stage 4 makes one whole-document call for the tree; the cascade then makes
+-- scoped calls that split a section too fat to read, one wave at a time. Those
+-- are the calls this namespace keeps: several per article, each its own paid
+-- draw, and a wave that dies half way must not buy the parents that already
+-- landed. `hierarchy-structure` cannot hold them — one row per call, keyed on a
+-- fingerprint that carries the target's own range, is a different key space from
+-- the article's single tree. See
+-- docs/plans/260904d-deepen-fat-sections.md § Stage 4.
+--
+-- Widening a CHECK is a drop and a re-add: Postgres has no ALTER for the
+-- expression. Purely additive — no existing row can violate the wider rule, so
+-- there is nothing to migrate and nothing for this to refuse.
+--
+-- Regenerated 2026-09-05 after merging origin/dev. The first cut of this
+-- migration was generated before `20260904235116_ingest_events_article_id` was
+-- in the chain, so its snapshot did not know about `ingest_events.article_id`
+-- and the next `drizzle-kit generate` would have diffed against it and tried to
+-- re-add that column. A migration's snapshot is a picture of the whole schema at
+-- that point in the chain, not of the table it touches — so a migration written
+-- on a branch has to be regenerated after the merge, not just replayed.
+ALTER TABLE "spideryarn"."checkpoints" DROP CONSTRAINT "checkpoints_namespace";--> statement-breakpoint
+ALTER TABLE "spideryarn"."checkpoints" ADD CONSTRAINT "checkpoints_namespace" CHECK ("spideryarn"."checkpoints"."namespace" in ('hierarchy-deepen','hierarchy-labels','hierarchy-structure','pdf-chunk'));
