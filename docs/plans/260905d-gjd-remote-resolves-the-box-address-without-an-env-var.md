@@ -165,3 +165,36 @@ root-owned `/etc` file widens no authority a caller who can set the variable did
   Terraform. A laptop cannot tell this change happened.
 - `npm test`, `npm run typecheck`, `npm run check` green.
 - The feedback-reports fan-out recipe is one command with nothing to remember.
+
+## What landed
+
+**Stage 1** — `9b7205f5`. `scripts/gjd-remote-host.ts` + 18 tests, `host()` rewired,
+`terraformHost()` split out so it is only run when it is asked, `hostSource()` behind `doctor`'s
+heading and `resolve`'s new `host:` line, `--help` ENVIRONMENT rewritten, one module-inventory entry
+in the box doc. Red first and red on the answer: the fallback test failed
+`expected { host: '1.2.3.4' } to deeply equal { host: '127.0.0.1' }` against the scaffold, not on a
+missing import.
+
+**Stage 2** — `provision.sh` writes `/etc/gjd-remote-host` (mktemp → `chown`/`chmod` → `mv -f -T`,
+because `cat >` follows a symlink and keeps the destination's ownership), deletes
+`/etc/profile.d/gjd-remote-loopback.sh`, and adds four verify checks: the file's type/owner/mode,
+its exact content, the absence of the old export, and the loopback ssh **at the address read from
+the file**. Docs: the box doc's section rewritten, `feedback-reports.md`'s recipe de-prefixed.
+
+**Applied to the live box** by hand, in the same shape the script now uses — the box is not rebuilt
+from `provision.sh` on every change, and a fix that only reached the next box would have left this
+one exactly as broken as it was. All four checks run by hand on the box afterwards: pass.
+
+Proved on the box with `GJD_REMOTE_HOST` unset in the shell, 2026-09-05:
+
+```
+$ npx tsx scripts/gjd-remote.ts resolve
+host: 127.0.0.1  (from /etc/gjd-remote-host)
+$ npx tsx scripts/gjd-remote.ts new-claude fanout-noenv-op5 --no-attach -p - < prompt.txt
+✓ started 'fanout-noenv-op5' with a prompt
+$ npx tsx scripts/gjd-remote.ts ssh 'tmux capture-pane -p -t fanout-noenv-op5 …'
+❯ Reply with the single word OK and then stop. …
+● OK
+$ npx tsx scripts/gjd-remote.ts kill fanout-noenv-op5
+✓ killed 'fanout-noenv-op5'
+```

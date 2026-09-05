@@ -1009,16 +1009,39 @@ Host 127.0.0.1 localhost
   IdentitiesOnly yes
 EOF
 '
-# ...and the address, so `gjd-remote ls` on the box needs no argument and no
-# Terraform. Only ever set on the box: on the laptop the variable stays unset
+# ...and the address, so `gjd-remote` on the box needs no argument and no
+# Terraform. Only ever written on a box: on the laptop this file does not exist
 # and the address still comes out of Terraform state, which is what makes it
-# survive a rebuild. A login shell is enough -- tmux sessions get one
-# (`exec bash -l` at the end of every job script).
-cat > /etc/profile.d/gjd-remote-loopback.sh <<'EOF'
-# Written by provision.sh. gjd-remote run ON the box talks to the box.
-export GJD_REMOTE_HOST=127.0.0.1
-EOF
-chmod 0644 /etc/profile.d/gjd-remote-loopback.sh
+# survive a rebuild. scripts/gjd-remote-host.ts is the reader.
+#
+# THIS USED TO BE AN EXPORT in /etc/profile.d/, and it was wrong for a year of
+# agent-days. The comment beside it said "a login shell is enough -- tmux
+# sessions get one (`exec bash -l` at the end of every job script)". They do
+# not: that `exec bash -l` is the line AFTER claude exits, so Claude and every
+# tool shell under it run from a stock-PATH non-login bash and never saw the
+# variable. gjd-remote then fell through to a tofu the box has not got and
+# reported a Terraform problem, and two readers concluded the tool could not run
+# on the box at all.
+#
+# The class is the one this file already learned about `claude` on PATH forty
+# lines down -- VERIFYING THE CONVENIENT PATH INSTEAD OF THE PATH THE WORK
+# TAKES. A file has no such path to be wrong about.
+#
+# Written to a temporary file and renamed, not `cat >`: `cat >` follows a
+# symlink and keeps whatever ownership and mode the destination already had, so
+# it cannot establish the root-owned regular file the reader requires. `-T` on
+# the mv is load-bearing -- with a directory at the destination the plain form
+# puts the file INSIDE it and exits 0.
+gjd_host_tmp=$(mktemp /etc/.gjd-remote-host.XXXXXX)
+printf '127.0.0.1\n' > "$gjd_host_tmp"
+chown root:root "$gjd_host_tmp"
+chmod 0644 "$gjd_host_tmp"
+mv -f -T "$gjd_host_tmp" /etc/gjd-remote-host
+# The export it replaces. Left behind it would be a second answer to the same
+# question, honoured only in login shells and read through the branch that does
+# no validation at all -- so a malformed file would be obeyed in one shell and
+# refused in the next.
+rm -f /etc/profile.d/gjd-remote-loopback.sh
 
 echo "=== ssh ==="
 systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
@@ -1116,13 +1139,32 @@ check "/usr/local/bin/claude points at that launcher" 'test "$(readlink /usr/loc
 # that npm's prefix here is computed rather than chosen, so hardcoding today's
 # answer would quietly stop checking anything if NodeSource ever changed it.
 check "no npm-global claude beside the native one" 'root=$(npm root -g) && test -n "$root" && ! test -e "$root/@anthropic-ai/claude-code"'
+# The file gjd-remote reads its address out of, checked as the READER requires
+# it and not merely as "a file is there": a regular file (not a symlink, not a
+# directory), root-owned, 0644, holding exactly one address and one newline.
+# `stat -c` prints all four in one string so a single check covers the lot and a
+# FAIL names what it actually found.
+check "gjd-remote host file is a root-owned 0644 regular file" \
+  'test "$(stat -c "%F %U %a" /etc/gjd-remote-host)" = "regular file root 644"'
+check "gjd-remote host file holds one address" \
+  'test "$(cat /etc/gjd-remote-host)" = "127.0.0.1" && test "$(wc -l < /etc/gjd-remote-host)" -eq 1'
+# ...and the export it replaced is gone, so there is one answer to the question.
+check "no leftover GJD_REMOTE_HOST export" '! test -e /etc/profile.d/gjd-remote-loopback.sh'
 # The loopback, end to end and as the user -- not "the key file exists". Three
 # separate things have to be true at once (a key, a line in authorized_keys, a
 # Host block that makes ssh actually OFFER a non-default key name), each of them
 # present-looking while the connection still fails, so the only check worth
 # having is the connection. BatchMode is what stops a broken one hanging on a
 # password prompt until the run times out.
-check "gjd-remote loopback ssh works" 'timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 hostname"'
+#
+# THE ADDRESS COMES OUT OF THE FILE, not out of a second copy of 127.0.0.1
+# written here. A hardcoded literal would let the file say one thing and this
+# check prove another -- the file could hold a syntactically fine PUBLIC address,
+# pass both checks above, and this probe would still be testing the loopback that
+# `Host 127.0.0.1` covers. Then the tool would use an address ssh has no identity
+# for, and nothing here would have noticed.
+check "gjd-remote loopback ssh works, at the address that file names" \
+  'addr=$(cat /etc/gjd-remote-host) && test -n "$addr" && timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new $addr hostname"'
 # Claude, over that same loopback -- deliberately AFTER it, so a broken ssh is
 # reported as a broken ssh rather than as a missing Claude.
 #
