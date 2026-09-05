@@ -272,17 +272,33 @@ exit code.
 | `evals/remember-stances.ts` § the summary block | prints `answers: ${CASES.length * REMEMBER_STANCES.length}` — the **planned** count — plus `flagged 0 / uncited 0 / truncated 0 (should be 0)` even if every call threw | a failed call does print its own `### stance — FAILED` section, but the Counts block still uses the planned total, there is no `failed` counter, and no `process.exitCode` anywhere in the file |
 | `evals/hierarchy-structure/floor.ts` | reads a run's `run.json` and reports per-arm stability without checking `completedAt`, so it quotes the surviving arms of a partial panel; a trailing advice paragraph prints even when the loop emitted nothing | unmitigated — and its two siblings, `verify-zdr.ts` and `verify-costs.ts`, both refuse exactly this, one of them saying *"the dangerous reading of a partial panel is the one where the arms that failed hardest are simply absent and the survivors get quoted as the result"* |
 | `evals/referee-mirror.ts` | Counts block prints `cases whose remarks contain a possible verdict: 0 (should be 0)` when zero cases produced remarks | lightly mitigated: failed cases get a `FAILED` table row; the only other tell is an empty `- model:` line |
-| `evals/dictation/bench-models.ts` | `clean` starts `true` and is falsified only by `odd.length`, so an arm whose every call was lost has an empty `seen` map and still prints *"every call named the model it was sent to"* | partly mitigated by a `lost N calls` line — and the comment directly above describes the **previous** version of this same bug |
+| `evals/dictation/bench-models.ts` | `clean` starts `true` and is falsified only by `odd.length`, so an arm whose every call was lost has an empty `seen` map and still prints *"every call named the model it was sent to"* | partly mitigated by a `lost N calls` line — **and the comment immediately above it is the fix for the previous version of this same bug**, in its own words *"a clean bill of health from a test that had not run"*, GPT Sol's item 4. See below |
 | `evals/dictation/bench-vocabulary-sources.ts` | prints `none — and read that as "no exact vocabulary term was inserted"` over a possibly empty set, and writes a **planned** `calls:` count into the results JSON people paste into plans | mitigated by `lost` printed and written beside it |
 | `evals/referee-claims.ts` | Counts block reads `0 (should be 0)` over a run where nothing came back, beside held-out figures computed from static fixtures — which makes the block look like a live measurement | per-case `_Not run._` and `**FAILED**` are printed, so it is the weakest instance |
 
-**One cross-cutting fact.** None of those six ever touches `process.exitCode`; across all of them
-there is a single `process.exit` and it is a usage error. They exit 0 whatever happened, so
-`&&`-chaining one, or reading `$?`, cannot tell a full run from a run in which every model call 502'd.
+**One cross-cutting fact, and it cuts the encouraging way.** None of those six ever touches
+`process.exitCode` -- across the six there is a single `process.exit`, and it is a usage error. They
+exit 0 whatever happened, so `&&`-chaining one, or reading `$?`, cannot tell a full run from a run in
+which every model call 502'd. **But the practice is not missing from `evals/`, only uneven**:
+`grep -rn "process.exitCode" evals/` returns seven hits across five files -- `quiz.ts`,
+`deepen/run.ts`, `extraction/probe.mts`, `cost/interactions.ts`, `cost/run.ts` (run 2026-09-05; a
+dated example, not a standing count). That is the more useful framing, because it makes each of the
+six a local omission with a working neighbour rather than a directory-wide absence needing a policy.
+⟨`spideryarn2-dd`, 2026-09-05, correcting a looser phrasing of this that would have read as "one hit
+in `evals/`".⟩
 `evals/quiz.ts` is the only member of the family that sets one — and it is the canonical fixed form
 worth copying: `marked` (obtained) against `CASES.length` (attempted), an explicit *"Nothing was
 measured … which is not the same thing as clean"*, and `exitCode = 1` on total failure. Its own header
 records that this bug shipped there first.
+
+**The strongest single piece of evidence in this whole write-up is in that row.** In
+`bench-models.ts` a fix for this exact class and its relapse sit adjacent in one file: a comment
+recording that the summary once *"ended by announcing that every call was answered by the model it
+was sent to — a clean bill of health from a test that had not run"*, and directly beneath it a
+`clean` flag that does the same thing one level up. Somebody understood the class well enough to
+write it down and reintroduced it in the next block. That is better evidence than another instance
+would be, because it shows the failure is not ignorance of the pattern.
+⟨`spideryarn2-dd`, 2026-09-05, reading the code rather than taking the finding on report.⟩
 
 Other fixed forms worth citing rather than re-deriving: `scripts/check.ts` § `verdict()`, which
 separates `clean` from `broke` (`findings === 0` **and** `code !== 0` → *DID NOT RUN*);
