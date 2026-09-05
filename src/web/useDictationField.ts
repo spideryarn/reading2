@@ -123,6 +123,21 @@ export function useDictationField({
    * touches the selection in between, and this costs one number.
    */
   const pressedAt = useRef<number | null>(null);
+  /**
+   * The value of the box when the dictation ended, so that a **retry** arriving
+   * later can prove `pressedAt` still points where it used to.
+   *
+   * The `span` proof cannot cover this: `span` is null by the time a retry's
+   * transcript lands, because the dictation it belonged to is over. So a reader
+   * who edits the box while reading the failure — which is exactly when they
+   * would — moves every offset under a number nobody re-checked, and the
+   * transcript is spliced into the middle of a word. GPT Sol's code review, R1.
+   *
+   * When the proof fails the offset is abandoned rather than the transcript:
+   * the words go in at the caret. Wrong place, right words, and the reader can
+   * see where it went — which is the safe way round to be wrong.
+   */
+  const valueAtEnd = useRef<string | null>(null);
 
 
   const commit = useRef(onCommit);
@@ -146,7 +161,16 @@ export function useDictationField({
       /* Somebody else moved the text under us. See the note on `span`. */
       if (held && current.slice(held.from, held.to) !== held.text) return false;
 
-      const at = held ? (replaceSpan ? held.from : held.to) : (pressedAt.current ?? el?.selectionStart ?? current.length);
+      /* No span: either the very first phrase of a dictation, or a retry's
+         transcript arriving after one ended. `stale` is only ever true in the
+         second case — see `valueAtEnd`. */
+      const stale = valueAtEnd.current !== null && valueAtEnd.current !== current;
+      const remembered = stale ? null : pressedAt.current;
+      const at = held
+        ? replaceSpan
+          ? held.from
+          : held.to
+        : (remembered ?? el?.selectionStart ?? current.length);
       const until = held && replaceSpan ? held.to : at;
 
       /* A space between phrases, unless we are at the very start or there is
@@ -182,14 +206,29 @@ export function useDictationField({
     onTranscript: (text) => put(text, true),
     onEnd: () => {
       span.current = null;
-      pressedAt.current = null;
+      valueAtEnd.current = live.current;
+      /* **`pressedAt` is deliberately kept**, where the span is not.
+         They answer different questions and only one of them has gone stale: the
+         span is *what this dictation put in the box*, which is now committed and
+         must never be spliced over again; `pressedAt` is *where the reader's
+         caret was when they pressed*, which is still where a retry's words
+         belong. Pressing the microphone again overwrites it, and nothing else
+         reads it, so keeping it costs nothing.
+
+         Cleared, this meant a retry inserted wherever the caret happened to be
+         — which after a failure is wherever the reader clicked while reading
+         the error. GPT Sol's plan review, F4. */
       commit.current?.();
     },
     context,
   });
 
   const toggle = useCallback(() => {
-    if (!dictation.armed) pressedAt.current = box.current?.selectionStart ?? null;
+    if (!dictation.armed) {
+      pressedAt.current = box.current?.selectionStart ?? null;
+      /* A new press: there is no ended dictation to be stale relative to. */
+      valueAtEnd.current = null;
+    }
     dictation.toggle();
     /* **Put the focus back where the words are going.** The header used to
        claim that `readOnly` "keeps focus"; GPT Sol pointed out that this is
