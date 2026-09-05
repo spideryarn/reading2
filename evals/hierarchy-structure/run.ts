@@ -656,8 +656,8 @@ async function main(): Promise<void> {
   /* The marker goes on last, and only if every cell it promised has a row.
      `--repeat` means one expected cell can have several results, so the test is
      coverage, not a count. */
-  const filled = new Set(runFile.results.map((r) => `${r.arm} ${r.slug}`));
-  const missing = runFile.expected.filter((e) => !filled.has(`${e.arm} ${e.slug}`));
+  const filled = new Set(runFile.results.map((r) => `${r.arm}\u0000${r.slug}`));
+  const missing = runFile.expected.filter((e) => !filled.has(`${e.arm}\u0000${e.slug}`));
   if (missing.length === 0) {
     runFile.completedAt = new Date().toISOString();
   } else {
