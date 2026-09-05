@@ -138,6 +138,51 @@ below it then assumed the login one. **The class: verifying the convenient path 
 the work actually takes.** Stage 2's verification is written to take the same non-login path the
 agents do.
 
+## The spikes
+
+Three, all 2026-09-05, all on the box. The first is in "Why the env var cannot reach the shells that
+need it" above. The other two are about Stage 2, and both changed the code.
+
+**The write path, against a fake `/etc`.** The exact `mktemp` → `printf` → `chown` → `chmod` →
+`mv -f -T` sequence, run over each destination it might meet:
+
+| destination before | after |
+|---|---|
+| nothing | `regular file 644`, right content, no leftovers |
+| the file it wrote last run | same — idempotent |
+| a `0600` file of nonsense | replaced, mode corrected |
+| **a symlink pointing at another file** | replaced by a real file, **and the symlink's target left untouched** |
+| **a directory** | `mv` refuses, run aborts — the file is *not* put inside it |
+| a leftover temp file from a killed run | fine, but the litter stays |
+
+The last two rows are why `mv -f -T` rather than `cat >`, and they are also the finding: a refused
+`mv` under `set -e` leaves one `/etc/.gjd-remote-host.XXXXXX` behind for ever, because nothing after
+it knows it is there. Fixed in the same stage — the `mv` now cleans up its own staged file before it
+exits non-zero.
+
+**Can the four verify checks fail?** A check nobody has watched fail is not evidence
+([silent-success.md](../reusable/silent-success.md)), and `check()` swallows all output, so a check
+that passes for the wrong reason is invisible. The three file checks were pulled **verbatim out of
+`provision.sh` by `grep`** — not retyped — and run against bind-mounted variants inside a private
+mount namespace, so the real `/etc` was never written:
+
+| the file is | type check | content check |
+|---|---|---|
+| `127.0.0.1\n`, root, 0644 | ok | ok |
+| `1.2.3.4\n` — a valid but wrong address | ok | **FAIL** |
+| right content, mode `0600` | **FAIL** | ok |
+| two lines | ok | **FAIL** |
+| no trailing newline | ok | **FAIL** |
+
+Plus: the export check fails when the export is put back, and the `$addr` expansion in the ssh probe
+resolves in the root shell before `su` sees it — `[127.0.0.1]` from a good file, `[1.2.3.4]` from a
+wrong one, and a refusal on an empty one. So the probe really does follow the file.
+
+Worth knowing: **provisioning is stricter than the reader.** The reader accepts `127.0.0.1` with no
+trailing newline; the content check does not, because `wc -l` counts newlines. That is deliberate —
+the managed file has one exact shape — but it means a hand-written file can work perfectly and still
+be reported as wrong, which is the right way round.
+
 ## Review ledger — GPT Sol, round 1 (plan)
 
 [260905d-review-sol-plan.md](260905d-review-sol-plan.md), prompt in

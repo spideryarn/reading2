@@ -1036,7 +1036,12 @@ gjd_host_tmp=$(mktemp /etc/.gjd-remote-host.XXXXXX)
 printf '127.0.0.1\n' > "$gjd_host_tmp"
 chown root:root "$gjd_host_tmp"
 chmod 0644 "$gjd_host_tmp"
-mv -f -T "$gjd_host_tmp" /etc/gjd-remote-host
+# The `||` is not belt-and-braces: `mv -T` REFUSES a directory at the
+# destination rather than putting the file inside it, and under `set -e` that
+# aborts the run and leaves the staged file behind. Measured against a fake /etc
+# on 2026-09-05: one stray /etc/.gjd-remote-host.XXXXXX per failed run, for ever,
+# because nothing afterwards knows it is there.
+mv -f -T "$gjd_host_tmp" /etc/gjd-remote-host || { rm -f "$gjd_host_tmp"; exit 1; }
 # The export it replaces. Left behind it would be a second answer to the same
 # question, honoured only in login shells and read through the branch that does
 # no validation at all -- so a malformed file would be obeyed in one shell and
