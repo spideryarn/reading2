@@ -193,8 +193,6 @@ let store: MemoryArtifactStore;
 function ctxFor(): StepContext {
   return {
     slug: SLUG,
-    dir: path.join(root, "data", SLUG),
-    htmlFile: path.join(root, "output", `${SLUG}.html`),
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,

@@ -1,6 +1,9 @@
 /**
- * A paper's claims run — the Postgres half. src/referee-claims-store.ts is the
- * other, and it holds the shape both of them keep.
+ * A paper's claims run. The only half — src/referee-claims-store.ts, the
+ * filesystem one, went on 2026-09-05 with the rest of the filesystem store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ * the stage-G section), and what it held that outlives it is here: the
+ * corollary below, `CLAIMS_SWEPT`, and the logging rule.
  *
  * **src/store/pg-referee-criteria.ts is this file's model**, and that file in
  * turn points at src/store/pg-searches.ts for the reasoning behind the article
@@ -14,11 +17,22 @@
  * once. `begin` therefore **replaces** the row: no `wantedId`, no
  * three-condition retry rule, no `MAX_` trim, because there is nothing to
  * collide with — a second run is a run, and the answer it overwrites was about
- * the same paper. src/referee-claims-store.ts § What differs has the corollary
- * worth reading before changing anything here: starting a run throws away the
- * last answer before the new one exists, deliberately, because a panel showing
- * yesterday's claims under today's spinner is the one state a referee cannot
- * interpret.
+ * the same paper. And the corollary worth reading before changing anything
+ * here: `begin` writes `status: "pending"` over whatever was stored, so
+ * **starting a run throws away the last answer before the new one exists.**
+ * That is deliberate — a panel showing yesterday's claims under today's spinner
+ * is the one state a referee cannot interpret — and it is survivable because
+ * the whole thing is one model call away from being rebuilt.
+ *
+ * ## What may be logged from this file
+ *
+ * Slugs, statuses, counts. **Never a claim, never a quote, never a passage's
+ * reasoning.** A paper under review is somebody else's unpublished work, and
+ * the rule src/referee-criteria-store.ts keeps applies with the volume turned
+ * up: this artefact is nothing but quotations from it. The stored `error`
+ * string is deliberately **not** logged either — it is whatever the call threw,
+ * and a provider that echoes the request back would put the paper's prose into
+ * a field a comment claimed could never hold it.
  *
  * ## Why this store exists, having been argued against
  *
@@ -53,7 +67,6 @@ import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Claim, ClaimsRun } from "../referee-claims.js";
 import { CLAIMS_TIMEOUT_MS } from "../referee-claims-run.js";
-import { CLAIMS_SWEPT } from "../referee-claims-store.js";
 import type { RefereeClaimsStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -86,6 +99,25 @@ type Db = ReturnType<typeof getDb>;
  * it unfalsifiable instead.
  */
 export const CLAIMS_ORPHAN_GRACE_MS = CLAIMS_TIMEOUT_MS + 30_000;
+
+/**
+ * What a sweep writes over an abandoned `pending` run.
+ *
+ * It lived in `src/referee-claims-store.ts` until 2026-09-05, when that module
+ * — the filesystem claims store — was deleted with the rest of the filesystem
+ * store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ * the stage-G section). There is one sweep now, so the sentence lives with it,
+ * which is where `SEARCH_SWEPT` below already was. `COMMENT_SWEPT`
+ * (src/comments.ts) and `CHAT_SWEPT` (src/chat.ts) stayed put instead, because
+ * those modules still hold a vocabulary their stores are written against and
+ * this one held nothing else.
+ *
+ * The words are unchanged: docs/project/copy.md says a reader-facing sentence
+ * is matched on the constant rather than pinned by a test, so moving it must
+ * not be an excuse to reword it.
+ */
+export const CLAIMS_SWEPT = "The server stopped before the claims run finished.";
 
 /**
  * The stored row as the client sees it, or `null` when this paper has never been

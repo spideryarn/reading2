@@ -41,9 +41,11 @@
  * - **A second module id.** `tests/store-fs-write-chains.test.ts` loads
  *   `ai-calls-fs` as `import("…?copy=2")` and `vi.mock`s `node:fs/promises`, so
  *   the wrapper is not what it gets. That duplication is that file's subject.
- * - **Source read as text.** `tests/slug.test.ts` reads `jobs-fs.ts` as a
- *   string. No import, no call, invisible to both witnesses — the manifest
- *   carries it by hand.
+ * - **Source read as text.** No import, no call, invisible to both witnesses —
+ *   the manifest has to carry such a file by hand. `tests/slug.test.ts` read
+ *   `jobs-fs.ts` as a string until stage G, 2026-09-05, when the case and the
+ *   module went together; there is no live example now, and the class is listed
+ *   anyway because nothing prevents the next one.
  * - **`src/store/blobs-fs.ts`**, deliberately: it is selected by credentials
  *   rather than by `SPIDERYARN_STORE` and is out of the migration's scope.
  *
@@ -89,16 +91,21 @@ const VITEST = join(REPO, "node_modules/.bin/vitest");
  *  go missing again — which is exactly what happened to the first instrument. */
 const REGENERATE = "npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json";
 
-/** The condemned modules still standing, instrumented at method level. Eight
- *  until stage G, 2026-09-05, took `uploads-fs`, `ai-calls-fs` and
- *  `realtime-sessions-fs`. Kept in step with `CONDEMNED` in
- *  vitest.witness.config.ts — `assertConfigAgrees()` checks. */
+/** The modules still instrumented at method level. Eight until stage G,
+ *  2026-09-05, took `uploads-fs`, `ai-calls-fs`, `realtime-sessions-fs`,
+ *  `jobs-fs` and then `fs.ts` itself — the last one with `src/api.ts`, the
+ *  article reader it was assembled from, which this instrument never watched at
+ *  all (the third blind spot). The same day's last group took `artifacts-fs`
+ *  and `data-root`.
+ *
+ *  **One left, and it is not condemned.** `copy-artefacts.ts` survives stage
+ *  D's store-agnostic `ArtifactSource`, so this instrument is now watching a
+ *  module nothing is trying to delete: there is nothing condemned left for it
+ *  to witness. Retiring it belongs with the tombstone in stage I, so that stage
+ *  H still has a working witness if it wants one. Kept in step with
+ *  `CONDEMNED` in vitest.witness.config.ts — `assertConfigAgrees()` checks. */
 const INSTRUMENTED = [
-  "src/store/fs.ts",
-  "src/store/artifacts-fs.ts",
-  "src/store/jobs-fs.ts",
   "src/store/copy-artefacts.ts",
-  "src/store/data-root.ts",
 ] as const;
 
 const NOT_INSTRUMENTED = ["src/store/blobs-fs.ts — selected by credentials, out of scope"];
@@ -122,7 +129,12 @@ const KNOWN_BLIND_SPOTS = [
  * the registry depends on.
  */
 const READ_ONLY_BLIND_SPOTS: Record<string, string> = {
-  "tests/store-artefacts-pg.test.ts": "reads PATHS from artifacts-fs without calling anything — registry evidence: static-only",
+  /* **RETIRED 2026-09-05, stage G.** `tests/store-artefacts-pg.test.ts` read
+     `PATHS` from `artifacts-fs` and called nothing, which is why this list
+     exists at all. `artifacts-fs.ts` is deleted and that import with it, so the
+     file is now an ordinary member of whichever bucket it lands in. The *class*
+     is still real and is still recorded in `KNOWN_BLIND_SPOTS` above; only this
+     instance is gone. An empty map is the honest state, not a broken one. */
 };
 
 // ------------------------------------------------------------------- controls
@@ -140,11 +152,11 @@ type Control = {
  * Four positives, chosen so that **every module in `INSTRUMENTED` is covered
  * by at least one** — `assertControlsCoverEveryModule()` checks that rather
  * than trusting this comment — and so that the assertions are method-level
- * (`fsJobStore.get`, not merely `jobs-fs`), because a proxy that hooked modules
- * but lost methods would still look busy.
+ * (`copy-artefacts:readParts`, not merely `copy-artefacts`), because a proxy
+ * that hooked modules but lost methods would still look busy.
  *
- * **All four now run in the `unit` lane.** The three that ran in
- * `private-postgres` were the three stage G deleted, so this file no longer
+ * **Both now run in the `unit` lane.** The ones that ran in
+ * `private-postgres` were among those stage G deleted, so this file no longer
  * proves the private lane mints its database under the instrument — nothing
  * else does either, and that is a gap rather than a decision. Counted against
  * `TEST_LANES` on 2026-09-05.
@@ -155,16 +167,29 @@ type Control = {
  * same module, and if no file does, that module is done.
  */
 const POSITIVE_CONTROLS: readonly Control[] = [
-  { file: "tests/data-root.test.ts", expect: ["data-root:dataRoot", "data-root:chooseDataRoot", "artifacts-fs:fsLocations"] },
-  { file: "tests/jobs-fs-load.test.ts", expect: ["jobs-fs:fsJobStore.get", "jobs-fs:fsJobStore.list", "jobs-fs:reloadForTests"] },
-  { file: "tests/artefact-copy.test.ts", expect: ["copy-artefacts:copyArtefacts", "copy-artefacts:readParts", "artifacts-fs:createFsArtifactStore"] },
-  /* **Three controls stood here until stage G, 2026-09-05** — for `uploads-fs`,
-     `ai-calls-fs` and `realtime-sessions-fs`. They went with the modules they
-     controlled, which is the paragraph above happening for the last time on
-     each: a control whose module has been deleted has nothing left to prove.
-     `assertControlsCoverEveryModule()` is what says the remaining four still
-     cover the five that survive. */
-  { file: "tests/store-chat-tail-guard.test.ts", expect: ["fs:fsChatStore.begin", "fs:fsChatStore.finish", "fs:fsChatStore.load"] },
+  { file: "tests/artefact-copy.test.ts", expect: ["copy-artefacts:copyArtefacts", "copy-artefacts:readParts"] },
+  /* **`tests/data-root.test.ts` was the sixth, and it went on 2026-09-05** with
+     `src/store/data-root.ts`, `src/store/artifacts-fs.ts` and `src/job-scope.ts`
+     — the last adapter group. Every one of its cases was about `chooseDataRoot`,
+     `findRepoRoot` or `fsLocations`, so there was nothing in it to relocate.
+     `tests/artefact-copy.test.ts` lost its `artifacts-fs:createFsArtifactStore`
+     site the same way and keeps the two that name the module it actually
+     controls. */
+  /* **Four controls stood here until stage G, 2026-09-05** — for `uploads-fs`,
+     `ai-calls-fs`, `realtime-sessions-fs` and `jobs-fs` (the last of them
+     `tests/jobs-fs-load.test.ts`, which was the whole of the cold-start
+     loader's coverage). They went with the modules they controlled, which is
+     the paragraph above happening for the last time on each: a control whose
+     module has been deleted has nothing left to prove.
+     `assertControlsCoverEveryModule()` is what says the remaining two still
+     cover the three that survive.
+
+     **A fifth went with `src/store/fs.ts` itself, later the same day** —
+     `tests/store-chat-tail-guard.test.ts`, controlling `fs:fsChatStore.*`.
+     `fs.ts` was assembled out of `src/api.ts`, the filesystem article reader,
+     which no instrument here ever watched; that was the third blind spot, and
+     it is written up in
+     docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G. */
 ];
 
 /**

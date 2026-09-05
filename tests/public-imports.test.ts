@@ -8,12 +8,22 @@
  * > `src/store/index.ts`, `src/store/pg.ts`, writer modules, or any AI/gateway
  * > root.
  *
- * The first three are about **leaks**: `src/api.ts` runs the meta through
- * `titleFor()`, `pg.ts`'s `blocksQuery` selects per-block `note` and its
+ * The first three are about **leaks**: `pg.ts` runs the meta through
+ * `titleFor()` — the reader's own name for the article, which is theirs and not
+ * a stranger's to see — its `blocksQuery` selects per-block `note`, and its
  * glossary read joins `glossary_lookups`. Every one of those is correct for the
  * owner and is somebody's private data here. The last two are about **money**:
  * Greg's rule is that no logged-out visitor causes a paid call, and a module
  * that cannot be reached cannot be called by mistake.
+ *
+ * **`src/api.ts` was the first of the three named until 2026-09-05**, when it
+ * was deleted with the filesystem store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * `titleFor` moved to `src/library-scalars.ts`, and that module is
+ * deliberately **not** on the forbidden list: it is a leaf of pure functions,
+ * `src/store/public-reader.ts` already imports `headingTitleOf` from it, and
+ * the leak was never the function — it was applying the owner's shelf override,
+ * which only `pg.ts` can read.
  *
  * ## Two things this test is honest about
  *
@@ -42,6 +52,12 @@
  * walker can see a dirty graph" are checked in the same run, and a walker
  * broken into always returning nothing fails rather than passing twice. That is
  * docs/reusable/silent-success.md applied to the check itself.
+ *
+ * It named `src/api.ts` among the four it demands, and that entry moved to
+ * `src/store/pg.ts` rather than being dropped: the control needs one module
+ * from each of the three forbidden groups plus the owner, and `pg.ts` is the
+ * owner-read `routes.ts` reaches now. Deleting the row instead would have left
+ * the control checking one group fewer, silently.
  */
 
 import { readFileSync } from "node:fs";
@@ -61,7 +77,7 @@ import { graphFrom, PUBLIC_ENTRIES, publicFiles, ROOT } from "./helpers/import-g
  * **The owner's read layer.** Each one returns something the public payload must
  * not contain, and each one is correct where it lives.
  */
-const OWNER_READS = ["src/api.ts", "src/store/index.ts", "src/store/pg.ts"];
+const OWNER_READS = ["src/store/index.ts", "src/store/pg.ts"];
 
 /**
  * **The owner himself.** `currentOwnerId()` is the runtime tripwire — on an
@@ -201,7 +217,7 @@ describe("the public API's import graph", () => {
   it("but the authenticated API reaches all of them, which is how we know the walk works", () => {
     const authenticated = graphFrom("src/routes.ts");
     const reached = authenticated.filter((f) => FORBIDDEN.includes(f));
-    for (const named of ["src/api.ts", "src/store/index.ts", "src/owner.ts", "src/ai-call.ts"]) {
+    for (const named of ["src/store/pg.ts", "src/store/index.ts", "src/owner.ts", "src/ai-call.ts"]) {
       expect(reached, named).toContain(named);
     }
   });
@@ -242,7 +258,7 @@ describe("the public API's import graph", () => {
  * - **`tests/owner-isolation.test.ts`** greps for `eq(articles.slug, …)`. That
  *   query never mentions `articles` at all — a child table is keyed by
  *   `article_id`, and the id is one the public read already legitimately holds.
- * - **The module graph above** forbids `api.ts`, `store/index.ts`, `pg.ts`,
+ * - **The module graph above** forbids `store/index.ts`, `pg.ts`,
  *   `owner.ts`, the writers and the gateway. `db/schema.ts` is on none of those
  *   lists and must not be: it is how any query names a table.
  * - **`tests/public-dto.test.ts`** asserts the keys of what a projection

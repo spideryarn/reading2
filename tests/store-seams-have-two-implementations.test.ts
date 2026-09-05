@@ -1,14 +1,11 @@
 /**
- * **A store seam must not be able to arrive with only one side — and a seam that
- * deliberately has one side has to say so somewhere a test reads.**
+ * **A store seam must not be able to arrive without a Postgres implementation.**
  *
  * `notMigrated` is a deliberate, loud, *runtime* refusal, and a refusal nothing
- * ever calls is silent. `SPIDERYARN_STORE` unset means `files`
- * (src/store/live.ts), so every test, every local run and every browser pass
- * exercises the configuration that is not deployed, and a seam with no Postgres
- * implementation looks exactly like a seam that works. That is how Claims
- * shipped on 2026-08-31 filesystem-only and answered 501 in production for four
- * hours with the whole suite green.
+ * ever calls is silent. A seam with no Postgres implementation is a 501 for
+ * every reader, and it looks exactly like a seam that works. That is how Claims
+ * shipped on 2026-08-31 and answered 501 in production for four hours with the
+ * whole suite green.
  * docs/postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md
  * asks for exactly this test:
  *
@@ -17,6 +14,24 @@
  * > maintains — the same move `tests/store-export-covers-tables.test.ts` makes
  * > for tables, which was written the day before this and would have caught this
  * > if it had been pointed at stores instead of tables.
+ *
+ * ## It asked for two until 2026-09-05, and two was never the point
+ *
+ * It said *two* because `SPIDERYARN_STORE` unset meant `files`, so a seam with
+ * no Postgres side was exercised by every test, every local run and every
+ * browser pass — in the one configuration that was not deployed. Stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * deleted the filesystem store, so that reason is gone. **The outage it guards
+ * is not**, so the assertion narrowed to it rather than being deleted with the
+ * store, and `SEAM_ASYMMETRIES` went: with one store there is nothing left for
+ * an asymmetry to be asymmetric about, and eleven seams lost their second side
+ * in a single commit. A record of exceptions grown to cover every case is a
+ * second list of the seams — the thing this file exists to make impossible.
+ *
+ * What that map used to buy is still bought, and more cheaply. Every entry in it
+ * excused a missing *files* side, so nothing that passed then fails now; and the
+ * door it left open — declaring away a missing **Postgres** side, the direction
+ * its own type called "a production outage with a date on it" — is shut.
  *
  * ## Derived, never listed — twice over
  *
@@ -27,40 +42,27 @@
  *
  * So **the seams come from `src/store/contracts.ts`** — every exported interface
  * — and **the implementations come from the source of `src/store/`**: every
- * module-level `export const <name>: <Contract>` whose name begins `fs` or `pg`.
+ * module-level `export const <name>: <Contract>` whose name begins `pg`.
  * Neither list is written down anywhere. An interface that nothing implements is
  * a data shape (`RawSource`, `SweepOptions`, `Turn`) and is not a seam; that is
  * why "is it implemented" is the test rather than a naming rule.
  *
- * A selector is not an implementation, and the `fs`/`pg` prefix is what tells
- * them apart: `export const commentStore: CommentStore = guarded(…)` in
- * index.ts is the *choice* between two implementations, and counting it as one
- * would make every seam look complete by construction.
+ * A selector is not an implementation, and the prefix is what tells them apart:
+ * `export const commentStore: CommentStore = guarded(…)` in index.ts is the
+ * wrapper around one, and counting it would make every seam look complete by
+ * construction. The `fs` half of `sideOf` is kept deliberately: it costs one
+ * regex and it is what would notice somebody reintroducing a filesystem adapter
+ * under the old naming, rather than that arriving unremarked.
  *
- * ## Why a parser and not a regular expression
+ * ## `notMigrated` is still sometimes right, and still has to be visible
  *
- * tests/helpers/ts-ast.ts § the header: both of this repo's earlier source scans
- * were wrong in both directions, and the direction that matters is a scan that
- * quietly stops matching. A gate that goes quiet is worse than one that goes red.
- *
- * ## The hard part: `notMigrated` is sometimes right
- *
- * `AdminStore`, `VisibilityStore` and `FeedbackStore` have a Postgres
- * implementation and a filesystem **refusal**, deliberately and permanently —
- * there is no user list, no visibility column and no feedback table on a
- * filesystem. Those are correct and must not be flagged. What must be flagged is
- * the other direction, and the undeclared case.
- *
- * `SEAM_ASYMMETRIES` in src/store/live.ts is where a one-sided seam declares
- * itself, and its type is what makes the two directions different things: a
- * missing **files** side needs a reason, and a missing **postgres** side needs a
- * reason *and* one plain sentence saying what a reader cannot do on the deployed
- * app. That sentence is the check. Nobody would have written it about *"Pull the
- * paper's claims"* and shipped.
+ * A `pgFooStore` whose every method refuses is the same 501 by a longer route,
+ * so it is flagged below. A refusal belongs beside the selector in
+ * `src/store/index.ts`, where a reader looking for the implementation finds the
+ * refusal instead of a store's name on an empty box.
  *
  * **No database, no network, no imports of the stores themselves** — this reads
- * the source. So it runs everywhere, always, which for a gate about a
- * configuration nobody exercises is the point.
+ * the source. So it runs everywhere, always.
  */
 
 import { readFile, readdir } from "node:fs/promises";
@@ -68,7 +70,6 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { SEAM_ASYMMETRIES } from "../src/store/live.js";
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 const STORE_DIR = path.resolve(import.meta.dirname, "..", "src", "store");
@@ -211,10 +212,52 @@ async function seams(): Promise<Map<string, Implementation[]>> {
 }
 
 const SEAMS = await seams();
-const SIDES: readonly Side[] = ["files", "postgres"];
 
 const sideNames = (impls: Implementation[], side: Side) =>
   impls.filter((i) => i.side === side).map((i) => i.name);
+
+/**
+ * **The contracts `src/store/index.ts` wires a selector for** — a second, and
+ * deliberately different, way of finding a seam.
+ *
+ * `SEAMS` above is implementations ∩ contracts, so a contract that **nothing
+ * implements** never enters it and the Postgres check below cannot look at it.
+ * That was fine while the answer to "is this a seam?" was "something implements
+ * it": an interface nothing implements was a data shape (`RawSource`,
+ * `SweepOptions`, `Turn`), which is what the file header says and why the test
+ * is "is it implemented" rather than a naming rule.
+ *
+ * **It stopped being fine when there was one store.** With two, a seam missing
+ * its Postgres side still had a filesystem one, so it was in `SEAMS` and the
+ * guard saw it — that is the Claims shape of 2026-08-31, and the check caught
+ * it. With one store, the same outage arrives as a contract plus a selector plus
+ * **no implementation at all**, which is invisible to a set built from
+ * implementations. Found by GPT Sol's review of stage G on 2026-09-05, and
+ * reproduced by both of us: a `ReviewMissingStore` contract with a selector and
+ * no adapter passed all five tests.
+ *
+ * A selector is the right second source precisely because a data shape never has
+ * one. `export const commentStore: CommentStore = guarded(…)` says *this
+ * contract is something the app calls*, which is the whole claim.
+ */
+async function selectorContracts(): Promise<string[]> {
+  const ast = parseSource(await readFile(path.join(STORE_DIR, "index.ts"), "utf8"));
+  const named: string[] = [];
+  walkAst(ast, (node) => {
+    if (node.type !== "ExportNamedDeclaration") return;
+    const declaration = node.declaration as AstNode | undefined;
+    if (declaration?.type !== "VariableDeclaration") return;
+    for (const raw of (declaration.declarations as AstNode[]) ?? []) {
+      const id = raw.id as AstNode | undefined;
+      if (id?.type !== "Identifier") continue;
+      const contract = contractOf(id.typeAnnotation);
+      if (contract) named.push(contract);
+    }
+  });
+  return named;
+}
+
+const SELECTED = await selectorContracts();
 
 /* --------------------------------------------------------- the seams exist -- */
 
@@ -241,13 +284,15 @@ describe("the store seams are found by reading the contract, not a list", () => 
        `Pick<GlossaryStore, "deleteGlossary">` (`lookUpTerm` is orchestration
        that index.ts builds, not a store method on either side).
 
-       Both are named, not just one. Until 2026-09-03 this line asserted
-       `fsGlossaryStore` alone, because the Postgres side did not exist; asking
-       only for the files side now would go on passing if `pgGlossaryStore`
-       stopped being recognised — and the Postgres side is the one production
-       runs. src/store/pg-glossary.ts. */
+       Until 2026-09-03 this line asserted `fsGlossaryStore` alone, because the
+       Postgres side did not exist; then both, because asking only for the files
+       side would go on passing if `pgGlossaryStore` stopped being recognised.
+       Since 2026-09-05 it is `pgGlossaryStore` alone again, from the other
+       direction: `fsGlossaryStore` went with src/store/fs.ts
+       (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G),
+       and the side production runs is the side worth naming.
+       src/store/pg-glossary.ts. */
     const glossary = SEAMS.get("GlossaryStore") ?? [];
-    expect(glossary.map((i) => i.name)).toContain("fsGlossaryStore");
     expect(glossary.map((i) => i.name)).toContain("pgGlossaryStore");
     /* And the plain-annotation path, on the seam that used to take the `Pick`
        route: `pgArticleReader` must still be found as an `ArticleReader`, or
@@ -273,35 +318,86 @@ describe("the store seams are found by reading the contract, not a list", () => 
 
 /* ------------------------------------------------------ both sides, or a why -- */
 
-describe("every store seam has two implementations, or says why not", () => {
-  it("has both sides wherever nothing is declared", () => {
+describe("every store seam has a Postgres implementation", () => {
+  /**
+   * **This asked for two implementations until 2026-09-05, and asking for two
+   * was never the point.**
+   *
+   * The postmortem that commissioned this file wanted a seam that could not
+   * arrive half-built. It said *"two implementations"* because `SPIDERYARN_STORE`
+   * unset meant `files`, so a seam with no Postgres side was exercised by every
+   * test, every local run and every browser pass in the one configuration that
+   * was not deployed — and looked exactly like a seam that worked. Claims
+   * shipped that way and answered 501 in production for four hours with the
+   * whole suite green.
+   *
+   * The reason is gone: stage G of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   * deleted the filesystem store, and there is one store now. **The failure is
+   * not gone**, so the assertion is narrowed to it rather than deleted — a seam
+   * with no Postgres implementation is still a 501 for every reader, and that is
+   * exactly what this now says.
+   *
+   * It is also strictly stronger than what it replaces. `SEAM_ASYMMETRIES` could
+   * excuse either side; every entry in it excused a missing *files* side, so
+   * nothing that was passing is newly failing, and the door that could have
+   * excused a missing Postgres side is now shut. That map is deleted with this
+   * change, which is the answer to a question the last group had to ask: eleven
+   * seams lost their files side in one commit, and a record of exceptions that
+   * has grown to cover every case is a second list of the seams — the thing this
+   * file's own header says it exists to make impossible.
+   */
+  it("has a Postgres implementation for every contract the app wires a selector for", () => {
+    /* The case above cannot see this one: `SEAMS` is built from implementations,
+       so a contract nothing implements is not in it. This asks the question from
+       the other end — the app calls it, therefore it needs a store. */
+    const wrong: string[] = [];
+    for (const contract of SELECTED) {
+      const impls = SEAMS.get(contract) ?? [];
+      if (sideNames(impls, "postgres").length > 0) continue;
+      wrong.push(contract);
+    }
+    expect(
+      wrong,
+      `src/store/index.ts wires a selector for ${wrong.join(", ")}, and nothing implements ` +
+        "it for Postgres. That is a 501 the moment a reader reaches it, and it is the shape " +
+        "the 2026-08-31 Claims outage takes now there is one store: a contract, a selector, " +
+        "and no adapter. Build the adapter, or take the selector out.",
+    ).toEqual([]);
+  });
+
+  it("finds selectors at all, so the check above cannot pass by finding nothing", () => {
+    /* The check above is satisfied by an empty list, and an empty list is what a
+       parser that stopped matching produces. This is the floor that tells the
+       two apart — the same argument the seam count makes for `SEAMS`. */
+    expect(SELECTED.length).toBeGreaterThan(8);
+    expect(SELECTED).toContain("CommentStore");
+    expect(SELECTED).toContain("ChatStore");
+  });
+
+  it("has a Postgres implementation for every seam", () => {
     const wrong: string[] = [];
     for (const [contract, impls] of SEAMS) {
-      const declared = SEAM_ASYMMETRIES[contract];
-      for (const side of SIDES) {
-        if (sideNames(impls, side).length > 0) continue;
-        if (declared?.missing === side) continue;
-        wrong.push(`${contract} has no ${side} implementation`);
-      }
+      if (sideNames(impls, "postgres").length > 0) continue;
+      wrong.push(`${contract} has no Postgres implementation`);
     }
     expect(
       wrong,
       `${wrong.join("; ")}.\n\n` +
-        "  A seam with one side is a 501 in whichever store it is missing from, and " +
-        "Postgres is the store production runs — so a missing Postgres " +
-        "side means the feature does not exist for anybody but a developer on a " +
-        "laptop, with every test green. Either build the adapter, or declare the " +
-        "asymmetry in SEAM_ASYMMETRIES (src/store/live.ts): a missing files side " +
-        "needs a reason, a missing postgres side needs a reason and one sentence " +
-        "naming what a reader cannot do on the deployed app.",
+        "  Postgres is the only store, so a seam with no Postgres implementation " +
+        "is a feature that does not exist for anybody — a 501 with every test " +
+        "green, which is how Claims shipped on 2026-08-31. Build the adapter; " +
+        "there is no longer a second side to fall back to and no way to declare " +
+        "this one away.",
     ).toEqual([]);
   });
 
   it("has no store that is a refusal wearing an implementation's name", () => {
     /* The structural check above is satisfied by a `pgFooStore` whose every
        method is `notMigrated(…)`, which is the same 501 with a longer route to
-       it. A refusal belongs in index.ts beside the selector, where it is visible
-       as a refusal, and it belongs in SEAM_ASYMMETRIES besides. */
+       it. A refusal belongs in index.ts beside the selector, where it is
+       visible as a refusal — and with one store there is nowhere left to
+       declare it away, which is the point of the check above. */
     const pretenders: string[] = [];
     for (const impls of SEAMS.values()) {
       for (const impl of impls) {
@@ -312,71 +408,8 @@ describe("every store seam has two implementations, or says why not", () => {
       pretenders,
       `${pretenders.join(", ")} calls notMigrated, so it is a refusal with a store's ` +
         "name on it. Every check here would count it as an implementation. Put the " +
-        "refusal in src/store/index.ts where the selector is, and declare the seam in " +
-        "SEAM_ASYMMETRIES.",
+        "refusal in src/store/index.ts where the selector is — or, better, build " +
+        "the adapter: there is one store, so this seam is a 501 for every reader.",
     ).toEqual([]);
-  });
-});
-
-/* ------------------------------------- the declarations are true, and stay true -- */
-
-describe("a declared asymmetry has to still be one", () => {
-  it("names nothing that is not a seam any more", () => {
-    const stale = Object.keys(SEAM_ASYMMETRIES).filter((name) => !SEAMS.has(name));
-    expect(
-      stale,
-      `SEAM_ASYMMETRIES names ${stale.join(", ")}, which is not a store seam in ` +
-        "src/store/contracts.ts any more. Delete the entry, or fix the name.",
-    ).toEqual([]);
-  });
-
-  it("goes red when the missing side gets built", () => {
-    /* The self-correcting direction, and the reason the record cannot rot into a
-       list of excuses: the day somebody writes `pgGlossaryStore`, this fails and
-       makes them delete the entry that says the deployed app cannot do it. It is
-       also what would have made the Claims entry disappear on 2026-09-01 rather
-       than surviving as a stale explanation of a fixed problem. */
-    const wrong: string[] = [];
-    for (const [contract, declared] of Object.entries(SEAM_ASYMMETRIES)) {
-      const impls = SEAMS.get(contract) ?? [];
-      const built = sideNames(impls, declared.missing);
-      if (built.length) {
-        wrong.push(`${contract} declares no ${declared.missing} side but has ${built.join(", ")}`);
-      }
-    }
-    expect(
-      wrong,
-      `${wrong.join("; ")}. The asymmetry was built away — delete the entry from ` +
-        "SEAM_ASYMMETRIES in src/store/live.ts, and take the refusal out of " +
-        "src/store/index.ts with it.",
-    ).toEqual([]);
-  });
-
-  it("gives every asymmetry a reason written in words", () => {
-    for (const [contract, declared] of Object.entries(SEAM_ASYMMETRIES)) {
-      /* A reason, not a shrug — `store-export-covers-tables.test.ts`'s rule and
-         its number. "not needed" is what somebody writes when they have not
-         thought about it, and it is what the next reader has to re-derive. */
-      expect(
-        declared.why.length,
-        `${contract} declares a one-sided seam and says why in too few words`,
-      ).toBeGreaterThan(40);
-    }
-  });
-
-  it("makes a missing Postgres side name the thing readers cannot do", () => {
-    /* The asymmetry between the two directions, enforced. `postgres` is what
-       deploys, so this side missing is not a design decision — it is an outage
-       with a date on it, and the entry has to say what the outage is in a
-       sentence somebody would be embarrassed to ship. The type already requires
-       the field; this requires it to be a sentence. */
-    for (const [contract, declared] of Object.entries(SEAM_ASYMMETRIES)) {
-      if (declared.missing !== "postgres") continue;
-      expect(
-        declared.productionGap.length,
-        `${contract} has no Postgres implementation, which is a 501 on the deployed ` +
-          "app. Say in a sentence what a reader cannot do.",
-      ).toBeGreaterThan(40);
-    }
   });
 });

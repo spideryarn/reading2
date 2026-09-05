@@ -56,7 +56,7 @@ counts and four ticks. Every one of those is already a column.
 
 `listArticles` reads all of it to feed two pure functions.
 
-`describeArticle` ([`src/api.ts:738`](../../src/api.ts)) uses the blocks for `blocks.length` and
+`describeArticle` (`src/api.ts:738`) uses the blocks for `blocks.length` and
 `sum(b.words)`, and the tree for a count of depth-1 and depth-2 nodes and the root's gist. All five
 of those numbers are **already stored**, on `article_revisions`:
 
@@ -171,7 +171,7 @@ identical on the filesystem side, where the caller now writes
 `deriveLibraryScalars({ blocks, tree, excerpt: meta.excerpt })` at the point it used to hand the
 blocks over — the same inputs through the same code.
 
-Two production callers: `describeDir` ([`src/api.ts:918`](../../src/api.ts)) and `listArticles`
+Two production callers: `describeDir` (`src/api.ts:918`) and `listArticles`
 ([`src/store/pg.ts:807`](../../src/store/pg.ts)).
 
 ### 3. The shelf's projection: five scalars, five booleans, no documents

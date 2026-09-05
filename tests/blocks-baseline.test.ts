@@ -56,7 +56,6 @@ import {
   runBlocks,
   splitIntoBlocks,
 } from "../src/blocks.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import type { Db } from "../src/db/client.js";
@@ -105,25 +104,34 @@ const SHELL = `<!doctype html><html><body>
 <div id="app"></div><script>window.__PAYWALL__ = true;</script>
 </body></html>`;
 
-/* -------------------------------------------------------- the filesystem -- */
+/* ---------------------------------------------- a store and a scratch file -- */
 
 interface Workspace {
   root: string;
-  dir: string;
+  /** Where `runBlocksOverFile` below puts stage 2's document. Not the store's. */
   htmlFile: string;
-  store: ArtifactStore;
+  store: MemoryArtifactStore;
 }
 
 /**
- * A store over a throwaway directory, laid out the way the real one is:
- * stage 3's `a.blocks.json` beside the HTML, stage 4's inside `data/`.
+ * **A `createFsArtifactStore` over a `mkdtemp` until 2026-09-05**, when the
+ * filesystem store was deleted
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § G). Nothing in this section was ever asking about files: it needs a store
+ * that can hold stage 3's baseline and stage 4's copy so `previousBlocksFrom`
+ * has something to read, and a temp directory was the cheapest one to build.
+ *
+ * **The directory that stays is not the store's.** `runBlocksOverFile` below is
+ * the thin caller that writes what stage 3 hands back, and half the refusals
+ * here are about *absence* — "nothing was written" cannot be observed of a pure
+ * function. So the HTML and the `a.blocks.json` beside it are plain files, and
+ * what the store holds is planted explicitly, which is what those two writes
+ * used to do by side effect through `PATHS`.
  */
 async function aWorkspace(): Promise<Workspace> {
   const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-"));
-  const dir = path.join(root, "data");
-  await mkdir(dir, { recursive: true });
-  const htmlFile = path.join(root, "a.html");
-  return { root, dir, htmlFile, store: createFsArtifactStore(() => ({ dir, htmlFile })) };
+  await mkdir(root, { recursive: true });
+  return { root, htmlFile: path.join(root, "a.html"), store: memoryArtefacts() };
 }
 
 const idsIn = (blocks: readonly Block[]): string[] => blocks.map((b) => b.id);
@@ -164,7 +172,7 @@ async function runBlocksOverFile(opts: {
   return { ...run, jsonFile };
 }
 
-describe("the baseline, over the filesystem store", () => {
+describe("the baseline, as the store answers it", () => {
   const cleanUp: string[] = [];
   afterAll(async () => {
     for (const root of cleanUp) await rm(root, { recursive: true, force: true });
@@ -177,20 +185,19 @@ describe("the baseline, over the filesystem store", () => {
   };
 
   it("carries every id across a re-extraction, taking the baseline from the store", async () => {
-    const { dir, htmlFile, store } = await workspace();
+    const { htmlFile, store } = await workspace();
 
     // Run one: a genuine first ingest. Nothing to carry, so everything mints.
     await writeFile(htmlFile, EXTRACTED, "utf-8");
     const first = await runBlocksOverFile({ htmlFile, previous: undefined });
     expect(first.stats.minted).toBe(3);
     expect(first.stats.carried).toBe(0);
-    /* Stage 4's copy, which is what `hasEarlierBlocks` reads on this store. It
-       exists here because a real article has been through stage 4 by now. */
-    await writeFile(
-      path.join(dir, "blocks.json"),
-      JSON.stringify(blocksArtefact(first.blocks)),
-      "utf-8",
-    );
+    /* What the first run left in the store: stage 3's own copy, which is the
+       baseline, and stage 4's, which is what `hasEarlierBlocks` reads. Both
+       were files under `PATHS` until 2026-09-05; stage 4's is here because a
+       real article has been through stage 4 by now. */
+    store.plant("a", "blocks", "blocks", blocksArtefact(first.blocks));
+    store.plant("a", "hierarchy", "blocks", blocksArtefact(first.blocks));
 
     /* Stage 2 runs again and overwrites the HTML with an id-free document —
        the case random ids exist for. */
@@ -208,19 +215,16 @@ describe("the baseline, over the filesystem store", () => {
   });
 
   it("refuses to mint when a baseline it should have had is missing", async () => {
-    const { dir, htmlFile, store } = await workspace();
+    const { htmlFile, store } = await workspace();
     await writeFile(htmlFile, EXTRACTED, "utf-8");
     const first = await runBlocksOverFile({ htmlFile, previous: undefined });
 
     /* Stage 4's copy still lists every id this article ever had; stage 3's own
-       copy — the baseline — has gone. block-ids.md calls that file a source
-       artefact rather than a cache for exactly this reason. */
-    await writeFile(
-      path.join(dir, "blocks.json"),
-      JSON.stringify(blocksArtefact(first.blocks)),
-      "utf-8",
-    );
-    await rm(htmlFile.replace(/\.html$/, ".blocks.json"));
+       copy — the baseline — has gone. block-ids.md calls it a source artefact
+       rather than a cache for exactly this reason. A `plant` and a `forget`,
+       where this was a `writeFile` and an `rm`. */
+    store.plant("a", "hierarchy", "blocks", blocksArtefact(first.blocks));
+    store.forget("a", "blocks", "blocks");
 
     await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);
   });
@@ -240,42 +244,51 @@ describe("the baseline, over the filesystem store", () => {
    * success. Stopping costs five minutes and keeps every anchor. GPT Sol,
    * 2026-08-28.
    */
-  it("refuses when stage 4's copy is there but will not parse", async () => {
-    const { dir, htmlFile, store } = await workspace();
+  it("refuses when stage 4's copy is there but cannot be used", async () => {
+    const { htmlFile, store } = await workspace();
     await writeFile(htmlFile, EXTRACTED, "utf-8");
     const first = await runBlocksOverFile({ htmlFile, previous: undefined });
 
-    /* Cut off halfway, which is what a `writeFile` killed in the middle leaves.
-       Every id this article has ever had is still in those bytes — that is the
-       point: the file is unusable, not empty. */
+    /* Cut off halfway, which is what a `writeFile` killed in the middle left.
+       Every id this article has ever had is still in those characters — that is
+       the point: the artefact is unusable, not empty.
+
+       `plant` rather than `write`, because `write` refuses a bad shape and that
+       is what `write` is for; this is the escape hatch a fake needs to produce
+       *"there is an artefact and it cannot be used"* at all
+       (helpers/memory-artefacts.ts). It reads back through the same shared
+       `whyUnusable` table both real adapters apply, so `hasEarlierBlocks`
+       answers **yes** — unusable is not absent — and the refusal below is what
+       this case is about. */
     const whole = JSON.stringify(blocksArtefact(first.blocks));
-    await writeFile(path.join(dir, "blocks.json"), whole.slice(0, whole.length >> 1), "utf-8");
-    await rm(htmlFile.replace(/\.html$/, ".blocks.json"));
+    store.plant("a", "hierarchy", "blocks", whole.slice(0, whole.length >> 1));
+    store.forget("a", "blocks", "blocks");
 
     await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);
   });
 
-  it("refuses when stage 4's copy is over the size this store can read", async () => {
-    const { dir, htmlFile, store } = await workspace();
-    await writeFile(htmlFile, EXTRACTED, "utf-8");
-    const first = await runBlocksOverFile({ htmlFile, previous: undefined });
-
-    /* Valid JSON, listing the real ids, and one byte past the 32 MiB ceiling in
-       `DECODERS` — so the only thing wrong with it is that this store will not
-       read it. The other half of the same misclassification, and the one that
-       does not resolve itself: `readOne` warns and returns `null` for ever. */
-    const artefact = blocksArtefact(first.blocks);
-    const padded = {
-      ...artefact,
-      blocks: artefact.blocks.map((b, i) =>
-        i === 0 ? { ...b, text: `${b.text}${"x".repeat(32 * 1024 * 1024)}` } : b,
-      ),
-    };
-    await writeFile(path.join(dir, "blocks.json"), JSON.stringify(padded), "utf-8");
-    await rm(htmlFile.replace(/\.html$/, ".blocks.json"));
-
-    await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);
-  });
+  /**
+   * ***refuses when stage 4's copy is over the size this store can read* stood
+   * here until 2026-09-05, and its subject was a table that no longer exists.**
+   *
+   * It wrote a `data/<slug>/blocks.json` that was valid JSON, listed every real
+   * id, and was one byte past the 32 MiB ceiling for `blocks` in `DECODERS`
+   * (`src/store/artifacts-fs.ts`) — so the only thing wrong with it was that
+   * *that* store would not read it. `readOne` warned and returned `null` for
+   * ever, and `hasEarlierBlocks` had to read that as **yes, there was an
+   * earlier run**, or stage 3 would mint a fresh identity set over an article
+   * that had one and report success. It was the half of the misclassification
+   * that does not resolve itself; the truncated artefact above is the other.
+   *
+   * **The claim has no home, and does not need one.** A ceiling on a decoder is
+   * a property of reading bytes off a disk, and Postgres has none.
+   * `helpers/fixture-artefacts.ts` § `MAX_BYTES` — the only bound left in the
+   * repo, and a fixture reader's rather than a store's — names this case in as
+   * many words as the one test whose subject was `DECODERS`, and as the reason
+   * this file was left unconverted in stage D. What survives it is the
+   * store-agnostic half, *unusable is not absent*, asserted above through
+   * `plant`.
+   */
 
   it("mints quietly when this really is a first ingest", async () => {
     const { store } = await workspace();
@@ -583,14 +596,17 @@ describe("the stamped HTML stage 3 returns", () => {
  * `skipped`, and **one distinct id set** across every revision of the article.
  */
 describe("the step", () => {
-  const stage3 = async (store: MemoryArtifactStore) => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-baseline-step-"));
-    cleanUp.push(dir);
-    return await STEPS.blocks.run(
+  /**
+   * **The context carried a `dir` and an `htmlFile` until 2026-09-05**, over a
+   * `mkdtemp` this made and then removed, and stage 3 never opened either — it
+   * reads `extract/extractedHtml` out of the store it is handed and returns its
+   * product. They went with `contextPaths` when the filesystem store was
+   * deleted, so what a step is told about *where* is now exactly the store.
+   */
+  const stage3 = async (store: MemoryArtifactStore) =>
+    await STEPS.blocks.run(
       {
         slug: "a",
-        dir,
-        htmlFile: path.join(dir, "a.html"),
         report: () => {},
         signal: new AbortController().signal,
         cacheArticle: false,
@@ -598,12 +614,6 @@ describe("the step", () => {
       store,
       nullCheckpointStore(),
     );
-  };
-
-  const cleanUp: string[] = [];
-  afterAll(async () => {
-    for (const root of cleanUp) await rm(root, { recursive: true, force: true });
-  });
 
   it("hands back the stamped HTML and the blocks, naming the same ids", async () => {
     const store = memoryArtefacts();
@@ -762,10 +772,14 @@ const NOT_A_USE = new Set([
 /**
  * **Nothing in `src/` may call `splitIntoBlocks` without its baseline.**
  *
- * The trap this closes, which is specific and worth stating: landing D deletes
- * `dir` and `htmlFile` from `StepContext`, so the code that calls stage 3 *has*
- * to be edited — that part is safe, because it will not compile. What is not
- * safe is the shape of the edit. `splitIntoBlocks(html, previous?: Block[])`
+ * The trap this closes, which is specific and worth stating: deleting `dir` and
+ * `htmlFile` from `StepContext` forces the code that calls stage 3 to be edited
+ * — that part was safe, because it would not compile, and it happened on
+ * 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § G). What was never safe is the shape of the edit, which is why this check
+ * outlives the removal it was written for.
+ * `splitIntoBlocks(html, previous?: Block[])`
  * takes its baseline **optionally**, so a conversion that reads the HTML from
  * the store and writes `splitIntoBlocks(await store.read(…))` compiles cleanly,
  * runs green, and silently re-mints every id in the article.

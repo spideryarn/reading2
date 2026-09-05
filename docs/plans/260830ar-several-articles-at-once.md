@@ -143,7 +143,7 @@ predicate exists today only in memory, at the `if (!request.url && !request.uplo
 
 A slug-named step job never reserves, so it can never be renamed and never be refused. On the
 filesystem side it rides beside `workKey` as a sibling key in the stored document
-([`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts)), which keeps it off the public `Job` type for
+(`src/store/jobs-fs.ts`), which keeps it off the public `Job` type for
 the same reason `workKey` is off it.
 
 ### Which conflict fired
@@ -221,7 +221,7 @@ article and is still a draft, and never asks whether the article moved underneat
 ```
 
 **And a second reason, on the laptop.** `chooseDataRoot` returns the repository root when not
-deployed ([`src/store/data-root.ts`](../../src/store/data-root.ts)); the per-job
+deployed (`src/store/data-root.ts`); the per-job
 `/tmp/spideryarn/<owner>/<job>/` split exists only under `VERCEL`. So two jobs on one slug would
 write the same `data/<slug>/` locally. That is **not** a problem for this plan — the article rule
 means it never happens — but it is a second thing within-article parallelism would have to solve, and
@@ -241,7 +241,7 @@ Four blockers, each verified here rather than taken on trust.
 builds `fsStoreSession({ artifacts: pipelineStore })` and only *wraps* it with publication
 ([`src/jobs.ts`](../../src/jobs.ts)), so every stage reads files — and on a deployed instance those
 files live in a scratch directory scoped to *this job's id*
-([`src/store/data-root.ts`](../../src/store/data-root.ts)). A `summary` job queued behind an ingest
+(`src/store/data-root.ts`). A `summary` job queued behind an ingest
 therefore claims on some instance, opens `blocks.json` in its own empty directory, and dies before it
 generates anything. Verified: `src/summarise.ts` opens the file directly.
 
@@ -341,7 +341,7 @@ and say so.
 | [`src/db/schema.ts`](../../src/db/schema.ts) | drop `jobs_only_one_running` and `jobs_active_slug`; add the three indexes above, `reserves_name`, `last_seen_at`; rewrite the "strictly subsumed" comment |
 | `drizzle/` | one generated migration — **read it before applying**, per [database.md](../project/database.md) |
 | [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) | `tryEnqueue` branches on the constraint name; `claim` takes the cap into account and maps the new index to `busy`; `failExpired` gains the queued sweep; `activeForSlug` prefers the reserving job |
-| [`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts) | the same three rules in the in-memory index — `runningNow()` becomes a count and a per-slug check. **This is the local default**, so it is not the secondary adapter here |
+| `src/store/jobs-fs.ts` | the same three rules in the in-memory index — `runningNow()` becomes a count and a per-slug check. **This is the local default**, so it is not the secondary adapter here |
 | [`src/store/jobs.ts`](../../src/store/jobs.ts) | the contract's comments; `ClaimRefusal.busy.why` gains the article case |
 | [`src/jobs.ts`](../../src/jobs.ts) | `enqueue` stops throwing 409 for slug-named work; the concurrency setting and where it is read |
 | [`docs/project/ingest-queue.md`](../project/ingest-queue.md) | § *Concurrency is still 1, and still deliberately* is now false and must say what replaced it and why |
@@ -432,7 +432,7 @@ rather than at the change:
   it stops existing: `store-step-fence`, `store-artefacts-pg`, `store-pg-session`, and two places in
   `jobs-publish-finalizer`. A waiter whose constraint can no longer fire waits for nothing, which is
   the good case; the bad case is that it was the only thing serialising that suite.
-- [`tests/jobs-fs-load.test.ts`](../../tests/jobs-fs-load.test.ts) pins that the work key survives a
+- `tests/jobs-fs-load.test.ts` pins that the work key survives a
   restart *"or that ends in a 409 for a request that should not have got one"* — the same 409, and
   after this change the sentence needs rewriting even though the test stays green.
 

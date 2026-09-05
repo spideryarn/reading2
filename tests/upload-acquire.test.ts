@@ -21,21 +21,31 @@
  */
 import { createHash } from "node:crypto";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
-import { rm } from "node:fs/promises";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { readRawBytes } from "../src/fetch.js";
-import { contextPaths, STEPS, stepLabel } from "../src/pipeline.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
+import { STEPS, stepLabel } from "../src/pipeline.js";
 import { canonicalKey, stagingKey } from "../src/source.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { claimUpload, forgetUpload, mintUpload, readUpload } from "../src/upload-records.js";
 
 const blobs = blobStore();
+
+/**
+ * **A store, because `run` takes one — and nothing here reads it back.**
+ *
+ * Every assertion in this file is about what the step *returns* (`product.parts`),
+ * about the upload record, or about the blob store. It was `fsArtifacts` under
+ * the repository's own `data/` until 2026-09-05, which is why each case had a
+ * directory to sweep up afterwards; a `Map` needs no sweeping and answers the
+ * same questions.
+ */
+const artefacts = memoryArtefacts();
 
 /**
  * **`uploads.owner_id` is a foreign key into `auth.users`, since 2026-09-05.**
@@ -103,18 +113,14 @@ async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
   await blobs.putIfAbsent(stagingKey(id), bytes, CONTENT_TYPE.pdf);
 
   const slug = `test-upload-${id.slice(0, 8)}`;
-  const { dir, htmlFile } = contextPaths(slug);
-  rubbish.push(() => rm(dir, { recursive: true, force: true }));
   const ctx = {
     slug,
-    dir,
-    htmlFile,
     upload: { id, filename: "paper.pdf" },
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
   };
-  return { id, ctx, slug, dir };
+  return { id, ctx, slug };
 }
 
 describe("acquiring an uploaded file", () => {
@@ -131,7 +137,7 @@ describe("acquiring an uploaded file", () => {
        tested the old shape, and the claim in this test's name — that the two
        origins produce the same artefact — is about the artefact rather than
        about where a laptop happens to keep it. */
-    const product = await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
     const manifest = product.parts?.raw;
     expect(manifest?.kind).toBe("pdf");
     expect(manifest?.file).toBe("raw.pdf");
@@ -171,7 +177,7 @@ describe("acquiring an uploaded file", () => {
     const { ctx } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
+    await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
     expect(await blobs.get(canonicalKey(shaOf(bytes), "pdf"))).toEqual(bytes);
   });
 
@@ -207,7 +213,7 @@ describe("acquiring an uploaded file", () => {
     await blobs.putIfAbsent(key, aPdf("not the real paper"), CONTENT_TYPE.pdf);
 
     const { ctx, id } = await readyToVerify(bytes);
-    await expect(STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore())).rejects.toThrow();
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow();
 
     /* The two halves that matter. The upload must NOT have been recorded as
        verified — that is the lie — and the squatter must still be there,
@@ -222,7 +228,7 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
+    await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
     expect(await blobs.head(stagingKey(id))).not.toBeNull();
   });
 
@@ -230,7 +236,7 @@ describe("acquiring an uploaded file", () => {
     const bytes = new TextEncoder().encode("PK this is a zip, honestly");
     const { id, ctx } = await readyToVerify(bytes);
 
-    await expect(STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore())).rejects.toThrow(/isn't a PDF inside/);
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(/isn't a PDF inside/);
     expect((await readUpload(id))?.status).toBe("rejected");
     expect((await readUpload(id))?.reason).toBe("not-a-pdf");
   });
@@ -246,7 +252,7 @@ describe("acquiring an uploaded file", () => {
     expect(arrived.byteLength).toBe(sent.byteLength);
     const { id, ctx } = await readyToVerify(arrived, shaOf(sent));
 
-    await expect(STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore())).rejects.toThrow(/isn't quite the file that was sent/);
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(/isn't quite the file that was sent/);
     expect((await readUpload(id))?.reason).toBe("checksum-mismatch");
   });
 
@@ -255,7 +261,7 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx } = await readyToVerify(bytes);
     await blobs.remove(stagingKey(id));
 
-    await expect(STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore())).rejects.toThrow(/never finished arriving/);
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(/never finished arriving/);
     expect((await readUpload(id))?.reason).toBe("missing");
   });
 
@@ -270,8 +276,8 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
-    await STEPS.fetch.run(ctx, fsArtifacts, nullCheckpointStore());
+    await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
+    await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
     expect((await readUpload(id))?.status).toBe("verified");
   });
 });

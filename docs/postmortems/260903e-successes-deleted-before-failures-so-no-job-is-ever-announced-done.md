@@ -30,7 +30,7 @@ said so.**
 `trimFinished` runs after **every** ending ([`src/jobs.ts:1137`](../../src/jobs.ts)), keeping
 `KEEP_FINISHED = 50` terminal jobs per owner. Its ordering is deliberate and documented in both
 adapters — [`src/store/pg-jobs.ts:1130`](../../src/store/pg-jobs.ts),
-[`src/store/jobs-fs.ts:700`](../../src/store/jobs-fs.ts):
+`src/store/jobs-fs.ts:700`:
 
 > Successes before failures, so successes are what gets dropped … A reader who loses a failure loses
 > the only account of what went wrong.

@@ -249,7 +249,7 @@ written from. When `tree.json` and `arc.json` carry the same, this page can answ
 properly. Until then silence is the honest answer — **a confident wrong verdict is worse here than
 none, because this is the page you open once you have stopped trusting the others.**
 
-**A new endpoint, `GET /api/metadata/:slug`.** It goes in [`src/api.ts`](../../src/api.ts) next to
+**A new endpoint, `GET /api/metadata/:slug`.** It goes in `src/api.ts` next to
 `loadArticle` and `listArticles`, because that file is
 [the seam a database goes behind](../project/architecture.md#server-and-client) and a directory walk
 is exactly the sort of thing that has to stay behind it.

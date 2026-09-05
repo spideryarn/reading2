@@ -121,7 +121,6 @@ function recordingStep(name: StepName): PipelineStep {
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: [name],
     run: async (ctx: StepContext) => {
       seen.push({ step: name, cacheArticle: ctx.cacheArticle });

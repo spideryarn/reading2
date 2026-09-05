@@ -119,8 +119,9 @@ So the rule is not "never JSONB". It is: **the default is a column, and a JSONB 
 sentence saying why it is not one.** If you find yourself wanting an index on something inside the
 blob, or a check on it, that sentence has stopped being true.
 
-`data/reader.json` and its neighbours are not counter-examples: the filesystem store is a JSON file
-by construction, and [architecture.md](architecture.md) is where that split lives.
+`data/reader.json` and its neighbours were not counter-examples: the filesystem store, deleted
+2026-09-05, was a JSON file by construction, and [architecture.md](architecture.md) is where that
+split lives.
 
 ## Migrating data *inside* a JSONB column, and the operator that lies
 

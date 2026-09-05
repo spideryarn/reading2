@@ -27,9 +27,10 @@
  *    that model wants to be asked. See `Arm`.
  * 2. Embeds `QUERIES` — hand-written, committed below, phrased so the words do
  *    NOT appear in the passage they are aiming at. That is the whole thing
- *    being bought: a literal matcher already ships (src/library-search.ts) and
- *    is free, so the only interesting question is what semantic search finds
- *    that word-matching cannot.
+ *    being bought: word-matching is free — the browser's `findLiteral` and, on
+ *    the server, `pgLibrarySearch` — so the only interesting question is what
+ *    semantic search finds that word-matching cannot. `literalBaseline` below
+ *    is that floor, run over this same corpus.
  * 3. Takes each arm's top 5 by cosine.
  * 4. Pools the *union* of every arm's top-5 per query and judges each
  *    (query, passage) pair ONCE, blind to which arm produced it. Every arm is
@@ -78,6 +79,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { CAPABLE_MODEL, CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { MESSAGES_PROVIDER } from "../src/messages-stream.js";
 import { cosine, type EmbeddingUsage, type EmbedResult, embedAll } from "../src/embeddings.js";
+import { fold, parseQuery } from "../src/library-search.js";
 import type { Block } from "../src/types.js";
 import {
   messagesSkinForDeclared,
@@ -395,7 +397,7 @@ async function loadCorpus(): Promise<{ passages: Passage[]; duplicates: number }
   const entries = await readdir(path.join(FIXTURE_ROOT, "data"), { withFileTypes: true });
   for (const e of entries) {
     // `_`-prefixed directories are not articles — `data/_jobs/` is the queue's
-    // records. Same rule as `listArticles` and `searchLibrary`.
+    // records. Same rule as the library listing.
     if (e.isDirectory() && !e.name.startsWith("_")) {
       dirs.push({ dir: path.join(FIXTURE_ROOT, "data", e.name), slug: e.name });
     }
@@ -812,13 +814,13 @@ function bootstrapDiff(a: number[], b: number[], seed: number): { lo: number; hi
 /**
  * A second, deliberately generous word-matching baseline.
  *
- * `searchLibrary` ANDs every term, and these queries are whole sentences, so it
- * returns nothing at all for every one of them. That is a true and useful fact
- * about what we ship — but on its own it is a straw man, because nobody claims
- * an AND matcher is a question-answering engine. So this is the strongest thing
- * word-matching can reasonably do without embeddings: OR over the query's
- * content words, ranked by how many of them a paragraph contains, damped by
- * length the same way `searchLibrary` damps its own score.
+ * `literalBaseline` ANDs every term, and these queries are whole sentences, so
+ * it returns nothing at all for every one of them. That is a true and useful
+ * fact about word-matching — but on its own it is a straw man, because nobody
+ * claims an AND matcher is a question-answering engine. So this is the
+ * strongest thing word-matching can reasonably do without embeddings: OR over
+ * the query's content words, ranked by how many of them a paragraph contains,
+ * damped by length the same way `literalBaseline` damps its own score.
  *
  * If semantic retrieval only beats the AND matcher, it has beaten a matcher
  * aimed at a different kind of query. If it also beats this, it is buying
@@ -870,29 +872,57 @@ function orBaseline(
 }
 
 /**
- * What the search we already ship would have found.
+ * What a literal matcher would have found, over **the same corpus the arms saw**.
  *
- * `searchLibrary` is imported rather than reimplemented. A hand-rolled copy of
- * "AND over the query's words, case and accent folded" would be *nearly* the
- * shipped behaviour, and the gap between the two would be attributed to
- * semantic search — see src/library-search.ts § parseQuery for how carefully
- * that function's exact rules are pinned, and why.
+ * ## It used to call `searchLibrary`, and that was worse in two ways
+ *
+ * Until 2026-09-05 this called `searchLibrary` from src/library-search.ts —
+ * the filesystem library search — on the argument that importing the shipped
+ * matcher beat reimplementing it. Two things were wrong with that, and the
+ * second is why this is not simply repointed at `pgLibrarySearch`:
+ *
+ * 1. **It searched a different corpus.** `searchLibrary` walked the developer's
+ *    own `data/` plus `example/`; every arm above is scored against
+ *    `tests/fixtures/data-root/data/` plus `example/` (`loadCorpus`). So the
+ *    baseline was being compared with retrieval over a set of passages it could
+ *    not see, on whatever happened to be in one checkout. On a fresh clone it
+ *    searched `example/` alone and reported a floor that meant nothing.
+ * 2. **The matcher it imported is gone.** `searchLibrary` was deleted with the
+ *    filesystem store
+ *    (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ *    the stage-G section). What ships now is `pgLibrarySearch`, one `SELECT`
+ *    against a `tsvector`, which needs a database and a loaded article per slug
+ *    — and which stems, ORs and drops stop words, so it is *not* the thing this
+ *    column is asking about.
+ *
+ * So the rule is written out here, over `passages`, and it is the same rule
+ * `searchLibrary` ran: `parseQuery` and `fold` are still imported from
+ * src/library-search.ts — those are exactly the two parts of it that were never
+ * about files, and src/chat-tools.ts uses them for the same reason. What is
+ * local is the scan and the ranking, six lines of it, and the comment on
+ * `parseQuery` is still the authority on the one place the matchers are allowed
+ * to disagree.
+ *
+ * **The number moved when this changed**, and any earlier run's literal column
+ * is not comparable with a later one. `evals/results/embedding-retrieval-2026-08-26.md`
+ * predates it.
  *
  * The number reported is recall of judged-relevant passages: of the passages a
  * judge marked 1 or 2, how many does the literal matcher return at all, and how
  * many in its own top 5. That is the only measure here that can see outside the
  * pool, and it is the one that says what semantic search is buying.
  */
-async function literalBaseline(
+function literalBaseline(
+  passages: Passage[],
   queries: Query[],
   relevantByQuery: Map<string, Set<string>>,
-): Promise<{
+): {
   queriesWithAnyHit: number;
   relevantTotal: number;
   foundAnywhere: number;
   foundInTop5: number;
   perQuery: { queryId: string; hits: number; foundAnywhere: number; foundInTop5: number }[];
-}> {
+} {
   let queriesWithAnyHit = 0;
   let relevantTotal = 0;
   let foundAnywhere = 0;
@@ -900,26 +930,45 @@ async function literalBaseline(
   const perQuery: { queryId: string; hits: number; foundAnywhere: number; foundInTop5: number }[] =
     [];
 
-  /* Imported here rather than at the top of the file, and the reason is dull
-     but real: src/library-search.ts pulls in src/log.ts, which builds its pino
-     logger at module load and reads LOG_LEVEL then. A static import would run
-     before this line and every one of these eighteen searches would print a
-     debug line into the middle of the report. `LOG_LEVEL` set by hand still
-     wins, because this only fills in a default. */
-  process.env.LOG_LEVEL ??= "warn";
-  const { searchLibrary } = await import("../src/library-search.js");
+  /* Folded once, not once per query. Eighteen queries over the whole corpus is
+     eighteen passes otherwise, and `fold` normalises NFKD on every character. */
+  const folded = passages.map((p) => ({
+    id: p.blockId,
+    text: fold(p.text),
+    words: p.text.split(/\s+/).length,
+  }));
 
   for (const q of queries) {
-    const { hits } = await searchLibrary(q.text, 200);
-    /* Deduplicated by block id for the same reason the corpus is — `example/`
-       shares ids with the noema article, and searchLibrary walks both. */
-    const seen = new Set<string>();
-    const ids: string[] = [];
-    for (const h of hits) {
-      if (seen.has(h.blockId)) continue;
-      seen.add(h.blockId);
-      ids.push(h.blockId);
+    const { terms, phrases } = parseQuery(q.text);
+    const needles = [...phrases, ...terms];
+    const scored: { id: string; rank: number }[] = [];
+    for (const p of folded) {
+      /* **Every needle must appear** — an AND, which is what the browser's
+         `findLiteral` does and what `parseQuery`'s own comment says this side
+         of the disagreement is. `score` is how often, because how often is the
+         only signal a substring scan has; damped by `log(words + 2)` so a long
+         paragraph does not win by being long. */
+      let score = 0;
+      let missing = false;
+      for (const needle of needles) {
+        let n = 0;
+        for (let i = p.text.indexOf(needle); i !== -1; i = p.text.indexOf(needle, i + needle.length))
+          n++;
+        if (n === 0) {
+          missing = true;
+          break;
+        }
+        score += n;
+      }
+      if (missing || needles.length === 0) continue;
+      scored.push({ id: p.id, rank: score / Math.log(p.words + 2) });
     }
+    scored.sort((a, b) => b.rank - a.rank);
+    /* `passages` is already deduplicated by block id (`loadCorpus`) — `example/`
+       shares ids with the noema article — so unlike the walk this replaced,
+       there is nothing left to dedupe here. */
+    const ids = scored.map((h) => h.id);
+    const seen = new Set(ids);
     const relevant = relevantByQuery.get(q.id) ?? new Set<string>();
     const anywhere = [...relevant].filter((id) => seen.has(id)).length;
     const top5 = new Set(ids.slice(0, TOP_K));
@@ -1342,7 +1391,7 @@ async function main(): Promise<void> {
       `mean pool ${(judgedPairs / QUERIES.length).toFixed(1)} passages per query.`,
   );
 
-  const baseline = await literalBaseline(QUERIES, relevantByQuery);
+  const baseline = literalBaseline(passages, QUERIES, relevantByQuery);
   const generous = orBaseline(passages, QUERIES, relevantByQuery);
 
   printModelTables(reports);

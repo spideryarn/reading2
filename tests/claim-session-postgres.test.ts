@@ -80,28 +80,21 @@
  *
  * Skips loudly when there is no database; see tests/helpers/pg-ready.ts.
  */
-import { mkdtemp, readdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
-/**
- * The scratch data root, before **any** import.
- *
- * `vi.hoisted` and not a plain statement, because imports are hoisted above every
- * statement in a module and `src/store/data-root.ts` is read by things this file
- * imports. A `SPIDERYARN_STORE=postgres` assignment sat here for the same reason
- * until 2026-09-05; there is one store now and nothing to pin.
- *
- * The data root is **not** hoisted, because it is not one value here: every
- * claim gets its own, and `withFreshScratch` below is what sets it.
+/*
+ * **A `vi.hoisted` block stood here until 2026-09-05**, saving
+ * `SPIDERYARN_DATA_ROOT` before any import could read it — hoisted because
+ * imports are hoisted above every statement in a module, and the filesystem
+ * store's data root was read by things this file imports. A
+ * `SPIDERYARN_STORE=postgres` assignment had sat in it for the same reason
+ * until earlier the same day. Both variables are gone: there is one store, and
+ * it has no root to point anywhere.
  */
-const HOISTED = vi.hoisted(() => {
-  const previousRoot = process.env.SPIDERYARN_DATA_ROOT;
-  return { previousRoot };
-});
 
 import { getDb } from "../src/db/client.js";
 import {
@@ -125,7 +118,6 @@ import { INTERRUPTED, STEP_STOPPED } from "../src/messages.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
-import { DATA_ROOT_ENV } from "../src/store/data-root.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { pgArticleReader } from "../src/store/pg.js";
@@ -181,55 +173,71 @@ const SLUGS = {
   pauseLapse: "claim-session-pg-pause-then-lapse",
 } as const;
 
-/* ------------------------------------------------------- the scratch roots -- */
+/* ----------------------------------------------- the article is not on disk -- */
 
-/** Every root this file made, kept so `afterAll` can take them away. */
-const ROOTS: string[] = [];
-
-/**
- * Run `body` with a **brand-new empty** `data/` root, and hand the root back.
- *
- * The root is deliberately *not* removed here: the caller asserts it is still
- * empty, which is the whole point of the arrangement, and an assertion against a
- * directory that has been deleted proves nothing.
- */
-async function withFreshScratch<T>(body: () => Promise<T>): Promise<{ result: T; root: string }> {
-  const before = process.env[DATA_ROOT_ENV];
-  const root = await mkdtemp(path.join(tmpdir(), "spya-claim-session-"));
-  ROOTS.push(root);
-  process.env[DATA_ROOT_ENV] = root;
-  try {
-    return { result: await body(), root };
-  } finally {
-    if (before === undefined) delete process.env[DATA_ROOT_ENV];
-    else process.env[DATA_ROOT_ENV] = before;
-  }
-}
+/** The repository root, which is where the deleted filesystem store resolved to. */
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
- * **This claim committed no artefact through a filesystem store**, which under
- * Postgres is the thing being shown rather than a tidiness check.
+ * **This claim put the whole article in Postgres and nothing on a disk.**
  *
- * `dataRoot()` is consulted for `ctx.dir` and `ctx.htmlFile` on every step of
- * every job, and the *session* is what turns a step's product into bytes — so a
- * claim publishing through its draft leaves this root exactly as `mkdtemp` made
- * it, and a claim that went through the filesystem session leaves the whole
- * article here. That is the difference this file exists to show, and the
- * mutation in the header is the proof it is load-bearing.
+ * ## What this used to be, and why it could not stay
  *
- * **What it does not prove, and the stated scope was wrong about this until
- * 2026-09-01.** It is not evidence that a real Postgres ingest writes nothing to
- * scratch. Every step below is a fixture with no body, and real stages
- * legitimately write checkpoints under `ctx.dir`: `hierarchy` is handed it as
- * its checkpoint directory (src/pipeline.ts, and src/hierarchy.ts creates it),
- * and PDF extraction creates `pdf-chunks` (src/pdf-read.ts). Nor would it catch
- * a real stage that dual-wrote its artefact to disk while still returning
- * correct `parts`. Catching that wants a deterministic real-stage case through
- * `claimSession` allowing only the documented checkpoint paths, which is not
- * built. GPT Sol, docs/plans/260901d-stage3-code-review-sol.md finding 4.
+ * Until 2026-09-05 this was `assertScratchUntouched(root)`: every claim ran
+ * inside a `mkdtemp` root pinned by `SPIDERYARN_DATA_ROOT`, and the assertion
+ * was that `readdir` of that root came back `[]`. It could not survive stage G
+ * of docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * — the variable, the root and `dataRoot()` are all deleted, so there is no
+ * directory left to prove empty. `store-migration-registry.ts` said in advance
+ * that these eleven assertions are load-bearing and must be **re-expressed
+ * rather than dropped**, and this is the re-expression.
+ *
+ * ## What it asks instead
+ *
+ * Whether the two places an article's files went — `data/<slug>/` and
+ * `output/<slug>.html`, under the repository root — exist at all. They must not.
+ * The slugs are this file's own (`SLUGS`), no other suite writes them, and
+ * `afterAll` removes rows rather than directories, so a directory that is there
+ * is always one this claim made.
+ *
+ * **It is stronger than the temp root in one direction and weaker in another,
+ * and both are worth saying.** Stronger: the old assertion proved only that
+ * nothing was written *to the root it had pinned*, so a store that ignored the
+ * override could write wherever it liked and stay green. This looks at the
+ * repository root, which is where the deleted `dataRoot()` resolved on a laptop
+ * and where a reconstructed `path.resolve(import.meta.dirname, "..", "..")` —
+ * the exact bug that module was written against — lands. Weaker: a resurrected
+ * store rooted somewhere else entirely would escape it. Nothing reads an
+ * override any more, so there is no third place for it to be.
+ *
+ * ## What it does not prove, and the stated scope was wrong about this until 2026-09-01
+ *
+ * It is not evidence that a real Postgres ingest writes nothing to scratch.
+ * Every step below is a fixture with no body, and real stages legitimately
+ * wrote checkpoints under the context's directory while that field existed —
+ * `hierarchy` took it as its checkpoint directory, and PDF extraction created
+ * `pdf-chunks` (src/pdf-read.ts). Nor would it catch a real stage that
+ * dual-wrote its artefact to disk while still returning correct `parts`.
+ * Catching that wants a deterministic real-stage case through `claimSession`,
+ * which is not built. GPT Sol, docs/plans/260901d-stage3-code-review-sol.md
+ * finding 4.
  */
-async function assertScratchUntouched(root: string, what: string): Promise<void> {
-  expect(await readdir(root), `${what} wrote to its scratch root`).toEqual([]);
+async function assertNothingOnDisk(slug: string, what: string): Promise<void> {
+  const there = async (where: string): Promise<string | null> => {
+    try {
+      await stat(where);
+      return where;
+    } catch {
+      return null;
+    }
+  };
+  const written = (
+    await Promise.all([
+      there(path.join(REPO_ROOT, "data", slug)),
+      there(path.join(REPO_ROOT, "output", `${slug}.html`)),
+    ])
+  ).filter((where): where is string => where !== null);
+  expect(written, `${what} wrote the article to a disk`).toEqual([]);
 }
 
 /* -------------------------------------------------------------- the article -- */
@@ -350,7 +358,6 @@ function returningStep(
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: STEPS[name].produces,
     async run(_ctx, store): Promise<StepProduct> {
       await options.body?.(store as ArtifactStore);
@@ -380,7 +387,6 @@ function hangingStep(name: StepName, before?: () => Promise<void>): PipelineStep
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: STEPS[name].produces,
     async run(ctx: { signal: AbortSignal }): Promise<StepProduct> {
       await before?.();
@@ -469,7 +475,11 @@ async function queueJob(
 }
 
 /**
- * Advance until this job actually gets to run, in a scratch root of its own.
+ * Advance until this job actually gets to run.
+ *
+ * **It gave each claim a scratch `data/` root of its own until 2026-09-05**, so
+ * that the assertion above had a fresh directory to prove empty. There is no
+ * root to give any more; `assertNothingOnDisk` is what replaced it.
  *
  * `claim` answers `busy` rather than throwing whenever somebody else is ahead —
  * another job already in flight on this article, or the counted concurrency cap
@@ -486,22 +496,20 @@ async function queueJob(
  * trip survived unnoticed for a day. Waiting for somebody else's slot is a job
  * that is still `queued`; being told `busy` about a job that is over is not.
  */
-async function advanceInFreshScratch(id: string, parts: AdvanceParts) {
-  return await withFreshScratch(async () => {
-    for (let attempt = 1; attempt <= 40; attempt++) {
-      const advanced = await runAsOwner(DEV_OWNER_ID, () => advanceJobWith(id, parts));
-      if (!advanced?.busy) return advanced;
-      expect(
-        advanced.job.status,
-        "told `busy` about a job that has already ended — somebody settled it behind the walk",
-      ).not.toMatch(/^(done|error|cancelled)$/);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    throw new Error(
-      `job ${id} never got to run in 20s: either this article already has a job, the ` +
-        "concurrency cap is full, or a row is wedged `running` and waiting will not clear it.",
-    );
-  });
+async function advanceUntilItRuns(id: string, parts: AdvanceParts) {
+  for (let attempt = 1; attempt <= 40; attempt++) {
+    const advanced = await runAsOwner(DEV_OWNER_ID, () => advanceJobWith(id, parts));
+    if (!advanced?.busy) return advanced;
+    expect(
+      advanced.job.status,
+      "told `busy` about a job that has already ended — somebody settled it behind the walk",
+    ).not.toMatch(/^(done|error|cancelled)$/);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(
+    `job ${id} never got to run in 20s: either this article already has a job, the ` +
+      "concurrency cap is full, or a row is wedged `running` and waiting will not clear it.",
+  );
 }
 
 /* ---------------------------------------------------------------- the reads -- */
@@ -582,9 +590,10 @@ describe("a claim under Postgres", () => {
       await database.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, row.id));
       await database.delete(articles).where(eq(articles.id, row.id));
     }
-    for (const root of ROOTS) await rm(root, { recursive: true, force: true });
-    if (HOISTED.previousRoot === undefined) delete process.env[DATA_ROOT_ENV];
-    else process.env[DATA_ROOT_ENV] = HOISTED.previousRoot;
+    /* **There is nothing on a disk to sweep**, and that is the point rather
+       than an omission: until 2026-09-05 this took away a `mkdtemp` root per
+       claim and put `SPIDERYARN_DATA_ROOT` back. `assertNothingOnDisk` above
+       is what says so now. */
   }, 60_000);
 
   /* ------------------------------------------------------------------ 1 -- */
@@ -594,7 +603,7 @@ describe("a claim under Postgres", () => {
     const { steps, blocks } = articleSteps(slug, "gna", "first ingest");
     const job = await queueJob(slug, INGEST);
 
-    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+    const advanced = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
     });
@@ -638,7 +647,7 @@ describe("a claim under Postgres", () => {
     expect((await jobRow(job.id))?.draftRevisionId).toBeNull();
 
     /* **And the whole article went into Postgres and nowhere else.** */
-    await assertScratchUntouched(root, "the ingest");
+    await assertNothingOnDisk(slug, "the ingest");
   }, 120_000);
 
   /* ------------------------------------------------------------------ 2 -- */
@@ -656,13 +665,13 @@ describe("a claim under Postgres", () => {
    * The empty scratch root is what makes it evidence: the decorator would have
    * had nothing to copy here and would have refused the publication outright.
    */
-  it("publishes a second claim where every step skips, from an empty scratch root", async () => {
+  it("publishes a second claim where every step skips, with nothing of it on a disk", async () => {
     const slug = SLUGS.ingest;
     const before = await currentRevisionOf(slug);
     expect(before, "case 1 has to have published before this case runs").not.toBeNull();
 
     const job = await queueJob(slug, ["hierarchy"]);
-    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+    const advanced = await advanceUntilItRuns(job.id, {
       session: claimSession,
       /* The real registry, unfaked: every one of these must skip, and a step
          that ran would fetch or call a model, which is a loud failure rather
@@ -688,7 +697,7 @@ describe("a claim under Postgres", () => {
 
     expect((await jobRow(job.id))?.status).toBe("done");
     expect((await jobRow(job.id))?.draftRevisionId).toBeNull();
-    await assertScratchUntouched(root, "the all-skipped claim");
+    await assertNothingOnDisk(slug, "the all-skipped claim");
   }, 120_000);
 
   /* ------------------------------------------------------------------ 3 -- */
@@ -703,11 +712,11 @@ describe("a claim under Postgres", () => {
    * through the store it is handed — which is `session.reads`, so under Postgres
    * it is the draft — and refuses to invent an answer if they are not there.
    */
-  it("runs a late single step that reads the article from the store, not from its empty root", async () => {
+  it("runs a late single step that reads the article from the store, on an instance that never ingested it", async () => {
     const slug = SLUGS.late;
     const { steps, blocks } = articleSteps(slug, "ptv", "the late-step article");
     const ingest = await queueJob(slug, INGEST);
-    await advanceInFreshScratch(ingest.id, {
+    await advanceUntilItRuns(ingest.id, {
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
     });
@@ -717,7 +726,7 @@ describe("a claim under Postgres", () => {
     const ARC = "the arc a late job wrote";
     let sawBlocks = 0;
     const job = await queueJob(slug, ["arc"]);
-    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+    const advanced = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: {
         ...STEPS,
@@ -763,7 +772,7 @@ describe("a claim under Postgres", () => {
       arc: "done",
     });
     expect((await jobRow(job.id))?.draftRevisionId).toBeNull();
-    await assertScratchUntouched(root, "the late single-step job");
+    await assertNothingOnDisk(slug, "the late single-step job");
   }, 120_000);
 
   /* ------------------------------------------------------------------ 4 -- */
@@ -793,7 +802,7 @@ describe("a claim under Postgres", () => {
 
     const first = articleSteps(slug, "rfa", "before the refresh");
     const ingest = await queueJob(slug, INGEST);
-    await advanceInFreshScratch(ingest.id, {
+    await advanceUntilItRuns(ingest.id, {
       session: claimSession,
       steps: { ...STEPS, ...first.steps } as never,
     });
@@ -805,7 +814,7 @@ describe("a claim under Postgres", () => {
     const second = articleSteps(slug, "rfa", "after the refresh");
     const refresh = await queueJob(slug, INGEST, true);
     let draftId = "";
-    const { result: failed } = await advanceInFreshScratch(refresh.id, {
+    const failed = await advanceUntilItRuns(refresh.id, {
       session: async (job, attempt) => {
         const session = await claimSession(job, attempt);
         draftId = (await jobRow(job.id))?.draftRevisionId ?? "";
@@ -859,7 +868,7 @@ describe("a claim under Postgres", () => {
       [...INGEST].sort(),
     );
 
-    const { result: advanced, root } = await advanceInFreshScratch(retried!.id, {
+    const advanced = await advanceUntilItRuns(retried!.id, {
       session: claimSession,
       steps: { ...STEPS, ...second.steps } as never,
     });
@@ -880,7 +889,7 @@ describe("a claim under Postgres", () => {
 
     expect((await jobRow(retried!.id))?.status).toBe("done");
     expect((await jobRow(retried!.id))?.draftRevisionId).toBeNull();
-    await assertScratchUntouched(root, "the retried refresh");
+    await assertNothingOnDisk(slug, "the retried refresh");
   }, 180_000);
 
   /* ------------------------------------------------------------------ 5 -- */
@@ -906,7 +915,7 @@ describe("a claim under Postgres", () => {
     const { steps } = articleSteps(slug, "hbk", "the handback article");
     const job = await queueJob(slug, INGEST);
 
-    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+    const advanced = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
       /* 22s leaves a 2s deadline after `DEADLINE_MARGIN_MS`, and `blocks` needs
@@ -929,7 +938,7 @@ describe("a claim under Postgres", () => {
     /* And the one step that ran wrote its run row into that draft, which is what
        the next claim reads to decide to skip it. */
     expect(await stepRunsOf(row!.draftRevisionId!)).toEqual({ extract: "done" });
-    await assertScratchUntouched(root, "the released claim");
+    await assertNothingOnDisk(slug, "the released claim");
 
     /* Tidy: nothing else in this file uses this slug, and a `queued` job holding
        `jobs_active_slug` would make the next run of this file wait for a lease. */
@@ -1013,7 +1022,7 @@ describe("a claim under Postgres", () => {
     /* The first claim hands the job back mid-ingest, which is what leaves a
        draft pointer on a `queued` job — case 5 is the same arrangement, asserted
        rather than assumed. */
-    const { result: released } = await advanceInFreshScratch(job.id, {
+    const released = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
       leaseMs: DEADLINE_MARGIN_MS + 2_000,
@@ -1033,7 +1042,7 @@ describe("a claim under Postgres", () => {
      */
     const MARKER = "THE POOL TIMEOUT A DRIVER WOULD HAVE QUOTED";
     let opens = 0;
-    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+    const advanced = await advanceUntilItRuns(job.id, {
       session: async (claimed, attempt) => {
         opens += 1;
         if (opens === 1) throw new Error(`connect ETIMEDOUT — ${MARKER}`);
@@ -1075,7 +1084,7 @@ describe("a claim under Postgres", () => {
     expect(row?.failureKind).toBe("retry");
     expect(row?.error).toContain("Trying again is safe");
 
-    await assertScratchUntouched(root, "the claim whose session would not open");
+    await assertNothingOnDisk(slug, "the claim whose session would not open");
   }, 120_000);
 
   /* ------------------------------------------------------------------ 6 -- */
@@ -1109,7 +1118,7 @@ describe("a claim under Postgres", () => {
     /* R1 — the article as it was. */
     const before = articleSteps(slug, "rqa", "before the re-extraction");
     const ingest = await queueJob(slug, INGEST);
-    await advanceInFreshScratch(ingest.id, {
+    await advanceUntilItRuns(ingest.id, {
       session: claimSession,
       steps: { ...STEPS, ...before.steps } as never,
     });
@@ -1140,7 +1149,7 @@ describe("a claim under Postgres", () => {
     const early = await pgJobStore.claim(ideas.id, DEV_OWNER_ID, mintAttempt(), 60_000, 4);
     expect(early.kind, "the queued job claimed past an older one on its article").toBe("busy");
 
-    await advanceInFreshScratch(rewrite.id, {
+    await advanceUntilItRuns(rewrite.id, {
       session: claimSession,
       steps: { ...STEPS, ...after.steps } as never,
     });
@@ -1149,14 +1158,13 @@ describe("a claim under Postgres", () => {
 
     /* What the `ideas` step read, as it read it. */
     let sawFirstBlockText: string | null = null;
-    const { result: advanced, root } = await advanceInFreshScratch(ideas.id, {
+    const advanced = await advanceUntilItRuns(ideas.id, {
       session: claimSession,
       steps: {
         ...STEPS,
         ideas: {
           name: "ideas",
           label: STEPS.ideas.label,
-          outputs: () => [],
           produces: STEPS.ideas.produces,
           async run(_ctx: unknown, store: ArtifactStore) {
             const file = await store.read(slug, "hierarchy", "blocks");
@@ -1213,7 +1221,7 @@ describe("a claim under Postgres", () => {
     const r3 = await currentRevisionOf(slug);
     expect((await stepHashesOf(r3!)).ideas).toBe(expected);
     expect((await stepHashesOf(r3!)).ideas).not.toBe(stale);
-    await assertScratchUntouched(root, "the job queued behind a re-extraction");
+    await assertNothingOnDisk(slug, "the job queued behind a re-extraction");
   }, 180_000);
 
   /* ------------------------------------------------------------------ 7 -- */
@@ -1263,7 +1271,7 @@ describe("a claim under Postgres", () => {
        about to be aborted, which is the last moment the original is provably
        the one in use. */
     let inFlightDraft: string | null = null;
-    const { result: paused, root } = await advanceInFreshScratch(job.id, {
+    const paused = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: {
         ...STEPS,
@@ -1322,7 +1330,7 @@ describe("a claim under Postgres", () => {
       "the step that finished before the overrun was not kept",
     ).toEqual({ extract: "done", blocks: "running" });
     expect(await currentRevisionOf(slug)).toBeNull();
-    await assertScratchUntouched(root, "the paused claim");
+    await assertNothingOnDisk(slug, "the paused claim");
 
     /* **And the next claim finishes it**, on the draft this one left. `extract`
        is skipped because its artefacts are in that draft — which is exactly what
@@ -1341,7 +1349,7 @@ describe("a claim under Postgres", () => {
         return await (steps.extract as PipelineStep).run(...args);
       },
     } as PipelineStep;
-    const { result: finished, root: second } = await advanceInFreshScratch(job.id, {
+    const finished = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: { ...STEPS, ...steps, extract: countedExtract } as never,
     });
@@ -1364,7 +1372,7 @@ describe("a claim under Postgres", () => {
     expect(await currentRevisionOf(slug)).toBe(held);
     const article = await runAsOwner(DEV_OWNER_ID, () => pgArticleReader.loadArticle(slug));
     expect(article.blocks.map((b) => b.id)).toEqual(blocks.map((b) => b.id));
-    await assertScratchUntouched(second, "the claim that resumed a paused job");
+    await assertNothingOnDisk(slug, "the claim that resumed a paused job");
   }, 180_000);
 
   /* ------------------------------------------------------------------ 8 -- */
@@ -1389,7 +1397,7 @@ describe("a claim under Postgres", () => {
     const { steps } = articleSteps(slug, "pzb", "the stopped article");
     const job = await queueJob(slug, INGEST);
 
-    const { result: advanced, root } = await advanceInFreshScratch(job.id, {
+    const advanced = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: {
         ...STEPS,
@@ -1439,7 +1447,7 @@ describe("a claim under Postgres", () => {
        spares a revision any job row names. */
     expect(row?.draftRevisionId).toBeNull();
     expect(await currentRevisionOf(slug)).toBeNull();
-    await assertScratchUntouched(root, "the claim the reader stopped");
+    await assertNothingOnDisk(slug, "the claim the reader stopped");
   }, 120_000);
 
   /* ------------------------------------------------------------------ 9 -- */
@@ -1468,12 +1476,12 @@ describe("a claim under Postgres", () => {
     };
 
     for (let window = 1; window <= REQUEUE_BUDGET; window++) {
-      const { result } = await advanceInFreshScratch(job.id, parts);
-      expect(result?.done, `window ${window} ended the job instead of pausing`).toBe(false);
+      const advanced = await advanceUntilItRuns(job.id, parts);
+      expect(advanced?.done, `window ${window} ended the job instead of pausing`).toBe(false);
       expect((await jobRow(job.id))?.requeues).toBe(window);
     }
 
-    const { result: over } = await advanceInFreshScratch(job.id, parts);
+    const over = await advanceUntilItRuns(job.id, parts);
     expect(over?.done, "the job went round again past its budget").toBe(true);
     const row = await jobRow(job.id);
     expect(row?.status).toBe("error");
@@ -1554,7 +1562,6 @@ describe("a claim under Postgres", () => {
     const blocksStep = {
       name: "blocks",
       label: STEPS.blocks.label,
-      outputs: () => [],
       produces: STEPS.blocks.produces,
       async run(): Promise<StepProduct> {
         blockRuns += 1;
@@ -1584,7 +1591,6 @@ describe("a claim under Postgres", () => {
       ({
         name: "hierarchy",
         label: STEPS.hierarchy.label,
-        outputs: () => [],
         produces: STEPS.hierarchy.produces,
         async run(
           ctx: { signal: AbortSignal },
@@ -1630,7 +1636,7 @@ describe("a claim under Postgres", () => {
        `STEP_BUDGET_MS.hierarchy`, so the walk puts the claim down between the
        two rather than starting a step it cannot finish. No requeue is spent —
        a between-steps release is free. */
-    const { result: first } = await advanceInFreshScratch(job.id, {
+    const first = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 30_000,
@@ -1643,7 +1649,7 @@ describe("a claim under Postgres", () => {
     expect((await jobRow(job.id))?.requeues ?? 0, "a between-steps release spent a window").toBe(0);
 
     /* --- Window 2: the clean pause, with the tree already paid for. --------- */
-    const { result: paused } = await advanceInFreshScratch(job.id, {
+    const paused = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(true) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 6_000,
@@ -1682,7 +1688,7 @@ describe("a claim under Postgres", () => {
     ).toBe(draft);
 
     /* --- Window 4: the finish, on the draft the first three left. ---------- */
-    const { result: finished, root } = await advanceInFreshScratch(job.id, {
+    const finished = await advanceUntilItRuns(job.id, {
       session: claimSession,
       steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
     });
@@ -1702,6 +1708,6 @@ describe("a claim under Postgres", () => {
     ).toBe(draft);
     const article = await runAsOwner(DEV_OWNER_ID, () => pgArticleReader.loadArticle(slug));
     expect(article.blocks.map((b) => b.id)).toEqual(firstIds);
-    await assertScratchUntouched(root, "the claim that finished a paused-then-lapsed job");
+    await assertNothingOnDisk(slug, "the claim that finished a paused-then-lapsed job");
   }, 180_000);
 });

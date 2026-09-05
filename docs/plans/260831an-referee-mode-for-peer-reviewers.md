@@ -510,7 +510,7 @@ is a fair description of what shipped.
 - ~~**Stage 4 — Claims.**~~ **Done, 2026-09-01.** `GET`/`POST /api/referee/claims/:slug`,
   [`src/referee-claims.ts`](../../src/referee-claims.ts),
   [`src/referee-claims-run.ts`](../../src/referee-claims-run.ts),
-  [`src/referee-claims-store.ts`](../../src/referee-claims-store.ts),
+  `src/referee-claims-store.ts`,
   [`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx), and `resolveClaim` joining the five
   resolvers already in `src/web/search-hits.ts`. Sol's finding 8 is fixed: the placeholder's code
   comment promising a ranking "by how thin the delivery is" and its visible "actually delivered" are

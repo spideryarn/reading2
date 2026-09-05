@@ -37,16 +37,21 @@ const ROOT = fileURLToPath(new URL(".", import.meta.url)).replace(/\/$/, "");
 const WITNESS = path.join(ROOT, "tests/setup/fs-store-witness.ts");
 const WITNESS_SETUP = "./tests/setup/fs-store-witness-setup.ts";
 
-/** The condemned filesystem-store modules. NOT blobs-fs.ts — out of scope,
+/** The modules this instrument watches. NOT blobs-fs.ts — out of scope,
  *  because it is selected by credentials rather than by `SPIDERYARN_STORE`.
  *  Kept in step with `TARGETS` in scripts/store-migration-candidates.ts and
- *  `INSTRUMENTED` in scripts/store-migration-witness.ts, which asserts it. */
+ *  `INSTRUMENTED` in scripts/store-migration-witness.ts, which asserts it.
+ *
+ *  **One left, and it is not condemned.** `artifacts-fs` and `data-root` went
+ *  on 2026-09-05 with stage G's last adapter group, and `copy-artefacts`
+ *  survives: stage D gave it a store-agnostic `ArtifactSource`, so what is left
+ *  here is an instrument watching a module nothing is trying to delete. That is
+ *  the state tsconfig.json predicted — *"deleted with the filesystem store in
+ *  stage G, when there is nothing left to instrument"* — and retiring the
+ *  instrument is stage I's, alongside the tombstone, so that stage H still has
+ *  a working witness if it needs one. */
 const CONDEMNED = [
-  "fs",
-  "artifacts-fs",
-  "jobs-fs",
   "copy-artefacts",
-  "data-root",
 ];
 const CONDEMNED_PATHS = new Set(CONDEMNED.map((n) => path.join(ROOT, "src/store", `${n}.ts`)));
 const BASENAME_RE = new RegExp(`(?:^|/)(${CONDEMNED.join("|")})\\.(?:js|ts)$`);

@@ -7,16 +7,20 @@
  * call it — `publishRevision` and the importer. That was fine while only
  * Postgres derived them. It stopped being fine on 2026-08-28, when the shelf
  * stopped recomputing these per request and started reading the columns
- * instead: `describeArticle` in src/api.ts then needed the same derivation, and
- * src/api.ts is the **filesystem** store. Importing pg-revisions.ts there would
- * pull drizzle and the connection pool in behind it, into the one path that
- * exists so this app runs with no database at all.
+ * instead: `describeArticle` then needed the same derivation, and it lived in
+ * src/api.ts, which was the **filesystem** store. Importing pg-revisions.ts
+ * there would have pulled drizzle and the connection pool in behind it, into
+ * the one path that existed so this app ran with no database at all.
  *
  * So the derivation moved out to a leaf with nothing under it, and both stores
- * reach it from above. `src/store/pg-revisions.ts` re-exports it, because
+ * reached it from above. `src/store/pg-revisions.ts` re-exports it, because
  * `publishRevision`'s return type is built from it. (The importer reached for
  * it at that address too, until src/store/import.ts was deleted on 2026-09-01;
  * the re-export outlived it.)
+ *
+ * **`describeArticle` itself moved in here on 2026-09-05**, at the bottom of
+ * this file, when src/api.ts was deleted with the filesystem store. The
+ * argument this module was created to make now finishes inside it.
  *
  * ## The rule this exists to keep
  *
@@ -41,8 +45,9 @@
  */
 
 import { articleWordCounts, type Treated } from "./block-policy.js";
+import { readingMinutes } from "./reading-time.js";
 import { supplementIndex } from "./supplement.js";
-import type { Block, Tree } from "./types.js";
+import type { Block, LibraryEntry, Meta, ShelfState, Tree, Visibility } from "./types.js";
 
 /**
  * What a shelf card needs that neither the metadata nor the shelf state holds.
@@ -144,4 +149,118 @@ export function deriveLibraryScalars(input: {
  */
 export function headingTitleOf(blocks: readonly Block[]): string | null {
   return blocks.find((b) => b.kind === "heading" && b.level === 1)?.text ?? null;
+}
+
+/* ------------------------------------------------------------ the library --
+   The card the homepage prints, and the title on it. Both moved here from
+   src/api.ts on 2026-09-05, when that file — the filesystem article reader —
+   was deleted (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   § G). They are the only two things in it that were not about directories:
+   one pure record-assembler over an already-derived `LibraryScalars`, and a
+   three-line precedence rule. This is the file that exists *because*
+   `describeArticle` needed a derivation neither store could own, so it is
+   where the assembler that needed it belongs. */
+
+/**
+ * One shelf-ready record, assembled from things already in memory.
+ *
+ * Pure, so it can be tested without a filesystem.
+ *
+ * The blurb, the word count and the three other numbers arrive as `scalars`;
+ * `deriveLibraryScalars` above is where the rules for them live, including why
+ * the first arc entry is deliberately not a fallback for the blurb.
+ */
+export function describeArticle(input: {
+  slug: string;
+  meta: Meta;
+  /**
+   * The five, **received rather than derived** — since 2026-08-28.
+   *
+   * This function used to take `blocks` and `tree` and compute them, which made
+   * it the second implementation of `deriveLibraryScalars`; both files said so
+   * in a comment, and a review had already caught them disagreeing about the
+   * `excerpt` rung of the blurb. There was one derivation reached from two
+   * moments while there were two stores; since 2026-09-05 there is one store,
+   * and it reads the columns `deriveLibraryScalars` wrote at publish.
+   * docs/plans/260828c-library-read-latency.md § 2.
+   *
+   * That mattered for latency as well as for correctness: deriving here meant
+   * reading every block row and the whole tree of every article — and
+   * sanitising each one through jsdom — on every homepage load.
+   */
+  scalars: LibraryScalars;
+  comments: number;
+  addedAt: string;
+  fixture?: boolean;
+  /**
+   * What the reader has done to the card — src/shelf.ts.
+   *
+   * Passed in rather than read here, so this function stays pure: the store
+   * fetches it its own way (four columns on the article row) and hands it over.
+   * It is optional so that a caller who has not got round to it still gets an
+   * entry rather than a type error, and the default is "never touched".
+   */
+  shelf?: ShelfState;
+  /** Which optional stages have produced something. Absent means none of them. */
+  has?: Partial<LibraryEntry["has"]>;
+  /**
+   * Whether anyone with the link can read it — **passed in, like `shelf`.**
+   *
+   * Optional because it used to be the field only one of the two stores could
+   * answer: the filesystem had no `visibility` column and passed nothing, so
+   * every card off it was unshared and sharing was refused with a 501. Postgres
+   * reads the column the query already selected.
+   */
+  visibility?: Visibility;
+}): LibraryEntry {
+  const { slug, meta, scalars } = input;
+  const shelf = input.shelf ?? { opens: 0 };
+
+  // Conditional spreads, not `byline: meta.byline` — exactOptionalPropertyTypes
+  // is on, so an explicitly-undefined property is not the same as an absent one.
+  // See docs/project/typechecking.md.
+  return {
+    slug,
+    // Through `titleFor`, which is also what `loadArticle` uses — so the card
+    // and the masthead cannot end up calling one article two things.
+    title: titleFor(meta, shelf).title,
+    ...(shelf.title ? { titleOverridden: true as const } : {}),
+    opens: shelf.opens,
+    ...(shelf.lastOpenedAt ? { lastOpenedAt: shelf.lastOpenedAt } : {}),
+    ...(shelf.archivedAt ? { archivedAt: shelf.archivedAt } : {}),
+    has: {
+      arc: input.has?.arc ?? false,
+      tweets: input.has?.tweets ?? false,
+      glossary: input.has?.glossary ?? false,
+    },
+    ...(meta.byline ? { byline: meta.byline } : {}),
+    ...(meta.siteName ? { siteName: meta.siteName } : {}),
+    ...(meta.url ? { url: meta.url } : {}),
+    addedAt: input.addedAt,
+    words: scalars.wordCount,
+    minutes: readingMinutes(scalars.wordCount),
+    blocks: scalars.blockCount,
+    parts: scalars.partCount,
+    sections: scalars.sectionCount,
+    comments: input.comments,
+    ...(scalars.rootGist ? { gist: scalars.rootGist } : {}),
+    /* **Only when it is public.** Spelling the private case out would put a
+       `"private"` on every card — see `LibraryEntry.visibility` in
+       src/types.ts, which is optional for this reason. The shelf reads it as
+       `=== "public"`, so an absence and a private article are the same
+       question answered the same way. */
+    ...(input.visibility === "public" ? { visibility: "public" as const } : {}),
+    ...(input.fixture ? { fixture: true as const } : {}),
+  };
+}
+
+/**
+ * The title the reader should see, and the one place that precedence lives.
+ *
+ * Reader's override first, extractor's second. Called by `loadArticle` for the
+ * masthead and by `describeArticle` for the card, so the two cannot disagree —
+ * which they did, for exactly as long as only one of them knew about overrides.
+ */
+export function titleFor(meta: Meta, shelf: ShelfState | undefined): Meta {
+  return shelf?.title ? { ...meta, title: shelf.title } : meta;
 }
