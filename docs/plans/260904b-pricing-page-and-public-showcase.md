@@ -293,31 +293,42 @@ product.
   and a currency switcher (hosted Checkout picks the currency from the customer's location — which
   is why each Stripe price carries all three, [billing.md](../project/billing.md)).
 
-## Where this stands, 2026-09-04 late
+## Where this stands, 2026-09-05
 
-**Most of it is on `dev`, and what is left is one stage plus a decision only Greg can make.**
+**Every stage is on `dev`.** What is left is three decisions, and all three are Greg's.
 
-| Stage | State |
+| Stage | On `dev` |
 |---|---|
-| 1 — buying from `/pricing` | **on `dev`** (`275a6230`, `fd081a15`) |
-| 2 — the pricing page rebuilt | **on `dev`** (`07412b79`) |
-| 3a — the listing's data and API | **on `dev`** (`80573d0c`, `1ef8ba6b`) |
-| 3b — `/read/public` itself | **on `dev`** (`bb454bb4`) |
-| 3c — the sharing copy that 3a owed | **on `dev`** (`56eecb43`, `ef0ac457`) |
-| 4b — a Reader can reach Researcher | **on `dev`** (`47345d3a`); GPT Sol's six findings in flight |
-| 4 — byline and a takedown route | in flight |
-| 4c — showcase links from the marketing pages | **built, uncommitted** (2026-09-05) |
-| 5 — a public article counts half | **built in this worktree**, not on `dev` yet |
+| 1 — buying from `/pricing` | `275a6230`, `fd081a15` |
+| 2 — the pricing page rebuilt | `07412b79` |
+| 3a — the listing's data and API | `80573d0c`, `1ef8ba6b` |
+| 3b — `/read/public` itself | `bb454bb4` |
+| 3c — the sharing copy that 3a owed | `56eecb43`, `ef0ac457` |
+| 4 — byline and a takedown route | `024633d4` |
+| 4b — a Reader can reach Researcher | `47345d3a`, `16d52565` |
+| 4c — showcase links on `/` and `/features` | `44c15900` |
+| 5 — a public article counts half | `e8f074b5` |
 
-**What is Greg's and cannot be done for him:** flipping the showcase articles public, in the
-production UI rather than by SQL, so the `article_visibility_changes` row records that he confirmed
-the rights. The criterion has grown two clauses since it was written: a showcase article should have
-a **Sketch** drawn, because a visitor's Diagram now shows the Sketch and most articles have never had
-one, and it will carry **his saved searches in his own words**, which is the first shared artefact
-that is the reader's voice rather than the model's.
+**The three decisions, none of which an agent may take.**
 
-**The one number that gates a deploy** is still the count of non-Greg public rows in production
-(§1). Nothing has changed about it; it has simply not been read yet.
+1. **Flip the showcase articles public**, in the production UI rather than by SQL, so the
+   `article_visibility_changes` row records that Greg confirmed the rights. The criterion grew two
+   clauses while this was built: pick articles with a **Sketch** drawn, because a visitor's Diagram
+   shows the Sketch and most articles have never had one; and know that the article carries **his
+   saved searches, in his own words**, which is the first shared artefact that is the reader's voice
+   rather than the model's.
+2. **The `CHECK` constraint can abort a deploy.** `billing_accounts_subscription_fields_need_subscription`
+   validates the rows already there, so if production holds an inconsistent billing row the migration
+   fails rather than passes. That is the right way round — such a row is an account that may be being
+   billed twice — but it is a deploy that can fail on him. `NOT VALID` plus a separate validation is
+   the alternative.
+3. **GPT Sol would have built the showcase cheaper**, as a link to `/read/public` rather than three
+   articles read from the listing. Greg's own sentence asked for a few articles to link to, so that is
+   what is built; the cheap version is a **subset** — delete the hook and the list — and needs no test
+   changes either way.
+
+**The one number still unread** is the count of non-Greg public rows in production (§1). Nothing has
+changed about it; nobody has looked.
 
 ## Stages
 
