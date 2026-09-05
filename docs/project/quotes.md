@@ -77,7 +77,7 @@ string" rule look like fussiness until you know what they are answers to.
 
 Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call, the verification),
 [`src/quote-match.ts`](../../src/quote-match.ts) (the matching rule, shared with search and ideas),
-[`src/api.ts`](../../src/api.ts) § `loadQuotes`, [`src/routes.ts`](../../src/routes.ts),
+[`src/store/pg.ts`](../../src/store/pg.ts) § `loadQuotes`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx),
 [`src/web/useQuotes.ts`](../../src/web/useQuotes.ts), `resolveQuotes` in
 [`src/web/search-hits.ts`](../../src/web/search-hits.ts), `QuotesBand` in

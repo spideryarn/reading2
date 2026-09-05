@@ -1,6 +1,7 @@
 # Debate mode — what the rest of the web says about this piece
 
-**Status: Stages 0–3 built, 2026-09-05; Stage 4 not started, and no live run has happened.**
+**Status: Stages 0–3 built, 2026-09-05; Stage 4 not started, and no live run has happened.** The
+next step is Stage 3½ — run it once — and the reasoning for putting that before Stage 4 is there.
 Written 2026-09-05. Second draft, after Stage 0's spike
 ([results](260905f-debate-mode-stage-0-spike-results.md)) and a GPT Sol plan review that refused the
 first draft on four established P1s. The ledger is at the bottom.
@@ -670,6 +671,35 @@ a link out); the owner foot line, comparing `reportedRows` with stored `keptRows
 `useOrderedRead` and `useStepJob`, with `useAutoRun` so **only an owner pressing an empty mode** starts
 the job — arrival never POSTs. `CACHEABLE`. Behind the experimental switch, `experimental: true` in
 `MODES_UI`, reason in the table there.
+
+### Stage 3½ — run it once, before Stage 4 — **the next thing to do**
+
+Added at the 2026-09-05 debrief, and it is a **reordering of the plan** rather than an extra step.
+
+**Nothing here has ever run against a live model.** Every screenshot, every fixture and every test in
+Stages 1–3 is synthetic. So four things this plan asserts are still unmeasured, and all four are
+cheaper to learn now than after Stage 4:
+
+- **whether the restrained prompt finds reviews that exist.** § The spend ceiling made restraint a
+  cost control on Stage 0b's evidence. Nobody has checked what it costs in *recall*.
+- **how often `articleReferenceQuote` empties group one.** The rule is strict on purpose, and the
+  plan argues an honest empty state is the right failure. If group one is empty on articles that
+  genuinely were reviewed, the argument stands and the mode is thinner than it reads.
+- **what a run actually costs.** Both probes carried **no article**; pass B sends the whole thing. The
+  true figure is above the quoted ~$0.27 and rises with length, and is currently unknown.
+- **whether `STEP_BUDGET_MS = 120_000` is anywhere near right.** It is an unmeasured guess, and Sol's
+  F31 established it is not a running deadline anyway.
+
+**Why before Stage 4 rather than after.** Stage 4 is the *sharing* half — the public contract, the
+visitor branch, the export chain. It is worth building for a mode that produces something worth
+sharing, and that is exactly the proposition no evidence yet supports. If a live run shows the output
+is thin on a typical article, the response is a prompt change or a product rethink, and Stage 4 built
+first would be work done on top of an unproved thing.
+
+Run it against two or three real articles on the shelf — one with known reception, one without —
+record `webSearches` and cost from the `ai_calls` ledger rows, and write the result into
+[the spike results doc](260905f-debate-mode-stage-0-spike-results.md). Then re-measure
+`STEP_BUDGET_MS` and decide about Stage 4 with numbers.
 
 ### Stage 4 — the shared link, and the docs
 

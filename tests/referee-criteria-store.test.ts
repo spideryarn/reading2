@@ -1,32 +1,31 @@
 /**
- * Where a referee's criteria are kept — `withCriterion` and the filesystem
- * store in src/referee-criteria-store.ts, and the Postgres store beside it.
+ * Where a referee's criteria are kept — `withCriterion`, and who may read one.
  *
- * Three things are under test and they are deliberately different in kind:
+ * Two things are under test and they are deliberately different in kind:
  *
  * 1. **`withCriterion` as a pure decision.** It holds the three-condition retry
  *    rule this repo carries a postmortem for
  *    (docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md) plus one
- *    addition of its own — a reset adopts the new config — and both stores call
- *    it, so pinning it here pins it for both.
- * 2. **A round trip through the filesystem store**, with a negative valence in
- *    it. That is the second half of the journey tests/referee-criteria-run.test.ts
- *    walks the first half of: model bytes → validator → outcome, and now
- *    outcome → disk → back. Together they are the whole path the plan predicts
- *    will silently lose a minus sign.
- * 3. **Parity with the Postgres store**, when there is a database. Skipped
- *    loudly when there is not, for the reason tests/db-schema.test.ts explains:
- *    a skipped test protects nothing, so the run must say "skipped" rather than
- *    "passed".
+ *    addition of its own — a reset adopts the new config. `pgRefereeCriteria
+ *    Store` calls it, so pinning it here pins it for the store. No database and
+ *    no files: it is a function over an array.
+ * 2. **Ownership**, against a database with two owners in it. Skipped loudly
+ *    when there is no database, for the reason tests/db-schema.test.ts
+ *    explains: a skipped test protects nothing, so the run must say "skipped"
+ *    rather than "passed".
  *
- * Writes under `data/<throwaway slug>/`, which is gitignored, and removes it.
+ * **A third block went on 2026-09-05**, with the filesystem store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G):
+ * seven cases driving `beginCriterion`/`finishCriterion`/`loadCriteria` against
+ * `data/<slug>/referee-criteria.json`, including the round trip that proved a
+ * −80 came back as −80 out of the bytes on disk. Its Postgres counterpart is
+ * `a negative valence survives the round trip` in
+ * tests/store-parity-referee.test.ts, which asserts −80 **and** an unclamped
+ * confidence against the row.
  */
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import {
@@ -38,25 +37,13 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../src/referee-criteria.js";
-import {
-  beginCriterion,
-  deleteCriterion,
-  finishCriterion,
-  loadCriteria,
-  recolourCriterion,
-  withColour,
-  withCriterion,
-} from "../src/referee-criteria-store.js";
+import { withCriterion } from "../src/referee-criteria-store.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
-import { fsRefereeCriteriaStore } from "../src/store/fs.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
-
-const SLUG = "test-referee-criteria-store";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
 
 const SINGLE: RefereeCriterionConfig = { kind: "single" };
 const DIVERGING: RefereeCriterionConfig = {
@@ -148,99 +135,18 @@ describe("withCriterion — which row a request produces", () => {
     expect(rows[0]?.criterion).toBe("c3");
   });
 
-  it("clears a colour by removing the key rather than storing a null", () => {
-    const [cleared] = withColour([row({ colour: 2 })], "spya-aaaaaa", null);
-    expect(cleared && "colour" in cleared).toBe(false);
-  });
-
-  it("refuses a colour neither store would write", () => {
-    expect(() => withColour([row()], "spya-aaaaaa", 1.5)).toThrow();
-    expect(() => withColour([row()], "spya-aaaaaa", -1)).toThrow();
-  });
+  /* `withColour` used to live beside `withCriterion` and had two cases here.
+     It went with the filesystem criteria store on 2026-09-05
+     (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+     the stage-G section) — `pg-referee-criteria.ts` never imported it, doing the
+     recolour as one `UPDATE` and importing `requireColour` from src/searches.ts
+     directly. Both its claims moved into the Postgres block below: the
+     absent-key-not-null clearing is now asserted inside § *walks one criterion
+     through begin, finish, fail, retry, finish, delete*, and the refusal is
+     § *refuses a bad colour with a 400*. */
 });
 
-/* ------------------------------------------------------ the files, alone -- */
-
-describe("the filesystem store", () => {
-  beforeEach(() => rm(DIR, { recursive: true, force: true }));
-  afterEach(() => rm(DIR, { recursive: true, force: true }));
-
-  /**
-   * **The second half of the headline journey.** −80 has to be −80 after a
-   * round trip through JSON on disk, because the failure the plan predicts is
-   * silent at every step: nothing errors, the row reads back, and the panel
-   * shows "counts neither way" for a passage the model said counts heavily
-   * against.
-   */
-  it("a negative valence survives being written and read back", async () => {
-    const begun = await beginCriterion(SLUG, "Are the controls adequate?", DIVERGING);
-    await finishCriterion(SLUG, begun.id, { status: "done", results: [NEGATIVE], model: "m" });
-
-    const back = await loadCriteria(SLUG);
-    const stored = back[0]?.results[0];
-    expect(stored?.kind).toBe("diverging");
-    if (stored?.kind === "diverging") expect(stored.valence).toBe(-80);
-
-    // And in the bytes on disk, not only in what the loader handed back.
-    const raw = await readFile(path.join(DIR, "referee-criteria.json"), "utf8");
-    expect(raw).toContain('"valence": -80');
-  });
-
-  it("keeps the poles and the scale across a write", async () => {
-    const begun = await beginCriterion(SLUG, "Controls?", DIVERGING);
-    await finishCriterion(SLUG, begun.id, { status: "done", results: [] });
-    const back = await loadCriteria(SLUG);
-    expect(back[0]?.config).toEqual(DIVERGING);
-  });
-
-  it("never lets a finish change the question it is answering", async () => {
-    const begun = await beginCriterion(SLUG, "Controls?", DIVERGING);
-    await finishCriterion(SLUG, begun.id, {
-      status: "done",
-      results: [],
-      criterion: "something else",
-      config: SINGLE,
-    } as Partial<SavedCriterion>);
-    const back = await loadCriteria(SLUG);
-    expect(back[0]?.criterion).toBe("Controls?");
-    expect(back[0]?.config).toEqual(DIVERGING);
-  });
-
-  it("does not resurrect a row deleted while the model was thinking", async () => {
-    const begun = await beginCriterion(SLUG, "Controls?", SINGLE);
-    await deleteCriterion(SLUG, begun.id);
-    await finishCriterion(SLUG, begun.id, { status: "done", results: [] });
-    expect(await loadCriteria(SLUG)).toEqual([]);
-  });
-
-  it("recolours a row, and ignores an id that names nothing", async () => {
-    const begun = await beginCriterion(SLUG, "Controls?", SINGLE);
-    await recolourCriterion(SLUG, begun.id, 4);
-    expect((await loadCriteria(SLUG))[0]?.colour).toBe(4);
-    await recolourCriterion(SLUG, "spya-nobody", 2);
-    expect(await loadCriteria(SLUG)).toHaveLength(1);
-  });
-
-  it("sweeps a pending row this process is no longer running", async () => {
-    const begun = await beginCriterion(SLUG, "Controls?", SINGLE);
-    const swept = await fsRefereeCriteriaStore.sweepPending(SLUG, {
-      keep: new Set<string>(),
-      graceMs: 0,
-    });
-    expect(swept.find((c) => c.id === begun.id)?.status).toBe("error");
-  });
-
-  it("leaves a pending row this process IS running alone", async () => {
-    const begun = await beginCriterion(SLUG, "Controls?", SINGLE);
-    const kept = await fsRefereeCriteriaStore.sweepPending(SLUG, {
-      keep: new Set([begun.id]),
-      graceMs: 0,
-    });
-    expect(kept.find((c) => c.id === begun.id)?.status).toBe("pending");
-  });
-});
-
-/* ------------------------------------------------------------- parity ---- */
+/* ------------------------------------------------------ ownership, in pg -- */
 
 /* `pgReady` warns loudly for us when there is no database — a skipped test
    protects nothing, so the run has to say "skipped" rather than "passed". */
@@ -314,22 +220,27 @@ describe("a criterion under somebody else's article", () => {
   });
 });
 
-describe("the two stores answer identically", () => {
+/**
+ * **Was `the two stores answer identically` until 2026-09-05**, when the
+ * filesystem arm went with its store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * The fixture and the script are unchanged; the comparison against a second
+ * store is what went, and the two assertions that were always against a
+ * literal — a retry resets rather than mints, and a −80 comes back as −80 —
+ * are what it was really holding.
+ */
+describe("one criterion's life in the Postgres store", () => {
   const PSLUG = "test-referee-criteria-parity";
-  const PDIR = path.resolve(import.meta.dirname, "..", "data", PSLUG);
   const ARTICLE_ID = "00000000-0000-4000-8000-0000000rc001".replace("r", "a").replace("c", "b");
   const REVISION_ID = "00000000-0000-4000-8000-0000000ab002";
 
   /**
-   * **A real article on BOTH sides**, which is the whole point of the fixture.
+   * **A real article with real blocks**, which is the whole point of the fixture.
    *
-   * The first version of this gave Postgres an article with no revision and the
-   * filesystem a directory with no blocks, and `sourceHash` was the first field
-   * to notice: one store hashed an empty list and the other had nothing to hash.
-   * Neither store was wrong; the fixture was. The alternative — excluding
-   * `sourceHash` from the comparison — removes the divergence by removing the
-   * check. tests/store-reader-state-parity.test.ts arrived at the same fixture
-   * for the same reason, and this is that one, narrowed to what criteria need.
+   * The first version gave Postgres an article with no revision, and
+   * `sourceHash` was the first field to notice: there was nothing to hash. The
+   * store is entitled to a published revision with blocks under it, and a
+   * fixture that does not supply one tests the fixture.
    */
   const BLOCKS = [
     {
@@ -379,22 +290,11 @@ describe("the two stores answer identically", () => {
       .set({ currentRevisionId: REVISION_ID })
       .where(eq(articles.id, ARTICLE_ID));
 
-    await rm(PDIR, { recursive: true, force: true });
-    await mkdir(PDIR, { recursive: true });
-    await writeFile(path.join(PDIR, "blocks.json"), JSON.stringify({ blocks: BLOCKS }), "utf8");
-    /* `tree.json` too: `hashDir` in src/searches.ts requires it before it will
-       hash a directory, for the same reason `articleDir` does. */
-    await writeFile(
-      path.join(PDIR, "tree.json"),
-      JSON.stringify({ rootId: BLOCKS[0].id, nodes: {} }),
-      "utf8",
-    );
   });
 
   afterAll(async () => {
     await getDb().delete(articles).where(eq(articles.slug, PSLUG));
     await closeDb();
-    await rm(PDIR, { recursive: true, force: true });
   });
 
   /** The wire form — what `src/routes.ts` would send — with the id normalised. */
@@ -402,66 +302,73 @@ describe("the two stores answer identically", () => {
     JSON.parse(JSON.stringify(rows)).map((r: SavedCriterion) => ({ ...r, id: "#0" }));
 
   it("walks one criterion through begin, finish, fail, retry, finish, delete", async () => {
-    const stores = [
-      ["files", fsRefereeCriteriaStore],
-      ["postgres", pgRefereeCriteriaStore],
-    ] as const;
+    const store = pgRefereeCriteriaStore;
     const now = () => "2026-09-01T00:00:00.000Z";
-    const seen: Record<string, unknown[]> = { files: [], postgres: [] };
 
-    for (const [name, store] of stores) {
-      const trace: unknown[] = [];
-      const first = await store.begin(PSLUG, "Are the controls adequate?", DIVERGING, undefined, now);
-      trace.push(wire([first.row]));
+    const first = await store.begin(PSLUG, "Are the controls adequate?", DIVERGING, undefined, now);
+    expect(first.row.status).toBe("pending");
 
-      await store.finish(PSLUG, first.row.id, { status: "error", error: "boom" }, first.attempt);
-      trace.push(wire(await store.load(PSLUG)));
+    await store.finish(PSLUG, first.row.id, { status: "error", error: "boom" }, first.attempt);
+    expect((await store.load(PSLUG))[0]).toMatchObject({ status: "error", error: "boom" });
 
-      /* The retry: the same id, the same criterion, a row that failed. Both
-         stores must reset rather than mint, and both must clear the error. */
-      const again = await store.begin(
-        PSLUG,
-        "Are the controls adequate?",
-        DIVERGING,
-        first.row.id,
-        now,
-      );
-      expect(again.row.id).toBe(first.row.id);
-      trace.push(wire([again.row]));
+    /* **The retry**, and the assertion the whole walk is here for: the same id,
+       the same criterion, a row that failed. The store must reset rather than
+       mint, and must clear the error. `withCriterion` decides it — the block at
+       the top of this file pins the decision, and this pins the store obeying
+       it. docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md. */
+    const again = await store.begin(
+      PSLUG,
+      "Are the controls adequate?",
+      DIVERGING,
+      first.row.id,
+      now,
+    );
+    expect(again.row.id).toBe(first.row.id);
+    expect(again.row.status).toBe("pending");
+    expect("error" in again.row).toBe(false);
+    // One row, not two: a mint would leave the failed one beside it.
+    expect(await store.load(PSLUG)).toHaveLength(1);
 
-      await store.finish(
-        PSLUG,
-        again.row.id,
-        { status: "done", results: [NEGATIVE], model: "m" },
-        again.attempt,
-      );
-      trace.push(wire(await store.load(PSLUG)));
+    await store.finish(
+      PSLUG,
+      again.row.id,
+      { status: "done", results: [NEGATIVE], model: "m" },
+      again.attempt,
+    );
+    await store.recolour(PSLUG, again.row.id, 5);
+    const done = (await store.load(PSLUG))[0];
+    expect(done?.status).toBe("done");
+    expect(done?.colour).toBe(5);
+    expect(wire([done as SavedCriterion])[0]).toMatchObject({ id: "#0", model: "m" });
 
-      await store.recolour(PSLUG, again.row.id, 5);
-      trace.push(wire(await store.load(PSLUG)));
+    /* Clearing removes the key rather than storing a `null`, which is not a
+       nicety: `exactOptionalPropertyTypes` is on and `SavedCriterion.colour` is
+       optional, so a `null` on the wire is a different value from an absent one
+       and a client checking `"colour" in row` would read "uncoloured" as
+       "coloured". The column *is* null; `pg-referee-criteria.ts` spells the
+       difference as a conditional spread on the way out. Ported from
+       `withColour`'s own case, 2026-09-05. */
+    await store.recolour(PSLUG, again.row.id, null);
+    const cleared = (await store.load(PSLUG))[0];
+    expect(cleared && "colour" in cleared).toBe(false);
 
-      trace.push(wire(await store.remove(PSLUG, again.row.id)));
-      seen[name] = trace;
-    }
-
-    expect(seen.postgres).toEqual(seen.files);
+    expect(await store.remove(PSLUG, again.row.id)).toEqual([]);
   });
 
-  it("both stores hand back a valence of −80 rather than 0", async () => {
-    for (const store of [fsRefereeCriteriaStore, pgRefereeCriteriaStore]) {
-      const begun = await store.begin(PSLUG, "Controls?", DIVERGING);
-      await store.finish(PSLUG, begun.row.id, { status: "done", results: [NEGATIVE] }, begun.attempt);
-      const back = await store.load(PSLUG);
-      const stored = back.find((c) => c.id === begun.row.id)?.results[0];
-      expect(stored?.kind).toBe("diverging");
-      if (stored?.kind === "diverging") expect(stored.valence).toBe(-80);
-      await store.remove(PSLUG, begun.row.id);
-    }
+  it("hands back a valence of −80 rather than 0", async () => {
+    const store = pgRefereeCriteriaStore;
+    const begun = await store.begin(PSLUG, "Controls?", DIVERGING);
+    await store.finish(PSLUG, begun.row.id, { status: "done", results: [NEGATIVE] }, begun.attempt);
+    const back = await store.load(PSLUG);
+    const stored = back.find((c) => c.id === begun.row.id)?.results[0];
+    expect(stored?.kind).toBe("diverging");
+    if (stored?.kind === "diverging") expect(stored.valence).toBe(-80);
+    await store.remove(PSLUG, begun.row.id);
   });
 
-  it("refuses a bad colour the same way on both sides — a 400, not a store failure", async () => {
-    for (const store of [fsRefereeCriteriaStore, pgRefereeCriteriaStore]) {
-      await expect(store.recolour(PSLUG, "spya-aaaaaa", 1.5)).rejects.toMatchObject({ status: 400 });
-    }
+  it("refuses a bad colour with a 400, not a store failure", async () => {
+    await expect(
+      pgRefereeCriteriaStore.recolour(PSLUG, "spya-aaaaaa", 1.5),
+    ).rejects.toMatchObject({ status: 400 });
   });
 });

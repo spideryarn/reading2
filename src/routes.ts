@@ -519,9 +519,10 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      § What the inventory found). Under `postgres` that answered *"this article
      did not come from a PDF"* about a PDF sitting in the `sources` bucket, and
      deployed it was the jobless `dataRoot()` caller that
-     src/store/data-root.ts names by route — where that function deliberately
-     throws, because both available answers are wrong. So the feature worked on
-     a laptop and 404d on every production request, for as long as it existed.
+     src/store/data-root.ts (deleted 2026-09-05) named by route — where that
+     function deliberately threw, because both available answers were wrong. So
+     the feature worked on a laptop and 404d on every production request, for
+     as long as it existed.
 
      `readPdf`, not "read the source document", because the content type is the
      boundary: an HTML source served from our own origin is stored XSS, so the
@@ -2178,8 +2179,8 @@ function liveMessages(slug: string): Set<string> {
 /**
  * Turn abandoned `pending` answers into `error`, so the reader can ask again.
  *
- * The rule itself lives in the store now — `fsChatStore.sweepPending` for the
- * filesystem, an `UPDATE … WHERE` for Postgres — and what is left here is the
+ * The rule itself lives in the store now — `pgChatStore.sweepPending`, an
+ * `UPDATE … WHERE` — and what is left here is the
  * half only a running server knows: which rows this process is writing, and
  * how long another process's row is allowed to be silent. See `SweepOptions`
  * in src/store/contracts.ts for why neither half is sufficient alone.
@@ -4163,8 +4164,8 @@ function claimsProblem(blocks: Block[]): string | null {
  *   every instant rather than only at the end.
  * - **There is no id and no attempt.** One run per article, so `finish` writes
  *   over whatever `begin` wrote and identity is the slug. The cost of that is
- *   real and is written down in src/referee-claims-store.ts: two tabs running
- *   this at once will have the slower answer win, where a criterion's
+ *   real and is written down in src/store/pg-referee-claims.ts: two tabs
+ *   running this at once will have the slower answer win, where a criterion's
  *   `attempt` would have refused the stale one.
  *
  * The `dropped` counts come back on the outcome and are **not** sent to the
@@ -5421,7 +5422,8 @@ interface ReaderState {
  * stored, so the rule has to hold for every writer rather than for this one
  * route. (The summary steer was the counter-example — validated at the boundary
  * because it went straight into a prompt and never landed anywhere — and it is
- * gone: docs/plans/260830o-steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
+ * gone: docs/plans/260830o-steer-becomes-the-profile.md.) `pgReaderStore.writeProfile`
+ * (src/store/pg-reader.ts) throws with `status: 400`, which
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
 async function patchReader(body: unknown): Promise<ReaderState> {
@@ -7663,9 +7665,9 @@ export async function serveAuthenticatedApi(
     if (criteria && req.method === "GET") {
       const slug = slugPart(criteria, 1);
       /* Both halves in one response, and read close together, for the reason
-         `readSearches` gives: the paper can be re-extracted between them, and a
-         list read before a hash read would be compared against an article none
-         of its criteria ever saw. */
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a list read before a hash read would
+         be compared against an article none of its criteria ever saw. */
       send(res, 200, {
         criteria: await sweepCriteria(slug),
         sourceHash: await refereeCriteriaStore.sourceHash(slug),
@@ -7710,9 +7712,9 @@ export async function serveAuthenticatedApi(
     if (refereeClaims && req.method === "GET") {
       const slug = slugPart(refereeClaims, 1);
       /* Both halves in one response, and read close together, for the reason
-         `readSearches` gives: the paper can be re-extracted between them, and a
-         run read before a hash read would be compared against an article it was
-         never answered about.
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a run read before a hash read would
+         be compared against an article it was never answered about.
 
          The sweep is a *read* that repairs: a `pending` run this process is not
          running is one an earlier process died in the middle of, and leaving it

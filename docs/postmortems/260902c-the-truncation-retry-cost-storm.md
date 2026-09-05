@@ -110,7 +110,7 @@ exists rather than being a nicety):
 **A safety property asserted in a comment and enforced by nothing** — and falsified not by a race in
 the code but by a fact about how the code is run.
 
-[`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts) said, correctly and prominently:
+`src/store/jobs-fs.ts` said, correctly and prominently:
 
 > **One process.** The index is this process's memory and the single-running rule is a variable in
 > it… Across processes it is not a fence at all. Nothing here pretends otherwise.
@@ -158,7 +158,7 @@ nobody stopped looking after it.
 gets a `globalThis` key and therefore the lifetime of the process. Two callers, and each is a lock
 rather than a cache:
 
-- **`QueueState`** in [`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts) — the index, the attempt
+- **`QueueState`** in `src/store/jobs-fs.ts` — the index, the attempt
   tokens, the work keys, the forgotten set, the write queue, and the two scalars `loaded` and
   `writeCounter`. `loaded` has to be there or the new copy re-runs `loadFromDisk`, which is the sweep
   that hands the job away; `writeCounter` has to be there or two copies mint the same `.pid.N.tmp`
@@ -179,7 +179,7 @@ about to be useful.
 Ranked by what they cost against what they are worth.
 
 1. **A test that two copies of the module cannot both claim one job**, which is now
-   [`tests/two-servers-one-queue.test.ts`](../../tests/two-servers-one-queue.test.ts).
+   `tests/two-servers-one-queue.test.ts`.
    `vi.resetModules()` plus a fresh import is not a simulation of the restart — it is the same event.
    Cheap, deterministic, and red against the real unfixed code rather than against a mutation. The
    companion for the other half is *"lets a Stop from a reloaded copy of this module reach the running

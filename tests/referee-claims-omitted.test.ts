@@ -21,8 +21,9 @@
  * ## It ran on the filesystem store until 2026-09-04, and that is the point
  *
  * The fixture was a hand-written `data/<slug>/blocks.json` and the read-back
- * went through `loadClaimsRun` (src/referee-claims-store.ts), which reads the
- * data root and never consults `src/store/` — so the number this file is about
+ * went through `loadClaimsRun` in the filesystem claims store (deleted with
+ * that store on 2026-09-05), which read the data root and never consulted
+ * `src/store/` — so the number this file is about
  * was being carried through the store that is **not deployed**
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § B). That matters more here than in most of the twenty-six: `claimsOmitted`

@@ -72,8 +72,8 @@ overlapping the two.
 Greg chose **arc only** (2026-08-29), from three options. The reason the other two are expensive:
 
 **An article with no `tree.json` cannot currently be opened at all.** Not "renders badly" — it is
-not servable. [`src/api.ts:152`](../../src/api.ts) is `if (!blocksFile || !tree) continue;` when
-listing the library, and [`src/api.ts:557`](../../src/api.ts) is `if (blocks && tree) return dir;`
+not servable. `src/api.ts:152` is `if (!blocksFile || !tree) continue;` when
+listing the library, and `src/api.ts:557` is `if (blocks && tree) return dir;`
 when locating one. `tree: Tree` is required in both payload types
 ([`src/types.ts:1051`](../../src/types.ts), [`src/public-types.ts:131`](../../src/public-types.ts)),
 and the spine, granularity zoom, outline, diagram, Dock and stats all read it. Deferring `toc`

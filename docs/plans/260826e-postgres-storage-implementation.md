@@ -220,7 +220,7 @@ Two things settled here that are easy to get wrong later:
 
 Three, and they are not the same shape, which is the thing most estimates of this work get wrong.
 
-1. **Reads** go through [`src/api.ts`](../../src/api.ts). One file, one set of functions.
+1. **Reads** go through `src/api.ts`. One file, one set of functions.
 2. **Pipeline writes** go through `PipelineStep.outputs(ctx): string[]` — an interface that returns
    **file paths** — implemented across the stage modules. There is no single file to swap.
 3. **Jobs and comments** have their own stores, and carry module-level in-memory state that assumes
@@ -424,7 +424,7 @@ None of these were in Sol's answer. All three came out of checking it, and two w
 going red for a reason that was not the test's fault.
 
 1. **The Postgres library listed `_`-prefixed slugs and the filesystem one never has.**
-   [src/api.ts](../../src/api.ts) has skipped the prefix since it was written — `data/_jobs/` is the
+   `src/api.ts` has skipped the prefix since it was written — `data/_jobs/` is the
    ingest queue's directory — and `pg.ts` had no equivalent, so the two libraries disagreed about
    any such slug. Nothing noticed until a test fixture used one. This is a direct answer to Sol's
    question 1, "what is compared nowhere at all". Fixed, with `left(slug, 1) <> '_'` rather than
@@ -874,7 +874,7 @@ against the code, and all of the substantial ones were real.
 2. **`expectedTailId` was checked one layer too high on the filesystem side** — loaded, checked,
    and *then* `editTurn` entered the mutex and read again. Two reads with a gap: a `begin` landing
    in it passes the check and is then deleted by the edit. The guard now runs inside the same
-   `update` callback as `withEdit`. [tests/store-chat-tail-guard.test.ts](../../tests/store-chat-tail-guard.test.ts)
+   `update` callback as `withEdit`. `tests/store-chat-tail-guard.test.ts`
    goes red three times out of three with the old placement.
 
 **Three smaller ones, all real:**

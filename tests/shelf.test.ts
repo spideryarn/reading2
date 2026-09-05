@@ -1,211 +1,105 @@
 /**
- * Shelf state — archive, rename, count an open (src/shelf.ts), and what the
- * shelf does with it (`listArticles`).
+ * Reading a fixture's `shelf.json` — what is left of `src/shelf.ts`.
+ *
+ * **This file used to be the filesystem shelf store's own suite**, and on
+ * 2026-09-05 that store was deleted with the rest of the filesystem store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ * the stage-G section). `patchShelf`, `setArchived`, `setTitle` and `recordOpen`
+ * went with it; `loadShelf` did not, because `tests/helpers/seed-reader-state.ts`
+ * and `tests/store-parity.test.ts` still read a fixture's `data/<slug>/shelf.json`
+ * through it to seed the columns Postgres keeps. That is a fixture reader, and
+ * these three cases are what says it still reads.
+ *
+ * **Where the fourteen went, one by one**, because a deleted assertion leaves
+ * nothing behind to go red:
+ *
+ * - **Ported into `tests/store-shelf-pg.test.ts` § the shelf's writes**, seven
+ *   of them, because `pg-shelf.ts` re-states each rule and nothing was driving
+ *   it: the title cap, blank-clears-the-title, and all four `purpose` rules
+ *   (stored, cleared on blank, line endings settled, cap refused, absent key
+ *   left alone), plus `lastOpenedAt`.
+ * - **Already there**: archive and un-archive (§ *moves the article between the
+ *   two halves*), the first archive date surviving a second Archive, title
+ *   stored and cleared, both fields in one write, the bad slug.
+ * - **Abolished rather than dropped**: *"does not lose a write when two happen
+ *   at once"* was about the per-process queue in `src/shelf.ts`. Postgres
+ *   computes `opens + 1` itself, and § *counts concurrent opens without losing
+ *   any* is the stronger claim in its place.
+ * - **Dropped, and named**: *"survives a re-extraction, like the title"*. On
+ *   disk the hazard was real and specific — stage 2 rewrites `meta.json` on
+ *   every run, so a title stored there would be silently undone weeks later. In
+ *   Postgres the override is a column on `articles` and an extraction writes a
+ *   *revision*, so the same accident cannot be spelled. The nearest live guard
+ *   is § *renames, and the reading view agrees with the card*, which shows the
+ *   override applied on top of whatever the current revision says. A full
+ *   equivalent would have to publish a second revision, and nothing in that
+ *   suite builds one.
  *
  * Runs against real files under `data/`, which is gitignored, because that is
- * what the code under test actually reads. Each test builds its own throwaway
- * article and removes it afterwards.
- *
- * **The test worth reading first is "survives a re-extraction".** The whole
- * reason a renamed title is an override in `shelf.json` rather than an edit to
- * `meta.json` is that stage 2 rewrites `meta.json` on every run — so a rename
- * stored there would work perfectly, and be silently undone weeks later. That
- * test is the guard, and it fails if anybody "tidies" the override away.
+ * what `loadShelf` reads. Each test builds its own throwaway article and
+ * removes it afterwards.
  */
-import { cp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { articleMetadata, listArticles } from "../src/api.js";
-import { loadShelf, patchShelf, recordOpen, setArchived, setTitle } from "../src/shelf.js";
-import { MAX_PURPOSE_CHARS } from "../src/profile.js";
+import { loadShelf } from "../src/shelf.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SLUG = "test-shelf-fixture";
 const DIR = path.join(ROOT, "data", SLUG);
-const EXAMPLE = path.join(ROOT, "example");
 
-/** A complete-enough article: the fixture's artefacts under a throwaway slug. */
-async function makeArticle(): Promise<void> {
-  await cp(EXAMPLE, DIR, { recursive: true });
+async function writeShelf(state: unknown): Promise<void> {
+  await mkdir(DIR, { recursive: true });
+  await writeFile(path.join(DIR, "shelf.json"), `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
 afterEach(() => rm(DIR, { recursive: true, force: true }));
 
-describe("shelf state", () => {
+describe("reading a shelf.json", () => {
   it("is empty, not an error, for an article nobody has touched", async () => {
+    // A missing file is the ordinary case — most articles have never been
+    // archived or renamed — and a seeder that threw on one would be unable to
+    // seed the majority of a corpus.
     expect(await loadShelf(SLUG)).toEqual({ opens: 0 });
   });
 
-  it("archives and un-archives", async () => {
-    const archived = await setArchived(SLUG, true);
-    expect(archived.archivedAt).toBeTruthy();
-    expect(await loadShelf(SLUG)).toEqual(archived);
-
-    const back = await setArchived(SLUG, false);
-    expect(back.archivedAt).toBeUndefined();
+  it("reads back every field the columns need, and drops the ones it does not", async () => {
+    /* The five that `seedShelfFromFiles` writes onto `articles`. `opens` is
+       coerced rather than trusted, because a negative or non-numeric count off
+       a hand-edited file would go into an `integer` column and be read back
+       forever as the number of times somebody opened the article. */
+    await writeShelf({
+      archivedAt: "2026-01-01T00:00:00.000Z",
+      title: "My own name",
+      opens: -3,
+      lastOpenedAt: "2026-02-02T00:00:00.000Z",
+      purpose: "the evidence",
+      leftover: "not a field",
+    });
+    expect(await loadShelf(SLUG)).toEqual({
+      archivedAt: "2026-01-01T00:00:00.000Z",
+      title: "My own name",
+      opens: 0,
+      lastOpenedAt: "2026-02-02T00:00:00.000Z",
+      purpose: "the evidence",
+    });
   });
 
-  it("tells the metadata page whether this one is deleted", async () => {
-    /* The page has its own Archive button (src/web/Metadata.tsx), and an Archive
-       button that cannot tell whether the article is already deleted is a
-       button offering to do a thing that has been done. `null` and not
-       `undefined` on the way out: on `ArticleMetadata` the question is always
-       asked, so an answer is always given — see the field's own docstring for
-       why that differs from `LibraryEntry`. */
-    await makeArticle();
-    expect((await articleMetadata(SLUG)).archivedAt).toBe(null);
-
-    const archived = await setArchived(SLUG, true);
-    expect((await articleMetadata(SLUG)).archivedAt).toBe(archived.archivedAt);
-
-    await setArchived(SLUG, false);
-    expect((await articleMetadata(SLUG)).archivedAt).toBe(null);
-  });
-
-  it("keeps the original date when archiving something already archived", async () => {
-    // Undo is one click away, and pressing Archive twice must not quietly reset
-    // the clock on "when did I get rid of this".
-    const first = await setArchived(SLUG, true, new Date("2026-01-01T00:00:00.000Z"));
-    const second = await setArchived(SLUG, true, new Date("2026-06-01T00:00:00.000Z"));
-    expect(second.archivedAt).toBe(first.archivedAt);
-  });
-
-  it("stores a title, and clears it on blank", async () => {
-    expect((await setTitle(SLUG, "  My own name  ")).title).toBe("My own name");
-    expect((await setTitle(SLUG, "   ")).title).toBeUndefined();
-    expect((await setTitle(SLUG, "Again")).title).toBe("Again");
-    expect((await setTitle(SLUG, null)).title).toBeUndefined();
-  });
-
-  it("refuses a title longer than the cap", async () => {
-    await expect(setTitle(SLUG, "x".repeat(400))).rejects.toThrow(/characters or fewer/);
-  });
-
-  it("counts opens and remembers the last one", async () => {
-    await recordOpen(SLUG, new Date("2026-01-01T00:00:00.000Z"));
-    const state = await recordOpen(SLUG, new Date("2026-02-02T00:00:00.000Z"));
-    expect(state.opens).toBe(2);
-    expect(state.lastOpenedAt).toBe("2026-02-02T00:00:00.000Z");
-  });
-
-  it("does not lose a write when two happen at once", async () => {
-    /* The read-modify-write is serialised per process, and this is why: without
-       the chain the second read starts before the first write lands, and one of
-       the two opens silently does not happen — with both reporting success. */
-    await Promise.all(Array.from({ length: 10 }, () => recordOpen(SLUG)));
-    expect((await loadShelf(SLUG)).opens).toBe(10);
-  });
-
-  it("stores a purpose, and clears it on blank", async () => {
-    // Same three rules as the title above, deliberately: absent leaves it,
-    // blank clears it, `null` clears it. A reader empties a box by selecting
-    // all and typing nothing, and a purpose of "   " is not a purpose.
-    expect((await patchShelf(SLUG, { purpose: "  the evidence  " })).purpose).toBe("the evidence");
-    expect((await patchShelf(SLUG, { purpose: "   " })).purpose).toBeUndefined();
-    expect((await patchShelf(SLUG, { purpose: "again" })).purpose).toBe("again");
-    expect((await patchShelf(SLUG, { purpose: null })).purpose).toBeUndefined();
-  });
-
-  it("settles a pasted purpose's line endings before storing it", async () => {
-    /* Not cosmetic. This string is hashed onto every artefact generated from
-       it, and a `\r\n` from a paste would make the same purpose compare as a
-       different one — marking every glossary on the shelf "you changed your
-       profile" for a change nobody made. src/profile.ts § normaliseProfileText. */
-    expect((await patchShelf(SLUG, { purpose: "one\r\ntwo" })).purpose).toBe("one\ntwo");
-  });
-
-  it("refuses a purpose longer than the cap, rather than shortening it", async () => {
-    // Refused, never truncated: a silently shortened instruction is one the
-    // reader believes they gave and did not.
-    await expect(
-      patchShelf(SLUG, { purpose: "x".repeat(MAX_PURPOSE_CHARS + 1) }),
-    ).rejects.toThrow(/characters or fewer/);
-    // …and the refusal changed nothing.
-    expect((await loadShelf(SLUG)).purpose).toBeUndefined();
-  });
-
-  it("leaves the purpose alone when the patch does not mention it", async () => {
-    await patchShelf(SLUG, { purpose: "the evidence" });
-    await patchShelf(SLUG, { archived: true });
-    expect((await loadShelf(SLUG)).purpose).toBe("the evidence");
-  });
-
-  it("survives a re-extraction, like the title", async () => {
-    /* The whole reason it lives out here rather than on the article. Stage 2
-       rewrites meta.json on every run; a purpose stored there would work
-       perfectly until the next `npm run extract` quietly dropped it. */
-    await patchShelf(SLUG, { purpose: "the evidence" });
-    await writeFile(
-      path.join(ROOT, "data", SLUG, "meta.json"),
-      JSON.stringify({ slug: SLUG, title: "Freshly Extracted" }),
-      "utf8",
-    );
-    expect((await loadShelf(SLUG)).purpose).toBe("the evidence");
-  });
-
-  it("keeps archived and renamed independent of each other", async () => {
-    await setTitle(SLUG, "Renamed");
-    await setArchived(SLUG, true);
-    const state = await loadShelf(SLUG);
-    expect(state.title).toBe("Renamed");
-    expect(state.archivedAt).toBeTruthy();
+  it("throws on a file that will not parse, rather than reporting an empty shelf", async () => {
+    /* The highest-stakes line in the module, and the reason it is not a
+       `catch (…) { return EMPTY }`: the file holds a title the reader typed and
+       a flag that hides a card, so quietly answering `{ opens: 0 }` would
+       un-archive an article and un-rename it in the same breath. It is also
+       one of the drivers in tests/parse-json.test.ts, where what matters is
+       that the log line names `shelf.json` without quoting a byte of it. */
+    await mkdir(DIR, { recursive: true });
+    await writeFile(path.join(DIR, "shelf.json"), "{ not json", "utf8");
+    await expect(loadShelf(SLUG)).rejects.toThrow();
   });
 });
 
-describe("the shelf reads it", () => {
-  it("prefers the reader's title over the extractor's", async () => {
-    await makeArticle();
-    const before = (await listArticles()).find((a) => a.slug === SLUG);
-    expect(before).toBeDefined();
-    expect(before?.titleOverridden).toBeUndefined();
-
-    await setTitle(SLUG, "What I call it");
-    const after = (await listArticles()).find((a) => a.slug === SLUG);
-    expect(after?.title).toBe("What I call it");
-    expect(after?.titleOverridden).toBe(true);
-  });
-
-  it("survives a re-extraction rewriting meta.json", async () => {
-    /* **The test this file exists for.** Stage 2 rewrites meta.json on every
-       run, so a renamed title stored THERE would be silently undone by the next
-       `npm run extract` — a bug that reports success and comes back weeks
-       later. The override lives in shelf.json, so this passes. */
-    await makeArticle();
-    await setTitle(SLUG, "What I call it");
-
-    const metaFile = path.join(DIR, "meta.json");
-    const meta = JSON.parse(await readFile(metaFile, "utf8"));
-    await writeFile(metaFile, JSON.stringify({ ...meta, title: "Whatever the site calls it" }));
-
-    const entry = (await listArticles()).find((a) => a.slug === SLUG);
-    expect(entry?.title).toBe("What I call it");
-  });
-
-  it("takes an archived article off the shelf and puts it in the other half", async () => {
-    await makeArticle();
-    expect((await listArticles()).some((a) => a.slug === SLUG)).toBe(true);
-
-    await setArchived(SLUG, true);
-    expect((await listArticles()).some((a) => a.slug === SLUG)).toBe(false);
-    expect((await listArticles({ archived: true })).some((a) => a.slug === SLUG)).toBe(true);
-
-    await setArchived(SLUG, false);
-    expect((await listArticles()).some((a) => a.slug === SLUG)).toBe(true);
-  });
-
-  it("carries opens and the built-artefact flags onto the entry", async () => {
-    await makeArticle();
-    await recordOpen(SLUG);
-    const entry = (await listArticles()).find((a) => a.slug === SLUG);
-    expect(entry?.opens).toBe(1);
-    expect(entry?.lastOpenedAt).toBeTruthy();
-    // The fixture has an arc but no thread, glossary or summaries.
-    expect(entry?.has.arc).toBe(true);
-    expect(entry?.has.tweets).toBe(false);
-  });
-
+describe("a slug that is not a slug", () => {
   it("refuses a slug that is not a slug, rather than sanitising it", async () => {
     await expect(loadShelf("../../etc/passwd")).rejects.toThrow(/Not a valid slug/);
-    await expect(setArchived("..", true)).rejects.toThrow(/Not a valid slug/);
   });
 });

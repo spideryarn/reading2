@@ -56,7 +56,7 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId, type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import type { Claim, ClaimsRun } from "../src/referee-claims.js";
-import { CLAIMS_SWEPT } from "../src/referee-claims-store.js";
+import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
   pgRefereeClaimsStore as store,
@@ -255,7 +255,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
 
     const again = await store.begin(SLUG);
     expect(again.status).toBe("pending");
-    /* The corollary src/referee-claims-store.ts writes down: starting a run
+    /* The corollary src/store/pg-referee-claims.ts writes down: starting a run
        throws away the last answer before the new one exists, deliberately,
        because yesterday's claims under today's spinner is the one state a
        referee cannot interpret. */

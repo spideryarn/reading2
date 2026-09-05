@@ -26,6 +26,7 @@ import { articles, searchRuns } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { isSpideryarnId } from "../src/ids.js";
+import { kindOfMessage, providerHttpFailure, worthRetrying } from "../src/messages.js";
 import { MAX_RUNS } from "../src/searches.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -292,6 +293,52 @@ describe("the Postgres searches store", () => {
     await expect(
       pgSearchStore.finish(SLUG, run.id, { status: "pending" }, attempt),
     ).rejects.toThrow(/must end a run/);
+  });
+
+  /* ---- ported from tests/searches.test.ts, 2026-09-05 ----------------------
+     § *a failure survives being written down and read back*. It went through
+     `beginRun`/`finishRun` on the filesystem side; those went with the
+     filesystem store
+     (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+     the stage-G section) and the claim had no home on this side at all.
+
+     The gap it closes: every other test of `kindOfMessage` hands it a message
+     straight from the factory, so all of them would keep passing if something
+     between the throw and the screen decorated the string — `Search failed:
+     ${msg} — tap to retry` is the plausible one, and it would move the bracket
+     off the end and silently turn every permanent failure back into a Retry
+     button. Nothing about that has a symptom. So this one goes through the real
+     path: store the failure the way the route does, read it back out of
+     Postgres, and ask the question the panel asks. */
+
+  it("still knows a topped-out account cannot be retried, after a round trip", async () => {
+    const permanent = providerHttpFailure(402);
+    expect(worthRetrying(permanent.message)).toBe(false); // before the round trip
+
+    const { run, attempt } = await pgSearchStore.begin(SLUG, "does this survive a write");
+    await pgSearchStore.finish(
+      SLUG,
+      run.id,
+      { status: "error", error: permanent.message },
+      attempt,
+    );
+
+    const stored = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id);
+    expect(stored?.status).toBe("error");
+    expect(worthRetrying(stored?.error)).toBe(false);
+    expect(kindOfMessage(stored?.error ?? "")).toBe("ours");
+  });
+
+  it("still offers another go for a transient one, after a round trip", async () => {
+    const { run, attempt } = await pgSearchStore.begin(SLUG, "and the other direction");
+    await pgSearchStore.finish(
+      SLUG,
+      run.id,
+      { status: "error", error: providerHttpFailure(429).message },
+      attempt,
+    );
+    const stored = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id);
+    expect(worthRetrying(stored?.error)).toBe(true);
   });
 
   it("never lets a patch rename a run or change its question", async () => {

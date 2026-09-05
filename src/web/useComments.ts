@@ -60,9 +60,9 @@ export function describeFetchFailure(error: Error): string {
  * arriving a few words at a time — both are `pending` with text — and would put
  * a typing cursor on the end of an answer that finished five minutes ago.
  *
- * It is never sent and never stored. `createComment` builds its row from named
- * fields (src/comments.ts), so there is nowhere for it to leak to even if it
- * were sent.
+ * It is never sent and never stored. `pgCommentStore.create` builds its row
+ * from named fields (src/store/pg-comments.ts), so there is nowhere for it to
+ * leak to even if it were sent.
  */
 export interface ClientComment extends Comment {
   replacing?: true;

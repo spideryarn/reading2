@@ -898,8 +898,9 @@ export interface SearchStore {
    * so both stores share one rule as well as one hash.
    *
    * **A method rather than a field on what `load` returns**, so a caller that
-   * only wants the list does not pay for a scan of every block. The read seam
-   * asks for both together (`readSearches`).
+   * only wants the list does not pay for a scan of every block. The routes that
+   * need both ask for both in one response, and say why where they do it
+   * (`refereeCriteria` and `refereeClaims` in src/routes.ts).
    *
    * `undefined` when the article has no readable blocks. That is not "current"
    * — `isStale` counts it as stale, because not knowing and knowing it is fine
@@ -1081,7 +1082,7 @@ export interface RefereeClaimsStore {
    *
    * There is no `wantedId` and no retry rule, because there is nothing to
    * collide with: a second run is a run, and the answer it overwrites was about
-   * the same paper. src/referee-claims-store.ts § What differs.
+   * the same paper. src/store/pg-referee-claims.ts § One run per article.
    */
   begin(slug: string, now?: () => string): Promise<ClaimsRun>;
 
@@ -1136,10 +1137,11 @@ export interface GlossaryLookupStore {
  *
  * Not article-scoped, unlike everything else in this file — there is one
  * profile per reader, which today means one profile, full stop
- * (docs/project/auth.md). The filesystem adapter is a thin wrapper over
- * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, which already
- * does the normalising, capping and atomic write; the Postgres adapter is
- * `reader_profiles`, one row per `owner_id`.
+ * (docs/project/auth.md). There was a filesystem adapter — a thin wrapper over
+ * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, over one
+ * `data/reader.json` — and it went on 2026-09-05 with the rest of the
+ * filesystem store. `src/profile.ts` kept the normalising, capping and hashing
+ * and lost the file; the adapter is `reader_profiles`, one row per `owner_id`.
  *
  * **It holds the reader's settings too**, since 2026-08-31 — the switch below
  * is on the same row rather than in a store of its own, for the reason

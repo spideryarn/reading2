@@ -153,9 +153,9 @@ nothing will rewrite them.
    `id`, with `spya-` id attributes and `#spya-…` fragments normalised out of the stored `html`.
 
 Question 1 alone was enough **by accident** until 2026-08-31. On disk `extract.extractedHtml` and
-`blocks.stampedHtml` are the same path (`PATHS` in
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)), so a re-extraction overwrites the
-very file question 1 reads and the missing ids give it away. Split into the two Postgres columns the
+`blocks.stampedHtml` were the same path (`PATHS` in
+`src/store/artifacts-fs.ts`, deleted 2026-09-05), so a re-extraction overwrote the
+very file question 1 read and the missing ids gave it away. Split into the two Postgres columns the
 alias goes, question 1 compares stage 3's own output against stage 3's own blocks, and it returns
 **true always**.
 

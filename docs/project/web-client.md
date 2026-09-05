@@ -52,11 +52,11 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in styles.css § plain, centred) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
-| [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
+| `src/api.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
 
 Running it: [setup-dev.md](setup-dev.md). `npm run dev` opens the **library** at `/`
 ([library.md](library.md)); an article is `/read/<slug>`, and a fresh clone that has never run the
-pipeline still has the committed `example/` fixture to open ([`src/api.ts`](../../src/api.ts)). Old
+pipeline still has the committed `example/` fixture to open (`src/api.ts`). Old
 `/?slug=<slug>` links are rewritten on the way in and keep working.
 
 Deep links are `/read/<slug>?at=spya-k6fpme`. Every other bit of view state is in the query string

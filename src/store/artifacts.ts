@@ -23,10 +23,11 @@
  *    `glossaryIsCurrent` on 2026-08-28, `threadIsCurrent` in D0 on 2026-08-29
  *    (docs/plans/260827aa-delete-the-importer.md).
  *
- * This file is types and one pure function. The file-backed adapter is
- * src/store/artifacts-fs.ts; the Postgres one is src/store/artifacts-pg.ts,
- * which src/store/pg-session.ts imports and which a claimed job runs on
- * wherever `SPIDERYARN_STORE=postgres` — see the header of
+ * This file is types and one pure function. The file-backed adapter was
+ * src/store/artifacts-fs.ts, deleted 2026-09-05 along with the
+ * `SPIDERYARN_STORE` flag that chose between the two; the Postgres one,
+ * src/store/artifacts-pg.ts — which src/store/pg-session.ts imports — is what
+ * every claimed job runs on now, the only store there is. See the header of
  * src/store/revisions.ts. (It said "nothing in production imports yet" until
  * 2026-09-02, which stopped being true at commit c42c940.)
  *
@@ -220,8 +221,9 @@ export type ArtifactOutcome<T> =
  *
  * ## Why it lives here rather than in the file adapter that grew it
  *
- * These rules were written in src/store/artifacts-fs.ts, where they answer
- * *"did this file survive being written?"*. The Postgres adapter has to answer
+ * These rules were written in src/store/artifacts-fs.ts (deleted 2026-09-05),
+ * where they answered *"did this file survive being written?"*. The Postgres
+ * adapter has to answer
  * the same question about a JSONB column, and the whole claim it makes is that
  * the two stores agree about what a usable artefact is. Two copies of the rules
  * cannot make that claim: they would agree on the day they were written and
@@ -842,14 +844,15 @@ export function sameStamp(recorded: StepStamp | null, expected: StepStamp): bool
 /**
  * Where artefacts live, behind one interface, so the pipeline can stop knowing.
  *
- * Two implementations, and the seam is the point: the file adapter
- * (src/store/artifacts-fs.ts) writes `data/<slug>/…`, and the Postgres one
- * (src/store/artifacts-pg.ts) writes columns on a draft revision. Every stage
- * returns a product now and calls `write()` rather than writing a file itself
- * (docs/project/database.md), so the two adapters are the only place that
- * choice is made.
+ * There were two implementations, and the seam was the point: the file
+ * adapter (src/store/artifacts-fs.ts) wrote `data/<slug>/…`, and the Postgres
+ * one (src/store/artifacts-pg.ts) writes columns on a draft revision. The file
+ * adapter was deleted 2026-09-05, so Postgres is the only one now — but every
+ * stage still returns a product and calls `write()` rather than writing a file
+ * itself (docs/project/database.md), and this interface is still where that
+ * happens.
  *
- * `slug` identifies the article in both; the Postgres adapter resolves it to
+ * `slug` identifies the article; the Postgres adapter resolves it to
  * the draft revision the current job owns.
  */
 export interface ArtifactStore {
