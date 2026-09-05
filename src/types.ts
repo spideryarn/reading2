@@ -3606,3 +3606,83 @@ export interface AdminFeedbackPage {
   /** Pass back as `?before=` to get the next page. `null` when there is no next page. */
   nextCursor: FeedbackCursor | null;
 }
+
+/* --------------------------------------------------------- link preview -- */
+
+/**
+ * **What the page on the other end of a hyperlink says about itself.**
+ *
+ * Four fields, all of them the destination's own words rather than ours — a
+ * summary is stage 3 and lives somewhere else. Every field is optional because
+ * the measured corpus really does vary: three of eight successes on 2026-09-05
+ * (plato.stanford, paulgraham, gwern) carry no `og:` tags at all, so the
+ * fallback chain is load-bearing and what survives it differs page by page.
+ *
+ * docs/project/links.md, and src/link-previews.ts for how each one is found.
+ */
+export interface PagePreview {
+  /** `og:title` → `twitter:title` → `<title>`. */
+  title?: string;
+  /** `og:site_name`. Never guessed from the host — the card already shows that. */
+  siteName?: string;
+  /** `og:description` → `twitter:description` → `<meta name=description>`. */
+  description?: string;
+  /**
+   * Readability's opening paragraph, and only when it looked like one.
+   *
+   * noema's is the word "Credits" — a byline artefact — so this is absent
+   * rather than wrong when the sanity check fails, and the card falls back to
+   * `description`.
+   */
+  firstParagraph?: string;
+  /** How long the destination is, in words. */
+  words?: number;
+}
+
+/**
+ * The answer to `GET /api/link-preview`.
+ *
+ * A discriminated union rather than a nullable page, because *nothing to show*
+ * and *ask again in a moment* are different things to a client and only one of
+ * them is worth a second request.
+ *
+ * **No timestamps, and that is a rule rather than an omission.** Returning when
+ * the row was fetched would tell a caller whether — and when — some prior reader
+ * caused a fetch of that URL. GPT Sol, 2026-09-05, finding P1-7;
+ * src/db/schema.ts § `linkPreviews`.
+ */
+export type LinkPreviewResponse =
+  /** We have something worth putting on the card. */
+  | { state: "ready"; page: PagePreview }
+  /**
+   * Somebody else holds the single-flight claim for this exact URL. Ask once
+   * more, shortly; do not treat it as an answer.
+   */
+  | { state: "pending" }
+  /**
+   * **We asked the destination and there is nothing to show.**
+   *
+   * Unreachable, refused by the far end, a PDF, a page with nothing in it. The
+   * card is left exactly as it was: two of ten destinations in this corpus are
+   * permanently behind a bot challenge, and that has to look like nothing
+   * happening rather than like an error.
+   *
+   * This is a fact about **the URL**, so the client caches it and stops asking.
+   */
+  | { state: "unavailable" }
+  /**
+   * **We did not ask**, and the reason is about this request rather than about
+   * the URL: the URL is not among this article's links, or it looks like it
+   * carries a key, or this reader's allowance is spent.
+   *
+   * The card looks exactly the same as for `unavailable` — the reader is told
+   * nothing either way. The distinction exists for the **client's cache**, and
+   * without it a single hover of a chat link (which is in no article, so always
+   * refused) or one rate-limited moment would silence that URL for the rest of
+   * the session, including on the prose link where it would have worked. GPT
+   * Sol, 2026-09-05, P2-1.
+   *
+   * It tells a caller nothing they did not have: they supplied the slug and the
+   * URL and they own the article, so they could already read its links.
+   */
+  | { state: "refused" };

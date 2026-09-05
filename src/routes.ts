@@ -19,6 +19,7 @@
  *                                 — purpose is null without a slug
  *   PATCH  /api/reader           { profile?: string | null, experimental?: boolean }
  *                                 → { profile, experimentalSince }, both always
+ *   GET    /api/link-preview    `?slug=&url=` → what that destination says about itself
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
  *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
@@ -261,6 +262,9 @@ import {
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isWebUrl } from "./urls.js";
+/* The fourth thing a link card can say: what the destination says about itself,
+   fetched by us once and cached for everybody. src/link-previews.ts. */
+import { linkPreview } from "./link-previews.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import {
   advanceJob,
@@ -6477,6 +6481,30 @@ export async function serveAuthenticatedApi(
      come from the shelf or the profile page. src/feedback.ts and
      docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
   const feedbackRoute = path === "/api/feedback";
+  /**
+   * **What the page on the other end of one of this article's hyperlinks says
+   * about itself** — fetched by us, once, and cached for everybody.
+   * src/link-previews.ts, docs/project/links.md.
+   *
+   * **In this table and not under `/api/public/`**, which is dispatched before
+   * the gate and sets no owner: an unauthenticated fetch endpoint is an open
+   * proxy and an open wallet.
+   *
+   * **Both the slug and the URL are in the query, and the slug's place is the
+   * one deviation from this file's habit.** Everything else that is about an
+   * article carries the slug in the path. Here the pair is the *question* — is
+   * this URL in that article, and does this reader own it — rather than a
+   * resource with a sub-resource: there is no `/api/link-preview/<slug>` worth
+   * asking for on its own, and the answer is not about the article at all. The
+   * URL cannot go in a path in any case (it carries its own `/` and `?`), so a
+   * split address would put half the question in each half of the URL. The plan
+   * fixed this shape: docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md.
+   *
+   * The URL is a **query parameter that is never logged** — `path` above is
+   * already stripped of the query for exactly this reason, and a hovered URL is
+   * a fact about what somebody was reading. docs/project/logging.md.
+   */
+  const linkPreviewRoute = path === "/api/link-preview";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(path);
   /**
    * **The sharing switch, and it is a sub-resource rather than a field.**
@@ -6967,6 +6995,29 @@ export async function serveAuthenticatedApi(
     }
     if (article && req.method === "GET") {
       send(res, 200, await loadArticle(slugPart(article, 1)));
+      return;
+    }
+    if (linkPreviewRoute && req.method === "GET") {
+      /* **A bad slug is a 400**, which is the one thing this route says out
+         loud about the request itself: it is malformed rather than a
+         destination we could not reach, and answering it like a Cloudflare
+         challenge would hide a client bug for ever.
+
+         **An article that is not this reader's is a 404**, thrown by
+         `loadArticle` through the owner filter, exactly as every other
+         per-article route here answers — a slug that does not exist and one
+         that belongs to somebody else are the same miss, which is the property
+         that stops this confirming what other people own.
+
+         Everything *after* those two is a 200 carrying one of the four
+         `LinkPreviewResponse` members, because the card's rule is that a
+         failure leaves it exactly as it was. `refused` and `unavailable` look
+         identical to the reader and differ only to the client's cache —
+         src/link-previews.ts § `linkPreview` says why that distinction exists
+         and why it gives a caller nothing. */
+      const at = query.get("slug") ?? "";
+      if (!isSlug(at)) throw httpError(400, "Not a slug");
+      send(res, 200, await linkPreview(at, query.get("url")));
       return;
     }
     if (visibility && req.method === "PUT") {

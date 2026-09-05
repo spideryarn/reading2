@@ -209,7 +209,11 @@ describe("declaredTables", () => {
        did the same. `billing_accounts` and `ingest_events` arrived 2026-09-02
        (drizzle/20260902172813_billing_quota.sql,
        docs/plans/260902i-stripe-payments-and-subscription-tiers.md) and did it
-       a third time, which is three for three. */
+       a third time, which is three for three. `link_previews` and
+       `rate_limit_events` arrived 2026-09-05
+       (drizzle/20260905172612_link_previews_and_rate_limit_events.sql,
+       docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
+       § Stage 2) and made it four. */
     expect(declared.map((d) => d.table)).toEqual([
       "ai_calls",
       "article_revisions",
@@ -227,7 +231,9 @@ describe("declaredTables", () => {
       "glossary_lookups",
       "ingest_events",
       "jobs",
+      "link_previews",
       "queue_state",
+      "rate_limit_events",
       "raw_sources",
       "reader_profiles",
       "realtime_sessions",
@@ -306,7 +312,7 @@ describe("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(26);
+      expect(report.declaredTables).toBe(28);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

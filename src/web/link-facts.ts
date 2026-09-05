@@ -7,7 +7,7 @@
  * card is already on screen. Both were named and deferred by the survey on
  * 2026-08-27 (docs/research/260827a-link-previews.md); Greg asked for both the next day.
  *
- * ## The two sources, and why only these two
+ * ## The three sources
  *
  * 1. **An article already on this shelf.** Its title, its root gist and its
  *    length are already ours — stage 2 ran Readability over that page at ingest
@@ -20,14 +20,23 @@
  *    `access-control-allow-origin: *`, and is the API half of Wikipedia's own
  *    Page Previews. A fixed known host, so there is no SSRF surface at all.
  *
- * **And that is the whole list, because of CORS.** The obvious third idea —
- * fetch the destination from the reader's browser and run Readability on it —
- * cannot work for an ordinary host: a cross-origin `fetch` of
- * `philpapers.org/rec/BUTAAT` is rejected before the response is readable, and
- * a `no-cors` request hands back an opaque body with nothing in it. Verified in
- * a real browser rather than assumed; the numbers are in
- * docs/project/links.md § What a browser can and cannot reach. The general case
- * needs our own server, which is the one source still unbuilt.
+ * 3. **Our own server, fetching the destination.** `GET /api/link-preview`,
+ *    since 2026-09-05 — the general case, and the only source that can answer
+ *    for an arbitrary page. It gives the destination's own title, site name,
+ *    description and opening paragraph, plus a word count.
+ *
+ * **The third one is a *server* fetch, and that is not a preference.** The
+ * obvious version — fetch the destination from the reader's browser and run
+ * Readability on it — cannot work for an ordinary host: a cross-origin `fetch`
+ * of `philpapers.org/rec/BUTAAT` is rejected before the response is readable,
+ * and a `no-cors` request hands back an opaque body with nothing in it. Verified
+ * in a real browser rather than assumed; the numbers are in
+ * docs/project/links.md § What a browser can and cannot reach.
+ *
+ * It also means the **destination never learns which reader hovered it**: the
+ * first hover of a URL by anybody causes one fetch from our server, and every
+ * hover after that — by that reader or any other — is a cache hit.
+ * src/link-previews.ts and src/db/schema.ts § `linkPreviews`.
  *
  * ## What Wikipedia is told, and what it is not
  *
@@ -60,7 +69,7 @@
 import { useEffect, useReducer } from "react";
 import { urlKey } from "../ingest.js";
 import { isWebUrl } from "../urls.js";
-import type { LibraryEntry } from "../types.js";
+import type { LibraryEntry, LinkPreviewResponse, PagePreview } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import type { LinkPreview } from "./link-preview.js";
 
@@ -95,6 +104,16 @@ export interface LinkFacts {
    * action under uncertainty is not to offer it.
    */
   shelfKnown: boolean;
+  /**
+   * **What the destination itself says about itself**, fetched by our server —
+   * the third source, and the only one that answers for an arbitrary page.
+   *
+   * Null covers *not asked*, *still asking* and *asked and got nothing*, which
+   * the card treats identically: it draws no section, and the free card is left
+   * exactly as it was. Unlike `library`, nothing here spends anything or offers
+   * the reader an action, so the three do not need telling apart.
+   */
+  page: PagePreview | null;
 }
 
 export interface LibraryMatch {
@@ -103,7 +122,13 @@ export interface LibraryMatch {
   self: boolean;
 }
 
-const NOTHING: LinkFacts = { loading: false, library: null, wiki: null, shelfKnown: false };
+const NOTHING: LinkFacts = {
+  loading: false,
+  library: null,
+  wiki: null,
+  shelfKnown: false,
+  page: null,
+};
 
 /**
  * How long either lookup gets before it counts as having found nothing.
@@ -409,6 +434,167 @@ function loadWiki(wiki: { lang: string; title: string }): Promise<void> {
   return run;
 }
 
+/* ----------------------------------------------------- the destination --- */
+
+/**
+ * What the destination itself said, keyed by the **URL as written in the
+ * article**, or null for "asked, nothing there".
+ *
+ * The same shape as `wikiCache` above and for the same three reasons: module
+ * level so a re-hover is silent, a `null` entry so a page that answers oddly is
+ * asked once rather than on every hover, and a separate `pending` map so two
+ * cards over the same link share one request.
+ *
+ * **Keyed by URL and not by `(slug, url)`.** The answer is a property of the
+ * address — the server's row is ownerless and article-less — and the slug is
+ * only ever the *permission* to ask. A reader who moves to another article in
+ * the same tab and meets the same link should get the answer already in hand.
+ */
+const pageCache = new Map<string, PagePreview | null>();
+const pagePending = new Map<string, Promise<void>>();
+
+/**
+ * **How long to wait before asking again after a `pending`.**
+ *
+ * `pending` means another request holds the server's single-flight claim for
+ * this exact URL — somebody else's cold hover, or this reader's own in another
+ * tab. It is the one answer worth a second question: treating it as "nothing"
+ * would leave that URL blank for the rest of the session for whoever lost a
+ * race they never knew about, which looks exactly like the feature not working.
+ *
+ * **Three seconds, not one**, and the number is chosen against the server's
+ * envelope rather than against what feels responsive: the winner's fetch has ten
+ * seconds (`PREVIEW_TIMEOUT_MS`), so a retry at 1.2s — the first version —
+ * usually arrives while the winner is still out on the network, and asks the
+ * same question again to get the same answer. Three seconds covers the median
+ * page comfortably. It is a compromise either way, which is why the *other* half
+ * matters more.
+ *
+ * **The other half: a second `pending` is not remembered.** One retry and no
+ * more — a loop here would be a card polling a fetch endpoint for as long as a
+ * pointer rests on a link — but the result is left out of the cache, so the next
+ * hover of that link asks again and by then the winner has almost certainly
+ * filled it. GPT Sol, 2026-09-05, P2-2.
+ */
+const PAGE_RETRY_MS = 3_000;
+
+/** What the server answers with, checked field by field before React sees it. */
+function readPage(body: unknown): LinkPreviewResponse | null {
+  if (typeof body !== "object" || body === null) return null;
+  const state = (body as { state?: unknown }).state;
+  if (state === "pending") return { state: "pending" };
+  if (state === "unavailable") return { state: "unavailable" };
+  if (state === "refused") return { state: "refused" };
+  if (state !== "ready") return null;
+  const page = (body as { page?: unknown }).page;
+  if (typeof page !== "object" || page === null) return null;
+  const fields = page as Record<string, unknown>;
+  const text = (name: string): string | undefined => {
+    const value = fields[name];
+    return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+  };
+  /* Each field checked rather than cast, for `readSummary`'s reason one section
+     up: this is our own server, but the *strings in it* came off a stranger's
+     page, and a `title` arriving as an object would be handed to React, which
+     declines by throwing, which takes the whole card down rather than one line
+     of it. Our own API is not a reason to skip the check — it is a reason the
+     check is cheap. */
+  const title = text("title");
+  const siteName = text("siteName");
+  const description = text("description");
+  const firstParagraph = text("firstParagraph");
+  const rawWords = fields.words;
+  const words = typeof rawWords === "number" && Number.isFinite(rawWords) && rawWords > 0
+    ? Math.round(rawWords)
+    : undefined;
+  /* A section with a heading and nothing under it reads as a lookup that broke,
+     which is worse than no section — the same rule `readSummary` follows. */
+  if (!title && !description && !firstParagraph) return null;
+  return {
+    state: "ready",
+    page: {
+      ...(title ? { title } : {}),
+      ...(siteName ? { siteName } : {}),
+      ...(description ? { description } : {}),
+      ...(firstParagraph ? { firstParagraph } : {}),
+      ...(words === undefined ? {} : { words }),
+    },
+  };
+}
+
+/** One request. Null covers every failure, which is all the card can use. */
+async function askServer(slug: string, url: string): Promise<LinkPreviewResponse | null> {
+  const stop = deadline();
+  const query = `?slug=${encodeURIComponent(slug)}&url=${encodeURIComponent(url)}`;
+  try {
+    const res = await apiFetch(`/api/link-preview${query}`, { ...(stop ? { signal: stop } : {}) });
+    return readPage(await readJson<unknown>(res));
+  } catch {
+    /* `apiFetch` has already put the failure in the console. Here a failure is
+       an absence, and the card is left exactly as it was — see `loadPage`. */
+    return null;
+  }
+}
+
+/**
+ * **Ask our server what is on the other side of this link.**
+ *
+ * The third source, and the only one that can answer for an arbitrary
+ * destination: a cross-origin `fetch` of `philpapers.org` from the reader's
+ * browser is rejected before the response is readable, so the general case needs
+ * our own server (docs/project/links.md § What a browser can and cannot reach).
+ *
+ * **A failure is cached as nothing and never retried this session**, exactly
+ * like Wikipedia's. Two of the ten destinations measured in this corpus are
+ * permanently behind a Cloudflare challenge, and that has to look like nothing
+ * happening rather than like an error — there is no *"couldn't reach it"* line,
+ * because a card that reports every dead link is a card that is mostly apology.
+ *
+ * The one exception is `pending`, which is not an answer at all: see
+ * `PAGE_RETRY_MS`.
+ */
+function loadPage(slug: string, url: string): Promise<void> {
+  if (pageCache.has(url)) return Promise.resolve();
+  const existing = pagePending.get(url);
+  if (existing) return existing;
+
+  const run = (async () => {
+    let answer = await askServer(slug, url);
+    if (answer?.state === "pending") {
+      await new Promise((wake) => setTimeout(wake, PAGE_RETRY_MS));
+      answer = await askServer(slug, url);
+    }
+    /**
+     * **Only an answer about the URL is remembered.**
+     *
+     * `ready` and `unavailable` are properties of the address, so both are
+     * cached — the second as "asked, nothing there", exactly like Wikipedia's.
+     *
+     * `refused` and a second `pending` are **not** properties of the address,
+     * and caching them was a bug in the first version of this. A `refused` is
+     * about this request: a chat link (which is in no article, so always
+     * refused), or a moment when the reader's allowance was spent. A second
+     * `pending` means somebody else was still fetching when we asked twice —
+     * their answer is very likely in the cache a few seconds later, and
+     * remembering "nothing" would be remembering the one thing that was
+     * certainly about to change. Both leave the map empty so a later hover
+     * asks again. GPT Sol, 2026-09-05, P2-1 and P2-2.
+     *
+     * A **transport** failure — the deadline, an offline moment, a malformed
+     * body — is `null` here and *is* cached, which is the same trade the other
+     * two sources make and for the same reason: the alternative is a card that
+     * re-asks on every hover of every link for the rest of a session that
+     * started badly.
+     */
+    if (answer?.state === "ready") pageCache.set(url, answer.page);
+    else if (answer === null || answer.state === "unavailable") pageCache.set(url, null);
+    pagePending.delete(url);
+  })();
+
+  pagePending.set(url, run);
+  return run;
+}
+
 /* ------------------------------------------------------------- the hook --- */
 
 /**
@@ -434,7 +620,11 @@ function loadWiki(wiki: { lang: string; title: string }): Promise<void> {
  * well as weaker, since a match can only ever be found under the very key the
  * article was indexed by.
  */
-export function useLinkFacts(link: LinkPreview | null, sourceUrl: string | null): LinkFacts {
+export function useLinkFacts(
+  link: LinkPreview | null,
+  sourceUrl: string | null,
+  slug: string | null,
+): LinkFacts {
   const url = link?.kind === "external" ? link.url : null;
   const wiki = link?.kind === "external" ? link.wiki : null;
   // Primitives, not the object: `describeLink` rebuilds a fresh `LinkPreview`
@@ -475,11 +665,42 @@ export function useLinkFacts(link: LinkPreview | null, sourceUrl: string | null)
     const unwatch = watchShelf(wake);
     void loadShelf().then(wake);
     if (lang && title) void loadWiki({ lang, title }).then(wake);
+    /**
+     * **And ask our own server what is on the other end**, unless somebody
+     * better placed can already answer.
+     *
+     * Three refusals, and each of them is a request the card would have nothing
+     * to do with:
+     *
+     * - **A Wikipedia link.** `link.wiki` is read off the href, so this is known
+     *   synchronously, and Wikipedia's own summary API gives a real lead
+     *   paragraph written by people. Fetching the article page as well would be
+     *   a second request for a worse answer.
+     * - **A page already on the shelf.** Its title, gist and length are ours
+     *   already — the richest thing any source here produces, and free. Read
+     *   from the module cache at effect time rather than from `library`, which
+     *   is derived during render: on the very first hover of a session the
+     *   shelf has not landed, so this misses and one spare request goes out.
+     *   Accepted, because the other order — waiting for the shelf before asking
+     *   — would put a network round trip in front of every preview for the sake
+     *   of the one hover where it could have been skipped.
+     * - **A link to the piece the reader is standing in.** The server refuses
+     *   it too (`articleLinks` reports a self-link as pointing nowhere), so this
+     *   is only about not making the request; the noema essay links to its own
+     *   canonical address in its own prose.
+     *
+     * `slug` is the *permission* rather than part of the question — the route
+     * uses it to prove this reader owns an article that really does point at
+     * this URL. Without one there is nothing to ask with, so nothing is asked.
+     */
+    const shelved = shelf?.get(urlKey(url)) !== undefined;
+    const ownLink = sourceUrl !== null && urlKey(sourceUrl) === urlKey(url);
+    if (slug && !lang && !title && !shelved && !ownLink) void loadPage(slug, url).then(wake);
     return () => {
       live = false;
       unwatch();
     };
-  }, [url, lang, title]);
+  }, [url, lang, title, slug, sourceUrl]);
 
   if (!url) return NOTHING;
   const asked = lang && title ? wikiCacheKey({ lang, title }) : null;
@@ -490,9 +711,19 @@ export function useLinkFacts(link: LinkPreview | null, sourceUrl: string | null)
     /* A shelf read that failed stops the spinner exactly as an empty one used
        to — the reader is not left looking at `looking it up…` for ever — but it
        no longer claims the shelf is empty. See `shelfKnown`. */
-    loading: (shelf === undefined && !shelfFailed) || (asked !== null && !wikiCache.has(asked)),
+    loading:
+      (shelf === undefined && !shelfFailed) ||
+      (asked !== null && !wikiCache.has(asked)) ||
+      /* **The destination lookup counts as loading too**, and only while it is
+         genuinely outstanding — `pagePending` empties when the answer lands,
+         whatever the answer was. It is the slowest of the three by an order of
+         magnitude (a real fetch of somebody else's server), so a spinner that
+         did not cover it would be a card that says it has finished looking and
+         then grows a section. */
+      pagePending.has(url),
     library: found ? { entry: found, self } : null,
     wiki: (asked ? wikiCache.get(asked) : null) ?? null,
     shelfKnown: shelf !== undefined,
+    page: pageCache.get(url) ?? null,
   };
 }

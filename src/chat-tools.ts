@@ -64,7 +64,12 @@ import { termPattern } from "./term-match.js";
 import { librarySearch, loadArticle, loadGlossary } from "./store/index.js";
 import { errorFields, log, since } from "./log.js";
 import { isSlug } from "./ingest.js";
-import { hostOf, isWebUrl } from "./urls.js";
+/* `requestTarget` and `sameTarget` lived in this file until 2026-09-05 and moved
+   to src/urls.ts at their second caller — the link-preview cache, whose key has
+   to be the same "what did we ask the network for" this file already computes.
+   src/urls.ts § `requestTarget` has the whole argument, including why it is not
+   `urlKey`. */
+import { hostOf, isWebUrl, sameTarget } from "./urls.js";
 
 /* --------------------------------------------------------------- the caps --
    All in characters, all small, and each one is the answer to "how much of this
@@ -657,50 +662,6 @@ interface Destination {
   targetBlockId: string | null;
   /** The raw fragment, for telling two unresolved anchors apart. */
   fragment: string;
-}
-
-/**
- * What a GET would actually ask for, or `null` if this is not a web URL.
- *
- * **Everything but the fragment**, because the fragment is the one part of a URL
- * that is never sent: `…/x#a` and `…/x` are the same request, and that is the
- * whole reason this function exists.
- *
- * `urlKey` was used here first and a GPT Sol review was right that it is the
- * wrong tool. It is the *shelf's* notion of sameness, and it is deliberately
- * generous — it folds `http` into `https`, `www.` into the bare host and drops
- * tracking parameters, because two spellings of one address should be one row on
- * a bookshelf. Those are false positives here, and a false positive is this
- * tool telling the model "that page is already open" about a page that is not.
- * `normaliseUrl`'s own comments say `http` and `https` can serve different
- * pages. So: same scheme, same host, same port, same path, same query.
- *
- * The path is decoded where it can be, so `/%78` and `/x` are one request, and
- * a trailing dot is dropped from the host — two under-refusals the same review
- * found. `new URL` has already lowercased the host and dropped a default port.
- */
-function requestTarget(url: string): string | null {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    const host = u.hostname.replace(/\.$/, "");
-    let path = u.pathname;
-    try {
-      path = decodeURIComponent(path);
-    } catch {
-      /* A stray percent. The raw path is still a fine identity; it just will not
-         match its own decoded spelling, which is the conservative direction. */
-    }
-    return `${u.protocol}//${host}${u.port ? `:${u.port}` : ""}${path}${u.search}`;
-  } catch {
-    return null;
-  }
-}
-
-/** Would fetching these two ask a server for the same thing? */
-function sameTarget(a: string, b: string): boolean {
-  const one = requestTarget(a);
-  return one !== null && one === requestTarget(b);
 }
 
 /**

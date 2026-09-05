@@ -142,8 +142,24 @@ documented, most current, accepts pre-fetched HTML cleanly.
 `readWebPage` in [`src/chat-tools.ts`](../../src/chat-tools.ts) already is a link-preview endpoint
 with a bigger extractor on the end. It calls `fetchDocument` with the scheme allowlist, the SSRF
 address guard, the redirect-hop cap, the byte-counted size cap and a single attempt, and it logs
-`hostOf(url)` and never the URL. A preview route is that call with a smaller `maxBytes` — OG tags
-live near the top of `<head>`, and jsdom parses truncated HTML fine — and a cheaper extraction.
+`hostOf(url)` and never the URL. A preview route is that call with a cheaper extraction on the end,
+and that is what [`src/link-previews.ts`](../../src/link-previews.ts) is.
+
+> **This paragraph used to end "with a smaller `maxBytes` — OG tags live near the top of `<head>`,
+> and jsdom parses truncated HTML fine". That is measured false**, and it was corrected on
+> 2026-09-05 while stage 2 was being built. `fetchDocument` throws `code: "too-large"` **before
+> returning anything**, so there is no partial head to parse: a thrifty cap yields *nothing at all*
+> rather than a little. Ten real destinations from this corpus, through `fetchDocument` called
+> exactly as `readWebPage` calls it — at **64KB only 2 of the 8 successes survive, at 256KB only
+> 4**, and nature, anthropic and gwern all sit at 260–300KB, just over that line, which makes 256KB
+> fragile rather than thrifty. The cap in the code is **1MB (1,048,576)**, the smallest tested one
+> that loses nothing; Wikipedia's 917,843 bytes is the largest in the sample.
+>
+> Recorded rather than quietly edited, because a doc that says *"build it this way"* and is wrong
+> about the mechanism is precisely the trap
+> [260903b-facts-that-were-wrong.md](260903b-facts-that-were-wrong.md) is about. **Deliberately not
+> done:** changing `fetchDocument` to return truncated text instead of throwing — a real change to a
+> shared safety-critical file, to save a few hundred KB per URL fetched once ever.
 
 The logging rule deserves a note of its own here: a hovered URL is arguably *more* sensitive than
 `read_web_page`'s case, because the reader did not type it or ask about it. They just moved a mouse

@@ -4280,3 +4280,268 @@ export const ingestEvents = spideryarn.table(
     unique("ingest_events_id_owner").on(t.id, t.ownerId),
   ],
 );
+
+/* -------------------------------------------------------- link previews -- */
+
+/**
+ * **What a page on the far end of a hyperlink says about itself — fetched once,
+ * for everybody.**
+ *
+ * Hovering an external link in the prose draws a card, and until 2026-09-05 the
+ * only things on it were read off the href plus two lookups that answer for a
+ * minority of links (docs/project/links.md). This table is the general case: our
+ * own server fetches the destination, keeps its title, its site name, its own
+ * description and its opening paragraph, and every later hover of that address —
+ * by that reader or any other — is a cache hit.
+ * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
+ * § Stage 2.
+ *
+ * ## This is the first ownerless table in this schema, and that is deliberate
+ *
+ * The comment above `checkpoints` is the argument this table has to answer: a
+ * row with no article in its key would be *adding* cross-reader sharing, "which
+ * nobody asked for and which would need its own argument about what a cache hit
+ * tells a stranger". Here the sharing **is** the privacy feature. A per-reader
+ * cache would mean the destination's server learns that some particular reader
+ * looked at some particular page at some particular moment, every time; one
+ * shared row means it learns that Spideryarn fetched a URL once, ever.
+ *
+ * What survives that argument is a **limited accepted disclosure**, and the plan
+ * § *Where the sharing stops* records it as accepted rather than argued away.
+ * Three specific things close the parts that would not be:
+ *
+ * 1. **No timestamp ever leaves the server.** `fetched_at` is here for retention
+ *    and for nothing else. Returning it would tell a caller whether — and when —
+ *    some prior reader caused a fetch.
+ * 2. **A defined retention**, rather than living for ever by default: a row is
+ *    dead once `expires_at` has passed by the sweep horizon, and nothing here is
+ *    worth keeping longer than the page it describes.
+ * 3. **Credential-bearing URLs are refused before they get here**, by
+ *    `carriesCredential` in src/urls.ts — an exact URL plus its content in an
+ *    ownerless store is the worst available home for a signed link.
+ *
+ * The route itself does the rest of the work: it is article-scoped, so a caller
+ * can only ever cause a fetch of a URL an author published in a piece that
+ * caller owns. GPT Sol, 2026-09-05, findings P1-1 and P1-7.
+ *
+ * ## The key is the exact request target, and NOT `urlKey`
+ *
+ * `target` is `requestTarget(url)` (src/urls.ts): scheme, host, port, path and
+ * query, ignoring only the fragment. `urlKey` folds `http` into `https`, `www.`
+ * into the bare host and drops tracking parameters, which is right for *"is this
+ * the article on my shelf?"* and wrong for *"what did we ask the network for?"*.
+ * Two identities, and this table holds the second one. GPT Sol, P1-2.
+ *
+ * ## A row is one of five things, and `outcome` says which
+ *
+ * The TypeScript side is a discriminated union (`CachedPreview` in
+ * src/link-previews.ts); this is that union flattened, with a CHECK that keeps
+ * the columns and the tag in step, so no row can be an `ok` with no title or an
+ * `alias` pointing nowhere.
+ *
+ * - `pending` — somebody is fetching this right now, and holds the claim until
+ *   `expires_at`. This is the single-flight lease: two simultaneous cold hovers
+ *   would otherwise both miss, both fetch and both spend, because a unique row
+ *   prevents duplicate *storage* and never duplicate *traffic*. GPT Sol, P1-4.
+ * - `ok` — we have something worth showing.
+ * - `transient` — a timeout, a 429, a 5xx. Short expiry, and `Retry-After` is
+ *   respected where the response carried one.
+ * - `permanent` — a stable 404, a 403 behind a bot challenge, a PDF, a page with
+ *   nothing extractable in it. Long expiry, but still an expiry: *"cache the
+ *   failure"* with no clock lets one blip poison a global row for ever. GPT Sol,
+ *   P2-2.
+ * - `alias` — this target redirected, and the answer is under `final_target`.
+ *   Without it, infinitely many redirecting spellings of one address go on
+ *   producing independent misses. GPT Sol, P1-2.
+ *
+ * **The CHECK enforces the union rather than describing it**, and that is a
+ * correction: the first version let an alias row carry a title and a failure row
+ * carry a description. No writer did either, which is exactly the state in which
+ * a later partial update quietly preserves stale content and passes the
+ * constraint. Three code paths write this table, and a rule that lives in one of
+ * them is not a rule — the argument `ingest_events_settled_once` already makes.
+ * GPT Sol, P2-3.
+ */
+export const linkPreviews = spideryarn.table(
+  "link_previews",
+  {
+    /** `requestTarget(url)`. See the header — never `urlKey`. */
+    target: text("target").primaryKey(),
+    /**
+     * Where the fetch actually ended up, for an `alias` row. Null on every
+     * other kind.
+     *
+     * Deliberately **not** a foreign key onto `target`: the pointed-at row can
+     * expire and be replaced independently, and a `references` here would either
+     * forbid that or cascade an alias away with it. Following the pointer is one
+     * extra select and it is allowed to miss.
+     */
+    finalTarget: text("final_target"),
+    /** Which of the five above. The CHECK below is the closed set. */
+    outcome: text("outcome").notNull(),
+    /**
+     * `FetchFailureCode`, or one of this feature's own classes — diagnostic
+     * only, and never shown to a reader. Null unless the outcome is a failure.
+     */
+    failure: text("failure"),
+    /** `og:title` → `twitter:title` → `<title>`. */
+    title: text("title"),
+    /** `og:site_name`. Often absent, and never guessed from the host. */
+    siteName: text("site_name"),
+    /** `og:description` → `twitter:description` → `<meta name=description>`. */
+    description: text("description"),
+    /**
+     * Readability's opening paragraph, **only when it survived a sanity check**.
+     *
+     * Measured 2026-09-05: noema's comes back as the word "Credits", which is a
+     * byline artefact rather than an opening. `saneParagraph` in
+     * src/link-previews.ts is the check, and null here means it failed — the
+     * card then falls back to `description`, which is the right answer there.
+     */
+    firstParagraph: text("first_paragraph"),
+    /** Readability's word count for the destination. Null when it found none. */
+    words: integer("words"),
+    /**
+     * **Retention only, and it must never reach a caller.** See the header,
+     * point 1: a `fetched_at` in a response says whether and when some prior
+     * reader caused a fetch.
+     *
+     * Spelled out rather than taken from the `createdAt()` helper every other
+     * table uses, because the helper's column is `created_at` and this is not a
+     * creation time: a refreshed row keeps its primary key and this moves. The
+     * comments here named `fetched_at` while the column said `created_at` for
+     * about an hour on 2026-09-05, which is exactly the kind of confidently
+     * wrong doc this repo treats as a bug. GPT Sol, P2-4.
+     */
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * **The fencing token for the single-flight claim** — the id of the claim
+     * that wrote this row, and null on any row nobody is holding.
+     *
+     * Without it a claim is a lock with no way to tell two holders apart, and
+     * GPT Sol's P1-3 walked the sequence: A claims, A stalls past its lease, B
+     * reclaims, A wakes up and its `release` deletes *B's* claim. The token
+     * makes both destructive operations conditional on being the holder — see
+     * `release` in src/store/pg-link-previews.ts.
+     *
+     * **It does not make "exactly one fetch" true**, and the claim's own comment
+     * says so: a stalled winner still fetches after its lease has gone. What it
+     * makes true is the property that actually matters, which is that a loser
+     * cannot destroy a winner.
+     */
+    claimId: uuid("claim_id"),
+    /**
+     * When this row stops being an answer.
+     *
+     * On a `pending` row it is the claim's lease, which is why an abandoned
+     * fetch cannot wedge a URL: the next request past the lease takes the claim.
+     */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check(
+      "link_previews_outcome",
+      sql`${t.outcome} in ('pending','ok','transient','permanent','alias')`,
+    ),
+    /**
+     * **The union, as a constraint.** Three code paths write this table and a
+     * rule that lives in one of them is not a rule — the same argument
+     * `ingest_events_settled_once` makes one table up.
+     *
+     * An `alias` has a `final_target` and nothing else; a failure has a
+     * `failure` and no content; an `ok` has at least one of the three things
+     * worth showing, because a row with none of them is a cache hit that draws
+     * an empty section, which reads as a lookup that broke.
+     */
+    check(
+      "link_previews_shape",
+      sql`case ${t.outcome}
+            when 'alias' then ${t.finalTarget} is not null and ${t.failure} is null
+                        and ${t.claimId} is null
+                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}) = 0
+            when 'ok' then ${t.finalTarget} is null and ${t.failure} is null
+                        and ${t.claimId} is null
+                        and num_nonnulls(${t.title}, ${t.description}, ${t.firstParagraph}) > 0
+            when 'pending' then ${t.finalTarget} is null and ${t.failure} is null
+                        and ${t.claimId} is not null
+                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}) = 0
+            else ${t.finalTarget} is null and ${t.failure} is not null
+                        and ${t.claimId} is null
+                        and num_nonnulls(${t.title}, ${t.siteName}, ${t.description}, ${t.firstParagraph}, ${t.words}) = 0
+          end`,
+    ),
+    check("link_previews_words", sql`${t.words} is null or ${t.words} >= 0`),
+    /** The sweep's only query — see the retention note in the header. */
+    index("link_previews_expires_at").on(t.expiresAt),
+  ],
+);
+
+/* ---------------------------------------------------------- rate limits -- */
+
+/**
+ * **One row per outbound fetch a reader's pointer caused**, so a bound on how
+ * many of them there may be is a bound rather than a hope.
+ *
+ * `GET /api/link-preview` is the first endpoint in this app where a reader
+ * *hovering* something makes us contact a third party and spend, and there was
+ * no inbound rate-limit helper to reuse: the ingest quota is a billing
+ * allowance, and `src/dictation-limits.ts` is about the size of one upload.
+ * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
+ * § Stage 2, and GPT Sol's finding P1-5.
+ *
+ * ## Keyed on the owner and nothing else
+ *
+ * Not on the article and not on the URL, which an attacker varies freely. The
+ * cap is *per person*, and the article-membership check on the route is what
+ * stops query-string variation being an unlimited source of cache misses.
+ *
+ * ## Two bounds out of one table
+ *
+ * - **A rolling window**: how many rows this owner has with `started_at` inside
+ *   the last hour. A row per event rather than a counter column, for the reason
+ *   `pg-feedback.ts` counts rows: a *rolling* window needs the times, and a
+ *   fixed window that resets lets twice the allowance through at the seam.
+ * - **Concurrency**: how many rows have a `lease_until` still in the future. The
+ *   fetch clears it when it finishes, so an abandoned request costs the owner
+ *   one slot until its lease runs out rather than for ever.
+ *
+ * Both are counted inside one transaction under an owner-scoped
+ * `pg_advisory_xact_lock`, which is what makes them atomic across instances —
+ * `count` then `insert` is raceable and a cap without the lock is a suggestion.
+ *
+ * ## What this records about a reader, and what it does not
+ *
+ * That an owner caused *n* outbound fetches at these times. **No URL, no article,
+ * no host.** The link-preview row holds what was fetched and knows nothing about
+ * who asked; this row knows who asked and nothing about what. Keeping them apart
+ * is the whole point, and neither table may grow a column that joins them.
+ *
+ * Rows older than the window are deleted by the same statement that counts them,
+ * so the table is bounded by (readers × allowance) rather than by history.
+ */
+export const rateLimitEvents = spideryarn.table(
+  "rate_limit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** `auth.users(id)`. FK in the custom migration, as with every `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * Which allowance. A closed set with a CHECK, for the reason
+     * `checkpoints_namespace` is closed: a typo would otherwise open a bucket
+     * with its own private, unenforced allowance.
+     */
+    bucket: text("bucket").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * In flight until this moment; null once the work finished or was released.
+     *
+     * A lease rather than a flag, because the process holding it can die.
+     */
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  },
+  (t) => [
+    check("rate_limit_events_bucket", sql`${t.bucket} in ('link-preview-fetch')`),
+    /** Both counting queries, and the sweep, run over exactly this. */
+    index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),
+  ],
+);

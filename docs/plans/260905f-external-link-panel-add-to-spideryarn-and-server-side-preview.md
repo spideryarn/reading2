@@ -1,6 +1,23 @@
 # The external link panel: add it to your shelf, and say what is on the other side
 
-**Status:** planned, 2026-09-05. Three stages, each landable on its own.
+**Status:** stages 1 and 2 built, 2026-09-05; stage 3 planned. Three stages, each landable on
+its own.
+
+- **Stage 1 — Add to Spideryarn:** built, commit `3a282b83`.
+- **Stage 2 — the server fetches the destination:** built. `GET /api/link-preview`,
+  `link_previews` (the first ownerless table in this schema), `rate_limit_events`,
+  [`src/link-previews.ts`](../../src/link-previews.ts), and a third source in
+  `link-facts.ts`. What it turned out to be is written up in
+  [links.md § What our own server can reach](../project/links.md#what-our-own-server-can-reach);
+  the doc claim this stage was required to correct is corrected in
+  [260827a-link-previews.md](../research/260827a-link-previews.md).
+- **Stage 3 — the Luna summary:** not built.
+
+The built code went back to GPT Sol —
+[260905f-code-review-sol.md](260905f-code-review-sol.md), five P1s and no P0, every one
+accepted. That review is the one worth reading if you are about to touch this: three of its
+findings are traps the plan could not have caught, because they did not exist until the code
+did.
 
 **Reviewed by GPT Sol before any code was written** —
 [260905f-plan-review-sol.md](260905f-plan-review-sol.md), seven P1s and no P0. **Every finding was
@@ -65,7 +82,7 @@ the "one fetch per URL for everybody" privacy win cannot cover it. Hence **two c
 
 | | Keyed by | Shared with | Why |
 |---|---|---|---|
-| the fetch + Readability extraction | `urlKey(url)` alone | **everybody** | this is the expensive, rate-limited, third-party-facing half, and sharing it is what stops the destination learning which reader hovered what |
+| the fetch + Readability extraction | `requestTarget(url)` alone *(this cell said `urlKey` in the draft, and § Two identities two paragraphs down overrules it — corrected here on 2026-09-05 when it was built, because a table is what people read)* | **everybody** | this is the expensive, rate-limited, third-party-facing half, and sharing it is what stops the destination learning which reader hovered what |
 | the Luna summary | `(owner, article, urlKey)` | nobody | it is about *this reader reading this piece*, so a global row would be both wrong and a disclosure |
 
 The second is close to `glossaryLookups`' shape (`src/db/schema.ts` § `glossaryLookups`) — a
@@ -75,7 +92,7 @@ part of the key. Corrected from GPT Sol's review, finding P1-3.* The first is th
 ownerless table in this schema**, and `schema.ts`'s comment above `checkpoints` is the argument it
 has to answer: a global row adds cross-reader sharing "which nobody asked for and which would need
 its own argument about what a cache hit tells a stranger". The argument is written down in
-[links.md § What is deliberately not built yet](../project/links.md#what-is-deliberately-not-built-yet)
+[links.md § Fetched once, for everybody](../project/links.md#fetched-once-for-everybody)
 and it is that the sharing *is* the privacy feature here — but it is a *limited accepted disclosure*
 rather than none at all, and § Where the sharing stops below says what we accept and what we close.
 

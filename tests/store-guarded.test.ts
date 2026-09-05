@@ -340,10 +340,17 @@ describe("no Postgres store is selected without a guard", () => {
       "pgChatStore",
       "pgCommentStore",
       "pgFeedbackStore",
+      /* The link preview's two, 2026-09-05. Worth one line of why they are
+         guarded rather than only that they are: a failed Drizzle query puts
+         every bound parameter into `Error.message`, and the bound parameter in
+         `pgLinkPreviewStore` is a URL somebody hovered — which
+         docs/project/logging.md keeps out of a *log*, let alone a 500. */
+      "pgFetchAllowanceStore",
       "pgGlossaryLookupStore",
       "pgGlossaryStore",
       "pgJobStore",
       "pgLibrarySearch",
+      "pgLinkPreviewStore",
       "pgReaderStore",
       "pgRealtimeSessionStore",
       "pgRefereeClaimsStore",

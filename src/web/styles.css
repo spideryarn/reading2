@@ -5405,13 +5405,20 @@ td.text.has-hit[data-hues="8"] {
   letter-spacing: 0.03em;
 }
 
-/* The two sections somebody else filled in. Both are indented behind a rule for
+/* The three sections somebody else filled in. All are indented behind a rule for
    the reason the glossary's are: the card is now several claims from several
    sources, and a reader who cannot see where one ends and the next begins has
    lost the thing the labels exist to give them. `.prose-card-part` supplies the
-   spacing; these two supply the mark. */
+   spacing; these three supply the mark.
+
+   The rule gets fainter as the source gets further away, which is the ranking
+   the card already applies when it decides which of the three to draw
+   (ProseHoverCard.tsx § ExternalBody): solid for a piece on the reader's own
+   shelf, dotted for Wikipedia, dashed for a page we fetched once and know
+   nothing else about. */
 .prose-card-part-shelf { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
 .prose-card-part-wiki { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part-page { border-left: 2px dashed var(--rule-strong); padding-left: 0.5rem; }
 /* A real title — the article's own name, not a guess read off a path. It gets
    the weight the host has, because once there is one it IS the answer. */
 .prose-card-title {

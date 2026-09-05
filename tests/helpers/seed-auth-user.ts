@@ -47,7 +47,18 @@ export type AuthUserTarget = Db | PgQueryable;
 export interface AuthUserSeed {
   /** The uuid other rows' `owner_id` will reference. */
   id: string;
-  /** `users_email_partial_key` is unique, so a per-run address is safest. */
+  /**
+   * `users_email_partial_key` is unique, so a per-file address is not merely
+   * safest — it is the only thing that works.
+   *
+   * **And `onConflictDoNothing` does not cover it**, which is the trap: that
+   * clause is `on conflict (id)`, so a *different* row already holding this
+   * address is not a conflict it knows about and the insert fails on the email
+   * instead. Two suites sharing `bob@example.invalid` under two ids did exactly
+   * that on 2026-09-05 — and it reddened the file that ran *second*, which had
+   * done nothing wrong and passed when re-run alone. Name the file in the
+   * address (`bob-link-preview@…`, `bob-allowance@…`) and it cannot happen.
+   */
   email: string;
   /** For a seeder that may run twice against a row it left behind. */
   onConflictDoNothing?: boolean;

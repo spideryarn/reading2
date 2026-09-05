@@ -531,3 +531,200 @@ export function withoutWebLinks(text: string): string {
   return out;
 }
 
+/* ------------------------------------------------- what a GET asks for --- */
+
+/**
+ * **What a GET would actually ask for, or `null` if this is not a web URL.**
+ *
+ * The WHATWG serialization with the fragment cleared, and **nothing else
+ * touched**. The fragment is the one part of a URL that is never sent — `…/x#a`
+ * and `…/x` are the same request — and that is the whole and only merge this
+ * function is allowed to make.
+ *
+ * **This is not `urlKey`, and the two must never be conflated.** `urlKey`
+ * (src/ingest.ts) is the *shelf's* notion of sameness and is deliberately
+ * generous — it folds `http` into `https`, `www.` into the bare host and drops
+ * tracking parameters, because two spellings of one address should be one row on
+ * a bookshelf. Every one of those is a false positive when the question is *what
+ * did we ask the network for*: `http` and `https` can serve different pages, and
+ * a query parameter we chose to ignore is a parameter the far end may act on. So
+ * there are **two identities**, and which one a caller wants is a real decision:
+ *
+ * - `urlKey` for reader-facing equivalence — shelf membership, the Add button;
+ * - this one for the fetch cache, the single-flight claim, and — through
+ *   `articlePointsAt` in src/link-previews.ts — **whether this reader is allowed
+ *   to make us fetch that address at all**.
+ *
+ * ## It used to decode the path, and that was wrong for this job
+ *
+ * Until 2026-09-05 this percent-decoded the pathname and dropped a trailing dot
+ * from the host, so that `/%78` and `/x` were one request. Both merges are
+ * **false**: `/a%2Fb` is not `/a/b`, `/a%3Fb` is not `/a?b`, and a trailing dot
+ * is a distinguishable virtual host. That was harmless while the only consumer
+ * was `read_web_page` refusing to re-fetch the open article, where merging too
+ * much is the *conservative* direction — and it stopped being harmless the
+ * moment the same key became an **authorization** key and a **global cache**
+ * key, where merging too much means an article that links `…/a%3Fb` authorises a
+ * fetch of the different address `…/a?b`, and one page's content is served for
+ * another's. GPT Sol, 2026-09-05, finding P1-1.
+ *
+ * The generous version still exists, because the chat tool still wants it, and
+ * it is `sameTarget` below — named for what it is rather than shared with this.
+ *
+ * `new URL` has already lowercased the host, dropped a default port, and
+ * normalised the escapes it is allowed to normalise.
+ *
+ * **It lived in src/chat-tools.ts until 2026-09-05** and moved here at its
+ * second caller. Moved rather than copied, and that is the same rule
+ * `articleLinks` states about its own HTML parse: a second implementation that
+ * could disagree with this one about what counts as the same request is exactly
+ * what a cache key must not be built on.
+ */
+export function requestTarget(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    u.hash = "";
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **Would fetching these two probably ask a server for the same thing?**
+ *
+ * *Probably*, and the difference from `requestTarget` is the whole point of this
+ * being a second function rather than an equality test on the first.
+ *
+ * Its one caller is `read_web_page`'s refusal to fetch the article the reader
+ * already has open (src/chat-tools.ts), and **there, merging too much is the
+ * safe direction**: a false match costs the model one fetch it did not need of a
+ * page it has already been given, and a false *miss* costs the reader ten
+ * seconds and a request to their publisher saying somebody is reading this right
+ * now. So this keeps the decoded path and the trailing-dot host that
+ * `requestTarget` gave up on 2026-09-05 — `…/essays/%78` and `…/essays/x` are
+ * one page as far as *that* refusal is concerned.
+ *
+ * **Do not use it as a cache key or an authorization key.** Over-matching there
+ * means serving one page's content for another's, which is the direction
+ * `requestTarget` exists to refuse. GPT Sol, P1-1.
+ */
+export function sameTarget(a: string, b: string): boolean {
+  const one = generousTarget(a);
+  return one !== null && one === generousTarget(b);
+}
+
+/** `sameTarget`'s key: `requestTarget`, then the two merges it will not make. */
+function generousTarget(url: string): string | null {
+  const exact = requestTarget(url);
+  if (exact === null) return null;
+  const u = new URL(exact);
+  const host = u.hostname.replace(/\.$/, "");
+  let path = u.pathname;
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    /* A stray percent. The raw path is still a fine key; it just will not match
+       its own decoded spelling, which is the conservative direction here. */
+  }
+  return `${u.protocol}//${host}${u.port ? `:${u.port}` : ""}${path}${u.search}`;
+}
+
+/**
+ * The query-parameter names that make a URL look like a key rather than an
+ * address — see `carriesCredential`.
+ *
+ * Compared with punctuation and case stripped, so `X-Amz-Signature`,
+ * `access_token` and `apiKey` all land on one entry.
+ */
+const CREDENTIAL_PARAMS = new Set([
+  "token",
+  "tokenhash",
+  "accesstoken",
+  "idtoken",
+  "refreshtoken",
+  "auth",
+  "authkey",
+  "authorization",
+  "apikey",
+  "key",
+  "resourcekey",
+  "rlkey",
+  "secret",
+  "clientsecret",
+  "password",
+  "passwd",
+  "passcode",
+  "pwd",
+  "pin",
+  "otp",
+  "signature",
+  "sig",
+  "hmac",
+  "jwt",
+  "session",
+  "sessionid",
+  "sid",
+  "ticket",
+  "code",
+  "invite",
+  "share",
+  "sharekey",
+  "xamzsignature",
+  "xamzcredential",
+  "xamzsecuritytoken",
+  "xgoogsignature",
+  "xgoogcredential",
+]);
+
+/**
+ * **Does this URL look like it carries something that works like a key?**
+ *
+ * A signed S3 link, an unsubscribe token, a password-reset address, a session id
+ * in a query string. `link_previews` (src/db/schema.ts) is the first ownerless
+ * table in this schema — a row in it outlives the article that introduced it and
+ * answers to any reader who hovers the same address — so *the exact URL plus
+ * what came back from it* is the worst available place to put a credential. Such
+ * URLs are refused rather than cached. GPT Sol, 2026-09-05, finding P1-7.
+ *
+ * ## It is a heuristic and it cannot be complete, and that has to be said
+ *
+ * The first version of this comment claimed the guarantee outright —
+ * *"credential-bearing URLs are refused"* — and a review was right that a
+ * name-based denylist cannot support that sentence: a capability can live in a
+ * path segment, or under a parameter name nobody has thought of. What this
+ * *does* give is the common shapes, refused before the row is written, plus one
+ * thing that matters more than the list: **the caller checks every URL in the
+ * redirect chain**, not only the one the author published, because a harmless
+ * published address can redirect into a signed one. GPT Sol, P1-3.
+ *
+ * Two rules, and both are deliberately over-eager. The cost of a false positive
+ * is a card that stays exactly as it was, which is what the reader already sees
+ * for any destination we cannot reach; the cost of a false negative is a secret
+ * written into a shared table.
+ *
+ * 1. `user:pass@host` — `hasCredentials` above, which the chat renderer already
+ *    uses for the same reason.
+ * 2. A query parameter whose **name** is in `CREDENTIAL_PARAMS`. Names rather
+ *    than value shapes, because a token is only a string and any entropy test
+ *    would refuse ordinary article slugs. `code`, `key` and `share` are on the
+ *    list knowing they have innocent uses: the cost of refusing one of those is
+ *    a card that says a little less.
+ */
+export function carriesCredential(url: string): boolean {
+  if (hasCredentials(url)) return true;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // Unparseable is somebody else's refusal to report; it is certainly not
+    // something to write into a shared table.
+    return true;
+  }
+  for (const name of parsed.searchParams.keys()) {
+    if (CREDENTIAL_PARAMS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ""))) return true;
+  }
+  return false;
+}
+

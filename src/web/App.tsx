@@ -3197,6 +3197,12 @@ function Reader({
           be there in every mode too. */}
       <ProseHoverCard
         entries={terms}
+        /* Which article this is, and it is the *permission* for the third
+           lookup rather than part of its question: `GET /api/link-preview`
+           refuses to fetch a URL until it has proved this reader owns this
+           article and that this article really points at that URL.
+           ProseHoverCard.tsx § slug, src/link-previews.ts. */
+        slug={slug}
         sourceUrl={article.meta.url ?? null}
         /* A visitor's card describes a link and asks nobody about it. The
            lookups behind this are `GET /api/library`, which is authenticated,

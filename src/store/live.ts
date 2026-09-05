@@ -263,4 +263,21 @@ export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
       "lines written against a module docs/plans/260831b-finish-the-database-move.md " +
       "deletes. A Feedback button that accepts a report and drops it is worse than none.",
   },
+  LinkPreviewStore: {
+    missing: "files",
+    why:
+      "The whole seam is a row shared by every reader and a claim two servers can " +
+      "contend for, and `data/` is one directory per slug with no way to express " +
+      "either. A files adapter would be a per-machine cache with no single-flight, " +
+      "which is not this feature with a different backing store — it is the thing " +
+      "this feature exists instead of. src/db/schema.ts § `linkPreviews`.",
+  },
+  FetchAllowanceStore: {
+    missing: "files",
+    why:
+      "A rate limit that is not atomic across instances is not a rate limit, and a " +
+      "filesystem has no way to make one — which is the whole of GPT Sol's finding " +
+      "P1-5, 2026-09-05. The Postgres side counts rows under an owner-scoped " +
+      "advisory lock; a files side could only count its own process's.",
+  },
 };

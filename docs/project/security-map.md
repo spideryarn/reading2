@@ -91,7 +91,8 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/fetch.ts`](../../src/fetch.ts) | scheme allowlist, `isBlockedAddress`, redirect limit, size cap |
 | [`src/ingest.ts`](../../src/ingest.ts) | `normaliseUrl` — refuses literal private and loopback hosts before queueing |
 | [`src/chat-tools.ts`](../../src/chat-tools.ts) | `isSlug` on the model's slug, URL-length cap on the model's URL |
-| [`src/urls.ts`](../../src/urls.ts) | `isWebUrl` — what model output must pass to become an `href` |
+| [`src/urls.ts`](../../src/urls.ts) | `isWebUrl` — what model output must pass to become an `href`; `carriesCredential` — what may not be written into an ownerless cache; `requestTarget` — what a GET actually asks for, and never `urlKey` |
+| [`src/link-previews.ts`](../../src/link-previews.ts) | **the one endpoint a reader's *pointer* can make us fetch a stranger's page with.** Its defence is not the gate but the scope: the caller must own the article *and* the article's own extracted links must contain the URL, before anything is fetched or spent. Authentication alone would make it an open proxy. Plus `fetchDocument`'s complete envelope, a credential refusal, and a per-owner limiter. [links.md](links.md#what-our-own-server-can-reach) |
 | [`src/injection-scan.ts`](../../src/injection-scan.ts) | hidden text in the raw source, found before the model reads it. It reports and decides nothing, and it does not read PDFs |
 | [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |

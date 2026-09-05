@@ -216,6 +216,55 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * `touched` map does not name this file, and the guard holds the two apart so
    * the field cannot become decorative.
    */
+  /**
+   * **The four suites the link-preview stage brought, 2026-09-05**, and all four
+   * are here for one reason: they import `src/store/index.js` or a `pg-*`
+   * adapter, which is how the import graph reaches a condemned module. None of
+   * them touches the filesystem store, because there is not one to touch — both
+   * of the seams they exercise are declared `missing: "files"` in
+   * `SEAM_ASYMMETRIES` (src/store/live.ts), and `link_previews` could not have a
+   * files side even in principle: it is one row shared by every reader and a
+   * claim two servers contend for.
+   *
+   * `evidence: "static-only"` on all four, and that is what the field means
+   * rather than a shrug: they were written after the witness run, so the stored
+   * `touched` map does not name them. Re-running witness 2 is what upgrades it.
+   */
+  "tests/link-preview-route.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres. It seeds two articles under two real owners through `scratchArticleInPg` " +
+      "and drives `handleApi`, so the ownership half of what it tests IS the Postgres owner " +
+      "filter. `fetchDocument` is the only thing faked; the store, the claim and the limiter are " +
+      "the real ones. There is no filesystem side of this to have migrated from.",
+  },
+  "tests/link-preview-cache.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres, and could not be anywhere else: its subject is an advisory-lock claim, " +
+      "a lease, an `expires_at` in a WHERE clause and an upsert that refuses to downgrade a live " +
+      "row. Every one of those is a property of the database rather than of a store interface.",
+  },
+  "tests/fetch-allowance.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres. A rate limit that is not atomic across instances is not a rate limit " +
+      "(GPT Sol, 2026-09-05, P1-5), so the thing under test is a count and an insert inside one " +
+      "owner-scoped `pg_advisory_xact_lock` — which has no filesystem equivalent.",
+  },
+  "tests/link-preview-extract.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "HTML in, four fields out. It imports src/link-previews.js for `extractPreview` and " +
+      "`saneParagraph`, and that module imports the store — which is how the import graph reaches " +
+      "a condemned one — but nothing here selects a store, opens a connection or writes a byte. " +
+      "The unit lane's poisoned `DATABASE_URL` is the backstop, and it passes under it.",
+  },
   "tests/tree-redundant-rung.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -2127,6 +2176,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
+  /* The first inbound rate limiter, and the lane follows from what it
+     counts: `rate_limit_events` rows per owner in a rolling hour. A peer
+     run sharing the stack's database and the same seeded owner would add
+     fills this file never made, and a cap suite that counts somebody
+     else's traffic fails for a reason nobody can reproduce. It seeds two
+     owners over SQL and needs neither GoTrue nor a bucket. */
+  "tests/fetch-allowance.test.ts": "private-postgres",
   "tests/find-article.test.ts": "private-postgres",
   "tests/glossary-delete-then-rebuild.test.ts": "private-postgres",
   "tests/glossary-ideas-baseline.test.ts": "private-postgres",
@@ -2206,6 +2262,15 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      article comes out of the committed corpus, so nothing here wants the shared
      stack. */
   "tests/live-session-routes.test.ts": "private-postgres",
+  /* `link_previews` is the one **ownerless** table in this schema, so its
+     rows are shared by construction and these two files clear the whole
+     table between cases — which is exactly the thing a shared database
+     must not have done to it while a peer is mid-run. The private lane is
+     what makes "the cache is empty" a fact this file established rather
+     than one it hopes for. The route file also seeds an article and a
+     second owner; neither wants the shared stack. */
+  "tests/link-preview-cache.test.ts": "private-postgres",
+  "tests/link-preview-route.test.ts": "private-postgres",
   "tests/load-article-serialisation.test.ts": "private-postgres",
   "tests/lock-lifecycle.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",
@@ -2548,6 +2613,23 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/ai-calls-spend-pg.test.ts": {
     "00000000-0000-4000-8000-00000000ad01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000ad02": { kind: "seeded" },
+  },
+  /* Two owners, both written under: `rate_limit_events.owner_id` really does
+     reference `auth.users(id)` (drizzle/20260905172650), so a made-up uuid can
+     spend no allowance at all — and the "not somebody else's allowance" case
+     needs a *second* reader who can actually write. `seedAuthUser` at module
+     scope, `onConflictDoNothing`. 2026-09-05. */
+  "tests/fetch-allowance.test.ts": {
+    "00000000-0000-4000-8000-00000000fd01": { kind: "seeded" },
+    "00000000-0000-4000-8000-00000000fd02": { kind: "seeded" },
+  },
+  /* One extra owner beside `TEST_OWNER`, and the case it exists for is the
+     sharpest in the file: an article belonging to somebody else must be a 404
+     rather than a fetch. Seeding a *real* second reader is what puts that in
+     front of the Postgres owner filter instead of in front of a slug that
+     simply does not exist. `seedAuthUser` in `beforeAll`. 2026-09-05. */
+  "tests/link-preview-route.test.ts": {
+    "00000000-0000-4000-8000-00000000fe01": { kind: "seeded" },
   },
   /* Arrived in the hinge, 2026-09-05, and the guard asked for it the moment it
      did. `mintUpload` wrote to the filesystem store while `SPIDERYARN_STORE` was

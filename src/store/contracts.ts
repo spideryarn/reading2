@@ -1793,3 +1793,187 @@ export interface FeedbackStore {
    */
   markMirrored(id: string, sentryEventId: string | null): Promise<boolean>;
 }
+
+/* ---------------------------------------------------------- link previews -- */
+
+import type { PagePreview } from "../types.js";
+
+/**
+ * **What one row of `link_previews` is**, as a union the compiler can check.
+ *
+ * The table stores this flattened into columns with a CHECK that keeps them in
+ * step (src/db/schema.ts § `linkPreviews`); this is the shape everything above
+ * the store speaks in, and the reason it is a union rather than a bag of
+ * optionals is that every other combination is unrepresentable nonsense — an
+ * `ok` with no content, an alias that also failed, a claim holding a title.
+ *
+ * **There is no timestamp on it.** The store answers *is this still an answer*
+ * itself, so nothing above it can be tempted to return a `fetchedAt` and tell a
+ * caller when some prior reader caused a fetch. GPT Sol, 2026-09-05, P1-7.
+ */
+export type CachedPreview =
+  /** Somebody is fetching this right now and holds the claim. */
+  | { kind: "pending" }
+  | { kind: "ok"; page: PagePreview }
+  /**
+   * We asked and could not use the answer. `why` is a `FetchFailureCode` or one
+   * of this feature's own classes; it is diagnostic and never reaches a reader.
+   *
+   * `transient` earns a short expiry and `permanent` a long one — see
+   * `PREVIEW_LIFETIMES` in src/link-previews.ts.
+   */
+  | { kind: "transient"; why: string }
+  | { kind: "permanent"; why: string }
+  /** This target redirected; the answer lives under `finalTarget`. */
+  | { kind: "alias"; finalTarget: string };
+
+/** A row to write, and when it stops being an answer. */
+export interface PreviewToStore {
+  /** `requestTarget(url)` — never `urlKey`. src/urls.ts. */
+  target: string;
+  entry: CachedPreview;
+  expiresAt: Date;
+}
+
+/**
+ * **Fetch once for everybody in the ordinary case, and never lose a good answer
+ * in the extraordinary one.**
+ *
+ * The single-flight half is `claim`, and it is the reason this is a store
+ * interface rather than two loose queries: the read, the staleness test and the
+ * claim have to happen inside one transaction under one lock, or two cold
+ * requests both miss, both fetch and both spend. A unique row prevents duplicate
+ * *storage* and never duplicate *traffic*. GPT Sol, 2026-09-05, P1-4.
+ *
+ * **The promise is deliberately weaker than "exactly once", and the first
+ * version of this comment claimed more than the code delivers.** A claim has a
+ * lease, and a claimant that stalls past its lease still comes back and fetches
+ * — nothing here can reach into another process's `await` and stop it. The
+ * second review's answer was: either weaken the promise or add real fencing.
+ * Both, in the proportion the stage is worth. What is true:
+ *
+ * - two cold requests arriving inside one lease cause **one** fetch;
+ * - a request whose claim has expired may cause a second fetch, and that is the
+ *   accepted cost — one duplicate metadata fetch, no model spend, no reader
+ *   waiting differently;
+ * - **a loser can never destroy a winner**: `release` is fenced on the claim
+ *   token, and `fill` refuses to turn a live `ok` row into a failure.
+ *
+ * The third of those is the one worth machinery, because it is the only failure
+ * a reader would ever see — a good preview replaced by a week of nothing.
+ */
+export interface LinkPreviewStore {
+  /**
+   * What we already know about this exact request target, following one alias
+   * hop, or `null` for "nothing usable".
+   *
+   * **An expired row reads as nothing**, so a caller cannot accidentally serve
+   * a stale answer by forgetting to check a date. A `pending` row whose lease
+   * has run out is nothing too.
+   *
+   * This is the path a cache *hit* takes, and it deliberately takes no lock and
+   * consumes no allowance — the steady state must not queue behind anything.
+   */
+  read(target: string): Promise<CachedPreview | null>;
+  /**
+   * Read again under the lock, and take the claim if there is nothing there.
+   *
+   * Returns what the caller should do:
+   * - `hit` — somebody filled it while we were waiting for the lock.
+   * - `claimed` — you are the one fetching. Write the answer with `fill`, and
+   *   if you cannot, `release` so the next caller may try before the lease ends.
+   * - `pending` — somebody else is fetching it right now.
+   *
+   * `leaseMs` is how long the claim is good for. Long enough to cover the fetch
+   * deadline with room, short enough that a killed process does not wedge a URL.
+   */
+  claim(target: string, leaseMs: number): Promise<PreviewClaim>;
+  /**
+   * Store the answer, and the alias row when the fetch was redirected.
+   *
+   * **It will not turn a live `ok` row into a failure**, whoever asks — see the
+   * `setWhere` in the implementation. That is the one guarantee here that a
+   * per-target claim cannot give, because the two writers of a final target need
+   * not hold the same claim or even the same lock.
+   */
+  fill(rows: readonly PreviewToStore[]): Promise<void>;
+  /**
+   * Give **your own** claim back without an answer, so the next caller may try.
+   *
+   * The token is not decoration: a claimant that stalled past its lease and woke
+   * up would otherwise delete its successor's claim. GPT Sol, 2026-09-05, P1-2.
+   */
+  release(target: string, claimId: string): Promise<void>;
+}
+
+export type PreviewClaim =
+  | { kind: "hit"; entry: CachedPreview }
+  /**
+   * You are fetching. `claimId` is the fencing token — hand it back to
+   * `release`, and hold on to it for as long as you might still write.
+   */
+  | { kind: "claimed"; claimId: string }
+  | { kind: "pending" };
+
+/* ------------------------------------------------------- fetch allowance -- */
+
+/** The only allowance there is today. A closed set, matching the table's CHECK. */
+export type RateBucket = "link-preview-fetch";
+
+/**
+ * **How many outbound fetches one reader's pointer may cause.**
+ *
+ * Keyed solely on the authenticated owner — never on the article or the URL,
+ * which an attacker varies freely — and atomic across instances, because
+ * `count` then `insert` without a lock is a suggestion rather than a cap. GPT
+ * Sol, 2026-09-05, P1-5. src/db/schema.ts § `rateLimitEvents` says what this
+ * records about a reader and what it deliberately does not.
+ *
+ * **Cache hits never come here at all.** The cache absorbs the steady state;
+ * this is for the pathological one.
+ */
+export interface FetchAllowanceStore {
+  /**
+   * Take one fill's worth of allowance, or refuse.
+   *
+   * `true` means the caller may fetch and **must** call `finish` with the token
+   * afterwards, whatever happened, or it holds a concurrency slot until its
+   * lease runs out.
+   */
+  take(bucket: RateBucket, policy: RatePolicy): Promise<AllowanceTaken>;
+  /** The fetch is over. Frees the concurrency slot; the fill still counts. */
+  finish(id: string): Promise<void>;
+}
+
+export type AllowanceTaken =
+  /** `id` is the token to hand back to `finish`. */
+  | { kind: "allowed"; id: string }
+  /** Too many fills in the window. */
+  | { kind: "rate" }
+  /** Too many at once. */
+  | { kind: "concurrency" };
+
+/**
+ * The numbers, which are **guesses rather than measurements**.
+ *
+ * Straight from GPT Sol's review, which said so itself: *"these are starting
+ * limits, not numbers established by repository evidence; tune them from
+ * telemetry and the maximum acceptable daily loss."* Nothing in this repository
+ * has measured how many distinct links a reader hovers in an hour. The noema
+ * essay has 62 distinct destinations and both caches absorb every hover after
+ * the first, so 120 is roughly "two whole unread articles' worth of links, all
+ * cold, in one hour" — which is a reader nobody has yet observed.
+ *
+ * Recorded as a guess on purpose, so the next person to touch them tunes them
+ * from telemetry rather than treating them as established.
+ */
+export interface RatePolicy {
+  /** How many fills in the window. */
+  fills: number;
+  /** The rolling window, in ms. */
+  windowMs: number;
+  /** How many fills may be in flight at once. */
+  concurrency: number;
+  /** How long a fill holds its concurrency slot if nothing releases it. */
+  leaseMs: number;
+}
