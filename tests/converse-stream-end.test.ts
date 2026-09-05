@@ -22,7 +22,7 @@
  * docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { converse } from "../src/converse.js";
+import { type ConverseEvent, converse } from "../src/converse.js";
 import type { Block, Meta } from "../src/types.js";
 
 const meta = { title: "A piece", url: "https://example.com/a" } as Meta;
@@ -129,6 +129,67 @@ describe("a provider that says it failed", () => {
     expect(failure).toContain("[ai-interrupted]");
     // And nothing was yielded that says the answer finished.
     expect(events.some((e) => e.type === "done")).toBe(false);
+  });
+});
+
+describe("a terminator that had already arrived when our own clock fired", () => {
+  it("delivers the finished answer rather than throwing it away as a timeout", async () => {
+    /* **`[DONE]` is proof the whole response arrived**, and `classifyEnd` used
+       to ask the signals first — so a deadline that fired in the gap between the
+       terminator being received and the loop noticing it threw away a complete
+       answer the reader had already watched appear, with "[ai-slow] … try
+       again". GPT Sol's finding F5, reproduced here without its timing harness.
+
+       The whole reply — prose, finish reason and `[DONE]` — is **one enqueued
+       chunk**, so `sseChunks` takes it in a single `read()` and then walks its
+       own line buffer, yielding the prose from inside that walk. It is suspended
+       *there*, with `[DONE]` already received and not yet seen, which is exactly
+       the gap. This test is the consumer, so sleeping between events resumes it
+       only after the deadline has fired — no race, and nothing depending on how
+       fast the box is beyond the 200 ms margin. */
+    const wholeReplyInOneChunk = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(
+          encoder.encode(`${delta("A whole answer.")}${ends("stop")}data: [DONE]\n\n`),
+        );
+        c.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        headers: new Headers(),
+        body: wholeReplyInOneChunk,
+      }) as unknown as Response),
+    );
+
+    const events: ConverseEvent[] = [];
+    let failure: string | null = null;
+    try {
+      for await (const event of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "why?",
+        slug: "example",
+        timeoutMs: 50,
+      })) {
+        events.push(event);
+        // Hand control back only once the deadline is certainly past.
+        if (event.type === "delta") await new Promise((r) => setTimeout(r, 250));
+      }
+    } catch (err) {
+      failure = (err as Error).message;
+    }
+
+    expect(failure).toBeNull();
+    const last = events.at(-1);
+    expect(last?.type).toBe("done");
+    if (last?.type !== "done") return;
+    expect(last.text).toBe("A whole answer.");
+    // And it is not reported as a stop either: nobody stopped anything.
+    expect(last.stopped).toBe(false);
   });
 });
 

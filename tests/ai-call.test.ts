@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AI_JOB_ROUTE,
   ProviderRefused,
+  classifyEnd,
   openRouterJson,
   openRouterStream,
   pathFor,
@@ -100,6 +101,13 @@ function streamed(...parts: string[]): Response {
 function end(): StreamEnd {
   return { terminated: false };
 }
+
+/** No clock fired and nobody left — the signals for an ordinary finished run. */
+const calm = () => ({
+  signal: undefined,
+  deadline: new AbortController().signal,
+  stalled: new AbortController().signal,
+});
 
 const noop = () => {};
 
@@ -881,6 +889,59 @@ describe("a call that is never finished", () => {
     expect(report.calls).toHaveLength(0);
     expect(report.pending).toHaveLength(1);
     expect(report.pending[0]?.job).toBe("chat");
+  });
+});
+
+describe("a `StreamEnd` handed to a second stream", () => {
+  it("starts the second stream with no memory of how the first one ended", async () => {
+    /* **The comment on the reset promised this and the code did not keep it.**
+       `finishReason` and `answered` were cleared; `terminated` was not. So an
+       object reused across two streams — which `converse` is one refactor away
+       from doing, and which the comment invites — would carry the first
+       stream's `[DONE]` into a second that ended at EOF with nothing to say why,
+       and `classifyEnd` would call that `finished`. Since finding F5 it is worse
+       than that: a stale `terminated: true` also suppresses the deadline, stall
+       and reader checks, so a second stream that timed out would be delivered as
+       a whole answer. GPT Sol, finding F7, 2026-09-05.
+
+       A promise in a comment the code does not keep is worse than no promise,
+       because the next caller reads the comment. */
+    const shared: StreamEnd = { terminated: false };
+    let call = 0;
+    stubTransport(() => {
+      call++;
+      // The first stream terminates properly; the second stops at EOF.
+      const raw =
+        call === 1
+          ? `${frame({ choices: [{ delta: { content: "one" } }] })}data: [DONE]\n\n`
+          : frame({ choices: [{ delta: { content: "two" } }] });
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new TextEncoder().encode(raw));
+            c.close();
+          },
+        }),
+      } as unknown as Response;
+    });
+
+    await collectSpend(async () => {
+      for (let i = 0; i < 2; i++) {
+        for await (const _ of openRouterStream(
+          "chat",
+          { model: "anthropic/claude-sonnet-5", messages: [] },
+          { signal: new AbortController().signal, onActivity: noop, end: shared },
+        )) {
+          // Drained for its side effects on `shared`.
+        }
+      }
+    });
+
+    expect(shared.terminated).toBe(false);
+    expect(classifyEnd(shared, calm())).toEqual({ kind: "unterminated" });
   });
 });
 

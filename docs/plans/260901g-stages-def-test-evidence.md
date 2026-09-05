@@ -149,3 +149,66 @@ Restored, and:
 ```
       Tests  3 passed (3)
 ```
+
+## After the review: the full suite, and two more reproductions
+
+**The full suite, at Stage G, before the review's fixes:**
+
+```
+$ npx tsx scripts/tmux-job.ts --name streamend-suite npm test
+ Test Files  712 passed | 1 skipped (713)
+      Tests  12895 passed | 35 skipped (12930)
+EXIT=0
+```
+
+No failures at all, mine or anybody else's — so there is nothing in this branch to attribute.
+
+### M6 — F5, a deadline that fires after the terminator
+
+**Reproduced here independently of Sol's timing harness**, and deterministically. The whole reply —
+prose, `finish_reason: "stop"` and `[DONE]` — is **one enqueued chunk**, so `sseChunks` takes it in a
+single `read()` and then walks its own line buffer, yielding the prose from inside that walk. It is
+suspended *there*, with the terminator received and not yet seen, which is exactly the gap. The test
+is the consumer, so sleeping 250 ms between events against `timeoutMs: 50` resumes it only once the
+deadline has certainly fired.
+
+Against the code as it stood after Stage G:
+
+```
+ FAIL  tests/converse-stream-end.test.ts > a terminator that had already arrived when our own
+       clock fired > delivers the finished answer rather than throwing it away as a timeout
+AssertionError: expected 'The AI service did not finish within …' to be null
+      Tests  1 failed | 3 passed (4)
+```
+
+**A complete answer, thrown away with a timeout apology over the top of words the reader had already
+watched appear.** Green after gating the three signal checks on `!end.terminated`.
+
+### M7 — F7, the reset that did not reset
+
+Mutation: comment out the new `options.end.terminated = false;` in `openRouterStream`.
+
+```
+ FAIL  tests/ai-call.test.ts > a `StreamEnd` handed to a second stream >
+       starts the second stream with no memory of how the first one ended
+AssertionError: expected true to be false // Object.is equality
+      Tests  1 failed | 36 passed (37)
+```
+
+Two streams through one `StreamEnd`: the first ends on `[DONE]`, the second at EOF with nothing to
+say why, and `classifyEnd` calls the second one `finished`.
+
+### The suites that are not mine, run anyway
+
+`classifyEnd`'s precedence is shared, so the F5 fix reaches `quiz-mark`, `explain` and `search` as
+well as the four this plan migrated. All three were run and are green:
+
+```
+$ npx vitest run tests/ai-call.test.ts tests/openrouter-stream.test.ts \
+    tests/converse-stream-end.test.ts tests/converse-stop.test.ts \
+    tests/quiz-mark-stream.test.tsx tests/explain.test.ts tests/search-stream.test.ts \
+    tests/referee-mirror-stream-end.test.ts tests/referee-claims-run.test.ts \
+    tests/referee-criteria-run.test.ts
+ Test Files  10 passed (10)
+      Tests  177 passed (177)
+```

@@ -662,11 +662,18 @@ rounds' — see `src/converse.ts`.
 
 **Two edges worth knowing before you touch it:**
 
-- **Our own clocks come before the reader, and the reader comes before the provider.** A deadline or
-  a stall aborts the reader's signal too, so all three arrive as one aborted signal and only
-  `readerAborted` tells them apart; asking the provider first would file our own twenty-second
-  silence as whatever the model last happened to say. A consequence: a provider that said `error`
-  and *then* lost its reader classifies as `abandoned`, so the caller applies its abandonment policy
+- **The terminator beats everything else.** `terminated` is set only when `data: [DONE]` literally
+  arrives, so it is not something the provider *said* — it is proof the complete SSE response was
+  received, and nothing that happens afterwards unreceives it. A clock or a reader-abort that fires
+  in the gap between the terminator arriving and the classifier being called used to throw away a
+  whole answer somebody had already watched appear. It does not weaken the mid-stream cases: a clock
+  that fires while the stream is running ends it *without* `[DONE]`, so `terminated` is false and
+  the checks below run exactly as before.
+- **Then our own clocks, then the reader, then what the provider said.** A deadline or a stall
+  aborts the reader's signal too, so all three arrive as one aborted signal and only `readerAborted`
+  tells them apart; asking the provider first would file our own twenty-second silence as whatever
+  the model last happened to say. A consequence: a provider that said `error` and *then* lost its
+  reader **before `[DONE]`** classifies as `abandoned`, so the caller applies its abandonment policy
   rather than its failure policy. Deliberate — the alternative tells off a reader who has gone, for
   the provider's fault.
 - **An `error` arriving as `chunk.error` data never reaches here.** It is payload, not an ending, and

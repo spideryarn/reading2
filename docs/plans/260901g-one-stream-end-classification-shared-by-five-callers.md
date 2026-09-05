@@ -397,6 +397,70 @@ piece), and **3 — extracting `runOneRound()` so a round's facts and a turn's f
 types — is a real refactor of a 900-line generator and is deliberately left**, with the argument for
 it written down in the postmortem rather than lost.
 
+### Stage H — the round-two review, and the two P1s it found in the shared classifier ✅
+
+[260901g-stages-def-code-review-sol.md](260901g-stages-def-code-review-sol.md) — GPT Sol on the
+**built code**, which is the review that finds what a plan review cannot. It **refused**, on two
+established P1s, and it had run harnesses rather than reasoned: *"F5 and F6 are established P1s with
+end-to-end reproductions."* Both were reproduced independently here before anything was changed.
+
+- [x] **F5 (P1, accepted, fixed).** `classifyEnd` asked the signals before `end.terminated`, so a
+      deadline that fired in the gap between `[DONE]` arriving and the loop noticing it classified a
+      **complete answer** as `timed-out` and threw it away — *"The AI service did not finish
+      within…"* over the top of words the reader had already watched appear.
+
+      `terminated` is set **only** when `data: [DONE]` literally arrives
+      ([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)), so it is not something the
+      provider *said*; it is proof the complete SSE response was received, and nothing later
+      unreceives it. The three signal checks are now gated on `!end.terminated`. It does not weaken
+      the mid-stream cases those checks exist for: a clock that fires while the stream is running
+      ends it *without* `[DONE]`.
+
+      **Not this change's bug — it predates the classifier**, because every caller's old sequence
+      also threw on `deadline.aborted` regardless of the terminator. Fixed here because this plan
+      owns `classifyEnd`, and one fix covers all seven callers.
+
+      Reproduced without Sol's timing harness, deterministically: the whole reply — prose, finish
+      reason and `[DONE]` — arrives as **one enqueued chunk**, so `sseChunks` takes it in a single
+      read and is suspended mid-line-buffer with the terminator received and not yet seen. The test
+      is the consumer, so sleeping between events resumes it only once the deadline has certainly
+      fired. `tests/converse-stream-end.test.ts` § *"a terminator that had already arrived when our
+      own clock fired"*, plus three cases in `tests/openrouter-stream.test.ts`.
+
+      **And one existing test asserted the opposite.** *"blames our deadline before anything the
+      provider said"* supplied `terminated: true`, which is the fixture that made it wrong — Sol's
+      words: *"A terminator is not merely something the provider said; it proves the complete SSE
+      response arrived."* Its fixture is now `terminated: false`, which is what it always meant.
+
+- [x] **F7 (P2, accepted, fixed).** `openRouterStream`'s reset cleared `finishReason` and `answered`
+      and **not `terminated`**, under a comment promising that a reused `end` "cannot carry a stale
+      verdict into a new stream". Nothing reuses one today; the defect is that the comment is the
+      thing the next caller will read. Worse after F5, because a stale `terminated: true` now
+      suppresses the clock checks too. Red-first in `tests/ai-call.test.ts`.
+
+- [x] **F6 (P1, accepted in substance; the fix is split, and half of it is Greg's).** Sol's
+      reproduction: round one writes *"I'll check that.\n\n"* — a complete sentence — emits a usable
+      tool call and ends `length`; round two answers cleanly. Stage E's fold reports
+      `truncated: true`, and the panel says *"This answer ran out of room and stopped mid-sentence"*.
+      Neither sentence is incomplete.
+
+      **The flag is right and the sentence overclaims.** A step *was* cut off and content *was*
+      lost, which is what the reader needs to know; whether the stored text ends mid-sentence is not
+      observable from `finish_reason`, and Sol says so plainly: *"The available wire signals cannot
+      reliably determine grammatical or semantic incompleteness."* So the fold stays — reverting it
+      would restore a silent success, which is the failure this whole plan exists to stop, and the
+      false positive costs a reader an unnecessary retry where the false negative costs them a
+      truncated answer with no warning at all.
+
+      `src/types.ts` § `truncated` now states the observable fact, close to Sol's wording: *"At least
+      one provider round hit its output limit after writing prose"*, with a note that the panel's own
+      sentence still overclaims. **The panel's copy is not changed**: this job is server-side only by
+      its brief and must not touch `src/web/`, and what a reader is shown is a product decision that
+      is Greg's. Written down where the field is defined rather than left for somebody to rediscover.
+
+*Abandonable as:* the migration, plus a shared-classifier bug that was there before it and is now
+fixed for all seven callers.
+
 ## What this is not
 
 **Not** the transport half of `§ 3.4` — key, endpoint, headers, clocks and accumulation stay where
@@ -415,7 +479,17 @@ twice; the classifier is what stops there being an eighth.
 
 ## The reviews
 
-- Stages D, E and F: [260901g-stages-def-review-sol.md](260901g-stages-def-review-sol.md) — reviewed
+- Stages D–G, **on the built code**:
+  [260901g-stages-def-code-review-sol.md](260901g-stages-def-code-review-sol.md) — refused, on two
+  established P1s it had reproduced by running harnesses rather than by reading. Both were real, one
+  of them (F5) a bug older than this migration living in the shared classifier. The prompt is
+  [260901g-stages-def-code-review-prompt.md](260901g-stages-def-code-review-prompt.md) and the
+  evidence handed to it is
+  [260901g-stages-def-test-evidence.md](260901g-stages-def-test-evidence.md). This is the round that
+  earned its keep: the plan review a week earlier could not have found F5, because F5 is not in the
+  plan.
+- Stages D, E and F, **on the plan**:
+  [260901g-stages-def-review-sol.md](260901g-stages-def-review-sol.md) — reviewed
   the plan **before it was built**, and three of its four findings changed the design: `stopped`
   cannot be derived from the round's outcome alone, the `truncated` fold over-fired as first
   written, and an in-band `chunk.error` never reaches `StreamEnd`, so the classifier alone would not

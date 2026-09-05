@@ -2504,13 +2504,29 @@ export interface ChatMessage {
    */
   stopped?: boolean;
   /**
-   * The model ran out of room mid-sentence. Assistant turns only.
+   * **At least one provider round hit its output limit after writing prose**, so
+   * the answer may be incomplete. Assistant turns only.
    *
    * `finish_reason: "length"` with text already written — which used to be
    * stored as an ordinary `done` answer, so a paragraph that stopped halfway
    * through a word looked like a model that had simply finished oddly. The
    * reader had no way to tell it apart from a complete answer, and "retry"
    * was not obviously the thing to do.
+   *
+   * **"May be" rather than "did", and that first line was reworded on
+   * 2026-09-05.** It used to say *"ran out of room mid-sentence"*, which claims
+   * more than any wire signal can support. A turn is up to four provider
+   * requests; since the fold in `src/converse.ts` this is true when an *earlier*
+   * round hit its ceiling after writing prose, and that round's prose can
+   * perfectly well have ended at a full stop with the truncation falling in the
+   * tool call after it. What is certain is that a step was cut off and content
+   * was lost; whether the stored text ends mid-sentence is not observable from
+   * `finish_reason`. GPT Sol, finding F6, with the reproduction in that review.
+   *
+   * **The panel's own sentence still says "stopped mid-sentence"**
+   * (`src/web/ChatPanel.tsx`), so it overclaims in that case. Changing what a
+   * reader is shown is Greg's call, not an agent's — see
+   * docs/project/copy.md — and it is written down here rather than quietly left.
    *
    * A flag rather than a status, for the same reason `stopped` is one: the
    * answer above it is real and worth keeping. Unlike `stopped`, this one **is**
