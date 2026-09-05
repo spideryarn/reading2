@@ -80,7 +80,7 @@ import {
   TextSearch,
   TriangleAlert,
 } from "lucide-react";
-import type { BlockId, Glossary, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
+import type { BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
@@ -128,11 +128,13 @@ import { useRenderCount } from "./perf.js";
  * App.tsx. reader-capability.ts says why a boolean could not have done it.
  *
  * **`owner.glossary` is the artefact, and the `glossary` prop is the list to
- * draw.** They are the same object on the owner's path and they must be — the
- * one thing that reads the artefact is `Foot`, which puts the generator, the
- * version and the pass count under the list, and every one of those is
- * provenance a visitor's projection drops. Read `owner.glossary` for nothing
- * else: the list has one source and it is the prop.
+ * draw.** They are the same object on the owner's path and they must be. Until
+ * 2026-09-05 `Foot` read the artefact for the provenance line under the list —
+ * the generator, the version and the pass count, every one of them dropped by a
+ * visitor's projection. That line is gone (see `Foot`), so **nothing reads the
+ * artefact any more**: `owner.glossary` survives here only as the *is there one
+ * yet* test for whether to draw the foot at all. The list has one source and it
+ * is the prop.
  */
 export type GlossaryOwner = UseGlossary;
 
@@ -482,11 +484,10 @@ export function GlossaryPanel({
 
           {owner?.glossary && (
             <Foot
-              glossary={owner.glossary}
               job={owner.job}
+              starting={owner.starting}
               failed={owner.failed}
               onMore={owner.more}
-              onReset={owner.reset}
               onCancel={owner.cancel}
               withProfile={withProfile}
               onWithProfile={setWithProfile}
@@ -1828,37 +1829,66 @@ function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
 }
 
 /**
- * The two things you can do to a finished list, and where it came from.
+ * The one thing you can do to a finished list: ask for another pass.
  *
- * **"Find more terms" and "Start again" are genuinely different operations**,
- * which is why they are two buttons and not one with a modifier. Running the
- * step again appends (src/glossary.ts § `generateGlossary`), so there has to be
- * a separate way to say "this list is wrong" — and it deletes before it
- * regenerates, which is destructive, which is why it asks first.
+ * **It used to be two buttons and a line of provenance**, and all three went on
+ * 2026-09-05 because Greg read the foot as a reader would:
  *
- * The confirm is the same shape as the thread page's rewrite: not a dialog, it
- * blocks nothing, and it says what the click costs before it is spent.
+ * > we can probably get rid of Start again button and the "claude-sonnet-5 ·
+ * > glossary/3 · one pass" at the bottom, those are all confusing and
+ * > unnecessary.
  *
- * It used to say here that it does not show the job that refused it, unlike the
- * band's own run button above. Nothing refuses a run any more — a second job on
- * one article queues (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md
- * § 1g) — so there is no gap left to state.
+ * **"Start again" was a DELETE and then a run**, needed because running the
+ * step again *appends* (src/glossary.ts § `generateGlossary`) and there was
+ * otherwise no way to say "this list is wrong". It went for three reasons. The
+ * glossary was the only one of the modes carrying a reset — ideas, quotes and
+ * the timeline all replace on re-run, so re-running one already *is* starting
+ * again (src/routes.ts, beside the `ideas` route). Since the threshold hides
+ * rather than groups, *too long, too noisy* is the slider's job and costs no
+ * model call (docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md).
+ * And the list is still recoverable without it: `existingFor` refuses to append
+ * when the source, the prompt version or the profile differs, so an edit, a
+ * prompt bump or the checkbox below rewrites the list — and inherits the ids,
+ * so the reader's `?term=` links survive it.
+ *
+ * The cost was paid on every visit — a destructive button, an inline confirm
+ * and a `danger` style in a band meant to stay quiet — for an action used
+ * roughly never. `DELETE /api/glossary/:slug` and its tests stay; it is the
+ * Postgres-safe half, and the Metadata page is where this belongs if anybody
+ * ever misses it. ⟨Fable⟩
+ *
+ * **The provenance line said `generator · version · N passes`.** The argument
+ * for `passes` was that it was the only way to see that *Find more* had done
+ * anything. That stopped being true when the head grew a term count and the
+ * threshold row grew *n of m*: both move when a pass lands, and both are the
+ * number the reader was actually waiting for. The generator and the version are
+ * pipeline facts — the public projection already drops them for a visitor
+ * (src/public-types.ts) — and they are still in the artefact and the export.
  */
 function Foot({
-  glossary,
   job,
+  starting,
   failed,
   onMore,
   withProfile,
   onWithProfile,
   hasProfile,
   slug,
-  onReset,
   onCancel,
 }: {
-  /** The whole artefact, because the foot is where its provenance is shown. */
-  glossary: Glossary;
   job: Job | null;
+  /**
+   * **The POST has gone and the poll has not seen the job yet** — `useStepJob.ts`
+   * § `starting`, which exists for exactly the gap this foot used to fall into.
+   *
+   * Without it the branch below was `if (job)`, so between the press and the
+   * job appearing the foot drew *Find more* again, enabled, next to a live
+   * checkbox. Pressing twice deduplicates server-side, but **toggling the
+   * checkbox in that gap does not**: the profile flag is part of the work key,
+   * so the second press is a differently-keyed job and a second paid call.
+   * The empty state above has always passed this; the foot never did. ⟨Sol⟩
+   */
+  starting: boolean;
   failed: StepFailure | null;
   onMore(useProfile?: boolean): Promise<void>;
   withProfile: boolean;
@@ -1866,22 +1896,18 @@ function Foot({
   hasProfile: boolean;
   /** For the profile panel's per-article half. src/web/ProfilePanel.tsx. */
   slug: string;
-  onReset(): Promise<void>;
   onCancel(id: string): void;
 }) {
-  const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  if (job) {
+  if (job || starting) {
     return (
       <div className="gloss-foot">
         <Progress
           job={job}
-          /* There is a job, so there is nothing to be waiting for. */
-          starting={false}
+          starting={starting}
           failed={null}
-          /* Unreachable here: this branch only renders with a job of our own,
-             and one article cannot have two active ones. */
+          /* Not reachable from here: `stalled` is about a job of ours the queue
+             has stopped advancing, and the surface that warns about it is the
+             shelf card — useStepJob.ts § `stalled`. */
           stalled={false}
           onRun={() => onMore(withProfile)}
           onCancel={onCancel}
@@ -1893,75 +1919,30 @@ function Foot({
 
   return (
     <div className="gloss-foot">
-      {asking ? (
-        <div className="gloss-confirm">
-          <p>Throw these {glossary.entries.length} away and start over?</p>
-          <button
-            type="button"
-            className="gloss-btn danger"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              await onReset();
-              setBusy(false);
-              setAsking(false);
-            }}
-          >
-            {busy ? "Starting…" : "Start again"}
-          </button>
-          <button
-            type="button"
-            className="gloss-btn"
-            disabled={busy}
-            onClick={() => setAsking(false)}
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <div className="gloss-actions">
-          {/* **The common case, and the first version missed it.** The checkbox
-              was on the empty state and the two stale banners, so a reader with
-              a perfectly current glossary — which is most readers, most of the
-              time — never saw it at all. Found in a browser, not by a test.
-              src/web/WrittenForYou.tsx. */}
-          <UseProfile
-            checked={withProfile}
-            onChange={onWithProfile}
-            hasProfile={hasProfile}
-            slug={slug}
-          />
-          <button
-            type="button"
-            className="gloss-btn"
-            title="Another model call, told what it has already found, looking for the quieter terms"
-            onClick={() => void onMore(withProfile)}
-          >
-            <Search size={12} />
-            Find more
-          </button>
-          <button
-            type="button"
-            className="gloss-btn"
-            title="Throw this list away and find a new one"
-            onClick={() => setAsking(true)}
-          >
-            <RotateCcw size={12} />
-            Start again
-          </button>
-        </div>
-      )}
+      <div className="gloss-actions">
+        {/* **The common case, and the first version missed it.** The checkbox
+            was on the empty state and the two stale banners, so a reader with
+            a perfectly current glossary — which is most readers, most of the
+            time — never saw it at all. Found in a browser, not by a test.
+            src/web/WrittenForYou.tsx. */}
+        <UseProfile
+          checked={withProfile}
+          onChange={onWithProfile}
+          hasProfile={hasProfile}
+          slug={slug}
+        />
+        <button
+          type="button"
+          className="gloss-btn"
+          title="Another model call, told what it has already found, looking for the quieter terms"
+          onClick={() => void onMore(withProfile)}
+        >
+          <Search size={12} />
+          Find more
+        </button>
+      </div>
 
       {failed && <p className="gloss-error">{failed.message}</p>}
-
-      {/* Provenance, quietly. `passes` is the number worth showing that nothing
-          else would: a list that took three calls to build is a different
-          object from one that took one, and it is the only way to see that
-          "Find more" did anything. */}
-      <p className="gloss-provenance">
-        {glossary.generator} · {glossary.version} ·{" "}
-        {glossary.passes === 1 ? "one pass" : `${glossary.passes} passes`}
-      </p>
     </div>
   );
 }
