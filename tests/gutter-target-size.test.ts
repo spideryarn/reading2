@@ -96,14 +96,17 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
     expect(slotPx(root)).toBeGreaterThanOrEqual(24);
   });
 
-  it("sizes the grid's columns from the slot, not from a fraction of the box", () => {
-    /* Sol's specific warning. `1fr 1fr` of a two-slot box is the same width
-       today, but it says "share what there is" where the claim is "each of these
-       is a 24px target" — and it is the declaration that stops being true first
-       if the box's width is ever changed independently. */
-    expect(css).toContain("grid-template-columns: repeat(2, var(--blk-slot))");
+  it("sizes the grid's column from the slot, not from a fraction of the box", () => {
+    /* Sol's specific warning. `1fr` of a one-slot box is the same width today,
+       but it says "share what there is" where the claim is "each of these is a
+       24px target" — and it is the declaration that stops being true first if
+       the box's width is ever changed independently. */
+    expect(css).toContain("grid-template-columns: var(--blk-slot)");
+    expect(css).toContain("grid-auto-rows: var(--blk-slot)");
     expect(css).toContain("width: var(--blk-gutter-w)");
-    expect(css).toContain("--blk-gutter-w: calc(var(--blk-slot) * 2)");
+    // One column since 2026-09-05: the bookmark went into the line, the second
+    // column went with it, and the prose got 24px back on each side.
+    expect(css).toContain("--blk-gutter-w: var(--blk-slot)");
   });
 
   it("gives every child the whole column rather than the glyph's own width", () => {
@@ -113,41 +116,62 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
     expect(box).toContain("width: 100%");
   });
 
-  it("floors every row at the slots its gutter has to hold", () => {
+  it("floors every row at the one slot every gutter has to hold", () => {
     /* **Deleting these is the failure Sol named**: the 49 tests that passed over
-       this stage would all have stayed green without them, and a control that
-       hangs out of its row is an input bug — it sits inside the upper row's
-       `<tr>`, so pointing at it marks the wrong row active.
+       the 2026-09-04 stage would all have stayed green without them, and a
+       control that hangs out of its row is an input bug — it sits inside the
+       upper row's `<tr>`, so pointing at it marks the wrong row active.
 
-       Three rules, because there are three shapes: the full column, an ordinary
-       row, and a heading whose gutter hangs from the *bottom* and therefore needs
-       the slot plus that offset rather than `--blk-top`. The second one is newer than the
-       other two — a 24px target in a 39px row fits by 0.04px at a 16px root, and
-       `--blk-slot`'s px floor turns that into a 1.56px overhang at 12px, because
-       the row keeps shrinking with the root and the target stops.
+       **There is one floor left, and it is the small one.** `.gutter-pad`, which
+       reserved the whole column on every row a reader owned, went on 2026-09-05:
+       the gutter now draws only what the row already has room for, so the row
+       does not have to be made room in. What survives is the floor that keeps a
+       *single* slot fitting — a 24px target in a 39px row fits by 0.04px at a
+       16px root, and `--blk-slot`'s px floor turns that into a 1.56px overhang
+       at 12px, because the row keeps shrinking with the root and the target
+       stops.
+
+       A heading's gutter hangs from the *bottom*, so its floor is the slot plus
+       that offset rather than `--blk-top`.
 
        This is a structural check, not a geometric one: it says the rules are
        there and are written off the same tokens. What they actually measure is
-       docs/plans/260904b-… § Built, and measured. */
-    expect(rule("td.text.gutter-pad")).toContain(
-      "height: calc(var(--blk-top) + var(--blk-slot) * 3 + var(--block-pad))",
-    );
-    /* And the grid has to declare the rows the floor reserves. **Not because
-       the control would go unplaced** — an earlier version of this comment said
-       so and GPT Sol corrected it: grid creates an implicit row and puts the "?"
-       in it quite happily. The failure is subtler and worse. An implicit row is
-       `auto`, so it is sized by its content — a 12px glyph, not a 24px slot —
-       which silently drops the target below WCAG's floor and unpins the fixed
-       positions the `grid-area`s exist to give. The row would have made room and
-       the grid would not have used it. Two declarations, one number, three
-       thousand lines apart. */
-    expect(rule("td.text.gutter-pad .blk-gutter")).toContain(
-      "grid-template-rows: repeat(3, var(--blk-slot))",
-    );
+       docs/plans/260905c-… § Built, and measured. */
     expect(rule("td.text")).toContain("height: calc(var(--blk-top) + var(--blk-slot) + var(--block-pad))");
-    expect(rule("td.text.kind-heading:not(.gutter-pad)")).toContain(
+    expect(rule("td.text.kind-heading")).toContain(
       "height: calc(var(--blk-slot) + var(--block-pad))",
     );
+    // And the class that used to floor a row is gone entirely, rather than left
+    // declared and unset — TableView.tsx no longer emits it.
+    expect(css).not.toContain("td.text.gutter-pad");
+  });
+
+  it("measures the room the row has, which is what the whole mechanism rests on", () => {
+    /* The gutter's own box IS the answer to "how much column will fit here":
+       the cell, less where the column starts and the pad it must not sit on.
+       Take either inset out and every query below is asking about the wrong
+       number — and nothing would look wrong until a control hung into the next
+       paragraph.
+
+       Two insets rather than `height: calc(100% - …)`, which says the same thing
+       and is defensible by spec: percentage heights inside table cells are an
+       interoperability-sensitive corner and this is the number the overhang
+       invariant rests on. GPT Sol's fifth finding on the plan, 2026-09-05. */
+    const box = rule(".blk-gutter");
+    expect(box).toContain("top: var(--blk-top)");
+    expect(box).toContain("bottom: var(--block-pad)");
+    // `line-height: 0` is in this rule too, so the check has to name the form
+    // it is refusing rather than the word.
+    expect(box).not.toContain("height: calc(100%");
+    expect(box).toContain("container-type: size");
+    /* A heading's box starts at the top of the *cell* rather than at
+       `--blk-top`, which is doubled on a heading and would leave 18.8px — less
+       than a target — for the query to measure. Bottom-aligned, so the slot sits
+       beside the heading's words rather than a line above them. Sol's third. */
+    const head = rule("td.text.kind-heading .blk-gutter");
+    expect(head).toContain("top: 0");
+    expect(head).toContain("bottom: calc(var(--block-pad) / 2)");
+    expect(head).toContain("align-content: end");
   });
 
   it("derives the cell's left padding from the gutter instead of restating it", () => {
@@ -203,46 +227,122 @@ function touchBlock(): string {
  * what `.blk-cmt` would have shipped as, and the only reason it did not is a
  * declaration somebody remembered to write.
  */
-describe("the three affordances are one vertical line, and the mark is not in it", () => {
-  it("puts the permalink, the chat button and the '?' down one column", () => {
-    /* **Greg's ask, 2026-09-05**: *"They are no longer in a vertical line. The
-       three are arranged in an L-shape."* The three are the affordances — the
-       address, the door into chat, and the "?" — and they are column 2, rows 1
-       to 3, against the prose. Asserted as a *column* rather than three
-       separate cells because "they line up" is the property that was lost. */
-    const line = [".blk-permalink", ".block-chat", ".blk-help"].map((sel) =>
-      /grid-area:\s*([^;]+);/.exec(rule(sel))?.[1]?.trim(),
+describe("the column shows as many controls as the row has room for", () => {
+  it("draws nothing by default, so a browser without the query is safe", () => {
+    /* **The default is the collapsed state on purpose.** Every rule that reveals
+       a second control lives inside a container query; a browser that does not
+       understand `@container` therefore gets one control and the way to the
+       rest, rather than a column of four hanging into the paragraph below. Get
+       this backwards — reveal by default, hide in the query — and the fallback
+       is the overhang bug this whole section exists to prevent. */
+    expect(css).toContain(".blk-gutter > * { display: none; }");
+    // One control and nothing behind it: draw it, whatever it is.
+    expect(css).toContain('.blk-gutter[data-controls="1"] > * { display: inline-flex; }');
+    /* **And no `:has()` decides any of it.** The one that survived the plan
+       review held the mark in the one-slot bracket and swapped the "…" in on
+       hover; it was `(0,5,1)` against the count rules' `(0,3,0)`, so it forced
+       the dot on at every capacity — a fifth item in a four-slot gutter, hanging
+       below its own row. It was also unreachable by keyboard and by touch, which
+       have no hover to swap with. GPT Sol's first two findings on the built
+       code, 2026-09-05. This assertion is what stops it coming back: it is the
+       kind of rule that looks obviously right in isolation. */
+    expect(css).not.toContain(":has(.blk-cmt)");
+    /* **And the class of bug stated once, rather than the instance.** What made
+       that rule dangerous was not `:has()` — it was a `tr:hover` selector
+       deciding `display`, which lets the pointer change *how many* controls are
+       drawn, in a column whose whole safety argument is that the number is
+       decided by the row. Hover may change `opacity` and `color` and nothing
+       else. The browser sweep that missed the original bug hovered nothing;
+       this is the assertion that does not need a pointer to hold. */
+    const hoverRules = [...css.matchAll(/(tr:hover[^{]*)\{([^}]*)\}/g)].filter(
+      ([, sel]) => /\.blk-|\.block-chat/.test(sel ?? ""),
     );
-    expect(line).toEqual(["1 / 2", "2 / 2", "3 / 2"]);
+    // `§ the gutter` is not a usable landmark here: this fixture has its
+    // comments stripped, which is the whole point of stripping them, and an
+    // `indexOf` on a section heading therefore returns -1 and slices from the
+    // end. An earlier draft of the assertion above did exactly that and passed
+    // against one character of CSS.
+    expect(hoverRules.length).toBeGreaterThan(0);
+    for (const [, , body] of hoverRules) expect(body).not.toContain("display");
   });
 
-  it("keeps the bookmark OUT of the line, in the first row of the other column", () => {
-    /* **Two separate things hang off this one declaration, and neither is
-       obvious from it.**
+  it("writes every threshold twice, because a query cannot read --blk-slot", () => {
+    /* **This is the one that would be wrong at a 20px root and right at 16.**
+       `--blk-slot` is `max(1.5rem, 24px)`, and a container query cannot read a
+       custom property, so each threshold is spelled `(min-height: Npx) and
+       (min-height: Mrem)` — which is `max()` in query syntax. Drop the rem half
+       and a 20px reader is offered three 30px targets in room for two; drop the
+       px half and a 9px reader is offered targets the px floor has stopped
+       shrinking.
 
-       *It is not an affordance.* The other three are buttons revealed on hover;
-       this is the reader's own mark, visible at rest. Standing it at a
-       different x is what says so — and it is why the column reads as three,
-       which is what Greg counted.
+       Asserted as exact strings because the failure is silent: the wrong
+       threshold still renders a gutter, just one slot too many, on a device the
+       author is not using. */
+    for (const [px, rem] of [
+      [48, 3],
+      [72, 4.5],
+      [96, 6],
+    ] as const) {
+      expect(css).toContain(
+        "@container (min-height: " + px + "px) and (min-height: " + rem + "rem)",
+      );
+      // Each pair is exactly one slot apart, which is the whole arithmetic.
+      expect(px / 24).toBe(rem / 1.5);
+    }
+  });
 
-       *And it is what lets the floor be three slots instead of four.* A
-       bookmark below the line would have to be row 4, so a commented row would
-       floor at 111.1px instead of 87.1 and the mark would sit 48px from its own
-       words — beside the *next* paragraph, to the eye. In row 1 a comment draws
-       nothing new below the first slot, so it needs no floor at all, which is
-       why `TableView` keys `gutter-pad` on the two callbacks alone.
-       `tests/gutter-pad-floor.test.tsx` asserts that half and points back here.
+  it("takes the controls in one order, and it is BlockGutter's render order", () => {
+    /* **`:nth-child` is a copy of the JSX's order, and that is now deliberate.**
+       Until 2026-09-04 every slot named its own `grid-area` precisely so the two
+       could differ; a column that truncates cannot afford that, because "the
+       first k that fit" has to mean something. So nothing is placed by
+       `grid-area` any more — the assertion is that no rule reintroduces one —
+       and the order is asserted from the other end in
+       `tests/block-gutter.test.tsx`, which renders the component and reads the
+       DOM.
 
-       Fable's arbitration, 2026-09-05, in
-       docs/plans/260905b-gutter-back-to-a-vertical-line-…md. */
-    expect(rule(".blk-cmt")).toContain("grid-area: 1 / 1");
-    /* And the gutter is still a map rather than a queue: four children, four
-       cells, no two the same. Auto-placement is what used to shunt the chat
-       button along when a comment arrived. */
-    const cells = [".blk-permalink", ".block-chat", ".blk-cmt", ".blk-help"].map((sel) =>
-      /grid-area:\s*([^;]+);/.exec(rule(sel))?.[1]?.trim(),
-    );
-    expect(new Set(cells).size).toBe(4);
+       The mark is first: Greg's call, 2026-09-05, so a note never disappears
+       because its paragraph is short. The price is that adding one pushes chat
+       and the "?" down a slot, which is the guarantee the 2 x 2 pad bought. */
+    expect(css).not.toContain("grid-area:");
+    expect(css).toContain(".blk-gutter > :nth-child(1) { display: inline-flex; }");
+    expect(css).toContain(".blk-gutter > :nth-child(-n + 2) { display: inline-flex; }");
+  });
+
+  it("shows the dot from the control count, never from a proxy for it", () => {
+    /* **Every rule that hides or shows the "…" is keyed on `data-controls`.**
+       The first draft asked `:has(.blk-cmt)` instead, on the reasoning that a
+       note is what makes four controls out of three — and that is a proxy, not
+       the count. `comments`, `onChatAbout` and `onHelp` are independent at the
+       component's boundary, so a visitor with a note came out with a mark and no
+       way to the address under it, and a caller passing one callback and a note
+       had three controls treated as four. GPT Sol's fourth finding on the plan,
+       2026-09-05; the eight combinations are rendered and read in
+       tests/block-gutter.test.tsx.
+
+       So: three controls fit in three slots and draw no dot; four do not. */
+    expect(css).toContain('.blk-gutter[data-controls="3"] > .blk-more { display: none; }');
+    expect(css).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: inline-flex; }');
+    const four = css.slice(css.indexOf("@container (min-height: 96px)"));
+    expect(four).toContain(".blk-gutter > * { display: inline-flex; }");
+    expect(four).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: none; }');
+  });
+
+  it("unfolds over the rows below rather than growing its own", () => {
+    /* The one deliberate overhang in this stylesheet, and the difference is
+       consent: it exists because the reader pressed a button, and it closes on
+       Escape, on choosing anything, and on a press anywhere else
+       (BlockGutter.tsx).
+
+       `container-type: normal` is the load-bearing half. Size containment means
+       "your height does not depend on your contents", which is exactly what has
+       to stop being true — leave it on and the unfolded column computes to
+       nothing at all. */
+    const at = css.indexOf(".blk-gutter[data-open] {");
+    const open = css.slice(at, at + 600);
+    expect(open).toContain("container-type: normal");
+    expect(open).toContain("height: auto");
+    expect(css).toContain(".blk-gutter[data-open] > * {");
   });
 
   it("is an affordance: hidden at rest, revealed on hover and on focus", () => {
@@ -333,7 +433,7 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
     expect(insetRem).toBeGreaterThan(0);
 
     for (const root of ROOTS) {
-      const needed = (MEASURE_REM + padR + insetRem * 2) * root + slotPx(root) * 2;
+      const needed = (MEASURE_REM + padR + insetRem * 2) * root + slotPx(root);
       expect(proseAloneMaxPx(root), `the cap clips the measure at a ${root}px root`).toBeGreaterThanOrEqual(
         Math.round(needed),
       );
@@ -343,13 +443,15 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
     }
   });
 
-  it("leaves the two common roots exactly where they were", () => {
-    // The point of adding the gutter as its own term rather than raising the
-    // constant: only the root that was wrong moves.
-    expect(proseAloneMaxPx(16)).toBe(832);
-    expect(proseAloneMaxPx(20)).toBe(1040);
-    // 624 before, and 624 was the bug.
-    expect(proseAloneMaxPx(12)).toBe(636);
+  it("reserves exactly one slot of gutter at each root", () => {
+    // Adding the gutter as its own term rather than raising the constant is
+    // what makes this follow the stylesheet: one slot at 16 and 12 where the px
+    // floor holds it at 24, and 30 at a 20px root where the rem wins.
+    expect(proseAloneMaxPx(16)).toBe(808);
+    expect(proseAloneMaxPx(20)).toBe(1010);
+    // 624 before 2026-09-04, and 624 was the bug; 636 until 2026-09-05, when the
+    // gutter went from two columns to one and every root lost a slot.
+    expect(proseAloneMaxPx(12)).toBe(612);
   });
 
   it("keeps the rem part a whole number of rem", () => {

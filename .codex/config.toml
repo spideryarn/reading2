@@ -22,6 +22,18 @@
 #
 # docs/reusable/codex-cli-as-subagent.md § The review profile.
 
+# `default_permissions` must be set whenever a `[permissions]` table exists, or codex refuses to load
+# any config in this directory at all — `config defines [permissions] profiles but does not set
+# default_permissions`, which broke plain interactive `codex` here (measured on 0.150.1, 2026-09-05).
+# `:workspace` is codex's built-in workspace-write profile, so interactive codex behaves as it does
+# anywhere else; the other built-ins are `:read-only` and `:danger-full-access`.
+#
+# It loosens nothing the wrapper does: scripts/run-codex.ts passes `-c default_permissions=review`
+# for the reviewer, and for its other modes an explicit `--sandbox read-only` still wins over this
+# line — measured 2026-09-05 with a real `codex exec` against a directory carrying both, where the
+# model's `touch` was refused.
+default_permissions = ":workspace"
+
 [permissions.review.filesystem]
 "/" = "read"
 "/tmp" = "write"
