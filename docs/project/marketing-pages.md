@@ -27,6 +27,7 @@ this sits under.
 | [`src/web/SiteBits.tsx`](../../src/web/SiteBits.tsx) | the furniture all three pages share, so they cannot drift into three |
 | [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) | the footer row, which these three pages share with the other four — `variant="marketing"` keeps this design's spacing |
 | [`src/web/PlanCards.tsx`](../../src/web/PlanCards.tsx) | the three plans, on all three pages — and, since 2026-09-04, the buttons that buy them on `/pricing` and `/profile` |
+| [`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx) | the block on `/` and `/features` that sends a stranger to a real shared article — every link in it derived from `/read/public`'s own listing, so an unshared article leaves none behind ([public-shelf.md](public-shelf.md)) |
 | [`src/web/shots.ts`](../../src/web/shots.ts) | every screenshot: file, pixel size, alt text |
 | `styles.css` § the site | the `site-*` classes — the whole visual language, in one block |
 

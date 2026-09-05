@@ -38,16 +38,21 @@ import {
   type TerminalNode,
   UNMEASURED_OVERHEAD,
   assertCascadeComplete,
+  bodyWordsIn,
+  decideExpansion,
+  type ExpansionDecision,
   estimateEvidenceTokens,
   estimateRequestTokens,
   finaliseCascade,
+  type ModelVerdict,
   normaliseExpansion,
   planExpansionBatches,
   predictedChildren,
+  proposalFromTree,
   shouldExpand,
   structuralBlocksIn,
 } from "../src/hierarchy-cascade.js";
-import { type BuildReport, buildTree } from "../src/hierarchy.js";
+import { type BuildReport, type ModelNode, buildTree } from "../src/hierarchy.js";
 import type { Block } from "../src/types.js";
 
 /* ------------------------------------------------------------- fixtures -- */
@@ -135,7 +140,7 @@ function target(from: number, to: number, where: string): ExpansionTarget {
 }
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], droppedHeadings: [] };
+  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
 }
 
 const state = (root: CascadeNode, capReached: CascadeState["capReached"] = []): CascadeState => ({
@@ -221,6 +226,190 @@ describe("shouldExpand", () => {
     const wider = ranged(0, 27);
     expect(structuralBlocksIn(wider, blocks)).toBe(10);
     expect(shouldExpand(wider, blocks, CASCADE_RECIPE)).toBe(true);
+  });
+});
+
+describe("bodyWordsIn", () => {
+  /**
+   * **A different predicate from `structuralBlocksIn`, on purpose.** The block
+   * count asks how many rows a reader could navigate to (`isStructural`); the
+   * word count asks how much prose the call is actually shown, which is what
+   * `renderBlocks` sends — every body block, the `gistable: false` ones marked
+   * and printed in full, and a supplement withheld. The two counts disagree on
+   * this fixture, which is the whole reason there are two of them.
+   */
+  it("counts every body block the model is shown, and never a withheld supplement", () => {
+    const mixed = article(9, (i) => (i === 3 ? image(i) : i === 6 ? note(i) : para(i)));
+    expect(structuralBlocksIn(ranged(0, 8), mixed)).toBe(7);
+    expect(bodyWordsIn(ranged(0, 8), mixed)).toBe(8 * 12);
+  });
+});
+
+/* ---------------------------------------------------------- precedence --- */
+
+/**
+ * **The five bounds, in order** — and the order is the part that had to be
+ * written down, because two of them contradict on a real node.
+ *
+ * Every case below is one row of the plan's table
+ * (docs/plans/260904d-deepen-fat-sections.md § "The four bounds, and which of
+ * them can overrule the verdict") plus the collision that made the ordering
+ * necessary.
+ */
+describe("decideExpansion", () => {
+  /** 2,400 words at twelve to the paragraph: over the ceiling, and well over the floor. */
+  const long = article(200);
+
+  const decide = (
+    node: RangedNode,
+    depth: number,
+    verdict?: ModelVerdict,
+    blocks: Block[] = long,
+  ) => decideExpansion({ node, depth, blocks, recipe: CASCADE_RECIPE, verdict });
+
+  it("1 — past the depth cap nothing expands, however loudly the node asks", () => {
+    const fat = ranged(0, 199);
+    expect(decide(fat, CASCADE_RECIPE.maxDepth, "needs-deeper")).toEqual({
+      decision: "stop",
+      because: "depth-cap",
+    });
+    /* **And the governor still says the node wants splitting**, which is the
+       point of keeping `maxDepth` out of `shouldExpand`: the executor writes a
+       `capReached` record from the two answers together. A `shouldExpand` that
+       went false here would make the node silently terminal — indistinguishable
+       from one that legitimately stopped. */
+    expect(shouldExpand(fat, long, CASCADE_RECIPE)).toBe(true);
+  });
+
+  it("3 — a node under the divisibility floor is not expanded however loudly it asks", () => {
+    expect(decide(ranged(0, 8), 1, "needs-deeper")).toEqual({
+      decision: "stop",
+      because: "divisibility-floor",
+    });
+  });
+
+  /**
+   * **The collision, and the reason the bounds are ordered rather than listed.**
+   * An eight-block node holding two of the author's own headings is under the
+   * floor *and* over the heading rule. `hierarchy-cascade.ts` had already
+   * settled it — a size rule alone would stop here, and the terminal level would
+   * then weld across a heading the prompt calls a hard boundary everywhere else.
+   * ⟨GPT Sol, finding 4.⟩
+   */
+  it("2 beats 3 — the eight-block node with two authored headings opens anyway", () => {
+    const headed = article(20, (i) => (i === 0 || i === 4 ? heading(i) : para(i)));
+    const short = ranged(0, 7);
+    expect(structuralBlocksIn(short, headed)).toBe(8); // under the floor
+    expect(decide(short, 1, "finished", headed)).toEqual({
+      decision: "expand",
+      because: "authored-heading",
+    });
+  });
+
+  it("4 — a node over the ceiling that called itself finished is opened, and says so", () => {
+    expect(decide(ranged(0, 199), 1, "finished")).toEqual({
+      decision: "expand",
+      because: "forced-open",
+    });
+    // Same node, one word under the ceiling: the verdict gets it back.
+    const generous = { ...CASCADE_RECIPE, forcedOpenWords: 2_400 };
+    expect(
+      decideExpansion({
+        node: ranged(0, 199),
+        depth: 1,
+        blocks: long,
+        recipe: generous,
+        verdict: "finished",
+      }),
+    ).toEqual({ decision: "stop", because: "verdict" });
+  });
+
+  it("5 — everything the four leave open is the model's, either way", () => {
+    const middling = ranged(0, 99); // above the floor, 1,200 words: under the ceiling
+    expect(decide(middling, 1, "needs-deeper")).toEqual({
+      decision: "expand",
+      because: "verdict",
+    });
+    expect(decide(middling, 1, "finished")).toEqual({ decision: "stop", because: "verdict" });
+  });
+
+  /**
+   * **An absent verdict is a third state, and it must not read as "finished".**
+   * A missing field silently meaning "finished" is the shape of this plan's
+   * whole failure mode. The *decision* is the same — stopping is the side that
+   * cannot spend money nobody asked for — and the *reason* is not, which is what
+   * lets the instrumentation tell a node nobody has asked yet (wave 1's whole
+   * tree) from one that answered.
+   */
+  it("names an absent verdict rather than folding it into finished", () => {
+    expect(decide(ranged(0, 99), 1)).toEqual({ decision: "stop", because: "no-verdict" });
+    // And the mechanical bounds still open what they would have opened — under
+    // their own name, because a ceiling with no verdict to overrule is not the
+    // same event as one that overruled a model saying "finished". See below.
+    expect(decide(ranged(0, 199), 1)).toEqual({
+      decision: "expand",
+      because: "unassessed-ceiling",
+    });
+  });
+
+  /**
+   * **The `never` check.** The pairings live in the type — `"depth-cap"` can only
+   * stop, `"authored-heading"` can only expand — and this is what keeps the
+   * switch on `because` exhaustive: a sixth reason added without a case here is
+   * a compile error at `npm run typecheck`, which covers the test project.
+   */
+  it("names a bound for every decision it can return", () => {
+    const bound = (d: ExpansionDecision): string => {
+      switch (d.because) {
+        case "depth-cap":
+          return "1";
+        case "authored-heading":
+          return "2";
+        case "divisibility-floor":
+          return "3";
+        case "forced-open":
+        case "unassessed-ceiling":
+          return "4";
+        case "verdict":
+        case "no-verdict":
+          return "5";
+        default: {
+          const unreachable: never = d;
+          return unreachable;
+        }
+      }
+    };
+    const headed = article(20, (i) => (i === 0 || i === 4 ? heading(i) : para(i)));
+    const seen = [
+      decide(ranged(0, 199), CASCADE_RECIPE.maxDepth, "needs-deeper"),
+      decide(ranged(0, 7), 1, "finished", headed),
+      decide(ranged(0, 8), 1, "needs-deeper"),
+      decide(ranged(0, 199), 1, "finished"),
+      decide(ranged(0, 99), 1, "finished"),
+      decide(ranged(0, 99), 1),
+      decide(ranged(0, 199), 1),
+    ];
+    expect(seen.map(bound)).toEqual(["1", "2", "3", "4", "5", "5", "4"]);
+    expect(new Set(seen.map((d) => d.because)).size).toBe(7);
+  });
+
+  /**
+   * **The ceiling's number is "how often it overruled a model that said
+   * finished", and a node nobody asked overrules nothing.** Both nodes are over
+   * the ceiling and both are opened; only one of them contradicts an answer. If
+   * they shared a `because` the figure would read high on precisely the wave
+   * where no verdict exists for any node — wave 1, which is every article's
+   * first pass. ⟨GPT Sol's review of stage 3, F2.⟩
+   */
+  it("distinguishes the ceiling overruling a verdict from the ceiling with none to overrule", () => {
+    expect(decide(ranged(0, 199), 1, "finished")).toEqual({
+      decision: "expand",
+      because: "forced-open",
+    });
+    expect(decide(ranged(0, 199), 1)).toEqual({
+      decision: "expand",
+      because: "unassessed-ceiling",
+    });
   });
 });
 
@@ -532,10 +721,18 @@ describe("normaliseExpansion", () => {
    * that nothing in the starts-only path lets a gap or an overlap back in.
    */
   it("tiles the parent exactly, with no gap and no overlap, whatever the starts say", () => {
+    /* **Every start here is inside the parent, including the first**, because a
+       start outside it is no longer planned around at all — it is refused,
+       below, at whatever position it appears. Two cases were written against
+       the older rule and moved rather than deleted, since what they exercise is
+       the collision and the drop rather than the clamp: one claimed block 19 of
+       a parent ending at 15 and now claims 15 itself, and one opened on block 0
+       of a parent starting at 4 and now opens on block 5, which is still pinned
+       back to 4. */
     const cases: string[][] = [
       [blockId(4), blockId(5), blockId(6)],
       [blockId(15), blockId(15), blockId(15)],
-      [blockId(0), blockId(19), blockId(7)],
+      [blockId(5), blockId(15), blockId(7)],
       [blockId(4), blockId(9), blockId(10), blockId(11), blockId(15)],
     ];
     for (const starts of cases) {
@@ -608,7 +805,7 @@ describe("normaliseExpansion", () => {
         children: [
           { start: blockId(9), title: "One" },
           { start: blockId(4), title: "Two" },
-          { start: blockId(0), title: "Three" },
+          { start: blockId(4), title: "Three" },
         ],
         parent,
         blocks,
@@ -755,6 +952,149 @@ describe("normaliseExpansion", () => {
   });
 
   /**
+   * **A start outside the parent is refused, not clamped.**
+   *
+   * The cascade's whole argument is that *"a call shown thirty blocks cannot
+   * emit a range that is wrong by 1,289 of them"* — and a clamp makes that
+   * sentence false by quietly mending the one answer that would have proved it.
+   * A scoped call is shown its parent's blocks and nothing else, so a start
+   * outside them is an answer about a different stretch of the article: a
+   * different fault from a boundary in the wrong place, and worth another draw.
+   */
+  it("refuses a later start outside the parent, and names it", () => {
+    const report = emptyReport();
+    const refuse = () =>
+      normaliseExpansion({
+        children: [
+          { start: blockId(4), title: "One" },
+          { start: blockId(17), title: "Two" },
+        ],
+        parent,
+        blocks,
+        where: "root > child 2",
+        report,
+      });
+    expect(refuse).toThrow(ExpansionRefused);
+    try {
+      refuse();
+    } catch (err) {
+      const refusal = err as ExpansionRefused;
+      expect(refusal.reason).toBe("outside-parent");
+      // The offending id, and where the parent ends, both through `nameValue`.
+      expect(refusal.message).toContain(blockId(17));
+      expect(refusal.message).toContain(blockId(15));
+      expect(refusal.planned).toEqual(emptyReport());
+    }
+    // Retryable, and the run is charged nothing for an answer it will re-ask.
+    expect(report).toEqual(emptyReport());
+  });
+
+  /**
+   * **The first child's start is range-checked before it is pinned**, and this
+   * is the gate that was open.
+   *
+   * The pin itself is right — children must cover their parent and nothing else
+   * can supply that block — but exempting the *claim* from the check let a
+   * first `start` naming a block in a **sibling** section pass all four gates,
+   * and the sibling's title, gist and verdict were attached to this parent's
+   * prose. There is nothing to distinguish that from the answer the refusal
+   * exists for: a block this call was never shown.
+   *
+   * So the pin survives and the exemption does not. Only an in-parent first
+   * start is pinned; how far *inside* the parent it was still absorbed and
+   * measured as the head repair.
+   */
+  for (const [claim, side] of [
+    [0, "before"],
+    [17, "after"],
+  ] as const) {
+    it(`refuses a first start ${side} the parent, rather than pinning it`, () => {
+      const report = emptyReport();
+      const refuse = () =>
+        normaliseExpansion({
+          children: [
+            { start: blockId(claim), title: "Written About Sibling" },
+            { start: blockId(9), title: "Two" },
+          ],
+          parent,
+          blocks,
+          where: "root",
+          report,
+        });
+      expect(refuse).toThrow(ExpansionRefused);
+      try {
+        refuse();
+      } catch (err) {
+        const refusal = err as ExpansionRefused;
+        expect(refusal.reason).toBe("outside-parent");
+        expect(refusal.message).toContain(blockId(claim));
+        expect(refusal.planned).toEqual(emptyReport());
+      }
+      expect(report).toEqual(emptyReport());
+    });
+  }
+
+  /**
+   * **The pin is not a clamp of a claim**, and it still fires — for a claim
+   * that was inside the parent all along.
+   */
+  it("pins an in-parent first start back to the parent's own start, and measures it", () => {
+    const report = emptyReport();
+    const children = normaliseExpansion({
+      children: [
+        { start: blockId(8), title: "One" },
+        { start: blockId(9), title: "Two" },
+      ],
+      parent,
+      blocks,
+      where: "root",
+      report,
+    });
+    expect(children[0]!.range).toEqual([blockId(4), blockId(8)]);
+    expect(report.repairs).toEqual([
+      { where: "root > child 1", kind: "gap", at: 4, size: 4 },
+    ]);
+  });
+
+  /**
+   * **The heading snap, which only one of the two derivations had.**
+   *
+   * `planChildRanges` runs `snapStartsToHeadings`: a child that begins one
+   * block after an authored heading and whose own `sourceHeading` names that
+   * heading is moved back onto it. `normaliseExpansion` did not, and from wave
+   * 2 on that is two rules over one tree — a scoped call is shown a slice
+   * derived by `planChildRanges` and its answer is derived here.
+   *
+   * Measured on a 142-page Kuhn paper: 53 of 82 nodes started on the block
+   * immediately after a heading, and every unbacked `sourceHeading` reproduced
+   * was at that offset (src/heading-snap.ts).
+   */
+  it("moves a child back onto the heading it names, as planChildRanges does", () => {
+    const withHeading = article(20, (i) => (i === 8 ? heading(i) : para(i)));
+    const report = emptyReport();
+    const children = normaliseExpansion({
+      children: [
+        { start: blockId(5), title: "One" },
+        { start: blockId(9), title: "Two", sourceHeading: "Heading 8" },
+      ],
+      parent,
+      blocks: withHeading,
+      where: "root",
+      report,
+    });
+    expect(children.map((c) => c.range)).toEqual([
+      [blockId(4), blockId(7)],
+      [blockId(8), blockId(15)],
+    ]);
+    expect(report.repairs).toContainEqual({
+      where: "root > child 2",
+      kind: "heading",
+      at: 8,
+      size: 1,
+    });
+  });
+
+  /**
    * **The differential test: the two derivations must not drift apart.**
    *
    * `normaliseExpansion` and `planChildRanges` implement the same rule in two
@@ -801,6 +1141,190 @@ describe("normaliseExpansion", () => {
       (n) => n.parent === tree.rootId && n.children.length > 0,
     );
     expect(internal.map((n) => n.range)).toEqual(children.map((c) => c.range));
+  });
+
+  /**
+   * **The differential test, on the case that was escaping it.** The snap moved
+   * into src/heading-snap.ts precisely so that both derivations run the same
+   * one; this is what says they did. Without it `normaliseExpansion` hands
+   * `buildTree` a child starting one block after its own heading, and
+   * `planChildRanges` snaps it — a changed range and a `heading` repair, on a
+   * tree the cascade had already called finished.
+   */
+  it("agrees with buildTree on a section that began one block after its heading", () => {
+    const whole = article(16, (i) => (i === 8 ? heading(i) : para(i)));
+    const normalised = emptyReport();
+    const children = normaliseExpansion({
+      children: [
+        { start: blockId(0), title: "One" },
+        { start: blockId(9), title: "Two", sourceHeading: "Heading 8" },
+        { start: blockId(12), title: "Three" },
+      ],
+      parent: [blockId(0), blockId(15)],
+      blocks: whole,
+      where: "root",
+      report: normalised,
+    });
+    expect(children.map((c) => c.range)).toEqual([
+      [blockId(0), blockId(7)],
+      [blockId(8), blockId(11)],
+      [blockId(12), blockId(15)],
+    ]);
+    expect(normalised.repairs).toEqual([
+      { where: "root > child 2", kind: "heading", at: 8, size: 1 },
+    ]);
+
+    const rebuilt = emptyReport();
+    const tree = buildTree(
+      { title: "Root", range: [blockId(0), blockId(15)], children },
+      {},
+      whole,
+      "differential-heading",
+      rebuilt,
+    );
+    expect(rebuilt).toEqual(emptyReport());
+    const internal = Object.values(tree.nodes).filter(
+      (n) => n.parent === tree.rootId && n.children.length > 0,
+    );
+    expect(internal.map((n) => n.range)).toEqual(children.map((c) => c.range));
+    // The claim is backed now, so the `§` badge survives — which is what the
+    // snap is for, rather than the boundary as such.
+    expect(internal[1]!.sourceHeading).toBe("Heading 8");
+  });
+
+  /**
+   * **The one place the two derivations differ, stated so that the differential
+   * test's promise is precise.** `planChildRanges` clamps a start back inside
+   * its parent and keeps the article; `normaliseExpansion` refuses. That is not
+   * drift: the incumbent is a whole-document call naming a boundary in an
+   * article it has all of, and its behaviour is measured and is not being
+   * changed by this stage. A scoped call has no such excuse.
+   */
+  it("differs from planChildRanges on an out-of-range start, deliberately", () => {
+    const whole = article(16);
+    const outside: ModelNode = {
+      title: "Root",
+      range: [blockId(0), blockId(15)],
+      children: [
+        {
+          title: "One",
+          range: [blockId(0), blockId(7)],
+          children: [
+            { title: "One a", range: [blockId(0), blockId(3)] },
+            { title: "One b", range: [blockId(10), blockId(11)] },
+          ],
+        },
+        { title: "Two", range: [blockId(8), blockId(15)] },
+      ],
+    };
+    const incumbent = emptyReport();
+    expect(() => buildTree(outside, {}, whole, "clamped", incumbent)).not.toThrow();
+    expect(incumbent.repairs.length).toBeGreaterThan(0);
+
+    expect(() =>
+      normaliseExpansion({
+        children: [
+          { start: blockId(0), title: "One a" },
+          { start: blockId(10), title: "One b" },
+        ],
+        parent: [blockId(0), blockId(7)],
+        blocks: whole,
+        where: "root > child 1",
+        report: emptyReport(),
+      }),
+    ).toThrow(/outside the parent's range/);
+  });
+});
+
+/* ------------------------------------------------------- the tree, back -- */
+
+/**
+ * **Wave 2 plans from the tree wave 1 built**, so the conversion back has to be
+ * lossless — and *ranges alone are not the property that matters*. A round trip
+ * that kept every range and shuffled the titles would produce a tree in which
+ * each section is named after its neighbour, and every invariant we have would
+ * pass it: it tiles, it covers, it has a gist on every internal node. So this
+ * asserts internal shape, `title`, `gist` and `sourceHeading`, and that the
+ * second build finds nothing to mend and nothing to drop.
+ */
+describe("proposalFromTree", () => {
+  const blocks = article(16, (i) => (i === 8 ? heading(i) : para(i)));
+  const navLabels = { [blockId(2)]: "A leaf label" };
+  const proposal: ModelNode = {
+    title: "Root",
+    gist: "The whole argument, in one sentence.",
+    range: [blockId(0), blockId(15)],
+    children: [
+      {
+        title: "One",
+        gist: "The first half.",
+        range: [blockId(0), blockId(7)],
+        children: [
+          { title: "One a", gist: "Opening.", range: [blockId(0), blockId(3)] },
+          { title: "One b", gist: "Turn.", range: [blockId(4), blockId(7)] },
+        ],
+      },
+      {
+        title: "Two",
+        gist: "The second half.",
+        range: [blockId(8), blockId(15)],
+        sourceHeading: "Heading 8",
+      },
+    ],
+  };
+
+  it("round-trips a built tree with no repair and no drop on the second build", () => {
+    const first = emptyReport();
+    const tree = buildTree(proposal, navLabels, blocks, "round-trip", first);
+    expect(first).toEqual(emptyReport()); // or the second build proves less
+
+    const back = proposalFromTree(tree);
+    expect(back).toEqual(proposal);
+
+    const second = emptyReport();
+    const again = buildTree(back, navLabels, blocks, "round-trip", second);
+    expect(second).toEqual(emptyReport());
+    /* The same tree, node for node — ids included, because `buildTree` mints
+       them in visit order and the visit order is what the shape decides. */
+    expect(again).toEqual(tree);
+  });
+
+  it("keeps the title, gist and sourceHeading attached to the prose they describe", () => {
+    const back = proposalFromTree(buildTree(proposal, navLabels, blocks, "round-trip"));
+    const two = back.children!.at(-1)!;
+    expect(two).toMatchObject({
+      title: "Two",
+      gist: "The second half.",
+      sourceHeading: "Heading 8",
+      range: [blockId(8), blockId(15)],
+    });
+    expect(back.children![0]!.children!.map((c) => [c.title, c.range])).toEqual([
+      ["One a", [blockId(0), blockId(3)]],
+      ["One b", [blockId(4), blockId(7)]],
+    ]);
+  });
+
+  /**
+   * The leaf layer is regrown from the range and carries no decision, so it is
+   * dropped — and a node whose children are all leaves comes back childless,
+   * which is what makes the round trip idempotent rather than one level deeper
+   * every time.
+   */
+  it("drops the leaf layer, and the labels survive because they are not in the tree", () => {
+    const tree = buildTree(proposal, navLabels, blocks, "round-trip");
+    const back = proposalFromTree(tree);
+    expect(back.children!.at(-1)!.children).toBeUndefined();
+    const rebuilt = buildTree(back, navLabels, blocks, "round-trip");
+    const labelled = Object.values(rebuilt.nodes).filter((n) => n.navLabel !== undefined);
+    expect(labelled.map((n) => [n.range[0], n.navLabel])).toEqual([[blockId(2), "A leaf label"]]);
+  });
+
+  it("refuses a tree that names a node it does not hold", () => {
+    const tree = buildTree(proposal, navLabels, blocks, "round-trip");
+    const broken = { ...tree, nodes: { ...tree.nodes } };
+    const orphan = Object.values(broken.nodes).find((n) => n.parent === tree.rootId)!;
+    delete broken.nodes[orphan.id];
+    expect(() => proposalFromTree(broken)).toThrow(/does not hold/);
   });
 });
 

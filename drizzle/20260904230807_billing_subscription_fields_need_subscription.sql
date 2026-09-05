@@ -1,0 +1,29 @@
+-- The four columns a subscription writes belong to a subscription.
+--
+-- `status`, `price_id`, `current_period_start` and `current_period_end` are
+-- written by one `UPDATE` in `syncSubscriptionFromStripe` (src/billing/sync.ts),
+-- all of them on every sync and all of them to null together, so any of them set
+-- with `stripe_subscription_id` null is a row nothing in this codebase can have
+-- produced.
+--
+-- It earns its place because that row was **schema-valid and it spent money**.
+-- `status = 'active'` with a known price and a readable period made
+-- `entitlementFromRow` answer *paying Reader*, while every "do they already have
+-- a subscription" test reads the id and said no. The two disagreed, so
+-- `/profile` offered a Reader the Reader plan through a Checkout Session, and
+-- pressing it would have started a second, concurrently billed subscription.
+-- GPT Sol found it on 2026-09-04 by running the real functions against the row.
+--
+-- `subscriptionState` (src/billing/tiers.ts) is the code half and fails closed
+-- for the same row; this is the half that holds for every writer, including a
+-- hand-typed `UPDATE` in a support conversation.
+--
+-- `num_nonnulls` rather than four disjunctions — the same idiom as
+-- `billing_accounts_quota_delta_is_dated` — because it says the rule instead of
+-- encoding it. `cancel_at_period_end` is not in the list: it is `not null` with
+-- a default of false, so it has no unset state to mean anything by.
+--
+-- `ADD CONSTRAINT` validates the rows already there, so if production is holding
+-- one of these this migration says so by failing rather than by passing. That is
+-- the right way round: such a row is an account that may be being billed twice.
+ALTER TABLE "spideryarn"."billing_accounts" ADD CONSTRAINT "billing_accounts_subscription_fields_need_subscription" CHECK ("spideryarn"."billing_accounts"."stripe_subscription_id" is not null or num_nonnulls("spideryarn"."billing_accounts"."status", "spideryarn"."billing_accounts"."price_id", "spideryarn"."billing_accounts"."current_period_start", "spideryarn"."billing_accounts"."current_period_end") = 0);

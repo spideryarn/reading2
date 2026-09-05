@@ -95,6 +95,7 @@ import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
+import { bareArticles, removeBareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 /* Put the flag back straight after the imports: vitest reuses a worker across
@@ -145,13 +146,26 @@ describe("the store these tests are actually talking to", () => {
  * `pump` is called after it is decided.
  */
 let wasVercel: string | undefined;
-beforeAll(() => {
+beforeAll(async () => {
   wasVercel = process.env.VERCEL;
   process.env.VERCEL = "1";
-});
+  /* **The article, before any job names it** — added 2026-09-05, when `enqueue`
+     started refusing a bare-slug request for an article the reader does not have
+     (src/jobs.ts). Owned by `OWNER`, because that is who `acceptAny`
+     authenticates the requests below as, and `articleExists` is owner-scoped.
+     The comment above says "the article does not exist"; it does now, and
+     nothing this file asserts was about its absence — every case is about
+     whether a *second job* on one article queues, collapses or is refused.
+     ./helpers/bare-article.ts. */
+  if (reachable) await bareArticles([SLUG], OWNER);
+}, 60_000);
 afterAll(async () => {
   if (wasVercel === undefined) delete process.env.VERCEL;
   else process.env.VERCEL = wasVercel;
+  if (reachable) {
+    await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
+    await removeBareArticles([SLUG], OWNER);
+  }
   if (reachable) await closeDb();
 });
 

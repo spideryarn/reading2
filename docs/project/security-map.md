@@ -145,14 +145,16 @@ the shelf.
 therefore a **closed query rather than a reusable predicate** — there is no exported
 *"visibility is public"* clause for anybody to bolt onto another query — and it carries the same
 readability bar as `loadArticle`/`loadHead` (a tree and at least one block), so a damaged revision
-cannot become a card whose destination 404s. It selects seven named columns, orders totally, and is
-bounded.
+cannot become a card whose destination 404s. It selects eight named columns, orders totally, and is
+bounded. Every one of the eight is a fact about the *document* — the eighth, added the same day, is
+`byline`, the author the publisher's own page declared. Nothing in the projection names the reader
+who shared it.
 
 **The existing static guard could not have caught a bad one.** `tests/owner-isolation.test.ts` greps
 `src/store/` for `eq(articles.slug, …)`, and a listing has no slug in it. That file now has a second
 section, *ownerless enumeration*, which inventories every query naming the `articles` table
 reachable from the public import graph, permits exactly two, reads the listing's **generated SQL**
-for the public predicate and the absence of `owner_id`, pins its seven columns, and runs it against
+for the public predicate and the absence of `owner_id`, pins its eight columns, and runs it against
 two owners over private, public-readable and public-but-unreadable rows. Each of those was watched
 failing against a deliberately broken query before it was believed.
 
@@ -172,7 +174,7 @@ past the regex it replaced.
 `<h1>`, so the listing's projection caps every text column it returns with `left()` **in the SQL** —
 after the rows are built it is too late, the bytes have crossed. `PUBLIC_CARD_CHARS` in
 [`src/store/public-library.ts`](../../src/store/public-library.ts) holds the numbers, and a fixture
-with a 5,000-character title, gist, site name and `<h1>` measures them. A partial index
+with a 5,000-character title, gist, site name, byline and `<h1>` measures them. A partial index
 (`articles_public_listing`, `drizzle/20260904175802_*`) covers `visibility = 'public'` in the
 listing's exact order, so `limit` bounds the database's work and not only the reply.
 
@@ -308,6 +310,14 @@ computed, sent and read by nothing for the first day, so an article with no arc 
 mode of its own", which is the mistake written out and still not seen. GPT Sol's review found it.
 The tests that missed it compared all-flags-false against all-flags-true, which agrees with a
 function that ignores a flag entirely; the ones there now turn on **one flag at a time**.
+
+**The tick-box is not a rights check, and the other half of the protection is a takedown route.**
+It moves responsibility onto the owner; nothing verifies that they hold the rights, and nothing
+could. So since 2026-09-04 there is one place a wronged rightsholder can write —
+[privacy.md § If something here is yours](privacy.md#if-something-here-is-yours), a section rather
+than a page, linked from the two surfaces a stranger meets a republished article on. There is
+deliberately **no** administrator path that unpublishes anybody's article: the mechanism is the
+owner's own sharing switch, and a person decides.
 
 **`StageState.done` is the wrong signal, and this is the trap.** It is
 `status === "done" && isCurrent(step)`, so a **stale** artefact reports `done: false` — while

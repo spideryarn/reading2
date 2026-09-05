@@ -341,10 +341,11 @@ describe("planBatches", () => {
     // tree.json off disk, and `walk` recurses straight past a mixed node's leaf
     // children without noticing.
     //
-    // On the generateHierarchy path checkCoverage would catch the result. On the
-    // `npm run labels -- <dir>` path nothing would: the merged tree reaches disk
-    // with paragraphs that have no sidebar row and nothing saying why. So the
-    // check lives where both callers pass through.
+    // On the generateHierarchy path checkCoverage would catch the result. On
+    // the second path — `npm run labels -- <dir>`, retired 2026-09-05 — nothing
+    // would: the merged tree reached disk with paragraphs that have no sidebar
+    // row and nothing saying why. So the check lives where every caller passes
+    // through, which is what kept it right when that path was deleted.
     const { tree, blocks } = fixture(4, 6);
     const root = tree.nodes[tree.rootId]!;
     const firstSection = tree.nodes[root.children[0]!]!;
@@ -629,11 +630,13 @@ describe("mergeLabels", () => {
   });
 
   it("replaces the labels rather than overlaying them on last run's", () => {
-    // Overlaying reads like politeness and is a trap. A re-run of
-    // `npm run labels` that covered less than the whole article would write a
-    // tree mixing this run's labels with the previous run's, with nothing on
-    // disk recording which was which — two prompts' output in one artefact,
-    // indistinguishable. Found by an adversarial review, 2026-08-26.
+    // Overlaying reads like politeness and is a trap. A re-run that covered
+    // less than the whole article would write a tree mixing this run's labels
+    // with the previous run's, with nothing recording which was which — two
+    // prompts' output in one artefact, indistinguishable. Found by an
+    // adversarial review, 2026-08-26, on `npm run labels`; the command went on
+    // 2026-09-05, and every route that still reaches this function — the queue,
+    // from a browser or from scripts/stage.ts — arrives here the same way.
     const first = mergeLabels(tree, {
       [blocks[0]!.id]: "The label from the first run, at a workable length",
       [blocks[1]!.id]: "Another label from the first run, also long enough",
@@ -831,8 +834,10 @@ describe("assertEveryBlockLabelled", () => {
   });
 
   it("refuses a gap, and names where it is", () => {
-    // `npm run labels -- <dir>` does not go through generateHierarchy, so this is the
-    // only thing between a short answer and a rewritten tree.json on that path.
+    // `npm run labels -- <dir>` did not go through generateHierarchy, so this
+    // was the only thing between a short answer and a rewritten tree.json on
+    // that path. The command went on 2026-09-05 and the check stays: it is
+    // stated on `mergeLabels`'s own input, so it covers whatever calls it next.
     const { [blocks[0]!.id]: _gone, ...short } = complete;
     expect(() => assertEveryBlockLabelled(short, blocks)).toThrow(/came back without one/);
     expect(() => assertEveryBlockLabelled(short, blocks)).toThrow(blocks[0]!.id);

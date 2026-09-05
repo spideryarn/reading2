@@ -32,6 +32,38 @@
  *
  * The model is stubbed, so the real `generateTweets`/`generateArc` run end to
  * end; nothing here reaches the network.
+ *
+ * ## The store here is a fake, and it always was one
+ *
+ * Until 2026-09-05 it was a `createFsArtifactStore` over a copy of `example/`.
+ * That was never the subject: what this file needs is *a store that can see the
+ * article while `ctx.dir` cannot*, and the filesystem one was the cheapest such
+ * store to build. It is `memoryArtefactsFrom` now
+ * ([helpers/memory-artefacts.ts](helpers/memory-artefacts.ts)), which reads the
+ * same copy of `example/` off the disk once and then answers from memory — so
+ * stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * can delete `src/store/artifacts-fs.ts` without this file noticing. The
+ * asymmetry the whole fixture rests on is unchanged, and `coldContext()` must
+ * still never be given a directory with an article in it.
+ *
+ * **Mutation.** Two arms, run 2026-09-05. (1) `tryReadArticle` in
+ * src/article-input.ts made to take its blocks from a `null` instead of from
+ * `store.read` — the stage no longer reading the store: **2 of 4 red**, the
+ * `tweets` and `arc` cases both on *promise rejected "No blocks or tree for
+ * nagel-bat" instead of resolving*. The first case stays green because it asks
+ * the store directly, which is the division of labour this file wants. (2)
+ * `memoryArtefactsFrom` made to count what it found and plant none of it —
+ * **3 of 4 red**, adding *actual value must be number or bigint, received
+ * "undefined"* on the store's own case and *the fixture has no tree* on `arc`.
+ * The negative control is green under both arms, which is what says it is
+ * independent of the store being loaded rather than riding on it.
+ *
+ * **Blind to.** Whether production hands a late step a store rooted anywhere
+ * useful — that is `claimSession` and lives in
+ * `tests/claim-session-postgres.test.ts`. Also blind to any behaviour that is
+ * genuinely the *filesystem* adapter's: the fake does not alias
+ * `extractedHtml`/`stampedHtml` onto one file, and nothing here reads either.
  */
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
@@ -42,8 +74,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { partsOf } from "../src/arc.js";
 import { STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
+import { memoryArtefacts, memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
 
@@ -97,10 +129,11 @@ beforeAll(async () => {
   published = await mkdtemp(path.join(tmpdir(), "spya-published-"));
   scratch = await mkdtemp(path.join(tmpdir(), "spya-scratch-"));
   await cp(path.join(REPO, "example"), path.join(published, "data", SLUG), { recursive: true });
-  store = createFsArtifactStore((slug) => ({
-    dir: path.join(published, "data", slug),
-    htmlFile: path.join(published, "output", `${slug}.html`),
-  })) as ArtifactReads;
+  /* **Read off the disk once, then held in memory** — the copy of `example/` is
+     still what the article *is*, and `memoryArtefactsFrom` refuses an empty
+     load, so a fixture that stopped being copied fails here rather than three
+     stages later saying "run the hierarchy step first". */
+  store = await memoryArtefactsFrom(published, SLUG);
 });
 
 afterAll(async () => {
@@ -120,6 +153,11 @@ function coldContext(): StepContext {
   };
 }
 
+/**
+ * **No mutation of its own** — this is the file's only block, so the two arms in
+ * the header are its evidence: 2 of its 4 cases red when the stage stops reading
+ * the store, 3 of 4 when the store stops holding the article.
+ */
 describe("a single-step job on an instance that never ingested the article", () => {
   it("the store holds the blocks the step needs", async () => {
     /* If this ever fails the rest of the file proves nothing — it would be
@@ -197,10 +235,7 @@ describe("a single-step job on an instance that never ingested the article", () 
    * from three layers down.
    */
   it("and refuses in its own words when the store has no article either", async () => {
-    const empty = createFsArtifactStore((slug) => ({
-      dir: path.join(scratch, "data", slug),
-      htmlFile: path.join(scratch, "output", `${slug}.html`),
-    })) as ArtifactReads;
+    const empty: ArtifactReads = memoryArtefacts();
     await expect(STEPS.arc.run(coldContext(), empty, nullCheckpointStore())).rejects.toThrow(/run the hierarchy step first/);
   });
 });

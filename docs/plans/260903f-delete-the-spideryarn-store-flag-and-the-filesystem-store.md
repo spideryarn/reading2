@@ -228,8 +228,8 @@ test rewritten *inside* the hinge is a test bent until it passes. Sol put the co
 
 ## The decisions, and who made each
 
-**Five so far, all on 2026-09-03.** Recorded together because each one deleted or moved work, and
-because the last two were handed back rather than answered.
+**Six. Five on 2026-09-03, one on 2026-09-04.** Recorded together because each one deleted or moved
+work, and because two of them were handed back rather than answered.
 
 | # | decision | by |
 |---|---|---|
@@ -238,6 +238,7 @@ because the last two were handed back rather than answered.
 | 3 | **Absorb [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)** into this plan rather than depend on it or duplicate it | Greg — see stage T |
 | 4 | **Retire `npm run labels`** | Greg delegated; settled with Sol — see stage E |
 | 5 | **`npm run fetch` becomes `npm run ingest`, and does the whole ingest** | Greg delegated; settled with Sol, **against our own recommendation** — see stage E |
+| 6 | **Run the job to the end of G. `I` waits on Greg's Vercel change; `H` is sized after G rather than committed to now** | Greg, 2026-09-04 — below |
 
 For 4 and 5 Greg's instruction was: *"Use your judgment — get input from GPT Sol if needed, aiming
 for simple/clean/long-term-best."* Sol agreed with us on 4 and **disagreed on 5**, and the reasoning
@@ -263,6 +264,33 @@ stage 4 with the filesystem store, which is the right time for it to die"* — b
 every stage to stay runnable on its own, and Greg kept the rule. **This is stage E, and Sol called
 it the plan's missing major stage:** it must land *before* the artefact filesystem machinery is
 deleted, not after.
+
+**6 — how far to run. Decision: through G, on a better reason than the one we gave.** Asked
+mid-flight whether the whole thing was still worth doing, we recommended C → F and said G could be
+reassessed, costing G as *maintenance burden* — which is nearly inert in a repo this young. Greg
+overruled the framing:
+
+> I would like to delete dead code, to avoid future agents being confused.
+>
+> — Greg, 2026-09-04
+
+That is the stronger argument and it is the one to keep. **In a repo where agents read the code to
+decide what to do, 3,900 lines of live-looking filesystem store is an active hazard, not clutter.**
+Every agent that opens `src/store/fs.ts` has to work out for itself that nothing runs it.
+
+**The same reason carries `I`, which is why `I` is not optional either.** The tombstone is live code
+reading `SPIDERYARN_STORE` and throwing on `files`; a permanent validated no-op says a store
+selection still exists. See § *The tombstone*, which already says so in its own words. `I` is small —
+one deletion and the grep listed under the stage — but it is **gated on Greg**, not on us: there is no
+Vercel credential on this box, so the variable has to come out of Preview and Production by hand
+first, and a hinge that threw on any value before that would break the next deploy.
+
+**`H` is the odd one out and is deliberately left open.** `G` and `I` remove things that mislead;
+`H` *adds* strictness the filesystem store had been preventing. Nothing is incoherent without it, it
+carries its own design question (chat's return type split, and whether `claimsProblem`'s unreachable
+400 stays as a fail-safe), and bundling it would mean the store deletion cannot be called done until
+an unrelated type change lands. **Size it after G**, which touches the same seams, rather than
+committing either way now.
 
 ## Where the ancestor plan is wrong
 
@@ -3178,7 +3206,8 @@ executor/transaction-aware.** Acceptance must prove all five:
 
 1. `pgCostStore.record` genuinely executed (not silently skipped).
 2. Fixture costs were never visible to normal dev reports.
-3. A crashed or failed suite leaves nothing behind.
+3. A crashed or failed suite leaves no ledger rows anywhere a report can see. **Corrected twice** —
+   see below; a `kill -9` proves *confinement*, and cleanup is the scavenger's job, not the run's.
 4. Parallel test files stay isolated from each other.
 5. Direct ledger integration tests still exercise committed behaviour.
 
@@ -3285,6 +3314,192 @@ what those suites cover is the **unpriced** path. Nothing in them would exercise
 `CHECK`. So *"the route suites prove the ledger columns work"* is not true today, and C should either
 add a fixture that makes it true or stop implying it.
 
+#### C's target cohort, frozen 2026-09-04 before a single edit
+
+Sol's advice on stage B was that a conversion stage needs an **independent oracle fixed before the
+work starts**, or the cohort quietly becomes "whatever turned out to be easy". This is C's, and it is
+not a grep: it is the dynamic witness, which records every call that actually reached the filesystem
+adapter, crossed with `TEST_LANES` and with which files set the flag themselves.
+
+**27 files reach `ai-calls-fs` at run time. 23 are already in `private-postgres`; 4 are in `unit`.**
+And 23 of the 27 set `process.env.SPIDERYARN_STORE = "postgres"` in their own hoisted block, because
+`src/store/live.ts` reads the variable once at module load.
+
+Cross those two facts and C's blast radius falls out exactly. Removing the `NODE_ENV === "test"`
+redirect changes the answer **only** for a file that sets the flag to `postgres`; every file that
+leaves it unset still gets `fsCostStore` from the `files` branch, which survives until F.
+
+| after C, this file… | predicted | actual |
+| --- | --- | --- |
+| writes its ledger rows to the **private database**, as intended | 22 | 21 |
+| **breaks, and is C's actual work** | **1** — `tests/cost-store-under-test.test.ts`, the only file both pinning the flag to `postgres` and living in the lane where `DATABASE_URL` is poisoned | **2** — that one, plus `tests/live-session-routes.test.ts`, four cases |
+| is untouched, because it leaves the flag unset | 4 | 4, confirmed by run |
+
+**Reproduce the freeze with** `scripts/store-migration-witness.ts` output crossed against `TEST_LANES`;
+the counts above are from `tests/store-migration-witness.json` measured `2026-09-04T22:17:39Z`.
+
+##### The freeze was one file short, and the predicate is why
+
+`tests/live-session-routes.test.ts` sets the flag and is in `private-postgres`, so the cross put it in
+the twenty-two called *"intended, should stay green"*. It was not green. It does not only **write**
+ledger rows — it **reads them back**, out of a JSONL it pointed `SPIDERYARN_LEDGER` at. Remove the
+redirect and the rows go to Postgres while the assertions go on reading an empty file.
+
+**The predicate was wrong, not the measurement.** *"Removing the redirect changes the answer only for
+a file that sets the flag to `postgres`"* is true, and it predicts **where rows go** — not **which
+assertions look for them**. A witness of writes cannot see a reader.
+
+This is the fourth outing of the same personal class in this plan — *an incomplete search reported as
+an absence* — and its most interesting one, because nothing was searched incompletely. The scan was
+exhaustive over the thing it scanned. **The freeze answered a different question from the one the
+stage was asking**, and read as an answer to both.
+
+Worse, **the file said so itself.** Its header carried *"the ledger deliberately did not move …
+stage C owns that redirect"*. The cross never asked it.
+
+> **When freezing a cohort for D or E, cross the write-witness with a grep for files that read the
+> store back.** A file that reads is affected by a change to where writes land, and no dynamic
+> witness of writes will ever list it.
+
+**So C was two files, not one, and not the 23 costed or the 39 the grep ceiling allowed.** The
+ceiling was honest and about 20× too big. `cost-store-under-test.test.ts` was rewritten *and moved to
+`private-postgres`* — the same edit the plan already described as *"the selection is Postgres, and it
+is the private database"*, which also implies a lane change the earlier costing never mentioned.
+
+#### C does not delete `ai-calls-fs.ts` — G does
+
+The earlier costing said *"`selected()` collapses to `export const costStore = guardedLedger`,
+`ai-calls-fs.ts` goes"*. **That contradicts stage G**, whose deletion order names `ai-calls` as one of
+its groups, and it is G that is right. Deleting the adapter in C would mean the ledger required a
+database while every other store was still on files — breaking the one thing `ai-calls-fs.ts`'s
+docstring says it exists for, three stages before the hinge that makes it safe.
+
+**C removes the `NODE_ENV === "test"` line and nothing else about the selection.** The `files` branch
+stays until F, the adapter until G. That keeps C at a stopping point where the tree is deployable,
+which is what a stage boundary is for. Settled here rather than asked, as a technical fork; put to
+Sol at the stage-end review.
+
+#### C is done, 2026-09-05, and all five criteria were proved by run
+
+One line removed from `selected()`; `ai-calls-fs.ts` untouched, as § *C does not delete it* argued.
+Two test files rewritten, one lane change, four docstrings that described the redirect as present
+tense corrected.
+
+| # | criterion | what the run printed |
+| --- | --- | --- |
+| 1 | `pgCostStore.record` genuinely executed | **16 rows** in `spideryarn.ai_calls` of the run's own database, counted **from outside the process** by an external poller; every other test database `0` |
+| 2 | fixture costs never visible to dev reports | `postgres` held `914 / 2026-09-04T22:52:15Z` before and after a full unit lane, three full private lanes and both mutation runs — **unchanged** |
+| 3 | a crashed run leaves no rows a report can see *(wording corrected twice — see below)* | `kill -9` mid-run: 13 committed rows survived **in the run's own database**, `postgres` still 914. Ordinary runs print `dropped spideryarn_test_…`; a live scavenge fired unprompted during the stage |
+| 4 | files stay isolated | two concurrent private-lane runs, one route file each: two distinct databases, `test-chat-route-fixture=4` and `test-remember-route-fixture=16`, neither seeing the other — **and those are the literal fixture slugs from the 4,714-row incident** |
+| 5 | direct ledger tests still exercise committed behaviour | `store-ai-calls` + `ai-calls-spend-pg`, **35 passed** |
+
+**Criterion 1 is the one worth reading twice.** With the redirect in place, **no route suite in the
+tree had ever put a row through `pgCostStore`** — the adapter that meters real money was exercised
+only by tests importing it directly. The redirect bought isolation by removing coverage of the only
+store that deploys, and C is where that stops.
+
+**Criterion 4's wording no longer fits the design it is being applied to**, and the plan should say so
+rather than let a green tick stand for a question nobody asked. The private lane is
+`fileParallelism: false`, so *parallel test files* do not exist inside it — files share one database,
+serially. What was measured instead, and is the true statement, is that concurrent **runs** are
+isolated. The residual risk the criterion was written for reappeared as the range-scan problem below,
+which is a different question with a different answer.
+
+##### The range scan, found by looking and fixed by scoping
+
+One database per run and no rollback means `costStore.read()` over the default window returns **every
+earlier file's rows**, not this file's. Every caller was enumerated:
+
+| | verdict |
+| --- | --- |
+| `tests/live-session-routes.test.ts` — `const before = (await ledger()).length` | **the one real instance.** `ledger(id)` now filters on the session id **inside the helper**, so all six call sites are scoped |
+| `tests/store-ai-calls.test.ts` | already safe — every read filtered by `runId` |
+| `tests/ai-calls-spend-pg.test.ts` | already safe *and deliberately*: its fixtures are dated **2031**, with a docstring saying that is so no other test or report shares its window |
+| `src/jobs.ts` → `costStore.forJob(job.id)` | job-scoped |
+| `scripts/ai-cost.ts` | the only wide reader; no test drives it against a live store |
+
+**Fixed by scoping the assertion, not by widening a tolerance** — a range assertion loosened until it
+passes is the same failure this plan keeps finding.
+
+#### C's stage-end review — one round, three findings, all three real
+
+GPT Sol, 2026-09-05, `gpt-5.6-sol` at high effort. **Refused on an established P1.** All three
+findings checked by hand; none was wrong.
+
+| ID | sev | finding | disposition |
+| --- | --- | --- | --- |
+| F1 | **P1**, established | `scripts/store-migration-witness.ts` § `POSITIVE_CONTROLS` uses `cost-store-under-test.test.ts` as its positive control for `ai-calls-fs`. C converted that file, so **the witness's own self-check could no longer pass** | fixed — control moved to `tests/store-ai-calls.test.ts` |
+| F2 | P3, established | criterion 3's wording claims a killed run leaves nothing behind, while the stage's own evidence shows the opposite | fixed — see above |
+| F3 | P3, established | the new `ledger()` helper's comment says "scoped by session id **in the query**"; it is a JavaScript filter over an unbounded read | fixed — comment now says what the code does, and why JS is the right call at 16 rows |
+
+**F1 is the interesting one, and it is the fourth thing this stage got wrong.** The control's own
+docstring predicts it exactly — *"Stage B converts these files one by one, and when it converts one
+this self-check goes red saying so … replace the control with a file that still touches the same
+module"* — and neither the implementer nor I ran the self-check, because C is not stage B and the
+sentence names stage B. **A rule written for one stage stopped being read at the stage boundary.**
+
+Watched red before it was fixed, then green after, which is why it is recorded as established rather
+than reasoned:
+
+```
+SELF-CHECK FAILED (1):
+  - tests/cost-store-under-test.test.ts: expected ai-calls-fs:fsCostStore.record,
+    ai-calls-fs:fsCostStore.describe; saw nothing
+```
+
+**Add `--self-check` to the end of every remaining stage that converts a file**, D through G. It
+takes ~40 seconds and it is the only thing that notices a control has gone stale.
+
+**Sol also checked three things and cleared them**, and they are worth recording because they were
+the ones I was least sure of: the second connection in `cost-store-under-test.test.ts` cannot escape
+to a remote database (the test-database factory refuses non-loopback hosts and `host`/`hostaddr`
+overrides, and `urlForDatabase` replaces only the pathname); restoring `SPIDERYARN_STORE` after the
+hoisted imports is safe, because `STORE` is captured at module load and vitest isolates module graphs
+per file; and **there is no third ledger read-back dependency** — the direct readers reduce to the
+corrected helper, job-scoped `forJob`, the explicitly filtered adapter tests, and the report script.
+
+**One round, not two, and the reason is mechanical.** The cap allows a narrowly scoped second pass on
+a P0/P1 established at round two; F1 was round one, and its fix is verified by the instrument's own
+self-check going red and then green — which outranks a second reasoned opinion about a two-line
+change.
+
+##### Criterion 3 was wrong a second time, and Sol caught it
+
+The first draft said a killed run would *roll back*. That was corrected during the spike to
+*"leaves nothing behind, proved by teardown"*. **Still wrong**, and the stage's own evidence says so:
+`kill -9` skips teardown, and the scavenger deliberately **spares** a database for six hours so that
+it cannot delete one a live run is using. Sol reproduced the sparing directly —
+`chooseScavengeVictims` on a zero-second-old database returns `dropped: []`, spared against a
+21,600-second threshold.
+
+So what the kill proved is **confinement, not cleanup**, and those are different claims:
+
+> An ordinary failed suite drops its private database at teardown; a killed run leaves only its
+> private database, never rows in the development ledger, and a later run scavenges that database
+> once it is stale.
+
+That is the criterion. **Three drafts to state one fact correctly**, all three sounding fine — and
+each was checked by somebody looking straight at the evidence that contradicted it. Worth noting
+because the same shape has now appeared in this plan at every scale: the redirect, the freeze, and
+now the criterion the freeze was measured against.
+
+##### The witness was not re-run after C, deliberately
+
+Both files C touched have stopped reaching `ai-calls-fs`, so
+`tests/store-migration-witness.json` now **over-reports** the filesystem store's run-time reach by
+two. That is the safe direction and the guard cannot fire on it: § *leaves no file that the import
+graph can reach and nothing accounts for* goes red when the witness **lacks** a record an entry
+claims, never when it holds one nobody needs any more.
+
+**Deferred to after D**, where 22 files change at once when the fixture loader moves — one 25-minute
+run instead of two. The registry entry for `cost-store-under-test.test.ts` says in its own docstring
+that it survives only because the witness still lists the file, so nobody reading it later mistakes
+the staleness for a measurement.
+
+**91 is therefore no longer the live number**; it is 89, un-remeasured. Do not quote it as a
+measurement until the run after D. § *The treadmill* has the standing rule about hand-editing that
+file, which still applies: nobody edits it to make a guard green.
+
 ### D — the fixture loader, which is two tools not one
 
 - **A minimal direct-row helper** for tests needing only an article record.
@@ -3301,6 +3516,366 @@ raw bytes, creates a job and draft, copies fixture stages **through the real wri
 publication guards and publishes. Replacing that with a "minimum coherent direct insert" would
 **silently remove integration coverage** — and `scratch-article.ts` already documents why a second
 files-to-Postgres implementation is undesirable. **Tests of publication keep using the real path.**
+
+#### D's target cohort, frozen 2026-09-05 before any edit
+
+Measured from `tests/store-migration-witness.json` (2026-09-04, less C's two departures), crossed
+with `TEST_LANES`. **This is the measurement that says D is the critical path**, and it is much
+bigger than the costing above.
+
+**Where the filesystem store's run-time reach actually is**, by instrumented module — a file counts
+once per module:
+
+| module | files | method-level |
+| --- | --- | --- |
+| `artifacts-fs` | **75** | `createFsArtifactStore` **56**, `fsLocations` 29, `pathFor` 3, the `fsArtifacts.*` methods 1–3 each |
+| `copy-artefacts` | 39 | `copyArtefacts` 39, `readParts` 1 |
+| `data-root` | 31 | `dataRoot` 31, `chooseDataRoot` 1, `findRepoRoot` 1 |
+| `ai-calls-fs` | 27 → **2**, after C | — |
+| `fs` | 9 | — |
+| `jobs-fs` | 7 | — |
+| `uploads-fs` | 5 | — |
+| `realtime-sessions-fs` | 1 | — |
+
+**`createFsArtifactStore` at 56 is the single biggest lever in the whole plan**, and **only 14 test
+files name it**. The other ~42 inherit it from one line in
+[`tests/helpers/load-article.ts`](../../tests/helpers/load-article.ts), through `scratchArticleInPg`.
+One import in one helper is most of what keeps the filesystem store alive at run time.
+
+| what D's landing does to a file | files |
+| --- | --- |
+| **leaves the filesystem store entirely** — reaches only `copy-artefacts` / `artifacts-fs` / `data-root` | **24** |
+| **reduces** its reach — the loader chain plus `ai-calls-fs` (14) or `fs` (1) | 15 |
+| unaffected by the loader — reaches `artifacts-fs`/`data-root` by another route | 36 |
+
+**Stage B roughly doubled this stage's value, and nobody planned that.** The inventory above costed
+`fixture-loader` at *"12, the largest"* and said *"Stage D decides all twelve at once"*. It is 24
+outright and 39 in part, because 22 of stage B's 26 conversions were built on `scratchArticleInPg`.
+§ *The witness was re-run* recorded that as stage B's failure to shrink anything; this is the other
+side of the same fact, and it is a gain.
+
+**The `contextPaths` mechanism is real and is not D's.** `runStep` in `src/jobs.ts` calls
+`contextPaths(job.slug)` unconditionally under either store, which is why `fsLocations` and
+`dataRoot` appear on pure-Postgres suites. But **only 4 files reach the store exclusively through
+it** — `billing-settlement`, `pg-session-exact-base`, `pipeline-slug-claim-files`,
+`store-session-isolation` — so it is a cheap fix with a small blast radius, and it belongs with the
+hinge rather than with the loader. It must land before G can delete `artifacts-fs.ts`.
+
+##### The reader axis, which is what C got wrong
+
+Applying the rule stage C paid for: a witness of writes cannot see a reader. **12 files assert on
+`loaded.copied`**, the set of steps the loader reports having copied — `chat-library-exclusion`,
+`chat-route`, `comment-referee-mark`, `corpus-materialise`, `helpers-load-article`,
+`hierarchy-structure-eval`, `referee-routes-postgres`, `remember-route`, `routes`,
+`store-block-roles-pg`, `store-parity`, and `tests/helpers/scratch-article.ts` itself.
+
+**That return value is the contract, and a replacement reader must produce it identically.** It is
+also the thing `copyArtefacts` was given a return value *for* — *"a silent no-op over an article the
+source store has never heard of is exactly the shape this repo keeps being caught by"*.
+
+#### Landed, 2026-09-05 — the loader, and six of the fourteen direct namers
+
+**The lever went in as designed.** The *source* half of `copyArtefacts` is
+[`tests/helpers/fixture-artefacts.ts`](../../tests/helpers/fixture-artefacts.ts), a reader over the
+committed `data/` + `output/` tree; the *destination* is still `pgArtifactsIn`, so every byte a
+fixture puts into the database goes through the production write path with every guard it has. The
+new file carries the `(step, kind) → path` table, and its header says out loud that this is a copy
+that becomes the original when stage G deletes `PATHS`.
+
+**One deviation from the brief, and it is the enabling change.** `copyArtefacts`'s `from` parameter
+is now `ArtifactSource` — `Pick<ArtifactStore, "read" | "stampFor">`, declared beside `ArtifactReads`
+in [`src/store/artifacts.ts`](../../src/store/artifacts.ts). Behaviour is untouched and
+`ArtifactStore` is still assignable, so `tests/artefact-copy.test.ts` drives filesystem-to-filesystem
+through the identical signature. The alternative — a reader pretending to be a whole `ArtifactStore`
+with seven throwing stubs for methods the copy never calls — would have put dead code behind a lie
+the type system was in a position to refuse.
+
+**`loaded.copied` is unchanged, proved at the seam rather than sampled through the suites.** A probe
+drove the old `createFsArtifactStore` and the new reader over all five corpus articles and compared
+everything: the `copied` list is identical for each — 3, 8, 8, 4 and 9 steps, **32 in all** — and so
+are all **52 artefacts** and all **32 stamps**, byte for byte as JSON. Zero differences. None of the
+files that assert on that value had to change.
+
+**And that probe missed a real break, which is the more useful half of this paragraph.** It compares
+the two sources over *the corpus as it is*, and the corpus's largest artefact is 154 KB — so it could
+not see that the new reader had no size ceiling and copied artefacts the old one refused. The
+docstring it was written alongside declared exactly that blind spot ("a fixture article no suite
+loads") and nobody, including its author, followed the sentence to its consequence. See § *the
+cross-family review refused* below, F1.
+
+**And the list of twelve above is nine.** Re-counted 2026-09-05: `corpus-materialise`'s `copied` is a
+different function's (`["data/", "output/"]`), `hierarchy-structure-eval` asserts on
+`copiedHeadings`, and `scratch-article.ts` passes the value through as `ScratchArticle.copied`
+rather than asserting on it. Three false positives from grepping a common word. The nine are
+`chat-library-exclusion`, `chat-route`, `comment-referee-mark`, `helpers-load-article`,
+`referee-routes-postgres`, `remember-route`, `routes`, `store-block-roles-pg`, `store-parity`, and
+they are named in
+[`fixture-artefacts.ts`](../../tests/helpers/fixture-artefacts.ts) so the correction sits next to the
+table it protects. It does not weaken the conclusion — the probe compared every artefact, not the
+nine assertions.
+
+**Measured reach, before and after** (`--files` on the ad-hoc witness against the 2026-09-04 JSON):
+
+| file | before | after |
+| --- | --- | --- |
+| `store-block-roles-pg` | `artifacts-fs`, `copy-artefacts` | `copy-artefacts` |
+| `comment-referee-mark` | `artifacts-fs`, `copy-artefacts` | `copy-artefacts` |
+| `chat-route` | `ai-calls-fs`, `artifacts-fs`, `copy-artefacts` | `copy-artefacts` |
+| `remember-route` | `ai-calls-fs`, `artifacts-fs`, `copy-artefacts` | `copy-artefacts` |
+| `late-step-on-a-cold-instance` | `artifacts-fs` | **nothing at all** |
+| `artefact-copy` (the control) | `artifacts-fs`, `copy-artefacts` | unchanged, as it must be |
+
+`copy-artefacts` stays, on all of them, and that is not a shortfall: the loader drives `copyArtefacts`
+and always will. That module is on the instrumented list because it lived beside the adapters, not
+because a fixture loader is condemned; where it ends up is stage G's call.
+
+**The clone in `scratchArticleInPg` stays, and the number is fresh.** Ten runs of `writes`,
+2026-09-05: clone min 24.2 / median 31.3 / max 62.5 ms against a whole seed of min 255.0 / median
+283.1 / max 443.6 ms — **11.1% at the median**, within noise of the 2026-09-01 figure the docstring
+already carried. `mutate` needs a writable copy anyway, and telling the reader a slug instead would
+mean writing it back into `meta.json` — making the fixture reader a *transformer* of what it reads,
+which is the exact property its safety argument rests on. The docstring now says all three.
+
+**The fourteen direct namers, decided one at a time and counted 6 / 2 / 2 / 4.**
+
+| what happened | files |
+| --- | --- |
+| **converted** onto the new fake | `illustrated-step-registration`, `job-failure`, `late-step-on-a-cold-instance`, `quiz-step-registration`, `stage-stamp-agreement`, `tweets` |
+| **re-classified** — the verdict was wrong, and the case belongs to the adapter | `block-roles`, `stage2c-raw-bytes` |
+| **left, and why is below** | `blocks-baseline`, `glossary-ideas-baseline` |
+| already `filesystem-adapter-behaviour` or `database-integration`, untouched by design | `artefact-copy`, `pipeline-artifact-store`, `store-session`, `store-pg-session` |
+
+The six moved onto a new
+[`tests/helpers/memory-artefacts.ts`](../../tests/helpers/memory-artefacts.ts) — an in-memory
+`ArtifactStore` that applies the same `SHAPE` and `BASELINE` rules and **does not reproduce the
+filesystem's aliasing**, because a fake of the thing being deleted would keep a filesystem-shaped
+assumption alive in ten suites after the filesystem was gone.
+
+`store-pg-session` was read as well as classified: its one `createFsArtifactStore()` is the **control**
+in case 6 — *the disk really does say done* — which is what stops "the preflight read the draft"
+being consistent with the file never having been written. It needs a filesystem store for exactly as
+long as there is one, and its premise disappears with the adapter. The registry's existing reason
+already said so.
+
+**The two re-classifications are worth knowing**, because both look like `store-agnostic-fake` from
+outside and are not:
+
+- `block-roles`'s one store case is a **serialisation round trip**. An in-memory fake would make it
+  `toEqual` against the object it just put in — a case that cannot fail, which is worse than the
+  reach it removes. `store-block-roles-pg` carries the same claim through Postgres.
+- `stage2c-raw-bytes`'s one store case asserts that the file `writeRawFiles` writes is the file
+  `PATHS.fetch.raw` reads. A fake with no paths cannot hold that. It dies in G with the
+  `SPIDERYARN_STORE=files` CLI path it documents.
+
+**Two are not done, and the two reasons are different — said apart, because "not done" hides which
+of them is a judgement and which is a stopping point.**
+
+- **`blocks-baseline` has a real blocker.** One of its seven filesystem cases is *refuses when stage
+  4's copy is over the size this store can read* — the 32 MiB ceiling in `DECODERS`, which Postgres
+  has no equivalent of and an in-memory fake cannot have without copying the table. Converting the
+  other six would leave the import in place and free nothing, so the honest unit of work is stage G's
+  per-assertion inventory, or moving that one case to
+  [`pipeline-artifact-store.test.ts`](../../tests/pipeline-artifact-store.test.ts) where the
+  adapter's own surface already lives.
+- **`glossary-ideas-baseline` has no blocker** — checked, rather than assumed by analogy: its
+  filesystem arm writes only shape and parse manipulations, every one of which `plant` reproduces,
+  and it has no ceiling case. It is unconverted because this stage stopped, not because anything
+  stands in the way. About fifteen `writeFile` sites, and its `articleIn(dir)` reads the article off
+  the same directory, so the fixture tree stays either way.
+
+They are the last two `store-agnostic-fake` rows still naming `createFsArtifactStore`.
+
+**And the `.insert(articles)` consolidation should not happen — measured, not assumed.** Thirty test
+files call it (`grep -rn "\.insert(articles)" tests/`, 2026-09-05). Grepped for any mention of
+`artifacts-fs`, `data-root`, `copy-artefacts`, `fsArtifacts` or `dataRoot()` in all thirty, the
+**only** hit is `store-artefacts-pg.test.ts` importing `PATHS` — which is the read-only blind spot
+already recorded in the registry with `evidence: "static-only"`, and has nothing to do with its
+insert. Everything else in the mention count is a `writeFile` or a `data-root` fixture path in prose.
+**So none of the thirty keeps a file inside the filesystem store's reach**: they are direct row
+inserts into Postgres, which is where they already belong, and routing them through a helper is pure
+tidying with a real downside — the plan's own warning that many are deliberate oddities whose whole
+purpose is the unusual row they construct. Fixing the loader at source is what removed the value the
+older D text saw here. **Recommendation: drop it from this plan rather than defer it.**
+
+#### D is done, 2026-09-05, and the witness was re-run
+
+`tests/helpers/fixture-artefacts.ts` is the loader's source now — `read` and `stampFor` over the
+committed fixture tree, no writes at all. `copyArtefacts`'s `from` narrowed from `ArtifactStore` to a
+new `ArtifactSource = Pick<ArtifactStore, "read" | "stampFor">`, so **a source that cannot write can
+be a source**; the destination is `pgArtifactsIn`, untouched. Six files that named
+`createFsArtifactStore` as a cheap fake moved to `tests/helpers/memory-artefacts.ts`.
+
+**The full witness re-run, 2026-09-05T02:10Z**, 669 files, one unresolved:
+
+| module | before (09-04) | after | |
+| --- | ---: | ---: | --- |
+| `artifacts-fs` | 75 | **37** | **−38**, and this is the stage's whole point |
+| `ai-calls-fs` | 27 | **4** | −23, stage C plus D's fakes |
+| `copy-artefacts` | 39 | 39 | ±0 — **see below** |
+| `data-root` | 31 | 31 | ±0 |
+| `fs` / `jobs-fs` / `uploads-fs` / `realtime-sessions-fs` | 9 / 7 / 5 / 1 | unchanged | |
+
+##### The headline count is 84 and it is the wrong number to read
+
+`touchesFilesystemStore` went **91 → 84**, which understates the stage by a factor of five, because
+**31 files now reach `copy-artefacts` and nothing else**. `src/store/copy-artefacts.ts` is on the
+instrumented list *because it lived beside the adapters*, not because it is condemned: it is the
+cross-store copier the fixture loader drives, it writes through the production path, and it survives
+the deletion. Counting it as filesystem-store reach inflates every total in this plan.
+
+**Files touching a genuinely condemned adapter: 91 → 53.** That is C and D together, and it is the
+number to quote.
+
+##### The freeze mis-framed this, for the third time in three stages
+
+§ *D's target cohort* predicted *"24 files leave the filesystem store entirely"*. Seven did. The other
+17 left `artifacts-fs` and kept `copy-artefacts`, because **the loader still calls `copyArtefacts` and
+always will** — that is what puts the fixture into Postgres through the production write path.
+
+The freeze's error was in its own table: it called `copy-artefacts` part of *"the loader chain"* files
+would leave, when it is the part they keep. Same shape as stage C's:
+
+| stage | the predicate I used | what it actually predicted |
+| --- | --- | --- |
+| C | sets the flag to `postgres` | where rows **go**, not which assertions look for them |
+| D | reaches only the loader chain | leaving `artifacts-fs`, not leaving the **store** |
+
+**Both were true statements answering a question the stage was not asking.** Neither was an incomplete
+search — the scans were exhaustive. The lesson that generalises, for E, F and G: **name the predicate
+in the same sentence as the prediction**, because *"24 files leave the store"* and *"24 files stop
+calling `createFsArtifactStore`"* look like the same claim and are not.
+
+##### Seven registry entries deleted, on B3's precedent
+
+The guard went red the moment the new witness landed — seven `STORE_MIGRATION` entries claiming
+`dynamic` evidence the witness no longer has. **That is the correct failure**, and the fix is the one
+B3 established: an entry says what work a file still needs and dies when the work is done, while
+`STORE_CONVERSIONS` keeps the evidence. All seven are in `ranAndTouchedNothing`, so the completeness
+check still accounts for them. `STORE_MIGRATION` is 106 → 99, counted rather than carried forward.
+
+##### The cross-family review refused, and the two P1s were both in the new helpers
+
+Not in the conversion, not in the loader, not in `copyArtefacts` — in the two files written to replace
+`createFsArtifactStore`. **Both were reproduced by the reviewer with real runs, and both were then
+reproduced here before being fixed**, which is the only reason the fixes can be believed.
+
+**F1 — the fixture reader had no size ceiling.** `createFsArtifactStore` enforces 4, 16 or 32 MiB per
+kind and answers `null` above it; the replacement read whatever was there. Reproduced with a 33 MiB
+shared `output/<slug>.html`: old copied `["hierarchy"]` and refused `extract` and `blocks` as
+half-present, new copied `["extract", "blocks", "hierarchy"]`.
+
+The review's fix was to copy `DECODERS` into the helper. **Rejected, and the reasoning is the useful
+part.** The per-kind spread exists to keep a *two-sided* contract — `write` refuses what `read` could
+not read back, so a step cannot report done and then be permanently not-done. A reader over a
+committed fixture has no write side and no step to re-run, so there is no contract to keep; what
+survives is one requirement, *this source must not accept what the old one refused*. So: **one bound,
+at 4 MiB — the tightest value in the old table — and a throw rather than a `null`.** At the table's
+*maximum* a 4-to-32 MiB window would remain for `raw`, `meta`, `assets`, `sketch` and `illustrated` in
+which the new reader silently accepts what the old refused; at the minimum that window is empty by
+construction. The cost is the other direction and is deliberate: a 4-to-32 MiB fixture of a
+higher-ceilinged kind is now refused where the old store accepted it — **loudly**, naming the file and
+both numbers, one constant to change. Corpus headroom is ~27×.
+
+**F2 — the memory fake handed back its own object.** Neither real store can: the filesystem parses
+bytes, Postgres decodes JSONB. It now detaches on the way in (`plant`, `write`) and out (`read`,
+`readBaseline`) through a **JSON round trip rather than `structuredClone`**, because the round trip is
+what both real stores actually do — `structuredClone` would keep `undefined` fields and `Date`s that
+neither can carry. `has` deliberately does not detach: it never hands a value out.
+
+**The half that mattered was not the purity.** Two converted controls did *read, edit a block, `plant`
+it back, assert*, and the edit alone was already moving the article. Measured: with the aliasing in
+place, **deleting the `plant` line from both files left all 28 cases green.** With the detach in,
+deleting it reddens `quiz-step-registration`'s. `illustrated-step-registration`'s stayed green even
+then, for a reason worth recording: its assertion is `true`, and an article that never moved answers
+`true` as well — no mutation of the `plant` can redden an assertion whose expected value does not
+depend on it. It has a positive control now, asking the store what it holds; with that, deleting the
+`plant` reddens one case in each file.
+
+**F3 — a reclassification reported but never applied.** `stage2c-raw-bytes`'s prose and this plan both
+said `filesystem-adapter-behaviour`; the executable `category` was still `store-agnostic-fake`. Fixed,
+with a note on the entry. **The registry's guard cannot catch this** — it checks that entries exist and
+carry a reason, never that a reason and its category agree — and that is worth knowing before trusting
+a verdict you have only read about. `block-roles` did take its intended value.
+
+**F4 — the `LAYOUT` coverage claim was too broad.** The nine `copied` assertions guard **seventeen of
+the table's eighteen rows**; `illustrated/illustrated` is populated by no corpus article, so a wrong
+path there is invisible to all nine. Measured across all five articles. The claim is corrected in the
+helper, along with the two ways to close it and what each costs — neither built, and the reason is
+that a synthetic `LAYOUT`-vs-`PATHS` parity assertion would make whichever file holds it *call into
+`artifacts-fs`*, adding a registry entry and a stage-G file at the moment the stage is removing them.
+
+**Both P1s were invisible to every suite that uses these helpers, and that is the finding under the
+findings.** The corpus is 27× under any ceiling, and every caller of the memory store happened to write
+back through the reference it read. A helper's own properties need a test of the helper:
+[`tests/helpers-store-fakes.test.ts`](../../tests/helpers-store-fakes.test.ts) is that test, six cases,
+and each half was watched red before being watched green.
+
+##### D's review: two rounds, both refused, six findings, all six real
+
+| round | ID | sev | finding | disposition |
+| --- | --- | --- | --- | --- |
+| 1 | F1 | **P1** est. | the fixture reader lost the store's size ceilings, so it copies a 32 MiB artefact the old source refuses | fixed — **not with Sol's patch**, see below |
+| 1 | F2 | **P1** est. | the in-memory fake hands back the same object reference; neither real store can | fixed, and it had left two controls unable to fail |
+| 1 | F3 | P3 est. | `stage2c-raw-bytes`'s reclassification was in the prose and not in the executable value | applied |
+| 1 | F4 | P3 est. | the `LAYOUT` coverage claim was too broad — no `illustrated.json` in the corpus | corrected, 17 of 18 rows populated |
+| 2 | G1 | **P1** est. | three Illustrated negative controls accept the untouched store | fixed, each watched red by deletion |
+| 2 | G2 | **P1** est. | two Tweets cases return `false` before reaching the condition they claim to test | fixed; **both predate the conversion** |
+| 2 | G3 | P2 reasoned | the open handle closes the rename race, not an in-place rewrite | closed anyway, both checks kept |
+
+**F1's fix is deliberately not the one that was offered**, and the reasoning is worth keeping. Sol's
+patch copied the per-kind 4/16/32 MiB table into the helper. But that spread exists to keep a
+**two-sided** contract — `write` refuses what `read` could not read back, so a step cannot report done
+and then be permanently not-done. **A reader over a committed fixture has no write side**, so there is
+no contract to keep; all that survives is *this source must not accept what the old one refused*.
+
+So: **one bound at 4 MiB — the tightest value in the old table** — and a loud throw. At the table's
+*maximum* a 4–32 MiB window would remain in which the new reader silently accepts what the old
+refused, which is F1 again one size down. At the minimum that window is empty by construction, and
+the cost is the opposite error: a 4–32 MiB fixture of a higher-ceilinged kind is refused where the old
+store accepted it — **loudly, naming the file and both numbers**. Corpus headroom is ~27×.
+**Copying less of `artifacts-fs`'s knowledge is the point**, because § *`LAYOUT` is a copy that is
+about to become the original* is the argument the whole design rests on.
+
+**Settled after two rounds.** The cadence allows one narrowly scoped check on a P1 established at
+round two; G1–G3 did not get a third review round, and the reason is that each fix was verified by the
+strongest evidence available for the property in question — **delete the setup line, watch the case go
+red, restore** — with the failure text recorded in each file. A reasoned third opinion does not outrank
+a control watched failing. G2's provenance was additionally checked against the history by hand rather
+than taken on report.
+
+##### The one thing E, F and G should take from stage D
+
+**Three times now, a case has been satisfied by its own setup not happening.** Round 1's arm A: with
+the memory fake aliasing, deleting the `store.plant` line from both converted controls left all 28
+cases green. Round 2's G1: the Illustrated block's three negative controls each expect `false`, and
+`beforeEach`'s Sketch is *already* not current, so deleting any of the three `writeSketch` lines
+changed nothing. Round 2's G2: two Tweets cases omitted the tree and metadata the stamp is computed
+from, so `stepIsDone` returned `false` before reaching either condition they name.
+
+They are one shape: **the value the case expects is also the value an untouched store produces.** A
+negative control is where it lives, because "not current", "not done" and "refused" are what you get
+from a store that was never set up — so the setup can fail silently and the assertion still passes.
+The tell is never in the assertion; it is that nothing connects the setup to it.
+
+**Two consequences a conversion stage has to act on.**
+
+*A suite going green after conversion proves nothing about whether its setup still matters.* Green is
+what a suite looks like when the conversion worked, and also when the conversion quietly stopped the
+setup reaching anything — the store moved, the writes went somewhere the reader no longer looks, and
+every `false` still arrives. Stage D's own conversions were green from the first run and carried five
+such cases through it, two of them **older than the conversion** (the Tweets pair had the same hole
+against the filesystem store, one leaning on test order through a shared directory and one on a fresh
+directory that never had a tree). So this is not only a conversion hazard: converting is when you are
+holding the file, which makes it when to look.
+
+*Find them by deleting a line, not by reading one.* Every one of the five was found that way and none
+by inspection, including by people who had just written the file. The rule that generalises: **for
+each case, delete its setup and watch — if it still passes, it is testing the empty store.** The
+repair is a precondition assertion that discriminates: read back the one field that differs from the
+untouched state (`sourceHash`, `profileHash`, `toBeNull()`), or assert the thing the answer depends on
+is computable at all (`stamp(...)` is not null). Then delete the setup again and watch it go red.
+[silent-success.md](../reusable/silent-success.md) is the general form; this is its per-case
+instrument.
 
 ### D′ — additive, before the hinge — as three separate reviewed commits
 
@@ -3766,6 +4341,124 @@ sentence is in the log. The script prints the log's.
 **When the previous stage has not run**, the step fails with that sentence and the job ends `error`.
 **There is no auto-chaining**: naming one step runs one step. Chaining is what `POST /api/jobs` with
 several steps is for.
+
+#### Landed, 2026-09-05
+
+Five `main()`s deleted (`fetch`, `extract`, `blocks`, `hierarchy`, `labels`), one script written, and
+`npm run pdf` split in two. `npm run cycles` stayed clean. Every command below was run against the
+local Postgres and its result read back out of the database rather than off the command's own
+output.
+
+| Command | Ran | Printed |
+|---|---|---|
+| `npm run ingest -- <url>` | `paulgraham.com/vb.html`, an article not on the shelf | five steps `done`, `41 blocks, 41 new ids (0 kept)`, article `vb-spya-vu3xen` |
+| `npm run ingest -- <url>` again | the same address, now on the shelf | all five `skipped`, same article — an address already there is adopted |
+| `npm run ingest -- <url> --force` | the same address again | five steps `done` on **the same article**, `41 blocks, 0 new ids (41 kept)` — the refresh, and the ids through a whole re-ingest |
+| `npm run ingest -- <file.pdf>` | a hand-built 1-page PDF | five steps `done`; upload record read back as **`verified`**, slug `stage-e-one-page-spya-qt9ev9`, stored hash equal to the claimed one |
+| `npm run extract -- <slug>` | a corpus clone | `skipped   already done`; with `--force`, `done   Writes and Write-Nots` |
+| `npm run blocks -- <slug> --force` | twice, then unforced | `19 blocks, 0 new ids (19 kept)` twice, then `skipped   already done` |
+| `npm run hierarchy -- <slug> --force` | the same clone | `13 sections over 19 blocks` |
+| `npm run eval:pdf-read -- <file.pdf>` | the same 1-page PDF | the chunk plan and the per-chunk recall table, `mean recall 1 over 1 of 1 page(s)`, `Spent: $0.0005` |
+
+**The block-id contract survives, and the count is over every revision of the article rather than
+over the runs**: seven revisions of the scratch clone after the seed and six commands, **one distinct
+id set**, by `count(distinct array_agg(block_id order by block_id))` grouped by revision.
+
+**A skip still publishes a revision.** `skipped   already done` is what the step says and the job
+still settles, opens a draft and publishes it — an identical one. That is the queue's behaviour and
+not the CLI's, and it is now said out loud in `setup-dev.md`, because *"a re-run without `--force`
+does nothing"* is not quite what happens.
+
+**`withLedger("cli", …)` really was double-scoping.** Every model call from these runs landed as
+`scope_kind = 'job_step'` with a job id and a slug, and none as `cli` — read out of `ai_calls` after
+the fact. `tests/paid-cli-ledger.test.ts` is down to one file, `src/pdf-read.ts`, with the reason
+written into it rather than the entries quietly deleted.
+
+**The unknown-slug fix.** `npm run blocks -- typoo-no-such-article` exits 1 with a sentence, and
+`select count(*)` on `articles` and `jobs` for that slug is 0 in both. The check moved into `enqueue`
+and now asks only `articleExists`, which is owner-scoped — so it no longer consults `slugIsTaken`,
+the one deliberately unfiltered global lookup, and "nobody has it" and "somebody else's" became
+indistinguishable by construction rather than by treatment.
+`tests/enqueue-owns-the-article.test.ts`'s third case reversed; it was **watched red on the new code
+before being rewritten** (*"Error: No such article. ❯ Module.enqueue src/jobs.ts:2864"*).
+
+**`enqueue` took `pump: false`** and the `VERCEL=1` lie went from `evals/cost/`. Asserted
+behaviourally in a new `tests/enqueue-drives-what-it-queues.test.ts` — queue a `fetch` step on a
+seeded article, look two seconds later — with a positive control that pins *what* the pump did
+(`done`, step `skipped`) so a day when that stops being a free skip fails loudly.
+
+**Three mutations worth recording, because two of them were controls that lied.**
+
+1. *Drop `blocksArtefact` from the blocks step* → `tests/sanitize-stale-artefact.test.ts` red,
+   `expected undefined to be 5`. That file used to run `npx tsx src/blocks.ts` in a subprocess; with
+   that `main()` gone it runs `STEPS.blocks.run` instead, which is one layer closer to the claim.
+2. *Delete the tail from `src/pdf-read.ts`* → `paid-cli-ledger` red on both the list check and the
+   file's own mutation control.
+3. *Move `scripts/stage.ts`'s `loadEnvLocal()` below its dynamic imports* → **green**. *Below the
+   argument check* → **green**. Only removing it **and** `src/store/live.ts`'s top-level call turned
+   `stage2c-raw-bytes`'s env-order case red. So that case proves the *effect* — the file is applied
+   before the command prints anything — and not which line did it, and the note is now in the test so
+   nobody cites it as cover for the script's ordering.
+
+**Two things this did not do.** `npm run eval:pdf-read` still writes its ledger rows to
+`data/_ai-calls.jsonl`, because it sets no `SPIDERYARN_STORE` — pre-existing, unchanged deliberately
+(the decision above was that the quality tool keeps its behaviour), and stage F's hinge fixes it.
+And `AGENTS.md`/`CLAUDE.md` still says *"two stages of seven"* cache on a content hash; the count is
+now stated properly in `architecture.md` § Conventions (**ten of the fourteen in `STEP_ORDER`**, by
+the predicate *the step declares a `stamp()` that `stepIsDone` compares*), and the rules file is
+Greg's to edit.
+
+##### What Sol's review of the built code changed, and the one thing it overturned
+
+Five findings, four fixed in `scripts/stage.ts` and one that is a decision for Greg. Every one was
+re-measured rather than taken on the review's word.
+
+**The one that overturns a decision this plan made.** *"Re-labelling becomes `npm run hierarchy --
+<slug> --force`; the extra structure call is the honest price"* — the sentence that justified
+retiring `npm run labels` — **is false**, and going through the queue is what made it false. The old
+CLI passed `nullCheckpointStore()` and always paid; a queue run gets the article's own `checkpoints`
+rows, and `force` is a flag on the *step* (run rather than skip) and means nothing to a checkpoint.
+Measured: two consecutive `npm run hierarchy -- stage-e-scratch --force` on an unchanged article
+bought **two model calls and then none**, printing `13 sections over 19 blocks` both times, with the
+`hierarchy-structure` and `hierarchy-labels` rows sitting there in between.
+
+So: **the stage CLIs gained a resume they never had** (good, and the opposite of what this plan and
+the first draft of `scripts/stage.ts` said), and **changing a label prompt and re-running has no
+command** (a real loss, and not one the `labels` decision priced in). Making `force` clear a
+checkpoint would change what a reader's Refresh does too, so it is a queue-wide product call rather
+than something a CLI should work round — left for Greg, and written down in
+`docs/project/setup-dev.md`, `architecture.md` § Conventions, `src/store/checkpoints.ts` and
+`src/labels.ts` rather than left as a surprise.
+
+**Four fixed here.**
+
+1. **`scripts/stage.ts fetch <slug> --force` was still the fetch-only job.** Deleting `npm run fetch`
+   from `package.json` removed the *name*; `oneStage` took any `StepName`. It now refuses `fetch`
+   with the sentence, so the rule lives in the code rather than in an npm script. Verified.
+2. **`npm run ingest -- <url>` could not re-fetch.** An address already on the shelf is adopted, so
+   every step skipped and *"re-fetching cascades"* was a claim nothing could reach — the landed run
+   above had used an address that was **not** on the shelf, which is exactly how the gap survived.
+   `--force` now forces `fetch` and `cascadeForce` takes the rest. Measured, above. `--force` stays
+   refused for a *file*, where it really is meaningless.
+3. **A failing `noteSlug` stranded the job.** The route can throw there because its `enqueue` starts a
+   pump; this one carries `pump: false` and is the only driver, so a throw between `enqueue` and
+   `drive` left a queued job nothing would ever advance. It is a warning now — and the slug is
+   written again by `settleUpload(…, "verified")`.
+4. **The file path minted before it looked.** An empty file or a `.txt` got an upload record and bytes
+   in Storage before the pipeline refused it. `looksLikePdf` — the same function `acquireUpload` uses
+   — and a positive-size check now run first. Verified: three refusals, no new `uploads` rows.
+
+**And one hardening the review asked for:** `drive` no longer waits on `busy` for ever. An older
+abandoned job queued with `pump: false` holds the article's line and nothing drives it, so the loop
+gives up after ten minutes and says what to look at.
+
+**What the review agreed was right**, having checked it: the `enqueue` refusal breaks no production
+caller and its privacy claim now holds by construction; the `pump` closure reaches every exit
+including both `handBackToARetry` paths; `pump: false` is correct for the cost eval; the five seeded
+suites are not weakened, and seeding only two of `tests/jobs.test.ts`'s four slugs is right. Its one
+remaining reservation is that `tests/blocks-baseline.test.ts` § *the step* is narrower than the
+subprocess test it replaced — it plants the first run's blocks by hand rather than committing them —
+which is true, and the Postgres arm of that same file still covers the commit-and-read seam.
 
 ### F — the hinge, one commit, and narrower than the first draft
 

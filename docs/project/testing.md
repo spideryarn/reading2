@@ -452,7 +452,7 @@ Those pixel assertions are nonetheless **deliberately coupled** to the widths qu
 that changing a constant breaks the tests and forces the doc to be edited in the same breath. A doc
 quoting numbers the code no longer produces is worse than a doc quoting none.
 
-## The two things to know before adding a test
+## The three things to know before adding a test
 
 1. **`example/` is a fixture as well as a placeholder.** Several tests read
    [`example/blocks.json`](../../example/README.md) and `example/tree.json`. Changing them by hand
@@ -460,6 +460,28 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
 2. **`src/validate-tree.ts` is a CLI**, with top-level `await` and `process.exit`. It's exercised as
    a subprocess, so its tests are slower (~1.5s) than everything else combined. If it ever grows a
    pure `validateTree(blocks, tree)` export, move those tests to it.
+3. **Which artefact store to hand it, and never `createFsArtifactStore`.** Three answers, and the
+   choice is *what the test is about* rather than what is cheapest to construct:
+   - the test is about **an article existing in Postgres** — a route, a reader, a comment to hang
+     somewhere: [`scratchArticleInPg`](../../tests/helpers/scratch-article.ts), or
+     [`loadArticleIntoPg`](../../tests/helpers/load-article.ts) when the corpus slug itself is the
+     subject. Both read the fixture tree through
+     [`fixture-artefacts.ts`](../../tests/helpers/fixture-artefacts.ts) and write through the real
+     `pgArtifactsIn`;
+   - the test is **not about storage** and just needs somewhere for a stage to put its product:
+     [`memoryArtefacts()`](../../tests/helpers/memory-artefacts.ts), or `memoryArtefactsFrom(root,
+     slug)` to start from a fixture on disk. It applies the same shape rules as the real stores;
+     it **copies on the way in and out**, so a value it handed you is not the one it holds, like
+     both real stores and unlike a `Map`; and it deliberately does **not** put
+     `extractedHtml` and `stampedHtml` at one address the way the filesystem does;
+   - the test is about **a job**, and the article is only there so the job may name it:
+     [`bareArticles`](../../tests/helpers/bare-article.ts), which inserts an `articles` row and
+     nothing else. Five suites needed it the day `enqueue` started refusing a bare-slug request for
+     an article the reader does not have (2026-09-05), and a bare row is enough because
+     `articleExists` left-joins the published revision on purpose — an article whose ingest crashed
+     still counts as existing;
+   - the test really is about **the adapter** — that is stage G's cohort, and the answer is in
+     [`store-migration-registry.ts`](../../tests/store-migration-registry.ts).
 
 ## Rendering a component, without a testing library
 

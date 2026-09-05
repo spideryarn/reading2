@@ -37,6 +37,32 @@ export interface PublicLibraryEntry {
    * disagree about what a piece is called.
    */
   title: string;
+  /**
+   * **Who wrote the piece — the article's author, never the reader who shared
+   * it.**
+   *
+   * `article_revisions.byline`, which stage 2 read off the publisher's own page
+   * through Readability (docs/project/content-extraction.md).
+   * It is a fact about the document, in the same class as `siteName` beside it,
+   * and that is the only reason it is allowed on an ownerless projection at all.
+   *
+   * **The other reading of "whose article is this" would be a serious mistake,**
+   * so it is written down rather than left to be obvious: the Spideryarn reader
+   * who added a piece and the person who wrote it are different people, and
+   * nothing about a reader's identity is on the public wire — there is no owner
+   * column in the listing's projection and no field here to put one in
+   * (store/public-library.ts § `PUBLIC_LIBRARY_CARD`). A card that started
+   * naming the sharer would be this app publishing its readers' names to
+   * strangers.
+   *
+   * `null` for most articles: a byline is whatever the page happened to declare,
+   * and plenty declare none.
+   *
+   * Greg, asked on 2026-09-04 whether a public article should show whose it is,
+   * said yes. The article page already did — the masthead and the visitor's
+   * details page both draw `PublicMeta.byline` — and this shelf did not.
+   */
+  byline: string | null;
   /** The one-line description, from `root_gist`. Absent for a piece with none. */
   gist: string | null;
   /** Where it was published — the extraction's `site_name`, not our domain. */

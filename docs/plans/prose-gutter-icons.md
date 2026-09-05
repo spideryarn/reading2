@@ -167,7 +167,9 @@ That argument had two holes, both Sol's:
 
 **So the overhang was removed rather than reasoned about.** A row that draws all three slots is
 floored at the height of three slots — `td.text.has-marks`, set from `cmtsByBlock` in
-[TableView.tsx](../../src/web/TableView.tsx). `height` on a `<td>` is a minimum, so every taller row
+[TableView.tsx](../../src/web/TableView.tsx). (That class is `gutter-pad` since 2026-09-04 and now
+means "this gutter is the full 2 × 2 pad"; the mechanism is the same and the name went with the
+meaning — [260904b § Stage 1](260904b-gutter-help-button-and-detached-streaming-chat.md#stage-1-measured).) `height` on a `<td>` is a minimum, so every taller row
 is untouched, and two slots (30px) already fit a one-line paragraph (39px), so **nothing without a
 comment moves**. Measured after: **no gutter control leaves its own row, in any shape** — checked by
 comparing every child's box against its row's, not by looking.
@@ -315,10 +317,17 @@ and Claude-in-Chrome was not connected, so:
 
 ## Open for Greg
 
-1. **Target size, and it is the real one.** The gutter's targets are 22 × 15px where WCAG 2.5.8 asks
-   for 24 × 24. Meeting it needs taller rows — no arrangement of two or more compliant targets fits
-   a 39px one-line paragraph — so it is a trade against the article's vertical rhythm and yours to
-   make. Doing nothing keeps a shortfall the app already had; the chat button was smaller than this.
+1. ~~**Target size, and it is the real one.**~~ **Decided 2026-09-04: bigger targets everywhere.**
+   The gutter's targets were 22 × 15px where WCAG 2.5.8 asks for 24 × 24. Meeting it needs taller
+   rows — no arrangement of two or more compliant targets fits a 39px one-line paragraph — so it was
+   a trade against the article's vertical rhythm and Greg's to make. He made it when the same
+   complaint came back from an iPad, and the answer was to stop stacking: the column is a **2 × 2
+   pad** now, and an owner's one-line paragraph row went 39px → 63px.
+   [260904b-gutter-help-button-and-detached-streaming-chat.md § Stage 1](260904b-gutter-help-button-and-detached-streaming-chat.md#stage-1-measured).
+   **The slot is `max(1.5rem, 24px)`, and the px half is what makes this actually closed** rather
+   than closed at a 16px root: WCAG 2.5.8 is specified in CSS pixels, and `1.5rem` is 18 of them for
+   a reader whose browser default is 12px. GPT Sol found that in review, and it was commit-blocking;
+   `tests/gutter-target-size.test.ts` is what keeps it true.
 2. **A retained browser fixture.** Sol's view is that geometry, target sizes, hit testing and the
    touch rules "belong in a retained browser fixture rather than a deleted one-off preview", and
    this repo has no such thing. The preview page was deleted per the convention `preview-sketch.tsx`

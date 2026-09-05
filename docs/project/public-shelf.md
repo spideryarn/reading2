@@ -64,6 +64,24 @@ of a page mounted for people with no account. The file's own header has the full
 
 Every sentence is in [`src/messages.ts`](../../src/messages.ts) § the shelf of public articles.
 
+## What a card says, and the one line under the list
+
+A card is the title, the piece's **byline**, where it was published, how long it is and when it was
+shared — the byline first, which is the order the owner's own shelf card and the article's masthead
+both use. It is *the article's* author, off the publisher's page, and never the reader who shared it;
+[`src/public-library-types.ts`](../../src/public-library-types.ts) § `byline` says at length why that
+distinction is worth writing down, and the listing's projection still names no column about an owner.
+Greg, asked on 2026-09-04 whether a public article should show whose it is, said yes — the article
+page already did, through `PublicMeta.byline`, and this shelf did not.
+
+Under the list, outside all three state arms so an empty shelf and a failed read keep it, is one
+quiet line: **if something here is yours, ask us to take it down**. The shelf is where a stranger
+*finds* a republished article, so it is one of the two places that link has to be — the other is the
+visitor's own details page for one article. It is not on a card: a card is an offer to read, and a
+report link on every one of them would read as a warning about each article.
+[privacy.md § If something here is yours](privacy.md#if-something-here-is-yours) is the section it
+points at, and why it is a section rather than a route.
+
 ## The address, and the three enforcers of it
 
 `public` is reserved as an article slug, because `/read/public` is otherwise an address two things
@@ -88,6 +106,30 @@ rule for the row is about the path and this is a `/read/` address;
 [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) records the day that exclusion was read as
 being about the reading *view* instead, and had it called rationalising.
 
+## Who sends people here
+
+Two marketing pages, `/` and `/features`, each draw the same block — a heading, a sentence, up to
+three real shared articles, and a link back to this shelf.
+[`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx) is the component and carries the
+argument; [marketing-pages.md](marketing-pages.md) is the pages it sits on.
+
+**Every link in it is derived from this shelf's own listing**, and that is the whole design rather
+than a convenience. Greg flips an article's visibility in the production UI whenever he likes and
+nobody redeploys afterwards, so a marketing page naming a slug in its source is a page that will one
+day hand a stranger a 404. `tests/public-showcase.test.tsx` proves the property — an article that
+stops being public leaves no link behind — by mounting each page twice against two different
+listings, because a test that only found the articles it seeded would be green for a hardcoded list.
+
+Two consequences worth knowing before changing it:
+
+- **The listing cannot *pick*.** It is ordered by `public_at` descending, so the three shown are the
+  most recently shared rather than the three best — a real gap against Greg's *"pick a few of those
+  to link to"*, left open because picking means naming and naming is the failure above. The honest
+  next step is a column the flip owns, not a list in a component.
+- **`/pricing` does not get the block**, and that is a constraint rather than a preference:
+  `tests/pricing-page-current-plan.test.tsx` asserts a signed-out `/pricing` makes no network request
+  at all.
+
 ## What is deliberately not here
 
 - **No search indexing.** `robots.txt` is `Disallow: /` and stays that way for now.
@@ -96,4 +138,3 @@ being about the reading *view* instead, and had it called rationalising.
 - **No cursor.** The row cap is a ceiling rather than a page size, so there is nothing to paginate
   through. The ordering is total on `(public_at, slug)` precisely so that a cursor is possible the
   day it starts biting.
-- **Showcase links from other pages**, which are stage 4 of the plan, along with a takedown route.

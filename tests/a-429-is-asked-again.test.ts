@@ -10,7 +10,7 @@
  * `allOrStop` cancels its siblings on the first rejection it took every chunk in
  * flight with it — on a path where `PDF_READER_MODEL` is routed with
  * `allow_fallbacks: false`, so every concurrent chunk competes for one upstream.
- * Widening `CHUNK_CONCURRENCY` to 16 doubles the request rate into it, which is
+ * Widening `CHUNK_CONCURRENCY` to 100 raises the request rate into it, which is
  * why this is fixed in the same stage rather than noted
  * (docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 5).
  *
@@ -22,11 +22,28 @@
  * would assert neither.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openRouterReader } from "../src/pdf-read.js";
+import { WidthGate } from "../src/concurrency.js";
+import { CHUNK_CONCURRENCY, openRouterReader } from "../src/pdf-read.js";
+
+/**
+ * **A gate per test, not the process-wide one.**
+ *
+ * `openRouterReader` defaults to a module singleton, which is right in
+ * production — what is being rationed is requests to one upstream, and that
+ * belongs to the account rather than to a job — and wrong here twice over. Its
+ * `pausedUntil` survives from one test to the next, and these tests reset the
+ * fake clock underneath it, so a 429 in one case held the *first* request of the
+ * next one and three tests went red at once. State that outlives a test is state
+ * a test cannot reason about.
+ *
+ * At `CHUNK_CONCURRENCY` so the width these exercise is the real one.
+ */
+let gate: WidthGate;
 
 beforeEach(() => {
   vi.stubEnv("OPENROUTER_API_KEY", "sk-test-key");
   vi.useFakeTimers();
+  gate = new WidthGate(CHUNK_CONCURRENCY);
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -44,6 +61,31 @@ function anAnswer(): Response {
     JSON.stringify({
       choices: [{ message: { content: TRANSCRIPTION }, finish_reason: "stop" }],
       usage: { prompt_tokens: 10, completion_tokens: 5 },
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+/**
+ * **A rate limit that arrives as HTTP 200**, which OpenRouter documents and does:
+ * a non-streaming generation failure can keep the 200 and put the provider's
+ * error in the body, `code: 429` and all.
+ *
+ * Found by GPT Sol reviewing the built stage, 2026-09-04, finding 1 — the
+ * highest-severity one, because this shape defeated *both* safety nets at once.
+ * `openRouterReader` checked `json.error` after `pdfCall` had already returned,
+ * so the refusal never reached `withTransportRetries` (no retry) and never
+ * reached the gate (no halving, and a growth credit awarded for a call that
+ * failed). One of these cancelled the whole document on the first occurrence.
+ */
+function aBodyRefusal(code: number, errorType?: string): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code,
+        message: "rate limited",
+        ...(errorType ? { metadata: { error_type: errorType } } : {}),
+      },
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
@@ -80,7 +122,7 @@ describe("a rate limit on a PDF chunk", () => {
   it("is asked again, and the second answer is the one used", async () => {
     const w = wire([() => aRefusal(429), anAnswer]);
 
-    const reading = openRouterReader("test/model").read(A_PDF, "read page 1");
+    const reading = openRouterReader("test/model", gate).read(A_PDF, "read page 1");
     await vi.advanceTimersByTimeAsync(60_000);
 
     const result = await reading;
@@ -100,7 +142,7 @@ describe("a rate limit on a PDF chunk", () => {
   it("waits as long as the provider asked before asking again", async () => {
     const w = wire([() => aRefusal(429, "5"), anAnswer]);
 
-    const reading = openRouterReader("test/model").read(A_PDF, "read page 1");
+    const reading = openRouterReader("test/model", gate).read(A_PDF, "read page 1");
     await vi.advanceTimersByTimeAsync(1_000);
     expect(w.calls(), "asked again before the provider said to").toBe(1);
 
@@ -124,7 +166,7 @@ describe("a rate limit on a PDF chunk", () => {
   it("waits the whole of a Retry-After it can afford, past its own backoff ceiling", async () => {
     const w = wire([() => aRefusal(429, "45"), anAnswer]);
 
-    const reading = openRouterReader("test/model").read(A_PDF, "read page 1");
+    const reading = openRouterReader("test/model", gate).read(A_PDF, "read page 1");
     /* Past both old clamps, and well inside the window the provider named. */
     await vi.advanceTimersByTimeAsync(35_000);
     expect(w.calls(), "asked again inside the window the provider named").toBe(1);
@@ -148,7 +190,7 @@ describe("a rate limit on a PDF chunk", () => {
   it("gives up rather than truncating a Retry-After it cannot afford", async () => {
     const w = wire([() => aRefusal(429, "600"), anAnswer]);
 
-    const settled = openRouterReader("test/model")
+    const settled = openRouterReader("test/model", gate)
       .read(A_PDF, "read page 1")
       .then(
         () => null,
@@ -185,7 +227,7 @@ describe("a rate limit on a PDF chunk", () => {
       return anAnswer();
     });
 
-    const reader = openRouterReader("test/model");
+    const reader = openRouterReader("test/model", gate);
     const chunks = Array.from({ length: 16 }, () => reader.read(A_PDF, "read page 1"));
     /* In steps, so the clock the retries wake on is real rather than one jump. */
     for (let ms = 0; ms < 40_000; ms += 25) await vi.advanceTimersByTimeAsync(25);
@@ -195,10 +237,56 @@ describe("a rate limit on a PDF chunk", () => {
     expect(new Set(wakeups).size, "sixteen chunks retried in lockstep").toBeGreaterThanOrEqual(4);
   });
 
+  it("is asked again when the 429 arrives inside a 200", async () => {
+    const w = wire([() => aBodyRefusal(429), anAnswer]);
+
+    const reading = openRouterReader("test/model", gate).read(A_PDF, "read page 1");
+    await vi.advanceTimersByTimeAsync(60_000);
+    const records = (await reading).records;
+
+    expect(w.calls(), "a body-level 429 was treated as a verdict").toBe(2);
+    expect(records).toHaveLength(1);
+  });
+
+  it("tells the gate about a 429 that arrived inside a 200", async () => {
+    const w = wire([() => aBodyRefusal(429, "rate_limit_exceeded"), anAnswer]);
+
+    const reading = openRouterReader("test/model", gate).read(A_PDF, "read page 1");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await reading;
+
+    expect(w.calls()).toBe(2);
+    /* The point of routing it through `ProviderRefused`: the width halves, and a
+       failed call does not earn a growth credit. */
+    expect(gate.report().refusals).toBe(1);
+    expect(gate.report().narrowest).toBe(CHUNK_CONCURRENCY / 2);
+  });
+
+  /**
+   * **A body error that is not a rate limit stays a verdict.** A 400 in a 200 is
+   * still a request this code got wrong, and asking again a hundred times over
+   * turns one bad request into three hundred.
+   */
+  it("does not retry a body-level error that is not a rate limit", async () => {
+    const w = wire([() => aBodyRefusal(400), anAnswer]);
+
+    const settled = openRouterReader("test/model", gate)
+      .read(A_PDF, "read page 1")
+      .then(
+        () => null,
+        (err: unknown) => err,
+      );
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(w.calls()).toBe(1);
+    expect((await settled) as Error).toBeInstanceOf(Error);
+    expect(gate.report().refusals).toBe(0);
+  });
+
   it("gives up after a fixed number of goes rather than for ever", async () => {
     const w = wire([() => aRefusal(429)]);
 
-    const reading = openRouterReader("test/model").read(A_PDF, "read page 1");
+    const reading = openRouterReader("test/model", gate).read(A_PDF, "read page 1");
     const settled = reading.then(
       () => null,
       (err: unknown) => err,
@@ -221,7 +309,7 @@ describe("a rate limit on a PDF chunk", () => {
   it.each([400, 402, 404])("does not ask again after a %i", async (status) => {
     const w = wire([() => aRefusal(status)]);
 
-    const settled = openRouterReader("test/model")
+    const settled = openRouterReader("test/model", gate)
       .read(A_PDF, "read page 1")
       .then(
         () => null,
@@ -246,7 +334,7 @@ describe("a rate limit on a PDF chunk", () => {
     const w = wire([() => aRefusal(429, "20")]);
     const abort = new AbortController();
 
-    const settled = openRouterReader("test/model")
+    const settled = openRouterReader("test/model", gate)
       .read(A_PDF, "read page 1", abort.signal)
       .then(
         () => null,

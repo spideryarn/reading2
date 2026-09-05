@@ -155,18 +155,34 @@
  * name would share a key space for no reason. Closed, and matched by a CHECK on
  * the table, so a typo cannot open a namespace nothing ever reads.
  *
- * **Two of these belong to the same step, and that is the point of the split.**
- * `hierarchy-structure` is stage 4's one big call — the tree — and
- * `hierarchy-labels` is the batches that follow it. They were one namespace's
- * worth of work and are two questions: on a 142-page paper the structure call is
- * 508 seconds and about two dollars, the batches are 34 rows, and a run that
- * dies in the batches must not buy the tree again. Adding a namespace is a
- * migration, because the CHECK on the table is the other copy of this list.
+ * **Three of these belong to the same step, and that is the point of the
+ * split.** `hierarchy-structure` is stage 4's one big call — the tree —
+ * `hierarchy-deepen` is the scoped calls that split a fat section afterwards,
+ * and `hierarchy-labels` is the batches that follow both. They were one
+ * namespace's worth of work and are three questions: on a 142-page paper the
+ * structure call is 508 seconds and about two dollars, the batches are 34 rows,
+ * and a run that dies in the batches must not buy the tree again. Adding a
+ * namespace is a migration, because the CHECK on the table is the other copy of
+ * this list.
+ *
+ * **The two copies are checked against each other**, since 2026-09-05, by
+ * *"the checkpoints namespace CHECK lists exactly the namespaces the type has"*
+ * in tests/db-schema.test.ts: it inserts a row under every name below and the
+ * database has to take all of them. Before that they were two hand-kept lists
+ * with nothing between them, and a name declared here and missing from the
+ * CHECK would have surfaced only as a `warn` on the write path — which is to
+ * say, as a checkpoint layer that reads nothing and costs the bill.
+ * docs/reusable/silent-success.md.
  */
-export type CheckpointNamespace = "hierarchy-labels" | "hierarchy-structure" | "pdf-chunk";
+export type CheckpointNamespace =
+  | "hierarchy-deepen"
+  | "hierarchy-labels"
+  | "hierarchy-structure"
+  | "pdf-chunk";
 
 /** Every namespace, for the CHECK, the tests and anything that has to enumerate. */
 export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = [
+  "hierarchy-deepen",
   "hierarchy-labels",
   "hierarchy-structure",
   "pdf-chunk",
@@ -452,9 +468,18 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * There are two, and neither is production. `fsStoreSession`
  * ([session.ts](session.ts)) runs against `data/<slug>/` on a laptop with
  * `SPIDERYARN_STORE` unset, where there is no `articles` row and therefore no
- * `articleId` — the one thing this store must be keyed on. And the stage
- * command lines (`npm run pdf`, `npm run labels`, `npm run hierarchy`) are in the
- * same position for the same reason.
+ * `articleId` — the one thing this store must be keyed on. And
+ * `npm run eval:pdf-read` is in the same position for the same reason.
+ *
+ * **It used to be three command lines and is now one.** `npm run hierarchy` and
+ * `npm run blocks` go through the queue since 2026-09-05 (`scripts/stage.ts`),
+ * so they have an article row and **do** resume — measured, and with an edge
+ * worth knowing: a `--force` re-run of `hierarchy` on an unchanged article
+ * replays its structure and labels out of these rows and buys nothing, because
+ * `force` is a flag on the step rather than on the purchase. That is the queue's
+ * behaviour and a reader's Refresh gets it too. `npm run labels` was retired
+ * outright, and `--force` is *not* the re-labelling command the plan expected it
+ * to be. docs/project/setup-dev.md § The stage commands are one script.
  *
  * **So the filesystem path keeps working and stops resuming**, and those are
  * two different sentences. Every article it produces is byte-for-byte what it

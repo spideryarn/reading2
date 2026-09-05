@@ -10,9 +10,11 @@
  * > **Run a CLI command with the ledger open**, so that `npm run hierarchy` is money
  * > that appears in `npm run cost` rather than money that vanishes.
  *
- * Eight npm scripts start a module that spends money — the seven Messages
- * stages, plus `npm run pdf`, which is the other extractor and goes through the
- * chat seam instead. Six had that line and two did not, so `npm run labels` and
+ * Eight npm scripts started a module that spent money when this was written —
+ * the seven Messages stages, plus `npm run pdf`, which is the other extractor
+ * and goes through the chat seam instead. (One is left; see `PAID_CLIS` for
+ * where the other seven went, and note that they went by two different routes.)
+ * Six had that line and two did not, so `npm run labels` and
  * `npm run pdf` made paid calls that never reached `npm run cost` and that
  * `unscopedCalls()` ([`src/ai-spend.ts`](../src/ai-spend.ts)) counted as fallen
  * on the floor. `tests/no-undeclared-spend.test.ts` structurally could not see
@@ -117,9 +119,10 @@
  *
  * Four tests, and each is narrower than the sentence people will remember:
  *
- * - **`wraps every listed stage CLI entrypoint`** checks the three modules in
- *   `PAID_CLIS`, and nothing else. It says nothing about evals, which open the
- *   ledger with the `"eval"` scope.
+ * - **`wraps every listed stage CLI entrypoint`** checks the modules in
+ *   `PAID_CLIS` — one, today — and nothing else. It says nothing about evals,
+ *   which open the ledger with the `"eval"` scope, nor about the queue's own
+ *   `job_step` scope, which is what covers a stage run from `scripts/stage.ts`.
  * - **`names every package.json entry module that imports a provider seam`**
  *   keeps that list from going stale — but only for a module that **directly**
  *   imports one of the two seams. A CLI that reaches a paid call transitively
@@ -134,8 +137,11 @@
  *   and `npm run cost` prints it every run. `ADMITTED` below has to agree with
  *   that list in both directions, so a second one cannot arrive quietly.
  * - **`stageCli itself opens the ledger`** checks one function in one file. It
- *   is what the two migrated CLIs stopped saying for themselves, and it says
- *   nothing about `src/hierarchy.ts`, which still carries the old tail.
+ *   is what the migrated CLIs stopped saying for themselves. Nothing in the tree
+ *   carries the *old* tail any more — `src/hierarchy.ts` was the last, and its
+ *   entrypoint went on 2026-09-05 — so that idiom survives here only in the
+ *   fixtures, deliberately: the detector still has to refuse it, and a rule that
+ *   stopped understanding a shape would be a rule that passed it.
  *
  * This is a tripwire, not a boundary — the same thing
  * `tests/no-undeclared-spend.test.ts` says about itself. The ordinary case is
@@ -160,9 +166,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * about entrypoints. The completeness check below stops the list going stale.
  */
 const PAID_CLIS: Readonly<Record<string, string>> = {
-  "src/hierarchy.ts": "npm run hierarchy — streamMessage",
-  "src/labels.ts": "npm run labels — streamMessage per batch",
-  "src/pdf-read.ts": "npm run pdf — openRouterJson per chunk",
+  "src/pdf-read.ts": "npm run eval:pdf-read — openRouterJson per chunk",
 };
 
 /**
@@ -175,9 +179,28 @@ const PAID_CLIS: Readonly<Record<string, string>> = {
  * docs/project/ingest-queue.md § The pipeline is a list, not a function;
  * docs/plans/260831b-finish-the-database-move.md § sub-stage I.
  *
- * The three that remain are the three whose CLI still earns its place: two
- * stages of the default ingest that a developer really does run against a
- * folder, and the PDF reader.
+ * **And it became one on 2026-09-05.** `src/hierarchy.ts` and `src/labels.ts`
+ * lost their `main()`s in stage E of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+ * They wrote artefacts by hand to paths off `process.cwd()`, which under
+ * Postgres are files nothing reads; `npm run hierarchy -- <slug> [--force]` is
+ * `scripts/stage.ts` now, driving the queue, and `npm run labels` is gone
+ * entirely (there is no `labels` step, and re-labelling is `hierarchy --force`).
+ *
+ * **The money did not become unscoped — it changed scope, and that is why this
+ * list shrank rather than gaining two admissions.** `runStep` opens a
+ * `collectSpend` with `scopeKind: "job_step"` around every step it runs
+ * (src/jobs.ts), so a stage driven from a terminal is scoped by the same thing
+ * that scopes it when a reader presses Add. A CLI that *also* wrapped the run in
+ * `withLedger("cli", …)` would put one purchase in two scopes, which is why
+ * `scripts/stage.ts` deliberately has no ledger call and is not listed here.
+ *
+ * The one that remains is the PDF reader, and it stayed because it is not a
+ * stage runner at all: `npm run eval:pdf-read` prints the pages, the chunk plan
+ * and the per-chunk recall table (src/pdf-score.ts), which is where the numbers
+ * in evals/pdf/README.md come from. The queue path surfaces none of that. It was
+ * `npm run pdf` until 2026-09-05; the ingest half of that name is
+ * `npm run ingest -- <file.pdf>`.
  */
 
 /** The two modules that can reach a provider. Naming one is spending money. */
@@ -1406,13 +1429,15 @@ describe("the listed stage CLIs open the ledger", () => {
      * so every mutation below is asserted to match exactly once and to change
      * the file.
      *
-     * **Both tails, because the migration is deliberately partial.**
-     * `src/hierarchy.ts` still ends with the guard-and-`withLedger` pair;
-     * `src/labels.ts` and `src/pdf-read.ts` end with
-     * `await stageCli(import.meta.url, main)`. The five stage CLIs that were on
-     * the new tail were deleted with their commands on 2026-09-01, so what is
-     * left is two files rather than three — and holding both tails here is what
-     * stops the second one arriving on a loosened rule.
+     * **One file, and it used to be three.** `src/hierarchy.ts` carried the old
+     * guard-and-`withLedger` pair and `src/labels.ts` the new
+     * `await stageCli(import.meta.url, main)`; both entrypoints went on
+     * 2026-09-05 with the commands that started them (see `PAID_CLIS`). Holding
+     * both tails here was what stopped a second file arriving on a loosened
+     * rule, and that job now falls to the *fixtures* above, which still exercise
+     * both idioms against made-up modules. The difference is worth naming: a
+     * fixture proves the detector understands a shape, and only a real file
+     * proves the tree still has it.
      */
     interface RealControl {
       readonly file: string;
@@ -1423,25 +1448,7 @@ describe("the listed stage CLIs open the ledger", () => {
     }
 
     const realFiles: readonly RealControl[] = [
-      {
-        file: "src/hierarchy.ts",
-        tail: 'if (isMain) void withLedger("cli", main);',
-        mutations: [
-          [
-            "if (isMain) void main();",
-            'src/hierarchy.ts — the entrypoint branch calls main() directly rather than withLedger("cli", …)',
-          ],
-          [
-            /* **The bypass the first version of this gate passed.** The wrapper
-               is called, on the real import, with the right scope — and `main`
-               is handed to `.then`, so the whole stage runs after the ledger has
-               closed. Greg reproduced this one on this file by hand. */
-            'if (isMain) void withLedger("cli", async () => {}).then(main);',
-            'src/hierarchy.ts — withLedger("cli", …) is not passed main(), so main() runs outside the ledger',
-          ],
-        ],
-      },
-      ...(["src/labels.ts", "src/pdf-read.ts"] as const).map((file) => ({
+      ...(["src/pdf-read.ts"] as const).map((file) => ({
         file,
         tail: "await stageCli(import.meta.url, main);",
         mutations: [
@@ -1852,7 +1859,9 @@ describe("the listed stage CLIs read .env.local", () => {
    * **Proved against the broken state**, the same way the ledger rule is.
    * docs/reusable/silent-success.md — a rule nobody has watched fail is not
    * evidence, and this one had eight green files the moment it was written,
-   * which is the most convincing way for a new check to be doing nothing.
+   * which is the most convincing way for a new check to be doing nothing. There
+   * is one real file left for it to be green on, which makes the fixtures below
+   * the whole of the proof rather than most of it.
    */
   describe("the detector goes red when it should", () => {
     const IMPORT = 'import { loadEnvLocal } from "./env.js";\n';

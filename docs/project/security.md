@@ -235,9 +235,9 @@ Each of these leaves an article that still renders, so nothing draws attention t
    exactly this.
 4. **Checking the embed host with anything other than an exact origin comparison.** As above.
 
-Idempotence is a *requirement*, not a nicety: `npm run blocks` writes its HTML output back over its
-own input file and is re-run routinely, so a second pass must be a no-op. Pinned by tests in both
-files.
+Idempotence is a *requirement*, not a nicety: stage 3 writes its stamped HTML back over the same
+artefact it read and is re-run routinely — `npm run blocks -- <slug> --force`, and every forced
+ingest — so a second pass must be a no-op. Pinned by tests in both files.
 
 ## Why the string path, not `IN_PLACE`
 
@@ -293,11 +293,17 @@ needs to ingest many articles without restarting, the fix belongs to the queue �
 
 ## Stage 2's debug page, and the three holes nobody counted <a id="stage-2s-debug-page"></a>
 
-**Fixed 2026-08-26.** [`src/extract.ts`](../../src/extract.ts) writes `output/<slug>.html` straight
-from Readability. Stage 3 rewrites that same file with clean HTML, so the window is only between the
-two commands — but the window is what the file is *for*. `npm run extract -- <url>` prints the path,
-and the next thing anybody does is open it. Everything in the first half of this document applied to
-it.
+**Fixed 2026-08-26.** [`src/extract.ts`](../../src/extract.ts) wrote `output/<slug>.html` straight
+from Readability. Stage 3 rewrote that same file with clean HTML, so the window was only between the
+two commands — but the window is what the file was *for*: `npm run extract -- <url>` printed the
+path, and the next thing anybody did was open it. Everything in the first half of this document
+applied to it.
+
+**Both commands stopped writing files on 2026-09-05** (stage E of
+[260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md)), so the
+window is gone with them. The sanitisation is not: it is in `runExtract`, not in the command, which
+is why deleting the command changed nothing about it — and `npm run eval:pdf-read`, the other
+extractor's quality tool, still writes an `output/<slug>.html` a person opens.
 
 This section used to say the fix was two lines: import `sanitizeInPlace`, call it before writing.
 **It was not, and the reason is worth more than the fix.** Sanitising the body closes one of four
@@ -411,8 +417,9 @@ an incident. And it does not touch `text` — never rendered as markup, and it i
 comments and search hits are anchored in, so rewriting it would move every anchor in the article for
 nothing.
 
-**There is no migration script, on purpose.** `npm run blocks` rewrites `blocks.json` anyway, so the
-existing remedy is the migration; what changed is that it now records that it happened.
+**There is no migration script, on purpose.** Re-running stage 3 rewrites the blocks anyway —
+`npm run blocks -- <slug> --force` — so the existing remedy is the migration; what changed is that it
+now records that it happened.
 
 **A stamp nothing checks is decoration, and a check on a stamp nobody writes never fires.** The two
 halves live in different files and fail independently, which is why both are pinned separately — and

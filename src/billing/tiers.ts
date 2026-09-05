@@ -30,7 +30,9 @@
 
 /* The wire's own union, over the database's row type. One set of arms, written
    where the browser can read it — see `Purchase` for why it is a parameter. */
-import type { Purchase } from "../billing-plan.js";
+import type { Purchase, SwitchFrom } from "../billing-plan.js";
+import { articles } from "./half-units.js";
+import type { Articles } from "./half-units.js";
 import type { QuotaRules } from "./quota-adjustment.js";
 import type { ChoiceRules } from "./subscription.js";
 
@@ -70,17 +72,17 @@ export interface TierRow {
  * code handled.
  */
 export type Entitlement =
-  | { readonly tier: "free"; readonly limit: number }
+  | { readonly tier: "free"; readonly limit: Articles }
   | {
       readonly tier: "paid";
       readonly tierId: TierId;
-      readonly limit: number;
+      readonly limit: Articles;
       readonly periodStart: Date;
       readonly periodEnd: Date;
     };
 
 /** Nobody has paid, or nobody could be identified. Never an error — it is a tier. */
-export const FREE: Entitlement = { tier: "free", limit: FREE_LIFETIME_INGESTS };
+export const FREE: Entitlement = { tier: "free", limit: articles(FREE_LIFETIME_INGESTS) };
 
 /**
  * The Stripe subscription statuses that carry entitlement.
@@ -130,6 +132,109 @@ export const TERMINAL_STATUSES: readonly string[] = ["canceled", "incomplete_exp
  */
 export function isTerminalStatus(status: string | null | undefined): boolean {
   return status !== null && status !== undefined && TERMINAL_STATUSES.includes(status);
+}
+
+/* ------------------------------------------- does this row already have one -- */
+
+/**
+ * The subscription columns of a `billing_accounts` row, and nothing else.
+ *
+ * Structural, so both callers hand over the row they already read rather than a
+ * copy of it — src/billing/summary.ts reads a `BillingRow`, src/billing/checkout.ts
+ * its own narrower `Account`, and both satisfy this.
+ */
+export interface SubscriptionColumns {
+  readonly stripeSubscriptionId: string | null;
+  readonly status: string | null;
+  readonly priceId: string | null;
+  readonly currentPeriodStart: Date | null;
+  readonly currentPeriodEnd: Date | null;
+}
+
+/**
+ * What this row says about a subscription, for the one question that spends
+ * money: **may another be sold?**
+ */
+export type SubscriptionState =
+  /** Nothing to duplicate — no subscription, or one that is over. Sell. */
+  | { readonly kind: "sellable" }
+  /**
+   * A subscription Stripe may still collect on. The Portal, never a second sale:
+   * `unpaid` and `past_due` are both still collectable, and a status this file
+   * has never heard of is treated the same way.
+   */
+  | { readonly kind: "open" }
+  /**
+   * **The row contradicts itself, so nothing may be decided from it.** Fail
+   * closed: no sale, no ranking, the Portal.
+   */
+  | { readonly kind: "contradictory"; readonly why: string };
+
+/** The columns that only a synced subscription writes. See `subscriptionState`. */
+const SUBSCRIPTION_DERIVED = [
+  "status",
+  "priceId",
+  "currentPeriodStart",
+  "currentPeriodEnd",
+] as const satisfies readonly (keyof SubscriptionColumns)[];
+
+/**
+ * **Does this account already have a subscription that selling another would
+ * duplicate?** — asked once, here, by everything that could answer it.
+ *
+ * ## The defect this replaces
+ *
+ * The summary and `startCheckout` used to ask it separately, and both asked the
+ * same short question: *a subscription id, with a status that is not terminal.*
+ * Entitlement asks something different again — an entitled status on a price we
+ * recognise, over a period containing now — and **it never looks at the
+ * subscription id at all**.
+ *
+ * So a row reading `status = 'active'`, a known Reader price and a readable
+ * period, with `stripe_subscription_id` null, made the two disagree: entitlement
+ * said *paying Reader*, the sale gate said *nobody, sell them anything*, and
+ * `/profile` offered a Reader the Reader plan through a Checkout Session that
+ * would have started a second concurrently-billed subscription. GPT Sol found it
+ * on 2026-09-04 by running the real functions against that row; the route test in
+ * tests/billing-usage-route.test.ts was watched failing with `checkout` over
+ * `["reader", "researcher"]` before this existed.
+ *
+ * **The separation was the fault, not a detail of it.** Two call sites asking a
+ * money question of the same row must ask the same function, so this is that
+ * function and there is no second spelling of it left.
+ *
+ * ## Why an inconsistent row is its own answer
+ *
+ * `contradictory` rather than folding into `open`, because the two want
+ * different logging: `open` is an ordinary Tuesday and this is a row that
+ * `billing_accounts_subscription_fields_need_subscription` says cannot exist
+ * (src/db/schema.ts). Both refuse the sale, which is the fail-closed direction —
+ * the cost of being wrong here is a reader sent to the Portal to look at what
+ * they have, and the cost the other way is a second subscription nobody asked
+ * for.
+ *
+ * **This does not change what the row *entitles*.** Entitlement fails towards
+ * *free* (`entitlementFromRow`, src/store/pg-billing.ts), so making it fail
+ * closed on the same rule would cut somebody's quota off over a state the
+ * database now refuses to hold. Selling is where the money is, so selling is
+ * where the guard is.
+ */
+export function subscriptionState(row: SubscriptionColumns | undefined | null): SubscriptionState {
+  if (!row) return { kind: "sellable" };
+  if (row.stripeSubscriptionId === null) {
+    /* Every field a sync writes in the same statement as the subscription id
+       (src/billing/sync.ts). One of them set without it is a row nothing in this
+       codebase can have written. */
+    const claimed = SUBSCRIPTION_DERIVED.filter((column) => row[column] !== null);
+    if (claimed.length > 0) {
+      return {
+        kind: "contradictory",
+        why: `${claimed.join(", ")} set with no stripe_subscription_id`,
+      };
+    }
+    return { kind: "sellable" };
+  }
+  return isTerminalStatus(row.status) ? { kind: "sellable" } : { kind: "open" };
 }
 
 /**
@@ -189,8 +294,15 @@ export function choiceRules(tiers: readonly TierRow[], now: Date): ChoiceRules {
  * `tierForPrice` matches retired tiers too, which is the whole point of retiring
  * being a flag rather than a delete.
  */
-function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) => number | null {
-  return (priceId) => tierForPrice(priceId, tiers)?.ingestsPerPeriod ?? null;
+function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) => Articles | null {
+  /* **The boundary where a tier row becomes a count of articles**, and one of
+     the four there are — see src/billing/half-units.ts. Everything downstream of
+     it, the stored delta and the clamp included, stays in that unit until
+     `budgetFor` at the admission seam. */
+  return (priceId) => {
+    const allowance = tierForPrice(priceId, tiers)?.ingestsPerPeriod;
+    return allowance === undefined ? null : articles(allowance);
+  };
 }
 
 /**
@@ -216,9 +328,11 @@ function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) 
 export function quotaRules(tiers: readonly TierRow[]): QuotaRules {
   return {
     allowanceFor: allowanceForPrice(tiers),
-    maxAllowance: tiers.reduce(
-      (most, tier) => (tier.stripePriceId === null ? most : Math.max(most, tier.ingestsPerPeriod)),
-      0,
+    maxAllowance: articles(
+      tiers.reduce(
+        (most, tier) => (tier.stripePriceId === null ? most : Math.max(most, tier.ingestsPerPeriod)),
+        0,
+      ),
     ),
   };
 }
@@ -228,7 +342,7 @@ export function entitlementForTier(tier: TierRow, period: { start: Date; end: Da
   return {
     tier: "paid",
     tierId: tier.id,
-    limit: tier.ingestsPerPeriod,
+    limit: articles(tier.ingestsPerPeriod),
     periodStart: period.start,
     periodEnd: period.end,
   };
@@ -267,12 +381,20 @@ export type Standing =
    * against a tier that sells 150 — and ranking *that* number against the
    * catalogue would offer them a switch to the tier they are already on. There
    * is no way to hand the wrong number to a parameter that takes a row.
+   *
+   * `from` is what the switch is out of — a paid period or a free trial — and it
+   * rides this far because the sentence beside the button differs
+   * (`switchingPlan`, ../billing-plan.ts). It is here rather than derived later
+   * for the same reason `on` is a row: the status column is known once, where
+   * the row is read.
    */
-  | { readonly kind: "subscribed"; readonly on: TierRow }
+  | { readonly kind: "subscribed"; readonly on: TierRow; readonly from: SwitchFrom }
   /**
    * An open subscription that entitles nothing — `unpaid`, `incomplete`, a
    * status Stripe invented since — or one whose stored period has run out, or
-   * one on a price no tier sells, so the tier behind it cannot be trusted.
+   * one on a price no tier sells, so the tier behind it cannot be trusted. Also
+   * a row that contradicts itself (`subscriptionState`), which is the same
+   * answer for a stronger reason: nothing about it may be believed.
    *
    * Nothing is sold into this state. It is not a judgement about deserving: a
    * second subscription beside one Stripe may still collect on charges the
@@ -323,6 +445,21 @@ export type Standing =
  *
  * `top` means *nothing on sale is larger than what you have* — which on an empty
  * catalogue is also true, and is the reading the copy above it should take.
+ *
+ * ## What this deliberately does not do: find a better deal
+ *
+ * The ranking is **quota upgrades only**, and that is the whole of what it
+ * claims. It answers *is there more allowance above me* and nothing else, so a
+ * tier that is cheaper for an equal or smaller allowance is hidden — 20 ingests
+ * for £8 beside the £10 the reader is on would never be offered, although
+ * switching would plainly save them money. That is not an oversight to be tidied
+ * away by loosening the `>`: with no ordering of *better*, a looser comparison
+ * offers sideways moves that buy nothing, and price cannot supply one because a
+ * tier carries an amount per currency and nothing makes three currencies agree
+ * which of two tiers is dearer. A real downgrade or a real bargain wants a
+ * product-progression column and a second question asked of it, not this one
+ * asked more vaguely. Until then the reader still has the Portal, which lists
+ * every plan we sell. GPT Sol, 2026-09-04.
  */
 export function tiersToOffer(
   tiers: readonly TierRow[],
@@ -341,10 +478,9 @@ export function tiersToOffer(
      guarantee: this is the one place it is established. */
   const [first, ...rest] = list;
   if (!first) return standing.kind === "subscribed" ? { kind: "top" } : { kind: "none" };
-  return {
-    kind: standing.kind === "subscribed" ? "switch" : "checkout",
-    tiers: [first, ...rest],
-  };
+  return standing.kind === "subscribed"
+    ? { kind: "switch", tiers: [first, ...rest], from: standing.from }
+    : { kind: "checkout", tiers: [first, ...rest] };
 }
 
 /**
