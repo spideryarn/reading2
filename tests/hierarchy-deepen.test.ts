@@ -760,19 +760,25 @@ describe("runExpansionWave", () => {
     const checkpoints = memoryCheckpoints(ARTICLE);
     const batches = plan([TARGETS[0]!], ONE_PER_CALL);
     let draw = 0;
-    await expect(
-      runWave({
-        checkpoints,
-        batches,
-        execute: async () => {
-          draw++;
-          return "{ this was never JSON";
-        },
-      }),
-    ).rejects.toThrow(/expansion/i);
+    const refused = await runWave({
+      checkpoints,
+      batches,
+      execute: async () => {
+        draw++;
+        return "{ this was never JSON";
+      },
+    });
     expect(draw).toBe(MAX_EXPANSION_REDRAWS + 1);
     expect(checkpoints.calls.writes, "a refused answer was checkpointed").toBe(0);
     expect(checkpoints.entries.size).toBe(0);
+    /* **And it no longer takes the wave down with it.** Until 2026-09-05 this
+       rejected, and one target the model would not split cost every peer that
+       had already been paid for — thirteen calls and $2.73 on the first paid
+       run. The refusal is now the *target's* failure: recorded, left as wave 1
+       made it, wave published without it. `RefusedCall`. */
+    expect(refused.refused).toHaveLength(1);
+    expect(refused.refused[0]?.reason).toBe("malformed-answer");
+    expect(refused.refused[0]?.draws).toBe(MAX_EXPANSION_REDRAWS + 1);
   });
 
   /**
@@ -787,15 +793,16 @@ describe("runExpansionWave", () => {
    * `malformed-answer` and an account with no credit are different facts and one
    * of them is a bug in this repo.
    */
-  it("carries the refusal's own class and reason out under the failure", async () => {
+  it("carries the refusal's own reason out on the refused call", async () => {
     const checkpoints = memoryCheckpoints(ARTICLE);
     const batches = plan([TARGETS[0]!], ONE_PER_CALL);
-    await expect(
-      runWave({ checkpoints, batches, execute: async () => "{ never JSON" }),
-    ).rejects.toMatchObject({
-      name: "ExpansionWaveFailed",
-      cause: { name: "ExpansionRefused", reason: "malformed-answer" },
-    });
+    const wave = await runWave({ checkpoints, batches, execute: async () => "{ never JSON" });
+    expect(wave.refused[0]).toMatchObject({ reason: "malformed-answer" });
+    /* **A malformed answer is not the same fact as a considered refusal**, and
+       the shape is what tells them apart — the datum the old path destroyed.
+       Nothing could be read out of this one, so it says so rather than
+       reporting an empty answer. */
+    expect(wave.refused[0]?.shape.sections, "unreadable and empty must not look alike").toBeNull();
   });
 
   it("does not redraw an executor that threw", async () => {

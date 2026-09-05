@@ -2168,6 +2168,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/comment-referee-mark.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
+  /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,
+     so a settled call becomes a real row and a late one becomes nothing — which
+     is the asymmetry `lateCalls` exists to report and cannot be shown against a
+     store nothing selects. It was written against `fsCostStore` for a day and
+     the import-graph guard is what said so. */
+  "tests/cost-ledger-shortfall.test.ts": "private-postgres",
   /* Stage C, 2026-09-05. A `unit`-lane file until the redirect it asserted
      went away; what it asserts now is *which database* the ledger lands in,
      and that needs one. */
