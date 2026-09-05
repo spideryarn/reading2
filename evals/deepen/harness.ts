@@ -46,8 +46,9 @@ import {
   type CheckpointNamespace,
   type CheckpointStore,
 } from "../../src/store/checkpoints.js";
-import type { StepName } from "../../src/types.js";
+import type { JobStatus, StepName } from "../../src/types.js";
 import type { CostFixture } from "../cost/fixtures.js";
+import type { DeepenFinding } from "./report.js";
 
 /* ------------------------------------------------------- the file on disk -- */
 
@@ -235,19 +236,43 @@ export function assertStepPlansRunnable(
 
 /* ------------------------------------------------ the measured step, lined up -- */
 
-/** What the run learned from waiting for the load jobs to reach the measured step. */
-export interface BarrierOutcome {
-  /** The slugs whose measured step announced itself, in the order they did. */
+/**
+ * **What the gate tells a step it has just let go of.**
+ *
+ * `"go"` — everybody was at the entry, run. `"abandoned"` — the gate gave up and
+ * this phase can no longer be measured, so do not run: see `abandonStep`.
+ */
+export type GateVerdict = "go" | "abandoned";
+
+/** What the run learned from lining the load jobs up with the book. */
+export interface RendezvousOutcome {
+  /** The slugs whose measured step reached the entry, in the order they did. */
   arrived: string[];
-  /** How many the run was waiting for. */
+  /** How many parties the rendezvous has in total — three, in phase D. */
   expected: number;
-  /** Why the wait ended. Only `"all"` means the phase is lined up. */
+  /**
+   * **How many *this* wait needed**, which is not always all of them: the
+   * readiness wait needs the two load steps and deliberately leaves the book out,
+   * because the book is not driven until the readiness wait has ended.
+   */
+  needed: number;
+  /** Why the wait ended. Only `"all"` means everyone this wait needed is there. */
   why: "all" | "timed out" | "jobs finished first";
   ms: number;
+  /**
+   * **How long each held step stood at the entry**, in arrival order.
+   *
+   * Not decoration. The hold is *inside* the load job's claim and after its
+   * step's clock has started, so every one of these milliseconds is both a
+   * millisecond off that claim's 740 s deadline and a millisecond added to the
+   * `hierarchy` window question 5 reads. `runPhaseD` says so out loud when it is
+   * more than a moment.
+   */
+  held: { slug: string; ms: number }[];
 }
 
 /**
- * **An eval-only start barrier, so that phase D's three measured windows can
+ * **An eval-only start rendezvous, so that phase D's three measured windows can
  * actually intersect.**
  *
  * The arithmetic in `peakConcurrency` was right and the phase did not arrange
@@ -258,62 +283,334 @@ export interface BarrierOutcome {
  * below three makes question 5 unanswerable *after* the money has gone.
  * ⟨GPT Sol, DPN-15.⟩
  *
- * **The book waits, and it waits outside a claim.** The two load jobs are driven
- * first and announce themselves as their measured step begins; only then is the
- * book's job driven at all. Making the *book* wait inside its own claim was the
- * obvious shape and is the wrong one: its `hierarchy` step needs 658-778 s
- * against a 740 s deadline, so seconds spent waiting are seconds taken off the
- * one step in the run with no headroom.
+ * **The first fix was a latch and the second was two-party; this one holds all
+ * three.** Announcing an arrival is not the same as being *at* the entry when
+ * the others get there, so `arrive` **holds its caller** (DPN-20). But holding
+ * only the two load steps and then releasing them before driving the book left
+ * the same hole one party over: with another job holding the third queue slot,
+ * both released loads could finish their measured step before the book ever
+ * reached `hierarchy`, and the outcome still said `"all"`. ⟨GPT Sol, DPN-20-R.⟩
  *
- * **It gives up rather than hanging.** A load job that fails before its measured
- * step never announces anything, so the wait ends on the jobs finishing or on a
- * deadline, and the run says which — an unlined-up phase is a finding, not a
- * silence. Pure but for the clock, so every ending can be exercised.
+ * **So there are two waits, and only the second one opens the gate.**
+ *
+ * 1. `waitFor(2, …)` — **readiness**. Both load steps are at the entry and still
+ *    held; nothing has been bought for the book, which has not been driven or
+ *    even queued. A readiness wait that does not end `"all"` is where the run
+ *    stops: `loadReadiness`.
+ * 2. `wait(…)` — **the gate**. The book is driven, reaches the same entry through
+ *    the same hook, and all three are released together.
+ *
+ * **The book does arrive inside its own claim, and that is sound rather than a
+ * concession.** Its `hierarchy` needs 658-778 s against a 740 s deadline and can
+ * give up none of it — but by the time it is driven, everybody else is already
+ * waiting *for it*, so its own wait is one microtask. The two load steps are the
+ * ones that really hold, inside their claims, and what they pay is in `held`.
+ *
+ * **It gives up rather than hanging, and lets go when it does.** A load job that
+ * fails before its measured step never arrives, so a wait ends on the jobs
+ * settling or on a deadline. `wait` opens the gate on every ending it has,
+ * because by then the phase is inside it and there is nobody else to let the
+ * held steps go; `waitFor` deliberately does not, so the caller's `finally` —
+ * `release()` — is the one door out of the readiness phase. Pure but for the
+ * clock, so every ending can be exercised.
+ *
+ * **One deadline for the whole rendezvous, not one per wait.** Two waits with a
+ * timeout each would let a held load step spend twice the number on standing
+ * still, which is twice as much of a 740 s lease as anyone intended.
+ *
+ * **And the gate says which of the two happened.** A step let go by a gate that
+ * *gave up* must not simply carry on: the phase is already lost, and a measured
+ * step that runs into a lost phase is bought for an answer the report will
+ * refuse. So `arrive` resolves to a verdict rather than to nothing, and
+ * `abandonStep` is what the caller does with it. The verdict is **latched at the
+ * first opening**, because `runPhaseD`'s `finally` calls `release()` on every
+ * path including the successful one — a second call must not turn a gate that
+ * opened on all three into an abandonment under three running steps.
  */
-export function startBarrier(opts: {
+export function startRendezvous(opts: {
   expected: number;
   timeoutMs: number;
   now?: () => number;
 }): {
-  announce: (slug: string) => void;
-  wait: (abandonIf: Promise<unknown>) => Promise<BarrierOutcome>;
+  /**
+   * Called by a held step. Resolves when the gate opens, to `"go"` if it opened
+   * on everybody and `"abandoned"` if it gave up — `abandonStep`.
+   */
+  arrive: (slug: string) => Promise<GateVerdict>;
+  /** Wait for the first `n` parties WITHOUT opening the gate. The readiness wait. */
+  waitFor: (n: number, abandonIf: Promise<unknown>) => Promise<RendezvousOutcome>;
+  /** Wait for all of them, then open the gate and say what it saw. */
+  wait: (abandonIf: Promise<unknown>) => Promise<RendezvousOutcome>;
+  /** The failure door: release whoever is held, abandoned, for a phase that will never wait. */
+  release: () => void;
+  /**
+   * **Every slug this gate actually turned away**, which is not the same set as
+   * the `held` snapshot in an outcome: that is taken as the outcome is built, so
+   * a step arriving *after* the gate closed is missing from it. The run named the
+   * abandoned jobs off that snapshot and left a late arrival refused and
+   * unexplained. The gate is the only thing that knows, so the gate says.
+   * ⟨GPT Sol, DPN-28.⟩ Read it after the jobs have drained.
+   */
+  turnedAway: () => string[];
 } {
   const now = opts.now ?? (() => Date.now());
   const startedAt = now();
+  const deadlineAt = startedAt + opts.timeoutMs;
   const arrived: string[] = [];
-  let everyone: () => void = () => undefined;
-  const all = new Promise<"all">((resolve) => {
-    everyone = () => resolve("all");
-  });
-  /* Zero to wait for is already lined up — otherwise the caller would wait out
-     the whole deadline to be told nothing was expected. */
-  if (opts.expected <= 0) everyone();
-  return {
-    announce(slug: string): void {
-      if (!arrived.includes(slug)) arrived.push(slug);
-      if (arrived.length >= opts.expected) everyone();
-    },
-    async wait(abandonIf: Promise<unknown>): Promise<BarrierOutcome> {
-      let timer: NodeJS.Timeout | undefined;
-      const alarm = new Promise<"timed out">((resolve) => {
-        timer = setTimeout(() => resolve("timed out"), opts.timeoutMs);
-      });
-      const why = await Promise.race([
-        all,
-        alarm,
-        abandonIf.then(() => "jobs finished first" as const),
-      ]);
-      if (timer !== undefined) clearTimeout(timer);
-      /* `arrived.length` rather than `why`: a job that announced itself in the
-         same tick as the last one settled must not be reported as missing. */
-      return {
-        arrived: [...arrived],
-        expected: opts.expected,
-        why: arrived.length >= opts.expected ? "all" : why,
-        ms: now() - startedAt,
-      };
-    },
+  const waiting: { slug: string; at: number }[] = [];
+  const turnedAway: string[] = [];
+
+  /* **A resolver per threshold**, because two waits want two different counts:
+     the readiness wait wants the load steps and the gate wants everybody. */
+  const thresholds: { n: number; hit: () => void }[] = [];
+  const reached = (n: number): Promise<"all"> => {
+    if (arrived.length >= n) return Promise.resolve("all");
+    return new Promise<"all">((resolve) => {
+      thresholds.push({ n, hit: () => resolve("all") });
+    });
   };
+
+  let openedAt: number | null = null;
+  let openGate: (verdict: GateVerdict) => void = () => undefined;
+  const gate = new Promise<GateVerdict>((resolve) => {
+    openGate = resolve;
+  });
+  /* **Latched, not merely idempotent.** `wait` opens the gate and the caller's
+     `finally` opens it again with `"abandoned"`, and the second one must move
+     neither the clock the first one stamped nor the verdict it gave — three
+     steps released to run must not be told afterwards that they were
+     abandoned. */
+  const open = (verdict: GateVerdict): void => {
+    if (openedAt !== null) return;
+    openedAt = now();
+    openGate(verdict);
+  };
+
+  const outcome = (needed: number, why: RendezvousOutcome["why"]): RendezvousOutcome => ({
+    arrived: [...arrived],
+    expected: opts.expected,
+    needed,
+    /* `arrived.length` rather than `why`: a job that reached the entry in the
+       same tick as the last one settled must not be reported as missing. */
+    why: arrived.length >= needed ? "all" : why,
+    ms: now() - startedAt,
+    /* Computed here rather than in the released continuations, which do not run
+       until after this object has been built. A step that arrives after the gate
+       opened waited for nothing, and must not report a negative. */
+    held: waiting.map((w) => ({ slug: w.slug, ms: Math.max(0, (openedAt ?? now()) - w.at) })),
+  });
+
+  const until = async (n: number, abandonIf: Promise<unknown>): Promise<RendezvousOutcome["why"]> => {
+    let timer: NodeJS.Timeout | undefined;
+    const alarm = new Promise<"timed out">((resolve) => {
+      timer = setTimeout(() => resolve("timed out"), Math.max(0, deadlineAt - now()));
+    });
+    const why = await Promise.race([
+      reached(n),
+      alarm,
+      abandonIf.then(() => "jobs finished first" as const),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
+    return why;
+  };
+
+  return {
+    arrive(slug: string): Promise<GateVerdict> {
+      if (!arrived.includes(slug)) arrived.push(slug);
+      waiting.push({ slug, at: now() });
+      for (const t of thresholds) if (arrived.length >= t.n) t.hit();
+      /* Recorded as the verdict reaches this caller rather than from a snapshot
+         taken earlier, so a step that arrives after the gate closed is counted
+         among the refused — DPN-28. */
+      return gate.then((verdict) => {
+        if (verdict === "abandoned" && !turnedAway.includes(slug)) turnedAway.push(slug);
+        return verdict;
+      });
+    },
+    async waitFor(n: number, abandonIf: Promise<unknown>): Promise<RendezvousOutcome> {
+      return outcome(n, await until(n, abandonIf));
+    },
+    async wait(abandonIf: Promise<unknown>): Promise<RendezvousOutcome> {
+      const why = await until(opts.expected, abandonIf);
+      const out = outcome(opts.expected, why);
+      /* **The verdict is the outcome's own `why`**, computed before the gate
+         opens so that a party arriving in the last tick still counts. Only a
+         gate that really opened on everybody says `"go"`. */
+      open(out.why === "all" ? "go" : "abandoned");
+      return out;
+    },
+    release: () => open("abandoned"),
+    turnedAway: () => [...turnedAway],
+  };
+}
+
+/**
+ * **The phrase that marks a step this eval stopped on purpose**, so it can be
+ * told at a glance from one that failed on its own merits.
+ *
+ * **It does not survive in the step's `error`, and that is measured rather than
+ * feared.** The thrown error carries it, but the queue replaces a failed step's
+ * message with a reader-facing sentence before it is stored — a `--dry-run` on
+ * 2026-09-05 forced this path and found `"Extracting the article did not
+ * finish…"` in `stepOutcomes[].error`, with no marker anywhere in it. That is
+ * the same trap `checkDriving` was written around, met a second time.
+ *
+ * So the marker's real home is the **finding `runPhaseD` puts on the job's own
+ * record**, which nothing rewrites and which reaches `run.json` and the closing
+ * findings block. The constant is shared so the two say the same words.
+ */
+export const ABANDONED_MARKER = "ABANDONED AT THE START RENDEZVOUS";
+
+/**
+ * **Should this released step run, or stop before it spends?**
+ *
+ * The gate can open without everybody at the entry — the book failing to get a
+ * claim slot inside the deadline is the likeliest way, and on a shared box that
+ * is closer to the expected case than to the tail. Every measured step that runs
+ * after that is bought for an answer question 5 will refuse: three windows are
+ * what it needs, and this phase no longer has them. On the book that is $7.40 of
+ * a $40.90 run. So the step throws **before** `step.run`, having bought nothing.
+ * ⟨Greg, 2026-09-05, after round 5 left this as the last known money-waster.⟩
+ *
+ * **Two guards, and neither is negotiable.**
+ *
+ * - `"go"` never throws. A gate that opened on everybody is the phase working.
+ * - `--dry-run` never throws. Its jobs already stop at their last free step and
+ *   fail (`stepsFor`); a second way to fail them proves nothing and would make
+ *   the rehearsal's output a worse guide to the paid run's, which is the only
+ *   thing the rehearsal is for.
+ *
+ * Returns the error rather than throwing it, so both answers can be watched
+ * without a step, a job or a database.
+ */
+export function abandonStep(opts: {
+  verdict: GateVerdict;
+  dryRun: boolean;
+  slug: string;
+  step: string;
+}): Error | null {
+  if (opts.verdict === "go") return null;
+  if (opts.dryRun) return null;
+  return new Error(
+    `${ABANDONED_MARKER}: \`${opts.step}\` on ${opts.slug} was released by a start rendezvous that ` +
+      "GAVE UP rather than opening on all three, so this eval stopped it before it ran and it " +
+      "bought nothing. The three measured windows cannot now overlap, so question 5 is " +
+      "unanswerable whatever this step did — running it would have spent money on an answer the " +
+      "report would then refuse to quote. This job's `error` is this eval's doing, not the " +
+      "pipeline's.",
+  );
+}
+
+/**
+ * **May the book be driven at all?** — asked of the readiness wait, before the
+ * book is queued and before a penny of it is spent.
+ *
+ * Phase D used to drive it unconditionally. So both load jobs could fail before
+ * `hierarchy`, the readiness wait end `"jobs finished first"` with their DPN-18
+ * findings already on the record, and the run then buy the book's whole wave
+ * into a phase that could not answer the only question that pass exists for.
+ * Question 1 is phases A and B only; **the phase-D book pass is for question 5
+ * and nothing else**, and question 5 needs three windows open at one instant. No
+ * load steps at the entry, no question 5, so no reason to buy it.
+ * ⟨GPT Sol, DPN-23.⟩
+ *
+ * Pure, so the refusal can be watched without a database.
+ */
+export function loadReadiness(ready: RendezvousOutcome): {
+  go: boolean;
+  findings: DeepenFinding[];
+} {
+  if (ready.why === "all") return { go: true, findings: [] };
+  return {
+    go: false,
+    findings: [
+      {
+        kind: "not-answerable",
+        fatal: true,
+        message:
+          `Phase D: only ${ready.arrived.length} of ${ready.needed} load step(s) reached the entry ` +
+          `to the measured step (the wait ended "${ready.why}" after ${(ready.ms / 1000).toFixed(1)}s). ` +
+          "The book's pass under load was NOT DRIVEN and NOT BOUGHT: it exists to answer question 5, " +
+          "question 5 needs all three measured windows open at one instant, and with the load steps " +
+          "gone that is no longer possible. Question 5 is absent, not zero, and the phase-D book " +
+          "repeat is missing from the driving.",
+      },
+    ],
+  };
+}
+
+/* --------------------------------------- a job that stopped, and what it left -- */
+
+/**
+ * **Two ways a paid job can stop having lost the evidence it was bought for**,
+ * turned into findings so that `stopIfCompromised` can see them.
+ *
+ * That function reads findings and only findings, so anything not made into one
+ * is, to the run, a clean job — and the next phase is purchased over it.
+ *
+ * 1. **A terminal status that is not `done`** (DPN-18). A phase-B `hierarchy`
+ *    writes valid deepening records and then label generation throws; the job
+ *    ends `error`, `driveJob` records that, and phase C is bought anyway.
+ * 2. **`done`, deepening on, and no records file** (DPN-19). `saveDeepenRecords`
+ *    swallows filesystem and hard-link failures on purpose — instrumentation
+ *    must not fail a reader's article — and `readRecordsDir` then returns `[]`,
+ *    which `driveJob` printed as "nobody asked". But **"nobody asked" and "asked
+ *    and the record was lost" are different facts**, and questions 1-3 are
+ *    computed entirely out of those records. This is the seam where the two got
+ *    confused. ⟨GPT Sol, DPN-18/DPN-19.⟩
+ *
+ * **`--dry-run` is exempt from the first**, and that is the rehearsal's shape
+ * rather than an excuse: its step list stops at `extract`, so the article never
+ * publishes and the job is *expected* to end at its last free step
+ * (`stepsFor`). It never turns deepening on, so the second cannot arise.
+ *
+ * A requeued job is left to its own finding, which already says the thing that
+ * matters about it — that re-claiming it would buy the whole wave again.
+ *
+ * Pure, and separate from `driveJob`, so every one of these can be watched
+ * without a database — tests/deepen-eval.test.ts.
+ */
+export function jobIntegrityFindings(opts: {
+  label: string;
+  dryRun: boolean;
+  requeued: boolean;
+  status: JobStatus | undefined;
+  deepenFlag: boolean;
+  hasRecords: boolean;
+}): DeepenFinding[] {
+  if (opts.dryRun) return [];
+  const findings: DeepenFinding[] = [];
+  if (!opts.requeued && opts.status !== "done") {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${opts.label}: the job stopped at \`${opts.status ?? "unknown"}\` rather than \`done\`. ` +
+        "Whatever it bought before it stopped is on the ledger, but this job did not finish the " +
+        "steps the run was buying it for, so nothing measured over it is a whole measurement and " +
+        "no later phase may be purchased on top of it.",
+    });
+  }
+  /* **Only on a job that finished**, and that is DPN-27 rather than caution.
+     "The records were LOST" is a claim about something having been asked for,
+     and a job that ended `error` may have failed before `hierarchy` ran at all —
+     a step this eval abandoned at the rendezvous never runs, so it never
+     requests anything. Saying "lost" over that is inventing the very fact DPN-19
+     was about not inventing, one branch further on. The status finding above
+     already says the job did not finish; the missing file is its consequence.
+     ⟨GPT Sol, DPN-27.⟩ */
+  if (opts.status === "done" && opts.deepenFlag && !opts.hasRecords) {
+    findings.push({
+      kind: "no-records",
+      fatal: true,
+      message:
+        `${opts.label}: deepening was ON and no records file was written — the records were LOST, ` +
+        "not never asked for. `saveDeepenRecords` swallows filesystem and hard-link failures on " +
+        "purpose, so this reads downstream as `nobody asked`; it is not. Questions 1-3 are " +
+        "computed out of these records and are short by this whole pass.",
+    });
+  }
+  return findings;
 }
 
 /* ------------------------------------------------- the requeue, refused -- */
@@ -341,11 +638,195 @@ export function startBarrier(opts: {
  */
 export function requeueVerdict(opts: {
   reasking: boolean;
+  /**
+   * **Is question 5 timing this job's step?** Then a re-drive is not merely
+   * expensive, it is a lie: the second attempt takes the rendezvous's *latched*
+   * verdict and returns at once, so it runs outside the gate beside whatever its
+   * siblings are doing — and the queue replaces the first attempt's clock
+   * (src/jobs.ts § `runStep`), so what is left is a plausible-looking pass whose
+   * duration omits the attempt that was actually lined up. ⟨GPT Sol, DPN-25.⟩
+   */
+  measured: boolean;
   requeuesBefore: number;
   requeuesNow: number;
 }): "stop" | "carry on" {
-  if (!opts.reasking) return "carry on";
+  if (!opts.reasking && !opts.measured) return "carry on";
   return opts.requeuesNow > opts.requeuesBefore ? "stop" : "carry on";
+}
+
+/**
+ * **Why this run refused to re-drive a job the claimant handed back**, in the
+ * words of whichever of the two reasons applied — and both can.
+ *
+ * - **Re-asking** is about money (DPN-07). The next claim would ignore the
+ *   checkpoint rows this attempt just wrote and buy the whole wave again, and
+ *   `REQUEUE_BUDGET` permits three such windows, none of them in the estimate.
+ * - **Measured** is about evidence (DPN-25). The retry takes the start
+ *   rendezvous's *latched* verdict and returns at once, so it runs outside the
+ *   gate; the queue then replaces the first attempt's clock, and what is left is
+ *   a question-5 pass that looks ordinary and whose duration omits the attempt
+ *   that was actually lined up.
+ *
+ * Pure, so both halves of the sentence can be watched being written.
+ */
+export function requeueFinding(opts: {
+  label: string;
+  slug: string;
+  window: number;
+  windows: number;
+  reasking: boolean;
+  measured: boolean;
+}): DeepenFinding {
+  return {
+    kind: "requeued",
+    fatal: true,
+    message:
+      `${opts.label}: the claimant handed this job back at its own deadline (requeue window ` +
+      `${opts.window} of ${opts.windows}). This run STOPPED rather than re-claiming it. ` +
+      (opts.reasking
+        ? `${REASK_ENV} still named ${opts.slug}, so the next claim would ignore the checkpoint ` +
+          "rows this one just wrote and buy the whole wave again, and the budget permits three " +
+          "such windows. "
+        : "") +
+      (opts.measured
+        ? "Question 5 is timing this job's measured step, and a re-drive would take the start " +
+          "rendezvous's LATCHED verdict — running outside the gate, beside whatever its siblings " +
+          "were doing — while the queue replaced this attempt's clock. The pass that came back " +
+          "would look ordinary and its duration would omit the attempt that was lined up. "
+        : "") +
+      "The job is left `queued`, the article and the job are RETAINED rather than cleaned up, " +
+      "and no later job in this run can publish over that slug. This pass is partial and must " +
+      "not be quoted.",
+  };
+}
+
+/* ---------------------------------------------- one fate, three measured jobs -- */
+
+/**
+ * **The invariant phase D was missing, and the fifth time it was missing it.**
+ *
+ * Four separate guards had already been fitted for four separate ways of buying
+ * something the run already knew it could not use, and here was a fifth: the
+ * three measured jobs were driven concurrently and *drained* together, and
+ * nothing else passed between them. Load 1's `hierarchy` could fail on its
+ * structure call while the book and load 2 went on admitting expansion and label
+ * calls — for a question 5 that could no longer reach three usable completions.
+ * ⟨GPT Sol, DPN-26.⟩
+ *
+ * So rather than a fifth guard, the rule those four are instances of:
+ *
+ * > **The three measured jobs share one fate, and none of them starts more paid
+ * > work after any of them has lost it.**
+ *
+ * Anything that puts three usable completions out of reach loses it: a measured
+ * step that failed, a wave that fell back to wave 1, a claim handed back at the
+ * deadline.
+ *
+ * **What this can and cannot do**, because the whole of DPN-29 is that these
+ * claims must be exact — and the first version of this paragraph got it wrong,
+ * which is DPN-30. It has two halves, and the second exists because the first
+ * was not enough:
+ *
+ * - **Before each claim**, `lost()` refuses: no further step and no re-drive.
+ * - **Inside a running claim**, `signal` cancels. One claim runs the *whole*
+ *   `hierarchy` step — structure call, expansion wave **and a full pass of
+ *   labels**, which `generateHierarchy` starts even after the wave failed — so
+ *   "stops starting" was true of steps and false of calls, and up to ~$10.80 of
+ *   phase D could still be bought after question 5 was lost.
+ *
+ * What remains uncancelled is **the single request already in flight**, which
+ * may still be billed by the provider. That is the honest bound; it is not "a
+ * whole label pass", which is what this used to say.
+ *
+ * The first reason is kept because the first reason is the cause; the ones after
+ * it are consequences, and a report that quoted the last would name the wrong
+ * job.
+ */
+export interface PhaseFate {
+  /** Say the phase is lost, and why. Only the first reason is kept. */
+  lose: (why: string) => void;
+  /** The reason this phase can no longer answer, or `null` while it still can. */
+  lost: () => string | null;
+  /**
+   * **Aborts the instant the fate is first lost**, and never otherwise.
+   *
+   * This is the half that reaches *inside* a claim, and it exists because
+   * stopping before the next claim was not enough (DPN-30). One claim runs the
+   * whole `hierarchy` step, and that step buys a structure call, an expansion
+   * wave **and a whole pass of labels** — `generateHierarchy` catches a failed
+   * wave and falls straight through to `generateLabels` regardless
+   * (src/hierarchy.ts § the `deepenFailed` catch). So a sibling could *begin* an
+   * entire label pass after question 5 was already unanswerable.
+   *
+   * `announcing` combines this into the measured step's `ctx.signal`, and `src/`
+   * already threads that signal where it needs to go — **read rather than
+   * assumed**: label batches are queued *with* it (`src/labels.ts` §
+   * `queue.add(…, { signal })`), so an abort drops the ones that have not
+   * started; the wave's own calls carry it through `liveExpansionExecutor`; and
+   * `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+   * wait, never a call in flight"*, which is exactly the bound to quote.
+   *
+   * **Only a lost fate aborts.** `ctx.signal` keeps doing its own job beside it.
+   */
+  signal: AbortSignal;
+}
+
+export function startPhaseFate(): PhaseFate {
+  let why: string | null = null;
+  const controller = new AbortController();
+  return {
+    lose(reason: string): void {
+      if (why !== null) return;
+      why = reason;
+      /* Aborting inside the same guard is what makes "lost" and "cancelled" one
+         fact rather than two that can drift apart. */
+      controller.abort(new Error(`Phase D was already lost: ${reason}`));
+    },
+    lost: () => why,
+    signal: controller.signal,
+  };
+}
+
+/**
+ * **Does this job's ending lose the phase for its siblings, or is it the
+ * rehearsal ending the way a rehearsal ends?**
+ *
+ * The fate used to be disarmed wholesale under `--dry-run`, and for a good
+ * reason: every rehearsal job is *expected* to fail at its last free step, so
+ * the first one to do so would stop its siblings and the rehearsal would stop
+ * being a faithful shape of the paid run — the one thing it is for
+ * (docs/postmortems/260905b-…-clean-run-over-zero-jobs.md). But that also meant
+ * the free run could never show the one thing DPN-26 and DPN-30 are about: a
+ * live failure reaching its siblings. ⟨Greg, 2026-09-05.⟩
+ *
+ * The distinction that lets both be true: **the expected ending is a failure at
+ * the last step this job was asked to run.** A failure earlier in the list, a
+ * requeue, or a wave that fell back are real failures even in a rehearsal, and
+ * lose the phase there too.
+ *
+ * Pure, so the rehearsal's own ending can be watched *not* losing it.
+ */
+export function fateReason(opts: {
+  label: string;
+  dryRun: boolean;
+  status: JobStatus | undefined;
+  requeued: boolean;
+  waveFailed: boolean;
+  /** The step that errored, where one did. */
+  failedStep: StepName | null;
+  /** The steps this job was asked to run, in order. */
+  steps: readonly StepName[];
+}): string | null {
+  if (opts.requeued) {
+    return `${opts.label} handed its claim back at its own deadline and was not re-driven`;
+  }
+  if (opts.waveFailed) return `${opts.label}'s deepening wave fell back to wave 1`;
+  if (opts.status === "done") return null;
+  /* The rehearsal's expected ending, and only that: publishing needs a tree and
+     a tree needs a model call, so a free job fails at the end of its list. */
+  const last = opts.steps.at(-1) ?? null;
+  if (opts.dryRun && opts.failedStep !== null && opts.failedStep === last) return null;
+  return `${opts.label} ended \`${opts.status ?? "unknown"}\` rather than \`done\``;
 }
 
 /* ------------------------------------------------- the checkpoint file -- */

@@ -30,21 +30,28 @@ import { describe, expect, it } from "vitest";
 import type { CandidateRecord } from "../src/hierarchy-expand.js";
 import type { DeepenStats } from "../src/hierarchy-deepen.js";
 import {
+  abandonStep,
+  ABANDONED_MARKER,
   assertReaskNames,
   assertSeamProof,
   assertStepPlansRunnable,
   byWhenWritten,
   checkpointWriter,
   estimate,
+  fateReason,
   formatEstimate,
+  jobIntegrityFindings,
+  loadReadiness,
   parseRecordsFile,
   readRecordsDir,
   RECORDS_VERSION,
   recordingCheckpoints,
   recordsFilePrefix,
+  type RendezvousOutcome,
+  startPhaseFate,
   requeueVerdict,
   type SeamProof,
-  startBarrier,
+  startRendezvous,
   type StepPlans,
   treeDigest,
 } from "../evals/deepen/harness.js";
@@ -57,6 +64,7 @@ import {
   checkRepeatBoughtItsWave,
   compareRepeats,
   costReport,
+  fullConcurrencyMs,
   type DrivenJob,
   parentPath,
   peakConcurrency,
@@ -597,11 +605,44 @@ describe("the budget report", () => {
   ];
 
   it("is quiet inside the budget when all three really overlapped", () => {
-    const q = budgetReport({ clocks: threeAtOnce, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: threeAtOnce, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.answerable).toBe(true);
     expect(q.peakConcurrency).toBe(3);
     expect(q.overBudget).toHaveLength(0);
     expect(q.reading).toMatch(/inside STEP_BUDGET_MS/);
+  });
+
+  /**
+   * **The floor is the load check now, and it has to be able to refuse.**
+   *
+   * `threeAtOnce` overlaps fully for 78 s — the second article ends at 1:20 and
+   * the last of them starts at 0:02. Held to a floor above that, question 5 must
+   * refuse: all three *started* together, which the rendezvous arranges, and the
+   * load was over long before the longest step was.
+   */
+  it("refuses when the three were not up together for long enough", () => {
+    const q = budgetReport({
+      clocks: threeAtOnce,
+      budgetMs: 700_000,
+      deadlineMs: 740_000,
+      expected: 3,
+      fullConcurrencyFloorMs: 120_000,
+    });
+    expect(q.fullConcurrencyMs).toBe(78_000);
+    expect(q.answerable, "an instant of overlap is arranged, not measured").toBe(false);
+    expect(q.findings.some((f) => f.fatal && /synchronised start/.test(f.message))).toBe(true);
+  });
+
+  it("passes the floor when they really were up together for it", () => {
+    const q = budgetReport({
+      clocks: threeAtOnce,
+      budgetMs: 700_000,
+      deadlineMs: 740_000,
+      expected: 3,
+      fullConcurrencyFloorMs: 60_000,
+    });
+    expect(q.answerable).toBe(true);
+    expect(q.fullConcurrencyFloorMs).toBe(60_000);
   });
 
   it("names a step past the budget", () => {
@@ -609,6 +650,7 @@ describe("the budget report", () => {
       clocks: [clock({ ms: 800_000, finishedAt: "2026-09-05T00:13:20.000Z" }), ...threeAtOnce.slice(1)],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 3,
     });
     expect(q.answerable).toBe(true);
@@ -627,6 +669,7 @@ describe("the budget report", () => {
       clocks: [clock({ ms: null, status: null, startedAt: null, finishedAt: null, hasSuccessfulStats: false })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 3,
     });
     expect(q.measured).toBe(0);
@@ -647,7 +690,7 @@ describe("the budget report", () => {
    */
   it("refuses three fast failures, which each carry a clock", () => {
     const failed = threeAtOnce.map((c) => clock({ ...c, status: "error", ms: 900, hasSuccessfulStats: false }));
-    const q = budgetReport({ clocks: failed, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: failed, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.measured).toBe(3);
     expect(q.completed).toBe(0);
     expect(q.answerable).toBe(false);
@@ -672,7 +715,7 @@ describe("the budget report", () => {
    */
   it("refuses three waves that FAILED, completed the step and finished inside the budget", () => {
     const fellBack = threeAtOnce.map((c) => clock({ ...c, hasSuccessfulStats: false }));
-    const q = budgetReport({ clocks: fellBack, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: fellBack, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.measured).toBe(3);
     /* Every one is `done`, inside the budget and overlapping its two siblings —
        the three things question 5 asks — and it is still not an answer. */
@@ -691,6 +734,7 @@ describe("the budget report", () => {
       clocks: [threeAtOnce[0]!, clock({ ...threeAtOnce[1]!, status: "error", hasSuccessfulStats: false })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 3,
     });
     expect(q.completed).toBe(1);
@@ -710,7 +754,7 @@ describe("the budget report", () => {
       clock({ label: "D 2", startedAt: "2026-09-05T00:01:00.000Z", finishedAt: "2026-09-05T00:02:00.000Z" }),
       clock({ label: "D 3", startedAt: "2026-09-05T00:02:00.000Z", finishedAt: "2026-09-05T00:03:00.000Z" }),
     ];
-    const q = budgetReport({ clocks: serial, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: serial, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.completed).toBe(3);
     expect(q.peakConcurrency).toBe(1);
     expect(q.answerable).toBe(false);
@@ -724,7 +768,7 @@ describe("the budget report", () => {
       clock({ label: "D 2", startedAt: "2026-09-05T00:00:30.000Z", finishedAt: "2026-09-05T00:01:30.000Z" }),
       clock({ label: "D 3", startedAt: "2026-09-05T00:02:00.000Z", finishedAt: "2026-09-05T00:03:00.000Z" }),
     ];
-    const q = budgetReport({ clocks: partly, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    const q = budgetReport({ clocks: partly, budgetMs: 700_000, deadlineMs: 740_000, expected: 3, fullConcurrencyFloorMs: 0 });
     expect(q.peakConcurrency).toBe(2);
     expect(q.answerable).toBe(false);
   });
@@ -740,6 +784,7 @@ describe("the budget report", () => {
       clocks: [clock({ withheld: 4 })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 1,
     });
     expect(cheap.selfAborted).toHaveLength(1);
@@ -748,6 +793,7 @@ describe("the budget report", () => {
       clocks: [clock({ withheld: 4, uncheckpointed: 4 })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
+      fullConcurrencyFloorMs: 0,
       expected: 1,
     });
     expect(dear.wasted).toHaveLength(1);
@@ -788,6 +834,72 @@ describe("peak concurrency", () => {
         { startedAt: undefined, finishedAt: undefined },
       ]),
     ).toBe(1);
+  });
+});
+
+/**
+ * **`peakConcurrency` became a wiring check, and this is what replaced it as the
+ * measurement.**
+ *
+ * The start rendezvous releases all three measured steps within one turn of the
+ * event loop, and a measured job that requeues is now refused rather than
+ * re-driven. So *given three valid completions, all three clocks open before
+ * `arrive()` returns and the gate says go only once all three have arrived* —
+ * which makes `peakConcurrency === 3` **constructed**, true of any run that got
+ * that far, and false only if a clock is corrupt. It confirms the wiring; it
+ * does not discover anything. ⟨GPT Sol, confirming an argument raised here.⟩
+ *
+ * `fullConcurrencyMs` is the honest replacement: **the longest interval during
+ * which all three were genuinely in flight**, which for windows that share a
+ * start is `min(finishedAt) - max(startedAt)`. It is bounded by the *shortest*
+ * of the three — and the load articles' `hierarchy` is far shorter than the
+ * book's 658-778 s — so it says out loud how much of the book's step was really
+ * contended.
+ */
+describe("how long all three were really in flight", () => {
+  const w = (from: string, to: string | null) => ({ startedAt: from, finishedAt: to });
+
+  it("is the overlap of the three, not the length of the longest", () => {
+    expect(
+      fullConcurrencyMs([
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:12:00Z"),
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"),
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:00:40Z"),
+      ]),
+      "the book ran twelve minutes; all three were up for forty seconds of it",
+    ).toBe(40_000);
+  });
+
+  it("takes the latest start as well as the earliest end", () => {
+    expect(
+      fullConcurrencyMs([
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:10:00Z"),
+        w("2026-01-01T00:00:30Z", "2026-01-01T00:10:00Z"),
+      ]),
+    ).toBe(570_000);
+  });
+
+  /* Windows that never all overlapped have no such interval, and a negative
+     number would read as a small positive one to anybody skimming. */
+  it("is zero where they did not all overlap", () => {
+    expect(
+      fullConcurrencyMs([
+        w("2026-01-01T00:00:00Z", "2026-01-01T00:00:10Z"),
+        w("2026-01-01T00:00:20Z", "2026-01-01T00:00:30Z"),
+      ]),
+    ).toBe(0);
+  });
+
+  /* An unfinished or unstarted window makes the answer unknown, not zero — the
+     distinction this whole harness exists to keep. */
+  it("is null where any window is missing an end", () => {
+    expect(
+      fullConcurrencyMs([w("2026-01-01T00:00:00Z", "2026-01-01T00:10:00Z"), w("2026-01-01T00:00:00Z", null)]),
+    ).toBeNull();
+  });
+
+  it("is null over no windows at all", () => {
+    expect(fullConcurrencyMs([])).toBeNull();
   });
 });
 
@@ -938,20 +1050,193 @@ describe("the cost eval's checks, in this eval's vocabulary", () => {
  * windows, and none of it was in the printed $40.90.
  */
 describe("what to do when the claimant hands the job back", () => {
+  const ordinary = { reasking: false, measured: false };
+
   it("stops a re-asking pass on its first requeue", () => {
-    expect(requeueVerdict({ reasking: true, requeuesBefore: 0, requeuesNow: 1 })).toBe("stop");
-    expect(requeueVerdict({ reasking: true, requeuesBefore: 1, requeuesNow: 2 })).toBe("stop");
+    expect(requeueVerdict({ ...ordinary, reasking: true, requeuesBefore: 0, requeuesNow: 1 })).toBe("stop");
+    expect(requeueVerdict({ ...ordinary, reasking: true, requeuesBefore: 1, requeuesNow: 2 })).toBe("stop");
   });
 
   /* An ordinary pass is re-driven and MUST be: a book's hierarchy step needs
      658-778s against a 740s deadline, so a requeue there is routine, and
      without the lever the re-drive resumes what it has already paid for. */
   it("carries on driving a pass the lever does not name", () => {
-    expect(requeueVerdict({ reasking: false, requeuesBefore: 0, requeuesNow: 1 })).toBe("carry on");
+    expect(requeueVerdict({ ...ordinary, requeuesBefore: 0, requeuesNow: 1 })).toBe("carry on");
   });
 
   it("carries on where nothing was requeued at all, which is the ordinary answer", () => {
-    expect(requeueVerdict({ reasking: true, requeuesBefore: 2, requeuesNow: 2 })).toBe("carry on");
+    expect(requeueVerdict({ ...ordinary, reasking: true, requeuesBefore: 2, requeuesNow: 2 })).toBe("carry on");
+  });
+
+  /**
+   * **DPN-25 — the second reason to stop, and it is about evidence rather than
+   * money.** A phase-D load job is not re-asking, so it was re-driven like any
+   * ordinary pass. Its second `arrive()` takes the **latched** `"go"` and
+   * returns at once, so the retry runs *outside* the rendezvous — beside
+   * whatever its siblings happen to be doing — and the queue replaces the first
+   * attempt's clock (src/jobs.ts § `runStep`). The result is a Q5 pass that
+   * looks perfectly ordinary and whose duration silently omits the first
+   * attempt. ⟨GPT Sol, DPN-25.⟩
+   *
+   * So a job whose step question 5 is timing stops on its first requeue,
+   * whether or not the re-ask lever names it.
+   */
+  it("stops a measured pass on its first requeue, re-asking or not", () => {
+    expect(
+      requeueVerdict({ reasking: false, measured: true, requeuesBefore: 0, requeuesNow: 1 }),
+      "a re-driven measured step runs outside the rendezvous and loses its first clock",
+    ).toBe("stop");
+    expect(requeueVerdict({ reasking: true, measured: true, requeuesBefore: 1, requeuesNow: 2 })).toBe("stop");
+  });
+
+  it("carries on a measured pass that did not requeue", () => {
+    expect(requeueVerdict({ reasking: false, measured: true, requeuesBefore: 1, requeuesNow: 1 })).toBe("carry on");
+  });
+});
+
+/**
+ * **DPN-26 — the fifth instance of "it buys after it already knows".**
+ *
+ * Phase D's three jobs were driven concurrently and *drained* together, and that
+ * is all: no failure signal crossed between them. So load 1's `hierarchy` could
+ * fail on its structure call while the book and load 2 went on admitting
+ * expansion and label calls — for a question 5 that already could not reach
+ * three usable completions. The four earlier instances each got their own guard;
+ * this one gets the invariant instead. ⟨GPT Sol, DPN-26.⟩
+ *
+ * **The invariant, stated once:** *the three measured jobs share one fate, and
+ * none of them starts more paid work after any of them has lost it.* What can
+ * lose it is anything that puts three usable completions out of reach — a
+ * measured step that failed, a wave that fell back, or a claim handed back.
+ *
+ * **What it can and cannot do**, because the difference matters and the
+ * temptation is to overclaim: it stops a job before its **next claim**, so no
+ * further step and no re-drive begins. It cannot reach inside a `hierarchy`
+ * call that is already in flight — that is the pipeline's, and `src/` is not
+ * this eval's to change. So the honest claim is *stops starting*, not *stops
+ * spending*.
+ */
+describe("the fate three measured jobs share", () => {
+  it("is whole until something loses it", () => {
+    const fate = startPhaseFate();
+    expect(fate.lost()).toBeNull();
+  });
+
+  it("keeps the first reason, because the first one is the cause", () => {
+    const fate = startPhaseFate();
+    fate.lose("load 1's hierarchy failed");
+    fate.lose("the book requeued");
+    expect(fate.lost()).toBe("load 1's hierarchy failed");
+  });
+
+  it("tells a job that is about to claim again to stop", () => {
+    const fate = startPhaseFate();
+    expect(fate.lost()).toBeNull();
+    fate.lose("load 2's wave fell back to wave 1");
+    expect(fate.lost()).toBe("load 2's wave fell back to wave 1");
+  });
+
+  /**
+   * **DPN-30 — and this is the level below where DPN-26 was fixed.**
+   *
+   * Stopping before the next *claim* does not stop the next paid *call*: one
+   * claim runs the whole `hierarchy` step, and that step buys a structure call,
+   * an expansion wave and a whole pass of labels. `generateHierarchy` catches a
+   * failed wave and falls straight through to `generateLabels` regardless
+   * (src/hierarchy.ts § the `deepenFailed` catch), so after question 5 is known
+   * unanswerable a sibling could still *begin* an entire label pass.
+   *
+   * The fate therefore carries a signal as well as a reason. It is combined into
+   * the measured step's `ctx.signal` by `announcing`, and `src/` already threads
+   * that signal to the places that matter: label batches are queued with it
+   * (`src/labels.ts` § `queue.add(…, { signal })`), so an abort **drops the ones
+   * that have not started**, and the wave's own calls carry it too.
+   */
+  it("aborts the instant it is lost, and not before", () => {
+    const fate = startPhaseFate();
+    expect(fate.signal.aborted, "a phase that is still whole must not cancel anything").toBe(false);
+    fate.lose("the book's hierarchy failed");
+    expect(fate.signal.aborted).toBe(true);
+  });
+
+  it("gives the reason as the abort reason, so a cancelled call says why", () => {
+    const fate = startPhaseFate();
+    fate.lose("load 1's wave fell back");
+    expect(String(fate.signal.reason)).toContain("load 1's wave fell back");
+  });
+
+  it("does not re-abort on a second loss", () => {
+    const fate = startPhaseFate();
+    fate.lose("first");
+    const reason = fate.signal.reason;
+    fate.lose("second");
+    expect(fate.signal.reason).toBe(reason);
+  });
+});
+
+/**
+ * **DPN-30, item 4 — the rehearsal could not exercise the failure path at all.**
+ *
+ * The fate was disarmed wholesale under `--dry-run`, for a good reason: every
+ * rehearsal job is *expected* to fail at its last free step, so the first one to
+ * do so would have stopped its siblings and the rehearsal would have stopped
+ * being a faithful shape of the paid run. But that also meant the one thing
+ * DPN-26 and DPN-30 are about — a live failure reaching its siblings — was the
+ * one thing the free run could never show.
+ *
+ * The distinction that lets both be true: **the expected ending is a failure at
+ * the last step this job was asked to run.** Anything else — a failure earlier
+ * in the list, a requeue, a wave that fell back — is a real failure even in a
+ * rehearsal, and loses the phase.
+ */
+describe("what loses the phase, and what is merely the rehearsal ending", () => {
+  const paid = { dryRun: false, label: "load 1", requeued: false, waveFailed: false };
+  const steps = ["fetch", "extract"] as const;
+
+  it("loses it when a paid measured job ends `error`", () => {
+    expect(
+      fateReason({ ...paid, status: "error", failedStep: "hierarchy", steps: ["hierarchy"] }),
+    ).toMatch(/load 1/);
+  });
+
+  it("loses it on a requeue", () => {
+    expect(
+      fateReason({ ...paid, requeued: true, status: "queued", failedStep: null, steps: ["hierarchy"] }),
+    ).toMatch(/claim/i);
+  });
+
+  it("loses it on a wave that fell back", () => {
+    expect(
+      fateReason({ ...paid, waveFailed: true, status: "done", failedStep: null, steps: ["hierarchy"] }),
+    ).toMatch(/wave/i);
+  });
+
+  it("says nothing about a job that finished", () => {
+    expect(fateReason({ ...paid, status: "done", failedStep: null, steps: ["hierarchy"] })).toBeNull();
+  });
+
+  /* The rehearsal's expected ending: the LAST step of the list fails, because
+     publishing needs a tree and a tree needs a model call. */
+  it("is not lost by a dry run failing at its last free step", () => {
+    expect(
+      fateReason({ ...paid, dryRun: true, status: "error", failedStep: "extract", steps }),
+      "the rehearsal's own expected ending must not stop its siblings",
+    ).toBeNull();
+  });
+
+  /* But a dry run that fails EARLY is a real failure, and the rehearsal should
+     show it propagating — which is the whole of item 4. */
+  it("is lost by a dry run failing before its last free step", () => {
+    expect(
+      fateReason({ ...paid, dryRun: true, status: "error", failedStep: "fetch", steps }),
+      "a rehearsal that cannot show a real failure reaching its siblings is not a rehearsal of it",
+    ).toMatch(/load 1/);
+  });
+
+  it("is lost by a dry run that requeues", () => {
+    expect(
+      fateReason({ ...paid, dryRun: true, requeued: true, status: "queued", failedStep: null, steps }),
+    ).not.toBeNull();
   });
 });
 
@@ -1677,6 +1962,121 @@ describe("the driving table over an empty run", () => {
   });
 });
 
+/* ===================================== a job that stopped, and what it left == */
+
+/**
+ * **DPN-18 and DPN-19 — two ways a paid job can stop having lost the evidence it
+ * was bought for, while `stopIfCompromised` sees nothing to stop for.**
+ *
+ * That function reads *findings*, and only findings. So anything that is not
+ * turned into one is, to the run, indistinguishable from a clean job — and the
+ * next phase is purchased.
+ *
+ * 1. **A terminal status that is not `done`.** A phase-B `hierarchy` writes valid
+ *    deepening records and then label generation throws. `driveJob` records
+ *    `jobStatus: "error"` and nothing else happens: phase C is bought over a
+ *    repeat that never finished.
+ * 2. **`done`, deepening on, and no records file.** `saveDeepenRecords` swallows
+ *    filesystem and hard-link failures on purpose — instrumentation must not
+ *    fail a reader's article — and `readRecordsDir` then returns `[]`. Which
+ *    `driveJob` printed as "no records file — nobody asked". But **"nobody
+ *    asked" and "asked and the record was lost" are different facts**, and Q1-Q3
+ *    are computed entirely out of those records. This is the seam where the two
+ *    got confused.
+ *
+ * `--dry-run` is exempt from the first because failing at the last free step is
+ * the whole shape of the rehearsal, and from the second because it never turns
+ * deepening on at all.
+ */
+describe("what a stopped job has to have left behind", () => {
+  const base = { label: "book hierarchy forced (repeat 2)", dryRun: false, requeued: false };
+
+  it("is fatal when a paid job ends `error`", () => {
+    const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: true });
+    expect(f.filter((x) => x.fatal)).toHaveLength(1);
+    expect(f[0]?.kind).toBe("not-answerable");
+    expect(f[0]?.message).toMatch(/error/);
+  });
+
+  for (const status of ["queued", "running", "cancelled"] as const) {
+    it(`is fatal when a paid job ends \`${status}\``, () => {
+      const f = jobIntegrityFindings({ ...base, status, deepenFlag: true, hasRecords: true });
+      expect(f.some((x) => x.fatal)).toBe(true);
+    });
+  }
+
+  it("says nothing about a paid job that ended `done` with its records", () => {
+    expect(
+      jobIntegrityFindings({ ...base, status: "done", deepenFlag: true, hasRecords: true }),
+    ).toEqual([]);
+  });
+
+  /* The requeue already has its own finding, with the reason a re-claim would
+     buy the wave again. A second one saying "not done" adds noise, not fact. */
+  it("leaves a requeued job to the requeue finding", () => {
+    expect(
+      jobIntegrityFindings({ ...base, requeued: true, status: "queued", deepenFlag: true, hasRecords: true }),
+    ).toEqual([]);
+  });
+
+  /**
+   * A dry run's jobs stop at `extract` and therefore end `error`: the article
+   * never publishes. That is what the rehearsal is.
+   */
+  it("says nothing about a dry run's job, whatever it ended as", () => {
+    expect(
+      jobIntegrityFindings({ ...base, dryRun: true, status: "error", deepenFlag: true, hasRecords: false }),
+    ).toEqual([]);
+  });
+
+  it("is fatal when a paid deepen-on job finished `done` with no records file", () => {
+    const f = jobIntegrityFindings({ ...base, status: "done", deepenFlag: true, hasRecords: false });
+    expect(f.filter((x) => x.fatal)).toHaveLength(1);
+    expect(f[0]?.kind).toBe("no-records");
+    expect(f[0]?.message, "the message must not read as `nobody asked`").toMatch(/lost|not written/i);
+  });
+
+  /* Phase C's flag-off half is *supposed* to write nothing, and the whole of
+     `checkInertness` rests on it. */
+  it("says nothing when deepening was off and nothing was written", () => {
+    expect(
+      jobIntegrityFindings({ ...base, status: "done", deepenFlag: false, hasRecords: false }),
+    ).toEqual([]);
+  });
+
+  /**
+   * **DPN-27 — and this said one of two things it could not tell apart**, which
+   * is the mistake DPN-19 exists to have fixed, made again one branch over.
+   *
+   * "The records were LOST" is only true if they were ever asked for. A job that
+   * ended `error` may have failed *before* `hierarchy` ran at all — a step this
+   * eval abandoned at the rendezvous never runs, so it never requests
+   * anything — and calling that a lost record is an invention. The generic
+   * `not-answerable` finding already says the job did not finish; that is the
+   * fact there is evidence for. ⟨GPT Sol, DPN-27.⟩
+   */
+  it("says nothing about missing records on a job that did not finish", () => {
+    const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: false });
+    expect(
+      f.map((x) => x.kind),
+      "an errored job's missing records are a consequence, not an independent fact",
+    ).toEqual(["not-answerable"]);
+    expect(f.every((x) => x.fatal)).toBe(true);
+  });
+
+  /* And the DPN-19 case itself is untouched: `done` is where a missing records
+     file really is the record having been lost. */
+  it("still catches the lost record on a job that finished", () => {
+    const f = jobIntegrityFindings({ ...base, status: "done", deepenFlag: true, hasRecords: false });
+    expect(f.map((x) => x.kind)).toEqual(["no-records"]);
+  });
+
+  it("names the job it is about, so a findings block says which phase lost it", () => {
+    const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: true });
+    expect(f[0]?.message).toContain(base.label);
+  });
+});
+
 /* ========================================= phase D, lined up before it counts == */
 
 /**
@@ -1687,72 +2087,414 @@ describe("the driving table over an empty run", () => {
  * two load articles start at `fetch` and get there only after stages 1-3. So the
  * run could spend $40.90 and then report question 5 unanswerable.
  *
- * The barrier holds the **book** back — not the load jobs — because the book's
- * step needs 658-778 s against a 740 s deadline and cannot spend seconds
- * waiting inside its own claim.
+ * **DPN-20 — and the first fix was a latch, not a rendezvous.** `announce` only
+ * *recorded* an arrival: load1 could announce, run its whole measured step and
+ * finish before load2 announced at all, and `wait` would then report `"all"` and
+ * release the book into a window load1 had already left.
+ *
+ * **DPN-20-R — and the second fix was still two-party.** The loads were held for
+ * each other and *nothing was held for the book*: the gate opened on the two of
+ * them and only then was the book driven at all, so with another job holding the
+ * third queue slot both released load steps could finish before the book reached
+ * `hierarchy` — and the outcome still read `"all"`. Q5 refuses that afterwards,
+ * correctly, but only once phase D has spent.
+ *
+ * So it is three-party. `waitFor(2)` is the **readiness** wait — both loads at
+ * the entry, gate still shut, nothing bought — and only then is the book driven,
+ * arriving through the same hook. `wait()` opens the gate when all three are
+ * there. The book therefore *does* arrive inside its own claim, and that is
+ * sound rather than a concession: everybody else is already waiting for it, so
+ * its wait is one microtask, and the step that needs 658-778 s against a 740 s
+ * deadline gives up none of it.
  */
-describe("the phase-D start barrier", () => {
+describe("the phase-D start rendezvous", () => {
   const never = new Promise<void>(() => undefined);
+  /* Two turns of the microtask queue: enough for anything `arrive` returns to
+     have settled if it was ever going to. */
+  const settle = async (): Promise<void> => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
 
-  it("opens as soon as every load job has reached the measured step", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
-    b.announce("load1");
-    b.announce("load2");
-    const out = await b.wait(never);
-    expect(out.why).toBe("all");
-    expect(out.arrived).toEqual(["load1", "load2"]);
+  /**
+   * **The DPN-20-R case itself**, and the assertion that is the finding is the
+   * one in the middle: the two loads are at the entry, the readiness wait has
+   * ended `"all"`, and *they are still held*. A two-party gate releases them
+   * there — which is exactly the window the book was then driven into.
+   */
+  it("holds both loads at the entry until the book arrives too", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const ran: string[] = [];
+    void r.arrive("load1").then(() => ran.push("load1"));
+    void r.arrive("load2").then(() => ran.push("load2"));
+
+    const ready = await r.waitFor(2, never);
+    expect(ready.why).toBe("all");
+    expect(ready.needed).toBe(2);
+    expect(ready.arrived).toEqual(["load1", "load2"]);
+    await settle();
+    expect(ran, "the loads were released before the book was anywhere near the entry").toEqual([]);
+
+    /* Only now is the book driven, and it arrives through the same hook. */
+    void r.arrive("book").then(() => ran.push("book"));
+    const lined = await r.wait(never);
+    expect(lined.why).toBe("all");
+    expect(lined.needed).toBe(3);
+    expect(lined.arrived).toEqual(["load1", "load2", "book"]);
+    await settle();
+    expect([...ran].sort()).toEqual(["book", "load1", "load2"]);
   });
 
-  it("waits for the second one rather than opening on the first", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
-    b.announce("load1");
-    setTimeout(() => b.announce("load2"), 10);
-    const out = await b.wait(never);
-    expect(out.why).toBe("all");
-    expect(out.arrived).toHaveLength(2);
+  /* The original DPN-20 property, unchanged: one load may not run ahead of the
+     other either. */
+  it("holds the first load step at its entry until the second one gets there", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    let released1 = false;
+    void r.arrive("load1").then(() => {
+      released1 = true;
+    });
+    await settle();
+    expect(released1, "load1 ran its measured step before load2 was anywhere near it").toBe(false);
+    void r.arrive("load2");
+    await r.waitFor(2, never);
+    await settle();
+    expect(released1, "load1 ran its measured step before the book arrived").toBe(false);
+  });
+
+  it("releases nobody until the wait ends, and then everybody", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const ran: string[] = [];
+    for (const slug of ["load1", "load2", "book"]) void r.arrive(slug).then(() => ran.push(slug));
+    await settle();
+    expect(ran, "a measured step started before the gate opened").toEqual([]);
+    await r.wait(never);
+    await settle();
+    expect([...ran].sort()).toEqual(["book", "load1", "load2"]);
+  });
+
+  it("says how long each held step waited at the entry", async () => {
+    let clock = 0;
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000, now: () => clock });
+    void r.arrive("load1");
+    clock = 5_000;
+    void r.arrive("load2");
+    clock = 8_000;
+    void r.arrive("book");
+    clock = 8_010;
+    const out = await r.wait(never);
+    expect(out.held).toEqual([
+      { slug: "load1", ms: 8_010 },
+      { slug: "load2", ms: 3_010 },
+      { slug: "book", ms: 10 },
+    ]);
   });
 
   /* A step that ran twice — a re-driven job — must not count as two jobs. */
-  it("counts jobs, not announcements", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 20 });
-    b.announce("load1");
-    b.announce("load1");
-    const out = await b.wait(never);
+  it("counts jobs, not arrivals", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 20 });
+    void r.arrive("load1");
+    void r.arrive("load1");
+    const out = await r.waitFor(2, never);
     expect(out.why).toBe("timed out");
     expect(out.arrived).toEqual(["load1"]);
   });
 
   /**
-   * **A load job that fails before its measured step never announces anything**,
-   * and the book must still be driven — the run reports an unlined-up phase
-   * rather than hanging on one that can no longer line up.
+   * **A load job that fails before its measured step never arrives**, and the
+   * survivor must be let go: a rendezvous that only ever opens on success wedges
+   * the other load job inside its own claim until the lease expires. What
+   * happens to the *book* on this path is `loadReadiness`'s to say, and the
+   * answer is that it is not driven at all (DPN-23).
    */
-  it("gives up when the load jobs have finished without getting there", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
-    const out = await b.wait(Promise.resolve("both jobs failed"));
+  it("lets the survivor go when the other load job has died", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    const out = await r.waitFor(2, Promise.resolve("the other load job failed"));
     expect(out.why).toBe("jobs finished first");
-    expect(out.arrived).toEqual([]);
+    expect(out.arrived).toEqual(["load1"]);
+    /* The readiness wait does NOT open the gate — that is the whole of DPN-20-R
+       — so the survivor is let go by the phase's `finally` instead. */
+    r.release();
+    await settle();
+    expect(released, "a held load step was left waiting for a job that will never arrive").toBe(true);
   });
 
-  it("gives up on its own deadline when nothing happens at all", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 5 });
-    const out = await b.wait(never);
+  it("gives up on its own deadline, and the release lets go when it does", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    const out = await r.waitFor(2, never);
     expect(out.why).toBe("timed out");
+    r.release();
+    await settle();
+    expect(released).toBe(true);
   });
 
-  /* The race is genuinely racy: a job announcing in the same tick as the last
+  /**
+   * **The full wait gives up and lets go by itself**, because by then there is
+   * nobody left to do it for the held steps — the book is being driven and the
+   * phase is inside `wait`.
+   */
+  it("opens the gate itself when the book never arrives", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    void r.arrive("load2");
+    const out = await r.wait(never);
+    expect(out.why).toBe("timed out");
+    await settle();
+    expect(released).toBe(true);
+  });
+
+  /* ------------------------------------------ what the gate tells them -- */
+
+  /**
+   * **The gate says which of two things happened**, because a released step has
+   * to know whether to run or to stop.
+   *
+   * A gate that opened on everybody is the phase working, and the step runs. A
+   * gate that opened because it gave up is the phase already lost — no three
+   * windows, so no question 5 — and the measured step that runs anyway is bought
+   * for nothing. On the book that is $7.40 of a $40.90 run, spent to buy an
+   * answer the report will then refuse.
+   */
+  it("tells the held steps to go when the gate opened on everybody", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const verdicts = ["load1", "load2", "book"].map((s) => r.arrive(s));
+    const out = await r.wait(never);
+    expect(out.why).toBe("all");
+    expect(await Promise.all(verdicts)).toEqual(["go", "go", "go"]);
+  });
+
+  it("tells them they were abandoned when it gave up instead", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    const held = r.arrive("load1");
+    void r.arrive("load2");
+    const out = await r.wait(never);
+    expect(out.why).toBe("timed out");
+    expect(await held, "a step released by a gate that never opened was told to carry on").toBe(
+      "abandoned",
+    );
+  });
+
+  it("says abandoned to a step let go by the failure door", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const held = r.arrive("load1");
+    r.release();
+    expect(await held).toBe("abandoned");
+  });
+
+  /**
+   * **The verdict is latched at the first opening**, and this is the hazard the
+   * whole design turns on: `runPhaseD`'s `finally` calls `release()` on *every*
+   * path, including the one where `wait` has already opened the gate on all
+   * three. If the second call could downgrade the first, a perfectly lined-up
+   * phase would tell three running steps they had been abandoned.
+   */
+  it("latches the first verdict, so the finally cannot downgrade a gate that opened", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const held = r.arrive("load1");
+    void r.arrive("load2");
+    void r.arrive("book");
+    await r.wait(never);
+    r.release();
+    expect(await held, "the finally turned a successful gate into an abandonment").toBe("go");
+  });
+
+  /* A step that arrives after a gate that gave up is just as abandoned. */
+  it("gives the latched verdict to a step that arrives late", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    await r.wait(never);
+    expect(await r.arrive("load1")).toBe("abandoned");
+  });
+
+  /**
+   * **DPN-28 — and the run named the wrong set.** The abandoned jobs were read
+   * off `wait`'s `held` snapshot, which is taken as the outcome is built — so a
+   * step that reached the entry *after* the gate closed was turned away with
+   * `"abandoned"` and got no explanatory finding, only the bare `error`. The
+   * gate is the only thing that knows who it really refused, so it is the gate
+   * that says. ⟨GPT Sol, DPN-28.⟩
+   */
+  it("names everyone it turned away, including whoever arrived after it closed", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 5 });
+    const early = r.arrive("load1");
+    const out = await r.wait(never);
+    expect(out.why).toBe("timed out");
+    expect(out.held.map((h) => h.slug), "the snapshot cannot see a late arrival").toEqual(["load1"]);
+    const late = r.arrive("load2");
+    expect([await early, await late]).toEqual(["abandoned", "abandoned"]);
+    expect(r.turnedAway().sort(), "the late arrival was refused and went unexplained").toEqual([
+      "load1",
+      "load2",
+    ]);
+  });
+
+  it("turns nobody away when the gate opened on everybody", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    const all = ["load1", "load2", "book"].map((s) => r.arrive(s));
+    await r.wait(never);
+    await Promise.all(all);
+    expect(r.turnedAway()).toEqual([]);
+  });
+
+  /**
+   * **The failure release.** If the phase throws between the arrivals and the
+   * wait — an `enqueue` that rejects, a checkpoint write that blows up — nothing
+   * would ever call `wait`, and two claims would sit at the entry until their
+   * leases ran out. `release()` is what the `finally` calls.
+   */
+  it("can be released by a phase that never reaches the wait", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    r.release();
+    await settle();
+    expect(released).toBe(true);
+  });
+
+  it("is idempotent, so the finally after a wait changes nothing", async () => {
+    const r = startRendezvous({ expected: 3, timeoutMs: 60_000, now: () => 0 });
+    void r.arrive("load1");
+    void r.arrive("load2");
+    void r.arrive("book");
+    const out = await r.wait(never);
+    r.release();
+    expect(out.why).toBe("all");
+  });
+
+  /* An arrival after the gate has opened — a step re-driven late — must not
+     hang, and must not report a negative wait. */
+  it("does not hold a step that arrives after the release", async () => {
+    let clock = 0;
+    const r = startRendezvous({ expected: 1, timeoutMs: 60_000, now: () => clock });
+    void r.arrive("load1");
+    clock = 100;
+    await r.wait(never);
+    clock = 200;
+    let released = false;
+    void r.arrive("load2").then(() => {
+      released = true;
+    });
+    await settle();
+    expect(released).toBe(true);
+  });
+
+  /* The race is genuinely racy: a job arriving in the same tick as the last
      one settles is lined up, and must not be reported as missing. */
   it("says `all` where everyone arrived, however the wait happened to end", async () => {
-    const b = startBarrier({ expected: 1, timeoutMs: 60_000 });
+    const r = startRendezvous({ expected: 1, timeoutMs: 60_000 });
     const settled = Promise.resolve().then(() => {
-      b.announce("load1");
+      void r.arrive("load1");
     });
-    const out = await b.wait(settled);
+    const out = await r.wait(settled);
     expect(out.why).toBe("all");
   });
 
   it("does not wait at all for nobody", async () => {
-    const b = startBarrier({ expected: 0, timeoutMs: 60_000 });
-    expect((await b.wait(never)).why).toBe("all");
+    const r = startRendezvous({ expected: 0, timeoutMs: 60_000 });
+    expect((await r.wait(never)).why).toBe("all");
+  });
+});
+
+/**
+ * **The last place the run spent knowing the answer could not come back.**
+ *
+ * The gate can open without everybody being there — the book cannot get a claim
+ * slot inside the deadline, most likely, which on a shared box is close to the
+ * expected case rather than the tail. Round 5 left that spending anyway: the
+ * three steps ran, `peakConcurrency` refused question 5 afterwards, and $7.40 of
+ * a $40.90 run had bought an answer the report would not quote. Every other
+ * protection here stops when the evidence is already lost; this was the one that
+ * did not. ⟨Greg, 2026-09-05.⟩
+ *
+ * So a step released by a gate that gave up **throws before it runs**, and
+ * `abandonStep` is the whole of the decision. Two guards, and neither is
+ * negotiable: it cannot fire on `--dry-run`, whose jobs are expected to fail at
+ * their last free step and must not be given a second way to; and it cannot fire
+ * on a gate that opened `"go"`, which is the phase working.
+ */
+describe("a measured step the gate gave up on", () => {
+  const base = { dryRun: false, slug: "load1", step: "hierarchy" };
+
+  it("throws before the step runs, so the wave is never bought", () => {
+    const err = abandonStep({ ...base, verdict: "abandoned" });
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain(ABANDONED_MARKER);
+    expect(err?.message, "the message must name the step and the slug").toMatch(/hierarchy/);
+    expect(err?.message).toMatch(/load1/);
+    expect(err?.message, "and must say it bought nothing").toMatch(/bought nothing|not bought/i);
+  });
+
+  it("never fires where the gate opened on everybody", () => {
+    expect(abandonStep({ ...base, verdict: "go" })).toBeNull();
+  });
+
+  /* A dry run's jobs already fail at their last free step. A second way to fail
+     them proves nothing and would make the rehearsal's output a worse guide to
+     the paid run's, which is the only thing the rehearsal is for. */
+  it("never fires under --dry-run, however the gate ended", () => {
+    expect(abandonStep({ ...base, dryRun: true, verdict: "abandoned" })).toBeNull();
+    expect(abandonStep({ ...base, dryRun: true, verdict: "go" })).toBeNull();
+  });
+});
+
+/**
+ * **DPN-23 — the run still bought after it knew the answer was gone**, in the one
+ * place round 4's fix could not reach.
+ *
+ * Both load jobs fail before `hierarchy`. The readiness wait ends `"jobs finished
+ * first"`, their DPN-18 findings are on the record — and phase D then drove the
+ * paid book anyway, because "drive the book" was unconditional. The book's
+ * phase-D pass exists **only** to answer question 5 (question 1 is phases A and B
+ * only), and question 5 needs three overlapping windows, so a book bought into a
+ * phase that cannot line up buys nothing at all. ⟨GPT Sol, DPN-23.⟩
+ *
+ * Pure, and separate from `runPhaseD`, so the refusal can be watched without a
+ * database.
+ */
+describe("whether the book may be driven at all", () => {
+  const outcome = (
+    why: RendezvousOutcome["why"],
+    arrived: string[],
+  ): RendezvousOutcome => ({ why, arrived, expected: 3, needed: 2, ms: 1_234, held: [] });
+
+  it("lets the book go when both load steps are held at the entry", () => {
+    const v = loadReadiness(outcome("all", ["load1", "load2"]));
+    expect(v.go).toBe(true);
+    expect(v.findings).toEqual([]);
+  });
+
+  it("refuses when both load jobs died before reaching the measured step", () => {
+    const v = loadReadiness(outcome("jobs finished first", []));
+    expect(v.go, "the paid book was driven into a phase that cannot answer Q5").toBe(false);
+    expect(v.findings).toHaveLength(1);
+    expect(v.findings[0]?.fatal).toBe(true);
+    expect(v.findings[0]?.kind).toBe("not-answerable");
+    expect(v.findings[0]?.message, "the finding must say the book was NOT bought").toMatch(
+      /not driven|not bought/i,
+    );
+  });
+
+  it("refuses when only one of the two got there", () => {
+    const v = loadReadiness(outcome("jobs finished first", ["load1"]));
+    expect(v.go).toBe(false);
+    expect(v.findings[0]?.message).toMatch(/1 of 2/);
+  });
+
+  it("refuses when the readiness wait timed out", () => {
+    const v = loadReadiness(outcome("timed out", ["load1"]));
+    expect(v.go).toBe(false);
+    expect(v.findings[0]?.fatal).toBe(true);
+    expect(v.findings[0]?.message).toMatch(/timed out/);
   });
 });

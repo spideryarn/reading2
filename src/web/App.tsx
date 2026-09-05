@@ -3205,6 +3205,14 @@ function Reader({
            test is that a signed-out browser leaves `/api/public/` never.
            ProseHoverCard.tsx § lookUpLinks. */
         lookUpLinks={owner !== null}
+        /* And the same answer to a different question. A visitor has no shelf
+           to add to, so the button is not drawn and `useJobs` is not called —
+           which matters as much as the button does, since a mounted subscriber
+           sets the job engine's polling cadence. Derived from `owner !== null`
+           beside the line above rather than from it: the two mean different
+           things (ProseHoverCard.tsx § canAddToShelf) and today's shared
+           condition is a coincidence worth keeping visible. */
+        canAddToShelf={owner !== null}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}
