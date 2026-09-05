@@ -18,9 +18,21 @@
  * still be swept, or the bug has been traded for a leak — a spinner that spins
  * for ever because nothing will ever declare the attempt dead.
  *
- * Both stores are here, because they are allowed to differ and the difference
- * has to be pinned rather than assumed. See `CommentStore.sweepPending` in
- * src/store/contracts.ts.
+ * **Both stores used to be here**, because they were allowed to differ and the
+ * difference had to be pinned rather than assumed. The filesystem half went on
+ * 2026-09-05 with the store it was about
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ * the stage-G section), and all four of its cases had a counterpart here
+ * already: *errors a pending comment nobody is answering* (§ *still errors an
+ * attempt whose lease has run out* and § *errors a pending row that never had a
+ * lease at all*), *spares one this process is answering* (§ *spares a fresh
+ * answer swept by a machine that is not the one answering*), *leaves a bookmark
+ * alone*, and *hands a comment left pending by a dead process to the next Try
+ * again* (§ *lets Try again claim an abandoned attempt with no sweep first*).
+ *
+ * What went with them is the *asymmetry* — `CommentStore.sweepPending` in
+ * src/store/contracts.ts explains why one store could get by on `keep` alone
+ * and the other could not, and there is now only the one that could not.
  *
  * ## And the two interleavings the lease opened up
  *
@@ -39,18 +51,10 @@
  * other suites it would be a test that sometimes fails for no reason.
  */
 
-import { rm } from "node:fs/promises";
-import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 
-import {
-  COMMENT_SWEPT,
-  createComment,
-  beginAnswer as fsBeginAnswer,
-  patchComment,
-  sweepPendingComments,
-} from "../src/comments.js";
+import { COMMENT_SWEPT } from "../src/comments.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles, blockIdentities, comments as commentsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -59,71 +63,6 @@ import { pgCommentStore } from "../src/store/pg-comments.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
-
-/* ------------------------------------------------------- the filesystem -- */
-
-const FS_SLUG = "test-comment-sweep-fixture";
-const FS_DIR = path.resolve(import.meta.dirname, "..", "data", FS_SLUG);
-const anchor = { blockId: "spya-k3m9qt", quote: "the hard problem", start: 12 };
-
-describe("the filesystem comment sweep", () => {
-  afterEach(() => rm(FS_DIR, { recursive: true, force: true }));
-
-  it("errors a pending comment nobody is answering", async () => {
-    const made = await createComment(FS_SLUG, { ...anchor, id: "spya-fsa999" });
-    await patchComment(FS_SLUG, made.id, { status: "error", error: "the model fell over" });
-    await fsBeginAnswer(FS_SLUG, made.id);
-
-    const [swept] = await sweepPendingComments(FS_SLUG, new Set());
-
-    expect(swept?.status).toBe("error");
-    expect(swept?.error).toBe(COMMENT_SWEPT);
-  });
-
-  it("spares one this process is answering", async () => {
-    const made = await createComment(FS_SLUG, { ...anchor, id: "spya-fsb222" });
-    await patchComment(FS_SLUG, made.id, { status: "error", error: "the model fell over" });
-    await fsBeginAnswer(FS_SLUG, made.id);
-
-    const [kept] = await sweepPendingComments(FS_SLUG, new Set([made.id]));
-
-    expect(kept?.status).toBe("pending");
-  });
-
-  it("leaves a bookmark alone — it was never an answer that failed to arrive", async () => {
-    await createComment(FS_SLUG, { ...anchor, id: "spya-fsc333" });
-    const [free] = await sweepPendingComments(FS_SLUG, new Set());
-    expect(free?.status).toBe("none");
-  });
-
-  /**
-   * **An abandoned answer must heal through *Try again*, with no `GET` first.**
-   *
-   * The sweep runs only on `GET /api/comments/:slug`; *Try again* posts straight
-   * at the answer endpoint (`retry` in src/web/useComments.ts). So if the row is
-   * only healed by the sweep, a reader whose server died mid-answer gets a 409
-   * from every press until they reload the page — and an open tab never does.
-   * GPT Sol found it in the final review, 2026-09-01.
-   *
-   * A fresh module registry is a restart, exactly: `comments.json` still says
-   * `pending`, and nothing in memory remembers who was writing it.
-   */
-  it("hands a comment left pending by a dead process to the next Try again", async () => {
-    const made = await createComment(FS_SLUG, { ...anchor, id: "spya-fsd444" });
-    await patchComment(FS_SLUG, made.id, { status: "error", error: "the model fell over" });
-    await fsBeginAnswer(FS_SLUG, made.id);
-
-    vi.resetModules();
-    const restarted = await import("../src/comments.js");
-    const { comment } = await restarted.beginAnswer(FS_SLUG, made.id);
-
-    expect(comment.status).toBe("pending");
-    // And the row is claimed once: the restarted module now refuses it too.
-    await expect(restarted.beginAnswer(FS_SLUG, made.id)).rejects.toThrow(
-      /already being answered/,
-    );
-  });
-});
 
 /* ---------------------------------------------------------- and Postgres -- */
 

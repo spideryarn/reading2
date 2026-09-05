@@ -1,35 +1,59 @@
 /**
- * Saved-search storage — src/searches.ts. See docs/project/search.md.
+ * What is left of `src/searches.ts`: the colour rules, the cap, `loadRuns`, and
+ * the staleness question a saved run answers. See docs/project/search.md.
  *
- * Deterministic: no network, no model. The nondeterministic half of the feature
- * — what the model says about a paragraph — is not tested here, for the reason
- * testing.md gives; what `findPassages` does with the answer once it has it is
- * in tests/search.test.ts.
+ * **This file used to be the filesystem saved-search store's own suite**, 37
+ * cases against `data/<slug>/searches.json`. `beginRun`, `finishRun`,
+ * `deleteRun`, `recolourRun`, `update`, `readSearches` and `currentSourceHash`
+ * went with the filesystem store on 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ * the stage-G section). `loadRuns` stayed, because
+ * `tests/helpers/seed-reader-state.ts` reads a fixture's file through it to
+ * seed `search_runs`; so did the pure half the Postgres store is written
+ * against — `MAX_RUNS`, `withRun`, `requireColour`, `isStorableColour`.
  *
- * Writes under `data/<throwaway slug>/`, which is gitignored, and removes it.
- * Same shape as tests/comments.test.ts, because src/searches.ts is the same
- * shape as src/comments.ts.
+ * **Where the rest went**, because a deleted assertion leaves nothing behind to
+ * go red:
+ *
+ * - **Already in `tests/store-searches-pg.test.ts`**: pending-before-the-model,
+ *   the three-condition retry reset and its two refusals, the cap dropping the
+ *   oldest, the criterion surviving a patch, the answer written over the
+ *   pending row, an attempt that is no longer live, and all seven colour cases
+ *   (stored, cleared to absent not null, slot 0, a run that is not there, a
+ *   retry, a bad colour as a 400).
+ * - **Ported there in the same commit**: § *a failure survives being written
+ *   down and read back*, both cases. Their subject (`worthRetrying`,
+ *   `kindOfMessage`) is alive and the round trip had no Postgres home at all.
+ * - **Abolished rather than dropped**: *"does not lose a run to a concurrent
+ *   write"* was about the per-process queue; § *never trims the run it just
+ *   inserted* and the attempt fence are what SQL puts in its place.
+ * - **Dropped, and named**: the four `currentSourceHash` cases — fingerprinting
+ *   the `example/` fixture under its own slug and no other, ignoring a
+ *   directory that is not a whole article, `readSearches` handing the panel
+ *   runs and a fingerprint in one read, and a retried run being re-answered
+ *   against today's article. All four are about walking `data/` for
+ *   `blocks.json`; `pg-searches.ts` asks its own tables and
+ *   `tests/store-searches-pg.test.ts` § *the article a run was answered
+ *   against* is the surviving three-case version of the same question. The
+ *   fixture-directory rule has no home and cannot have one — there is no
+ *   candidate-directory walk left to be wrong about.
+ *
+ * Deterministic: no network, no model.
  */
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  beginRun,
-  currentSourceHash,
-  deleteRun,
-  finishRun,
-  isStale,
   isStorableColour,
   loadRuns,
   MAX_RUNS,
   MAX_STORED_COLOUR,
-  readSearches,
-  recolourRun,
-  update,
+  requireColour,
+  withRun,
 } from "../src/searches.js";
-import type { Block, SearchHit, SearchRun } from "../src/types.js";
+import { isStale } from "../src/search-stale.js";
 import { hashBlocks } from "../src/source-hash.js";
-import { kindOfMessage, providerHttpFailure, worthRetrying } from "../src/messages.js";
+import type { Block, SearchHit, SearchRun } from "../src/types.js";
 
 const SLUG = "test-searches-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -42,9 +66,14 @@ const HIT: SearchHit = {
   reasoning: "States the position being rejected.",
 };
 
+async function writeSearches(body: string): Promise<void> {
+  await mkdir(DIR, { recursive: true });
+  await writeFile(FILE, body, "utf8");
+}
+
 afterEach(() => rm(DIR, { recursive: true, force: true }));
 
-describe("saved-search storage", () => {
+describe("reading a searches.json", () => {
   it("is empty for an article nobody has searched", async () => {
     expect(await loadRuns(SLUG)).toEqual([]);
   });
@@ -56,167 +85,33 @@ describe("saved-search storage", () => {
     await expect(loadRuns("..")).rejects.toThrow(/Not a valid slug/);
   });
 
-  /**
-   * The ordering that is the reason `beginRun` exists at all: the criterion is
-   * on disk **before** the model is called, so a crash leaves a visible
-   * unfinished search rather than a question that evaporated with the process.
-   */
-  it("stores a run as pending, before any model has been called", async () => {
-    const run = await beginRun(SLUG, "arguments against the main claim");
-    expect(run.status).toBe("pending");
-    expect(run.hits).toEqual([]);
+  it("reads the runs back off the file, and survives one with the key but no runs", async () => {
+    await writeSearches(JSON.stringify({ runs: [] }));
+    expect(await loadRuns(SLUG)).toEqual([]);
+
+    const run: SearchRun = {
+      id: "spya-k3m9qt",
+      criterion: "arguments against the main claim",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      status: "done",
+      hits: [HIT],
+    };
+    await writeSearches(JSON.stringify({ runs: [run] }));
     expect(await loadRuns(SLUG)).toEqual([run]);
   });
 
-  it("accepts an id the client minted, so ?run= can name it from the first frame", async () => {
-    const run = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-    expect(run.id).toBe("spya-k3m9qt");
+  it("throws rather than silently emptying itself when the file will not parse", async () => {
+    /* Every saved search for the article is unreadable at once, and a `[]` here
+       would look exactly like "you have never searched this" — then the next
+       write would make that true. It is also one of the drivers in
+       tests/parse-json.test.ts: the log line must name `searches.json` without
+       quoting the reader's criterion back into it. */
+    await writeSearches("{ not json");
+    await expect(loadRuns(SLUG)).rejects.toThrow();
   });
+});
 
-  it("mints its own id rather than trusting one that is not ours", async () => {
-    const run = await beginRun(SLUG, "evidence", "../../etc/passwd");
-    expect(run.id).not.toBe("../../etc/passwd");
-    expect(run.id).toMatch(/^spya-[a-z0-9]{6}$/);
-  });
-
-  it("mints its own id rather than overwriting a run that already has that one", async () => {
-    // What makes a duplicate send harmless instead of a way to write over
-    // somebody else's saved search.
-    const first = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-    const second = await beginRun(SLUG, "something else", "spya-k3m9qt");
-    expect(second.id).not.toBe(first.id);
-    expect(await loadRuns(SLUG)).toHaveLength(2);
-  });
-
-  it("writes the answer over the pending row rather than appending a second one", async () => {
-    // Appending would leave the pending row behind as a permanent spinner that
-    // nothing can ever clear.
-    const run = await beginRun(SLUG, "evidence");
-    const after = await finishRun(SLUG, run.id, { status: "done", hits: [HIT], model: "m" });
-    expect(after).toHaveLength(1);
-    expect(after[0]).toMatchObject({ id: run.id, status: "done", model: "m" });
-    expect(after[0]!.hits).toEqual([HIT]);
-  });
-
-  it("keeps the criterion the reader typed, whatever a patch tries to say", async () => {
-    const run = await beginRun(SLUG, "the original question");
-    const [stored] = await finishRun(SLUG, run.id, {
-      status: "done",
-      hits: [],
-      criterion: "something else entirely",
-    } as never);
-    expect(stored!.criterion).toBe("the original question");
-  });
-
-  it("stores a failure on the run rather than throwing it away", async () => {
-    const run = await beginRun(SLUG, "evidence");
-    const [stored] = await finishRun(SLUG, run.id, { status: "error", error: "the model timed out" });
-    expect(stored).toMatchObject({ status: "error", error: "the model timed out" });
-  });
-
-  /**
-   * The delete-during-search race, from the storage end.
-   *
-   * A search takes tens of seconds and the reader can delete it while it is
-   * out. `finishRun` must not resurrect what they removed — the client's
-   * tombstone (useSearch.ts) is the other half of the same guarantee, and this
-   * is the half that means the file on disk is right even if the client is
-   * closed.
-   */
-  it("does not bring back a run that was deleted while the model was thinking", async () => {
-    const run = await beginRun(SLUG, "evidence");
-    await deleteRun(SLUG, run.id);
-    const after = await finishRun(SLUG, run.id, { status: "done", hits: [HIT] });
-    expect(after).toEqual([]);
-  });
-
-  it("deletes one run without touching its neighbours", async () => {
-    const a = await beginRun(SLUG, "first");
-    const b = await beginRun(SLUG, "second");
-    const left = await deleteRun(SLUG, a.id);
-    expect(left.map((r) => r.id)).toEqual([b.id]);
-  });
-
-  it("keeps the reader's colour choice, and clears it back to absent", async () => {
-    const run = await beginRun(SLUG, "arguments against");
-    await recolourRun(SLUG, run.id, 5);
-    expect((await loadRuns(SLUG))[0]?.colour).toBe(5);
-
-    /* Absent, not `colour: null`. A null on disk would be a third state for a
-       field that has two, and `exactOptionalPropertyTypes` would let it through
-       anywhere the object is spread. `in` rather than a truthiness check,
-       because **slot 0 is a colour** — the one hue an `if (!colour)` anywhere
-       in this feature would have silently dropped. */
-    await recolourRun(SLUG, run.id, null);
-    const cleared = (await loadRuns(SLUG))[0];
-    expect(cleared && "colour" in cleared).toBe(false);
-    expect(JSON.parse(await readFile(FILE, "utf8")).runs[0]).not.toHaveProperty("colour");
-  });
-
-  it("keeps slot 0, which every truthiness check in this feature would drop", async () => {
-    const run = await beginRun(SLUG, "the first hue");
-    await recolourRun(SLUG, run.id, 0);
-    expect((await loadRuns(SLUG))[0]?.colour).toBe(0);
-  });
-
-  it("recolours one run without touching its neighbours, or the answer on it", async () => {
-    const a = await beginRun(SLUG, "first");
-    const b = await beginRun(SLUG, "second");
-    await finishRun(SLUG, a.id, { status: "done", hits: [HIT] });
-    const runs = await recolourRun(SLUG, a.id, 3);
-    expect(runs.find((r) => r.id === a.id)).toMatchObject({
-      colour: 3,
-      status: "done",
-      hits: [HIT],
-      criterion: "first",
-    });
-    expect(runs.find((r) => r.id === b.id)).not.toHaveProperty("colour");
-  });
-
-  it("shrugs at a colour for a run that is not there", async () => {
-    /* A second tab can delete a search between this one reading the list and
-       the reader pressing a swatch. The list that comes back says it is gone,
-       which is the answer — a 404 here would be the app reporting a fault for
-       something that already happened correctly. */
-    const run = await beginRun(SLUG, "first");
-    await expect(recolourRun(SLUG, "spya-zzzzzz", 4)).resolves.toHaveLength(1);
-    expect((await loadRuns(SLUG))[0]?.id).toBe(run.id);
-  });
-
-  it("keeps the reader's colour across a retry", async () => {
-    /* A retry rebuilds the run field by field, precisely so the failed
-       attempt's error and hits cannot survive underneath a later answer. The
-       colour is the one field that must survive it: it is not part of the
-       attempt, it is a property of the question, and the question is what a
-       retry keeps. Dropping it made this store disagree with the Postgres one,
-       whose reset simply does not name the column. GPT Sol, 2026-08-27. */
-    const run = await beginRun(SLUG, "arguments against", "spya-runab2");
-    await recolourRun(SLUG, run.id, 4);
-    await finishRun(SLUG, run.id, { status: "error", error: "the model fell over" });
-
-    const again = await beginRun(SLUG, "arguments against", run.id);
-    expect(again.id).toBe(run.id);
-    expect(again.status).toBe("pending");
-    expect(again.colour).toBe(4);
-    expect((await loadRuns(SLUG))[0]?.colour).toBe(4);
-  });
-
-  it("refuses a bad colour at the store, not only at the route", async () => {
-    /* The contract says both stores validate, so both stores have to. A store
-       that leaned on the route would let the importer — which writes this
-       column and does not go through a route — put a 2.5 on disk, where it
-       reaches the browser as `var(--cat-2.5-rgb)`: not an error anywhere, and
-       it paints nothing at all. And the Postgres half would refuse the same
-       call with a database failure rather than a 400, which is two stores
-       disagreeing about what a bad request *is*. */
-    const run = await beginRun(SLUG, "arguments against");
-    for (const bad of [64, -1, 2.5]) {
-      await expect(recolourRun(SLUG, run.id, bad)).rejects.toThrow(/storable colour/);
-    }
-    const stored = (await loadRuns(SLUG))[0];
-    expect(stored && "colour" in stored).toBe(false);
-  });
-
+describe("the colour the reader picked", () => {
   it("refuses to store anything that is not a small whole number", () => {
     /* The guard the route leans on. Loose on purpose at the top end — the
        server does not know how big the palette is (src/web/hit-colours.ts § the
@@ -231,132 +126,74 @@ describe("saved-search storage", () => {
     }
   });
 
-  it("drops the oldest once the cap is reached", async () => {
-    // The oldest end, deliberately: the searches you come back to are the ones
-    // you ran recently.
-    for (let i = 0; i < MAX_RUNS + 3; i++) await beginRun(SLUG, `criterion ${i}`);
-    const runs = await loadRuns(SLUG);
-    expect(runs).toHaveLength(MAX_RUNS);
-    expect(runs[0]!.criterion).toBe("criterion 3");
-    expect(runs[MAX_RUNS - 1]!.criterion).toBe(`criterion ${MAX_RUNS + 2}`);
-  });
-
-  it("survives a file that has the key but no runs in it", async () => {
-    await update(SLUG, () => []);
-    expect(await loadRuns(SLUG)).toEqual([]);
-    expect(JSON.parse(await readFile(FILE, "utf8"))).toEqual({ runs: [] });
-  });
-
-  it("throws rather than silently emptying itself when the file will not parse", async () => {
-    // Every saved search for the article is unreadable at once, and a `[]`
-    // here would look exactly like "you have never searched this" — then the
-    // next write would make that true.
-    await update(SLUG, () => []);
-    await readFile(FILE, "utf8"); // the file exists
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(FILE, "{ not json", "utf8");
-    await expect(loadRuns(SLUG)).rejects.toThrow();
-  });
-
-  /**
-   * The serialised queue, which matters more here than it looks.
-   *
-   * A run is written twice, tens of seconds apart, with the reader free to
-   * start a second search in between. Without the chain the second read sees
-   * the file as it was before the first write landed and puts it back that way:
-   * both writes succeed, and one search is simply gone.
-   */
-  it("does not lose a run to a concurrent write", async () => {
-    const [a, b, c] = await Promise.all([
-      beginRun(SLUG, "one"),
-      beginRun(SLUG, "two"),
-      beginRun(SLUG, "three"),
-    ]);
-    const runs = await loadRuns(SLUG);
-    expect(runs).toHaveLength(3);
-    expect(new Set(runs.map((r) => r.id))).toEqual(new Set([a.id, b.id, c.id]));
-  });
-
-  it("resets a run in place when the retry sends its own id back", async () => {
-    /* The shape of a retry: beginRun, then finishRun with an error — the failed
-       row stays on disk, same as any other failure — then beginRun again with
-       the *same* id, which is exactly what useSearch.ts's retry() sends.
-
-       beginRun used to read any id already in the file as a collision to defend
-       against, so a retry minted a second run and answered under the new id.
-       The old row was never named again, so the spinner the reader was looking
-       at never stopped, and a reload showed an unexplained duplicate beside the
-       failure. createComment has had the reset-in-place branch all along; this
-       is the same rule for the same reason.
-       docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md */
-    const first = await beginRun(SLUG, "arguments against the main claim", "spya-k3m9qt");
-    await finishRun(SLUG, first.id, { status: "error", error: "the model timed out" });
-
-    const retried = await beginRun(SLUG, "arguments against the main claim", "spya-k3m9qt");
-
-    expect(retried.id).toBe(first.id);
-    expect(retried.status).toBe("pending");
-    expect(retried.hits).toEqual([]);
-    const runs = await loadRuns(SLUG);
-    expect(runs).toHaveLength(1);
-  });
-
-  it("refuses to reset a run that already finished, however the request arrives", async () => {
-    /* Same id, same criterion — but this row is `done`, and resetting it would
-       throw away an answer the reader already has and pay for another one. The
-       criterion proves "same question", not "this is a retry": a duplicated
-       POST, a stale tab, or a replay all match on both fields. Only a run that
-       actually failed is retryable. */
-    const first = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-    await finishRun(SLUG, first.id, { status: "done", hits: [] });
-
-    const again = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-
-    expect(again.id).not.toBe(first.id);
-    const runs = await loadRuns(SLUG);
-    expect(runs.find((r) => r.id === first.id)?.status).toBe("done");
-  });
-
-  it("refuses to reset a run that is still running", async () => {
-    // A double-clicked POST. Resetting would abandon the call in flight and
-    // start a second paid one.
-    const first = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-    expect(first.status).toBe("pending");
-
-    const again = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-
-    expect(again.id).not.toBe(first.id);
+  it("throws for a colour no store would write, and lets `null` through", () => {
+    /* `requireColour` is the throwing form, and it is what both Postgres stores
+       call before they touch a row — `pg-searches.ts` and
+       `pg-referee-criteria.ts` import it from here rather than restating the
+       rule, so this is the one place it is stated. `null` is "clear it", not a
+       bad value. */
+    expect(() => requireColour(null)).not.toThrow();
+    expect(() => requireColour(0)).not.toThrow();
+    expect(() => requireColour(2.5)).toThrow();
+    expect(() => requireColour(-1)).toThrow();
+    expect(() => requireColour(MAX_STORED_COLOUR)).toThrow();
   });
 });
 
-describe("a failure survives being written down and read back", () => {
-  /* The gap this closes: every other test of `kindOfMessage` hands it a message
-     straight from the factory, so all of them would keep passing if something
-     between the throw and the screen decorated the string — `Search failed:
-     ${msg} — tap to retry` is the plausible one, and it would move the bracket
-     off the end and silently turn every permanent failure back into a Retry
-     button. Nothing about that has a symptom.
+describe("withRun — which run a begin produces", () => {
+  /* The decision itself, with no store under it. `pgSearchStore.begin` runs it
+     and `tests/store-searches-pg.test.ts` drives all three of its branches
+     through SQL; these two say what the branch *names* mean, which is what a
+     store reads to decide between an `UPDATE` and an `INSERT`. Both branches
+     produce `pending`, so a store reading `run.status` to work it out would get
+     it wrong — see the docstring. */
+  const at = "2026-08-20T00:00:00.000Z";
 
-     So this one goes through the real path: store the failure the way the route
-     does, read it off disk, and ask the question the panel asks. */
-  it("still knows a topped-out account cannot be retried", async () => {
-    const permanent = providerHttpFailure(402);
-    expect(worthRetrying(permanent.message)).toBe(false); // before the round trip
-
-    const run = await beginRun(SLUG, "does this survive a write");
-    await finishRun(SLUG, run.id, { status: "error", error: permanent.message });
-
-    const [stored] = await loadRuns(SLUG);
-    expect(stored?.status).toBe("error");
-    expect(worthRetrying(stored?.error)).toBe(false);
-    expect(kindOfMessage(stored?.error ?? "")).toBe("ours");
+  it("mints when the id is free, and says so", () => {
+    const { runs, run, kind } = withRun([], "arguments against the main claim", undefined, at);
+    expect(kind).toBe("minted");
+    expect(run.status).toBe("pending");
+    expect(runs).toHaveLength(1);
   });
 
-  it("still offers another go for a transient one", async () => {
-    const run = await beginRun(SLUG, "and the other direction");
-    await finishRun(SLUG, run.id, { status: "error", error: providerHttpFailure(429).message });
-    const [stored] = await loadRuns(SLUG);
-    expect(worthRetrying(stored?.error)).toBe(true);
+  it("resets a failed run of the same question in place, keeping its createdAt", () => {
+    /* The three-condition retry rule this file carries a postmortem for
+       (docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md):
+       same id, same criterion, and the stored run FAILED. `createdAt` is kept
+       because it is still the search the reader asked for; only the attempt is
+       new. */
+    const failed: SearchRun = {
+      id: "spya-k3m9qt",
+      criterion: "arguments against the main claim",
+      createdAt: at,
+      status: "error",
+      error: "the model fell over",
+      hits: [],
+    };
+    const { runs, run, kind } = withRun(
+      [failed],
+      "arguments against the main claim",
+      "spya-k3m9qt",
+      "2026-08-21T00:00:00.000Z",
+    );
+    expect(kind).toBe("reset");
+    expect(runs).toHaveLength(1);
+    expect(run.id).toBe("spya-k3m9qt");
+    expect(run.createdAt).toBe(at);
+    expect(run.status).toBe("pending");
+    expect("error" in run).toBe(false);
+  });
+
+  it("keeps at most MAX_RUNS, oldest first", () => {
+    // The oldest end, deliberately: the searches you come back to are the ones
+    // you ran recently.
+    let runs: SearchRun[] = [];
+    for (let i = 0; i < MAX_RUNS + 3; i++) {
+      ({ runs } = withRun(runs, `criterion ${i}`, undefined, at));
+    }
+    expect(runs).toHaveLength(MAX_RUNS);
+    expect(runs[0]?.criterion).toBe("criterion 3");
+    expect(runs[MAX_RUNS - 1]?.criterion).toBe(`criterion ${MAX_RUNS + 2}`);
   });
 });
 
@@ -373,6 +210,10 @@ describe("a failure survives being written down and read back", () => {
  * exactly as a tweet thread, a glossary and a set of summaries already do
  * (src/source-hash.ts). Same hash, same word for it, one definition of
  * "current" for the whole article.
+ *
+ * The fingerprint is now taken by `pg-searches.ts` from its own tables rather
+ * than by walking `data/` for a `blocks.json`, so what is left here is the
+ * comparison — `isStale` (src/search-stale.ts), which is what the panel asks.
  */
 describe("a saved search knows which article it answered", () => {
   const ONE: Block[] = [
@@ -398,164 +239,34 @@ describe("a saved search knows which article it answered", () => {
     hits: [HIT],
   };
 
-  /**
-   * A real article directory, which means **both** files.
-   *
-   * `articleDir` in src/api.ts will not serve a directory that has only one of
-   * them, and `currentSourceHash` mirrors that rule — so a fixture writing
-   * `blocks.json` alone would be hashing a directory the reader is not being
-   * shown. Writing both is what makes this test about the same article the app
-   * would put on screen.
-   */
-  const writeBlocks = async (blocks: Block[]) => {
-    await mkdir(DIR, { recursive: true });
-    await writeFile(path.join(DIR, "blocks.json"), JSON.stringify({ blocks }), "utf8");
-    await writeFile(
-      path.join(DIR, "tree.json"),
-      JSON.stringify({ version: "1", generator: "t", slug: SLUG, rootId: "n0", nodes: {} }),
-      "utf8",
-    );
-  };
-
-  it("records the fingerprint of the article it was answered against", async () => {
-    await writeBlocks(ONE);
-    const run = await beginRun(SLUG, "arguments against the main claim");
-    expect(run.sourceHash).toBe(hashBlocks(ONE));
-  });
+  const answered: SearchRun = { ...OLD_RUN, sourceHash: hashBlocks(ONE) };
 
   /**
    * The bug, stated as the lie it tells: the article moves underneath a saved
    * run and the run goes on presenting itself as an answer about this article.
    */
-  it("stops claiming to be current once the article moves underneath it", async () => {
-    await writeBlocks(ONE);
-    const run = await beginRun(SLUG, "arguments against the main claim");
-    await finishRun(SLUG, run.id, { status: "done", hits: [HIT], model: "m" });
-
-    // The article is re-extracted. Nothing tells the saved run.
-    await writeBlocks(TWO);
-
-    const [stored] = await loadRuns(SLUG);
-    expect(stored!.sourceHash).toBe(hashBlocks(ONE));
-    expect(stored!.sourceHash).not.toBe(hashBlocks(TWO));
-    expect(isStale(stored!, await currentSourceHash(SLUG))).toBe(true);
+  it("stops claiming to be current once the article moves underneath it", () => {
+    expect(hashBlocks(ONE)).not.toBe(hashBlocks(TWO));
+    expect(isStale(answered, hashBlocks(TWO))).toBe(true);
   });
 
-  it("is not out of date while the article has not moved", async () => {
+  it("is not out of date while the article has not moved", () => {
     // The other half, and the one that stops "say it is stale" being the fix.
     // A banner on every saved search is the same amount of information as no
     // banner at all.
-    await writeBlocks(ONE);
-    const run = await beginRun(SLUG, "arguments against the main claim");
-    expect(isStale(run, await currentSourceHash(SLUG))).toBe(false);
+    expect(isStale(answered, hashBlocks(ONE))).toBe(false);
   });
 
-  it("counts a run written before we recorded this as out of date", async () => {
+  it("counts a run written before we recorded this as out of date", () => {
     // The honest answer for every search saved before 2026-08-26: we do not
     // know, and "cannot tell" has to fall on the side that says so.
-    await writeBlocks(ONE);
-    expect(isStale({ ...OLD_RUN }, await currentSourceHash(SLUG))).toBe(true);
+    expect(isStale(OLD_RUN, hashBlocks(ONE))).toBe(true);
   });
 
   it("counts an article nobody could fingerprint as out of date too", () => {
-    // The same rule, the other way round — src/api.ts § loadGlossary reaches
-    // for it in the same words: "Unknown counts as stale: the honest answer,
-    // and the safe way round to be wrong."
+    // The same rule, the other way round — `loadGlossary` in src/store/pg.ts
+    // reaches for it in the same words: "Unknown counts as stale: the honest
+    // answer, and the safe way round to be wrong."
     expect(isStale({ sourceHash: "0123456789abcdef" }, undefined)).toBe(true);
-  });
-
-  /**
-   * The fixture, which is the one article whose files are not under `data/` and
-   * the one case a naive implementation gets silently wrong in both directions.
-   *
-   * `loadArticle` opens `example` out of `example/` (src/api.ts §
-   * `candidateDirs`), so hashing `data/example/blocks.json` and finding nothing
-   * would make every saved search on the demo read as out of date for ever,
-   * with the article on screen perfectly unchanged.
-   *
-   * And no further. This test used to assert the opposite half — that an
-   * *unknown* slug got the fixture's hash — back when `loadArticle` served the
-   * fixture for any slug at all. That fallback is gone, so a fingerprint taken
-   * from prose the reader is being refused would be a number about somebody
-   * else's article.
-   */
-  it("fingerprints the fixture under its own slug, and under no other", async () => {
-    const example = JSON.parse(
-      await readFile(path.resolve(import.meta.dirname, "..", "example", "blocks.json"), "utf8"),
-    ) as { blocks: Block[] };
-
-    expect(await currentSourceHash("example")).toBe(hashBlocks(example.blocks));
-    expect(await currentSourceHash("test-searches-no-such-article")).toBeUndefined();
-  });
-
-  it("ignores a directory that is not a whole article", async () => {
-    /* Half an ingest: blocks written, tree not. `articleDir` refuses to serve
-       this — with a 404 now, where it used to show the fixture — so a
-       fingerprint of it would date a saved search to an article nobody has been
-       shown. */
-    await mkdir(DIR, { recursive: true });
-    await writeFile(path.join(DIR, "blocks.json"), JSON.stringify({ blocks: ONE }), "utf8");
-
-    expect(await currentSourceHash(SLUG)).not.toBe(hashBlocks(ONE));
-    // And specifically nothing, rather than something else's hash.
-    expect(await currentSourceHash(SLUG)).toBeUndefined();
-  });
-
-  it("re-answers a retried run against today's article, not the failed attempt's", async () => {
-    // A retry is a fresh model call over whatever the piece says now. Carrying
-    // the failed attempt's hash forward would date the new answer to a version
-    // of the article it never saw — and it would read as current.
-    await writeBlocks(ONE);
-    const first = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-    await finishRun(SLUG, first.id, { status: "error", error: "the model timed out" });
-
-    await writeBlocks(TWO);
-    const again = await beginRun(SLUG, "evidence", "spya-k3m9qt");
-
-    expect(again.id).toBe(first.id); // the retry branch, not a fresh mint
-    expect(again.sourceHash).toBe(hashBlocks(TWO));
-    expect(isStale(again, await currentSourceHash(SLUG))).toBe(false);
-  });
-
-  it("hands the panel the runs and the fingerprint to judge them by, in one read", async () => {
-    await writeBlocks(ONE);
-    await beginRun(SLUG, "arguments against the main claim");
-    const { runs, sourceHash } = await readSearches(SLUG);
-    expect(sourceHash).toBe(hashBlocks(ONE));
-    expect(runs.map((r) => isStale(r, sourceHash))).toEqual([false]);
-  });
-
-  /**
-   * The whole article, not only the blocks the run cited.
-   *
-   * The tempting economy is to fingerprint just the cited paragraphs, so an
-   * edit elsewhere leaves the run alone. It is wrong: the model was shown every
-   * block and chose these, so a section added afterwards makes the answer
-   * incomplete in a way no hash over the old hits could notice. The run would
-   * report itself current while the passage the reader wants sits in text
-   * nothing has searched.
-   */
-  it("is out of date when a section it never cited is added", async () => {
-    await writeBlocks(ONE);
-    const run = await beginRun(SLUG, "arguments against the main claim");
-    await finishRun(SLUG, run.id, { status: "done", hits: [HIT], model: "m" });
-
-    await writeBlocks([
-      ...ONE,
-      {
-        id: "spya-r7wx24",
-        tag: "p",
-        kind: "text",
-        text: "A section that arrived in the re-extraction, quoted by nobody.",
-        words: 10,
-        html: "<p>A section that arrived in the re-extraction, quoted by nobody.</p>",
-        gistable: true,
-      },
-    ]);
-
-    // The cited block is untouched, and the run is still out of date.
-    const [stored] = await loadRuns(SLUG);
-    expect(stored!.hits[0]!.blockId).toBe(ONE[0]!.id);
-    expect(isStale(stored!, await currentSourceHash(SLUG))).toBe(true);
   });
 });

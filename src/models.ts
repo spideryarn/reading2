@@ -18,9 +18,12 @@
  * > (Sonnet-latest), and then use your judgment about which tasks to use for
  * > which (default to capable-model for now).
  *
- * So there are now two tiers rather than one model. **Every task is on the
- * capable tier today** — see `TASK_TIER` below, which is where a task changes
- * tier and where the reasoning for each one is written down.
+ * So there are now two tiers rather than one model. **Every task but one is on
+ * the capable tier** — the exception is `link-summary`, which arrived on the
+ * quick tier on 2026-09-05 and is what turned the warnings below from
+ * hypotheticals into things somebody had to check. See `TASK_TIER` below, which
+ * is where a task changes tier and where the reasoning for each one is written
+ * down.
  *
  * ## The three literals
  *
@@ -84,10 +87,12 @@
  * A model id is not the whole of what a tier decides. Effort, the completion
  * ceiling, the web-search cap and what gets replayed between turns all belong to
  * the same choice, and the list below says so. The honest shape for that is one
- * *call policy* per request-path task rather than one string — but there is one
- * policy in existence today, and a second tier nobody has switched to. A policy
- * object built now would be a guess at the shape of a change that has not
- * happened. `modelForOpenRouter` is where it grows from when it does.
+ * *call policy* per request-path task rather than one string — and since
+ * 2026-09-05 there is a second tier with exactly one task on it, which carries
+ * its own ceiling and its own effort at its call site (src/link-summary.ts)
+ * rather than in a table here. One task is not yet a shape; a policy object
+ * built from it would still be a guess. `modelForOpenRouter` is where it grows
+ * from when there are two.
  *
  * ## Two things that have to move with the model, and one that does not
  *
@@ -132,10 +137,14 @@
  * — the answers just quietly get worse over a long conversation.
  *
  * Most of that was found by a GPT-5.6-sol review of this change, 2026-08-26.
- * **None of it is fixed here**, because nothing is on the quick tier and fixing
- * it now would be five changes justified by a switch nobody has made — each one
- * shaped by a guess at how the switch would go. It is written down so the switch
- * is not the moment somebody discovers them.
+ * **None of it is fixed here**, and that is still right: the list is about the
+ * three Anthropic-bound request-path calls, and moving one of *those* remains a
+ * switch nobody has made. `link-summary` did not move — it was born on the quick
+ * tier — so rather than fixing these it answers them one at a time at its own
+ * call site: its own ceiling, spelled `max_completion_tokens`; no provider pin
+ * on its route; no `cache_control`; no web-search tool. The list stays here so
+ * the switch is not the moment somebody discovers them, and so the next task to
+ * move has a worked example.
  *
  * The pipeline half of the table does not get that treatment, because its
  * failure is different in kind: not a setting that suits the other model, but a
@@ -222,10 +231,13 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
  * and structured outputs both supported. What it does not take is `stop` or
  * `verbosity`, neither of which this app sends.
  *
- * **Nothing here has been measured against it.** The price is a reason to try a
- * task on it, not a reason to move one; the way to move one is an eval under
- * evals/ that says what was gained and what was lost, in the shape of
- * evals/results/effort-vs-quality.md.
+ * **One job runs on it, and no job has been *moved* to it.** `link-summary`
+ * (src/link-summary.ts) was written for this tier on 2026-09-05 and is the only
+ * evidence about it this repo has: it works, at latencies and prices recorded in
+ * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md.
+ * That is a reason to try another task on it and not a reason to move one; the
+ * way to move one is still an eval under evals/ that says what was gained and
+ * what was lost, in the shape of evals/results/effort-vs-quality.md.
  */
 export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 
@@ -459,7 +471,27 @@ export type Task =
    * `STAGE_EFFORT` or `ARTICLE_RENDERER`. src/types.ts § `StepName` says the
    * same thing where a reader of that union will trip over it.
    */
-  | "debate";
+  | "debate"
+  /**
+   * **How the page on the far end of a hyperlink stands to the piece the reader
+   * is holding** —
+   * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
+   * § Stage 3, and src/link-summary.ts.
+   *
+   * **The first task ever put on the quick tier**, so the two caveats in this
+   * file's header stopped being hypothetical here: see `TASK_TIER` below for
+   * what was actually measured. It is a request-path call with a reader hovering
+   * a card, so it is on chat/completions — which is also the only wire
+   * `QUICK_MODEL_OPENROUTER` is served on, so for this one task the tier and the
+   * wire decide each other.
+   *
+   * Its own task rather than `explain`'s for the reason `quiz-mark` exists to
+   * have stopped making: a call billed under another job's name is spend nobody
+   * can find later. It is also the cheapest call in the app and the only one
+   * whose input is somebody else's web page, so folding it into a Sonnet job's
+   * line would misreport both the money and the shape.
+   */
+  | "link-summary";
 
 /**
  * **The three model calls that are not a `Task`** — and the type exists so that
@@ -599,10 +631,12 @@ export type AiJob =
  * **Which tier each task is on — and the file's actual decision, rather than its
  * constants, which are only the vocabulary for it.**
  *
- * Everything is `capable`, which is what Greg asked for ("default to
- * capable-model for now") and is also the honest state: no task here has been
- * measured on the quick tier, and a tier is not a preference to be guessed at
- * per task, it is a trade to be checked.
+ * Everything is `capable` except `link-summary`. That default is what Greg
+ * asked for ("default to capable-model for now") and is also the honest state:
+ * no task here has been *moved* to the quick tier, and a tier is not a
+ * preference to be guessed at per task, it is a trade to be checked. The one
+ * exception was written for the quick tier rather than moved onto it, which is
+ * the difference between a decision and an unmeasured migration.
  *
  * **Flipping a row is not the whole of switching a task** — read the header's
  * list of what has to move with the model first. For the seven pipeline tasks it
@@ -666,6 +700,28 @@ export const TASK_TIER: Record<Task, Tier> = {
      reception — the exact thing Stage 0 got back, and the thing every rule in
      src/debate.ts exists to refuse. */
   debate: "capable",
+  /**
+   * **The first `quick` row in this table**, and the one place its two
+   * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
+   * Sonnet's price, on a job that runs once per cold link a reader rests on.
+   *
+   * Quick because of what the job is, not only because of what it costs: the
+   * model is given the destination's opening, the paragraph the link sits in and
+   * one sentence about the piece, and asked what the first has to do with the
+   * others. That is a short piece of reading comprehension over material that is
+   * all in front of it — not the multi-step inference `ideas` is paid `high`
+   * for, and not prose anybody keeps.
+   *
+   * What the header warned about, checked rather than assumed (2026-09-05,
+   * measurements in the plan): the reasoning floor is real, so the ceiling is
+   * `max_completion_tokens` sized well clear of it and the parameter is spelled
+   * the way this model advertises rather than the deprecated `max_tokens` the
+   * other chat callers send. The Anthropic provider pin is **not** on this
+   * job's route — see `AI_JOB_ROUTE` — because pointed at an OpenAI model it
+   * is wrong quietly. There is no `cache_control` anywhere in the request, so
+   * the breakpoint caveat does not arise.
+   */
+  "link-summary": "quick",
 };
 
 /**
@@ -812,6 +868,11 @@ export const TASK_WIRE: Record<Task, Wire> = {
      shape. Every other artefact-producing step is `"messages"`. See `Task`
      above, and src/pdf-read.ts for the precedent. */
   debate: "chat",
+  /* Chat, and for this one task the wire is not a free choice: it is the only
+     one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
+     bottom of this file is about. A reader is watching it stream, so it would
+     have been this wire anyway. */
+  "link-summary": "chat",
 };
 
 /** Which protocol this task's model call speaks. */
@@ -907,6 +968,11 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
   debate: "SPIDERYARN_DEBATE_MODEL",
+  /* It has one because it is the app's only quick-tier task, so "is the cheap
+     model good enough for this" is a question somebody will want to answer by
+     running the real feature against a capable model for an evening rather than
+     by editing the tier table and rebuilding. */
+  "link-summary": "SPIDERYARN_LINK_SUMMARY_MODEL",
 };
 
 /** What a task will really send, and whether anything overrode the code to say so. */

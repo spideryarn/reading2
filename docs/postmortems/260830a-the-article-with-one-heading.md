@@ -224,7 +224,7 @@ $0.39. The labels were the cheap half all along.
 
 ## A class rather than a bug: the lease that is not one
 
-`beginStep` in [`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) writes a marker and
+`beginStep` in `src/store/artifacts-fs.ts` writes a marker and
 says plainly what it is not:
 
 > Deliberately not a lease: a pid and a timestamp invite "it has been an hour, it must be dead", and

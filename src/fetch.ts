@@ -33,7 +33,7 @@
  * and importing it would also *run* it.
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import path from "node:path";
@@ -294,11 +294,12 @@ export async function writeRaw(
  * caller writes*, and for a command line the caller is `main()`. Every stage
  * that still has a command line leaves the file it always left —
  * `output/<slug>.html`, `tree.json`, `labels.json` — and a `fetch` command that
- * printed a digest instead would be the one that broke the pattern. It would also break
- * something people actually do: running `npm run fetch -- <url>` by hand under
- * `SPIDERYARN_STORE=files` satisfies the queue's `fetch` step, because the
- * filesystem artefact store reads `raw.json` at exactly this path
- * (`PATHS.fetch.raw` in src/store/artifacts-fs.ts).
+ * printed a digest instead would be the one that broke the pattern. It would also have
+ * broken something people used to do: running `npm run fetch -- <url>` by hand
+ * under `SPIDERYARN_STORE=files` satisfied the queue's `fetch` step, because
+ * the filesystem artefact store read `raw.json` at exactly this path
+ * (`PATHS.fetch.raw` in src/store/artifacts-fs.ts, deleted 2026-09-05) — there
+ * is one store now, and that flag is gone too.
  *
  * **It takes the manifest rather than making one**, so the two files cannot
  * describe different documents: the caller has already had `writeRaw` hash and
@@ -333,8 +334,9 @@ export async function writeRawFiles(
  * src/store/export.ts and `readPdf` in src/store/pg-source.ts.
  *
  * **None of the three is ever silently downgraded to "assume HTML".** That
- * fallback existed on `readRaw` below and stage 2 relied on it; it is gone, and
- * this class is what replaced it. Greg's decision 4 of
+ * fallback existed on `readRaw`, which stage 2 relied on and which was deleted
+ * on 2026-09-05 — the note where it stood, below, has the history; it is gone,
+ * and this class is what replaced it. Greg's decision 4 of
  * docs/plans/260831b-finish-the-database-move.md makes refetching the right answer for
  * an old article — but only if the state says so out loud, which is what a
  * thrown error does and what a quiet default did not.
@@ -566,32 +568,25 @@ function credentialsSeen(): string {
   return `${seen("SUPABASE_URL")} and ${seen("SUPABASE_SERVICE_ROLE_KEY")}`;
 }
 
-/**
- * The manifest sitting in a directory, or `null` when there is not one.
- *
- * **Not stage 2's route any more, and the `null` no longer means "assume
- * HTML".** It meant that until 2026-08-31: every article ingested before
- * manifests existed had a `raw.html` and no `raw.json`, and stage 2 fell back
- * to reading that file. Nothing writes `raw.html` now, so the fallback had
- * nothing to fall back *to*, and it is gone rather than left pointing at
- * absence. Two articles in the local corpus were relying on it —
- * `data/constitution` and `data/noema-mythology-of-conscious-ai` — and the
- * answer for them is a re-fetch (Greg, 2026-08-30: the corpus is expendable).
- *
- * What still calls this is `articleMetadata` in src/api.ts, which shows the
- * metadata page where a document came from. `slugIsSpokenFor` in src/jobs.ts
- * called it too until 2026-08-31, to decide whether an upload would collide
- * with an article already there; that question no longer exists — every slug
- * carries a globally unique short id, so nothing collides
- * (docs/plans/260831b-finish-the-database-move.md § Stage 3 item 0).
- */
-export async function readRaw(dir: string): Promise<RawManifest | null> {
-  try {
-    return JSON.parse(await readFile(path.join(dir, "raw.json"), "utf8")) as RawManifest;
-  } catch {
-    return null;
-  }
-}
+/* **`readRaw(dir)` was here, and it went on 2026-09-05.** It read a `raw.json`
+   out of a `data/<slug>/` and answered `null` for anything it could not parse.
+   Its last caller was `loadSource` in src/api.ts, which went with the
+   filesystem store
+   (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+   Its own docstring named `articleMetadata` as what still called it, and that
+   had been wrong for some time — the function it named never mentioned it.
+
+   **The thing worth keeping is why its `null` stopped meaning "assume HTML".**
+   Until 2026-08-31 every article ingested before manifests existed had a
+   `raw.html` and no `raw.json`, and stage 2 fell back to reading that file.
+   Nothing writes `raw.html` now, so the fallback had nothing to fall back *to*.
+   `RawDocumentUnavailable` above is what replaced it: three named reasons, none
+   of them silently downgraded to a guess.
+
+   The read that survived `readRaw`'s deletion was `fsArtifacts.read`, which
+   went through the artefact seam rather than opening the file a second way —
+   but it went too, with the rest of src/store/artifacts-fs.ts, on 2026-09-05.
+   There is one store now, and no manifest read on disk at all. */
 
 /* ------------------------------------------------------------------ *
  * How it fails

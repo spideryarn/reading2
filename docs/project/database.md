@@ -52,13 +52,21 @@ admin's user list, the visibility switch, public reading — and each of them re
 sentence rather than returning a plausible default. Those branches are **scaffolding around a store
 that is going away**, and they get deleted rather than maintained.
 
-A one-sided seam now has to **declare itself** in `SEAM_ASYMMETRIES`
-([`src/store/live.ts`](../../src/store/live.ts)), because a refusal written only in a docstring is
-indistinguishable from a store somebody forgot — which is how Claims shipped filesystem-only and
-answered 501 in production for four hours with every test green
+Every store seam must have a **Postgres implementation**, and
+[`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts)
+derives both the seams and the implementations from the source rather than from a list anybody
+maintains. A seam with no Postgres side is a 501 for every reader, and it looks exactly like a seam
+that works — which is how Claims shipped filesystem-only and answered 501 in production for four
+hours with every test green
 ([260901e](../postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md)).
-A missing *files* side needs a reason; a missing *postgres* side needs a reason **and** one plain
-sentence naming what a reader cannot do on the deployed app, because that is what it is.
+A `pgFooStore` whose every method calls `notMigrated` is the same 501 by a longer route, so the same
+test flags it.
+
+That guard asked for *two* implementations, and carried a `SEAM_ASYMMETRIES` map for the seams that
+deliberately had one, until 2026-09-05. Two was never the point: it was asking for a Postgres side
+in a world where `files` was the default and would otherwise hide its absence. With one store the
+map would have had to name every seam, so it went and the assertion narrowed to what still matters
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § G).
 
 ## The filesystem era: files under `data/<slug>/`
 
@@ -147,15 +155,20 @@ two-simultaneous-claims race against both.
 [260827h-durable-queue-and-uploads.md](../plans/260827h-durable-queue-and-uploads.md), whose first line is about why
 a durable record for one part of an ingest does not make the ingest durable.
 
-**Reads** all go through [`src/api.ts`](../../src/api.ts) — `loadArticle`, `loadTweets`,
+**Reads** all go through `src/api.ts` — `loadArticle`, `loadTweets`,
 `loadGlossary`, `articleMetadata`, `listArticles`. (`deleteGlossary` is the one *write* that goes
 through it, and [glossary.md](glossary.md) says why it has to.) [library.md](library.md) makes the same point from the other side.
 
 **Writes do not.** This doc used to say "`src/api.ts` is the one file the store lives behind", and
-that is only half true — it is the *read* seam. The write path is
-`PipelineStep.outputs(ctx): string[]`, an interface that returns **file paths**, implemented across
-seven stage modules (`fetch`, `extract`, `blocks`, `hierarchy`, `arc`, `tweets`, `glossary`). Any estimate that treats
-the Postgres move as a one-file change is wrong, and this is where that mistake starts.
+that is only half true — it is the *read* seam. The write path was
+`PipelineStep.outputs(ctx): string[]`, an interface that returned **file paths**, implemented across
+seven stage modules (`fetch`, `extract`, `blocks`, `hierarchy`, `arc`, `tweets`, `glossary`). Any estimate that treated
+the Postgres move as a one-file change was wrong, and this is where that mistake started.
+
+**Both of those are gone now**, and the paragraph is kept because the estimate it corrects is the
+thing worth remembering. `src/api.ts` went on 2026-09-05 with the filesystem store it was the reader
+for; `outputs` went the same day, once nothing in `src/` called it. A step declares `produces` — the
+*kinds* it makes — and the `ArtifactStore` decides where those go.
 
 Why files at all: *"Prefer boring: filesystem over database, one server process"* —
 [AGENTS.md](../../AGENTS.md). Each stage writes JSON and every stage stays independently runnable.
@@ -1269,8 +1282,10 @@ handed one through **[`StoreSession.checkpoints`](../../src/store/session.ts)** 
 to `PipelineStep.run` — and never builds one for itself.
 
 **This was a directory until 2026-09-01, and it was not a tidiness problem.** The files went to
-`data/<slug>/`, which on Vercel is job-scoped `/tmp`; a retry is a new job id by design and lands on
-a different machine anyway, so **every attempt at a long PDF started from zero**. A document dense
+`data/<slug>/`, which on Vercel was job-scoped `/tmp` (that scoping — `src/job-scope.ts` and
+`src/store/data-root.ts` — was itself deleted 2026-09-05, once every store was Postgres); a retry was
+a new job id by design and landed on a different machine anyway, so **every attempt at a long PDF
+started from zero**. A document dense
 enough to plan a chunk per page can miss the 740s step deadline ([`src/pdf-read.ts`](../../src/pdf-read.ts)
 § `CHUNK_CONCURRENCY` has the arithmetic, against `MAX_PAGES`), so an accepted document could fail
 for ever without ever accumulating enough finished work to get under it — a liveness failure rather

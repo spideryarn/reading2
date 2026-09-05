@@ -9,8 +9,9 @@
  *     '/tmp/spideryarn/<owner>/spya-bpcjus/data/nagel-bat/blocks.json'
  *
  * Why there is nothing at that path, and why nothing put it there. On a
- * deployed instance `dataRoot()` is `/tmp/spideryarn/<owner>/<job>/`
- * (src/store/data-root.ts) — scoped to **one job**, deliberately, so that a
+ * deployed instance the filesystem store's root was `/tmp/spideryarn/<owner>/<job>/`
+ * (`src/store/data-root.ts`, deleted 2026-09-05) — scoped to **one job**,
+ * deliberately, so that a
  * failed job's half-built artefacts cannot be served as the next job's. A job
  * created as `{ slug, steps: ["tweets"] }` has exactly one step in it, so
  * `fetch`, `extract`, `blocks` and `hierarchy` never run and never write. The
@@ -28,7 +29,10 @@
  * one stage that uses it — and `stamp` uses it too. So today one half of every
  * late step asks the store whether its artefact is current and the other half
  * reads a path. This file is that split written down: the store is given the
- * article, `ctx.dir` is not, and the step is asked to run.
+ * article, the context is not, and the step is asked to run. **`ctx.dir` is
+ * gone entirely since 2026-09-05**, so the split this file was written to show
+ * is now closed by the type rather than by the fixture; what is left, and what
+ * these cases still are, is that a late step reads its inputs through the store.
  *
  * The model is stubbed, so the real `generateTweets`/`generateArc` run end to
  * end; nothing here reaches the network.
@@ -43,9 +47,10 @@
  * same copy of `example/` off the disk once and then answers from memory — so
  * stage G of
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * can delete `src/store/artifacts-fs.ts` without this file noticing. The
- * asymmetry the whole fixture rests on is unchanged, and `coldContext()` must
- * still never be given a directory with an article in it.
+ * could delete `src/store/artifacts-fs.ts` without this file noticing — which
+ * it did, the same day, along with `StepContext.dir`. `coldContext()` cannot be
+ * given a directory at all now, which was the instruction this paragraph used
+ * to have to write down.
  *
  * **Mutation.** Two arms, run 2026-09-05. (1) `tryReadArticle` in
  * src/article-input.ts made to take its blocks from a `null` instead of from
@@ -115,8 +120,15 @@ const SLUG = "nagel-bat";
 
 /** Where the article is: a copy of `example/`, standing in for Postgres. */
 let published = "";
-/** Where the job is: the empty job-scoped scratch a cold instance hands it. */
-let scratch = "";
+/*
+ * **`scratch` stood here until 2026-09-05** — an empty `mkdtemp` directory
+ * standing in for the job-scoped `/tmp` a cold instance hands a late step, so
+ * that `ctx.dir` could point at somewhere the article demonstrably was not.
+ * `StepContext.dir` went with the filesystem store in stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+ * so the asymmetry this file rests on is now structural: there is no directory
+ * to hand a step at all, and the store is the only thing it is given.
+ */
 
 /**
  * The store the run phase gets — rooted at the published copy, **not** at the
@@ -127,7 +139,6 @@ let store: ArtifactReads;
 
 beforeAll(async () => {
   published = await mkdtemp(path.join(tmpdir(), "spya-published-"));
-  scratch = await mkdtemp(path.join(tmpdir(), "spya-scratch-"));
   await cp(path.join(REPO, "example"), path.join(published, "data", SLUG), { recursive: true });
   /* **Read off the disk once, then held in memory** — the copy of `example/` is
      still what the article *is*, and `memoryArtefactsFrom` refuses an empty
@@ -138,15 +149,18 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await rm(published, { recursive: true, force: true });
-  await rm(scratch, { recursive: true, force: true });
 });
 
-/** A step context whose directory is empty, as a cold instance's always is. */
+/**
+ * The context a cold instance hands a late step.
+ *
+ * **It carried a directory until 2026-09-05**, deliberately an empty one — see
+ * where `scratch` stood, above. It carries the slug and nothing about storage
+ * now, which is the same claim made by the type instead of by a fixture.
+ */
 function coldContext(): StepContext {
   return {
     slug: SLUG,
-    dir: path.join(scratch, "data", SLUG),
-    htmlFile: path.join(scratch, "output", `${SLUG}.html`),
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,

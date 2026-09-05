@@ -158,7 +158,6 @@ function driverError(): Error {
 const SKIPPING_STEP = {
   name: "arc",
   label: STEPS.arc.label,
-  outputs: () => [],
   produces: ["arc"],
   run: () => {
     throw new Error("the step must not run: this fixture is about the door where none does");

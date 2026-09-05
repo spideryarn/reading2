@@ -7,11 +7,15 @@
  * them back, and `writeRawFiles` is how a caller that wants files puts them on a
  * disk. That caller was `npm run fetch`, and since 2026-09-05 it is **this file
  * and nothing else** — the command went to `npm run ingest` (scripts/stage.ts),
- * which drives the queue and stores nothing on a disk, and `writeRawFiles` dies
- * in stage G of
- * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
- * Until then the property below is still worth asserting, because the
- * filesystem artefact store still reads that file. Nothing had ever read one of those
+ * which drives the queue and stores nothing on a disk.
+ *
+ * **The pairing that justified half of that went with the filesystem store**,
+ * on 2026-09-05: a case here asserted that the `raw.json` `writeRawFiles` writes
+ * is the file `PATHS.fetch.raw` in `src/store/artifacts-fs.ts` reads back as a
+ * manifest, and there is no longer a second constant to compare against. It is
+ * recorded under *what `writeRawFiles` leaves behind* below. What survives is
+ * the property that does not need a reader: the bytes beside the manifest are
+ * the bytes the manifest's hash names. Nothing had ever read one of those
  * objects back before, so **every failure mode of that read was unexercised**,
  * and one of them turned out to be
  * live in the corpus on the day this was written: nine of the eighteen
@@ -59,7 +63,6 @@ import { PINNED } from "../src/env.js";
 import { keepTheOriginal } from "../src/pdf-read.js";
 import { STEPS, UNCONVERTED_STEPS } from "../src/pipeline.js";
 import { canonicalKey } from "../src/source.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import { fsBlobs } from "../src/store/blobs-fs.js";
 import type { RawSourceStore } from "../src/store/blobs.js";
 import { checkProduct } from "../src/store/session.js";
@@ -328,34 +331,25 @@ describe("a reference the object store cannot honour", () => {
 
 describe("what `writeRawFiles` leaves behind", () => {
   /**
-   * **The documented property, asserted rather than assumed.**
+   * ***writes a raw.json the filesystem artefact store reads back as the
+   * manifest* stood here until 2026-09-05.**
    *
-   * Running `npm run fetch -- <url>` by hand under `SPIDERYARN_STORE=files` was
-   * meant to satisfy the queue's `fetch` step, so the queue skipped straight to
-   * extraction. That only held if the file `writeRawFiles` writes is the file
-   * `PATHS.fetch.raw` reads — two constants in two modules that nothing else
-   * compares. This reads it back through the real artefact store rather than by
-   * checking the filename, so a change to either end fails here.
+   * It asserted that `writeRawFiles` put a `raw.json` where
+   * `PATHS.fetch.raw` in `src/store/artifacts-fs.ts` looked for it —
+   * `has("paper", "fetch", ["raw"])` true, and the manifest read back with the
+   * same `storedSha256` and `kind` — which mattered while running
+   * `npm run fetch -- <url>` by hand was meant to satisfy the queue's `fetch`
+   * step. Two constants in two modules that nothing else compared.
    *
-   * **The command is gone and the pairing is not**, 2026-09-05: `writeRawFiles`
-   * has no caller left but this case, and it is still the only thing comparing
-   * those two constants for as long as either exists.
+   * **The claim has no home and needs none: one of its two ends is gone.**
+   * `src/store/artifacts-fs.ts` was deleted with the rest of the filesystem
+   * store (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   * § G), so there is no reader of that path left to disagree with the writer,
+   * and no `SPIDERYARN_STORE=files` for the hand-run to have been for. The
+   * store-migration registry named this case in advance as the one thing in
+   * this file that dies with the adapter. `writeRawFiles` itself outlives it by
+   * one case, below.
    */
-  it("writes a raw.json the filesystem artefact store reads back as the manifest", async () => {
-    const doc = pdfDoc("what the command wrote");
-    const manifest = await writeRaw(doc, store);
-    const dir = path.join(root, "cli", "data", "paper");
-    await writeRawFiles(dir, doc, manifest);
-
-    const artifacts = createFsArtifactStore(() => ({
-      dir,
-      htmlFile: path.join(root, "cli", "output", "paper.html"),
-    }));
-    expect(await artifacts.has("paper", "fetch", ["raw"])).toBe(true);
-    const back = await artifacts.read("paper", "fetch", "raw");
-    expect(back?.storedSha256).toBe(manifest.storedSha256);
-    expect(back?.kind).toBe("pdf");
-  });
 
   /**
    * **The file beside the manifest holds the bytes the manifest's hash names.**

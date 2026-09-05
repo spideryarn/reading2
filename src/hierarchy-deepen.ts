@@ -1614,10 +1614,10 @@ export async function runExpansionWave(opts: {
  *
  * Read at call time rather than frozen at import, so a deployment can turn one
  * ingest deep without a rebuild and a test can move it — the rule
- * `jobConcurrency` (src/jobs.ts) and `dataRoot` (src/store/data-root.ts) already
- * state. Anything but `"1"` or `"true"` is off, a misspelling included: this is
- * the switch on a change that multiplies a book's bill several times over, and a
- * typo must fail closed.
+ * `jobConcurrency` (src/jobs.ts) already states, and `dataRoot` did too before
+ * src/store/data-root.ts was deleted 2026-09-05. Anything but `"1"` or `"true"`
+ * is off, a misspelling included: this is the switch on a change that
+ * multiplies a book's bill several times over, and a typo must fail closed.
  *
  * Whether it ever moves is **stage 8's decision**, with the evidence stage 5
  * measures — the same book read both ways, side by side, against the cost.

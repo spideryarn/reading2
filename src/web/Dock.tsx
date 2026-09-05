@@ -122,6 +122,7 @@ import { useEffect, useId, type ReactNode } from "react";
 import {
   AlignLeft,
   BookA,
+  Brain,
   ClipboardCheck,
   Lightbulb,
   ChevronUp,
@@ -138,7 +139,6 @@ import {
   MessageSquareText,
   MessagesSquare,
   Search,
-  Speech,
   TriangleAlert,
   X,
   Quote,
@@ -687,7 +687,11 @@ const MODES_UI = [
   {
     mode: "remember",
     experimental: true,
-    icon: Speech,
+    /* `Brain`, not `Speech`, from 2026-09-05. `Speech` was the mode's method — the
+       reader talks — and Greg asked for its subject instead: what they kept.
+       SPIDERYARN-READING2-25. It is the only brain in the bar, and Lucide has
+       exactly one, so there is no second thing it could be confused with. */
+    icon: Brain,
     blurb: "Say what you took from this and find out where it holds up — not saved notes or flashcards",
   },
 ] satisfies readonly ModeUi[];

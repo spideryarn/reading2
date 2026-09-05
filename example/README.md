@@ -29,15 +29,23 @@ that the left-right axis has something to say.
 
 ## Replacing it
 
-[`src/api.ts`](../src/api.ts) looks in `data/<slug>/` **first** and falls back
-here — but only for the slug `example`. So the moment the real pipeline writes
-`data/example/`, the client picks it up with no code change; every other slug
-opens its own directory or 404s.
+**Nothing reads this directory at request time any more.** Until 2026-09-05 `src/api.ts`
+looked in `data/<slug>/` first and fell back here for the slug `example`, so a
+fresh clone had something to open before the pipeline had ever run. That file was
+the filesystem article reader and went with the store it read from
+([260903f](../docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § G).
 
-It used to fall back here for *any* slug, which meant an article with no tree
-yet — or no article at all — was served this text under the reader's own
-address. `candidateDirs` in [`src/api.ts`](../src/api.ts) says why that had to
-go. Nothing about this fixture changed.
+The fixture is not retired — it reaches a reader the way every other article
+does. `npm run setup` runs `db:seed-dev`, which loads this corpus into Postgres.
+What has gone is the *fallback*, and losing it is the point rather than a
+casualty: a fallback that served this text under a slug the reader had asked for
+is exactly the bug the old note below described, and the last of it is now
+structurally impossible rather than narrowed to one slug.
+
+The historical note, kept because it explains the shape: the fallback used to
+fire for *any* slug, so an article with no tree yet — or no article at all — was
+served this text under the reader's own address. Narrowing it to the fixture's
+own slug was the fix at the time.
 
 Whatever writes a tree must satisfy the invariants in
 [granularity-zoom.md § The tree](../docs/project/granularity-zoom.md#the-tree).

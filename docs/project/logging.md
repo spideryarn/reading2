@@ -12,8 +12,9 @@ document carries the reasoning.
 ## What logging is for here
 
 **Logging is what the server says to whoever is running it.** Nothing else in this project can do
-that job. A job's outcome is written to `data/_jobs/<id>.json`, which survives a restart and is
-genuinely good; an error is sent to the reader as JSON, which is what the reading view needs. But
+that job. A job's outcome is written to a row in the `jobs` table (`data/_jobs/<id>.json` until
+2026-09-05), which survives a restart and is genuinely good; an error is sent to the reader as JSON,
+which is what the reading view needs. But
 neither reaches the person operating the thing, and once this is on Vercel there is no terminal to
 look at.
 
@@ -139,8 +140,8 @@ Here each one has a job:
 
 | level | means | example |
 |---|---|---|
-| `error` | **ours, and broken.** Something failed that should not have | an unexpected throw reaching the catch-all; a corrupt `comments.json` |
-| `warn` | **suspicious, still working.** The thing that is invisible in the response | a request answered from the `example/` fixture; a 4xx; a job record that would not parse |
+| `error` | **ours, and broken.** Something failed that should not have | an unexpected throw reaching the catch-all; a store read that should never fail failing |
+| `warn` | **suspicious, still working.** The thing that is invisible in the response | a 4xx; a job record that would not parse |
 | `info` | **it happened, and you would want it a week later** | a request completed; a step finished, with what it cost |
 | `debug` | **useful while you are looking.** Off in production | a step skipped as already done; a fetch's size |
 
@@ -159,7 +160,7 @@ the name you meant.
 | `http` | [`src/routes.ts`](../../src/routes.ts) | one line per API request: method, path, status, `ms`. Level follows the status — 4xx is the client's fault and is not an alarm, 5xx is ours and is |
 | `jobs` | [`src/jobs.ts`](../../src/jobs.ts) | the queue: enqueued, each step's transition, the outcome — and **what the step cost in money**, on every one of those three. See [ingest-queue.md](ingest-queue.md) |
 | `pipeline` | [`src/pipeline.ts`](../../src/pipeline.ts) | **what a step cost in tokens** — model, tokens in and out, `ms`. Its `model` is the stamp name (`claude-sonnet-5`), not the wire id the request carried; [setup-dev.md](setup-dev.md) says why those differ |
-| `store` | [`src/api.ts`](../../src/api.ts), [`src/comments.ts`](../../src/comments.ts) | the silent fallbacks, chiefly the fixture one |
+| `store` | [`src/store/pg.ts`](../../src/store/pg.ts) and the rest of `src/store/`; [`src/comments.ts`](../../src/comments.ts) and its siblings only for their surviving fixture readers | store-level failures — historically chiefly the fixture fallback, below, which no longer exists now the store is Postgres-only |
 | `auth` | [`src/auth.ts`](../../src/auth.ts) | **only ever our side failing.** A refused token is not logged here — that is an ordinary 401 and the `http` line already says so. Nothing in this component may carry a token, a `sub` or an email address |
 | `health` | [`src/vercel-health.ts`](../../src/vercel-health.ts) | the two errors `GET /api/health` catches — the store check and the schema check. The endpoint is public, so the caller gets the driver's message truncated to 200 characters and the whole of it comes here. Trimming the response is only safe while the untrimmed copy is somewhere |
 | `model` | [`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts), [`src/search.ts`](../../src/search.ts) | the model calls with a reader waiting on them — explaining a selection, chat, and semantic search |
@@ -219,8 +220,8 @@ two can be added up together:
 A line with none of these made no model call at all, which is most of them.
 
 **`aiRunId` is the join, and it exists because the fields above are a summary.** Since 2026-08-28
-each call is also a row — in `ai_calls` or in `data/_ai-calls.jsonl`
-([ai-gateway.md](ai-gateway.md)) — and the question a surprising `aiCost` provokes is *which calls*.
+each call is also a row in `ai_calls` (`data/_ai-calls.jsonl` until 2026-09-05 —
+[ai-gateway.md](ai-gateway.md)) — and the question a surprising `aiCost` provokes is *which calls*.
 Without an id on both sides, answering it means guessing at a timestamp range.
 
 **`aiWriteFailures` is the one anomaly the ledger itself cannot report**, because the evidence is
@@ -361,23 +362,28 @@ that emits nothing at all; the same harness and the same reasoning as
 
 ### The fixture alarm, and what it can never fire for
 
-The `store` warning on [`src/api.ts`](../../src/api.ts) says when an article was answered out of
+**History, all of it: `src/api.ts` and its `candidateDirs` fallback were deleted on 2026-09-05 along
+with the rest of the filesystem store, and Postgres has no directory to fall through to at all — the
+whole failure mode described below cannot occur any more.** It is kept because the story of how a
+path traversal hid behind a silent fallback is worth having read.
+
+The `store` warning on `src/api.ts` said when an article was answered out of
 `example/` rather than out of its own directory. That was the fallback which
 [disguised a real path traversal as a refusal](security.md#why-it-survived-being-looked-at): a
 shallow `../../etc` found no `blocks.json`, fell through to the fixture, and returned HTTP 200 with
 plausible content. The response cannot tell you which directory answered. One line could.
 
-**The fallback was removed on 2026-08-30** and the warning stayed. It is now an assertion rather than
-a report: nothing can reach it, and if it ever fires again somebody has widened `candidateDirs` and
-the symptom would otherwise be invisible in the response. That is the whole reason it is a log line
-and not a comment.
+**The fallback was removed on 2026-08-30** and the warning stayed. It became an assertion rather than
+a report: nothing could reach it, and if it ever fired again somebody had widened `candidateDirs` and
+the symptom would otherwise have been invisible in the response. That was the whole reason it was a
+log line and not a comment.
 
-Two things about it are worth knowing, both found while wiring it up:
+Two things about it were worth knowing, both found while wiring it up:
 
-- **It stays quiet for `example` itself.** Asking for the fixture and getting the fixture is the
-  fixture working. Warning there would put a line on every fresh-clone page load, and an alarm that
-  fires when nothing is wrong is an alarm nobody reads.
-- **A corrupt article could never trigger it.** `readJson` returns `null` for `ENOENT` and *rethrows*
+- **It stayed quiet for `example` itself.** Asking for the fixture and getting the fixture is the
+  fixture working. Warning there would have put a line on every fresh-clone page load, and an alarm
+  that fires when nothing is wrong is an alarm nobody reads.
+- **A corrupt article could never trigger it.** `readJson` returned `null` for `ENOENT` and *rethrew*
   everything else, so a `blocks.json` that exists and will not parse throws out of `loadArticle` as a
   500 — it never reached the fallback. Absent fell through; malformed did not. Two genuinely
   separate paths, which is worth writing down because the natural assumption is that both ended up at
@@ -751,7 +757,8 @@ keeping, write it beside the artefact on purpose.
 
 **Where it was left alone, and why.** A dozen other `JSON.parse` calls discard the error entirely —
 `catch { return null }` in the stage files' `readJson`, `catch { previous = undefined }` in
-[`src/blocks.ts`](../../src/blocks.ts), the per-record `catch` in `loadFromDisk`, the per-chunk one in
+[`src/blocks.ts`](../../src/blocks.ts), the per-record `catch` in `loadFromDisk` (in `src/jobs.ts`'s
+filesystem half, deleted 2026-09-05 with the rest of it), the per-chunk one in
 [`src/converse.ts`](../../src/converse.ts), and `readBody` in [`src/routes.ts`](../../src/routes.ts),
 which throws a fixed 400 string. None of them can reach a log line, so none of them changed.
 [`src/search.ts`](../../src/search.ts) already had it right before any of this, throwing
@@ -825,18 +832,27 @@ So there is a rule, and it is about shape rather than volume: **if the number of
 code emits grows with the data, the caller says it once instead.** A line per skipped directory is a
 line per *article on the shelf*, on every homepage load — the cost grows with the library while the
 information in it does not. Both places this came up ([`loadFromDisk`](../../src/jobs.ts) reading the
-queue, [`listArticles`](../../src/api.ts) walking the shelf) now collect into an array and emit one
+queue, `listArticles` walking the shelf) now collect into an array and emit one
 line carrying `{ count, first five names, of }`. The count is what tells you the scale, the names are
 what make it actionable, and the cap is what stops a long line being the one that gets truncated by
 whatever is collecting it. The loop that finds the problem is not the right place to report it.
 
 **It came back a third time, in a helper rather than in a loop.** `readJson` in
-[`src/api.ts`](../../src/api.ts) warned once per unreadable file, which is exactly right for the
+`src/api.ts` warned once per unreadable file, which is exactly right for the
 seven callers that read a single article — and `describeDir` calls it three times per directory
 inside the shelf walk. Measured on 300 corrupt directories: **300 warnings on one homepage load**,
 past the 256-line ceiling, so the tail of that request's logs was dropped. A helper that logs is
 convenient until it is called in a loop, and the loop is always somewhere else. `readJson` now takes
 an `unreadable` array; passing one moves the *saying* to the caller, never removes it.
+
+**That code is gone and the rule is not.** `src/api.ts` was the filesystem article reader and was
+deleted on 2026-09-05 with the filesystem store
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § G), so
+there are no directories to walk. The surviving shelf has exactly one place it can speak per row —
+`scalarsForShelf` in [`src/store/pg.ts`](../../src/store/pg.ts), which recomputes the library scalars
+for a published revision that has none — and it was written aggregated, for this reason, from the
+review that found it emitting `M` warnings and `2 + 2M` statements. The account below is kept because
+the two things it found are about the shape of the mistake rather than about that file.
 
 Two things that only showed up once it was reproduced, both worth more than the fix:
 
@@ -850,7 +866,9 @@ Two things that only showed up once it was reproduced, both worth more than the 
   different loads. Verdicts now come back through `allSettled` in *input* order; the `unreadable`
   names arrive through a throw and so are sorted before being cut. Pinned by
   `tests/library-log-volume.test.ts`, which runs two real loads and compares — a single call cannot
-  disagree with itself.
+  disagree with itself. That file moved to the Postgres shelf on 2026-09-05, over 300 published
+  revisions with no library scalars; the ordering it pins is now the query's `order by`, and the
+  claim it makes is the same one.
 
 Whether one corrupt file *should* blank the whole shelf rather than dropping one card is a separate
 question, deliberately left alone: only the logging changed.
@@ -1143,7 +1161,8 @@ from a grep, which is the mistake that section is about.
 - [prompt-caching.md](prompt-caching.md) — what the cache counts on these lines are for, and why
   the same cache is reported two different ways on the two wires
 - [comments.md](comments.md) — the model call in a request handler, and why it is the exception
-- [security.md](security.md) — the fixture fallback that the `store` warning now watches
+- [security.md](security.md) — the fixture fallback the `store` warning used to watch, before both
+  it and the filesystem store it belonged to were deleted
 - [block-ids.md](block-ids.md) — why re-minted ids are worth a warning
 - [testing.md](testing.md) — and `tests/log.test.ts`, which proves the redaction rather than
   restating the config

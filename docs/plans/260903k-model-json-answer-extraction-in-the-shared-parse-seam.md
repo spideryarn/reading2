@@ -250,7 +250,7 @@ to Fable rather than deciding it himself. **Fable's answer is no**, and the deci
 A failed-only capture is the same object under a narrower filter, and re-opening a cross-family
 decision that fresh needs a better reason than one bad afternoon. Three further reasons, in Fable's
 order: `parseJsonFrom` has neither a store handle nor a slug, and the artefact store is keyed off a
-closed `PATHS` table ([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) § `pathFor`), so
+closed `PATHS` table (`src/store/artifacts-fs.ts` § `pathFor`), so
 a new kind is something export, delete, the admin view and the privacy page all have to learn — a
 lifecycle, not a line, and disproportionate to *"don't overengineer it"*. The write would happen
 inside a `catch`, which is [logging.md](../project/logging.md)'s failure mode 6. And there are paying
