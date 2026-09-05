@@ -432,6 +432,106 @@ address; a title is a title, and printing both would show the reader our working
 It is also the one thing on the card that a late-arriving lookup *changes* rather than adds —
 everything else only grows downwards.
 
+## Add it to Spideryarn
+
+Since 2026-09-05 the foot of an external card carries a second control, and it is the one way this
+feature compounds rather than merely describes.
+
+> When I click on an external hyperlink, how can we make the experience really great? … It should
+> show an Add to Spideryarn button, which would kick off ingestion of that article to my shelf.
+>
+> — Greg, 2026-09-05
+
+It queues the ingest **in place**, and that is Greg's call against the obvious answer:
+
+> I don't want to open in a new tab, because that's disruptive when I've added Spideryarn to my
+> Homepage on iPad, because then it opens on top. Card shows progress is fine for now — eventually
+> we'll want a richer per-article-queue progress bar for this and other per-article jobs.
+>
+> — Greg, 2026-09-05
+
+The alternative was navigating to `/add/<url>`, which inherits the progress list, Stop, dedupe and
+the quota notice for nothing. What survives from it is the wiring: this presses `useJobs().add(url)`,
+which is the *same* `POST /api/jobs { url }` the shelf's Add box sends, so slot admission, the
+deduplication and the 402 all arrive without a second implementation
+([ingest-queue.md](ingest-queue.md), [billing.md § Which requests spend a slot](billing.md#which-requests-spend-a-slot-and-why-the-wall-is-at-the-routes)).
+**One press spends a metered ingest slot**, and a free account has three for life, so this is a
+genuinely new low-friction front door onto a metered action.
+
+**Only an owner is offered it, and the seam is that `useJobs` is not called** — `canAddToShelf`
+gates whether `WithAddToShelf` exists, exactly as `lookUpLinks` gates `WithLinkFacts`, and for the
+identical reason: a hook cannot be skipped conditionally, and a mounted `useJobs` subscriber sets the
+job engine's polling cadence whether or not it draws anything.
+[reader-capability.ts](../../src/web/reader-capability.ts) is the written-up version of that trap.
+
+**And four more silences, each of them a metered slot not spent by mistake.** No button for a link
+that does not leave the app; none for a link back to the piece being read, decided from the href
+rather than from the shelf, because the noema essay links to itself and re-ingesting the article you
+are standing in is the worst thing this could do; none for a page already on the shelf — which is
+what keeps the foot to **two controls at most**, since *read it here* and *add to Spideryarn* are
+mutually exclusive by construction and the three-control wrap the plan expected never arises; and
+**none until the shelf is actually known**. That last one is why `LinkFacts` carries `shelfKnown`:
+`library` is null while `/api/library` is in flight *and* if it failed, so without it the first hover
+of every session offered to add articles the reader already owned. Under uncertainty about a metered
+action, offer nothing. GPT Sol's review of the built code, 2026-09-05, finding P1-1.
+
+**A refusal only gets a button when another press could help.** `worthRetrying` (src/messages.ts)
+decides, so a `[pay-free]` reader gets the sentence and a link to the page that answers it and
+nothing to spend the next attempt on — the sentence says the pricing page is the way forward, and a
+*try again* under it would be the card arguing with the copy. A **failed ingest** gets its sentence
+and no button at all, because retrying an ingest is `POST /api/jobs/:id/retry`, which keeps the slug
+and the steps that already succeeded; all this card holds is a URL, so the only thing it could press
+is a fresh add wearing the same word. Retry stays on the job card that knows `jobWorthRetrying` and
+can call the right route.
+
+### Nothing about the add is held in the card
+
+The card is torn down when the pointer leaves *and* by a `MutationObserver` whenever the prose
+re-renders, so component state here has the lifetime of a hover — and an ingest is a minute or two.
+Three things therefore live in module-level maps in
+[`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx), keyed by `urlKey`: an add that has been
+pressed and not yet answered (without it, a re-hover offers a second press over a metered action),
+the refusal sentence (`lastFailure()` is a ref inside one subscriber and dies with it), and which job
+the URL became. Progress is **read** from the `jobEngine` singleton by job id — never by slug, for
+the reason [AddPage.tsx](../../src/web/AddPage.tsx) writes up — so re-hovering shows the job wherever
+it has got to. All three gaps were named by GPT Sol reviewing the plan, finding P2-1.
+
+**And the terminal status is read, never announced.** `useJobs(onFinished)` tells a subscriber only
+about jobs that finish while it is mounted, and the card usually is not: the reader presses and moves
+on. So the completion is noticed by whichever card opens next, off the job list.
+
+**The known gap, named rather than fixed.** Reading the job list means a job that has *left* it —
+retention is bounded — is indistinguishable from one the engine has not polled for yet, and the card
+goes on saying *adding it to your shelf…*. It takes a reader who neither hovers nor reloads between
+the ingest finishing and the record ageing out. Closing it properly needs a tab-level observer over
+the engine, and the durable home for that is the per-article queue Greg named and this is a
+way-station to. GPT Sol, 2026-09-05, finding P2-2.
+
+### The loop: finishing invalidates the shelf
+
+`link-facts.ts`'s shelf map is loaded once per page load and nothing else refreshes it, which is a
+harmless stale *absence* right up until this tab is the thing that made it stale. So a job reaching
+`done` calls `refreshShelf()`, which re-reads `/api/library`, swaps the map in and wakes every open
+card — and the card the reader added from upgrades itself from *add to Spideryarn* to *on your shelf*
+and *read it here*. A failed refresh keeps the shelf we had rather than replacing it with an empty
+one, **and says it failed**, so the completed job is not remembered as already refreshed and the next
+hover asks again.
+
+That is the whole compounding argument: **the measured 1-in-67 shelf hit rate above is exactly what
+this grows.** Every add makes the next hover of that link richer.
+
+Measured end to end in a browser on 2026-09-05: press, move the pointer away so the card is torn
+down, ingest finishes 55s later with nothing watching, re-hover the same link in the same tab with no
+reload — the foot goes from `open in a new tab · add to Spideryarn` to `open in a new tab · read it
+here`, and `/api/library` is requested exactly twice in the session, the second 0.8s after the job
+was noticed done.
+
+The tests are [`tests/add-to-shelf-from-the-card.test.tsx`](../../tests/add-to-shelf-from-the-card.test.tsx),
+which mounts the card for real and asserts the call count on `useJobs` rather than the absent button
+— a card that drew nothing and still called the hook would be the bug and would look like the fix —
+and [`tests/a-failed-shelf-read-is-not-an-empty-shelf.test.tsx`](../../tests/a-failed-shelf-read-is-not-an-empty-shelf.test.tsx),
+which is its own file because "the shelf read failed" is a module state a test file can reach once.
+
 ## What is deliberately not built yet
 
 **Our own server fetching the page once, and caching it for everybody.** The general case, and the
@@ -509,13 +609,18 @@ of the trail rule was wrong about philpapers and the unit test agreed with it: t
 written with an invented numeric id, so both were confidently wrong together. A fixture drawn from
 the data cannot do that.
 
-The asynchronous half has tests only either side of the wire, and **the reason the hook itself has
-none is not the one first written here.** The first version of this paragraph said a test of it would
-be a test of a mock; a GPT Sol review pointed out that `useLinkFacts` is driven entirely by a prop
-and two deferred promises, which is about as testable as a hook gets. The real reason is that this
-repo has no React test harness at all, and adding one is a dependency decision bigger than this
-feature. The three tests worth writing the day it exists are named at the foot of
-[`tests/link-facts.test.ts`](../../tests/link-facts.test.ts).
+The asynchronous half has tests only either side of the wire, and **the reason given here for that
+has now been wrong twice.** The first version said a test of the hook would be a test of a mock; a
+GPT Sol review pointed out that `useLinkFacts` is driven entirely by a prop and two deferred
+promises, which is about as testable as a hook gets. The second version said this repo has no React
+test harness at all — true when it was written on 2026-08-27, and false since: there are 124
+`tests/*.test.tsx` files as of 2026-09-05 (`ls tests/*.test.tsx | wc -l`), mounting components with
+`createRoot` under `IS_REACT_ACT_ENVIRONMENT`, and
+[`tests/add-to-shelf-from-the-card.test.tsx`](../../tests/add-to-shelf-from-the-card.test.tsx)
+mounts this very card. So the three tests named at the foot of
+[`tests/link-facts.test.ts`](../../tests/link-facts.test.ts) are now simply unwritten rather than
+impossible. A doc that says "this cannot be done here" outlives the reason it was true —
+[260903b-facts-that-were-wrong.md](../research/260903b-facts-that-were-wrong.md).
 
 What is tested is the pair of pure functions either side of the wire
 ([`tests/link-facts.test.ts`](../../tests/link-facts.test.ts)), because those are where somebody

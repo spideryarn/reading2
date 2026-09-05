@@ -5548,6 +5548,16 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.81rem;
 }
 .prose-card-waiting svg { flex: none; }
+/* The queue said no — a quota refusal with its way out beside it, or an ingest
+   that failed. Louder than `.prose-card-waiting` because the reader pressed a
+   button and this is the answer, and it wraps rather than clamps: a refusal the
+   card cut in half is a refusal nobody can act on. */
+.prose-card-refused {
+  margin-top: 0.35rem;
+  color: var(--destructive);
+  font-size: 0.81rem;
+  overflow-wrap: break-word;
+}
 /* The address itself. On an external card it sits above the foot, deliberately
    quiet: it is there for the reader who wants to judge the URL rather than our
    reading of it, not for the one skimming. Also the whole body of an href we
