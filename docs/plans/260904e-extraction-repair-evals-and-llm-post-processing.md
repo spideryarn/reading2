@@ -267,6 +267,347 @@ assuming provenance is available. And an **id-churn counter**, which later stage
 Done when: those bugs are fixed and pinned, provenance coverage is *measured and written down*, the
 cache-invalidation consequence is decided, `npm test` and `npm run typecheck` green.
 
+#### What landed, 2026-09-05 — **A is done**
+
+`npm run typecheck` green. `npm test`, re-run after the review fixes below,
+is **2 failed / 11,869 passed of 11,907**, and neither is this work: `client-imports`
+(`src/web/useStepJob.ts → ../pipeline.js`) and `store-migration-registry`
+(`tests/feedback-dictation-vocabulary.test.tsx`), both already red on `origin/dev` and both committed
+by other work. **That is a red trunk, not a flake, and somebody should fix them.** The earlier run
+had three more, all of which pass alone and were this box under load.
+
+A note on how that was established, because it nearly was not: `npm test` backgrounded through a pipe
+reported **exit 0 with a zero-byte log, twice**, and the real answer — exit 1 — came only from a
+tmux run writing to a file with an explicit `EXIT=` marker appended. A green from the first form is
+worth nothing. [silent-success.md](../reusable/silent-success.md).
+
+Everything below was measured on the committed corpus,
+which grew from 21 to 35 fixtures under this work as stage B landed its nine and then five more;
+every figure says which cut it is over. The instruments are `evals/extraction/provenance.mts` and
+`evals/extraction/block-census.mts` (both new, both committed) and four throwaway scripts whose
+numbers are quoted here rather than kept — the census exists because one of those four was thrown
+away with the only record of how its denominator was counted, and nobody could reproduce it.
+
+**1. `<pre>` text fidelity — fixed, and it cost one decision that was then taken back.**
+[`codeText`](../../src/blocks.ts) is a `<pre>`-only branch of `extractText`; every other block takes
+the old path unchanged. It reads a `<br>` and a highlighter's per-line `<div>` as the line breaks
+they are, because those carry no newline in the text at all.
+
+Over the 21 fixtures that had a pre-change baseline — **11,656 blocks**, counted along the shipping
+route (`runExtract` → `runBlocks`) by [`evals/extraction/block-census.mts --cut pre-0904`](../../evals/extraction/block-census.mts)
+— **545 code blocks changed and 0 non-code blocks changed**, with 0 differences in block count, tag,
+kind or `gistable`. That is the "byte-identical elsewhere" claim, run rather than argued.
+
+> **That denominator said 11,614 until 2026-09-05, and the correction is worth keeping.** A block
+> count is a property of the corpus *and* of where you cut into stage 2, and neither the doc nor the
+> throwaway script said which. 11,614 is these same 21 fixtures split from `article.content` — the
+> route [probe.mts](../../evals/extraction/probe.mts) takes on purpose — which misses the `<h1>` and
+> `.meta` line `debugPage` wraps round the article, and stage 3 splits *that*. GPT Sol, re-counting,
+> got 11,518 and 11,558: the same two routes over `CORPUS`'s 20, one fixture short of the cut. The
+> census script is committed so the next disagreement is a re-run rather than an argument; the 545
+> and the zeros are unchanged by any of it, and were re-derived the same day. RFC 9110's request examples were one line
+each and are now four; man(2)'s header was `"open(2) System Calls Manual open(2)"` and now has its
+columns; all 400 of Whitman's poems, which Project Gutenberg sets in `<pre>`, have their lines back.
+
+> **"Preserves code layout" is too broad, and the limits are named in `codeText` rather than left to
+> be found.** The fix is rooted at the `<pre>` itself and reaches nothing outside it. A `<pre>` inside
+> a `<blockquote>` never gets there at all — the blockquote is terminal, so quoted code still takes
+> the prose branch and loses its line breaks and its indentation together. A `<pre>` containing a
+> `<table>` gets one cell per line, no row structure, and the text after the table glued to the last
+> cell, because nothing inserts a break *after* an element. Both are pinned as expectations in
+> `tests/block-text-fidelity.test.ts`, so whoever fixes either has to change a test rather than
+> nothing. Fixing them properly means a recursive, layout-aware walk in place of a flat separator
+> insertion; that is a different piece of work. GPT Sol, 2026-09-05.
+
+**Ids do not churn: 0 re-mints attributable, across all 35 fixtures.** Measured with two arms —
+control (previous text == this text) and change (previous text == the pre-change text) — because the
+splitter re-mints 218 ids of its own accord on this corpus, and one number would have been read as
+this change's fault. Both arms give 218. `exactKey` normalises whitespace before hashing, so the key
+is computed from the collapsed form either way.
+
+The compatibility that rests on is now tested properly, which it was not: see **6** below.
+
+> **What those 218 are is not an ambiguous folded bucket, and this paragraph said it was.** GPT Sol
+> caught it, and re-investigating it found something worse than a wrong explanation.
+>
+> They are the corpus's **text-less, source-less blocks** — 122 `<p>`, 59 `<hr>`, 30 `<li>`, 7
+> `<figure>` — every one with no written text and no `src` anywhere in its html, so `exactKey`,
+> `foldedKey` and `legacyKey` all return `null` ([`src/blocks.ts`](../../src/blocks.ts) § `exactKey`)
+> and `bucketBy` drops the block from **both** sides of the match. They re-mint on *every* run over
+> byte-identical input. 218 of the corpus's 302 text-less blocks; the other 84 have a `src` and carry
+> fine. The 7 figures were checked by looking rather than guessed at — they are literally
+> `<figure id="…">\n  \n</figure>` after sanitising, with no `img` left inside.
+>
+> **It is pre-existing and unconditional** — `84ce16bf`, 2026-08-24, the commit that introduced
+> carry-over at all — and it is not benign:
+>
+> - `hashBlocks` includes the block id ([`src/source-hash.ts`](../../src/source-hash.ts), both
+>   branches), so **17 of the 35 fixtures flip their blocks fingerprint on a re-extraction that
+>   changed not one word**, taking `assets`, article vectors, `projection`, `similar`, saved searches
+>   and `labels` stale with them.
+> - `reasonsNotToPublish` compares that fingerprint against hierarchy's `input_hash`, so the same 17
+>   are the articles the refusal above actually bites on.
+> - **And the one nobody expected.** `blocksMatchTheirHtml` ([`src/pipeline.ts`](../../src/pipeline.ts))
+>   re-derives the blocks and compares the stamped html byte-for-byte. Under Postgres,
+>   `extracted_html` carries none of our ids, so the empties cannot reuse and cannot carry — they
+>   mint, the html differs, and **the `blocks` step never reports itself done**. Measured over the
+>   corpus: Postgres arm 18 done / 17 not; filesystem arm 34 / 1. On the filesystem `extracted ===
+>   stamped`, so the empties reuse their ids off the document and the guard passes — which is why the
+>   idempotence measurement quoted in [block-ids.md](../project/block-ids.md) came back clean. **It
+>   measured the arm where the bug is invisible.** Production is Postgres.
+>
+> **Nothing a reader owns is damaged**, and that is why it has gone unnoticed: a comment or a
+> bookmark needs a text selection, and these blocks have no text to select; `assertIdsCarried` needs
+> only *one* id to survive, so it never fires. block-ids.md half-knows this already — *"The one
+> casualty is an `<hr>`, which has neither text nor a `src` to match on and which nobody
+> annotates"* — but frames it as one block on one article rather than as unconditional churn on half
+> the corpus.
+>
+> **Recommended fix, not taken here, because id assignment is not something to change in a review
+> round.** Give such a block the pass-one key `` `e:${tag}` `` instead of `null` — one line at the
+> `src` fallback in `exactKey`. Pass one already consumes duplicates in document order, which is the
+> right semantics and the same rule that keeps every repeated `<li>Yes</li>`'s id today. Measured on
+> a scratch copy: **218 re-mints → 0, and the Postgres freshness arm 17-not-done → 0**. The
+> catastrophic outcome — a rollout that re-mints across every stored article — does not arise, because
+> previous and candidate blocks are keyed by the same new function and pair up; that is what the 0 is.
+> What it concedes is positional matching for blocks where position is the only signal, which costs
+> nothing when nothing can be anchored to them. Ranked against three alternatives: **not** an ordinal
+> inside the key (that is the sequential-id failure block-ids.md § *Why random and not sequential*
+> exists to refuse, and it buys nothing option 1 does not); **not** a structural digest of the html
+> (needs `spya-` ids normalised out first, and getting that wrong re-mints every empty block on
+> rollout); and neighbour anchoring is the most faithful and by far the most machinery, for blocks
+> nothing anchors to. Second, separately and after it: stop emitting the invisible ones at all — the
+> 159 empty `p`/`li`/`figure`, not the `<hr>`s, which are a rule the reader can see. That one costs a
+> **one-time** fingerprint flip on every stored article containing one, so it needs a deliberate
+> re-run rather than being discovered.
+>
+> **A free side finding.** The single filesystem-arm failure is `mkdocs-tabs`, and it is a different
+> bug: re-splitting stage 3's own output loses every block's `context: {type:"callout"}`, because
+> `scrubReserved(doc, CONTEXT_ATTRS)` strips the transport before serialising. On the filesystem a
+> stage-3 re-run therefore drops callout context silently. Worth its own ticket.
+
+> **A decision was taken here and then retracted, and both halves are worth keeping.**
+>
+> The first version of `codeText` **deleted blank lines**, on this argument: `articleWithIds` and
+> `articleText` ([`src/article-prompt.ts`](../../src/article-prompt.ts)) join blocks with `"\n\n"`,
+> so a code block carrying a blank line splits itself in two inside every prompt we send, the second
+> half arrives with no `[i] spya-…:` prefix, and Ideas, Quiz and Sketch — which cite block ids as
+> evidence — would hang it on the block that follows. Nothing raises.
+>
+> **That argument does not survive, and GPT Sol checked it rather than arguing with it (2026-09-05).**
+> Nothing in production parses those prompts by splitting on `"\n\n"`; and Ideas and Quiz, the two
+> stages that cite an id *as evidence*, validate that the text they quote occurs in the block they
+> cite — so the misattribution described is rejected there. What the deletion cost was real and
+> measured: **223 of 674** corpus code blocks have an internal blank line, and **153 of Whitman's 400
+> poem blocks** lost their stanza breaks. A stanza break is meaning. Python layout, diff context and
+> preformatted prose were damaged the same way.
+>
+> **So blank lines are kept.** The residual risk is Sketch, which validates the cited id alone: a
+> model could in principle attribute the second half of a split block to the following id. That is
+> recorded in `codeText` rather than designed around, because the fix for it — if it ever shows up in
+> a Sketch — is one change to the framing in `articleWithIds`, and not a second mutilation of the
+> canonical text that four consumers read. **The lesson is the shape of the mistake**: a prompt-side
+> worry was paid for out of the extracted text, which is the artefact everything else depends on.
+>
+> Keeping them needed one thing the deleting version did not: **the inserted line break has to be
+> idempotent.** `codeText` puts a separator in front of every block-level element, because a
+> highlighter that wraps each line in its own `<div>` leaves no newline in the text at all — and
+> markup indented as `<div>a</div>\n<div>b</div>`, or nesting a per-line `<div>` inside a wrapper
+> `<div>`, would then fabricate a blank line the page never showed. A run of break signals now counts
+> as **as many breaks as it has real newlines, and at least one**. Pinned in
+> `tests/block-text-fidelity.test.ts`.
+
+**The `hashBlocks` consequence, worked out rather than waved at.** Two things change at once for a
+code-bearing article: the text, and the *canonical form*. `hashBlocks` routes any block whose text
+holds a tab or newline to the framed `spya-blocks/3` branch, and its own comment said "ordinary
+extraction cannot reach it — `extractText` collapses whitespace". That is now false and the comment
+says so. Nothing had to change in the function, which is the argument for having written that guard
+at all: it was defended as insurance against a second importer, and what arrived was a change to the
+first one.
+
+Nothing goes stale until an article is **re-extracted** — `text` is a stored column, never recomputed
+on read — so there is no backfill to run and no migration. What re-runs when one is:
+
+| | on a fingerprint mismatch |
+|---|---|
+| glossary, tweets, arc, quotes, ideas, sketch, quiz, timeline, and `illustrated` behind sketch | the step re-runs — **paid model calls** |
+| `assets` | re-fetches every image |
+| article vectors, `similar`, `projection` | in-memory cache miss, re-embeds — ~$0.0015 and 4.5s on a 360-block article |
+| saved searches, referee criteria, referee claims, the metadata page's ticks | **reported stale, nothing regenerates** — correct as is |
+
+**And one refusal, which was the only sharp edge, and is now closed.** `reasonsNotToPublish`
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) refuses to publish when hierarchy's
+`input_hash` disagrees with the current blocks hash, and `hierarchy` has **no `stamp`**, so it does
+not re-run on its own. A normal `force: ["extract"]` or `force: ["blocks"]` drags it along via
+`cascadeForce`; a job of `{ steps: ["blocks"] }` does not, because `cascadeForce` only names steps
+**already in the job**. On a code-bearing article that job would run, succeed, and leave the article
+unpublishable until somebody worked out that the fix was to re-run a step they had never named.
+
+This plan first called that a hand-built job. GPT Sol checked and it is not: `POST /api/jobs` takes
+any subset of `STEP_ORDER`, so **`{ steps: ["blocks"] }` is production-reachable through the jobs
+API** by anybody with a session — no first-party UI path issues one, which is why nothing had hit it.
+[`unrunnableStepPlan`](../../src/jobs.ts) now refuses that combination in `enqueue`, with a 400 that
+names the missing step, **rather than quietly adding a `hierarchy` run** — that would spend the
+slowest model call in the pipeline (228s measured) on behalf of a caller who did not ask for it, and
+make the job that ran different from the job that was requested. The pure rule and its wiring are
+asserted separately in `tests/jobs.test.ts`, the second because a guard nothing calls is the shape of
+half the bugs in this repo.
+
+The three pinned literal hashes (`21189fa4eb0bceca` in `tests/source-hash-roles.test.ts` and
+`tests/supplement.test.ts`, and `example/labels.json`) are safe and were checked rather than assumed:
+`example/blocks.json` holds only `p` and `figure`, and no corpus article's `blocks.json` contains a
+`pre`. `tests/fixture-corpus.test.ts` would go red the day one is regenerated without its
+`labels.json`, which is the right behaviour and is the guard for the refusal above.
+
+**2. Zero-width-only blocks — fixed, narrowly.** Sol's premise held: `<p>   </p>` was already
+`gistable: false`, because `extractText` collapses and trims. `<p>&#8203;</p>` was not, because a
+zero-width space is not `\s`. [`isBlank`](../../src/blocks.ts) now ignores the invisible family —
+soft hyphen, U+200B–U+200F, U+2060–U+2064, U+FEFF — and nothing else: a block whose text is `€`, `→`
+or `1–0` is a block a reader can see, and a "has no letter or number" rule is the shape this repo has
+already been wrong with twice. **Zero blocks on 35 fixtures changed**, so this is exercised by its
+tests alone and by nothing on the corpus — *not exercised*, not *no regressions*.
+
+**Sol is right that it still renders a blank row.** `gistable: false` only adds an `opaque` class in
+[`TableView.tsx`](../../src/web/TableView.tsx); the row is still drawn. The block also still exists,
+which is correct — deleting it would take a block id out of the sequence. Making the row disappear is
+a rendering decision, deliberately not taken here, and pinned as an expectation so that whoever takes
+it changes a test rather than nothing.
+
+**3. Byline whitespace — fixed. The BBC half is answered, and the plan was wrong about it.**
+[`tidyMetaText`](../../src/extract.ts) collapses internal whitespace where the `Meta` is built, not
+inside `readArticle` — an instrument asking what Readability said should get what Readability said.
+Five fixtures change, all of them improvements:
+
+| | before | after |
+|---|---|---|
+| quanta-year-physics | `"By \n        \n            Natalie Wolchover\n        \n            \nDecember 17, 2024"` | `"By Natalie Wolchover December 17, 2024"` |
+| hacker-howto | `"Eric Steven Raymond\n    Thyrsus Enterprises\n    <esr@thyrsus.com>"` | `"Eric Steven Raymond Thyrsus Enterprises <esr@thyrsus.com>"` |
+| ar5iv-attention | `"Affiliation: Google Brain\n\nEmail: noam@google.com"` | `"Affiliation: Google Brain Email: noam@google.com"` |
+| npr-ozy-style-feature | `"by \n  Bec Roldan"` | `"by Bec Roldan"` |
+| plos-biology | `"Leonard P. Freedman   ,"` | `"Leonard P. Freedman ,"` |
+
+> **`"Visual Journalism teamBBC News"` is one Readability byline, not our byline glued to our
+> siteName** — so the fix the trawl implied would have been a fix to the wrong thing. Established by
+> probing live BBC articles, since the trawl's own page is not committed and could not be located.
+> BBC sets a contributor's **name and their role in adjacent spans with no whitespace between them**,
+> inside `Byline-styles__ContributorsContainerStyled`; that container's `textContent` reads
+> `"James GallagherHealth and science correspondent"` on a page serving right now. Meanwhile BBC
+> hands us `siteName: "BBC News"` **separately and correctly**, and a team-authored BBC piece today
+> simply gets `byline: "BBC News"` — a different string. Across 50 current BBC articles not one byline
+> was run together (the one flagged was `"Phil McNulty"`, a false positive on the case-change test,
+> which is the whole argument against a case-change rule). **So no separator is inserted anywhere.**
+> If this is worth fixing it is a markup recogniser in stage 2 — *rule on markup* — and it belongs to
+> stage C.
+>
+> **Not reproduced:** the exact `"Visual Journalism teamBBC News"` string. The trawl's raw HTML for it
+> is not in the repo and searching did not find the page. The mechanism above is measured; that
+> specific string is inferred from it.
+
+**And the collapse itself was wrong for half the world's scripts.** `/\s+/gu → " "` is right for a
+script that separates its words with spaces and wrong for one that does not: a Japanese publisher who
+sets a contributor's name and their role on two source lines hands Readability a newline between two
+ideographs, and flattening it yields `"田中太郎 記者"` — a word gap the page never showed anybody, in
+a name. `tidyMetaText` now follows the **CSS Text 3 segment-break rule**, which is what a browser does
+with the same bytes: a line break between two CJK characters collapses to nothing, a break with Latin
+on either side keeps its space, and a space the publisher actually typed stays a space. Han,
+Hiragana, Katakana, Hangul, CJK punctuation and the fullwidth forms — not "everything non-Latin". RTL
+text and bidi controls are deliberately untouched, because Arabic and Hebrew space their words; Sol
+checked that half in the same review and it was already right. Tested in
+`tests/extract-byline.test.ts`.
+
+The function's scope is now stated where it lives, too: **it is for a single-line metadata field and
+nothing else.** It flattens every line break it finds, which is what a library card wants and what
+prose never does — and the generic name was an invitation to reach for it from the wrong place.
+
+**4. Source-id provenance — built, and the coverage is better than 260827ab's floor because there is
+a fallback.** `readArticleWithProvenance` stamps every source element, hands Readability the identity
+`serializer`, and keeps the stamped source alive by giving Readability a re-parsed copy of it —
+Readability mutates what it is given, so the source could not otherwise be looked up in.
+`sourceRefOf` resolves a node to `direct`, `descendant`, `ancestor` or `none`, and the *how* is
+always reported.
+
+**Stamping is inert on all 35 fixtures** — and *inert* now means what the word says. The check takes
+the stamped run's **serialised HTML**, removes the one attribute the instrument adds
+(`withoutSourceRefs`), and compares it byte-for-byte against what the shipping `readArticle` returns
+for the same bytes. 0 mismatches over the whole corpus. That has to be checked because Readability
+weights `class` and `id` when it scores a node.
+
+> **It said `yes` for a week without meaning it.** The first version compared whitespace-normalised
+> `textContent`, which cannot see a wrapper element, an attribute, a reordering or a space — and GPT
+> Sol demonstrated that by prepending `"\n\n"` to the extracted HTML in the implementation and
+> watching both the column and `tests/extract-provenance.test.ts` pass anyway. The test named itself
+> "byte-identical" while doing nothing of the kind, which is
+> [silent-success.md](../reusable/silent-success.md) inside the gate written to prevent it. Both the
+> column and the test have now been watched go red against that exact mutation, and the test runs on
+> a `<table>`/`<font>` page as well as a well-behaved one, so the rebuild path is covered too.
+>
+> **The second gate had the same disease.** "The stamped source survived the parse" compared the
+> source document with itself — two numbers read off one object, written by one loop, true whatever
+> happened. `readArticleWithProvenance` now returns `sourceHtml`, the bytes taken at the moment
+> Readability is handed its *copy*, and both the eval and the test compare the document against that.
+> Watched red against the mutation it exists for: delete the re-parse and give Readability the stamped
+> document itself.
+
+Over 35 fixtures and 83,091 output elements: **98.7% direct, 100.0% mapped, 2 unmapped.** Per-fixture
+(`npx tsx evals/extraction/provenance.mts`), the rows that matter:
+
+| fixture | output els | direct | mapped | distinct ids | worst fan-out |
+|---|---:|---:|---:|---:|---:|
+| **pg-greatwork** | 404 | **42.6%** | 100.0% | **172** | **217** |
+| pmc-article | 5 | 40.0% | 100.0% | 2 | 3 |
+| medium-about | 16 | 62.5% | 100.0% | 10 | 4 |
+| blogger-bldgblog | 923 | 71.6% | 100.0% | 661 | 29 |
+| npr-ozy-style-feature | 700 | 91.9% | 100.0% | 643 | 3 |
+| python-docs-itertools | 4,726 | 100.0% | 100.0% | 4,725 | 2 |
+| rfc9110 | 13,652 | 98.9% | 100.0% | 13,504 | 2 |
+| distill-momentum | 18,629 | 99.8% | 100.0% | 18,596 | 3 |
+
+260827ab's **40.9%** on Paul Graham reproduces at **42.6%** on our capture, which is the honest
+corroboration. **The last two columns are why `mapped` is not the headline.** A 100% mapped rate
+would have been read as 100% provenance; on pg-greatwork 217 of 404 output nodes resolve to *one*
+source element, and the 404 nodes hold only 172 distinct ids between them. There the fallback is
+answering "somewhere inside this", and the text matcher is the better instrument — run both and
+report where they disagree, exactly as 260827ab said. Everywhere else the fan-out is 2 or 3, i.e. a
+generated wrapper and the element it wraps, which is the benign case.
+
+Two narrowings, both Sol's and both right. **`mapped` is a bound, not a provenance figure** — read it
+as "located within", never as "came from", and read `distinct` and `fanout` beside it or don't quote
+it. And **"every source element" means every element `querySelectorAll("*")` reaches**: a
+`<template>`'s content lives in its own fragment and is not stamped. Left that way — Readability does
+not lift `<template>` content into an article — but the claim is narrowed in `stampSourceIds` rather
+than left for somebody to discover.
+
+**One caveat that is not fixed, recorded so the numbers are not over-read.** These rows are measured
+on Readability's live DOM, and what stage 2 stores is that DOM *serialised and re-parsed*. Nine
+fixtures change element structure across that round trip; Sol measured pg-greatwork's `404 / 172
+direct = 42.6%` becoming `401 / 169 = 42.1%` after a storage-equivalent reparse. The instrument is
+answering "what did Readability drop?", which is the question it was built for; an instrument about
+*stored* HTML would have to reparse first.
+
+The attribute is registered in [`src/reserved.ts`](../../src/reserved.ts) as `sourceRef`, scrubbed
+before stamping like every other member of that namespace, and **no shipping code path calls any of
+this**: `runExtract` → `readArticle`, which does not stamp.
+
+**5. The id-churn counter** — `idChurn(before, after)` in [`src/blocks.ts`](../../src/blocks.ts),
+returning `before`/`after`/`carried`/`reminted`/`lost` rather than a ratio, because `carried` alone
+means nothing without a denominator. It is instrumentation, not a guard: `IdsNotCarried` already
+refuses a run that kept none, and this only counts, so stage D can report churn without a threshold
+in it. It is what proved the `<pre>` change costs nothing.
+
+**6. The compatibility test that tested nothing.** "Does not churn a code block's id across a
+re-extraction" ran the new extraction **twice** — which is a much easier question than the one the
+change actually has to survive, and it never supplied a legacy previous block whose text had been
+whitespace-collapsed. Sol proved the hole: with the whitespace normalisation removed from `exactKey`
+and `legacyKey` in a temporary copy, that test stayed green while a constructed legacy case re-minted
+both its ids. `tests/block-text-fidelity.test.ts` now carries a real old-to-new fixture — the same
+blocks, the same `html`, and a `text` flattened the way the pre-change `extractText` flattened it —
+with **repeated** code, because a lone block would still carry on the folded key and so cannot tell a
+working compatibility path from a broken one. Watched red against Sol's exact mutation.
+
+**Not done, and deliberately:** table row separators (out of scope, and named above as needing a
+contract of its own); anything that makes the blank zero-width row disappear from the reading view;
+any migration or database write.
+
 ### B — The corpus, the golds, and a scorer that has been seen to fail
 
 ~12 new fixtures from the trawl shortlist, hashed and committed with licences, chosen against the

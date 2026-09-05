@@ -252,6 +252,17 @@ Measured on the test article, re-extracted *and* with a new paragraph inserted a
 **138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to
 match on and which nobody annotates.
 
+> **That last sentence understates it, and the understatement matters.** Every text-less block with
+> no `src` anywhere in its html keys as `null` in all three passes, so it is in no bucket on either
+> side and **re-mints on every run over byte-identical input** — not one `<hr>` on one article, but
+> 218 blocks across 17 of the 35 corpus fixtures (122 `<p>`, 59 `<hr>`, 30 `<li>`, 7 `<figure>`).
+> Nothing a reader owns is lost, for exactly the reason above. What does move is the *fingerprint*:
+> `hashBlocks` includes the block id, so half the corpus reports a changed article after a
+> re-extraction that changed no words — and under Postgres those same articles can never satisfy
+> `blocksMatchTheirHtml`, so the `blocks` step never reports itself done. Pre-existing since
+> `84ce16bf` (2026-08-24). Measured, with the one-line fix and the alternatives weighed, in
+> [260904e § A](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md).
+
 **A PDF re-read costs more than a web page re-extraction, and it is measured.** Re-running stage 2 on
 the *same PDF with the same model and the same prompt*, then stage 3, keeps **32 of 43 ids and mints
 11**. Readability run twice over the same HTML produces the same paragraphs; a model run twice over

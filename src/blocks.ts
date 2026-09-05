@@ -158,21 +158,177 @@ function ownContent(el: Element): Element {
   return clone;
 }
 
+/** The separator insertion, shared by both branches of `extractText`. */
+const BOUNDARY_TAGS = "p,div,br,li,h1,h2,h3,h4,h5,h6,blockquote,figcaption,td,th,tr";
+
+/**
+ * The mark `codeText` puts where a line break belongs, before deciding whether
+ * one is already there.
+ *
+ * A NUL, because the HTML parser rewrites any literal U+0000 in a document to
+ * U+FFFD before we ever see it — so this cannot collide with the page's own
+ * text, which a sentinel of any printable character could. It never survives:
+ * every one of them is consumed by the collapse below.
+ */
+const INSERTED_BREAK = "\u0000";
+
+/**
+ * A run of break signals — inserted marks, the source's own newlines, and the
+ * trailing spaces between them — taken together, because how many line breaks
+ * they add up to cannot be decided one at a time.
+ *
+ * Leading indentation is deliberately outside the run: `[ \t]*` appears only
+ * *before* a newline or a mark, never after one, so `<pre>if x:<br>    return`
+ * keeps its four spaces.
+ */
+const BREAK_RUN = new RegExp(
+  `(?:[ \\t]*[\\n${INSERTED_BREAK}])*[ \\t]*${INSERTED_BREAK}(?:[ \\t]*[\\n${INSERTED_BREAK}])*`,
+  "gu",
+);
+
+/**
+ * **In a `<pre>`, whitespace is the content**, so this branch exists.
+ *
+ * `extractText` below ends `.replace(/\s+/g, " ")`, which is right for prose —
+ * a newline in the markup is not a newline in the sentence — and destroys the
+ * only structure code has. It had no `<pre>` branch until 2026-09-05, though
+ * `classify` has known since it was written that `PRE` is `kind: "code"`.
+ *
+ * **545 blocks changed** when this branch was added, over the 21 fixtures that
+ * had a pre-change baseline to diff against (11,656 blocks along the shipping
+ * route; evals/extraction/block-census.mts --cut pre-0904): RFC 9110's
+ * request/response examples and its ABNF as one unbroken line each, man(2)'s
+ * column layout, and all 400 of Whitman's poems, which Project Gutenberg sets in
+ * `<pre>`. `html` was intact throughout, so the reading view was fine
+ * (src/web/TableView.tsx renders `block.html`) and the damage was to everything
+ * that reads `text`: word counts, search, every AI prompt.
+ *
+ * **Blank lines are kept, and this paragraph is here because they briefly were
+ * not.** The first version of this function filtered them out, arguing that
+ * `articleWithIds` and `articleText` (src/article-prompt.ts) join blocks with
+ * `"\n\n"`, so a block carrying a blank line would split itself in two inside a
+ * prompt and the second half would arrive with no `[i] spya-…:` prefix for a
+ * citing stage to hang it on. **That argument was wrong and is retracted** (GPT
+ * Sol, 2026-09-05): nothing in production parses those prompts by splitting on
+ * `"\n\n"`, and Ideas and Quiz — the two stages that cite a block id as evidence
+ * — validate that the text they quote occurs in the block they cite, so the
+ * misattribution cannot land there. What the deletion cost was real and
+ * measured: 223 of 674 corpus code blocks have an internal blank line, and 153
+ * of Whitman's 400 poem blocks lost their stanza breaks. A stanza break is
+ * meaning.
+ *
+ * **The residual risk, recorded rather than designed around:** Sketch validates
+ * the cited id alone, so a model could in principle attribute the second half of
+ * a blank-line-bearing block to the id that follows it. If that ever shows up in
+ * a Sketch, the fix is one change to the framing in `articleWithIds` — indent or
+ * fence the continuation lines — and not a second mutilation of the canonical
+ * text, which four other consumers read.
+ *
+ * **Rooted at the `<pre>` itself, and no wider — which leaves two shapes still
+ * broken, named here so they are a limitation rather than a surprise.**
+ *
+ *  - **A `<pre>` inside a `<blockquote>`** never reaches this function. The
+ *    blockquote is terminal (`collectElements` below does not descend into one),
+ *    so quoted code takes the prose branch and loses its indentation and its
+ *    line breaks together. Pinned in tests/block-text-fidelity.test.ts so that
+ *    whoever fixes it changes an expectation rather than nothing.
+ *  - **A `<pre>` containing a `<table>`** gets a break before every `td`, `th`
+ *    and `tr` — so cells land on their own lines, the row structure is gone, and
+ *    text following the table is glued to the last cell, because nothing inserts
+ *    a break *after* an element.
+ *
+ * Fixing either properly means giving `extractText` a real recursive
+ * layout-aware walk instead of a flat separator insertion. Not today.
+ *
+ * The narrow fix is the one that can be shown inert: over the same corpus,
+ * **0 non-code blocks changed** and nothing's tag, kind or `gistable` moved —
+ * diffed before and after rather than argued.
+ *
+ * **Ids do not churn, and that had to be checked rather than assumed**, because
+ * `text` is what a block is matched on across a re-extraction. `exactKey`
+ * normalises whitespace itself before hashing (`/\s+/gu` → `" "`), so the key is
+ * computed from the collapsed form either way and every id carries. Pinned in
+ * tests/block-text-fidelity.test.ts. **`hashBlocks` is a different matter** and
+ * does change for every code-bearing article — see the plan doc, § A.
+ */
+function codeText(el: Element): string {
+  const clone = el.cloneNode(true) as Element;
+  /* A line break inside a `<pre>` can be spelled three ways: a real newline in
+     the text (which needs nothing), a `<br>`, or one element per line, which is
+     what every syntax highlighter emits. The last two carry no newline at all,
+     so `textContent` alone would glue `alpha` to `beta`. */
+  for (const n of Array.from(clone.querySelectorAll(BOUNDARY_TAGS))) {
+    n.insertAdjacentText("beforebegin", INSERTED_BREAK);
+  }
+  return (
+    (clone.textContent ?? "")
+      .replace(/\r\n?/gu, "\n")
+      /* **An inserted break where the source already had one is the same
+         break**, and two of them at the same position are still one.
+
+         Markup indented as `<div>a</div>\n<div>b</div>` carries a real newline
+         between the divs, and a highlighter that nests a per-line `<div>` inside
+         a wrapper `<div>` opens two elements at one spot. Inserting
+         unconditionally would put a blank line into the reader's prompt that the
+         page does not show and the author did not write — which, now that blank
+         lines are kept, is no longer harmlessly filtered out downstream.
+
+         So a run counts as **as many breaks as it has real newlines, and at
+         least one**. The cost is a `<br>` written next to a literal newline,
+         which reads as one break rather than two: rare, and the safer of the two
+         directions to be wrong in. */
+      .replace(BREAK_RUN, (run) => "\n".repeat(Math.max(1, (run.match(/\n/gu) ?? []).length)))
+      /* **Blank lines at the ends are markup; blank lines in the middle are
+         content.** `</code>\n</pre>` is how a page is indented, not something
+         the author wrote. Trimmed line-wise rather than with `.trim()`, which
+         would take the first line's indentation off — the thing this function
+         exists to keep. */
+      .replace(/^(?:[ \t]*\n)+/u, "")
+      .replace(/(?:\n[ \t]*)+$/u, "")
+  );
+}
+
 /**
  * Text with block boundaries preserved as spaces. Bare `textContent` runs
  * adjacent blocks together — a blockquote of two paragraphs comes out as
  * "…sentence one.Sentence two…" — which corrupts word counts and any gist
  * written from it.
+ *
+ * `<pre>` takes the other branch; `codeText` above says why.
  */
 function extractText(el: Element): string {
+  if (el.tagName === "PRE") return codeText(el);
   const clone = el.cloneNode(true) as Element;
-  for (const n of Array.from(
-    clone.querySelectorAll("p,div,br,li,h1,h2,h3,h4,h5,h6,blockquote,figcaption,td,th,tr"),
-  )) {
+  for (const n of Array.from(clone.querySelectorAll(BOUNDARY_TAGS))) {
     n.insertAdjacentText("beforebegin", " ");
   }
   return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
 }
+
+/**
+ * **Characters that take up no room and say nothing** — and a `<p>` holding
+ * only these is an empty paragraph however many of them there are.
+ *
+ * `describeBlock` asked `text.length === 0`, which is true of `<p>   </p>` —
+ * `extractText` collapses and trims — and **false of `<p>&#8203;</p>`, because
+ * a zero-width space is not `\s`. One block of one invisible character then went
+ * to the ToC, the summaries and the granularity-zoom tree as content. One French
+ * Wikipedia page in the trawl carries 181 empty paragraphs.
+ *
+ * Deliberately only the invisible family, not "has no letter or number": a
+ * block whose text is `€`, `→` or `1–0` is a block a reader can see, and
+ * 260830at's ≤6-character rule is exactly the shape this repo has already been
+ * wrong with twice. Soft hyphen is included because it renders as nothing unless
+ * the line happens to break there; the bidi marks are included because a run of
+ * them alone is a formatting artefact, never a passage.
+ *
+ * `gistable` is not in `hashBlocks` (src/source-hash.ts), so changing this
+ * invalidates no cached artefact — but for the same reason it will not
+ * *re*-classify an article until something else re-runs stage 3.
+ */
+const INVISIBLE = /[\u00AD\u200B-\u200F\u2060-\u2064\uFEFF]/gu;
+
+const isBlank = (text: string): boolean => text.replace(INVISIBLE, "").trim().length === 0;
 
 function classify(el: Element): { kind: BlockKind; level?: number } {
   const tag = el.tagName;
@@ -209,7 +365,7 @@ function describeBlock(
     kind = "media";
     gistable = false;
     note = "image-only paragraph";
-  } else if (text.length === 0) {
+  } else if (isBlank(text)) {
     gistable = false;
     note = "empty";
   } else if (CAPTION_MARKER.test(text)) {
@@ -393,6 +549,52 @@ function collectElements(root: Element): Element[] {
   };
   walk(root);
   return out;
+}
+
+/**
+ * **How many ids survived** between two runs of stage 3 over the same article.
+ *
+ * The one number that says what a change to extraction, to `extractText` or to
+ * a repair pass actually costs, because a re-minted id is not a cosmetic
+ * difference: every comment, highlight, saved reading position, ToC row and
+ * search hit addresses text by block id (docs/project/block-ids.md), and a
+ * block that comes back with a fresh one has quietly taken all of them with it.
+ * Nothing raises. So this is instrumentation, deliberately separate from
+ * `SplitResult.stats` — those are one run's own counters and cannot compare two.
+ *
+ * `IdsNotCarried` further down is the *guard* on the same quantity, and it asks
+ * a different question: it refuses a run that kept none. This one only counts,
+ * so an eval can report a number without a threshold in it — which is what
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md needs
+ * before it can argue about whether a repair is worth its churn.
+ *
+ * `Pick<Block, "id">`, not `Block`, so a bare `{ id }` row out of Postgres and a
+ * full block list both satisfy it and neither caller has to widen a query.
+ *
+ * - `carried` — in both runs.
+ * - `reminted` — in the second run only: a block whose text or tag changed
+ *   enough that `exactKey` and `foldedKey` both refused to match it.
+ * - `lost` — in the first run only: the passage is gone from the article, or it
+ *   merged into another block.
+ *
+ * `reminted + lost` is the churn; `carried` alone means nothing without
+ * `before`, which is why all five fields are returned rather than a ratio.
+ */
+export function idChurn(
+  before: readonly Pick<Block, "id">[],
+  after: readonly Pick<Block, "id">[],
+): { before: number; after: number; carried: number; reminted: number; lost: number } {
+  const was = new Set(before.map((b) => b.id));
+  const now = new Set(after.map((b) => b.id));
+  let carried = 0;
+  for (const id of now) if (was.has(id)) carried += 1;
+  return {
+    before: was.size,
+    after: now.size,
+    carried,
+    reminted: now.size - carried,
+    lost: was.size - carried,
+  };
 }
 
 export interface SplitResult {

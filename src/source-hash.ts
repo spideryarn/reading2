@@ -126,12 +126,19 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
      (`88b65f848068e592` from both, before this line). Two different articles
      each reporting that nothing has changed is the whole failure this function
      exists to prevent.
-     Ordinary extraction cannot reach it — `extractText` in src/blocks.ts
-     collapses whitespace, and across data/ not one of 890 blocks in 8 articles
-     carries a tab or a newline — but imported blocks do not go through it, and
-     a guard that depends on a normalisation two modules away is a guard that
-     ends the day a second importer is written. Routing the ambiguous input to
-     the framed form costs nothing on the corpus, by that same measurement.
+     **Ordinary extraction reaches it now, and that is the point of the
+     guard.** This paragraph used to say the opposite — "ordinary extraction
+     cannot reach it, `extractText` in src/blocks.ts collapses whitespace, and
+     across data/ not one of 890 blocks in 8 articles carries a tab or a
+     newline" — and that stopped being true on 2026-09-05, when `extractText`
+     grew a `<pre>` branch so that a code block keeps its lines. Every
+     code-bearing article now takes the framed form. Nothing had to change here,
+     which is the whole argument for having written the guard rather than
+     relying on the normalisation: it was defended as insurance against a second
+     importer, and what actually arrived was a change to the first one. The
+     consequence is a fingerprint change on every article with a `<pre>` — ids
+     carry, so nothing is orphaned, but derived artefacts recompute; see
+     docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § A.
      GPT Sol, 2026-08-29, who also caught that a compatibility test comparing a
      hash against a clone of its own input is tautological — the pin in
      tests/supplement.test.ts is the literal hex. */

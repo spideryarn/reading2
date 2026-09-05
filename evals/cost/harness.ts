@@ -371,7 +371,7 @@ const ON_DEMAND_MODES: readonly StepName[] = PAYING_STEPS.filter((s) => s !== "h
 export const ALL_MODES = ON_DEMAND_MODES;
 
 /**
- * `--steps fetch,extract,blocks` or `--modes arc,ideas` — a comma-separated
+ * `--steps fetch,extract,blocks,hierarchy` or `--modes arc,ideas` — a comma-separated
  * list, checked against `STEP_ORDER` so a typo is a message rather than a job
  * that quietly runs the default five and a bill nobody expected.
  *
