@@ -729,7 +729,14 @@ function Excerpt({ row }: { row: DebateRow }) {
       <blockquote className="dbt-card-quote">“{row.sourceQuote}”</blockquote>
       {/* Group one's whole claim is that this page is about this piece, and this
           is the witness for it: words from the source's own extract in which it
-          names the article. A row without one cannot exist in that group. */}
+          names the article. A row without one cannot exist in that group.
+
+          **This sentence became true on 2026-09-05** (Sol's F24). Until then the
+          stage only checked that the words were somewhere in the extract, so a
+          genuine quotation about something else was printed under "It names this
+          article". `namesArticle` (src/debate.ts) is what makes the claim: the
+          witness has to carry the article's address, its title, or a short title
+          with the byline. */}
       {reference && (
         <p className="dbt-card-ref">
           It names this article: “{reference}”
