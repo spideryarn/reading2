@@ -95,6 +95,29 @@ the bridge at the top of `tailwind.css` maps `--color-muted` to `--muted`, the s
 `tw:text-muted-foreground` is. All 88 call sites in `src/web` are already the right one, so that
 check arrives with a clean baseline, which is the only time one is cheap to add.
 
+### And the other direction: a utility nothing generates
+
+[`tests/tailwind-utilities-resolve.test.ts`](../../tests/tailwind-utilities-resolve.test.ts) is the
+complement. `css-tokens` catches a *stylesheet* reading a token nothing defines; this catches a
+*component* writing a `tw:` class nothing compiles — **a Tailwind v4 utility whose theme key is
+missing emits no rule at all**, so the class stays on the element, the build succeeds, and the
+property falls back to its own default: text inherits, a background goes transparent, a border
+colour becomes `currentColor`. Every one of those looks designed rather than broken. Four names were
+missing from the bridge for weeks and twenty utilities were dead, including the whole visual
+treatment of `SharedNotice`
+([260905f](../plans/260905f-twenty-tailwind-utilities-that-compiled-to-nothing.md)).
+
+Every input comes from Tailwind itself — its `compile()` over the real `tailwind.css`, its own
+scanner over the `@source` that file names, its resolver per candidate — because the alternative is
+a hand-written model of which utilities are colours, and `text-sm`, `border-t`, `divide-y` and
+`bg-transparent` all disprove it. **A test that has to be taught the answer can be taught the wrong
+one**, which is how the bug got in.
+
+Adding a theme key is not free: **`--color-x` enables every colour-shaped utility, not the one you
+wanted**. `--color-rule` makes `tw:text-rule` legal, and that is words in a hairline colour. The
+`tw:text-` half of `css-tokens.test.ts` is what stops it, so a new name in the bridge means checking
+that guard covers it.
+
 **The file's header says what it does not prove**, and that matters more than the list above.
 It is a text scanner: it cannot see scope or reachability, cannot see what is actually behind the
 text, and cannot judge a fallback that is present and still wrong. Each half also asserts it can

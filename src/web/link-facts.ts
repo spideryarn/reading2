@@ -79,6 +79,22 @@ export interface LinkFacts {
   loading: boolean;
   library: LibraryMatch | null;
   wiki: WikiSummary | null;
+  /**
+   * **Have we actually got the shelf, or is `library: null` just ignorance?**
+   *
+   * `library` is null in three different situations — still loading, the
+   * request failed, and the page genuinely is not on the shelf — and until
+   * 2026-09-05 nothing here could tell them apart. That was harmless while the
+   * only consequence was a section not being drawn. It stopped being harmless
+   * when the card grew a button that spends a metered ingest slot: on the first
+   * hover of a session, before `/api/library` lands, *every* link looked
+   * absent, so the card would offer to add an article the reader already owns —
+   * the one you are reading included. GPT Sol, 2026-09-05, finding P1-1.
+   *
+   * False means **we do not know**, and the honest thing to do with a metered
+   * action under uncertainty is not to offer it.
+   */
+  shelfKnown: boolean;
 }
 
 export interface LibraryMatch {
@@ -87,7 +103,7 @@ export interface LibraryMatch {
   self: boolean;
 }
 
-const NOTHING: LinkFacts = { loading: false, library: null, wiki: null };
+const NOTHING: LinkFacts = { loading: false, library: null, wiki: null, shelfKnown: false };
 
 /**
  * How long either lookup gets before it counts as having found nothing.
@@ -132,12 +148,66 @@ function deadline(): AbortSignal | undefined {
  * mounted card and the point is that all of an article's links share one
  * request.
  *
- * It is not refreshed. An article added in another tab during this reading
- * session will not be matched until reload, which is a stale *absence* — the
- * card falls back to the ordinary one and says nothing wrong.
+ * It is not refreshed **on its own**. An article added in another tab during
+ * this reading session will not be matched until reload, which is a stale
+ * *absence* — the card falls back to the ordinary one and says nothing wrong.
+ *
+ * **The one thing that does refresh it is `refreshShelf`**, and it exists
+ * because a stale absence stops being harmless the moment this tab is the thing
+ * that made it stale: the card's own Add button puts a page on the shelf, and
+ * without this the same card would go on saying that page is not on the shelf
+ * until a reload. See `refreshShelf`.
  */
 let shelf: Map<string, LibraryEntry> | undefined;
 let shelfPending: Promise<void> | null = null;
+
+/**
+ * The first load asked and could not find out.
+ *
+ * Kept apart from `shelf` because the two answer different questions and the
+ * card now needs both: *should I still be spinning* (no — we asked and failed,
+ * and we are not going to re-ask this session) and *do I know what is on the
+ * shelf* (no). Before this, a failure installed an empty map, which said "the
+ * shelf is empty" to anything that looked — fine for a section that simply
+ * isn't drawn, wrong for a button that spends an ingest slot.
+ */
+let shelfFailed = false;
+
+/**
+ * The newest read of the shelf that has actually **installed** one.
+ *
+ * Two reads can be in flight at once — the lazy first load and a refresh after
+ * an add — and the network may answer them in either order. Without a guard the
+ * older answer can land second and put the pre-add shelf back, which is a card
+ * saying "not on your shelf" about an article the reader watched arrive.
+ *
+ * **Installed rather than started**, which is the correction to the first
+ * version of this: comparing against the newest read *started* meant a refresh
+ * that started and then failed permanently silenced an initial load that was
+ * still in flight — leaving `shelf` undefined with `shelfPending` already
+ * resolved, so `looking it up…` sat under every external link for the rest of
+ * the session and nothing would ever ask again. GPT Sol, 2026-09-05, P2-3.
+ */
+let shelfInstalled = 0;
+let shelfRead = 0;
+
+/**
+ * Told whenever the shelf map is replaced, so a card already on screen can
+ * upgrade itself.
+ *
+ * A bare listener set rather than a store: the answer is derived during render
+ * from the module cache (see `useLinkFacts`), so all a subscriber needs is a
+ * poke. `useLinkFacts` is the only subscriber today.
+ */
+const shelfWatchers = new Set<() => void>();
+
+/** Hear about a new shelf. Returns the unsubscribe. */
+function watchShelf(onChange: () => void): () => void {
+  shelfWatchers.add(onChange);
+  return () => {
+    shelfWatchers.delete(onChange);
+  };
+}
 
 /**
  * The shelf, keyed the way an href will be looked up.
@@ -174,30 +244,83 @@ export function shelfIndex(entries: readonly LibraryEntry[]): Map<string, Librar
   return index;
 }
 
-function loadShelf(): Promise<void> {
-  if (shelf) return Promise.resolve();
+/** `GET /api/library`, indexed — or null for "we could not find out". */
+function readShelf(): Promise<Map<string, LibraryEntry> | null> {
   // Spread rather than `{ signal: deadline() }`: `exactOptionalPropertyTypes`
   // is on, so an explicit `undefined` is not the same as an absent key.
   const stop = deadline();
-  shelfPending ??= apiFetch("/api/library", { ...(stop ? { signal: stop } : {}) })
+  return apiFetch("/api/library", { ...(stop ? { signal: stop } : {}) })
     .then((r) => readJson<{ articles: LibraryEntry[] }>(r))
-    .then((body) => {
-      shelf = shelfIndex(body.articles);
-    })
-    .catch(() => {
-      /* An empty shelf rather than a retry loop — including on the deadline
-         above, which is why that deadline stops the spinner rather than merely
-         cancelling a request. `apiFetch` has already put the failure in the
-         console; the card's job here is to stop saying it is looking and say
-         nothing about the library, which an empty map does.
+    .then((body) => shelfIndex(body.articles))
+    /* Null rather than an empty map, so the two callers below can differ on
+       what a failure means — and they do. `apiFetch` has already put the
+       failure in the console. */
+    .catch(() => null);
+}
 
-         **It is not retried for the rest of the session.** A reader who was
-         offline for one hover keeps the plain card until they reload, which is
-         the cost of not having a card that re-asks on every hover of every
-         link in a long article. */
-      shelf = new Map();
-    });
+/**
+ * Take a read of the shelf, and install it unless a newer read already has.
+ *
+ * @returns whether this read installed a shelf. False covers both "the request
+ *   failed" and "a fresher answer got here first", which are the same thing to
+ *   a caller: what it asked for did not happen.
+ */
+function applyShelf(): Promise<boolean> {
+  const read = ++shelfRead;
+  return readShelf().then((index) => {
+    if (index === null) return false;
+    // Strictly older than one already installed — see `shelfInstalled`.
+    if (read < shelfInstalled) return false;
+    shelfInstalled = read;
+    shelf = index;
+    shelfFailed = false;
+    for (const wake of [...shelfWatchers]) wake();
+    return true;
+  });
+}
+
+function loadShelf(): Promise<void> {
+  if (shelf || shelfFailed) return Promise.resolve();
+  /* **A failure is recorded rather than dressed up as an empty shelf**, and
+     the deadline above is why the record matters: the card has to stop saying
+     it is looking, and that used to be done by installing `new Map()` — which
+     also told everything downstream that the shelf was empty. `shelfKnown` on
+     `LinkFacts` is the honest version.
+
+     **It is not retried for the rest of the session.** A reader who was
+     offline for one hover keeps the plain card until they reload, which is
+     the cost of not having a card that re-asks on every hover of every
+     link in a long article. */
+  shelfPending ??= applyShelf().then((ok) => {
+    if (!ok && shelf === undefined) shelfFailed = true;
+    for (const wake of [...shelfWatchers]) wake();
+  });
   return shelfPending;
+}
+
+/**
+ * **Read the shelf again, because this tab just changed it.**
+ *
+ * The card's Add button queues an ingest, and when that ingest finishes the
+ * page really is on the shelf — but `shelf` above was filled once, on the first
+ * hover of the session, and nothing else ever writes to it. Without this the
+ * reader watches the job succeed in the card and the very same card goes on
+ * offering to add it, for as long as they stay on the page. That is the loop
+ * that makes the feature compound, so it is not optional decoration:
+ * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md § Stage 1.
+ *
+ * **A failure keeps the shelf we had.** There is a good map in hand by the time
+ * anything calls this, and replacing it on a blip would take "on your shelf"
+ * away from every other link in the article.
+ *
+ * **It answers whether it worked**, and that is not decoration: the caller
+ * remembers which completed jobs it has already spent a refresh on, so a
+ * refresh that failed must not be remembered as one that happened, or the card
+ * sits on *added to your shelf* and never becomes *read it here*. GPT Sol,
+ * 2026-09-05, P2-1.
+ */
+export function refreshShelf(): Promise<boolean> {
+  return applyShelf();
 }
 
 /* -------------------------------------------------------------- wikipedia -- */
@@ -345,10 +468,16 @@ export function useLinkFacts(link: LinkPreview | null, sourceUrl: string | null)
     const wake = () => {
       if (live) bump();
     };
+    /* **And when somebody else replaces the shelf**, which since the card grew
+       an Add button is something this very card can cause. A subscription
+       rather than a second `loadShelf()`: the map is already in memory by
+       then, so what is missing is only the render that reads it. */
+    const unwatch = watchShelf(wake);
     void loadShelf().then(wake);
     if (lang && title) void loadWiki({ lang, title }).then(wake);
     return () => {
       live = false;
+      unwatch();
     };
   }, [url, lang, title]);
 
@@ -358,8 +487,12 @@ export function useLinkFacts(link: LinkPreview | null, sourceUrl: string | null)
   const found = shelf?.get(key);
   const self = sourceUrl !== null && urlKey(sourceUrl) === key;
   return {
-    loading: shelf === undefined || (asked !== null && !wikiCache.has(asked)),
+    /* A shelf read that failed stops the spinner exactly as an empty one used
+       to — the reader is not left looking at `looking it up…` for ever — but it
+       no longer claims the shelf is empty. See `shelfKnown`. */
+    loading: (shelf === undefined && !shelfFailed) || (asked !== null && !wikiCache.has(asked)),
     library: found ? { entry: found, self } : null,
     wiki: (asked ? wikiCache.get(asked) : null) ?? null,
+    shelfKnown: shelf !== undefined,
   };
 }

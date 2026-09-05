@@ -172,6 +172,9 @@ export const PATHS: {
   illustrated: {
     illustrated: (at) => path.join(at.dir, "illustrated.json"),
   },
+  debate: {
+    debate: (at) => path.join(at.dir, "debate.json"),
+  },
 };
 
 
@@ -290,6 +293,14 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
      same, because the cap is a guard against a corrupt or hostile file rather
      than a size estimate. */
   quiz: { maxBytes: 32 * MiB, decode: json("quiz") },
+  /* Twenty-four rows at most across the two groups (`MAX_DIRECT_ROWS` +
+     `MAX_CLAIM_ROWS`, src/debate.ts), each a URL, a title and two or three
+     quoted passages — and every quoted passage is bounded by the search
+     engine's own extract, which `MAX_EVIDENCE_EXCERPT` caps at 8,000
+     characters. So a real one is tens of KB. The same ceiling as its
+     neighbours all the same, because the cap is a guard against a corrupt or
+     hostile file rather than a size estimate. */
+  debate: { maxBytes: 32 * MiB, decode: json("debate") },
 };
 
 /** The path for one `(step, kind)`, or a clear error rather than `undefined`. */

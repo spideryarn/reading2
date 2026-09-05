@@ -168,6 +168,7 @@ import {
   ListTree,
   MessageCircle,
   MessageCircleQuestionMark,
+  MessagesSquare,
   Paintbrush,
   PenLine,
   RefreshCw,
@@ -267,6 +268,15 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* A paintbrush beside the sketch's pen: the same argument, painted rather
      than drawn. docs/project/diagram.md § Illustrated. */
   illustrated: Paintbrush,
+  /* Two speech marks facing each other: the one stage whose artefact is other
+     people's words rather than a reading of these ones.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+
+     **The only line of `src/web/` this stage touches**, and it is here because
+     `STAGE_ICONS` is a `Record<StepName, …>` — the typecheck asks for it the
+     moment the step exists, which is exactly what that record is for. The mode
+     itself, its button and its panel are a later stage. */
+  debate: MessagesSquare,
 };
 
 /**
