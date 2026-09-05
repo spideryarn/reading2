@@ -631,7 +631,7 @@ function checkableBundledTables(): BundledTable[] {
   );
 }
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-export-covers-tables.test.ts",
   tables: [
     "spideryarn.referee_criteria",
@@ -640,9 +640,7 @@ const { reachable } = await pgReady({
   ],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("what the record calls exported, both exports were watched writing", () => {
+describe("what the record calls exported, both exports were watched writing", () => {
   let out: string;
   let result: ExportResult;
   /** Every entry of the reader's zip, decoded — path to text. */

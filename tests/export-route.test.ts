@@ -80,7 +80,6 @@ loadEnvLocal();
  * `handleApi` at the bottom of this block is dynamic and nothing else is.
  * tests/owner-isolation.test.ts has the long version.
  */
-process.env.SPIDERYARN_STORE = "postgres";
 
 /**
  * The bundle, with a seam for the one outcome no fixture can produce.
@@ -242,12 +241,10 @@ async function get(
   return { status, headers, body: Buffer.concat(chunks) };
 }
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/export-route.test.ts",
   tables: ["spideryarn.articles", "spideryarn.block_identities"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** This run's rows, and only ever this run's — see `RUN` above. */
 async function clean(): Promise<void> {
@@ -292,7 +289,7 @@ async function sweepAbandoned(): Promise<void> {
   }
 }
 
-when("downloading one article's data", { timeout: 20_000 }, () => {
+describe("downloading one article's data", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     /* Not `clean()`: these ids were minted a millisecond ago and nothing can
        have written under them, so cleaning first would be theatre. What is

@@ -80,14 +80,12 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
    tests/billing-quota-race.test.ts documents at length. */
 loadEnvLocal();
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/billing-half-units.test.ts",
   tables: ["spideryarn.billing_accounts", "spideryarn.ingest_events", "spideryarn.articles"],
   keepPool: true,
   max: 6,
 });
-
-const dbIt = reachable ? it : it.skip;
 
 /** Fixed and distinctive, so a killed run's rows are cleared rather than added to. */
 const OWNER = "0b110a1f-0000-4000-8000-0000000000a1" as OwnerId;
@@ -261,7 +259,7 @@ afterAll(async () => {
 /* ------------------------------------------------------------ the price -- */
 
 describe("what an ingest costs", () => {
-  dbIt("charges a private article two half-units and a public one one", async () => {
+  it("charges a private article two half-units and a public one one", async () => {
     await givenCharged(await givenArticle("private-one", "private"));
     await givenCharged(await givenArticle("public-one", "public"));
 
@@ -287,7 +285,7 @@ describe("what an ingest costs", () => {
     expect(budgetFor(inArticles(FREE_LIFETIME_INGESTS))).toBe(FREE_LIFETIME_INGESTS * 2);
   });
 
-  dbIt("charges a reservation full price, because nobody knows yet", async () => {
+  it("charges a reservation full price, because nobody knows yet", async () => {
     expect((await reserveIngest(OWNER)).kind).toBe("admitted");
     const usage = await usageFor(OWNER, FREE);
     expect(usage).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 0, inFlight: 1 });
@@ -301,7 +299,7 @@ describe("what an ingest costs", () => {
    * article is deleted out from under a charged row, which `on delete set null`
    * makes possible.
    */
-  dbIt("charges a row it cannot resolve to an article at full price", async () => {
+  it("charges a row it cannot resolve to an article at full price", async () => {
     await givenCharged(null);
     expect(await usageFor(OWNER, FREE)).toEqual({
       chargedFullPrice: 1,
@@ -310,7 +308,7 @@ describe("what an ingest costs", () => {
     });
   });
 
-  dbIt("puts a deleted public article's rows back to full price", async () => {
+  it("puts a deleted public article's rows back to full price", async () => {
     if (!pool) return;
     const article = await givenArticle("deleted-later", "public");
     await givenCharged(article);
@@ -332,7 +330,7 @@ describe("what an ingest costs", () => {
 /* --------------------------------------------------- sharing, both ways -- */
 
 describe("sharing and unsharing move the count in both directions", () => {
-  dbIt("halves an article's charged rows when it is shared, and puts them back", async () => {
+  it("halves an article's charged rows when it is shared, and puts them back", async () => {
     await givenCharged(await givenArticle("toggled", "private"));
     expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(2);
 
@@ -354,7 +352,7 @@ describe("sharing and unsharing move the count in both directions", () => {
    * put themselves over the wall by taking something down, which is exactly why
    * the unshare warning has to say the number before it happens.
    */
-  dbIt("lets an unshare put a free reader over, and then refuses them", async () => {
+  it("lets an unshare put a free reader over, and then refuses them", async () => {
     for (const n of [1, 2, 3, 4, 5]) {
       await givenCharged(await givenArticle(`shared-${n}`, "public"));
     }
@@ -392,7 +390,7 @@ describe("sharing and unsharing move the count in both directions", () => {
  * 2026-09-05.
  */
 describe("a paid period counts public rows by its own bounds", () => {
-  dbIt("counts the start instant and not the end instant, on the half-price side", async () => {
+  it("counts the start instant and not the end instant, on the half-price side", async () => {
     await givenPaidPeriod();
     const shared = await givenArticle("paid-window", "public");
     /* Inside: the start instant itself, and the last millisecond before the end. */
@@ -414,7 +412,7 @@ describe("a paid period counts public rows by its own bounds", () => {
     });
   });
 
-  dbIt("refuses at the wall on public rows inside the period", async () => {
+  it("refuses at the wall on public rows inside the period", async () => {
     await givenPaidPeriod();
     const shared = await givenArticle("paid-wall", "public");
     /* Four public successes inside the window — four half-units against a
@@ -446,7 +444,7 @@ describe("the half-unit overdraft, which is accepted rather than absent", () => 
    * seven. Taken knowingly, because the money-safe `used + 2 <= budget` would
    * make Greg's own sentence — six public articles on the free tier — false.
    */
-  dbIt("admits one ingest from five half-units, and it settles at seven", async () => {
+  it("admits one ingest from five half-units, and it settles at seven", async () => {
     for (const n of [1, 2, 3, 4, 5]) {
       await givenCharged(await givenArticle(`over-${n}`, "public"));
     }
@@ -474,7 +472,7 @@ describe("the half-unit overdraft, which is accepted rather than absent", () => 
    * new article returns them to six, which is still refused. So there is no
    * add-then-unshare cycle that earns a second half-unit.
    */
-  dbIt("earns no second overdraft from an add-then-share cycle", async () => {
+  it("earns no second overdraft from an add-then-share cycle", async () => {
     for (const n of [1, 2, 3, 4, 5]) {
       await givenCharged(await givenArticle(`cycle-${n}`, "public"));
     }
@@ -508,7 +506,7 @@ describe("the offer counts articles rather than ledger rows", () => {
    * which means *"share three articles"* would be false for somebody who needs
    * to share one.
    */
-  dbIt("says one article when the three half-units come from one article", async () => {
+  it("says one article when the three half-units come from one article", async () => {
     /* One article added three times — the same URL pasted back after being
        archived, which adopts the shelf's article and charges again — plus one
        ordinary article. Eight half-units against a budget of six, so **three**
@@ -545,7 +543,7 @@ describe("the offer counts articles rather than ledger rows", () => {
    * Nothing on any screen distinguishes the two, so the only fix is to say
    * which. GPT Sol, 2026-09-05.
    */
-  dbIt("names the articles that carry the charge, by the name the library shows", async () => {
+  it("names the articles that carry the charge, by the name the library shows", async () => {
     if (!pool) return;
     for (const n of [1, 2, 3]) await givenCharged(await givenArticle(`counted-${n}`, "private"));
     await givenArticle("grandfathered", "private");
@@ -573,7 +571,7 @@ describe("the offer counts articles rather than ledger rows", () => {
     expect(await sharingWouldMakeRoom(OWNER, FREE, await usageFor(OWNER, FREE))).toBe(true);
   });
 
-  dbIt("offers nothing when everything shareable is already shared", async () => {
+  it("offers nothing when everything shareable is already shared", async () => {
     for (const n of [1, 2, 3, 4, 5, 6]) {
       await givenCharged(await givenArticle(`all-shared-${n}`, "public"));
     }
@@ -585,7 +583,7 @@ describe("the offer counts articles rather than ledger rows", () => {
     expect(refused).not.toHaveProperty("shareToMakeRoom");
   });
 
-  dbIt("offers nothing when the rows predate the column and cannot be cheapened", async () => {
+  it("offers nothing when the rows predate the column and cannot be cheapened", async () => {
     /* No article to resolve — exactly the shape of every row charged before
        2026-09-05. Full price, and unshareable. */
     for (const _ of [1, 2, 3]) await givenCharged(null);
@@ -634,7 +632,7 @@ describe("tiers, deltas and clamps stay in articles", () => {
    * room; at sixty-six it does not. Under the wrong order it would be entitled
    * to a hundred and eighty-three and neither of these would refuse.
    */
-  dbIt("meters an upgraded account on 33 articles, not on 91", async () => {
+  it("meters an upgraded account on 33 articles, not on 91", async () => {
     if (!pool) return;
     await givenUpgradedMidPeriod();
     /* Thirty-two private articles: sixty-four half-units, two below the budget. */
@@ -808,7 +806,7 @@ describe("the lock order: billing_accounts before articles", () => {
    * holds the owner's billing row and the visibility switch is *asserted* to be
    * blocked, rather than fired N times in the hope of an unlucky interleaving.
    */
-  dbIt("makes a visibility change wait on the owner's billing row", async () => {
+  it("makes a visibility change wait on the owner's billing row", async () => {
     if (!pool) return;
     await givenArticle("locked-out", "private");
     const holder = await pool.connect();
@@ -845,7 +843,7 @@ describe("the lock order: billing_accounts before articles", () => {
 /* --------------------------------------------- the guard the type carries -- */
 
 describe("a successful settlement carries the article it produced", () => {
-  dbIt("writes succeeded_at and article_id in the same statement", async () => {
+  it("writes succeeded_at and article_id in the same statement", async () => {
     if (!pool) return;
     const admitted = await reserveIngest(OWNER);
     expect(admitted.kind).toBe("admitted");

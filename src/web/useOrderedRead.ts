@@ -100,6 +100,16 @@ export interface OrderedRead {
    * **This artefact is gone** — a DELETE, or the reader asked for it to be
    * rebuilt. Every reply still in the air is dropped, and the trailing read with
    * them: a read now would race the rebuild.
+   *
+   * **Nothing calls this today.** Its one caller was `useGlossary`'s `clear()`,
+   * which went with the glossary panel's *Start again* on 2026-09-05
+   * (`Foot` in ./GlossaryPanel.tsx), and none of the other seven readers ever
+   * had a delete to need it for. A cross-family review said to remove it; it is
+   * kept, on the narrower ground that this is a shared seam and the eight hooks
+   * over it did not ask for a contract change — the first artefact to grow a
+   * delete wants exactly this, and the generation counter it bumps is still
+   * load-bearing for slug changes either way. Delete it if that stops being
+   * true.
    */
   discard(): void;
 }

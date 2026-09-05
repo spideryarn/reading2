@@ -65,19 +65,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — the same block, for
- * the same reason, as tests/comment-referee-mark.test.ts and
- * tests/chat-route.test.ts. `STORE` is read once at module load, so setting it
- * after the first import of `src/store/index.js` would set nothing and the
- * suite would quietly test the filesystem again — which is the whole bug.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
@@ -130,29 +117,15 @@ vi.mock("../src/referee-criteria-run.js", async () => ({
 const SLUG = "test-referee-routes-postgres";
 const ABSENT = "test-referee-routes-postgres-no-such-article";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/referee-routes-postgres.test.ts",
   tables: ["spideryarn.referee_criteria", "spideryarn.referee_claims"],
   max: 2,
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { refereeClaimsStore, refereeCriteriaStore, STORE } = await import("../src/store/index.js");
+const { refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  /* **The positive control, and it is not decoration.** Every assertion below
-     passes just as happily against the filesystem store, which is exactly how
-     the 501 survived a full route suite. If this line goes red, nothing else in
-     this file means what it says. */
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
 
 interface Reply {
   status: number;
@@ -219,7 +192,7 @@ function frame(text: string, event: string): Record<string, unknown> | undefined
   return found?.[1] ? (JSON.parse(found[1]) as Record<string, unknown>) : undefined;
 }
 
-when("Referee's routes under SPIDERYARN_STORE=postgres", { timeout: 60_000 }, () => {
+describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
 
   beforeAll(async () => {

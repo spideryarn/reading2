@@ -39,17 +39,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once, and a static `import` is hoisted above every statement.
- * The same block, for the same reason, as tests/quiz-mark-route.test.ts.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { eq, sql } from "drizzle-orm";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
@@ -84,31 +73,16 @@ const COLOUR_SLUG = "test-routes-colour-fixture";
  */
 const MISSING = "test-routes-no-such-article";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/routes.test.ts",
   tables: ["spideryarn.articles", "spideryarn.comments", "spideryarn.search_runs"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { commentStore, readerStore, searchStore, shelfStore, STORE } = await import(
+const { commentStore, readerStore, searchStore, shelfStore } = await import(
   "../src/store/index.js"
 );
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this file working — the filesystem
-       store answers `loadComments` out of a JSON file, and every case below
-       would go on passing about a store nobody deploys. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * The five articles, seeded once.
@@ -153,7 +127,6 @@ let QUOTE2 = "";
 const AT2 = 30;
 
 beforeAll(async () => {
-  if (!reachable) return;
   fixture = await scratchArticleInPg(SLUG, {
     ownerId: TEST_OWNER,
     mutate: async (dir) => {
@@ -179,15 +152,13 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  if (reachable) {
-    /* **The reader profile is the one row this file writes that no article
-       owns**, so nothing cascades it away — see § *the reader routes*. Deleted
-       here, and then asserted gone, because "we tidied up" is a claim and the
-       read is the result. */
-    await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
-    expect(await asTestOwner(() => readerStore.readProfile())).toBeNull();
-    expect(await asTestOwner(() => readerStore.readExperimental())).toBeNull();
-  }
+  /* **The reader profile is the one row this file writes that no article
+     owns**, so nothing cascades it away — see § *the reader routes*. Deleted
+     here, and then asserted gone, because "we tidied up" is a claim and the
+     read is the result. */
+  await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
+  expect(await asTestOwner(() => readerStore.readProfile())).toBeNull();
+  expect(await asTestOwner(() => readerStore.readExperimental())).toBeNull();
   await fixture?.remove();
   await shelfArticle?.remove();
   await purposeArticle?.remove();
@@ -209,7 +180,6 @@ async function commentsOn(slug: string): Promise<Awaited<ReturnType<typeof comme
  * the reader state written on it.
  */
 afterEach(async () => {
-  if (!reachable) return;
   await asTestOwner(async () => {
     for (const c of await commentStore.load(SLUG)) await commentStore.remove(SLUG, c.id);
   });
@@ -343,7 +313,7 @@ async function callStreaming(
  * move without rewriting the handler — the same limit `quiz-mark-route`
  * records against the same claim.
  */
-when("asking a question is a stream, and refusing one is not", () => {
+describe("asking a question is a stream, and refusing one is not", () => {
   /* The two shapes, and they must not be able to swap places. A failure the
      server can see before it starts writing is an HTTP status the client can
      read with `r.ok`; a failure after that can only be a frame. If validation
@@ -377,7 +347,7 @@ when("asking a question is a stream, and refusing one is not", () => {
   });
 });
 
-when("the library route", () => {
+describe("the library route", () => {
   /**
    * **The fixture-visibility control for the whole file.**
    *
@@ -428,7 +398,7 @@ when("the library route", () => {
  * answered `{ opens: 0 }` for every one of these, and the two cases that assert
  * exactly that would have passed while asserting nothing.
  */
-when("the shelf routes", () => {
+describe("the shelf routes", () => {
   /** What the shelf now says, as the reader the request ran as. */
   const shelfState = (slug: string) => asTestOwner(() => shelfStore.read(slug));
 
@@ -660,7 +630,7 @@ when("the shelf routes", () => {
  * that dropped a first write would be visible only through the `GET` that
  * follows it.
  */
-when("the reader routes", () => {
+describe("the reader routes", () => {
   /** The one row this block writes, gone — so each case starts from nothing. */
   beforeEach(async () => {
     await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
@@ -952,7 +922,7 @@ when("the reader routes", () => {
  * decided by pattern matching before anything is read. The library read itself
  * is mutated in *the library route* above.
  */
-when("the library route, continued", () => {
+describe("the library route, continued", () => {
   it("does not answer to a path that merely starts with it", async () => {
     // `/api/library/anything` quietly serving the whole shelf would be the
     // kind of thing nobody notices until something depends on it.
@@ -1024,7 +994,7 @@ when("the library route, continued", () => {
  * coming back with HTTP 200, and no store the app can reach today has a path to
  * join, so this block is now about the refusal rather than about the escape.
  */
-when("a slug that is not a slug", () => {
+describe("a slug that is not a slug", () => {
   // Deep enough to climb out of any checkout, then somewhere absolute.
   const TRAVERSAL = `${encodeURIComponent("../".repeat(12))}private%2Ftmp%2Fanything`;
 
@@ -1093,7 +1063,7 @@ when("a slug that is not a slug", () => {
  * slug 404 as well, which the block above catches. The move is what closed the
  * class, and this case is now a guard against somebody reopening it.
  */
-when("what a failure is reported as", () => {
+describe("what a failure is reported as", () => {
   // Every one of these used to come back 404, which sent the reader looking for
   // a missing article instead of the thing that was actually wrong.
   it("calls a malformed body 400, not 404", async () => {
@@ -1154,7 +1124,7 @@ when("what a failure is reported as", () => {
  * `commentStore.load` is watched going red in *making a comment costs nothing*
  * below, so it is known to be able to see a row.
  */
-when("the anchor offset must be a real offset", () => {
+describe("the anchor offset must be a real offset", () => {
   // A negative start silently drew the mark a few characters left of the words
   // it belonged to. Refusing it at the door is cheaper than defending every
   // reader of the value. See src/web/annotate.ts § resolveMark.
@@ -1211,7 +1181,7 @@ when("the anchor offset must be a real offset", () => {
  * `keep` entirely would pass. And to the *clearing* of `attempt_id` beside the
  * status, which nothing here reads back.
  */
-when("a pending comment nobody is answering", () => {
+describe("a pending comment nobody is answering", () => {
   /* A `pending` row now has to be *made* pending, because creating one is free
      and lands as `none`. `beginAnswer` is the only thing that writes `pending`
      — which is exactly the property the sweep depends on — and it refuses a
@@ -1302,7 +1272,7 @@ when("a pending comment nobody is answering", () => {
   });
 });
 
-when("making a comment costs nothing", () => {
+describe("making a comment costs nothing", () => {
   /* **A real block, and a quote really inside it.** The route checks the anchor
      against the article, so a made-up passage is a 400 rather than a stored
      comment nothing can draw. These three come from `example/blocks.json`,
@@ -1547,7 +1517,7 @@ when("making a comment costs nothing", () => {
  * (`tweetsStale`, the tree and the metadata head) is `tests/store-parity.test.ts`'s
  * to speak for.
  */
-when("the tweets route", () => {
+describe("the tweets route", () => {
 
   it("refuses a slug that could climb out of data/", async () => {
     // Not theoretical: `part()` percent-decodes, so `%2E%2E%2F` arrives as
@@ -1644,7 +1614,7 @@ when("the tweets route", () => {
  * everything about `finish`: nothing here reads a completed run back out of the
  * store, only out of the frames.
  */
-when("POST /api/search/:slug is a stream too", () => {
+describe("POST /api/search/:slug is a stream too", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(async () => {
     /* The runs a previous case left, rather than a directory removed and
@@ -1869,7 +1839,7 @@ when("POST /api/search/:slug is a stream too", () => {
  * subject and happens above the store: every 400 here is decided before a
  * statement runs.
  */
-when("PATCH /api/search/:slug/:id", () => {
+describe("PATCH /api/search/:slug/:id", () => {
   /* The runs a previous case saved, rather than a removed directory. */
   beforeEach(async () => {
     await asTestOwner(async () => {
@@ -1983,7 +1953,7 @@ when("PATCH /api/search/:slug/:id", () => {
  * assertion would still hold. If one ever needs a real row to reach its
  * validation, that is itself worth knowing.
  */
-when("no PATCH route answers a malformed body with a 500", () => {
+describe("no PATCH route answers a malformed body with a 500", () => {
   const PATCH_ROUTES = [
     "/api/library/a-slug",
     "/api/reader",
@@ -2025,7 +1995,7 @@ when("no PATCH route answers a malformed body with a 500", () => {
  * stated in its own header: there is no store between the request and the
  * refusal to break.
  */
-when("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
+describe("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
   for (const body of ["null", "[]", '"3"', "7"]) {
     it(`answers ${body} with 400, not 500`, async () => {
       const r = await call("PATCH", "/api/chat/test-routes-colour-fixture/t1", body);
@@ -2068,7 +2038,7 @@ when("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => 
  * but every claims check inside the real verifier — `role`, `is_anonymous`, the
  * `sub` shape — is `tests/auth.test.ts`'s, not this file's.
  */
-when("the gate", () => {
+describe("the gate", () => {
   it("refuses a request with no Authorization header", async () => {
     /* GET, because a 401 on a POST could equally be validation failing first —
        and the order matters: the gate runs before any body is read, so a
@@ -2105,7 +2075,7 @@ when("the gate", () => {
  * administrator (`TEST_SUB`, which `isAdmin` says yes to) — so the interesting
  * case needs a verifier of its own. See src/admin.ts and docs/project/admin.md.
  */
-when("the admin gate", () => {
+describe("the admin gate", () => {
   /** Somebody else entirely, signed in perfectly properly. */
   const asSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
     ok: true,

@@ -48,38 +48,16 @@
  * `private-postgres` in the same change.
  */
 import { Client } from "pg";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import type { AiCallRow } from "../src/ai-spend.js";
 import { urlForDatabase } from "../scripts/db-test-create.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
-/**
- * `SPIDERYARN_STORE=postgres`, set before **any** import runs.
- *
- * `vi.hoisted` and not a plain statement, for the reason tests/chat-route.test.ts
- * gives: `src/store/live.ts` reads the flag once, the first time anything
- * imports it, and imports are hoisted above every statement in a module. An
- * ordinary assignment would run after the import below had already settled the
- * answer to `files` — and this file would then pass while proving nothing,
- * because `files` is the store that was never the problem.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 const { costStore } = await import("../src/store/ai-calls.js");
-const { STORE } = await import("../src/store/live.js");
 const { currentOwnerId } = await import("../src/owner.js");
 const { getDb, closeDb } = await import("../src/db/client.js");
 const { sql } = await import("drizzle-orm");
-
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   test files and does not reset `process.env` between them. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 /**
  * `credits_used_nanos` and `owner_id` are what the row below carries, and
@@ -87,7 +65,7 @@ else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
  * naming only the table would let a half-migrated database fail inside the store
  * with a bare `42703`. tests/helpers/pg-ready.ts § what to name.
  */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/cost-store-under-test.test.ts",
   tables: ["spideryarn.ai_calls", "auth.users"],
   columns: [
@@ -95,8 +73,6 @@ const { reachable } = await pgReady({
     { table: "spideryarn.ai_calls", column: "realtime_session_id" },
   ],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** The fixture call. One row, spelled out, so a new column has to be decided. */
 function fixtureRow(): AiCallRow {
@@ -196,7 +172,7 @@ function fixtureRow(): AiCallRow {
  * that they write into the same private database — tests/chat-route.test.ts and
  * the other twenty-one that pin the flag.
  */
-when("the ledger a test writes to", () => {
+describe("the ledger a test writes to", () => {
   afterAll(async () => {
     /* No `delete` of the fixture row, deliberately. The database is dropped
        whole at the end of the run (`tests/setup/private-db-global.ts`), which is
@@ -206,13 +182,12 @@ when("the ledger a test writes to", () => {
     await closeDb();
   });
 
-  it("really did select postgres, so the assertions below mean something", () => {
-    /* Without this the whole file is green on a `files` run, which is the
-       configuration that never had the bug. `NODE_ENV` is still asserted — not
-       because anything now branches on it, but because a run where vitest had
-       stopped setting it would be a different harness from the one every claim
-       below is about. */
-    expect(STORE).toBe("postgres");
+  it("runs under NODE_ENV=test, so the harness is the one these claims are about", () => {
+    /* A run where vitest had stopped setting it would be a different harness
+       from the one every claim below is about. Its companion — `expect(STORE)`,
+       which said the `postgres` flag had taken — went with the flag on
+       2026-09-05: there is one store, so there is no `files` run for this file
+       to be accidentally green on. */
     expect(process.env.NODE_ENV).toBe("test");
   });
 

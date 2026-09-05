@@ -65,13 +65,11 @@ const ARTICLE_ID = "00000000-0000-4000-8000-00000000ab00";
 const REVISION_ID = "00000000-0000-4000-8000-00000000ab01";
 const THREAD = "spya-thread";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-reader-state-parity.test.ts",
   tables: ["spideryarn.chat_messages"],
   max: 2,
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** Replace every minted id with `#n`, numbered by first appearance. */
 function normalise(value: unknown, seen = new Map<string, string>()): unknown {
@@ -118,7 +116,7 @@ function clock(): () => string {
   return () => new Date(start + 1000 * n++).toISOString();
 }
 
-when("the filesystem and Postgres stores agree about the reader's state", () => {
+describe("the filesystem and Postgres stores agree about the reader's state", () => {
   /**
    * The two paragraphs both stores are made to agree about.
    *

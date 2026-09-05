@@ -12,20 +12,38 @@
  * prevent. The registry classifies whole files, so one file could not carry
  * both verdicts. Hence two files.
  *
- * ## This file dies in stage G, and it has **two** subjects, not one
+ * ## Two of its three blocks are gone, and the hinge is why
  *
- * They die at different moments, so whoever deletes half of it should not
- * delete the other half by accident:
+ * **The two that drove the real runner died on 2026-09-05**, in the hinge that
+ * deleted `SPIDERYARN_STORE`
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F) — and not because their subject went. Their subject is still here. What
+ * went is the only route to it: they called `enqueue` and `getJob`, and
+ * `src/jobs.ts` reached the filesystem queue **because the flag was unset**. It
+ * binds `pgJobStore` now, so both cases asked a database that the unit lane
+ * poisons, and no amount of moving them reaches `fsJobStore` again.
  *
- * - **`sweepStopped`**, **`writes a readable record, still, after all that`**
- *   and **`leaves the marker behind when a step fails`** are about
- *   [`src/store/jobs-fs.ts`](../src/store/jobs-fs.ts) and
- *   [`src/store/artifacts-fs.ts`](../src/store/artifacts-fs.ts): the restart
- *   sweep that has no Postgres counterpart (Postgres has a lease instead —
- *   `settleExpired`), the write-to-a-temp-file-then-rename mechanism, asserted
- *   by the absence of `<id>.json.<pid>.<n>.tmp` afterwards, and the
- *   begun-and-never-finished marker file. **They die in the same commit as
- *   their adapter**, which is stage G's `jobs` group and then `artifacts-fs.ts`.
+ * They are enumerated rather than merely deleted, which is stage G's rule
+ * arriving early:
+ *
+ * - **`leaves the marker behind when a step fails`** — a step that threw inside
+ *   `advanceJob` leaves `beginStep`'s marker, and `stepIsDone` reads it and
+ *   answers *not done*. `tests/store-artefacts-pg.test.ts` covers `interrupted`
+ *   both ways round on `revision_step_runs.status`; **what nothing covers is the
+ *   path through the real runner**, and the Postgres shape of that — a draft
+ *   rolled back and a step run left `error` — is `tests/jobs.test.ts` § *running
+ *   a job* to grow.
+ * - **`writes a readable record, still, after all that`** — `writeOnce`'s
+ *   temp-file-then-rename, asserted by the absence of `<id>.json.<pid>.<n>.tmp`.
+ *   **Nothing covers this and nothing should**: there is no Postgres equivalent
+ *   of a temp file; a transaction is what replaces it. It dies with
+ *   `src/store/jobs-fs.ts` in stage G either way, and it died here first.
+ *
+ * - **`sweepStopped`** is about [`src/store/jobs-fs.ts`](../src/store/jobs-fs.ts)
+ *   — the restart sweep that has no Postgres counterpart (Postgres has a lease
+ *   instead, `settleExpired`). It survives, because it calls the function
+ *   directly with a hand-made record and never goes near a store. **It dies in
+ *   the same commit as its adapter**, which is stage G's `jobs` group.
  * - **`what a step counts as done`** looks like a test of `STEPS[…].outputs`
  *   and is really a test of **`StepContext.dir` and `StepContext.htmlFile`** —
  *   the `step-context-paths` mechanism the store registry names
@@ -60,33 +78,20 @@
  * - `writeOnce`'s rename — **nothing, and nothing should.** There is no Postgres
  *   equivalent of a temp file; a transaction is what replaces it.
  *
- * **What none of those has is the path through the real runner**, which is what
- * `leaves the marker behind` uniquely gave: a step that threw inside
- * `advanceJob`, rather than a store method called directly. The Postgres shape
- * of that is a draft rolled back and a step run left `error`, and it is
- * `tests/jobs.test.ts` § *running a job* that would have to grow it.
+ * ## It needs no database, and that is now true by construction
  *
- * ## It stays on the filesystem store, deliberately
- *
- * No `SPIDERYARN_STORE` pin, no lane in `TEST_LANES` — so it runs in the `unit`
- * project, where `DATABASE_URL` is poisoned. That is the point: the code under
- * test here is the filesystem adapter, and a database would only obscure it.
+ * Nothing left in it reaches a store: `sweepStopped` is handed a record, and the
+ * `outputs` block is arithmetic over two path strings. It runs in the `unit`
+ * project, where `DATABASE_URL` is poisoned, and stays there.
  */
-import { readdir, rm } from "node:fs/promises";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { enqueue, forgetJob, getJob } from "../src/jobs.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { sweepStopped } from "../src/store/jobs-fs.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
-import { jobFilesOnDisk } from "./helpers/job-files.js";
-
-const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
-const JOBS_DIR = path.join(ROOT_DATA, "_jobs");
 
 /** A step in whatever state a case needs, for the record-shaped tests below. */
 function step(name: StepName, status: JobStep["status"]): JobStep {
@@ -103,40 +108,6 @@ function job(status: Job["status"], steps: JobStep[]): Job {
     status,
     createdAt: "2026-08-25T10:00:00.000Z",
   };
-}
-
-/**
- * Its own slug, no longer shared with `tests/jobs.test.ts`.
- *
- * That file used one slug for six cases; this one is the only case left that
- * queues anything, so it gets a name nothing else writes under — which also
- * means the two files can run in the same worker without one's `afterAll`
- * tidying the other's records away mid-test.
- */
-const SLUG = "test-jobs-fs-adapter-no-such-article";
-
-/* Remove only this file's records. `data/_jobs/` is a real directory a reader
-   may have jobs in — the test must not tidy away theirs. */
-afterAll(async () => {
-  for (const { path: full, record } of await jobFilesOnDisk()) {
-    if (record.slug === SLUG) await rm(full, { force: true });
-  }
-  /* And the run marker the failed job left behind. Not tidiness: `beginStep`
-     does a `mkdir` before the stage runs, so a job that fails on its first step
-     still leaves `data/<slug>/steps/` behind, and a marker surviving into the
-     next run would make the fixture's `fetch` not-done for a reason that has
-     nothing to do with what is being tested. */
-  await rm(path.join(ROOT_DATA, SLUG), { recursive: true, force: true });
-});
-
-/** Poll until the job stops moving, or give up. */
-async function settle(id: string): Promise<Job> {
-  for (let i = 0; i < 60; i++) {
-    const job = await getJob(id);
-    if (job && job.status !== "queued" && job.status !== "running") return job;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  throw new Error("job never finished");
 }
 
 describe("what a step counts as done", () => {
@@ -192,80 +163,6 @@ describe("what a step counts as done", () => {
   it("is not done when none of its files are there", async () => {
     for (const name of STEP_ORDER) {
       expect(await stepIsDone(STEPS[name], ctx, fsArtifacts)).toBe(false);
-    }
-  });
-});
-
-describe("the record the filesystem queue leaves behind", () => {
-  /**
-   * The job queued here cannot succeed — there is no URL for this slug, so
-   * `fetch` throws before it reaches the network — which makes it safe: nothing
-   * is fetched and no model is called. What it exercises is `writeOnce`'s
-   * temp-file-and-rename, which is where the only bug that ever reached a
-   * running server lived: two overlapping writes for one job, which took the
-   * dev server down with an unhandled rejection.
-   */
-  /**
-   * The marker, through the real runner rather than through the store on its
-   * own.
-   *
-   * A step that threw did not finish, and the next run must re-run it rather
-   * than believe whatever half of its output landed. `fetch` here fails for a
-   * reason that has nothing to do with the marker — the fixture has no source
-   * URL — which is what makes it a fair test of the failure path.
-   */
-  it("leaves the marker behind when a step fails, so the step is not done", async () => {
-    const job = await enqueue({ slug: SLUG, steps: ["fetch"] });
-    expect((await settle(job.id)).status).toBe("error");
-    expect(await fsArtifacts.interrupted(SLUG, "fetch")).toBe(true);
-
-    // And it is what `stepIsDone` reads, not merely a file sitting there.
-    const at = contextPaths(SLUG);
-    const ctx = { ...at, slug: SLUG, report: () => undefined, signal: new AbortController().signal, cacheArticle: false };
-    expect(await stepIsDone(STEPS.fetch, ctx, fsArtifacts)).toBe(false);
-
-    /* Removed with `rm`, not with `finishStep`. The marker belongs to the
-       runner's attempt and the test never saw that token — which is the point
-       of the token, and is also why a test that leaves one behind has to clean
-       up by hand. A stray marker here would make the *next* run of this suite
-       start from a slug whose `fetch` is already not-done for the wrong
-       reason. */
-    await rm(path.join(ROOT_DATA, SLUG, "steps"), { recursive: true, force: true });
-    expect(await fsArtifacts.interrupted(SLUG, "fetch")).toBe(false);
-    // Cleared again in `afterAll` as well as here: every job this suite runs
-    // fails, so every one of them leaves a marker, not only this test's.
-  });
-
-  it("writes a readable record, still, after all that", async () => {
-    const job = await enqueue({ slug: SLUG, steps: ["fetch"] });
-    try {
-      await settle(job.id);
-      const files = await readdir(JOBS_DIR);
-      expect(files).toContain(`${job.id}.json`);
-      /* No temp file left behind: a stray `.tmp` is a write that never renamed.
-         **This job's own**, rather than every `.tmp` in the directory, because
-         `data/_jobs/` is shared with every other suite in the run and several of
-         them are writing to it from other workers at this moment — a write in
-         flight elsewhere is not a write that failed here, and asserting over the
-         whole directory made this red at random (seen 2026-09-01, on a temp file
-         belonging to tests/retry-is-only-for-a-failed-job.test.ts). The name is
-         `<id>.json.<pid>.<n>.tmp`, so the prefix is the job.
-
-         **And waited for rather than read once**, which is the half the prefix
-         did not fix. `settle` above polls `getJob`, and terminal status lands in
-         the live map *before* its `persist` completes — `forgetJob` in
-         src/jobs.ts says so, and builds its own tombstone around the same gap. So
-         a single `readdir` here can catch this job's own write mid-rename and
-         call it a leak. Under load it did (2026-09-01). A bounded wait is the
-         honest reading: the file must be gone soon, not instantly. */
-      const strays = async () =>
-        (await readdir(JOBS_DIR)).filter((f) => f.startsWith(job.id) && f.endsWith(".tmp"));
-      for (let i = 0; i < 40 && (await strays()).length; i++) {
-        await new Promise((r) => setTimeout(r, 25));
-      }
-      expect(await strays()).toEqual([]);
-    } finally {
-      await forgetJob(job.id).catch(() => undefined);
     }
   });
 });

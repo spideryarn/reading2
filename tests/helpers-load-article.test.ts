@@ -80,12 +80,10 @@ requireFixture(FROM, [
 ]);
 
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/helpers-load-article.test.ts",
   tables: ["spideryarn.raw_sources"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **This file starts a job, so it takes the shared run lock.**
@@ -96,7 +94,7 @@ const when = reachable ? describe : describe.skip;
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
-const runLock = reachable ? await takeRunLock("tests/helpers-load-article.test.ts") : undefined;
+const runLock = await takeRunLock("tests/helpers-load-article.test.ts");
 afterAll(async () => {
   await runLock?.release();
 });
@@ -179,7 +177,7 @@ async function forget(slug: string): Promise<void> {
   await db.delete(articles).where(eq(articles.slug, slug));
 }
 
-when("the fixture loader", () => {
+describe("the fixture loader", () => {
   afterAll(async () => {
     await closeDb();
   });

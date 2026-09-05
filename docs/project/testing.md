@@ -641,12 +641,13 @@ were indistinguishable until it finished.
   store ones `ENOENT` on `data/`, which is gitignored and holds accumulated fixtures.
 - **With `.env.local` linked and `data/` copied in: 5–6 failures** — the genuine state of HEAD on a
   busy day.
-- **About a dozen Postgres suites turn themselves into `describe.skip`** when `DATABASE_URL` is
-  unreachable. A run with no local Supabase is green *having run none of them*.
+- **A dozen Postgres suites turned themselves into `describe.skip`** when `DATABASE_URL` was
+  unreachable, and a run with no local Supabase was green *having run none of them*. **Not since
+  2026-09-05**: no suite can skip itself over a missing database any more, and `npm test` fails
+  once, in the private lane's globalSetup, before a file is collected
+  (§ [When a skip is not acceptable](#when-a-skip-is-not-acceptable-never-since-2026-09-05)).
 
-So: check `npm run db:status` is up before trusting a green run, or the Postgres half never ran — or
-run it under [`REQUIRE_POSTGRES=1`](#when-a-skip-is-not-acceptable-require_postgres1), which turns
-that skip into a failure and is the answer when a green run is about to be used as evidence. And
+So a green run now means the database was there. And
 when judging whether HEAD itself is broken, reproduce in a worktree with `node_modules` symlinked,
 `.env.local` linked and `data/` **copied** (tests delete under it) — not in the shared working tree,
 which always carries other agents' edits. "26 files fail" from a clean checkout is this, not a
@@ -884,43 +885,92 @@ re-run that file with `--reporter=verbose` before believing anything about it.**
 [silent-success.md](../reusable/silent-success.md) in its quietest form — the count does change, so
 something is visibly not happening, and only the *why* is missing.
 
-### When a skip is not acceptable: `REQUIRE_POSTGRES=1`
+### When a skip is not acceptable: never, since 2026-09-05
 
-A skip is right on a laptop and wrong on a machine whose working-ness is the thing being proved.
-Forty-odd suites take themselves out when the database is missing, and they do it in the one part of
-the summary nobody reads: a run can pass, or fail for something else entirely, with every one of
-them absent. So *"the tests pass on the box"* says nothing about the half of the suite that touches
-the database — [`scripts/deploy.ts`](../../scripts/deploy.ts) names the same hole as a deploy gate.
+**A test may not decide for itself whether the database is required.** There is one store
+([database.md](database.md)), so a machine with no database cannot run this application at all, and a
+suite that skipped over that would be describing a configuration that does not exist.
+
+That is a change of policy, and the thing it replaced is worth knowing. A hundred-odd suites used to
+take themselves out when the database was missing, in the one part of the summary nobody reads: a run
+could pass, or fail for something else entirely, with every one of them absent. `REQUIRE_POSTGRES=1`
+was the escape hatch for the runs that cared. **The flag is gone from every decision** — nothing
+reads it, `scripts/check.ts` still sets it and will stop when the store tombstone goes.
+
+Two mechanisms, and between them there is no way for a suite to opt out:
+
+- **The preflight.** [`tests/setup/private-db-global.ts`](../../tests/setup/private-db-global.ts)
+  mints the run's private database before a single file is collected. No stack, and the **whole
+  command** fails, once, with the command that fixes it. Ninety separate skips became one error.
+- **The per-suite probe.** [`pgReady`](../../tests/helpers/pg-ready.ts) still asks whether *this*
+  database has the table, column or grant *this* file needs — a database one migration behind is a
+  real thing and `npm run db:migrate` is a different instruction from `npm run db:start`. It
+  **throws** rather than returning a boolean, so `reachable ? describe : describe.skip` cannot be
+  written: there is no `reachable`.
+
+[`tests/one-store-only.test.ts`](../../tests/one-store-only.test.ts) is what stops the skip coming
+back — it greps for that alias and for both `skipIf` forms, and asserts `PgReady` still has no
+boolean on it. All five shapes were watched failing on 2026-09-05.
+
+**Checking the refusal does not work the obvious way** — and this is the trap, not the mechanism.
+`.env.local` beats the shell for most of this repo, deliberately ([`src/env.ts`](../../src/env.ts)
+has the reasons), so a bad `DATABASE_URL` on the command line usually misdirects nothing and the run
+proves nothing (measured 2026-08-31, before it was believed). The private lane's factory is the
+exception: `baseUrl()` in [`scripts/db-test-create.ts`](../../scripts/db-test-create.ts) asks
+`resolveTargetUrl({ shellWins: true })`, so a shell value *does* reach it. That makes the control one
+command, and **read the diagnostic rather than the exit code** — it has to name the target you
+deliberately broke:
 
 ```bash
-REQUIRE_POSTGRES=1 npm test
+DATABASE_URL='postgresql://postgres:postgres@127.0.0.1:1/postgres' \
+  npx vitest run --project private-postgres tests/store-comments.test.ts
 ```
 
-With that set, [`pgReady`](../../tests/helpers/pg-ready.ts) — and the five suites that hand-roll their
-own probe, through `failIfPostgresRequired` — register **one failing test** instead of skipping,
-naming what was missing and the command that fixes it: `npm run db:start` for a database that is not
-answering, `npm run db:migrate` for one that is behind. The suite itself still skips, so the run says
-`1 failed | N skipped` rather than thirty connection errors, and it exits non-zero. Unset, nothing
-changes: same verdict, same warning, same silence when there is no `DATABASE_URL` at all.
+**Do not stop the shared Supabase to check this.** Every other worktree on the box is using it.
 
-**`npm run check` sets it** on its `test` gate, because that is the command whose green result gets
-quoted ([static-analysis.md](static-analysis.md#the-gateadvisory-split)). So `npm run check` now needs
-a database; `npm run check -- --offline` runs the same steps without the flag, and says in its summary
-that the database suites were free to skip and that it is not the real gate.
+### A rule and its reachability are two claims, and only one is testable in-process
 
-Use it wherever else a green run is about to be quoted as evidence — CI, the remote box (stage 3 of
-[260831x-remote-box-dev-environment.md](../plans/260831x-remote-box-dev-environment.md)), and any time you are about
-to tell somebody the tests passed.
+Written up here because it cost a P0 on 2026-09-05 and the shape is not specific to that stage.
 
-**Checking it does not work the obvious way.** `.env.local` beats the shell, deliberately and for
-good reasons ([`src/env.ts`](../../src/env.ts) has them), so
-`DATABASE_URL=postgresql://…@127.0.0.1:1/postgres npm test` quietly runs against the live database
-and proves nothing — measured 2026-08-31, before it was believed. To exercise the unreachable branch
-you need either a machine where the database really is down, or a vitest `setupFiles` that sets the
-variable *after* `src/env.ts` has taken its snapshot of the environment. Three of those now exist —
-§ *The ordering trap*, above — and
-[`tests/setup/unit-no-database.ts`](../../tests/setup/unit-no-database.ts) is the shortest one to
-copy.
+A guard whose whole job is a **side effect at module load** — a boot check, a validator, a
+registration — is only in the program while something imports it. Delete the last consumer of a
+symbol it exports and the module goes with it, silently: the compiler removes an unused import, it
+never demands one. That is what happened to the `SPIDERYARN_STORE` tombstone, and **its own two
+tests stayed green the whole time**, because both `import { refuseTheStoreFlag }` and call it.
+Loading a module by hand and asking whether the function works cannot see whether anything else
+loads it — the check shares an assumption with the bug, and the assumption is *that the guard is
+reachable at all*.
+
+So when a test is about something that happens at import:
+
+- **One test for the rule**, calling the function, which is where the cases live
+  ([`tests/store-selection.test.ts`](../../tests/store-selection.test.ts)).
+- **One test for the wiring**, which has to be a **child process** importing *the module a server
+  imports* and asserting the child dies
+  ([`tests/store-flag-refused-at-boot.test.ts`](../../tests/store-flag-refused-at-boot.test.ts)).
+  In-process is not an option: the module under test is already loaded in the worker and a module is
+  evaluated once.
+- **Two controls on the child**, because *"it died"* and *"it never ran"* are the same observation
+  from outside: one that it boots when it should, and one that it is really in the environment you
+  think — the runner sets `VITEST` in every worker and children inherit it, so a check switched off
+  under the runner is switched off in the child too unless you clear it.
+- **Every independent root, not one.** This is the half the first fix got wrong, and it cost a
+  second P0 on the same day. The import went into `src/store/index.ts` — the reader wiring hub, the
+  obvious front door — and the reported symptom went away while `src/jobs.ts`,
+  `src/upload-records.ts` and `src/store/ai-calls.ts` all still reached Postgres without crossing it.
+  So did `scripts/stage.ts`, which runs pipeline steps against real articles, and
+  `evals/cost/run.ts`, which spends money.
+
+**Where a side-effecting import belongs: at the narrowest boundary everything must cross, not at the
+most obvious front door.** A front door is whichever door you happened to walk through. Here that is
+[`src/db/client.ts`](../../src/db/client.ts) — `getDb` is exported from exactly one place and
+`new Pool` appears in exactly one file — and **the boundary claim is itself a test**, because a
+second connection opened anywhere else would silently put the guard back on one path of several.
+
+The general question a deletion should ask is **"which files import this module?"**, which is not
+the same as *"does anything still reference the symbol I removed?"*. `grep -rn 'store/live.js' src/`
+answered it in one line — and the one line was a different file with the same basename, which reads
+as confirmation. docs/reusable/silent-success.md.
 
 ## One database, many suites: the three shared resources
 

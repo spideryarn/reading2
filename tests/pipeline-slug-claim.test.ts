@@ -33,9 +33,21 @@
  * **another owner's source URL** while resolving a collision. See the comment
  * on `articleExists` in src/pipeline.ts for what that leaves open.
  *
- * The files-store half of the same pair is tests/pipeline-slug-claim-files.test.ts,
- * and it has to be a separate file: `STORE` is read once at module load
- * (src/store/live.ts), so one module cannot see both stores.
+ * ## The upload, which is the case a URL-shaped `articleExists` would lose
+ *
+ * An uploaded article has **no address**: `article_revisions.final_url` is null,
+ * and `urlForSlug` therefore answers `undefined` for a slug that very much
+ * exists. Those two answers disagreeing is the whole point of the left join in
+ * `ownedArticle` (src/pipeline.ts) — and nothing pinned it here until
+ * 2026-09-05, because the claim lived in `tests/pipeline-slug-claim-files.test.ts`
+ * and that file went with the store flag in the hinge. A regression deriving
+ * `articleExists` from URL presence would have passed everything that was left
+ * and treated **every upload as an article nobody owns**, which is step 1 of the
+ * sequence at the top of this header. GPT Sol's review of stage F.
+ *
+ * The files-store half of the pair was `tests/pipeline-slug-claim-files.test.ts`,
+ * a separate file because `STORE` was read once at module load; both it and the
+ * store it named are gone.
  */
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -51,7 +63,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * the branch it is meant to choose. Every import of the code under test below
  * is therefore dynamic.
  */
-process.env.SPIDERYARN_STORE = "postgres";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles } from "../src/db/schema.js";
@@ -69,14 +80,17 @@ const ARTICLE_ID = "00000000-0000-4000-8000-0000000000e7";
 const REVISION_ID = "00000000-0000-4000-8000-0000000000e8";
 const URL = "https://example.test/pipeline-slug-claim";
 
-const { reachable } = await pgReady({
+/** The uploaded article: a slug and a published revision with **no address**. */
+const UPLOAD_SLUG = "test-pipeline-slug-claim-upload";
+const UPLOAD_ARTICLE_ID = "00000000-0000-4000-8000-0000000000e9";
+const UPLOAD_REVISION_ID = "00000000-0000-4000-8000-0000000000f5";
+
+await pgReady({
   suite: "tests/pipeline-slug-claim.test.ts",
   columns: [{ table: "spideryarn.articles", column: "owner_id" }],
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("a slug that exists only in Postgres", { timeout: 20_000 }, () => {
+describe("a slug that exists only in Postgres", { timeout: 20_000 }, () => {
   let scratch = "";
   let before: string | undefined;
 
@@ -103,6 +117,25 @@ when("a slug that exists only in Postgres", { timeout: 20_000 }, () => {
       .update(articles)
       .set({ currentRevisionId: REVISION_ID })
       .where(eq(articles.id, ARTICLE_ID));
+
+    /* **The upload: published, and with neither URL column set.** `requestedUrl`
+       is left out as well as `finalUrl`, because a PDF off somebody's disk was
+       never asked for by address either. This is the row shape `acquireUpload`
+       leaves behind. */
+    await db
+      .insert(articles)
+      .values({ id: UPLOAD_ARTICLE_ID, ownerId: currentOwnerId(), slug: UPLOAD_SLUG });
+    await db.insert(articleRevisions).values({
+      id: UPLOAD_REVISION_ID,
+      articleId: UPLOAD_ARTICLE_ID,
+      status: "published",
+      title: "A paper that came off somebody's disk",
+      fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    await db
+      .update(articles)
+      .set({ currentRevisionId: UPLOAD_REVISION_ID })
+      .where(eq(articles.id, UPLOAD_ARTICLE_ID));
   });
 
   afterAll(async () => {
@@ -131,6 +164,25 @@ when("a slug that exists only in Postgres", { timeout: 20_000 }, () => {
   it("gives its source URL to urlForSlug", async () => {
     const { urlForSlug } = await import("../src/pipeline.js");
     expect(await urlForSlug(SLUG)).toBe(URL);
+  });
+
+  /**
+   * **The two answers must disagree, and that is the assertion.**
+   *
+   * An upload exists and has no address. Asserted as a pair, in one case, because
+   * separately either half is satisfied by the wrong implementation: a
+   * URL-derived `articleExists` passes *"urlForSlug is undefined"* happily and
+   * fails only on the line above it, and only if somebody thought to write it.
+   *
+   * **Watched red on 2026-09-05** by making `articleExists` derive its answer
+   * from the URL — `return (await ownedArticle(slug))?.url != null` — which is
+   * exactly the regression this exists to catch, and which every other case in
+   * this file survives.
+   */
+  it("finds an uploaded article that has no URL at all", async () => {
+    const { articleExists, urlForSlug } = await import("../src/pipeline.js");
+    expect(await articleExists(UPLOAD_SLUG)).toBe(true);
+    expect(await urlForSlug(UPLOAD_SLUG)).toBeUndefined();
   });
 
   /** A slug nobody has, so "true" cannot be the answer to everything. */
@@ -168,7 +220,9 @@ when("a slug that exists only in Postgres", { timeout: 20_000 }, () => {
 
 async function clean() {
   const db = getDb();
-  await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, ARTICLE_ID));
-  await db.delete(articleRevisions).where(eq(articleRevisions.articleId, ARTICLE_ID));
-  await db.delete(articles).where(eq(articles.id, ARTICLE_ID));
+  for (const id of [ARTICLE_ID, UPLOAD_ARTICLE_ID]) {
+    await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
+    await db.delete(articleRevisions).where(eq(articleRevisions.articleId, id));
+    await db.delete(articles).where(eq(articles.id, id));
+  }
 }
