@@ -228,8 +228,8 @@ test rewritten *inside* the hinge is a test bent until it passes. Sol put the co
 
 ## The decisions, and who made each
 
-**Five so far, all on 2026-09-03.** Recorded together because each one deleted or moved work, and
-because the last two were handed back rather than answered.
+**Six. Five on 2026-09-03, one on 2026-09-04.** Recorded together because each one deleted or moved
+work, and because two of them were handed back rather than answered.
 
 | # | decision | by |
 |---|---|---|
@@ -238,6 +238,7 @@ because the last two were handed back rather than answered.
 | 3 | **Absorb [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)** into this plan rather than depend on it or duplicate it | Greg — see stage T |
 | 4 | **Retire `npm run labels`** | Greg delegated; settled with Sol — see stage E |
 | 5 | **`npm run fetch` becomes `npm run ingest`, and does the whole ingest** | Greg delegated; settled with Sol, **against our own recommendation** — see stage E |
+| 6 | **Run the job to the end of G. `I` waits on Greg's Vercel change; `H` is sized after G rather than committed to now** | Greg, 2026-09-04 — below |
 
 For 4 and 5 Greg's instruction was: *"Use your judgment — get input from GPT Sol if needed, aiming
 for simple/clean/long-term-best."* Sol agreed with us on 4 and **disagreed on 5**, and the reasoning
@@ -263,6 +264,33 @@ stage 4 with the filesystem store, which is the right time for it to die"* — b
 every stage to stay runnable on its own, and Greg kept the rule. **This is stage E, and Sol called
 it the plan's missing major stage:** it must land *before* the artefact filesystem machinery is
 deleted, not after.
+
+**6 — how far to run. Decision: through G, on a better reason than the one we gave.** Asked
+mid-flight whether the whole thing was still worth doing, we recommended C → F and said G could be
+reassessed, costing G as *maintenance burden* — which is nearly inert in a repo this young. Greg
+overruled the framing:
+
+> I would like to delete dead code, to avoid future agents being confused.
+>
+> — Greg, 2026-09-04
+
+That is the stronger argument and it is the one to keep. **In a repo where agents read the code to
+decide what to do, 3,900 lines of live-looking filesystem store is an active hazard, not clutter.**
+Every agent that opens `src/store/fs.ts` has to work out for itself that nothing runs it.
+
+**The same reason carries `I`, which is why `I` is not optional either.** The tombstone is live code
+reading `SPIDERYARN_STORE` and throwing on `files`; a permanent validated no-op says a store
+selection still exists. See § *The tombstone*, which already says so in its own words. `I` is small —
+one deletion and the grep listed under the stage — but it is **gated on Greg**, not on us: there is no
+Vercel credential on this box, so the variable has to come out of Preview and Production by hand
+first, and a hinge that threw on any value before that would break the next deploy.
+
+**`H` is the odd one out and is deliberately left open.** `G` and `I` remove things that mislead;
+`H` *adds* strictness the filesystem store had been preventing. Nothing is incoherent without it, it
+carries its own design question (chat's return type split, and whether `claimsProblem`'s unreachable
+400 stays as a fail-safe), and bundling it would mean the store deletion cannot be called done until
+an unrelated type change lands. **Size it after G**, which touches the same seams, rather than
+committing either way now.
 
 ## Where the ancestor plan is wrong
 
@@ -3178,7 +3206,8 @@ executor/transaction-aware.** Acceptance must prove all five:
 
 1. `pgCostStore.record` genuinely executed (not silently skipped).
 2. Fixture costs were never visible to normal dev reports.
-3. A crashed or failed suite leaves nothing behind.
+3. A crashed or failed suite leaves no ledger rows anywhere a report can see. **Corrected twice** —
+   see below; a `kill -9` proves *confinement*, and cleanup is the scavenger's job, not the run's.
 4. Parallel test files stay isolated from each other.
 5. Direct ledger integration tests still exercise committed behaviour.
 
@@ -3284,6 +3313,192 @@ had as `C → B`.
 what those suites cover is the **unpriced** path. Nothing in them would exercise a BYOK or realtime
 `CHECK`. So *"the route suites prove the ledger columns work"* is not true today, and C should either
 add a fixture that makes it true or stop implying it.
+
+#### C's target cohort, frozen 2026-09-04 before a single edit
+
+Sol's advice on stage B was that a conversion stage needs an **independent oracle fixed before the
+work starts**, or the cohort quietly becomes "whatever turned out to be easy". This is C's, and it is
+not a grep: it is the dynamic witness, which records every call that actually reached the filesystem
+adapter, crossed with `TEST_LANES` and with which files set the flag themselves.
+
+**27 files reach `ai-calls-fs` at run time. 23 are already in `private-postgres`; 4 are in `unit`.**
+And 23 of the 27 set `process.env.SPIDERYARN_STORE = "postgres"` in their own hoisted block, because
+`src/store/live.ts` reads the variable once at module load.
+
+Cross those two facts and C's blast radius falls out exactly. Removing the `NODE_ENV === "test"`
+redirect changes the answer **only** for a file that sets the flag to `postgres`; every file that
+leaves it unset still gets `fsCostStore` from the `files` branch, which survives until F.
+
+| after C, this file… | predicted | actual |
+| --- | --- | --- |
+| writes its ledger rows to the **private database**, as intended | 22 | 21 |
+| **breaks, and is C's actual work** | **1** — `tests/cost-store-under-test.test.ts`, the only file both pinning the flag to `postgres` and living in the lane where `DATABASE_URL` is poisoned | **2** — that one, plus `tests/live-session-routes.test.ts`, four cases |
+| is untouched, because it leaves the flag unset | 4 | 4, confirmed by run |
+
+**Reproduce the freeze with** `scripts/store-migration-witness.ts` output crossed against `TEST_LANES`;
+the counts above are from `tests/store-migration-witness.json` measured `2026-09-04T22:17:39Z`.
+
+##### The freeze was one file short, and the predicate is why
+
+`tests/live-session-routes.test.ts` sets the flag and is in `private-postgres`, so the cross put it in
+the twenty-two called *"intended, should stay green"*. It was not green. It does not only **write**
+ledger rows — it **reads them back**, out of a JSONL it pointed `SPIDERYARN_LEDGER` at. Remove the
+redirect and the rows go to Postgres while the assertions go on reading an empty file.
+
+**The predicate was wrong, not the measurement.** *"Removing the redirect changes the answer only for
+a file that sets the flag to `postgres`"* is true, and it predicts **where rows go** — not **which
+assertions look for them**. A witness of writes cannot see a reader.
+
+This is the fourth outing of the same personal class in this plan — *an incomplete search reported as
+an absence* — and its most interesting one, because nothing was searched incompletely. The scan was
+exhaustive over the thing it scanned. **The freeze answered a different question from the one the
+stage was asking**, and read as an answer to both.
+
+Worse, **the file said so itself.** Its header carried *"the ledger deliberately did not move …
+stage C owns that redirect"*. The cross never asked it.
+
+> **When freezing a cohort for D or E, cross the write-witness with a grep for files that read the
+> store back.** A file that reads is affected by a change to where writes land, and no dynamic
+> witness of writes will ever list it.
+
+**So C was two files, not one, and not the 23 costed or the 39 the grep ceiling allowed.** The
+ceiling was honest and about 20× too big. `cost-store-under-test.test.ts` was rewritten *and moved to
+`private-postgres`* — the same edit the plan already described as *"the selection is Postgres, and it
+is the private database"*, which also implies a lane change the earlier costing never mentioned.
+
+#### C does not delete `ai-calls-fs.ts` — G does
+
+The earlier costing said *"`selected()` collapses to `export const costStore = guardedLedger`,
+`ai-calls-fs.ts` goes"*. **That contradicts stage G**, whose deletion order names `ai-calls` as one of
+its groups, and it is G that is right. Deleting the adapter in C would mean the ledger required a
+database while every other store was still on files — breaking the one thing `ai-calls-fs.ts`'s
+docstring says it exists for, three stages before the hinge that makes it safe.
+
+**C removes the `NODE_ENV === "test"` line and nothing else about the selection.** The `files` branch
+stays until F, the adapter until G. That keeps C at a stopping point where the tree is deployable,
+which is what a stage boundary is for. Settled here rather than asked, as a technical fork; put to
+Sol at the stage-end review.
+
+#### C is done, 2026-09-05, and all five criteria were proved by run
+
+One line removed from `selected()`; `ai-calls-fs.ts` untouched, as § *C does not delete it* argued.
+Two test files rewritten, one lane change, four docstrings that described the redirect as present
+tense corrected.
+
+| # | criterion | what the run printed |
+| --- | --- | --- |
+| 1 | `pgCostStore.record` genuinely executed | **16 rows** in `spideryarn.ai_calls` of the run's own database, counted **from outside the process** by an external poller; every other test database `0` |
+| 2 | fixture costs never visible to dev reports | `postgres` held `914 / 2026-09-04T22:52:15Z` before and after a full unit lane, three full private lanes and both mutation runs — **unchanged** |
+| 3 | a crashed run leaves no rows a report can see *(wording corrected twice — see below)* | `kill -9` mid-run: 13 committed rows survived **in the run's own database**, `postgres` still 914. Ordinary runs print `dropped spideryarn_test_…`; a live scavenge fired unprompted during the stage |
+| 4 | files stay isolated | two concurrent private-lane runs, one route file each: two distinct databases, `test-chat-route-fixture=4` and `test-remember-route-fixture=16`, neither seeing the other — **and those are the literal fixture slugs from the 4,714-row incident** |
+| 5 | direct ledger tests still exercise committed behaviour | `store-ai-calls` + `ai-calls-spend-pg`, **35 passed** |
+
+**Criterion 1 is the one worth reading twice.** With the redirect in place, **no route suite in the
+tree had ever put a row through `pgCostStore`** — the adapter that meters real money was exercised
+only by tests importing it directly. The redirect bought isolation by removing coverage of the only
+store that deploys, and C is where that stops.
+
+**Criterion 4's wording no longer fits the design it is being applied to**, and the plan should say so
+rather than let a green tick stand for a question nobody asked. The private lane is
+`fileParallelism: false`, so *parallel test files* do not exist inside it — files share one database,
+serially. What was measured instead, and is the true statement, is that concurrent **runs** are
+isolated. The residual risk the criterion was written for reappeared as the range-scan problem below,
+which is a different question with a different answer.
+
+##### The range scan, found by looking and fixed by scoping
+
+One database per run and no rollback means `costStore.read()` over the default window returns **every
+earlier file's rows**, not this file's. Every caller was enumerated:
+
+| | verdict |
+| --- | --- |
+| `tests/live-session-routes.test.ts` — `const before = (await ledger()).length` | **the one real instance.** `ledger(id)` now filters on the session id **inside the helper**, so all six call sites are scoped |
+| `tests/store-ai-calls.test.ts` | already safe — every read filtered by `runId` |
+| `tests/ai-calls-spend-pg.test.ts` | already safe *and deliberately*: its fixtures are dated **2031**, with a docstring saying that is so no other test or report shares its window |
+| `src/jobs.ts` → `costStore.forJob(job.id)` | job-scoped |
+| `scripts/ai-cost.ts` | the only wide reader; no test drives it against a live store |
+
+**Fixed by scoping the assertion, not by widening a tolerance** — a range assertion loosened until it
+passes is the same failure this plan keeps finding.
+
+#### C's stage-end review — one round, three findings, all three real
+
+GPT Sol, 2026-09-05, `gpt-5.6-sol` at high effort. **Refused on an established P1.** All three
+findings checked by hand; none was wrong.
+
+| ID | sev | finding | disposition |
+| --- | --- | --- | --- |
+| F1 | **P1**, established | `scripts/store-migration-witness.ts` § `POSITIVE_CONTROLS` uses `cost-store-under-test.test.ts` as its positive control for `ai-calls-fs`. C converted that file, so **the witness's own self-check could no longer pass** | fixed — control moved to `tests/store-ai-calls.test.ts` |
+| F2 | P3, established | criterion 3's wording claims a killed run leaves nothing behind, while the stage's own evidence shows the opposite | fixed — see above |
+| F3 | P3, established | the new `ledger()` helper's comment says "scoped by session id **in the query**"; it is a JavaScript filter over an unbounded read | fixed — comment now says what the code does, and why JS is the right call at 16 rows |
+
+**F1 is the interesting one, and it is the fourth thing this stage got wrong.** The control's own
+docstring predicts it exactly — *"Stage B converts these files one by one, and when it converts one
+this self-check goes red saying so … replace the control with a file that still touches the same
+module"* — and neither the implementer nor I ran the self-check, because C is not stage B and the
+sentence names stage B. **A rule written for one stage stopped being read at the stage boundary.**
+
+Watched red before it was fixed, then green after, which is why it is recorded as established rather
+than reasoned:
+
+```
+SELF-CHECK FAILED (1):
+  - tests/cost-store-under-test.test.ts: expected ai-calls-fs:fsCostStore.record,
+    ai-calls-fs:fsCostStore.describe; saw nothing
+```
+
+**Add `--self-check` to the end of every remaining stage that converts a file**, D through G. It
+takes ~40 seconds and it is the only thing that notices a control has gone stale.
+
+**Sol also checked three things and cleared them**, and they are worth recording because they were
+the ones I was least sure of: the second connection in `cost-store-under-test.test.ts` cannot escape
+to a remote database (the test-database factory refuses non-loopback hosts and `host`/`hostaddr`
+overrides, and `urlForDatabase` replaces only the pathname); restoring `SPIDERYARN_STORE` after the
+hoisted imports is safe, because `STORE` is captured at module load and vitest isolates module graphs
+per file; and **there is no third ledger read-back dependency** — the direct readers reduce to the
+corrected helper, job-scoped `forJob`, the explicitly filtered adapter tests, and the report script.
+
+**One round, not two, and the reason is mechanical.** The cap allows a narrowly scoped second pass on
+a P0/P1 established at round two; F1 was round one, and its fix is verified by the instrument's own
+self-check going red and then green — which outranks a second reasoned opinion about a two-line
+change.
+
+##### Criterion 3 was wrong a second time, and Sol caught it
+
+The first draft said a killed run would *roll back*. That was corrected during the spike to
+*"leaves nothing behind, proved by teardown"*. **Still wrong**, and the stage's own evidence says so:
+`kill -9` skips teardown, and the scavenger deliberately **spares** a database for six hours so that
+it cannot delete one a live run is using. Sol reproduced the sparing directly —
+`chooseScavengeVictims` on a zero-second-old database returns `dropped: []`, spared against a
+21,600-second threshold.
+
+So what the kill proved is **confinement, not cleanup**, and those are different claims:
+
+> An ordinary failed suite drops its private database at teardown; a killed run leaves only its
+> private database, never rows in the development ledger, and a later run scavenges that database
+> once it is stale.
+
+That is the criterion. **Three drafts to state one fact correctly**, all three sounding fine — and
+each was checked by somebody looking straight at the evidence that contradicted it. Worth noting
+because the same shape has now appeared in this plan at every scale: the redirect, the freeze, and
+now the criterion the freeze was measured against.
+
+##### The witness was not re-run after C, deliberately
+
+Both files C touched have stopped reaching `ai-calls-fs`, so
+`tests/store-migration-witness.json` now **over-reports** the filesystem store's run-time reach by
+two. That is the safe direction and the guard cannot fire on it: § *leaves no file that the import
+graph can reach and nothing accounts for* goes red when the witness **lacks** a record an entry
+claims, never when it holds one nobody needs any more.
+
+**Deferred to after D**, where 22 files change at once when the fixture loader moves — one 25-minute
+run instead of two. The registry entry for `cost-store-under-test.test.ts` says in its own docstring
+that it survives only because the witness still lists the file, so nobody reading it later mistakes
+the staleness for a measurement.
+
+**91 is therefore no longer the live number**; it is 89, un-remeasured. Do not quote it as a
+measurement until the run after D. § *The treadmill* has the standing rule about hand-editing that
+file, which still applies: nobody edits it to make a guard green.
 
 ### D — the fixture loader, which is two tools not one
 

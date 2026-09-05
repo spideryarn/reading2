@@ -16,8 +16,8 @@
  * all, given that `files` is the default and a cost tracker that records
  * nothing by default is worse than none.
  *
- * **Under the test harness it is always the filesystem one**, whatever the flag
- * says, and `selected()` below is where that is decided and why.
+ * **The test harness gets no special case**, and `selected()` below records the
+ * one that used to be here and why it went.
  */
 
 import type { AiCallRow } from "../ai-spend.js";
@@ -40,10 +40,11 @@ import { STORE } from "./live.js";
 const guardedLedger: CostStore = guardDbStore("ai-calls", pgCostStore);
 
 /**
- * **Which adapter answers this call** — the store flag, except under the test
- * harness, where it is always the filesystem one.
+ * **Which adapter answers this call** — the store flag, and nothing else.
  *
- * `ai-calls-fs.ts` already solved test pollution for `files` mode: it writes to
+ * ## There was a third case here for three days, and this is why
+ *
+ * `ai-calls-fs.ts` had solved test pollution for `files` mode: it writes to
  * `data/_ai-calls.test.jsonl` when `NODE_ENV` is `test`, because several suites
  * drive real requests through `handleApi` and every one of those opens a
  * collector with this store behind it. `ai-calls-pg.ts` never had the other
@@ -54,24 +55,39 @@ const guardedLedger: CostStore = guardDbStore("ai-calls", pgCostStore);
  * meaningless, and the standing "3,872 calls reported no cost" warning masked
  * the one signal that would show a real unpriced problem.
  *
- * **Redirecting rather than refusing**, on GPT Sol's call: a store that threw
- * under test would stop the route suites exercising the metering lifecycle at
- * all, which is the half of the ledger those tests are the only cover for. An
- * `is_test` column and a synthetic `scope_kind` were both rejected — neither
+ * The fix that day was a line at the top of this function —
+ * `if (process.env.NODE_ENV === "test") return fsCostStore;` — **redirecting
+ * rather than refusing**, on GPT Sol's call: a store that threw under test would
+ * stop the route suites exercising the metering lifecycle at all, which is the
+ * half of the ledger those tests are the only cover for. An `is_test` column and
+ * a synthetic `scope_kind` were both rejected then and stay rejected — neither
  * keeps fixture rows out of a `GROUP BY` somebody writes next month without
- * knowing to exclude them. The focused `pgCostStore` tests in
- * tests/store-ai-calls.test.ts still go to Postgres, by importing the adapter
- * directly and cleaning up after themselves.
+ * knowing to exclude them.
  *
- * **Asked per call, not once at module load, and that is the whole trap.** The
+ * ## What replaced it, on 2026-09-05
+ *
+ * **A database, not a branch.** The `private-postgres` vitest project mints a
+ * database for the run, points `DATABASE_URL` at it and drops it afterwards
+ * (tests/setup/private-db.ts), so a fixture row written through `pgCostStore` is
+ * a real row that no report and no other run can see. That is the isolation the
+ * redirect was standing in for, and it is stronger in the direction that
+ * mattered: with the redirect in place **no route suite in the tree had ever put
+ * a row through the Postgres adapter**, which is the only one that deploys.
+ *
+ * So this function is the flag again, and
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § C is where it was argued. tests/cost-store-under-test.test.ts is what says
+ * the rows land in the private database and not in the developer's own.
+ *
+ * **Asked per call, not once at module load, and that is still the trap.** The
  * comment on `ledger()` in ai-calls-fs.ts records what happened the first time:
- * ESM hoists static imports, so a module-level constant here is decided before
- * any test body runs, and a suite that sets `NODE_ENV` in its own `beforeAll`
- * would already have been given the Postgres adapter. It would then write to
- * the shared ledger while looking exactly like a test that had been redirected.
+ * ESM hoists static imports, so a module-level constant here would be decided
+ * before any test body ran, and a suite that sets `SPIDERYARN_STORE` in its own
+ * `beforeAll` would already have been given the other adapter — writing
+ * somewhere it did not intend while looking exactly like a suite that had been
+ * configured.
  */
 function selected(): CostStore {
-  if (process.env.NODE_ENV === "test") return fsCostStore;
   return STORE === "postgres" ? guardedLedger : fsCostStore;
 }
 
