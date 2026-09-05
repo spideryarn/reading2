@@ -132,7 +132,10 @@ Three things about that number are deliberate:
 
   The second is **the panel's own top edge**, and it is the one that actually bit. `ColumnRect.top`
   is the header row's bottom, and that row is sticky under the masthead, so it settles over the
-  first hundred and fifty pixels of scroll — as its own doc comment says. The version of this that
+  first hundred and fifty pixels of scroll — as its own doc comment says. (Since 2026-09-05 that row
+  has **no height**, so its bottom edge is the controls bar's own and a panel now starts directly
+  under the bar. The row is still there, and deleting it would leave every panel with no rectangle
+  at all — [granularity-zoom.md § the header row](granularity-zoom.md#the-header-row).) The version of this that
   took `stableH - rect.top` fixed the phone and reopened the identical hole on every desktop:
   measured in a browser at four lines and three, two hundred pixels down the article, against two
   and one at the top of it. A reader arriving at an article and scrolling once watched every

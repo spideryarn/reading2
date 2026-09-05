@@ -408,7 +408,8 @@ explicitly. A pass run against a bare `/` looks fine and exercises none of it.
 | URL | What you're looking at |
 |---|---|
 | `/` | **Plain** — the article and nothing else. Since 2026-09-05 there is no controls bar to speak of here at all |
-| `/?mode=hierarchy` | reading mode: column headers `Parts L1 │ Sections L2 │ Text verbatim` and a controls bar of `L1 · L2 · Para` and nothing else — [granularity-zoom.md § What the bar calls each column](granularity-zoom.md#what-the-bar-calls-each-column) |
+| `/?mode=hierarchy` | reading mode: a controls bar of `Parts · Sections · Paragraphs` and nothing else. **No column-header row** — since 2026-09-05 the `<thead>` is still in the DOM and has zero height, which is not the same as being gone: read `document.querySelector('thead th').getBoundingClientRect().height` and expect exactly `0`, and check the fisheye panels still have their contents ([granularity-zoom.md § the header row](granularity-zoom.md#the-header-row)) |
+| `/?mode=hierarchy&text=0` | an old link from before the `Text` pill went. It must **rewrite itself to `?mode=outline`** before the page paints, dropping the `text` pair — the address had no way back to the prose ([url-state.md](url-state.md#the-parameters)) |
 | `/?mode=hierarchy&cols=0,1,2` | an old link from before the L0 column went. It must open **1 and 2**, silently dropping the `0` — not error, not draw an empty column |
 | `/?mode=outline` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
 | `/?mode=hierarchy&at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
@@ -786,11 +787,16 @@ Adding `layer(app)` and finding the page unchanged is *also* what total failure 
 both halves: that the app rules are inside the layer, **and** that a temporary `tw:px-4` on something
 inside `.controls` actually moves it.
 
-**`/?text=0` is where a scanner collision shows.** Tailwind's source scanner is a plain text scan,
-so before `prefix(tw)` it generated an `.outline` utility — and `TableView` uses `outline` as a
-*mode* class on the `<table>`. The result was a 1px border round the whole table, in a mode you have
-to opt into, that reads as a deliberate design choice. Outline mode is not the default view; check
-it explicitly, every time styling changes.
+**`/?text=0` was where a scanner collision showed, and it is not reachable any more.** Tailwind's
+source scanner is a plain text scan, so before `prefix(tw)` it generated an `.outline` utility — and
+`TableView` uses `outline` as a *mode* class on the `<table>`. The result was a 1px border round the
+whole table, in a state you had to opt into, that read as a deliberate design choice. **Since
+2026-09-05 `?text=0` is rewritten away at boot** ([url-state.md](url-state.md#the-parameters)), so
+nothing sets `showText` false and `table.zoom.outline` cannot be drawn at all — which means this
+particular check no longer fires and the collision would now hide until somebody reintroduces the
+state. The lesson generalises and is the part to keep: a *mode* class that shares a name with a
+utility is a border nobody ordered, and the only way to see it is to get the mode on screen. Check
+whichever of `.reading`, `.overflowing` and `.only-prose` you can reach when styling changes.
 
 Related, and worth knowing before you trust the compiled CSS at all: **`tailwind.css` sets
 `source(none)` with one explicit `@source`, because v4 otherwise scans from the project root and

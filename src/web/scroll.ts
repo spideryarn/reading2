@@ -52,29 +52,53 @@ export function dockOffset(): number {
 }
 
 /**
- * Height of the chrome a row arriving at the top has to clear: `.controls` plus
- * the table head. **Measured, not declared.**
+ * Height of the chrome a row arriving at the top has to clear: `.controls`, and
+ * the status bar behind it. **Measured, not declared.**
  *
  * This used to be the literal `84`, with a comment asking whoever changed
- * `--bar-h` or `--head-h` in styles.css to remember to change it here too. Three
- * separate things now depend on it — deep links, the `?at=` tracker, and the
- * arrow keys — and the failure when it drifts is the quiet kind this codebase
- * keeps meeting (docs/reusable/silent-success.md): nothing errors, every jump
- * simply lands a few pixels under the bar it was supposed to clear, and the
- * check you would run to confirm the scroll worked says it worked.
+ * `--bar-h` or the table head's height in styles.css to remember to change it
+ * here too. Three separate things now depend on it — deep links, the `?at=`
+ * tracker, and the arrow keys — and the failure when it drifts is the quiet kind
+ * this codebase keeps meeting (docs/reusable/silent-success.md): nothing errors,
+ * every jump simply lands a few pixels under the bar it was supposed to clear,
+ * and the check you would run to confirm the scroll worked says it worked.
  *
- * Measuring the bars themselves cannot drift, and it covers a header that wraps
- * to two lines, browser zoom, and a user's larger default font size. Note it is
- * no longer *only* a height — see the note inside on the bar that moves, and on
+ * Measuring the bar itself cannot drift, and it covers a bar that wraps to two
+ * lines, browser zoom, and a user's larger default font size. Note it is no
+ * longer *only* a height — see the note inside on the bar that moves, and on
  * why the clamp's ceiling is a prediction rather than a measurement.
  *
- * Two rects per call. Everything asking already reads layout in the same batch.
+ * **The table head left this answer on 2026-09-05.** It used to be a second
+ * term, `document.querySelector("thead th")`, and two things went wrong with
+ * that at once:
+ *
+ *  - **It measures nothing now.** The head keeps its element — the fisheye
+ *    panels take every column's rectangle from it (useColumnContext.ts) and a
+ *    `<th scope="col">` is what names a column for a screen reader — and gives
+ *    up its height (styles.css § the head with no row). A term that is always zero
+ *    is not a term.
+ *  - **The query had no scope on it.** An article's own prose can contain a
+ *    `<table><thead><th>`, and it survives sanitising — checked by running
+ *    src/sanitize.ts over one rather than by reading the allowlist. Ours was
+ *    always earlier in document order, so this was latent rather than live in
+ *    both directions; but "the right element by luck of ordering" is not a
+ *    contract, and now there is no query to get wrong.
+ *    `tests/mobile-chrome.test.ts` poses such a head as a decoy.
+ *
+ * One rect per call. Everything asking already reads layout in the same batch.
  */
 export function stickyOffset(): number {
+  const safeTop = safeAreaInsets().top;
   const bar = document.querySelector<HTMLElement>(".controls");
-  const head = document.querySelector<HTMLElement>("thead th");
-  // Before the table exists there is nothing in the way, so nothing to clear.
-  if (!bar || !head) return 0;
+  /* **`safeTop`, not `0`, when there is no bar.** There is a fixed opaque
+     `.reader::before` of exactly the inset's height painting the strip under
+     the clock (styles.css `.reader::before`), so a destination has to clear it
+     whether or not a bar is drawn on top. Returning `0` here would land every
+     jump under the status bar on the one kind of device that has one — and
+     stage 4 of docs/plans/260905d-declutter-the-reading-view-top-bars.md takes
+     the bar away in most modes, which turns this from a boot-time transient
+     into the resting state. GPT Sol, reviewing the plan, 2026-09-05. */
+  if (!bar) return safeTop;
   const rect = bar.getBoundingClientRect();
   /**
    * **How much of the bar a row arriving at the top will have to clear** — not
@@ -121,18 +145,19 @@ export function stickyOffset(): number {
    *
    * **And it is the FLOOR as well, which is the case that is easy to miss.**
    * When the bar has slid away its `bottom` is negative, so the floor is what
-   * the expression returns — and it is not zero any more: the table head is
-   * still pinned at `--safe-top`, under the clock, so a destination must clear
-   * that even with the bar gone. A floor of `0` under-reported by a whole
-   * status bar in exactly the state a reader spends most of their time in.
+   * the expression returns — and it is not zero: `.reader::before` still paints
+   * an opaque strip of exactly this height under the clock, so a destination
+   * must clear that even with the bar gone. A floor of `0` under-reported by a
+   * whole status bar in exactly the state a reader spends most of their time
+   * in. (The reason used to be written as "the table head is still pinned at
+   * `--safe-top`", which was true and is not any more; the pseudo-element was
+   * always the more durable half of it.)
    *
    * On every device without a notch both terms are `0` and this is the line it
    * always was, which is why `tests/mobile-chrome.test.ts` poses an inset
    * rather than trusting the machine it runs on.
    */
-  const safeTop = safeAreaInsets().top;
-  const covering = Math.max(safeTop, Math.min(rect.height + safeTop, rect.bottom));
-  return covering + head.getBoundingClientRect().height;
+  return Math.max(safeTop, Math.min(rect.height + safeTop, rect.bottom));
 }
 
 /**

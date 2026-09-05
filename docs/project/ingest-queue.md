@@ -78,6 +78,7 @@ the progress list.
 | [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the subscription over the engine, and the actions |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) | the box on the shelf, the progress list, and `JobCard` |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | `/add/<a whole URL>` — [§ The add page](#the-add-page) |
+| [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the third front door: *add to Spideryarn* on the hover card of an external hyperlink, which posts the same `{ url }` from inside the reading view — [links.md § Add it to Spideryarn](links.md#add-it-to-spideryarn) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
 | [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker, the drop zone and the progress bar — [§ Uploading a PDF](#uploading-a-pdf) |

@@ -17,6 +17,13 @@
  *      column is not sitting under a left-aligned title
  *      (§ the title over the column)
  *
+ * **There was a fourth, and it went on 2026-09-05.** `th.text .th-measure` put
+ * the `Text verbatim` heading on the prose's left edge by the same arithmetic.
+ * The column-header row lost its height that day and its labels became
+ * `.sr-only` spans (styles.css § the head with no row), so there is no heading
+ * to align: both the rule and the two spans it needed are gone.
+ * docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 3.
+ *
  * **Delete any one of the three and the page still renders**, which is exactly
  * the species of silence `tests/spine-width.test.ts` and `doc-links.test.ts`
  * exist for. What none of them can see is whether a browser actually centres
@@ -76,39 +83,32 @@ describe("the reading column is centred in its cell", () => {
     expect(r).toContain("font-weight: var(--reading-weight)");
   });
 
-  it("the column heading travels with the prose, and only that heading", () => {
-    const r = rule("th.text .th-measure");
-    // Same quantity as the gutter's, with the percentage base written for a
-    // block child: `100%` is the head cell's content box, so the head's own
-    // gutter is added back before the body cell's two pads come off.
-    expect(r).toContain("var(--head-pad-x)");
-    expect(r).toContain("var(--text-pad-l)");
-    expect(r).toContain("var(--text-pad-r)");
-    expect(r).toContain("var(--reading-measure)");
-    expect(r).toMatch(/margin-left: max\(\s*0px/);
-    // The reading face, or `65ch` counts the chrome's zeroes — see the gutter.
-    expect(r).toContain("font-size: var(--reading-size)");
-    expect(r).toContain("font-weight: var(--reading-weight)");
-    // …and the head's own type goes back on the inner span, from the same two
-    // names `thead th` sets it from, so the heading cannot drift from its
-    // neighbours.
-    const name = rule("th.text .th-name");
-    expect(name).toContain("font-size: var(--head-type-size)");
-    expect(name).toContain("font-weight: var(--head-type-weight)");
+  /**
+   * **The heading that used to have to travel with the prose has no height.**
+   *
+   * This is what is left of that case: an assertion that the row really is
+   * collapsed, rather than that its one visible label is aligned. The three
+   * things it checks are the three ways a zero-height head silently stops being
+   * one — a padding, a border, or a label left in flow will each hold the row
+   * open, because a table cell treats `height` as a *minimum*.
+   */
+  it("the column-header row has no height left to align anything in", () => {
     const head = rule("thead th");
-    expect(head).toContain("font-size: var(--head-type-size)");
-    expect(head).toContain("font-weight: var(--head-type-weight)");
-    expect(head).toContain("padding: 0.5rem var(--head-pad-x)");
-  });
-
-  it("and TableView is what puts `text` on that one header cell", () => {
-    /* The selector above is inert without it, and a class that no component
-       writes is a rule the next reader has to prove is dead — the mistake
-       `.block-id` left behind in § text. */
+    expect(head).toContain("height: var(--head-h)");
+    expect(head).toContain("padding: 0");
+    expect(head).not.toContain("border-bottom");
+    // The token itself, or `height: var(--head-h)` above proves nothing.
+    expect(css).toMatch(/--head-h:\s*0px/);
+    /* And the labels are out of flow, or the cell is as tall as its text
+       whatever `height` says. `.sr-only` is the shared utility (§ screen
+       readers); TableView writing something else would pass the CSS check
+       above and render a 20px row. */
     const tsx = readFileSync(new URL("../src/web/TableView.tsx", import.meta.url), "utf8");
-    expect(tsx).toContain('className={`text pin-right${');
-    expect(tsx).toContain('<span className="th-measure">');
-    expect(tsx).toContain('<span className="th-name">');
+    expect(tsx).toContain('<span className="sr-only">{columnLabel(d, geometry.leafDepth)}</span>');
+    expect(tsx).toContain('<span className="sr-only">Text verbatim</span>');
+    // …and the column is still named for a screen reader, which is the whole
+    // reason the text is hidden rather than deleted.
+    expect(tsx).toContain('scope="col"');
   });
 
   it("the footnotes opt out as a block, apparatus and all", () => {

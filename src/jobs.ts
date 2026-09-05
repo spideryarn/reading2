@@ -650,6 +650,25 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      If the brief ever needs to be longer, the lever the plan names is the
      prompt: cap the vignette count and the length of the compositions. */
   illustrated: 600_000,
+  /* **A GUESS, and the honest label matters here more than usual**, because
+     nothing this step does is bounded by a parameter.
+     ⟨Stage 0/0b, 2026-09-05, docs/plans/260905f-debate-mode-stage-0-spike-results.md⟩
+     A bare probe — three or four searches, no article, no schema — took 10.0 to
+     10.3 s. This step is two of those in sequence, and the second carries the
+     whole article, so 120 s is roughly six times the only thing measured.
+
+     **What it does NOT bound is the spend**, and that is the point to carry
+     away. `max_total_results` is enforced to the row and is not a budget: an
+     adversarial probe with the cap at 4 ran **36 searches** for $0.10, because
+     nothing in the request caps the number of *searches* and searches are what
+     cost money. So the ceiling here is made of three things and none of them is
+     a parameter — a prompt written for restraint rather than thoroughness, this
+     deadline, and `webSearches` on the `ai_calls` ledger row as the alarm.
+
+     Re-measure at the end of the stage rather than leaving this a guess: the
+     plan says so, and the first runs against the shelf are what will say
+     whether the article-carrying pass is 20 s or 60 s. */
+  debate: 120_000,
 };
 
 /**

@@ -323,6 +323,18 @@ top-level key comes back `200` with no complaint. Only an observable difference 
 proves anything — the provider pin is believed here because the *named upstream changed*, not
 because the call succeeded.
 
+**And its dual, which is the one that costs money: OpenRouter honouring a field is not evidence that
+the field bounded the spend.** A result cap is not a spend cap. `openrouter:web_search`'s
+`max_total_results` is enforced exactly — a probe on 2026-09-05 asked for 4 and got 4 — and in the
+same call the provider ran **36 searches** to produce them, at $0.10. Nothing in the request bounds
+the number of searches, and the number of searches is what is billed; `max_uses` is no better, a
+probe asking for 2 got 6 ([`src/converse.ts`](../../src/converse.ts) § `webSearchTool`). What drove
+the 36 was a prompt ordering the model to *be thorough* — which bought no extra evidence, because the
+results were capped anyway. **So a prompt for a searching call is a cost control**, and the honest
+bounds are an abort deadline and `webSearches` on the ledger row as the alarm. Measured while
+planning Debate mode; the numbers and the method are in
+[260905f](../plans/260905f-debate-mode-stage-0-spike-results.md) § Stage 0b.
+
 ## What it cost
 
 **One vendor now sits in front of the whole app.** Before this, an OpenRouter outage cost the reader

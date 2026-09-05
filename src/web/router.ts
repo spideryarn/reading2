@@ -70,7 +70,9 @@ import { isSlug, PUBLIC_LIBRARY_SLUG } from "../ingest.js";
    article's head has to know which view an address settles on, and it may not
    import anything under src/web/. */
 import {
+  hidesProse,
   isLegacyAboutPair,
+  isTextOffPair,
   queryPairs,
   redirectsToMetadata,
   type ArticleView,
@@ -834,6 +836,18 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacyAnchor(at);
   at = liftLegacySlug(at);
   at = liftLegacyAbout(at);
+  /* **Last, and both halves of that are deliberate.**
+     *After* `canonicalAddHref`, because an `/add/` address's query belongs to
+     the URL being added — `addUrlFrom` puts it straight back onto it — so
+     dropping a pair before canonicalisation adds a different article. Once that
+     has run, the query has been folded into the encoded segment and there is
+     nothing here to touch. *Last of all* rather than merely after it, because
+     the three lifts above each rebuild `search` (the anchor lift appends `at=`;
+     the other two move the query onto a different path), and this way there is
+     one shape of query to reason about instead of four. Nothing below it can be
+     affected either, because unlike the other four this rewrite never changes
+     which page you land on. */
+  at = liftStrandedText(at);
 
   const href = `${at.pathname}${at.search}${at.hash}`;
   return href === was ? null : href;
@@ -987,6 +1001,74 @@ function liftLegacyAbout(at: Address): Address {
     return { ...splitHref(readHref(route.slug, rest, "metadata")), hash: at.hash };
   }
   return { pathname: at.pathname, search: rest ? `?${rest}` : "", hash: at.hash };
+}
+
+/**
+ * **`?mode=hierarchy&text=0` → `?mode=outline`, and the `text` pair goes
+ * whatever the mode was.**
+ *
+ * The `Text` pill was the only way back to the prose, and it went with the rest
+ * of the controls bar on 2026-09-05 — so an old `?mode=hierarchy&text=0` link is
+ * a table with the article hidden and nothing on screen that puts it back. This
+ * is the fifth of these rewrites and the first that is about a state the app
+ * used to be able to leave.
+ *
+ * **Outline, and the argument is not the obvious one.** Neither destination
+ * restores the no-prose state — `proseVisible` is `modeBand || showText`, so a
+ * mode band always shows the article — which means "honour what they asked for"
+ * cannot decide it. What decides it is that **the reader who saved that link was
+ * looking at a bar that said OUTLINE**: the old `reading`/`outline` chip flipped
+ * to `outline` whenever `text=0` was on, granularity-zoom.md calls the compact
+ * table "outline mode" throughout, and TableView still classes it `zoom outline`.
+ * So Outline is the name that reader already associates with what they
+ * bookmarked, and a nested list that expands around them beats a table whose
+ * rows are separated by thousands of pixels of the prose it just put back.
+ * Arbitrated by Fable, 2026-09-05.
+ *
+ * **The unconditional half looks like tidying an inert parameter and is not.**
+ * `text=0` bites only in Hierarchy (`inMode` is `mode !== "hierarchy"`), so a
+ * bare `?text=0` lands harmlessly in Plain — and then strands the reader the
+ * moment they press Hierarchy on the Dock, because the parameter is still in the
+ * URL. Dropping it is defusing something with a delay on it.
+ *
+ * Everything else is carried through byte for byte, `?cols=0,1` included: a
+ * stale column set is dead weight in Outline and harmless, where reserialising
+ * it would turn those commas into `%2C`. The mode is rewritten **in place**, so
+ * the order the reader's link was written in survives too — and only the
+ * **first** `mode` pair, because that is the one every reader of this query
+ * gets back (`URLSearchParams.get` returns the first match, and so does nuqs).
+ * A duplicate further along is somebody else's already-ignored pair, and
+ * rewriting it would both be a lie and produce `?mode=outline&mode=outline`.
+ *
+ * The server predicts all of this — `readMode` in src/read-address.ts — or the
+ * tab would say Hierarchy and then say Outline a second later, which is the
+ * whole subject of docs/project/page-titles.md.
+ */
+function liftStrandedText(at: Address): Address {
+  /* **Two questions, and they are not the same one.** *Is there anything to
+     remove* is `.some()`: every `text=0` in the query goes, first or fortieth,
+     because an inert one left behind is the landmine this rewrite exists to
+     defuse. *Is the reader stranded* is `hidesProse`, which asks only the
+     first `text` pair — the one nuqs actually reads. `?text=1&text=0` is
+     therefore tidied without anybody being moved out of Hierarchy. Conflating
+     the two was GPT Sol's F2 on this stage, 2026-09-05. */
+  if (!queryPairs(at.search).some(isTextOffPair)) return at;
+  /* `hasKey` below rather than `pair.startsWith("mode=")`, and this read decodes
+     the key too — so `?%6dode=hierarchy` is answered the same way by the
+     decision and by the edit. A decoding decision paired with a literal removal
+     is the ninth address bug's whole shape. */
+  let stranded =
+    new URLSearchParams(at.search).get("mode") === "hierarchy" && hidesProse(at.search);
+  const kept = withoutPairs(at.search, isTextOffPair)
+    .split("&")
+    .filter((pair) => pair !== "")
+    .map((pair) => {
+      if (!stranded || !hasKey(pair, "mode")) return pair;
+      stranded = false;
+      return "mode=outline";
+    })
+    .join("&");
+  return { pathname: at.pathname, search: kept ? `?${kept}` : "", hash: at.hash };
 }
 
 /**

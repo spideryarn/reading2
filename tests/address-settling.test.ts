@@ -218,6 +218,23 @@ const QUERIES: { search: string; view: ArticleView }[] = [
   { search: "?mode=chat&mode=glossary", view: "article" },
   { search: "?at=spya-k6fpme&%61t=spya-hqrrtt", view: "article" },
   { search: "?%6dode=glossary", view: "article" },
+  /* **The eleventh rewrite, 2026-09-05: `?text=0` is a state with no exit.**
+     The `Text` pill was the only way back to the prose and it went with the
+     rest of the controls bar, so `?mode=hierarchy&text=0` lands a reader in a
+     view they cannot leave. It is rewritten to `?mode=outline` at boot — which
+     means the **server** has to predict it too, exactly as it predicts the
+     metadata redirect, or the tab says Hierarchy for a second and then says
+     Outline. `readMode` in src/read-address.ts is where the two agree. */
+  { search: "?mode=hierarchy&text=0", view: "article" },
+  { search: "?text=0&mode=hierarchy", view: "article" },
+  { search: "?%6dode=hierarchy&text=0", view: "article" },
+  { search: "?mode=hierarchy&text=%30", view: "article" },
+  /* And the cases it must leave alone. `text=0` outside Hierarchy already draws
+     the prose (`proseVisible` is `modeBand || showText`), so only the pair is
+     dropped; `text=1` is the default and is nobody's landmine. */
+  { search: "?text=0", view: "article" },
+  { search: "?mode=glossary&text=0", view: "article" },
+  { search: "?mode=hierarchy&text=1", view: "article" },
 ];
 
 /** Fragments, including the legacy anchor that becomes `?at=` on the way in. */
@@ -400,5 +417,121 @@ describe("the server's title and the client's, over every address either can see
     expect(settled).not.toContain("cols=0%2C1");
     expect(settled).toContain("mode=summary");
     expect(settled).toContain("at=spya-k3m9qt");
+  });
+
+  /**
+   * **`?text=0` had no way out, so it stopped being an address you can be at.**
+   *
+   * The pill that wrote it went with the rest of the controls bar on
+   * 2026-09-05, and `?mode=hierarchy&text=0` renders a table with the article
+   * hidden and nothing on screen that puts it back. So the fifth boot-time
+   * rewrite: the mode becomes `outline`, and the `text` pair is dropped
+   * whatever the mode was.
+   *
+   * **Outline, and not Plain, is the least surprising landing** — arbitrated by
+   * Fable. Neither restores the no-prose state (`proseVisible` is
+   * `modeBand || showText`, so a mode band always shows the article), so that
+   * cannot be the tie-break. What decides it is that the reader who saved the
+   * link was looking at a bar that said **OUTLINE**: the old `reading`/`outline`
+   * chip flipped whenever `text=0` was on, granularity-zoom.md calls the
+   * compact-table state "outline mode" throughout, and TableView still classes
+   * the table `zoom outline` in it.
+   *
+   * The unconditional half is the part that looks like tidying and is not.
+   * `text=0` bites only in Hierarchy — `inMode` is `mode !== "hierarchy"` — so a
+   * bare `?text=0` lands harmlessly in Plain *today*, and arms itself the moment
+   * the reader presses Hierarchy on the Dock, because the parameter is still in
+   * the URL.
+   */
+  describe("the ?text=0 rewrite", () => {
+    const settle = (search: string) => settleAddress(`/read/${SLUG}`, search, "");
+
+    it("sends a stranded Hierarchy address to Outline", () => {
+      expect(settle("?mode=hierarchy&text=0")).toBe(`/read/${SLUG}?mode=outline`);
+      // Order is not part of the rule: the mode is rewritten where it stands.
+      expect(settle("?text=0&mode=hierarchy")).toBe(`/read/${SLUG}?mode=outline`);
+    });
+
+    it("reads an encoded key and an encoded value as the same request", () => {
+      /* The scar `hasKey` carries, in this rewrite's own spelling: a decoding
+         decision paired with a literal removal leaves a pair in the query that
+         one side acts on and the other has never seen. */
+      expect(settle("?%6dode=hierarchy&text=0")).toBe(`/read/${SLUG}?mode=outline`);
+      expect(settle("?mode=hierarchy&te%78t=0")).toBe(`/read/${SLUG}?mode=outline`);
+      expect(settle("?mode=hierarchy&text=%30")).toBe(`/read/${SLUG}?mode=outline`);
+    });
+
+    it("drops the pair in every other mode, and changes nothing else", () => {
+      expect(settle("?text=0")).toBe(`/read/${SLUG}`);
+      expect(settle("?mode=glossary&text=0")).toBe(`/read/${SLUG}?mode=glossary`);
+      expect(settle("?mode=summary&text=0&at=spya-k3m9qt")).toBe(
+        `/read/${SLUG}?mode=summary&at=spya-k3m9qt`,
+      );
+    });
+
+    it("leaves every other pair byte for byte, `cols` included", () => {
+      /* A stale `cols=` is dead weight in Outline and harmless, and rewriting
+         it would re-encode those commas — the thing params.ts spells them out
+         to avoid. */
+      const settled = settle("?cols=0,1&mode=hierarchy&text=0&at=spya-k3m9qt") ?? "";
+      expect(settled).toBe(`/read/${SLUG}?cols=0,1&mode=outline&at=spya-k3m9qt`);
+    });
+
+    it("rewrites the first mode pair only, which is the one anything reads", () => {
+      /* `URLSearchParams.get` returns the first match and so does nuqs, so a
+         second `mode` is already ignored — rewriting it too would say the
+         reader had asked for Outline twice. */
+      expect(settle("?mode=hierarchy&mode=glossary&text=0")).toBe(
+        `/read/${SLUG}?mode=outline&mode=glossary`,
+      );
+      // And a second one behind a *non*-hierarchy first is left entirely alone.
+      expect(settle("?mode=glossary&mode=hierarchy&text=0")).toBe(
+        `/read/${SLUG}?mode=glossary&mode=hierarchy`,
+      );
+    });
+
+    it("says nothing at all about an address that is not stranded", () => {
+      expect(settle("?mode=hierarchy")).toBeNull();
+      expect(settle("?mode=hierarchy&text=1")).toBeNull();
+      expect(settle("?text=1")).toBeNull();
+      expect(settle("")).toBeNull();
+    });
+
+    /**
+     * **A duplicate `text` is decided by the first one, exactly as `mode` is.**
+     *
+     * This rewrite already knows that `URLSearchParams.get` and nuqs both return
+     * the *first* match — it says so above, and only rewrites the first `mode`
+     * pair for that reason. `hidesProse` asked `.some()` instead, so
+     * `?mode=hierarchy&text=1&text=0` was read as stranded while the client read
+     * `text` as `1` and had the prose on screen the whole time: a reader with
+     * the article in front of them, moved out of Hierarchy on the strength of a
+     * pair nothing else in the app will ever look at.
+     *
+     * The later pair is still removed, because "no `text=0` survives boot" is
+     * the rule and an inert one left in the query is the landmine this rewrite
+     * exists to defuse. It just does not get a vote on where the reader lands.
+     *
+     * GPT Sol, reviewing stage 3, 2026-09-05 — the same shape as the ninth
+     * address bug, in the one parameter that had not been given the treatment.
+     */
+    it("lets the first `text` decide, and still takes the later one out", () => {
+      expect(settle("?mode=hierarchy&text=1&text=0")).toBe(`/read/${SLUG}?mode=hierarchy&text=1`);
+      // And the other way round: the first says 0, so it strands and rewrites.
+      expect(settle("?mode=hierarchy&text=0&text=1")).toBe(`/read/${SLUG}?mode=outline&text=1`);
+    });
+
+    /**
+     * **The one it must not fire on.** `/add/<url>`'s query belongs to the
+     * *pasted* URL — `addUrlFrom` puts it back on — so a `?text=0` there is the
+     * article's own parameter and dropping it adds a different page. This runs
+     * after `canonicalAddHref`, which folds the query into the encoded segment,
+     * so by the time it looks there is no query left to touch.
+     */
+    it("does not reach inside a URL somebody is adding", () => {
+      expect(settleAddress("/add/https://x.test/a", "?mode=hierarchy&text=0", "")).toBe(
+        `/add/${encodeURIComponent("https://x.test/a?mode=hierarchy&text=0")}`,
+      );
+    });
   });
 });

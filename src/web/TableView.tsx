@@ -84,11 +84,14 @@ interface Props {
   /** Explicit pixel widths, one per rendered column. See layout.ts. */
   layout: Layout;
   showText: boolean;
-  /**
-   * The depth ↑ / ↓ are currently aimed at, so the column can say so. Chosen by
-   * where the pointer is — see keynav.ts, and the `data-nav-depth` tags below.
-   */
-  navDepth: number;
+  /* **No `navDepth` here since 2026-09-05.** The depth ← / → are aimed at used
+     to come in as a prop so the header row could light the matching `<th>`.
+     That row has no height now, and the aim is drawn by tinting the column —
+     which has to reach the fisheye panels, which are `position: fixed` outside
+     this table. So it is one `data-aim` attribute on `.reader` (App.tsx) and a
+     rule in styles.css § the aimed column, and this component stops re-rendering
+     on every twitch of the pointer. The cells still carry `data-nav-depth`,
+     which is what that rule matches and what keynav.ts resolves an aim with. */
   /* **No `arcCells` here since 2026-09-05.** The L0 column drew the arc — one
      sentence per part, with a `3 / 7` step marker and a loading tint while the
      stage was still running — and Greg took the column out: "let's get rid of
@@ -261,7 +264,6 @@ function TableViewInner({
   columns,
   layout,
   showText,
-  navDepth,
   onJump,
   notes,
   noteReturn,
@@ -668,24 +670,30 @@ function TableViewInner({
   return (
     <>
     <table
-      /* `only-prose` — the article is the only column there is, so the table
-         head is a label for the whole screen. It reads `Text verbatim` above
-         a column of the author's paragraphs, which says nothing that looking
-         at them does not, and it costs 40px of a 390px landscape viewport
-         where a third of the height is already bars. So the stylesheet drops
-         it (§ a narrow window).
+      /* `only-prose` — the article is the only column there is. It used to hide
+         the table head as well, which was worth 40px of a 390px landscape
+         viewport where a third of the height is already bars; the head has had
+         no height in any mode since 2026-09-05 (styles.css § the head with no
+         row), so that rule went and this class is now only what centres the
+         masthead over a centred column (styles.css § plain, centred).
 
          The condition is `no gist columns AND the prose is on`, not
          `one column`: a single *gist* column still has to say which level it
          is, and in outline mode that is the only place saying so. Reached
-         three ways — a phone in reading mode, and either width of mode band,
-         where the head has been equally redundant beside a chat panel on a
-         laptop all along.
+         three ways — a phone in reading mode, and either width of mode band.
 
-         `stickyOffset()` needs no telling: it measures `thead th` rather than
-         reading `--head-h`, and a `display: none` head measures zero. That is
-         the second time this week that "measure it, don't agree a number with
-         another file" has paid for itself — scroll.ts says why. */
+         **The head could not have gone on being `display: none` here**, which
+         is worth stating because it looks like the obvious tidy-up: that takes
+         the element out of the box tree, and `useColumnContext.ts` measures
+         `thead th[data-col]` for every fisheye panel's rectangle. A hidden head
+         means panels with no geometry, over gist cells that deliberately draw
+         nothing while panels are on. Zero height costs none of that.
+
+         **`only-prose` also switches the aim tint off**, which is the other
+         thing it now does: with no gist columns the prose is the only rung
+         there is, the pointer rests on it permanently, and the tint would be a
+         standing orange cast over the whole article rather than a choice
+         between columns. styles.css § the aimed column. */
       className={`zoom ${showText ? "reading" : "outline"}${overflowing ? " overflowing" : ""}${
         columns.length === 0 && showText ? " only-prose" : ""
       }`}
@@ -699,49 +707,51 @@ function TableViewInner({
           <col key={i} style={{ width: w }} />
         ))}
       </colgroup>
+      {/* **A head with no height, and every one of its jobs intact.** Greg
+          asked for the row of `PARTS L1` / `SECTIONS L2` labels back as
+          vertical space, 2026-09-05, and the words moved into the controls
+          bar's pills (App.tsx § the controls bar). What could not move is
+          everything else this row does:
+
+           - `data-col` is where `useColumnContext.ts` gets each column's
+             `left`, `width` and `bottom` from. Delete the head and every
+             fisheye panel returns `null`, over gist cells that draw nothing
+             while panels are on — Hierarchy's Parts and Sections columns
+             become empty boxes.
+           - `scope="col"` is what makes a screen reader say "Sections" before
+             reading a cell. The pills are outside the table and can never do
+             this: they are buttons, not headers.
+           - The head's sticky `top` is the y a panel starts at, and at zero
+             height that is the bar's own bottom edge — so the panels now sit
+             directly under the bar rather than a head's height below it.
+
+          So the label wears the shared `.sr-only` clip-rect utility rather than
+          removed, and the cell keeps its position in the table's layout. The
+          `L{d}` depth tag went with the visible row: a number that said where a
+          column sits in the tree rather than what is in it, and nothing to read
+          out loud. styles.css § the head with no row. */}
       <thead>
         <tr>
           {columns.map((d) => (
             <th
               key={d}
+              scope="col"
               data-nav-depth={d}
               data-col={d}
               className={[
                 d === pinLeft ? "pin-left" : "",
                 d === pinRight ? "pin-right" : "",
-                /* One column lights, and it is the one the aim names. */
-                d === navDepth ? "nav-aim" : "",
               ].filter(Boolean).join(" ")}
             >
-              {columnLabel(d, geometry.leafDepth)}
-              <span className="depth-tag">L{d}</span>
+              <span className="sr-only">{columnLabel(d, geometry.leafDepth)}</span>
             </th>
           ))}
           {showText && (
             /* The prose column is the finest granularity there is, so the
                arrows mean the same thing over it as over the leaf column: one
                paragraph at a time. Leaves are 1:1 with blocks (src/hierarchy.ts). */
-            <th
-              data-nav-depth={geometry.leafDepth}
-              className={`text pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
-            >
-              {/* **Two spans, and neither is decoration.** The prose below is
-                  centred in its cell (styles.css § text), so a heading left at
-                  the cell's edge names a column whose text starts 180px to its
-                  right — the masthead had the same defect and was fixed the same
-                  way. `.th-measure` is the box that does the moving: it carries
-                  the article's font *purely so that `65ch` means there what it
-                  means in the prose*, and `.th-name` puts the head's own type
-                  back. They have to be two elements because one element cannot
-                  both resolve a `ch` in the reading face and be set in the
-                  chrome's. The other headers are untouched — they sit over
-                  columns that are not centred and are right as they are.
-                  styles.css § the header over the article's column. */}
-              <span className="th-measure">
-                <span className="th-name">
-                  Text<span className="depth-tag">verbatim</span>
-                </span>
-              </span>
+            <th scope="col" data-nav-depth={geometry.leafDepth} className="text pin-right">
+              <span className="sr-only">Text verbatim</span>
             </th>
           )}
         </tr>

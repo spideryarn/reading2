@@ -81,6 +81,7 @@ import type { LabelsFile } from "../labels.js";
 import type {
   Arc,
   Citation,
+  Debate,
   FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
@@ -873,6 +874,42 @@ export const articleRevisions = spideryarn.table(
      * resolve, in the browser as well as on the server.
      */
     illustrated: jsonb("illustrated").$type<Illustrated>(),
+
+    /**
+     * What the rest of the web says about this piece — `Debate`, src/types.ts,
+     * written by the `debate` step.
+     * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+     *
+     * **The only artefact column here holding text this app did not make and
+     * did not fetch**, and that is the one thing about it to know. Every row
+     * carries quoted passages of a stranger's web page, returned by
+     * OpenRouter's server-side search and capped at
+     * `MAX_EVIDENCE_EXCERPT` (8,000 characters) before they reach memory. They
+     * are stored so a reader can check the claim being made about that page,
+     * they are rendered as text and never as markup, and every URL in here is
+     * re-judged by `publicCitationUrl` at the public boundary rather than
+     * trusted because it is stored.
+     *
+     * The WHOLE artefact, like its neighbours, and `sourceHash` is
+     * `articleWithIdsFingerprint` — the blocks, the tree and the cited head —
+     * because pass B shows the model the article with its block ids on it. A
+     * column holding the rows without the hash could not answer whether the
+     * claims those rows answer are still in the piece.
+     *
+     * **`searchedAt` is not staleness and must not be read as it.** It is when
+     * the search ran, it crosses both DTOs deliberately, and a visitor opening a
+     * year-old shared article is owed the date without the artefact declaring
+     * itself invalid. `stale` continues to mean the article changed.
+     *
+     * **No `profileHash`**, like `timeline` and `quiz`: who is reading does not
+     * change what the web said.
+     *
+     * **No foreign key from a claim row's `blockId` to `revision_blocks`**, on
+     * the same argument the glossary, the ideas, the quotes, the timeline, the
+     * quiz and the sketch make: a dropped paragraph should cost that row its
+     * jump rather than take a delete with it or block one.
+     */
+    debate: jsonb("debate").$type<Debate>(),
 
     /**
      * The article's own images, and what became of each — `Assets`,
@@ -2215,7 +2252,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate')`,
     ),
     check(
       "revision_step_runs_status",

@@ -203,7 +203,27 @@
      silently wrong, and the way they go wrong is a control sitting on top of
      the one thing the page is for. */
   --feedback-w: 7.5rem;
-  --head-h: 2.5rem; /* thead */
+  /* **The table head's height, and it is zero on purpose since 2026-09-05.**
+     Greg: *"I'm even wondering if we can get rid of the row of
+     column-header-labels in Hierarchy mode … to save on vertical space"* — so
+     the row went, and the element stayed. It is still doing three jobs that
+     have nothing to do with being visible: the fisheye panels take every
+     column's rectangle from `thead th[data-col]` (useColumnContext.ts), a
+     `<th scope="col">` is what names a column for a screen reader, and the
+     head's sticky `top` is what a panel's `bottom` resolves to. Deleting it
+     would have emptied Hierarchy's Parts and Sections columns outright — the
+     gist cell under a panel deliberately draws nothing (TableView.tsx).
+
+     **Changed here rather than on `thead th` alone**, because `td.gist .sticky`
+     positions itself at `--bar-bottom + --head-h` (§ table): moving the token
+     keeps that consumer right for free, where a rule on the head would have
+     left every gist floating a head's height below the bar. Three consumers
+     and no more — this line, the head's own `height`, and that one.
+
+     `0px` and not `0`: it goes into a `calc()` sum with a length, and a
+     unitless zero there makes the whole declaration invalid.
+     docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 3. */
+  --head-h: 0px;
   /* The bottom bar — Dock.tsx. Read by the comment dialog and the overflow
      fade, both of which have to stop above it, so it is a token rather than a
      number written out three times. */
@@ -691,106 +711,38 @@ table.zoom {
   border-spacing: 0;
 }
 
+/* ------------------------------------------------- § the head with no row ----
+   **A row of column names that is not a row.** Greg asked for the vertical
+   space back (§ tokens, `--head-h`) and the element had to stay, so what is
+   left is a strip of zero height that is still exactly where the head was:
+   sticky under the controls bar, one cell per column, each one carrying its
+   name in an `.sr-only` span.
+
+   Three things read it, and none of them reads a pixel of it:
+
+    - `useColumnContext.ts` takes each column's `left`, `width` and `bottom`
+      from `thead th[data-col]`. With no height, `bottom === top`, which is the
+      bar's own bottom edge — so a fisheye panel now starts directly under the
+      bar instead of a head's height below it. Better, not merely unbroken.
+    - A screen reader reads `<th scope="col">` as the name of every cell in the
+      column. The pills in the controls bar are outside the table and can never
+      do this job, which is why the text is hidden rather than deleted.
+    - `--head-h` is what `td.gist .sticky` adds to `--bar-bottom` below.
+
+   **Everything visual went, and `overflow: hidden` is the belt to the
+   `.sr-only` braces**: a table cell treats `height` as a *minimum*, so this
+   collapses only because nothing inside it is in flow. The old type tokens
+   (`--head-pad-x` and the two `--head-type-*`) went with it, along with
+   § the header over the article's column — 40 lines that moved `Text verbatim`
+   onto the prose's left edge, added 2026-09-04 and inert the moment the word
+   stopped being drawn. */
 thead th {
   position: sticky;
   top: var(--bar-bottom);
   z-index: 25;
   height: var(--head-h);
-  background: var(--panel);
-  border-bottom: 1px solid var(--rule-strong);
-  /* **Three names for what used to be three literals**, because § the header
-     over the article's column has to state this bar's type and gutter a second
-     time — one element cannot both carry the head's 0.68rem and resolve `65ch`
-     in the article's face, so the prose column's heading is two boxes and the
-     inner one puts these back. Named rather than copied: a heading that
-     silently stopped matching its neighbours is exactly the drift a literal
-     invites. */
-  --head-pad-x: 1rem;
-  --head-type-size: 0.68rem;
-  --head-type-weight: 600;
-  padding: 0.5rem var(--head-pad-x);
-  text-align: left;
-  font-family: var(--font-ui);
-  font-size: var(--head-type-size);
-  font-weight: var(--head-type-weight);
-  line-height: 1.4;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-/* ------------------------------- § the header over the article's column ----
-   **`Text verbatim` follows the prose, for the reason the masthead does.**
-   § text centres the article in its cell, and in Hierarchy that leaves the one
-   heading in the row naming a column whose first word starts 180px to its
-   right, while `Parts` and `Sections` sit squarely over theirs. Greg looked at
-   it and called it a misalignment rather than whitespace, 2026-09-04. The
-   honest reading is that this heading was never aligned to the *text* — it was
-   aligned to the cell, and that only looked right while the text began at the
-   cell's edge.
-
-   **Only this heading.** The gist columns are not centred and are correct where
-   they are, so `th.text` is a class TableView puts on one cell.
-
-   **The offset is the same quantity as everywhere else in this change**, with
-   the percentage base written for where it lands: this is a block child, so
-   `100%` is the header cell's *content* box, and the head's own gutter has to
-   be added back before the body cell's is taken off. The two cells are the same
-   column — one `<col>`, `table-layout: fixed` — which is what makes the widths
-   comparable at all; only the padding differs, and that difference is the
-   `--head-pad-x` / `--text-pad-*` swap below.
-
-   **It could not be padding on the `<th>`, which is where this started.**
-   Percentage padding on a table cell does not resolve against the cell:
-   measured in Chrome, the heading landed 239px past the prose. So the geometry
-   is a margin on a block inside the cell, where `100%` is defined. */
-th.text .th-measure {
-  display: block;
-  /* The article's font, and *only* so that `--reading-measure` below counts the
-     same 65 zeroes the prose does — size and weight both, because Geist is
-     variable. Nothing is set at this size: `.th-name` below is the whole of the
-     visible heading. § the gutter carries the same two lines for the same
-     reason. */
-  font-size: var(--reading-size);
-  font-weight: var(--reading-weight);
-  margin-left: max(
-    0px,
-    calc(
-      (
-          100% + var(--head-pad-x) * 2 - var(--text-pad-l) - var(--text-pad-r) -
-            var(--reading-measure)
-        ) / 2 + var(--text-pad-l) - var(--head-pad-x)
-    )
-  );
-}
-/* And the head's own type back, so the heading looks exactly as it did. Both
-   values come from `thead th` above rather than being written again. */
-th.text .th-name {
-  font-size: var(--head-type-size);
-  font-weight: var(--head-type-weight);
-}
-
-.depth-tag {
-  margin-left: 0.45rem;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--ink-faint);
-  opacity: 0.7;
-}
-
-/* The column the arrow keys are aimed at. Deliberately quieter than a switched-on
-   granularity pill: this one follows the mouse, and a thing that changes
-   on every sideways twitch of the pointer must not shout. A bottom rule rather
-   than a background, so it cannot be mistaken for the pinned-column shading. */
-thead th.nav-aim {
-  color: var(--highlight);
-  box-shadow: inset 0 -2px 0 var(--highlight);
-}
-
-thead th.nav-aim .depth-tag {
-  color: var(--highlight);
-  opacity: 0.85;
+  padding: 0;
+  overflow: hidden;
 }
 
 td {
@@ -808,6 +760,85 @@ td {
    See src/web/App.tsx. */
 table.zoom { table-layout: fixed; }
 td.text { background: var(--page); }
+
+/* ------------------------------------------------------ § the aimed column ----
+   **Which column ← / → are pointed at, said by tinting the column itself.**
+
+   It used to be an underline on the `<th>` (`thead th.nav-aim`), and there used
+   to be an `↑↓ SECTIONS` readout in the controls bar beside it. The readout went
+   with the rest of the bar on 2026-09-05 and the header row lost its height in
+   the same pass, so both of the things that could name an aim went at once —
+   while the keys stayed, at Greg's asking. So the aim moved onto the one surface
+   that is left: the column.
+
+   Five constraints, and every one is a thing that was got wrong first — three
+   by reasoning, two by looking at the rendered page:
+
+    - **One attribute on `.reader`, never a class on the cells.** A deep article
+      renders thousands of `<td>`s and the aim changes on every sideways twitch
+      of the pointer, so re-classing them would defeat `memo(TableView)`. It
+      lives on `.reader` rather than on the table because **the panels are not
+      inside the table** — see below — and because that is the level where
+      `navDepth` already is: `TableView` no longer takes it as a prop at all, so
+      moving the pointer stops re-rendering the table entirely, which it did not
+      before this change.
+    - **The gist columns are tinted through their *panel*, not their cells.**
+      Every gist column in Hierarchy is covered by an opaque `position: fixed`
+      `.ctx-panel` (§ the column context), and the cell underneath deliberately
+      draws nothing while one is there — so a tint on `td.gist` is invisible in
+      exactly the case Greg reaches by pressing ←. Found in a browser; every
+      unit check passed. Both surfaces are named on each line below, and the
+      cell half is still doing work: the *leaf* gist column has no panel, and
+      neither does the prose.
+    - **`background-image`, not `box-shadow`.** `.pin-left` already owns
+      `box-shadow` for the overflow-layer cue below, and a second `box-shadow`
+      declaration *replaces* it rather than composing with it — so the aim would
+      silently delete the shadow that tells the reader a column is a layer. A
+      `background-color` is no good either: `td.text`, `td.gist.active`,
+      `td.gist.continuation` and `.ctx-panel` all set opaque backgrounds of
+      their own, which is also why the tint cannot ride on the `<col>`.
+    - **`[data-nav-depth]` and not `.depth-N`.** The prose `<td>` carries no
+      `depth-N` class, and it is the rung the reader reaches by pressing → all
+      the way — so a matrix written over the class silently does nothing on the
+      column Greg is most likely to be aiming at. Both kinds of cell already
+      carry `data-nav-depth`, which is what `keynav.ts` resolves a pointer with.
+    - **`:not(.only-prose)`, or Plain washes the whole page.** With no gist
+      columns the prose is the only rung there is, the pointer sits on it
+      permanently, and the tint would be a permanent orange cast over the
+      article rather than a choice between columns. An indicator that says
+      *which of several* means nothing when there is one.
+
+   **The spine is deliberately not in here.** An aim is a *depth*, and the spine
+   is depth 1 drawn a second way — so when depth 1 is aimed the Parts column
+   already says so, and tinting a fixed rail as well would say it twice on a
+   surface the arrows are not stepping through. The one case that shows nothing
+   is a pointer resting on the spine with the Parts column fitted away, which lit
+   nothing before this change either.
+
+   **The ladder is written out to depth 7**, which is well past anything
+   `buildGeometry` produces today (three, or five after
+   docs/plans/260904d-deepen-fat-sections.md). CSS cannot compare one element's
+   attribute with another's, so a matrix is the whole of the mechanism; past the
+   bound the tint simply does not draw, which is a missing hint rather than a
+   broken key. `tests/aimed-column.test.ts` pins the bound, the property, the
+   panel and the prose cell. */
+.reader[data-aim] {
+  /* Quieter than a switched-on granularity pill, because this one follows the
+     mouse and a thing that changes on every twitch must not shout. Faint enough
+     that it still reads over `--highlight-wash` on the active cell without
+     competing with it. */
+  --aim-wash: color-mix(in oklab, var(--highlight) 7%, transparent);
+}
+.reader[data-aim="0"] :is(table.zoom:not(.only-prose) td[data-nav-depth="0"], .ctx-panel.depth-0),
+.reader[data-aim="1"] :is(table.zoom:not(.only-prose) td[data-nav-depth="1"], .ctx-panel.depth-1),
+.reader[data-aim="2"] :is(table.zoom:not(.only-prose) td[data-nav-depth="2"], .ctx-panel.depth-2),
+.reader[data-aim="3"] :is(table.zoom:not(.only-prose) td[data-nav-depth="3"], .ctx-panel.depth-3),
+.reader[data-aim="4"] :is(table.zoom:not(.only-prose) td[data-nav-depth="4"], .ctx-panel.depth-4),
+.reader[data-aim="5"] :is(table.zoom:not(.only-prose) td[data-nav-depth="5"], .ctx-panel.depth-5),
+.reader[data-aim="6"] :is(table.zoom:not(.only-prose) td[data-nav-depth="6"], .ctx-panel.depth-6),
+.reader[data-aim="7"] :is(table.zoom:not(.only-prose) td[data-nav-depth="7"], .ctx-panel.depth-7) {
+  background-image: linear-gradient(var(--aim-wash), var(--aim-wash));
+}
 
 /* The pinned columns sit ON TOP of the scrolling ones, so they need to read as
    a layer rather than as a neighbour — otherwise a column half-hidden under the
@@ -921,7 +952,11 @@ td.gist {
 
 td.gist .sticky {
   position: sticky;
-  top: calc(var(--bar-bottom) + var(--head-h)); /* clears both bars */
+  /* Clears the controls bar and the table head. The second term has been `0`
+     since 2026-09-05 (§ the head with no row) and stays in the sum on purpose:
+     it is the token that says how tall that row is, and a head that grew again
+     would move this with it rather than leave it stranded. */
+  top: calc(var(--bar-bottom) + var(--head-h));
   padding: 0.85rem 1rem 1rem;
 }
 
@@ -5440,6 +5475,16 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.81rem;
 }
 .prose-card-waiting svg { flex: none; }
+/* The queue said no — a quota refusal with its way out beside it, or an ingest
+   that failed. Louder than `.prose-card-waiting` because the reader pressed a
+   button and this is the answer, and it wraps rather than clamps: a refusal the
+   card cut in half is a refusal nobody can act on. */
+.prose-card-refused {
+  margin-top: 0.35rem;
+  color: var(--destructive);
+  font-size: 0.81rem;
+  overflow-wrap: break-word;
+}
 /* The address itself. On an external card it sits above the foot, deliberately
    quiet: it is there for the reader who wants to judge the URL rather than our
    reading of it, not for the one skimming. Also the whole body of an href we
@@ -12653,14 +12698,20 @@ td.text.kind-heading .blk-gutter[data-open] {
 }
 
 
-/* The table head, when the article is the only column there is.
-   Set by TableView.tsx — read the comment there for why the condition is "no
-   gist columns and the prose is on" rather than "one column". Worth 40px in a
-   landscape phone, and it removes a row reading `Text verbatim` above a column
-   of the author's paragraphs, which is not a loss at any size. */
-table.only-prose thead { display: none; }
+/* **`table.only-prose thead { display: none }` was here, and it went on
+   2026-09-05.** It hid the head whenever the article was the only column —
+   worth 40px on a landscape phone, and a row reading `Text verbatim` over a
+   column of the author's paragraphs is no loss at any size. Both halves of that
+   are now true of every mode rather than this one: the head has no height
+   anywhere (§ the head with no row). And it could not have stayed, because
+   `display: none` takes the element out of the box tree entirely, which would
+   take every fisheye panel's geometry with it — `useColumnContext.ts` measures
+   `thead th[data-col]` and `ContextPanel` draws nothing without a rectangle.
 
-/* **And when it is the only column, it sits in the middle of the window.**
+   **The class itself stays**: the rule below uses it too, and
+   `tests/prose-centred-in-its-cell.test.ts` pins that one. */
+
+/* **When it is the only column, it sits in the middle of the window.**
    Greg, 2026-09-03: *"In Plain mode, can you centre the text on the page?"* —
    the article had the whole width and used the left 738px of it, which on a
    1600px screen is 850px of empty page down one side.
