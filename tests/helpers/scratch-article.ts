@@ -19,13 +19,31 @@
  * *as* `writes`. That is right for a suite whose subject is the corpus, and
  * wrong for these: they write reader state under the slug they read, so two
  * files sharing one slug would see each other's comments and each other's
- * conversations. A throwaway name is the whole point, and the filesystem store
- * derives the slug from the directory name — so the copy is how a corpus
- * article gets a different one.
+ * conversations. A throwaway name is the whole point, and the loader finds an
+ * article by looking for a directory with its name — so the copy is how a
+ * corpus article gets a different one.
  *
- * The copy is cheap and is not the cost. Measured 2026-09-01 on `writes`:
- * **~30ms to clone, ~280ms to load**, of which ~180ms is `copyArtefacts` doing
- * three round trips per pipeline step.
+ * **That reason survived stage D, and it was re-asked rather than inherited.**
+ * The source side of the loader is now `./fixture-artefacts.ts`, which could in
+ * principle be told the slug instead of deducing it from the path, so the clone
+ * looked like something the change might have made unnecessary. Three things
+ * say keep it, and the third is the one that decides it:
+ *
+ * - **The cost is small and has not moved.** Re-measured 2026-09-05 on `writes`,
+ *   ten runs each: **clone min 24.2 / median 31.3 / max 62.5 ms** against a whole
+ *   seed of **min 255.0 / median 283.1 / max 443.6 ms** — 11.1% of the seed at
+ *   the median, and within noise of the 2026-09-01 figure this paragraph used to
+ *   quote. Across the ~22 suites that seed this way it is under a second of a
+ *   whole test run.
+ * - **`mutate` needs a writable copy anyway**, and eight suites use it. Removing
+ *   the clone for the other callers buys two code paths through a helper whose
+ *   entire job is *one throwaway article*.
+ * - **A slug the reader was *told* would have to be written back into the
+ *   artefacts**, because `meta.json` carries it. That makes the fixture reader a
+ *   transformer of what it reads, and the whole argument for it being safe —
+ *   `./fixture-artefacts.ts` § *what this is, and the thing it is deliberately
+ *   not* — is that it reads a fixed layout and changes nothing. Moving a rewrite
+ *   into it to save 31ms would trade the property that makes it defensible.
  *
  * ## Why it is not a direct-SQL seeder
  *
@@ -36,6 +54,11 @@
  * `./load-article.ts` is shaped the way it is. Everything below goes through
  * that loader, so the zero-copy refusal, the raw-source check and the publish
  * guards all still run. There is no second path here to keep honest.
+ *
+ * **And reading the fixture without a store did not create one.** The thing that
+ * would be a second implementation is a second *write* path into Postgres;
+ * `./fixture-artefacts.ts` writes nothing, and the destination is still
+ * `pgArtifactsIn` with every guard it has.
  *
  * ## The lock, and why these seeds do not take it
  *
@@ -182,10 +205,10 @@ export interface ScratchOptions {
    * and inventing one would be the second write path this helper exists to
    * avoid.
    *
-   * **A rewrite of `blocks.json` is mirrored for you.** The filesystem store
+   * **A rewrite of `blocks.json` is mirrored for you.** The fixture layout
    * keeps the blocks in two places — `data/<slug>/blocks.json` for step
    * `hierarchy` and `output/<slug>.blocks.json` for step `blocks`
-   * (src/store/artifacts-fs.ts) — and `copyArtefacts` copies both. Editing one
+   * (`LAYOUT` in ./fixture-artefacts.ts) — and `copyArtefacts` copies both. Editing one
    * and not the other loads two different articles into one revision, and which
    * of them wins is a question about `STEP_ORDER` that no test should have to
    * ask. So `mutate` gets the article directory, and whatever it leaves in
