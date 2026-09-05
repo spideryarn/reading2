@@ -1327,10 +1327,12 @@ export const GLOSSARY_TERM_NOT_QUOTED: ReaderFacingFailure = {
  * so a re-extraction leaves the old list attached to new blocks. It is
  * `GlossaryResponse.stale`, and the panel is already showing the banner that
  * says so when this fires — **which is why the sentence points at that banner's
- * *Find them again* rather than at *Start again* in the foot.** They are
- * different operations, and the foot draws progress instead of its buttons while
- * a job is in flight; the banner is the one that is certainly on screen at the
- * moment this sentence arrives. ⟨Sol⟩
+ * *Find them again*.** It pointed there rather than at *Start again* in the foot
+ * because they were different operations and the foot draws progress instead of
+ * its buttons while a job is in flight; the banner is the one certainly on
+ * screen at the moment this sentence arrives. ⟨Sol⟩ *Start again* has since gone
+ * (`Foot` in src/web/GlossaryPanel.tsx), so the banner is now the only thing it
+ * could point at — but the reason it was already the right one still holds.
  *
  * **It makes no claim about where the term is used**, and two drafts did before
  * settling here. *"The passage it points at is no longer there"* is false when

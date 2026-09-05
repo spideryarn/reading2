@@ -136,6 +136,10 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
        key on a chat answer, and tests/store-roundtrip.test.ts compares the two
        byte for byte. Same rule as every field above it. */
     ...(row.stance === null ? {} : { stance: row.stance as RememberStance }),
+    /* `true` or nothing at all, exactly like `stopped` and `interrupted` above —
+       the filesystem store has no key on an ordinary question and
+       tests/store-roundtrip.test.ts compares the two byte for byte. */
+    ...(row.help ? { help: true as const } : {}),
   };
 }
 
@@ -271,6 +275,12 @@ function messageRow(
        errored, was stopped, or was swept still has to say which instruction
        produced it, and the retry of that row has to have something to inherit. */
     stance: message.stance ?? null,
+    /* **The write half, and it has to be listed here too.** `toMessage` names it
+       on the way out; without this line it is never written in the first place,
+       nothing complains — the field is optional on `ChatMessage` — and every "?"
+       press loses its metadata between the route and the database. Same class of
+       silent loss as `tools`, which is how that column came to exist. */
+    help: message.help ?? false,
     createdAt: new Date(message.createdAt),
     ...(attempt === undefined ? {} : { attemptId: attempt, attemptStartedAt: DB_NOW }),
   };

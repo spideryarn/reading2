@@ -319,7 +319,10 @@ describe("the article on its own stops at the measure", () => {
   it("caps the lone reading column at proseAloneMaxPx", () => {
     const f = alone(1600);
     expect(f.columns).toEqual([]);
-    expect(f.widths).toEqual([832]); // 49rem + the gutter's 48px, at the 16px default
+    // 49rem + the gutter's 24px, at the 16px default. It was 48px and the
+    // gutter two columns wide until 2026-09-05, when the bookmark moved into
+    // the line and the second column went — layout.ts § proseAloneMaxPx.
+    expect(f.widths).toEqual([808]);
     /* Through the function rather than `PROSE_ALONE_MAX_REM * root`, because the
        cap stopped being one rem number on 2026-09-04: the gutter's slot is
        `max(1.5rem, 24px)`, so below a 16px root it stops shrinking and the cell's
@@ -339,22 +342,24 @@ describe("the article on its own stops at the measure", () => {
        and both of the cell's pads 25% wider — so a fixed 800 would have clipped
        their measure to about 51ch, which is the one thing this cap must never
        do. Found by GPT Sol reviewing the built code, 2026-09-03. */
-    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 20 }).tableW).toBe(1040);
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 20 }).tableW).toBe(1010);
     // 624 until 2026-09-04, and 624 was the bug: at a 12px root the gutter's
-    // px floor makes the left pad 4.7rem, not 3.7, and a rem constant could not
-    // follow it. GPT Sol's stage 1 review.
-    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 12 }).tableW).toBe(636);
+    // px floor makes the left pad 2.7rem, not 2.2, and a rem constant could not
+    // follow it. GPT Sol's stage 1 review. 636 until 2026-09-05, when the
+    // gutter halved: one slot at every root, so this term is 24px here and 30
+    // at a 20px root rather than 48 and 60.
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 12 }).tableW).toBe(612);
     // And it is still a cap, not a width: a window narrower than it wins.
     expect(fit({ windowWidth: 700, chosen: [], rootFontPx: 20 }).tableW).toBe(688);
   });
 
   it("leaves every narrower window exactly as it was", () => {
-    // 844 = `proseAloneMaxPx(16)` plus the spine, so the cap stops
+    // 820 = `proseAloneMaxPx(16)` plus the spine, so the cap stops
     // biting one pixel below it. Under that the column is still the whole
     // window, which is what every phone gets and what the § gistsThatFit
     // examples above assert.
-    expect(alone(844).tableW).toBe(832);
-    expect(alone(843).tableW).toBe(831);
+    expect(alone(820).tableW).toBe(808);
+    expect(alone(819).tableW).toBe(807);
     expect(alone(390).tableW).toBe(378);
   });
 

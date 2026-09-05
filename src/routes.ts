@@ -2163,6 +2163,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     anchor,
     kind,
     stance,
+    help,
     sourceCommentId,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
@@ -2189,6 +2190,18 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
   if (kind !== undefined && !isThreadKind(kind)) {
     throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
+  }
+  /* **Absent or literally `true`, and nothing else.** Same rule as `stance` and
+     `kind` above, and the same reason: a client that sends `help: "yes"` and
+     gets a 200 has no way to learn that the answer it received was written with
+     the ordinary prompt, and neither has the reader. `false` is refused too
+     rather than treated as absent — a client sending it has a bug, and accepting
+     it quietly is how the bug survives to the next release.
+
+     Checked before anything is read or written, so a bad body is an ordinary
+     JSON 400 rather than an `error` frame inside a 200 stream. */
+  if (help !== undefined && help !== true) {
+    throw httpError(400, "help must be true, or left out entirely");
   }
   const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
@@ -2223,6 +2236,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      finding 4. */
   if ((wantsRetry || wantsEdit) && (kind !== undefined || stance !== undefined)) {
     throw httpError(400, "A retry or an edit takes its kind and stance from the conversation");
+  }
+  /* **And neither may claim to be a help press**, for a sharper version of the
+     same reason — sharper because here the client would be *right* and still
+     must not be believed. A retry re-asks a stored question, and whether that
+     question was a "?" press is recorded on the row itself. Taking the body's
+     word for it would let a stale tab retry an ordinary question as an
+     explanation, or an explanation as an ordinary question, with the stored
+     metadata and the prompt that was actually used disagreeing and nothing on
+     screen saying so. The row is authoritative; see `converse({ help })` below.
+
+     A separate check from the one above so the sentence can say which field. */
+  if ((wantsRetry || wantsEdit) && help !== undefined) {
+    throw httpError(400, "A retry or an edit takes its help flag from the stored question");
   }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
@@ -2294,6 +2320,66 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, `A ${wantedKind} conversation is about the whole article and cannot be anchored`);
   }
   const wanted = parseAnchor(anchor);
+  /* **`help: true` has a meaning, and the meaning is checked, not just the
+     shape.**
+
+     Far above, `help` is validated as absent-or-literally-`true`. That is the
+     wire; this is the contract, and it is one sentence — `ChatMessage.help` in
+     src/types.ts: *the paragraph "?" button created this thread*. Without these
+     three checks the flag was accepted on a later turn of an existing
+     conversation, on an unanchored one, on a selection chat, and on a Remember
+     or Candidates thread. Every one of those stores a press nobody made **and**
+     answers the request with the teaching prompt, so the row and the answer are
+     both wrong and agree with each other.
+
+     Refused rather than dropped, which is the posture the anchor rule just
+     above takes and for the same reason: a client whose request is silently
+     reinterpreted has no way to learn that it was, and neither has the reader.
+
+     All three are checked here, before `loadArticle` and before anything is
+     written, so a bad body is an ordinary JSON 400 rather than an `error` frame
+     inside a 200 stream — and the first of them is stated a second time under
+     `inTurnOrder`, where the read is safe from a thread appearing between the
+     look and the write. `help === true` is the only truthy value that can reach
+     here.
+
+     The real client sends exactly what these allow: `helpAboutBlock` in
+     src/web/App.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
+     on the send that creates the thread — pinned by *still lets through the
+     thing the real client sends* in tests/chat-help-route.test.ts, so tightening
+     this any further goes red rather than quiet.
+
+     GPT Sol's review of the built code, finding 1. */
+  if (help === true) {
+    /* A thread already exists under this id, so this turn is not creating one.
+       `storedKind` is defined for exactly the threads that exist, and it was
+       loaded a few dozen lines up for the character cap, so this costs nothing.
+
+       **Checked again under `inTurnOrder` below**, and that is not belt and
+       braces: this read is outside the lock, so a thread can be created between
+       it and the write. Here for the sentence and the fast refusal; there for
+       the guarantee — the division `withTurn`'s own kind check already
+       describes. */
+    if (storedKind !== undefined) {
+      throw httpError(400, 'A "?" press starts a conversation; a later question in one is not one');
+    }
+    /* Absent means chat — the default `withTurn` applies to a thread it is
+       creating — so the effective kind is what is checked, not the field. And
+       it can be read off the body alone because the rule above has established
+       that this turn creates the thread. */
+    if ((wantedKind ?? "chat") !== "chat") {
+      throw httpError(
+        400,
+        `A ${wantedKind} conversation is about the whole article, not a passage, so it cannot be a "?" press`,
+      );
+    }
+    if (!wanted || "quote" in wanted) {
+      throw httpError(
+        400,
+        'A "?" press is about a whole paragraph: send anchor: { blockId }, with no quote',
+      );
+    }
+  }
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
   // 404 rather than an `error` frame inside a 200 stream.
   const article = await loadArticle(slug);
@@ -2376,6 +2462,32 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         throw httpError(409, "That conversation is already a different kind");
       }
     }
+    /* **And a "?" press CREATES a conversation**, read again under the lock.
+
+       The same rule refused this request far above, before `loadArticle`, off a
+       load taken outside `inTurnOrder`. That one is the sentence a reader's
+       client gets and the reason nothing was loaded for a request that was
+       never going to run; this one is the guarantee, and it is here for the
+       reason the two checks above it give — the thread cannot be created
+       between the look and the write. Same division as `kind`, whose store-side
+       twin is inside `withTurn`'s transaction.
+
+       A later question in an existing conversation is the reader typing. A flag
+       saying otherwise puts a press in the database that nobody made **and**
+       answers an ordinary follow-up with the teaching prompt.
+
+       400 rather than 409, unlike its two neighbours: they describe a request
+       that would have been fine against a different conversation, and this one
+       is a client sending a field it has no business sending at all. */
+    if (help === true) {
+      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
+      if (existing) {
+        throw httpError(
+          400,
+          'A "?" press starts a conversation; a later question in one is not one',
+        );
+      }
+    }
     return wantsRetry
       ? await chatStore.retry(slug, threadId, retry as string)
       : wantsEdit
@@ -2399,6 +2511,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
                `withTurn` writes whatever it is given and the check constraint
                refuses one on a user row. */
             ...(stance ? { stance: stance as RememberStance } : {}),
+            /* Onto the **user** row, not the reply — the mirror of `stance` just
+               above. `withTurn` writes it and a CHECK constraint refuses one on
+               an assistant row. */
+            ...(help === true ? { help: true as const } : {}),
           });
   });
   const { thread, reply, user } = begun;
@@ -2567,6 +2683,23 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conversation is. GPT Sol's review of docs/plans/260827ah-review-mode.md,
          finding 5. */
       kind: thread.kind,
+      /* **The passage, from the THREAD, on every turn** — same rule as `kind`
+         just above, and this one had never been kept. `buildConverseMessages`
+         has documented since 2026-08-26 that the structural anchor is sent every
+         turn *because* `recentHistory` drops the oldest turns, so a passage that
+         lives only in the reader's first message stops being sent while the
+         panel and the database still say the thread is anchored to it. Nothing
+         passed it, so on the chat path that was never true.
+
+         `?? null` rather than a conditional spread: the option's type admits
+         null, `anchorSection` returns "" for it, and `exactOptionalPropertyTypes`
+         refuses an explicit `undefined`. Nothing moves above the `cache_control`
+         breakpoint — the line lands in the final user message, beside the
+         profile and the position. GPT Sol's review of the built code, finding 2.
+
+         The quote stays fenced in `anchorSection`: the passage is the article's
+         words, and the article is untrusted — docs/project/security.md. */
+      anchor: thread.anchor ?? null,
       /* And the stance from the reply row, for the same reason one step down:
          `withTurn` wrote the request's, `withRetry` carried over the replaced
          answer's, `withEdit` took it from the answer it is replacing. Reading
@@ -2574,6 +2707,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          "what does this pending answer say it is?" — instead of the route
          re-deriving it three ways. */
       ...(reply.stance ? { stance: reply.stance } : {}),
+      /* **From the stored QUESTION row, never from the request body** — the rule
+         `kind` and `stance` above already follow, applied to the one field the
+         client could have got right and still must not be asked.
+
+         All three ways in agree here without arranging it: `withTurn` wrote it
+         onto the row it just created, `withRetry` hands back the very same
+         stored question, and `withEdit` spreads it onto the rewritten one. So
+         pressing "Try again" on an explanation is answered as an explanation,
+         which is exactly what a thread-level flag could not have done — it would
+         have had to be refused on a turn that creates no thread, and the reader
+         would have got a different kind of answer with nothing saying so. GPT
+         Sol's review of docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md,
+         finding 1. */
+      help: user.help === true,
       signal: stop.signal,
     })) {
       if (event.type === "delta") {
@@ -6394,9 +6541,11 @@ export async function serveAuthenticatedApi(
      `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
   const askTerm = /^\/api\/glossary\/([\w.%-]+)\/ask$/.exec(path);
   /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
-     so re-running the step already *is* "start again". The glossary needs a
-     delete precisely because running it again would add to the list it is
-     trying to throw away. Asking for these is
+     so re-running the step already *is* "start again". The glossary has a delete
+     precisely because running it again would add to the list it is trying to
+     throw away — though since 2026-09-05 nothing in the client calls it, and
+     this route's shape is the one the glossary's button was measured against
+     when it went (docs/project/glossary.md § Finding more). Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(path);
   /* Read only, and no DELETE, for exactly the reason `ideas` above has none:

@@ -1194,6 +1194,50 @@ check "/usr/local/bin/codex points at that launcher" 'test "$(readlink /usr/loca
 # its resources out of its install tree at RUNTIME, so a leftover npm copy is
 # not merely stale -- it is a second tree that a stray PATH could still reach.
 check "no npm-global codex beside the native one" 'root=$(npm root -g) && test -n "$root" && ! test -e "$root/@openai/codex"'
+# Every repo we run codex in carries a `[permissions]` table in its own
+# `.codex/config.toml` -- the review profile scripts/run-codex.ts selects. A
+# codex whose permissions schema has moved does not degrade there, it STOPS:
+# codex refuses to load *any* config in a directory whose project config it
+# cannot accept, so every `codex` and `codex exec` in the checkout exits 1
+# before the model is reached, while `codex --version` above goes on passing.
+# That is what happened on 2026-09-05 -- a table without `default_permissions`
+# became an error, on 0.150.1 and 0.153.4 alike -- and nothing on the box said
+# so; the repo's fix is the `default_permissions = ":workspace"` line it now
+# carries, and this check is what would have caught it here.
+#
+# The probe brings its OWN CODEX_HOME, for two reasons: a project's
+# `.codex/config.toml` is read only when the project is trusted (measured
+# 2026-09-05: an untrusted directory's config is ignored in silence, git repo or
+# not), and the real ~/.codex must not be touched by a check.
+#
+# BOTH DIRECTIONS, and the negative one is the load-bearing half: without it the
+# check would pass just as happily on a codex that had stopped reading project
+# configs at all, which is the same silent nothing it is here to detect. The
+# verdict is the failure STRING rather than an exit code -- `codex doctor` exits
+# 1 on an unauthenticated box whatever the config says, and provisioning runs
+# before the human logs codex in.
+CODEX_CFG_PROBE=$(mktemp)
+cat > "$CODEX_CFG_PROBE" <<'PROBE'
+set -eu
+# `pwd -P` because the trust entry below is matched against the path codex sees:
+# on macOS `mktemp -d` hands back a /var symlink to /private/var, the two do not
+# compare equal, and an untrusted probe reads no config at all -- which fails the
+# negative arm rather than passing quietly, exactly as it should.
+d=$(cd "$(mktemp -d)" && pwd -P); h=$(mktemp -d)
+trap 'rm -rf "$d" "$h"' EXIT
+mkdir -p "$d/.codex"
+printf '[projects."%s"]\ntrust_level = "trusted"\n' "$d" > "$h/config.toml"
+cd "$d"
+printf 'default_permissions = ":workspace"\n[permissions.review.filesystem]\n"/" = "read"\n' > "$d/.codex/config.toml"
+good=$(CODEX_HOME="$h" timeout 60 codex doctor 2>&1 || true)
+printf '[permissions.review.filesystem]\n"/" = "read"\n' > "$d/.codex/config.toml"
+bad=$(CODEX_HOME="$h" timeout 60 codex doctor 2>&1 || true)
+case "$good" in *"could not be loaded"*) exit 1 ;; esac
+case "$bad" in *"could not be loaded"*) ;; *) exit 1 ;; esac
+PROBE
+chmod 0644 "$CODEX_CFG_PROBE"
+check "codex accepts a repo-shaped [permissions] config" 'timeout 180 su - '"$USER_NAME"' -c "bash '"$CODEX_CFG_PROBE"'"'
+rm -f "$CODEX_CFG_PROBE"
 check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chrome --version"'
 # Was: `playwright cr --version || ls ~/.cache/ms-playwright/.../chrome`. Both
 # halves were wrong. The `||` put the WEAK test first -- `cr --version` prints

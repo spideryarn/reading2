@@ -461,8 +461,20 @@ export function CommentDialog({
         {/* Not "Try again", which is what the error state offers and means
             something else. This is the reader saying the answer was thin, and
             the model is told exactly that. Hidden while one is running, because
-            two overlapping re-asks race to write the same row. */}
-        {own && comment.status !== "pending" && (
+            two overlapping re-asks race to write the same row.
+
+            **And hidden on a FREE comment**, which `!== "pending"` alone let
+            through. `status: "none"` is every bookmark and every note written
+            without ticking "Also ask the AI" — and `beginAnswer` in
+            src/comments.ts refuses exactly that with a 409, *"was never a
+            question, so there is nothing to answer"*. So a reader who wrote
+            "what is the evidence for this?" as a plain comment was offered a
+            button saying **Search the web** and told, on pressing it, that they
+            had never asked anything. The refusal is right; the button was the
+            bug. Found while diagnosing report 1X, 2026-09-05;
+            tests/comment-dialog-search-the-web.test.tsx renders all four
+            statuses so that narrowing this too far goes red as well. */}
+        {own && comment.status !== "pending" && comment.status !== "none" && (
           <Tooltip
             content={
               <>

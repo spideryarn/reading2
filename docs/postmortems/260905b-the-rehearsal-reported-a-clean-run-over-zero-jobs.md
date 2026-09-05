@@ -223,29 +223,50 @@ the suite is: a check on the report's reasoning, not on the run's existence.
 
 ## What would have caught it, ranked by ease and value
 
-Nothing below is built. `evals/` is another agent's in-flight work; this is the analysis.
+**Built on 2026-09-05, in the round that closed the pre-spend review** — 1, 2, 3 and 4 are all in
+`evals/deepen/` now, each marked below; 5 is still owed by its own plan, and 6 is still the
+instruction that already failed. The numbering and the original wording are kept so the reasoning
+still reads as it was written, when `evals/` was another agent's in-flight work.
+
+The `--dry-run` that proved them also found, for free, the thing no amount of analysis had: **the
+ingest cannot be split across two jobs.** A job that stops short of a publishable article fails, and
+a failed job's draft revision is rolled back — so the next job on that slug opens on an article with
+no fetched document at all. That is why phase D lines its three measured windows up with a start
+barrier rather than by pre-ingesting the load articles.
 
 1. **Refuse a report over zero jobs, in `reportRun`.** Four lines at the top: if
    `ctx.runFile.jobs.length === 0`, push a fatal finding saying no job was ever created and that
    nothing below describes a run, and set `process.exitCode = 1`. It is the guard `budgetReport` was
    given the same morning, one function away, and it converts every future way the phases can die
    before creating anything into a loud one. Trivial; highest value.
+   **Built** — `reportRun` says `NO JOBS WERE CREATED AT ALL` in a banner, the findings block
+   prints the population its `none` is over, and `formatDriving([])` refuses to explain a run
+   that did not happen.
 
 2. **Record in `run.json` that the run died, and with what.** `reportRun` is called from a `finally`
    and is told nothing about what reached it. Catch, stash the error on `runFile`, rethrow. Then the
    artefact distinguishes *ran and found nothing* from *never ran* — the distinction the 11:28 pair
    above cannot make, six hours later, to somebody holding both files. Cheap, and it repairs the
    artefact rather than only the console.
+   **Built** — `main` catches, hands the error to `reportRun` as `died`, and rethrows; a run
+   that died opens with `THE RUN DIED` and carries a fatal finding into `run.json`. Where the
+   reporting throws as well, both errors travel in an `AggregateError` rather than the second
+   replacing the first.
 
 3. **Assert the job count the run set out to create, not merely that it is non-zero.** The run knows
    it: one phase-A ingest, `repeats - 1` phase-B repeats, two phase-C passes, three phase-D jobs. A
    driving report over fewer is not answerable — the discipline `answerTheQuestions` already applies
    to passes (`expectedBookPasses`) and `budgetReport` to clocks (`expected: 3`). Small; it subsumes
    1 and also covers partial failure, which is the likelier shape.
+   **Built** — `reportRun` takes `expectedJobs` (`repeats + 5`) and goes fatal on a short run
+   that neither stopped on purpose nor threw. Kept beside 1 rather than replacing it, because
+   zero has a louder thing to say than "short".
 
 4. **Never print a pre-written explanation of an expected failure without checking it happened.**
    `formatDriving`'s footer is unconditional, so the reader is told why the failures below are fine
    before anything establishes there are any. One `if`; the habit generalises past this file.
+   **Built** — the footer is behind a `jobs.length === 0` guard, and the phase-C block stopped
+   printing `tree … identical` over two digests that were both the literal string `"dry-run"`.
 
 5. **The seam test for `enqueue`'s refusal** — owed and specified in
    [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md#stage-e-unrunnable-untested).

@@ -32,14 +32,20 @@ import type { DeepenStats } from "../src/hierarchy-deepen.js";
 import {
   assertReaskNames,
   assertSeamProof,
+  assertStepPlansRunnable,
   byWhenWritten,
   checkpointWriter,
   estimate,
+  formatEstimate,
   parseRecordsFile,
+  readRecordsDir,
   RECORDS_VERSION,
   recordingCheckpoints,
+  recordsFilePrefix,
   requeueVerdict,
   type SeamProof,
+  startBarrier,
+  type StepPlans,
   treeDigest,
 } from "../evals/deepen/harness.js";
 import {
@@ -63,9 +69,10 @@ import {
   wave1Unchanged,
   yesRate,
   yesRates,
+  formatDriving,
 } from "../evals/deepen/report.js";
 import { REASK_ENV } from "../src/hierarchy-deepen.js";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -574,7 +581,7 @@ describe("the budget report", () => {
     status: "done",
     startedAt: "2026-09-05T00:00:00.000Z",
     finishedAt: "2026-09-05T00:01:40.000Z",
-    hasStats: true,
+    hasSuccessfulStats: true,
     outOfTime: 0,
     withheld: 0,
     resumed: 0,
@@ -617,7 +624,7 @@ describe("the budget report", () => {
    */
   it("refuses to call a phase where nothing ran a clean bill", () => {
     const q = budgetReport({
-      clocks: [clock({ ms: null, status: null, startedAt: null, finishedAt: null, hasStats: false })],
+      clocks: [clock({ ms: null, status: null, startedAt: null, finishedAt: null, hasSuccessfulStats: false })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
       expected: 3,
@@ -635,11 +642,11 @@ describe("the budget report", () => {
    * three phase-D hierarchy steps can start, fail in a second, and be counted
    * as three measurements: `budgetReport` printed *"All 3 hierarchy steps
    * finished inside STEP_BUDGET_MS.hierarchy"* over a phase in which nothing
-   * finished at all. `status` and `hasStats` are what tell a completed step
+   * finished at all. `status` and `hasSuccessfulStats` are what tell a completed step
    * from a fast failure.
    */
   it("refuses three fast failures, which each carry a clock", () => {
-    const failed = threeAtOnce.map((c) => clock({ ...c, status: "error", ms: 900, hasStats: false }));
+    const failed = threeAtOnce.map((c) => clock({ ...c, status: "error", ms: 900, hasSuccessfulStats: false }));
     const q = budgetReport({ clocks: failed, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
     expect(q.measured).toBe(3);
     expect(q.completed).toBe(0);
@@ -649,10 +656,39 @@ describe("the budget report", () => {
     expect(q.findings[0]!.message).toMatch(/started and failed carries both timestamps/);
   });
 
+  /**
+   * **DPN-03-R — the case that gets past `status` AND past "stats exist".**
+   *
+   * A wave that exhausts its redraws throws `DeepenFailed`; `generateHierarchy`
+   * catches it, writes a records file with `failed: true`, falls back to the
+   * wave-1 tree, generates labels and **completes the `hierarchy` step**. So all
+   * three phase-D steps are `done`, all three carry a real clock, all three
+   * carry `stats`, and all three genuinely overlapped — and every number
+   * question 5 printed was a measurement of the FALLBACK path.
+   *
+   * The old field meant `j.stats != null`, which is true of every one of them.
+   * `hasSuccessfulStats` is `j.stats != null && j.waveFailed === false`, and the
+   * name is positive so that reading the caller tells you what it asserts.
+   */
+  it("refuses three waves that FAILED, completed the step and finished inside the budget", () => {
+    const fellBack = threeAtOnce.map((c) => clock({ ...c, hasSuccessfulStats: false }));
+    const q = budgetReport({ clocks: fellBack, budgetMs: 700_000, deadlineMs: 740_000, expected: 3 });
+    expect(q.measured).toBe(3);
+    /* Every one is `done`, inside the budget and overlapping its two siblings —
+       the three things question 5 asks — and it is still not an answer. */
+    expect(fellBack.every((c) => c.status === "done" && (c.ms ?? 0) < 700_000)).toBe(true);
+    expect(peakConcurrency(fellBack)).toBe(3);
+    expect(q.completed).toBe(0);
+    expect(q.answerable).toBe(false);
+    expect(q.reading).toMatch(/NOT measured/);
+    expect(q.reading).not.toMatch(/finished inside/);
+    expect(q.findings[0]!.message).toMatch(/fallback tree/);
+  });
+
   /* One measured clock out of three used to print "All 1 ...". */
   it("refuses one measurement where three were expected", () => {
     const q = budgetReport({
-      clocks: [threeAtOnce[0]!, clock({ ...threeAtOnce[1]!, status: "error", hasStats: false })],
+      clocks: [threeAtOnce[0]!, clock({ ...threeAtOnce[1]!, status: "error", hasSuccessfulStats: false })],
       budgetMs: 700_000,
       deadlineMs: 740_000,
       expected: 3,
@@ -1215,17 +1251,23 @@ describe("the estimate", () => {
     });
     expect(e.totalUsd).toBeCloseTo(8.4 + 3 * 7.4 + 3 * 3.4 + 0.1);
     expect(e.rows.every((r) => r.basis.length > 0)).toBe(true);
-    expect(e.caveat).toMatch(/UPPER BOUND/);
+    expect(e.caveat).toMatch(/upper bound on ONE purchase of that row/);
+    /* And it does not let the reader carry "upper bound" up to the total. */
+    expect(e.caveat).toMatch(/not a bound on how many purchases the run makes/);
   });
 
   /**
-   * **DPN-07's other half: the estimate named a bound it could not hold.** A
+   * **DPN-07's other half, and DPN-16's correction of what it then claimed.** A
    * requeued re-asking pass used to be re-driven and bought its wave again,
-   * three windows deep, and none of that was in the $40.90. The run enforces
-   * the bound now (`requeueVerdict`), and the estimate prints the worst case it
-   * is enforcing against rather than leaving it to be discovered.
+   * three windows deep, and none of that was in the $40.90. The run refuses
+   * that now (`requeueVerdict`) — but the text then said *"the nominal total is
+   * the bound"*, and it is not one. An ordinary, non-re-asking pass can requeue
+   * and re-buy any answer whose best-effort checkpoint write failed, a redraw
+   * buys a second answer, and nothing anywhere refuses a call at $N. The two
+   * numbers are a **nominal estimate** and a **three-window requeue exposure**,
+   * and neither is a bound. ⟨GPT Sol, DPN-16.⟩
    */
-  it("prints the worst case a requeue would have cost, and says what enforces the bound", () => {
+  it("names the two figures as an estimate and an exposure, and denies being a bound", () => {
     const e = estimate({
       bookIngestDeepened: 1,
       bookHierarchyRepeat: 3,
@@ -1235,9 +1277,15 @@ describe("the estimate", () => {
     /* Three re-asking passes, three windows each: two more purchases apiece. */
     expect(e.worstCaseUsd).toBeCloseTo(e.totalUsd + 3 * 7.4 * 2);
     expect(e.worstCaseUsd).toBeGreaterThan(e.totalUsd);
-    expect(e.bound).toMatch(/STOPS a re-asking pass on its first requeue/);
-    /* And it does not claim to be a cap on spending, which it is not. */
-    expect(e.bound).toMatch(/not a cap on the run|not a cap|nothing here refuses a call/);
+    expect(e.bound).toMatch(/NOMINAL ESTIMATE/);
+    expect(e.bound).toMatch(/THREE-WINDOW REQUEUE EXPOSURE/);
+    expect(e.bound).toMatch(/stops a re-asking pass on its first requeue/);
+    /* **The claim that was withdrawn**, and the one that replaced it. */
+    expect(e.bound).not.toMatch(/is the bound/);
+    expect(e.bound).toMatch(/NEITHER FIGURE IS A BOUND, AND NOTHING HERE ENFORCES A CAP/);
+    expect(e.bound).toMatch(/whose best-effort checkpoint write failed|checkpoint write failed/);
+    expect(formatEstimate(e)).toMatch(/NOMINAL ESTIMATE/);
+    expect(formatEstimate(e)).not.toMatch(/worst case, were a requeue re-driven/);
   });
 
   it("has no requeue exposure where there are no re-asking passes", () => {
@@ -1462,5 +1510,249 @@ describe("the driving", () => {
       job({ phase: "B", startedAt: undefined, finishedAt: undefined }),
     ]);
     expect(found).toEqual([]);
+  });
+});
+
+/* ================================================= the step lists, refused == */
+
+/**
+ * **The free rehearsal died at its first `enqueue` and reported itself clean.**
+ *
+ * `dev` merged in a rule — `unrunnableStepPlan` in `src/jobs.ts` — that refuses
+ * any step list containing `blocks` without `hierarchy`, because such a job runs,
+ * succeeds and then cannot publish. `--dry-run` asked for exactly that in all
+ * three of its lists, so **every** phase threw a 400, no job row was ever
+ * created, and the run printed its whole closing report on the way down:
+ * an empty driving table, `Findings: none`, a written `run.json`, and the error
+ * on the last line of all.
+ * docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md.
+ *
+ * Neither `npm run typecheck` nor this suite could see it: a step list is data,
+ * and nothing here asked the queue whether it would take one. So the run asks,
+ * before it enqueues anything, on every path including the free ones — and the
+ * rule is handed in rather than imported so that watching it refuse costs
+ * nothing. `evals/deepen/run.ts § stepsFor` is what it is asked about.
+ */
+describe("the step plans, checked against the queue's rule before anything is enqueued", () => {
+  const plans = (over: Partial<StepPlans> = {}): StepPlans => ({
+    ingest: ["fetch", "extract"],
+    rerun: ["extract"],
+    force: ["extract"],
+    ...over,
+  });
+  /** The real rule's shape, as a stand-in a test can hand a wrong list to. */
+  const noBlocksWithoutHierarchy = (steps: readonly string[]): string | undefined =>
+    steps.includes("blocks") && !steps.includes("hierarchy") ? "blocks needs hierarchy" : undefined;
+
+  it("passes lists the queue would take", () => {
+    expect(() => assertStepPlansRunnable(plans(), noBlocksWithoutHierarchy)).not.toThrow();
+    expect(() =>
+      assertStepPlansRunnable(
+        plans({
+          ingest: ["fetch", "extract", "blocks", "hierarchy", "assets"],
+          rerun: ["hierarchy"],
+          force: ["hierarchy"],
+        }),
+        noBlocksWithoutHierarchy,
+      ),
+    ).not.toThrow();
+  });
+
+  /* The exact list `--dry-run` carried on the morning of 2026-09-05. */
+  it("refuses the list that killed the rehearsal, and names which one it was", () => {
+    expect(() =>
+      assertStepPlansRunnable(
+        plans({ ingest: ["fetch", "extract", "blocks"], rerun: ["blocks"], force: ["blocks"] }),
+        noBlocksWithoutHierarchy,
+      ),
+    ).toThrow(/`ingest` step list \[fetch, extract, blocks\]/);
+  });
+
+  /* And a list that is only wrong in one of the three, which is what a partial
+     repair looks like. */
+  it("refuses a single bad list among the good ones", () => {
+    expect(() =>
+      assertStepPlansRunnable(plans({ rerun: ["blocks"] }), noBlocksWithoutHierarchy),
+    ).toThrow(/`rerun` step list \[blocks\]/);
+  });
+
+  it("ignores an empty list rather than asking about nothing", () => {
+    expect(() =>
+      assertStepPlansRunnable(plans({ force: [] }), noBlocksWithoutHierarchy),
+    ).not.toThrow();
+  });
+});
+
+/* ============================================== the records, read by slug == */
+
+/**
+ * **DPN-14 — three jobs write into one directory, and the reader used to parse
+ * every new file before asking whose it was.**
+ *
+ * A sibling's half-written file therefore rejected the whole read, which
+ * `driveJob` turns into a fatal finding against **the asking job** and leaves its
+ * own `recordsFiles` empty. Two fixes, and both are wanted: the writer publishes
+ * atomically (`src/hierarchy-deepen.ts § saveDeepenRecords`), and the reader
+ * filters on the filename before it opens anything.
+ */
+describe("reading one job's records out of a shared directory", () => {
+  const body = (slug: string): string =>
+    JSON.stringify({
+      version: RECORDS_VERSION,
+      slug,
+      writtenAt: "2026-09-05T00:00:00.000Z",
+      failed: false,
+      reason: null,
+      stats: {
+        targets: 0,
+        expanded: 0,
+        added: 0,
+        withheld: 0,
+        uncheckpointed: 0,
+        calls: 0,
+        resumed: 0,
+        outOfTime: 0,
+        verdicts: { rawYes: 0, rawNo: 0 },
+        usage: { inputTokens: 0, outputTokens: 0 },
+      },
+      records: [],
+    });
+
+  it("does not open — let alone fail on — a file belonging to another slug", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "deepen-records-"));
+    await writeFile(path.join(dir, "mine-2026-09-05-1-1.json"), body("mine"), "utf-8");
+    /* A sibling's file, caught mid-write: half a file is not valid JSON. */
+    await writeFile(path.join(dir, "theirs-2026-09-05-1-1.json"), '{"version": "deepen-rec', "utf-8");
+    const found = await readRecordsDir(dir, { slug: "mine" });
+    expect(found.map((f) => f.file)).toEqual(["mine-2026-09-05-1-1.json"]);
+  });
+
+  /* Without a slug, every file is being asked for, and a broken one is still an
+     error — which is what the reporting-time read wants. */
+  it("still refuses a broken file when it was asked for the whole directory", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "deepen-records-"));
+    await writeFile(path.join(dir, "theirs-2026-09-05-1-1.json"), '{"version": "deepen-rec', "utf-8");
+    await expect(readRecordsDir(dir)).rejects.toThrow();
+  });
+
+  /* The prefix rule is the writer's, and a second copy of it is how a filter
+     quietly stops matching. The parsed slug is still the authority. */
+  it("spells a slug into a filename prefix the way the writer does", () => {
+    expect(recordsFilePrefix("evaldeepen-abc123-book")).toBe("evaldeepen-abc123-book");
+    expect(recordsFilePrefix("a/b c")).toBe("a-b-c");
+    expect(recordsFilePrefix("")).toBe("article");
+    expect(recordsFilePrefix("x".repeat(200))).toHaveLength(80);
+  });
+
+  it("keeps a file whose name matches a longer slug's prefix out by its contents", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "deepen-records-"));
+    await writeFile(path.join(dir, "book-2026-09-05-1-1.json"), body("book-and-more"), "utf-8");
+    expect(await readRecordsDir(dir, { slug: "book" })).toEqual([]);
+  });
+});
+
+/* ================================= a summary that can say "there was nothing" == */
+
+/**
+ * **The other half of the rehearsal that reported a clean run**: not the throw,
+ * but the report printed over it. `formatDriving` rendered its explanatory
+ * paragraph — "a dry-run ingest stops at its last free step and FAILS, that is
+ * expected" — over a run in which **no job had been created at all**, which is
+ * the paragraph of a run that happened. docs/reusable/silent-success.md.
+ */
+describe("the driving table over an empty run", () => {
+  it("says there were no jobs rather than explaining what the jobs did", () => {
+    const printed = formatDriving([]);
+    expect(printed).toMatch(/NO JOBS/);
+    expect(printed).toMatch(/absence, not a clean run/);
+    expect(printed).not.toMatch(/stops at its last free step/);
+  });
+
+  it("still explains itself when there were jobs", () => {
+    const printed = formatDriving([
+      { phase: "A", label: "book ingest", slug: "book", force: [], createdArticle: true },
+    ]);
+    expect(printed).toMatch(/book ingest/);
+    expect(printed).not.toMatch(/NO JOBS/);
+  });
+});
+
+/* ========================================= phase D, lined up before it counts == */
+
+/**
+ * **DPN-15 — the arithmetic was right and the phase did not arrange the thing it
+ * measures.** `peakConcurrency` correctly demands that all three of phase D's
+ * `hierarchy` windows be open at one instant, and nothing made them: the book's
+ * job is a forced `hierarchy` and starts its measured step at once, while the
+ * two load articles start at `fetch` and get there only after stages 1-3. So the
+ * run could spend $40.90 and then report question 5 unanswerable.
+ *
+ * The barrier holds the **book** back — not the load jobs — because the book's
+ * step needs 658-778 s against a 740 s deadline and cannot spend seconds
+ * waiting inside its own claim.
+ */
+describe("the phase-D start barrier", () => {
+  const never = new Promise<void>(() => undefined);
+
+  it("opens as soon as every load job has reached the measured step", async () => {
+    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
+    b.announce("load1");
+    b.announce("load2");
+    const out = await b.wait(never);
+    expect(out.why).toBe("all");
+    expect(out.arrived).toEqual(["load1", "load2"]);
+  });
+
+  it("waits for the second one rather than opening on the first", async () => {
+    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
+    b.announce("load1");
+    setTimeout(() => b.announce("load2"), 10);
+    const out = await b.wait(never);
+    expect(out.why).toBe("all");
+    expect(out.arrived).toHaveLength(2);
+  });
+
+  /* A step that ran twice — a re-driven job — must not count as two jobs. */
+  it("counts jobs, not announcements", async () => {
+    const b = startBarrier({ expected: 2, timeoutMs: 20 });
+    b.announce("load1");
+    b.announce("load1");
+    const out = await b.wait(never);
+    expect(out.why).toBe("timed out");
+    expect(out.arrived).toEqual(["load1"]);
+  });
+
+  /**
+   * **A load job that fails before its measured step never announces anything**,
+   * and the book must still be driven — the run reports an unlined-up phase
+   * rather than hanging on one that can no longer line up.
+   */
+  it("gives up when the load jobs have finished without getting there", async () => {
+    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
+    const out = await b.wait(Promise.resolve("both jobs failed"));
+    expect(out.why).toBe("jobs finished first");
+    expect(out.arrived).toEqual([]);
+  });
+
+  it("gives up on its own deadline when nothing happens at all", async () => {
+    const b = startBarrier({ expected: 2, timeoutMs: 5 });
+    const out = await b.wait(never);
+    expect(out.why).toBe("timed out");
+  });
+
+  /* The race is genuinely racy: a job announcing in the same tick as the last
+     one settles is lined up, and must not be reported as missing. */
+  it("says `all` where everyone arrived, however the wait happened to end", async () => {
+    const b = startBarrier({ expected: 1, timeoutMs: 60_000 });
+    const settled = Promise.resolve().then(() => {
+      b.announce("load1");
+    });
+    const out = await b.wait(settled);
+    expect(out.why).toBe("all");
+  });
+
+  it("does not wait at all for nobody", async () => {
+    const b = startBarrier({ expected: 0, timeoutMs: 60_000 });
+    expect((await b.wait(never)).why).toBe("all");
   });
 });

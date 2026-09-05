@@ -67,6 +67,7 @@
  */
 
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { onFontsChanged } from "./fonts.js";
 
 /**
  * The rungs, widest first, as the class each one puts on `.dock`.
@@ -222,12 +223,18 @@ export function useDockFit(content: string): {
     const tail = el.querySelector(".dock-tail");
     if (tail) ro?.observe(tail);
     if (!ro) window.addEventListener("resize", soon);
-    /* `document.fonts` is absent in jsdom and in older engines. Resolving after
-       unmount is harmless: `measure` reads `ref.current` first. */
-    void document.fonts?.ready.then(soon);
+    /* The `loadingdone` event rather than `fonts.ready`, which is expensive to
+       read on a long article (fonts.ts). **This call site was never the hot
+       one** — the effect depends on a `useCallback(…, [])`, so it runs once,
+       and the cost measured on 2026-09-05 was all in Spine's copy. Changed for
+       consistency and because the event also catches font batches that start
+       after this runs, which the one-shot promise did not.
+       `fonts.ts` handles the engines that have no `document.fonts` at all. */
+    const offFonts = onFontsChanged(soon);
     return () => {
       if (raf) cancelAnimationFrame(raf);
       ro?.disconnect();
+      offFonts();
       if (!ro) window.removeEventListener("resize", soon);
     };
   }, [measure]);

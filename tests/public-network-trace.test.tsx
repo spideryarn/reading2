@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHARED_WITH_YOU } from "../src/messages.js";
-import type { Article } from "../src/types.js";
+import type { Article, ChatThread, ThreadSummary } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
@@ -484,6 +484,53 @@ let served: PublicArticle;
  */
 let publicArticle: () => Response;
 
+/**
+ * **The conversations the server already holds for this article.**
+ *
+ * Empty unless a case seeds one, and served to **both** chat GETs — the
+ * reading view's `?summary=1` and the panel's full fetch, which `reply` cannot
+ * tell apart and does not need to: one object carrying `turns` as well as
+ * `messages` satisfies `ThreadSummary` and `ChatThread` at once, and the two
+ * readers each take the fields they know.
+ */
+let storedChats: (ChatThread & Pick<ThreadSummary, "turns">)[] = [];
+
+/** The reader's own words in a conversation they had earlier, and the answer. */
+const SEEDED_QUESTION = "Why is the example carrying the argument?";
+const SEEDED_ANSWER = "Because the claim is never stated on its own.";
+
+/**
+ * A whole-block conversation on the fixture's first paragraph.
+ *
+ * Whole-block — `anchor` with no `quote` — because that is what the gutter's
+ * chat button starts, and what the chip beside that paragraph is counting.
+ */
+const SEEDED_CHAT: ChatThread & Pick<ThreadSummary, "turns"> = {
+  id: "spya-thr001",
+  title: "About the first paragraph",
+  createdAt: "2026-09-04T10:00:00.000Z",
+  updatedAt: "2026-09-04T10:01:00.000Z",
+  kind: "chat",
+  anchor: { blockId: "spya-bbbbbb" },
+  turns: 1,
+  messages: [
+    {
+      id: "spya-msg001",
+      role: "user",
+      text: SEEDED_QUESTION,
+      createdAt: "2026-09-04T10:00:00.000Z",
+      status: "done",
+    },
+    {
+      id: "spya-msg002",
+      role: "assistant",
+      text: SEEDED_ANSWER,
+      createdAt: "2026-09-04T10:01:00.000Z",
+      status: "done",
+    },
+  ],
+};
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -509,7 +556,7 @@ function reply(url: string, method: string): Response {
   if (url === "/api/reader") return json({ experimentalSince });
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
-  if (url.startsWith("/api/chat/")) return json({ threads: [] });
+  if (url.startsWith("/api/chat/")) return json({ threads: storedChats });
   if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
   /* **Nobody has built this one**, for the owner control at the foot of this
      file: pressing a mode whose artefact is missing is what starts a job, and
@@ -561,6 +608,7 @@ beforeEach(() => {
   trace.length = 0;
   session.user = null;
   served = ARTICLE;
+  storedChats = [];
   notBuilt = null;
   experimentalSince = null;
   /* **The switch's store is a module singleton**, so it keeps the last test's
@@ -655,6 +703,11 @@ const outsidePublic = () => trace.filter((r) => !r.url.startsWith("/api/public/"
 const buttonNamed = (label: string): HTMLButtonElement | null =>
   [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === label) ?? null;
 
+/* **The empty-paragraph name.** Since 2026-09-05 a chip with conversations
+   behind it announces itself as *"Open a conversation about this paragraph (n
+   total)"* instead, because the press reopens one — so a case that seeds
+   `storedChats` on the block it is counting will not find its chip here. The
+   two cases that use this helper have none. */
 const chatButtons = () =>
   [...host.querySelectorAll("button")].filter(
     (b) => b.getAttribute("aria-label") === "Chat about this paragraph",
@@ -2374,6 +2427,130 @@ describe("the same address, as the owner", () => {
     const gutters = host.querySelectorAll("a.blk-permalink").length;
     expect(gutters, "the prose must have rendered").toBeGreaterThan(0);
     expect(chatButtons().length).toBe(gutters);
+  });
+
+  /**
+   * **The chip opens what it is counting.**
+   *
+   * The regression for
+   * docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md
+   * § stage 1, and for the report behind it: the reader pressed a blue chip
+   * that said *"(1 already)"* and got an empty composer, because
+   * `chatAboutBlock` minted a fresh draft every time while the button beside it
+   * advertised state it would not show.
+   *
+   * **Here rather than in a file of its own** because the failure is in App's
+   * wiring, and this is the only harness that mounts the real `App` at the real
+   * address with a server behind it. A unit test on `BlockGutter` cannot see
+   * it — the gutter calls the callback it is given either way — and a unit test
+   * on `threadFor` cannot see it either, which is the whole shape of this bug:
+   * every part worked and nothing joined them.
+   *
+   * The count is asserted **before** the press, and that is not decoration: if
+   * the seeded conversation never reached the reading view, the click would
+   * open a draft for a reason that has nothing to do with the fix, and the
+   * assertions below would be red for the wrong cause.
+   */
+  it("opens the conversation the chat chip is counting, not an empty composer", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    storedChats = [SEEDED_CHAT];
+    await open();
+
+    const chip = host.querySelector(
+      'tr[data-block="spya-bbbbbb"] .block-chat',
+    ) as HTMLButtonElement | null;
+    expect(chip, "the paragraph must have a chat chip").toBeTruthy();
+    expect(chip?.querySelector(".block-chat-n")?.textContent).toBe("1");
+
+    await act(async () => {
+      (chip as HTMLButtonElement).click();
+    });
+    await settle();
+
+    /* The address is the durable half — `?thread=` is what both the panel and
+       the full chat band read, so a reopen that did not write it would leave a
+       transcript nobody could link to. */
+    expect(new URLSearchParams(location.search).get("thread")).toBe(SEEDED_CHAT.id);
+    /* And the words. Only the stored transcript can put these on screen: they
+       are in no fixture the reading view draws from. */
+    expect(host.textContent).toContain(SEEDED_ANSWER);
+    expect(host.textContent).toContain(SEEDED_QUESTION);
+  });
+
+  /**
+   * **And the door a reopening chip would otherwise have shut.**
+   *
+   * Before stage 1 the chat chip always started a new whole-block
+   * conversation; after it, it never does — and the "?" reopens too, while a
+   * prose selection only ever reaches phrase-anchored chats. So without this
+   * button the change is a **removal**: nothing anywhere begins a second
+   * conversation about a paragraph. Sol wanted the control cut; Fable and Greg
+   * kept it, and this is what makes keeping it a claim rather than an
+   * intention.
+   *
+   * **It must force a draft from inside a thread**, which is the one way this
+   * can be got wrong invisibly: wiring it to the chip's own callback would find
+   * the conversation the reader is standing in and reopen it, and the button
+   * would look present and do nothing.
+   */
+  it("still offers a way to start a second conversation, from the reopened panel", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    storedChats = [SEEDED_CHAT];
+    await open();
+
+    const chip = host.querySelector(
+      'tr[data-block="spya-bbbbbb"] .block-chat',
+    ) as HTMLButtonElement;
+    await act(async () => chip.click());
+    await settle();
+    expect(host.textContent, "the panel must be showing the conversation").toContain(
+      SEEDED_ANSWER,
+    );
+
+    const fresh = buttonNamed("New conversation");
+    expect(fresh, "the reopened panel must offer a new conversation").toBeTruthy();
+
+    const before = trace.filter((r) => r.method === "POST").length;
+    await act(async () => (fresh as HTMLButtonElement).click());
+    await settle();
+
+    /* An empty composer, on this paragraph — the panel's other shape. */
+    expect(host.querySelector("textarea.chat-input")).not.toBeNull();
+    expect(new URLSearchParams(location.search).get("thread")).toBeNull();
+    /* And the transcript is gone, which is what says the button forced a draft
+       rather than reopening what it was already showing. */
+    expect(host.textContent).not.toContain(SEEDED_ANSWER);
+    /* A draft is free. Nothing is stored until somebody asks something. */
+    expect(trace.filter((r) => r.method === "POST").length).toBe(before);
+    /* The door is not offered from the draft itself: there is nothing yet to
+       start a *second* conversation beside. */
+    expect(buttonNamed("New conversation")).toBeNull();
+  });
+
+  /**
+   * **And it is offered only where there is a paragraph to offer.**
+   *
+   * A conversation started in the Chat band is about the article and has no
+   * anchor at all, so "New conversation about this paragraph" would be a button
+   * about nothing. Without this the condition is untested in the one direction
+   * that can be got wrong silently: a row of text buttons gains a fourth that
+   * reads fine and does something else.
+   */
+  it("offers no new-conversation door on a chat that is not about a paragraph", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    const loose = { ...SEEDED_CHAT, id: "spya-thr002" };
+    /* `anchor` deleted rather than left undefined: the wire for an unanchored
+       thread has no such key, and a fixture that carried one would prove the
+       condition against a shape the server never sends. */
+    delete (loose as { anchor?: unknown }).anchor;
+    storedChats = [loose];
+    await open("?thread=spya-thr002");
+
+    expect(host.textContent, "the panel must be showing the conversation").toContain(
+      SEEDED_ANSWER,
+    );
+    expect(buttonNamed("Open in full chat"), "and it must be the thread panel").toBeTruthy();
+    expect(buttonNamed("New conversation")).toBeNull();
   });
 
   /**
