@@ -1,6 +1,7 @@
 # Measure annotation computation before optimising it
 
-Status as of 2026-09-06: Stage 1a measured and it convicts; Stage 1b skipped; Stage 2 under way.
+Status as of 2026-09-06: Stage 1a measured and it convicts; Stage 1b skipped; Stage 2 built and
+tested; Stage 3 (the browser A/B) still to run.
 Source baseline
 `6eecb377f24d92446086a006d5b3103daae40aef` (branch `worktree-a7-annotation-measure`).
 
@@ -97,7 +98,7 @@ keystroke stay flat regardless of length, which is what makes the two slow ones 
 O(article) cost rather than dialog-rendering cost. The flat controls also prove the harness and the
 page were live, so the fast numbers are real fast numbers. What it does **not** say is that
 annotation is the cause: `getBoundingClientRect` was 29.9% of script after the last round of fixes
-([performance.md § Clicking](../project/performance.md#clicking-2026-09-05--and-everything-above-this-line-is-about-scrolling)),
+([performance.md § Clicking](../project/performance.md#clicking-2026-09-05-and-everything-above-this-line-is-about-scrolling)),
 and the dialog and the panel do their own work. Attributing this is Stage 1a's job.
 
 **And it is a development-only baseline, expected to be inflated** — not, strictly, an upper
@@ -124,6 +125,11 @@ number reported beside it so a large share of a trivial total cannot masquerade 
 **The statistic is the median of at least five warmed repetitions**, the first discarded — the same
 shape `measure-cpu.ts` uses, and settled here rather than chosen after the fact (Sol F3). A
 conspicuous maximum is investigated and reported, never silently dropped.
+
+**What Stage 1a actually ran was five repetitions *including* the discarded first — four warmed, one
+short of this rule** (Sol F19). Recorded rather than quietly reconciled. It does not reverse the
+verdict, which cleared the threshold by 3–4×, but it is the sort of gap that becomes a habit if the
+rule is silently relaxed to fit the run. Stage 3's A/B takes six.
 
 **Optimise** if, on the largest workload measured, either holds:
 
@@ -228,6 +234,18 @@ the Hetzner box. Five repeats per gesture, first discarded, mode `"counts"`. Pop
 first: 551 `tr[data-block]`, 177 raw term marks (20 distinct), 8 raw comment marks (5 distinct),
 20,346 nodes.
 
+**Re-runnable**, which the original throwaway harness was not (Sol F19) —
+[`scripts/measure-annotation.ts`](../../scripts/measure-annotation.ts) is that harness promoted, and
+it prints the raw per-repetition vectors, prints the population counts first, and refuses to report
+at all when `window.__perf` is missing or the page rendered no blocks:
+
+```bash
+npm run build && SPIDERYARN_STORE=postgres npx vite preview --port 5290 --strictPort
+npx tsx scripts/measure-annotation.ts --slug replication-crisis-spya-hrjamq \
+  --url http://localhost:5290 --local-sign-in --sign-in-via http://localhost:5274/ \
+  --email referee-test-260901@example.com --repeats 6
+```
+
 | gesture, 551 blocks | end-to-end med | **attributable** med | verdict at 8ms |
 |---|---:|---:|---|
 | press a glossary term | 285 ms | **29.9 ms** | over by 3.7× |
@@ -243,11 +261,17 @@ Length control, `scaling-hypothesis` at 186 blocks: comment open **5.4 ms** attr
 verdict may land on 1a alone because the cost has been demonstrated, where a *defer* could not.
 
 **And the honest proportion, which is not what a keen reader would want it to be.** Annotation is
-only **10–14% of the gesture** — 30ms of 285ms, 30ms of 232ms. The other ~86% is commit, layout and
-the geometry reads, which is **A8's ground and not this job's**. A7 is real, it is over budget, and
-it is not the reason the interface feels sluggish on its own. Both halves of that go in
-performance.md, because a plan that quietly implies it fixed the 948ms would mislead the next person
-into thinking the problem was solved.
+only **10–14% of the gesture** — the three medians are 10.5%, 13.1% and 11.8%, and they are ratios
+of separate medians rather than paired per-run shares, so read them as a band and not a figure.
+
+**What the other ~86% is, the instrument does not say** (Sol F16). All it establishes is that the
+time falls **outside these two memos**. It likely includes React reconciliation and commit, the live
+DOM's own `innerHTML` parse, style, layout, paint and the geometry reads — and the dialog's and the
+panel's own work, which is nobody's "ground" in this review. Much of it is probably A8's, and an
+earlier draft of this section simply asserted that; it is not established here and the wording is
+now weaker on purpose. A7 is real, it is over budget, and it is not on its own the reason the
+interface feels sluggish. Both halves of that go in performance.md, because a write-up that quietly
+implied it fixed the 948ms would send the next person to the wrong room.
 
 The production numbers are also ~3× below the dev-server baseline in § The baseline gesture cost
 (285ms against 927ms), which is what `<StrictMode>` and unbundled modules are worth here, and why
@@ -256,7 +280,14 @@ the plan refused to decide on a dev-server number.
 #### Where the time actually goes, and how it reshapes Stage 2
 
 Diagnostic run, `"full"` mode, glossary press, **numbers perturbed upward by the leaf clocks and
-therefore not decisive** — but the *split* is what matters and it is stable across samples:
+therefore not decisive** — and the *split* is perturbed too, in a direction that has to be named
+(Sol F14). Each leaf sample costs two clock reads, so the diagnostic adds roughly **1,102** reads
+around 551 `addZoomHandles` calls against only **192** around 96 `annotateHtml` calls. Repeating the
+run does not remove a systematic bias, so `addZoomHandles`' share is **overstated by an unmeasured
+amount** and the 55/40 split below is a perturbed estimate, not a trustworthy division.
+
+**The call counts are not perturbed, and they carry the argument on their own**: 551 calls to
+service a change touching one or two blocks is avoidable work whatever each one costs.
 
 | inside `proseHtml` | calls | ~ms | share |
 |---|---:|---:|---:|
@@ -274,11 +305,16 @@ Three things follow, and they change the plan:
    reuse deletes all of it.
 2. **`annotateHtml` runs on all 96 marked blocks** when a term press changes the marks of one or
    two. Per-block reuse deletes almost all of that too.
-3. **Anchor resolution is not the cost here** — five parses and five searches. So the shared
-   rendered-text cache that was Stage 2 step 1 **is cut**: it would save five parses on the workload
-   that decided this, and the anchor-stability work below removes even those. Cutting it also leaves
-   `search-hits.ts` § `pages` alone, which is one fewer file touched in a tree a dozen agents are
-   working in. If a future workload with a hundred comments says otherwise, the citation is here.
+3. **Anchor resolution is not the cost on this workload** — five parses and five searches. So the
+   shared rendered-text cache that was Stage 2 step 1 is **deferred, not disproved** (Sol F15). It
+   would save five parses here, and the anchor-stability work below removes even those; deferring it
+   also leaves `search-hits.ts` § `pages` alone, which is one fewer file touched in a tree a dozen
+   agents are working in.
+
+   **What five anchors cannot establish**: that the cache is unwarranted for a reader with a hundred
+   comments, or for the initial render, or for a genuine anchor change — none of which
+   anchor-stability covers. This is a simplest-first deferral on one article's evidence, and the
+   trigger to revisit it is a denser workload actually being measured, not an argument.
 
 **Streaming was not measured on the path the plan named as the worst case.** `useComments`' own
 `send()` streaming is reachable only by retrying or deepening an already-answered comment, and no
@@ -411,6 +447,47 @@ under the same block id; **a changed glossary entry — new forms and new occurr
 comment or hit still shares one `<mark>`, and only the affected prose nodes change** (Sol F8);
 removed blocks; article and access changes; overlapping marks; figures; note-return navigation.
 
+### Stage 2 result, 2026-09-06 — both steps landed, tests red first
+
+Two files of source and two of tests. `npm run typecheck` clean; `npx biome check` on the four
+files returns exactly the baseline HEAD already had (two errors and one complexity info, all
+pre-existing).
+
+**Step 1 — [`TableView.tsx`](../../src/web/TableView.tsx) § `marksByBlock`.** One memo still, with
+the same dependency list, but the body is now three module-level functions and a ref:
+`anchorKey(comments, chats)` reduces the inputs to `(kind, id, blockId, start, quote)` per anchor —
+so a streamed delta, which replaces every comment object and the array, produces the **same key**;
+`resolveAnchors` runs only when that key or `byId` changes; and `applyOpen` puts the ring on
+afterwards, handing back the previous per-block arrays **by identity** for every block that neither
+lost nor gained it. When the anchors and the selection are both unchanged the memo returns the
+**same map**, so `proseHtml` does not even re-run.
+
+**Step 2 — `proseHtml`.** `proseCache` now holds a `ProseEntry` per block: the html, the three
+source mark arrays, the pressed term *if this block has it*, and the `{ __html }` object. A block
+whose inputs all match is passed through with neither `annotateHtml` nor `addZoomHandles` called.
+`NO_MARKS` — one shared empty array — is what makes the unmarked majority compare equal at all; a
+`?? []` literal would have missed on every one of them.
+
+**And [`search-hits.ts`](../../src/web/search-hits.ts) § `hitMarks` had to be split first**, exactly
+as F7 said: its per-block arrays are now built without `openKey` and cached in a `WeakMap` on the
+`Found[]` identity (`unpressed`, the same key and argument as `pages`), with the pressed flag
+applied per block on top. Without that, step 2's key would have missed on every block with a hit
+whenever the reader pressed a result. `App.tsx` is untouched — the signature did not change.
+
+**[`tests/annotation-reuse.test.tsx`](../../tests/annotation-reuse.test.tsx)**, nine tests, written
+before the code and **watched fail**: 4 red / 5 passing beforehand, 9 green after. The four that
+were red are the body-only delta (`renderedText` 2, `resolveMark` 2, `annotateHtml` 1,
+`addZoomHandles` 95 → all 0), selecting a different comment and pressing a different term (95
+`addZoomHandles` → 2), and an unrelated prop re-annotating a block (1 → 0). The five that passed
+throughout are the changed-input controls that make those zeroes mean anything — a new comment, a
+changed hit, a changed block html under a stable id, a changed glossary entry, a removed block and
+an article swap — plus the shared-`<mark>` and row-count guards, which every test carries.
+
+One existing assertion had to move: `tests/annotation-cost.test.ts` charged the two memos by
+re-rendering with a fresh-but-identical `comments` array, which is precisely the shape that now
+costs nothing. It takes a fresh mount instead, and the "`addZoomHandles` runs on every block" claim
+is now made about a first paint, which is still true.
+
 ### Stage 3 — verify in a browser, document, land
 
 **Measure before and after in one session, back to back** (Sol F12), rather than comparing against
@@ -493,6 +570,31 @@ need, gained a first experiment that can end the job in one measurement, and had
 optimisation (F1) corrected from one that would have fixed selection while leaving streaming — the
 suspected worst case — exactly as slow as before.
 
+### Stage 1a review — `260905i-stage1a-review-sol.md`, verdict "approve with P2 findings"
+
+No established P0 or P1; the optimise verdict stands. Seven findings, and the reviewer established
+three of them by **running mutations against an archive of the commit** rather than by reading it,
+which is why F17 is the one that mattered.
+
+| ID | Finding | Settled how |
+|---|---|---|
+| F17 | **The instrument's own test stayed green through three mutations that break the decisive timers** — memo start times replaced with `NO_CLOCK`, a real clock read added in `"counts"` mode, and `maxMs` replaced by the accumulated total | Fixed: the test now spies on `performance.now`, drives a scripted clock so an enabled memo must record an exact positive duration, and feeds unequal samples so a total cannot pass as a maximum. Each mutation was applied, seen red, and reverted |
+| F18 | The snapshot's `mode` did not always describe its samples — `stop` kept nonzero counters under `mode: "off"`, and `"counts"` → `"full"` blended two kinds of sample under one label | Fixed: counters reset whenever the mode actually changes, so they always belong to the mode reported. The old "start does not reset" reasoning is superseded and the docstring says so |
+| F19 | The measurement was a scratchpad harness, so the numbers could not be re-run or audited; and only medians were kept | Fixed: promoted to `scripts/measure-annotation.ts`, which prints raw per-repetition vectors and population counts and refuses to report when `window.__perf` is absent. The four-warmed-repetitions gap is recorded in § Decision rule rather than reconciled away |
+| F14 | The `"full"` split is systematically biased toward `addZoomHandles` — 1,102 clock reads against 192 | Accepted: the split is now labelled a perturbed estimate, and the argument rests on the unperturbed call counts |
+| F15 | Five anchors do not establish the rendered-text cache is generally unwarranted | Accepted: "deferred, not disproved", with what five anchors cannot show spelled out |
+| F16 | The residual ~86% was assigned to A8; the instrument establishes only that it is outside the two memos | Accepted: reworded, and the guess is labelled a guess |
+| F10 | `maxMs` is per-site, so summing two maxima may combine different renders and neither alone is the worst *combined* delta | **Remedy declined, finding accepted** — see below |
+
+**The one overrule, and why.** F10 asks for a render identifier or a combined outer interval so the
+"worst single streamed delta ≥ 16ms" clause can be evaluated numerically. **Not built.** Stage 2's
+acceptance for the streaming case is *zero work for a body-only delta* — strictly stronger than any
+millisecond threshold, and it needs no per-render correlation to check. Building a render-id
+mechanism to evaluate a rule that Stage 2 makes moot is a moving part bought for nobody. The
+limitation is real, so it is written into `annotation-cost.ts`: **`maxMs` is per-site, and the two
+memo maxima may come from different renders — do not add them and call the result a delta.** If a
+later job needs that number, this is the note that says what to build.
+
 ## Log
 
 - 2026-09-05 — plan written; local corpus surveyed; GPT Sol rounds 1 and 2 both returned "do not
@@ -501,6 +603,11 @@ suspected worst case — exactly as slow as before.
   Sol's cheaper decisive experiment: Stage 1a attributes the real article, Stage 1b is conditional
   on 1a not convicting. A third, scoped check of F4 found the restructure still permitted a defer on
   a light workload; fixed. Plan committed at `89955db2`.
+- 2026-09-06 — Stage 2 built: anchor resolution keyed on the anchors rather than the comment
+  objects, `open` applied in a second per-block pass, per-block input reuse in `proseHtml`, and
+  `hitMarks` split from `openKey` so that reuse can hit. Nine new tests in
+  `tests/annotation-reuse.test.tsx`, four of them watched red first. Browser A/B (Stage 3) not yet
+  run, so **no reader-visible number is claimed yet.**
 - 2026-09-06 — the instrument landed (`src/web/annotation-cost.ts`, three modes, six sites). Stage 1a
   measured on a production build: **attributable annotation is ~30ms median per gesture on 551
   blocks, 3–4× over the 8ms threshold — optimise.** Stage 1b skipped. The breakdown cut Stage 2 from

@@ -169,13 +169,14 @@ So: state the render counts as the result, quote CPU as directional, and never c
 "improvement" that one re-run would erase. If you need a CPU number to hold still, take three runs
 and say so.
 
-## The three instruments, and which one answers which question
+## The instruments, and which one answers which question
 
 | | Answers | Reach for it when |
 |---|---|---|
 | [`src/web/perf.ts`](../../src/web/perf.ts) — in the page, `?perf=1` | **why**: which timer, which component, how many fetches, visible vs hidden | you have a live page and want to know what it is doing |
 | [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — its own Chrome, over CDP | **how much**: real CPU for the whole renderer *and* the main thread alone, the script / layout / style split, per frame, plus render counts | you want a number you can put in a commit message |
 | [`scripts/chrome-cpu.ts`](../../scripts/chrome-cpu.ts) — `ps` against a running Chrome | **how much**, whole process, nothing else | you must measure a browser you cannot relaunch |
+| [`scripts/measure-annotation.ts`](../../scripts/measure-annotation.ts) — Playwright, driving gestures | **whose fault**: end-to-end beside the share the annotation pipeline owns, per gesture, every repetition printed | a gesture in the reading view is slow and you need to know how much of it is the marks. Its in-page half is [`src/web/annotation-cost.ts`](../../src/web/annotation-cost.ts) |
 | `measure-cpu.ts --cpu-profile <out>` — a sampling profile of the window | **which function**: self time, ours separated from `node_modules` | the split says *layout* or *script* and you need a name to go and open |
 | a **DOM mutation census** in the page — a `MutationObserver` during a scroll, grouped and counted | **what is being written**, which is often not what the profiler blames | style or layout is high and you do not know what is dirtying the DOM |
 

@@ -49,6 +49,7 @@ import {
   type AnnotationCost,
   type CostSite,
   resetAnnotationCost,
+  setAnnotationCostMode,
   startAnnotationCost,
   stopAnnotationCost,
 } from "../src/web/annotation-cost.js";
@@ -75,20 +76,38 @@ const LEAVES = ["renderedText", "resolveMark", "annotateHtml", "addZoomHandles"]
 /** How many times `callTheLeaves` reaches each leaf. */
 const ROUNDS = 5;
 
-/** The four leaf sites, exercised in exactly the same way in every mode. */
-function callTheLeaves(): void {
+/**
+ * The four leaf sites, exercised in exactly the same way in every mode — and
+ * with **no assertion inside the loop**, so the window can be watched by a
+ * `performance.now` spy without vitest's own machinery landing in the count.
+ * The guards live in `callTheLeaves` below, outside that window.
+ */
+function doTheLeafWork(): { resolved: number; marked: number; handled: number } {
   const html =
     "<p>Tea and toast, and a <em>figure</em> below.</p><figure><img width='400'></figure>";
+  let resolved = 0;
+  let marked = 0;
+  let handled = 0;
   for (let i = 0; i < ROUNDS; i++) {
     const text = renderedText(html);
     const found = resolveMark(text, { quote: "toast", start: 8 });
-    expect(found, "the fixture quote must resolve, or this exercises nothing").not.toBeNull();
+    if (found) resolved += 1;
     const marks: Mark[] = [{ id: `c${i}`, start: found?.start ?? 0, end: found?.end ?? 0 }];
-    const marked = annotateHtml(html, marks);
-    expect(marked, "annotateHtml must actually have done work").toContain("<mark");
-    const withHandles = addZoomHandles(marked);
-    expect(withHandles, "addZoomHandles must actually have done work").toContain("zoom-btn");
+    const annotated = annotateHtml(html, marks);
+    if (annotated.includes("<mark")) marked += 1;
+    if (addZoomHandles(annotated).includes("zoom-btn")) handled += 1;
   }
+  return { resolved, marked, handled };
+}
+
+/** `doTheLeafWork`, with the guards that say it exercised anything at all. */
+function callTheLeaves(): void {
+  const did = doTheLeafWork();
+  expect(did, "the leaves did not all do their work, so this exercises nothing").toEqual({
+    resolved: ROUNDS,
+    marked: ROUNDS,
+    handled: ROUNDS,
+  });
 }
 
 /** Every site's numbers, flattened for a whole-snapshot assertion. */
@@ -123,12 +142,34 @@ function tallyIsSane(cost: AnnotationCost, site: CostSite): void {
   }
 }
 
+/**
+ * A clock that only ever goes forward, by one whole millisecond per reading.
+ *
+ * Wall-clock assertions here would be a machine-speed lottery — a memo whose
+ * timer never started and a memo that finished in under a microsecond both
+ * round to the same "not negative". With this installed, any interval that read
+ * the clock at *both* ends is a positive whole number of milliseconds, and an
+ * interval that started at `NO_CLOCK` is still exactly zero. That is the
+ * difference the memo assertions turn on, and it is why they are exact rather
+ * than an inequality: `toBeGreaterThanOrEqual(0)` is the assertion a broken
+ * timer passes.
+ */
+function stepClock(): () => void {
+  let t = 1000;
+  const spy = vi.spyOn(performance, "now").mockImplementation(() => {
+    t += 1;
+    return t;
+  });
+  return () => spy.mockRestore();
+}
+
 beforeEach(() => {
   stopAnnotationCost();
   resetAnnotationCost();
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   stopAnnotationCost();
   resetAnnotationCost();
 });
@@ -190,6 +231,127 @@ it("counts the leaves without timing them in the mode the decision is made in", 
      most expensive of the four and the safest to insist on. */
   const timed = LEAVES.some((site) => full[site].ms > 0);
   expect(timed, 'no leaf accumulated any time in "full" mode — the timers never ran').toBe(true);
+});
+
+/**
+ * The test above reads the *recorded values*, and a recorded zero is exactly
+ * what a leaf that read the clock and threw the reading away would also
+ * produce. `"counts"` mode is defined by an absence — no clock read at a leaf —
+ * and an absence has to be watched for directly. GPT Sol mutation-tested the
+ * first version of this file and got a green suite out of a `performance.now()`
+ * added to `leafClock()` in `"counts"` mode; this is the assertion that would
+ * have caught it. docs/reusable/silent-success.md.
+ */
+it('reads no clock at a leaf in "counts" mode, and exactly two per call in "full"', () => {
+  const now = vi.spyOn(performance, "now");
+
+  startAnnotationCost();
+  now.mockClear();
+  const inCounts = doTheLeafWork();
+  const readsInCounts = now.mock.calls.length;
+
+  startAnnotationCost("full");
+  now.mockClear();
+  const inFull = doTheLeafWork();
+  const readsInFull = now.mock.calls.length;
+  now.mockRestore();
+
+  /* The same work both times, so the two read counts are comparable and a zero
+     below is about the clock rather than about a leaf that did nothing. */
+  const all = { resolved: ROUNDS, marked: ROUNDS, handled: ROUNDS };
+  expect(inCounts, "the leaves did no work in \"counts\" mode").toEqual(all);
+  expect(inFull, 'the leaves did no work in "full" mode').toEqual(all);
+
+  expect(
+    readsInCounts,
+    '"counts" mode read the clock at a leaf — that mode exists precisely so it does not',
+  ).toBe(0);
+  /* Two reads per call: `leafClock()` on the way in, `noteCost()` on the way
+     out. Four leaves, ROUNDS calls each. Exact rather than "more than zero",
+     because a site that quietly lost its timer takes eight off this number and
+     an inequality would not notice. */
+  expect(readsInFull, 'a leaf timer did not run in "full" mode').toBe(4 * ROUNDS * 2);
+});
+
+/**
+ * `maxMs` under a clock we wrote ourselves.
+ *
+ * The inequalities in `tallyIsSane` are satisfied by an accumulated total as
+ * well as by a maximum — Sol replaced one with the other and the suite stayed
+ * green. Three deliberately unequal samples separate them: only a real maximum
+ * is 20 when the total is 32.
+ */
+it("records each sample exactly, and keeps the largest one rather than the total", () => {
+  /* One sample per pair of readings, since `leafClock()` takes the first and
+     `noteCost()` the second: 5ms, then 20ms, then 7ms. The count is knowable
+     because the test above pins it at two reads per leaf call. */
+  const readings = [1000, 1005, 2000, 2020, 3000, 3007];
+  let reads = 0;
+  const spy = vi.spyOn(performance, "now").mockImplementation(() => {
+    /* Runs past the end of the script rather than throwing: a throw from
+       inside a mocked global escapes mid-render and leaves the spy installed
+       for every test after this one, which turns one clear failure into five
+       confusing ones. The overrun is asserted below instead. */
+    const t = readings[reads++];
+    return t ?? 9000 + reads;
+  });
+
+  startAnnotationCost("full");
+  for (let k = 0; k < 3; k++) renderedText("<p>Tea and toast.</p>");
+  spy.mockRestore();
+
+  const cost = annotationCost();
+  expect(
+    reads,
+    "three leaf calls did not read the scripted clock exactly twice each",
+  ).toBe(readings.length);
+  expect(cost.renderedText.n).toBe(3);
+  expect(cost.renderedText.ms, "the three samples must total 5 + 20 + 7").toBe(32);
+  expect(
+    cost.renderedText.maxMs,
+    "maxMs is 32, so it is the accumulated total and not the largest single sample",
+  ).toBe(20);
+});
+
+/**
+ * F18: the counters belong to the mode the snapshot reports.
+ *
+ * Both halves, because the cheap fix for one breaks the other — resetting on
+ * every call to the setter would wipe a run whenever a harness re-asserted the
+ * mode it was already in.
+ */
+it("zeroes the counters when the mode changes, and not when it is merely restated", () => {
+  startAnnotationCost("full");
+  callTheLeaves();
+  const running = totals(annotationCost());
+  expect(running.calls, "nothing was counted, so nothing is being tested").toBeGreaterThan(0);
+
+  startAnnotationCost("full");
+  expect(totals(annotationCost()), "re-starting the same mode wiped a run").toEqual(running);
+  setAnnotationCostMode("full");
+  expect(totals(annotationCost()), "re-setting the same mode wiped a run").toEqual(running);
+
+  /* A real change zeroes them, so `"counts"` can never report leaf totals
+     accumulated while the leaf timers were on. */
+  setAnnotationCostMode("counts");
+  const switched = annotationCost();
+  expect(switched.mode).toBe("counts");
+  expect(totals(switched), '"counts" inherited samples taken in "full"').toEqual({
+    calls: 0,
+    ms: 0,
+  });
+
+  /* And the same for stopping, which used to leave nonzero numbers wearing the
+     label that means "nobody switched the probe on". */
+  callTheLeaves();
+  expect(totals(annotationCost()).calls).toBeGreaterThan(0);
+  stopAnnotationCost();
+  const stopped = annotationCost();
+  expect(stopped.mode).toBe("off");
+  expect(totals(stopped), 'counters survived into a snapshot labelled "off"').toEqual({
+    calls: 0,
+    ms: 0,
+  });
 });
 
 it("stops recording again, and reset returns it to zero", () => {
@@ -320,13 +482,29 @@ it('charges the two memos in TableView, in "counts" mode and not when off', asyn
     "the fixture comment never resolved, so marksByBlock did no work",
   ).not.toBeNull();
 
+  /* On a clock of our own for the mounted render, so the memo durations below
+     can be asserted as *positive* rather than as "not negative". Sol replaced
+     both memo start times with `NO_CLOCK` and the suite stayed green, because
+     nothing here ever said a memo must record time. Now it does, and only a
+     timer that really started can. */
+  const realClock = stepClock();
   startAnnotationCost();
-  /* A prop the memos depend on, so both re-run: a fresh `comments` array is
-     exactly the streaming-delta shape the plan is about. */
+  /* **A fresh mount rather than a re-render, since 2026-09-06.** This used to
+     re-render with a fresh-but-identical `comments` array — the streaming-delta
+     shape — and that no longer charges anything, because Stage 2 of
+     docs/plans/260905i-… made a delta that moves no anchor cost nothing at all.
+     Which is the point of it, and tests/annotation-reuse.test.tsx is where that
+     zero is asserted and paired with its controls. A first paint is the pass
+     that still visits every block, and it is what the count below is about. */
   await act(async () => {
-    root.render(createElement(TableView, propsFor(loaded, { comments: [...comments] }) as never));
+    root.unmount();
+  });
+  root = createRoot(mountPoint);
+  await act(async () => {
+    root.render(createElement(TableView, propsFor(loaded, { comments }) as never));
   });
   const on = annotationCost();
+  realClock();
   expect(
     on.marksByBlock.n,
     "marksByBlock is not charged — the memo lost its noteCost",
@@ -334,7 +512,21 @@ it('charges the two memos in TableView, in "counts" mode and not when off', asyn
   expect(on.proseHtml.n, "proseHtml is not charged — the memo lost its noteCost").toBeGreaterThan(
     0,
   );
-  for (const site of ["marksByBlock", "proseHtml"] as const) tallyIsSane(on, site);
+  for (const site of ["marksByBlock", "proseHtml"] as const) {
+    tallyIsSane(on, site);
+    /* The step clock moves a whole millisecond per reading, so a memo that
+       timed itself records a positive integer and a memo whose `t0` was
+       `NO_CLOCK` records exactly 0. `n > 0` above cannot tell those apart —
+       `noteCost` counts the call either way. */
+    expect(
+      on[site].ms,
+      `${site} recorded no time under a clock that cannot stand still — its timer never started`,
+    ).toBeGreaterThan(0);
+    expect(
+      Number.isInteger(on[site].ms),
+      `${site} recorded ${on[site].ms}ms, which did not come from the scripted clock`,
+    ).toBe(true);
+  }
   /* The outer timers run in "counts" mode — that is the whole point of the
      mode — while the leaves inside them are counted and not timed. */
   expect(on.addZoomHandles.ms, 'a leaf was timed in "counts" mode').toBe(0);

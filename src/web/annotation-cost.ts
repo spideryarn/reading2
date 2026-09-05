@@ -91,6 +91,18 @@
  * destroys the distribution the question is about. One comparison per sample
  * buys the answer.
  *
+ * **But `maxMs` is the worst single *call* at one site, and not the worst
+ * render.** The two memo maxima are kept independently, so `marksByBlock.maxMs`
+ * and `proseHtml.maxMs` may well come from different React renders: **do not
+ * add them together and call the result one render's cost.** Nothing here
+ * correlates the two. That is deliberate (GPT Sol's F10, declined 2026-09-06):
+ * Stage 2's acceptance for the streaming case is *zero work for a body-only
+ * delta*, which is strictly stronger than any millisecond threshold and needs
+ * no per-render correspondence to check. If a later job genuinely needs the
+ * worst **combined** render, what it must add is a render identifier carried
+ * with each sample, or one enclosing interval around both memos — not a third
+ * `maxMs`.
+ *
  * ## What the counts are and are not
  *
  * `n` is honest: it is calls, including the ones that took a fast path
@@ -118,8 +130,9 @@ export type CostSite =
   | "marksByBlock"
   | "proseHtml";
 
-/** One site's running total. */
-export interface CostTally {
+/** One site's running total. Not exported: `AnnotationCost` below is the shape
+ *  callers hold, and it carries this structurally. */
+interface CostTally {
   /** Calls, fast-path ones included. Counted in `"counts"` as well as `"full"`. */
   n: number;
   /** Wall-clock ms across those calls. Zero for a leaf under `"counts"`, where
@@ -140,6 +153,11 @@ export interface CostTally {
  * on"; four zeroed leaf timers is the shape of "the leaves are free" *and* of
  * `"counts"` mode working exactly as intended. Neither pair is the same answer,
  * and only `mode` tells them apart.
+ *
+ * That only works if `mode` really does describe these numbers, so it is an
+ * invariant rather than a hope: **the counters always belong to the mode the
+ * snapshot reports**, because every change of mode zeroes them. See
+ * `setAnnotationCostMode` for the two ways it used not to hold.
  */
 export type AnnotationCost = Readonly<Record<CostSite, Readonly<CostTally>>> & {
   readonly mode: CostMode;
@@ -177,11 +195,6 @@ export function costOn(): boolean {
   return mode !== "off";
 }
 
-/** The current mode, for a caller that wants to restore it afterwards. */
-export function annotationCostMode(): CostMode {
-  return mode;
-}
-
 /**
  * A leaf site's start time: the clock in `"full"`, and the "do not time this"
  * sentinel otherwise.
@@ -211,29 +224,59 @@ export function noteCost(site: CostSite, t0: number): void {
 }
 
 /**
- * Turn the instrument on. Does **not** reset — a caller that wants a clean
- * window says so with `resetAnnotationCost()`, which keeps "switch it on" and
- * "start a measurement" as two separate decisions.
+ * Turn the instrument on, on a clean set of counters.
+ *
+ * **This used to say it deliberately did *not* reset**, on the grounds that
+ * "switch it on" and "start a measurement" are two decisions. They are, and
+ * `resetAnnotationCost()` still separates them *within* one mode — but the
+ * no-reset version bought that at the cost of the invariant `mode` exists to
+ * carry, so it is gone (GPT Sol's F18, 2026-09-06). See `setAnnotationCostMode`.
  *
  * `"counts"` by default, because that is the mode the decision is made in and a
  * caller who has not thought about it should get the honest number rather than
  * the perturbed one. Ask for `"full"` deliberately.
  */
 export function startAnnotationCost(next: Exclude<CostMode, "off"> = "counts"): void {
-  mode = next;
+  setAnnotationCostMode(next);
 }
 
-/** Stop recording, keeping whatever has been accumulated so far. */
+/** Stop recording. Zeroes the counters, for the reason `setAnnotationCostMode`
+ *  gives — read the snapshot *before* stopping, not after. */
 export function stopAnnotationCost(): void {
-  mode = "off";
+  setAnnotationCostMode("off");
 }
 
-/** The one setter, for a caller that wants to name the state including `"off"`. */
+/**
+ * The one setter, and the one writer of `mode` — everything else here goes
+ * through it.
+ *
+ * **A real change of mode zeroes the counters**, so that the counters always
+ * belong to the mode the snapshot reports. Two ways that used not to hold, both
+ * of which produced numbers whose label was a lie:
+ *
+ * - `stopAnnotationCost()` kept the accumulated totals while the snapshot then
+ *   said `mode: "off"` — nonzero numbers wearing the label that means "nobody
+ *   switched the probe on";
+ * - going straight from `"counts"` to `"full"` blended leaf-untimed and
+ *   leaf-timed samples under a final `"full"` label, so four leaf totals were a
+ *   mixture of measurements and deliberate zeroes with nothing to say so.
+ *
+ * Resetting on the transition is one rule and no extra state, which is why it
+ * was preferred to recording a separate sample mode alongside the counters.
+ *
+ * **Setting the mode it is already in is a no-op**, so this cannot quietly wipe
+ * a measurement in progress — `startAnnotationCost()` called twice, or a
+ * measurement harness re-asserting `"full"` between repetitions, must not lose
+ * the run.
+ */
 export function setAnnotationCostMode(next: CostMode): void {
+  if (next === mode) return;
   mode = next;
+  counters = zero();
 }
 
-/** Back to six zeroes, leaving the mode alone. */
+/** Back to six zeroes, leaving the mode alone. The way to start a fresh window
+ *  *within* one mode — one measured gesture, then the next. */
 export function resetAnnotationCost(): void {
   counters = zero();
 }
