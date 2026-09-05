@@ -147,6 +147,7 @@ async function fixture() {
 
 async function runWith(reader: PdfReader, bytes: Uint8Array) {
   return runPdfExtract({
+    frontMatter: null,
     bytes,
     url: "https://example.test/paper.pdf",
     /* A fresh one per call, so nothing here resumes: this file is about the
@@ -262,6 +263,7 @@ describe("PDF chunks are read concurrently", () => {
 
     const survivor = async (reader: PdfReader) => {
       const result = await runPdfExtract({
+        frontMatter: null,
         bytes,
         url: "https://example.test/paper.pdf",
         checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),

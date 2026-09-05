@@ -308,6 +308,22 @@ export type RecordType =
   | "footnote"
   | "reference"
   | "cover"
+  /**
+   * **The publisher's furniture on the article's own pages**, as distinct from
+   * `cover`, which is a whole page belonging to a publisher or a library.
+   *
+   * A journal masthead, "Contents lists available at …", a journal-homepage or
+   * DOI strip, a received/revised/accepted date block, an ISSN and copyright
+   * line, an "Available online" date, a "Downloaded from …" watermark, an arXiv
+   * margin stamp. All of it sits *on* page 1 among the title and the abstract,
+   * and none of it is a cover page.
+   *
+   * Added 2026-09-05 rather than widening `cover`, on GPT Sol's review: a DOI
+   * strip is not a cover, and a type that means "things we do not show" is a
+   * second, worse spelling of `RENDERED`.
+   * docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md
+   */
+  | "publisher"
   | "tabledata";
 
 /**

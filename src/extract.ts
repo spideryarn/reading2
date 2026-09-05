@@ -30,6 +30,9 @@ import { Readability } from "@mozilla/readability";
 import { escapeHtml } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
+/* The namespace and its scrub — src/reserved.ts is the only file allowed to
+   name one of these attributes. See `stampSourceIds`. */
+import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
 import type { Meta } from "./types.js";
 
@@ -238,6 +241,77 @@ export function unhideCollapsedSections(doc: Document): void {
 }
 
 /**
+ * **A metadata string with the page's layout taken back out of it.**
+ *
+ * Readability's `_checkByline` returns `node.textContent.trim()` — an outer trim
+ * and nothing else — so a byline the publisher set over several source lines
+ * arrives with those lines still in it. Real examples, all from pages we hold:
+ *
+ * - `"By \n \n Natalie Wolchover\n \n \nDecember 17, 2024"` — Quanta
+ * - `"Affiliation: Google Brain\n\nEmail: noam@google.com"` — the ar5iv fixture
+ * - `"Eric Steven Raymond\n    Thyrsus Enterprises\n    <esr@thyrsus.com>"` —
+ *   the hacker-howto fixture
+ *
+ * `meta.byline` is rendered on the library card and in the masthead, where a
+ * newline is either a line break nobody asked for or one silently swallowed by
+ * the layout. Collapsing is the same thing `extractText` does to prose in stage
+ * 3 and for the same reason: **a newline in the markup is not a newline in the
+ * sentence.** Except where it is not even a space — `CJK_SEGMENT_BREAK` below.
+ *
+ * **It inserts nothing**, and that is a decision. The trawl reported
+ * `"Visual Journalism teamBBC News"` as "byline and site name concatenated with
+ * no separator"; it is not. `byline` and `siteName` are separate fields, stored
+ * separately and rendered with a ` · ` between them, and BBC hands us
+ * `siteName: "BBC News"` on its own. The run-together string is **one**
+ * Readability byline, built from two adjacent spans in BBC's own contributor
+ * markup — a contributor's name and their role, set with no whitespace between
+ * them, which reproduces on live pages today as
+ * `"James GallagherHealth and science correspondent"`. Inserting a space at a
+ * case change would rewrite `McNulty`, `DeSantis` and every name of that shape.
+ * If it is worth fixing it is a markup recogniser in stage 2, not a string rule
+ * here — *rule on markup, model on meaning*, and it is stage C's problem.
+ *
+ * **Applied where the artefact is built, not inside `readArticle`.** An eval
+ * instrument asking `readArticle` what Readability said should get what
+ * Readability said; the pipeline storing a `Meta` should get the tidy form. One
+ * function, exported, so a second copy cannot drift from this one.
+ *
+ * **For a single-line metadata field and nothing else.** It flattens every line
+ * break it finds, which is right for a byline on a library card and wrong for
+ * anything a reader is meant to read — prose goes through `extractText` in
+ * src/blocks.ts, which has a `<pre>` branch precisely because flattening is not
+ * always harmless. Do not reach for this one because the name is generic.
+ */
+export function tidyMetaText(raw: Maybe): string | undefined {
+  const tidy = (raw ?? "").replace(CJK_SEGMENT_BREAK, "").replace(/\s+/gu, " ").trim();
+  return tidy || undefined;
+}
+
+/**
+ * **A line break between two CJK characters renders as nothing, so it collapses
+ * to nothing.**
+ *
+ * `/\s+/gu → " "` is the right rule for a script that separates its words with
+ * spaces and the wrong one for a script that does not: a Japanese publisher who
+ * sets a contributor's name and their role on two source lines hands Readability
+ * a newline between two ideographs, and flattening it yields `"田中太郎 記者"` —
+ * a word gap the page never showed anybody, in a name. This is the CSS Text 3
+ * segment-break transformation, which is what a browser does with the same
+ * bytes, so following it is matching the page rather than inventing a rule.
+ *
+ * **Only a *break*, and only between two CJK characters.** A space the publisher
+ * actually typed stays a space; a break with Latin on either side keeps its
+ * space, because there the gap is what the reader saw. Han, Hiragana, Katakana
+ * and Hangul, plus CJK punctuation and the fullwidth forms — the scripts whose
+ * line breaking works this way, not everything non-Latin. RTL text and bidi
+ * controls are deliberately untouched: Arabic and Hebrew space their words.
+ *
+ * GPT Sol, 2026-09-05, who found the inserted space and checked the RTL half.
+ */
+const CJK = "\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Hangul}\\u3000-\\u303F\\uFF00-\\uFF60";
+const CJK_SEGMENT_BREAK = new RegExp(`(?<=[${CJK}])[^\\S\\n]*\\n\\s*(?=[${CJK}])`, "gu");
+
+/**
  * Stage 2 — Readability over already-fetched HTML, and the artefacts that fall
  * out of it.
  *
@@ -291,20 +365,227 @@ export function readArticle(
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
+  const dom = sourceDom(html, url);
+  const { notes, callouts } = prepareDocument(dom.window.document);
+  return { article: new Readability(dom.window.document).parse(), notes, callouts };
+}
+
+/**
+ * The JSDOM every reader of a fetched page gets, and the `VirtualConsole` is the
+ * whole reason it is a function.
+ *
+ * **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
+ * JSDOM's default forwards its own errors straight to `console`, and one of them
+ * quotes the page: a malformed `@import` produces `Could not parse CSS @import
+ * URL "<whatever the page said>" relative to base URL "<the full source URL,
+ * query string included>"`. That is fetched-page-controlled text and a possibly
+ * private URL on the server's stderr, going round Pino, `errorFields` and
+ * redaction alike — none of which can reach a string somebody else's library
+ * printed.
+ *
+ * Ordinary CSS parse failures print a fixed sentence and are harmless; it is the
+ * `@import` branch that carries the page's own words. Dropping the lot is right
+ * anyway: we are here for the article text, and JSDOM's opinion of a stylesheet
+ * is not something anybody running this needs.
+ *
+ * Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round of
+ * the same class, and the first one where the leak was a dependency's rather
+ * than ours. See docs/project/logging.md.
+ */
+function sourceDom(html: string, url: string): InstanceType<ReturnType<typeof jsdom>["JSDOM"]> {
   const { JSDOM, VirtualConsole } = jsdom();
-  const dom = new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
-  unhideCollapsedSections(dom.window.document);
+  return new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+}
+
+/**
+ * **Everything done to the DOM before Readability sees it**, in the order that
+ * is the contract.
+ *
+ * One home for the order, for the reason `readArticle`'s own header gives: two
+ * eval instruments re-derived it, both left `canonicaliseNotes` out, and both
+ * reported 18 stranded footnote markers the real pipeline does not produce.
+ * `readArticleWithProvenance` below is a third caller and would have been a
+ * third chance to get it wrong.
+ */
+function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutStats } {
+  unhideCollapsedSections(doc);
   /* Before Readability, and it has to be: Readability's `keepClasses: false`
      takes the identifying classes off, and the sanitiser downstream of it
      deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
      3 there is nothing left to recognise a note by. See src/notes.ts. */
-  const notes = canonicaliseNotes(dom.window.document);
+  const notes = canonicaliseNotes(doc);
   /* After the notes, and for the same reason as the notes: Readability deletes
      the element a callout is named on. Order between the two does not matter —
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
-  const callouts = canonicaliseCallouts(dom.window.document);
-  return { article: new Readability(dom.window.document).parse(), notes, callouts };
+  const callouts = canonicaliseCallouts(doc);
+  return { notes, callouts };
+}
+
+/**
+ * **Give every element in the source a number, so the output can say where it
+ * came from.**
+ *
+ * A counter in document order, not a hash: this identity lives for one eval run
+ * and is never written down, so the cheapest thing that is unique is the right
+ * one. Returns how many elements were stamped, which is the denominator every
+ * coverage figure is over.
+ *
+ * The scrub first is the namespace's standing obligation
+ * ([src/reserved.ts](reserved.ts)): the attribute is ours and therefore
+ * forgeable, and a page that got one past us would have its own markup dressed
+ * as something we vouched for — here, as the source of a passage it is not.
+ *
+ * **"Every element" means every element `querySelectorAll("*")` reaches**, which
+ * is not quite everything: a `<template>`'s content lives in its own document
+ * fragment and is not stamped, so an output node that came from one would
+ * resolve to its nearest stamped ancestor rather than to itself. Left that way
+ * deliberately — Readability does not lift `<template>` content into an article,
+ * so the case is theoretical — but the claim is narrowed here rather than left
+ * for somebody to discover. GPT Sol, 2026-09-05.
+ *
+ * Exported for the tests and for `evals/extraction/provenance.mts`, which scores
+ * the coverage. **Nothing on a request path may call this**, and nothing does.
+ */
+export function stampSourceIds(doc: Document): number {
+  scrubReserved(doc, [RESERVED_ATTRS.sourceRef]);
+  let n = 0;
+  for (const el of Array.from(doc.querySelectorAll("*"))) {
+    n += 1;
+    el.setAttribute(RESERVED_ATTRS.sourceRef, `s${n}`);
+  }
+  return n;
+}
+
+/**
+ * **The provenance arm's output with the stamps taken back off — and nothing
+ * else touched.**
+ *
+ * This exists so that "the instrument did not change what it measured" is a
+ * *byte* comparison against `readArticle`'s own string, rather than a comparison
+ * of whitespace-normalised text. The first version of that check compared
+ * `textContent` with `/\s+/gu → " "` applied, and GPT Sol reproduced the hole on
+ * 2026-09-05 by prepending `"\n\n"` to the extracted HTML: the mutation changed
+ * the output and **the check still said yes**. Anything an instrument can do to
+ * a document that whitespace-normalised text cannot see — a wrapper element, an
+ * attribute, a reordering — is exactly the class of damage that matters here,
+ * because Readability weights `class` and `id` when it scores a node.
+ *
+ * `innerHTML` on a clone rather than `scrubReserved` on the live node, because
+ * the caller goes on to count stamps afterwards. It removes **only** the one
+ * attribute; if the stamped run differs from the stock run in any other way, the
+ * strings differ and the row is invalid.
+ */
+export function withoutSourceRefs(content: Element): string {
+  const clone = content.cloneNode(true) as Element;
+  clone.removeAttribute(RESERVED_ATTRS.sourceRef);
+  for (const el of Array.from(clone.querySelectorAll(`[${RESERVED_ATTRS.sourceRef}]`))) {
+    el.removeAttribute(RESERVED_ATTRS.sourceRef);
+  }
+  return clone.innerHTML;
+}
+
+/**
+ * Where an output node came from, and **how confident that answer is**.
+ *
+ * Readability generates wrapper nodes of its own — a `<div>` or a `<p>` it built
+ * rather than kept — and on markup degenerate enough it rebuilds the document
+ * wholesale. 260827ab measured the direct hit rate at 92.7%, 99.8% and **40.9%**
+ * on three pages, the last being Paul Graham's, and treating that 40.9% as
+ * "the rest is unknowable" would throw away most of a page that is largely
+ * recoverable. So there is a fallback, and it is reported rather than hidden:
+ *
+ * | `how` | meaning |
+ * |---|---|
+ * | `direct` | the node itself carries the stamp — the only answer that is certain |
+ * | `descendant` | a generated wrapper; the id is its first stamped descendant's, in document order |
+ * | `ancestor` | a generated leaf; the id is its nearest stamped ancestor's |
+ * | `none` | nothing near it is stamped — say so rather than guess |
+ *
+ * **Descendant beats ancestor**, because it is the narrower claim: a wrapper
+ * round one paragraph is that paragraph, whereas an ancestor may be the whole
+ * article. A caller that needs certainty filters on `how === "direct"`; a caller
+ * measuring recall takes all three and reports the split, which is what the
+ * instrument does.
+ */
+export function sourceRefOf(node: Element): {
+  id: string | null;
+  how: "direct" | "descendant" | "ancestor" | "none";
+} {
+  const own = node.getAttribute(RESERVED_ATTRS.sourceRef);
+  if (own) return { id: own, how: "direct" };
+  const below = node.querySelector(`[${RESERVED_ATTRS.sourceRef}]`);
+  if (below) return { id: below.getAttribute(RESERVED_ATTRS.sourceRef), how: "descendant" };
+  const above = node.parentElement?.closest(`[${RESERVED_ATTRS.sourceRef}]`);
+  if (above) return { id: above.getAttribute(RESERVED_ATTRS.sourceRef), how: "ancestor" };
+  return { id: null, how: "none" };
+}
+
+/**
+ * **Stage 2 again, with the provenance kept** — for instruments, never for the
+ * pipeline.
+ *
+ * Readability's `serializer` option decides what `article.content` is; the
+ * default takes `innerHTML`, and the identity function hands back the **DOM
+ * node** instead, stamps and all. That turns "what did extraction drop?" from a
+ * text-matching problem — 260827ab's list of eight ways that went wrong, of
+ * which the worst is that a hidden *duplicate* of a paragraph is invisible to a
+ * substring test — into a set difference over ids.
+ *
+ * **Two documents, because Readability mutates the one it is given.** The
+ * stamped source has to survive the parse for an output id to be looked up in
+ * it, so the source is stamped, serialised, and re-parsed for Readability. The
+ * cost is one extra parse per page in an eval, and the alternative — mapping ids
+ * through a document Readability has already pruned — answers a different
+ * question.
+ *
+ * `runExtract` does not call this and must not: the shipping path stays
+ * byte-for-byte what it was, which `tests/extract-provenance.test.ts` checks by
+ * comparing the two side by side rather than by asserting it.
+ */
+export function readArticleWithProvenance(
+  html: string,
+  url: string,
+): {
+  article: ReturnType<Readability<Element>["parse"]>;
+  notes: NoteStats;
+  callouts: CalloutStats;
+  /** The stamped source, as Readability was handed it and before it pruned anything. */
+  source: Document;
+  /**
+   * **The bytes of that source at the moment Readability was handed its copy** —
+   * so that "the source survived the parse" is a comparison rather than an
+   * assertion about a document nothing touched.
+   *
+   * The claim the whole mapping rests on is that `source` is still the *source*:
+   * every id an output node resolves to is looked up in it, and a document
+   * Readability had pruned would answer `none` for exactly the passages an
+   * instrument exists to find. Checking that by counting `source`'s own elements
+   * against `stampedElements` is nearly true by construction — GPT Sol's point,
+   * 2026-09-05 — because both are read off the same object. This is the other
+   * half of the pair, taken before the parse, and it is what actually goes red
+   * when somebody "simplifies" the two documents below into one.
+   */
+  sourceHtml: string;
+  /** How many source elements carry a stamp — the denominator for coverage. */
+  stampedElements: number;
+} {
+  const prepared = sourceDom(html, url);
+  const { notes, callouts } = prepareDocument(prepared.window.document);
+  const stampedElements = stampSourceIds(prepared.window.document);
+  const sourceHtml = prepared.window.document.documentElement.outerHTML;
+  const forReadability = sourceDom(prepared.serialize(), url);
+  const article = new Readability<Element>(forReadability.window.document, {
+    serializer: (el) => el as Element,
+  }).parse();
+  return {
+    article,
+    notes,
+    callouts,
+    source: prepared.window.document,
+    sourceHtml,
+    stampedElements,
+  };
 }
 
 /**
@@ -445,10 +726,13 @@ export async function runExtract(opts: {
      in the piece — the field's note in src/types.ts says why it is not
      `fetchedAt`, and `publicationDate` above why it is not converted to UTC. */
   const publishedAt = publicationDate(article.publishedTime);
+  /* The page's own line breaks taken back out — `tidyMetaText` above says why,
+     and why it stops there rather than guessing at a missing separator. */
+  const byline = tidyMetaText(article.byline);
   const meta: Meta = {
     slug,
     title: article.title ?? slug,
-    ...(article.byline ? { byline: article.byline } : {}),
+    ...(byline ? { byline } : {}),
     ...(article.siteName ? { siteName: article.siteName } : {}),
     ...(article.lang ? { lang: article.lang } : {}),
     url: opts.url,

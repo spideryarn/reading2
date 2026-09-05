@@ -114,6 +114,7 @@ import {
   getJob,
   orderSteps,
   sameWork,
+  unrunnableStepPlan,
   workKeyFor,
 } from "../src/jobs.js";
 import {
@@ -225,6 +226,53 @@ describe("orderSteps", () => {
 
   it("leaves an already-ordered list alone", () => {
     expect(orderSteps([...STEP_ORDER])).toEqual(STEP_ORDER);
+  });
+});
+
+/**
+ * **The one step combination the queue refuses**, and it is refused at the door
+ * rather than after it has run. See `unrunnableStepPlan` in src/jobs.ts for the
+ * trap and for why the answer is a 400 and not a silently added model call.
+ *
+ * **No mutation involving the store: no store reaches this block.** Every case
+ * here hands the pure function a list of step names and reads the string or
+ * `undefined` it returns; nothing is claimed, queued or written.
+ *
+ * **And that is the gap, not a clean bill.** The refusal that matters happens at
+ * the queue's door — `enqueue` calls this and throws a 400 — and *nothing*
+ * asserts that. The cost of the hole is measured rather than hypothetical:
+ * `evals/deepen/`'s free `--dry-run` asked for `["fetch","extract","blocks"]`,
+ * every phase threw at `enqueue`, and the whole suite stayed green through it,
+ * because this block tests the predicate and no block tests the door. A
+ * store-level test belongs with whoever added the rule — it wants an article, an
+ * owner and an assertion that no job row is written, which is the shape
+ * `tests/enqueue-owns-the-article.test.ts` already has for the ownership refusal.
+ * Written here rather than fixed here on purpose: this judgement is a fact about
+ * this block, and the registry's real question is one for the rule's author.
+ * ⟨Found 2026-09-05 while merging `dev`; see the deliberate "not fixed here" in
+ * docs/plans/260905b-feedback-reports-batch-three.md, which this does not
+ * overturn — it answers the question that decision left open.⟩
+ */
+describe("unrunnableStepPlan", () => {
+  it("refuses blocks without hierarchy, which is the request that strands an article", () => {
+    expect(unrunnableStepPlan(["blocks"])).toMatch(/hierarchy/);
+    expect(unrunnableStepPlan(["fetch", "extract", "blocks"])).toMatch(/hierarchy/);
+    expect(unrunnableStepPlan(["blocks", "assets", "arc"])).toMatch(/hierarchy/);
+  });
+
+  it("allows the pair, in either order it may be written", () => {
+    expect(unrunnableStepPlan(["blocks", "hierarchy"])).toBeUndefined();
+    expect(unrunnableStepPlan(orderSteps(["hierarchy", "blocks"]))).toBeUndefined();
+    expect(unrunnableStepPlan(DEFAULT_INGEST_STEPS)).toBeUndefined();
+    expect(unrunnableStepPlan([...STEP_ORDER])).toBeUndefined();
+  });
+
+  it("says nothing about a job that does not touch the blocks at all", () => {
+    // `hierarchy` alone is fine and common: it is how somebody repairs exactly
+    // the article this rule exists to stop stranding.
+    expect(unrunnableStepPlan(["hierarchy"])).toBeUndefined();
+    expect(unrunnableStepPlan(["fetch", "extract"])).toBeUndefined();
+    expect(unrunnableStepPlan(["tweets"])).toBeUndefined();
   });
 });
 
@@ -585,6 +633,10 @@ const OWN_SLUGS = [
   "test-advance-token",
   "test-advance-sweeps",
   "test-enqueue-busy-article",
+  /* Nothing should ever be inserted under this one — the point of its test is
+     that `enqueue` throws first — so it is here for the day the guard is broken
+     and a row does land. */
+  "test-enqueue-blocks-only",
 ];
 
 /** Slugs minted at run time — the short-id case's two. */
@@ -1157,6 +1209,21 @@ describe("running a job", () => {
       await settle(held.id);
       await forgetJob(held.id);
     }
+  });
+
+  /**
+   * **And the guard is wired**, which is a separate claim from
+   * `unrunnableStepPlan` returning the right string — a pure function nothing
+   * calls is the shape of half the bugs in this repo
+   * (docs/reusable/silent-success.md). It throws before anything is inserted or
+   * reserved, so there is nothing to clean up afterwards.
+   */
+  it("refuses a blocks-only job at the door rather than stranding the article", async () => {
+    const blocksOnly = enqueue({ slug: "test-enqueue-blocks-only", steps: ["blocks"] });
+    await expect(blocksOnly).rejects.toThrow(/hierarchy/);
+    // A 400 rather than a 500: this is a bad request, and the route maps the
+    // field straight onto the status code.
+    await expect(blocksOnly).rejects.toMatchObject({ status: 400 });
   });
 
   /**

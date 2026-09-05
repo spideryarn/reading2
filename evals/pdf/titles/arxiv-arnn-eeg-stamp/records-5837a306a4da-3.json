@@ -1,0 +1,177 @@
+{
+  "slug": "arxiv-arnn-eeg-stamp",
+  "sample": 3,
+  "prompt": "5837a306a4da",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T09:00:18.094Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "ARNN: Attentive Recurrent Neural Network for Multi-channel EEG Signals to Identify Epileptic Seizures",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Salim Rukhsara,∗",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "aDepartment of Electrical Engineering, IIT Jodhpur, 342037, India",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading2",
+      "text": "Abstract",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Electroencephalography (EEG) is a widely used tool for diagnosing brain disorders due to its high temporal resolution, non-invasive nature, and affordability. Manual analysis of EEG is labor-intensive and requires expertise, making automatic EEG interpretation crucial for reducing workload and accurately assessing seizures. In epilepsy diagnosis, prolonged EEG monitoring generates extensive data, often spanning hours, days, or even weeks. While machine learning techniques for automatic EEG interpretation have advanced significantly in recent decades, there remains a gap in its ability to efficiently analyze large datasets with a balance of accuracy and computational efficiency. To address the challenges mentioned above, an Attention Recurrent Neural Network (ARNN) is proposed that can process a large amount of data efficiently and accurately. This ARNN cell recurrently applies attention layers along a sequence and has linear complexity with the sequence length and leverages parallel computation by processing multi-channel EEG signals rather than single-channel signals. In this architecture, the attention layer is a computational unit that efficiently applies self-attention and cross-attention mechanisms to compute a recurrent function over a wide number of state vectors and input signals. This framework is inspired in part by the attention layer and long short-term memory (LSTM) cells, but it scales this typical cell up by several orders to parallelize for multi-channel EEG signals. It inherits the advantages of attention layers and LSTM gate while avoiding their respective drawbacks. The model’s effectiveness is evaluated through extensive experiments with heterogeneous datasets, including the CHB-MIT and UPenn and Mayo’s Clinic datasets. The empirical findings suggest that the proposed model outperforms baseline methods such as LSTM, Vision Transformer (ViT), Compact Convolution Transformer (CCT), and R-Transformer (RT), showcasing superior performance with faster processing capabilities across EEG datasets. The code has been made publicly accessible at https://github.com/Salim-Lysiun/ARNN.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Keywords:\nAttention, LSTM, Neural Networks, Seizure, Epilepsy, Transformer",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "1. Introduction",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Epileptic seizures are a common neurological condition that has affected around 50 million individuals globally [1, 2]. These seizures are marked by abrupt and abnormal electrical activity in the brain, resulting in recurring and unprovoked episodes that impede normal functioning of human beings. The occurrence and frequency of epilepsy are influenced by factors such as age, genetics, and environmental triggers. A notable increase in epilepsy cases is observed during childhood and later in adulthood [3]. Seizures result from a disruption in the balance between excitatory and inhibitory brain signals, caused by mechanisms like ion channel dysfunctions, neurotransmitter imbalances, and structural abnormalities, particularly in regions like the hippocampus [1, 4]. The detection of these seizures is of utmost importance, especially through the use of scalp electroencephalography (EEG), which continues to be a fundamental non-invasive method for monitoring the electrical activity of the brain [5]. Advancements in EEG signal processing have significantly enhanced seizure detection and its analysis",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "footnote",
+      "text": "∗Corresponding Author\nEmail address: rukhsar.1@iitj.ac.in (Salim Rukhsar)\nURL: https://github.com/Salim-Lysiun (Salim Rukhsar)",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "capability, providing deeper insights of their dynamical behavior and thus aiding in accurate diagnosis. Effective seizure detection using scalp EEG is essential for timely intervention and management. Prolonged monitoring in epilepsy cases generates large amounts of EEG data due to extended brain activity recording [6]. Therefore, automatic interpretation of EEG signals is crucial to alleviate the workload by processing large amount of data to detect seizure accurately and efficiently. Advancement in machine learning techniques has the potential for efficient and personalized treatments.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Nowadays, Transformers are preferred over recurrent neural networks (RNNs) [7] for processing non-temporal data, such as in natural language processing [8] and image recognition [9]. They have been highly successful for a number of reasons. To begin with, training Transformers is more efficient on today’s accelerator technology since all sequences are processed in parallel. RNNs excel in handling time series datasets due to their ability to capture temporal dependencies and sequential patterns, but it processes sequences one by one and thus longer training time is required. Second, while passing from one sequence to the next, an RNN has to condense the preceding sequences into a single hidden state vector. However, the amount of previous sequences that the long short-term memory (LSTM) can encode, is constrained by the size of the state vector. Transformer, on the other hand, is not restricted in its ability to process past sequences. Third, attention is efficient even across longer distances. The information may be lost by the forget gate in an LSTM when moving forward, leading to vanishing gradients during backpropagation. In practice, this implies that LSTM faces problems in sending enriched information over a large number of sequences, which is significantly less than the handling ability of the attention mechanism of the Transformer [10].",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "figure",
+      "text": "Figure 1: Comprehensive illustration of the Attentive recurrent neural network (ARNN) architecture. The architecture begins by segmenting multi-channel input EEG signals into number of local windows, enabling efficient capture of short-term dependencies. Each window undergoes linear projection to generate query (Q), key (K), and value (V) vectors, serving as inputs for the self-attention layer, which captures intra-window dependencies. The input cross-attention mechanism establishes a connection between the current input vectors and recurrent states, facilitating context-aware feature refinement. The state cross-attention layer further maintains interdependencies among state vectors across multiple windows, ensuring temporal continuity. These attention outputs are concatenated and transformed via a linear projection layer to produce a hidden state. This hidden state is processed by the LSTM-style recurrent gate, which dynamically controls the integration of current and past states, enhancing the model’s ability to capture both local and global dependencies.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Despite the stated benefits, Transformers do have drawbacks. Long-form document processing, such as technical articles or ultra-high-pixel images, is hampered by the quadratic computational complexity of self-attention with respect to the sequence length [2, 8, 11]. Original Transformer architecture inherently [8] does not understand or handle relationships and interactions between different channels or variables in multichannel time series data. Furthermore, the self-attention does not find effective local dependencies and hence loses information in time series data that consists of local high frequency components [11].",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "This paper introduces a novel framework that leverages both attention and recurrence, as shown in Fig. 1. The aforementioned restrictions are all addressed in our implementation of the Attentive recurrent neural networks (ARNN), which is unique in several key respects. This proposed model is designed to take the benefit of attention and recurrence while avoiding their respective drawbacks for processing large dataset efficiently and accurately. In this novel architecture, we combined self and cross-attention for capturing local features in a local window, and a recurrence gate to condense the information to form a global feature. Instead of sequentially processing individual sequences, the recurrent cell functions on the local window of a segment, as illustrated in Fig. 2. Within each local window, all sequences are processed simultaneously. Similarly, the recurrent cell operates on a block of state vectors, rather than just a single vector. As a result, the recurrent state size is significantly larger than that of a typical LSTM, greatly enhancing the model’s capacity to retain past information. The use of local window-based sequence processing allows the model to propagate information and gradients over longer distances, due to the reduced number of recurrent steps. This approach decreases the number of forget gate applications, thereby reducing training time. The model is designed to process local windows sequentially, benefiting from both attention and recurrence mechanisms. However, a trade-off has been made between these two processes to determine the optimal size of the local windows for computational efficiency. This balance ensures that the model can effectively utilize both mechanisms for efficient and accurate processing. The multi-channel EEG signals exhibit dominantly high-frequency bursts with long-term relations in seizure classification [2, 12]. By capturing these high-frequency components within local windows, the proposed ARNN cell can form global features that provide a rich representation of the input data. This enhanced representation leads to improved seizure detection performance. The main contributions of the proposed work are summarized as follows:",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "figure",
+      "text": "Figure 2: An illustration of sequence processing by RNN, ViT and ARNN cell. In contrast to sequential processing by RNN and parallel processing by ViT, ARNN cell operates sequentially on multi-dimensional local window of the sequence to produce global dependencies formed by local dependencies.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "Integration of Attention and Recurrence: The ARNN framework uniquely combines self-attention and cross-attention mechanisms with a recurrence gate to capture fine-grained dependencies within local windows. This integration allows the model to form global features based on these dependencies, enhancing its ability to retain and process past information effectively over longer sequences.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "Ability to process large dataset efficiently and effectively: The proposed architecture is designed to handle large datasets by optimizing computational efficiency through the use of local window-based sequence processing. This approach reduces the number of recurrent steps and leverages attention mechanisms, enabling the model to process large amount of data more quickly while maintaining high accuracy.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "listitem",
+      "text": "Robust Performance in Seizure Detection: The ARNN framework demonstrates robust performance in seizure detection by effectively capturing both high-frequency bursts and long-term dependencies within EEG signals. By leveraging the attention-recurrence mechanism, the model achieves superior accuracy in identifying seizure patterns across varying signal lengths and noise levels, making it well-suited for real-world applications in medical diagnostics.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "The rest of the paper is organized as follows: Section 2 is dedicated to related work. The proposed architecture of the ARNN model is elaborated in detail in Section 3. The ablation study is presented in Section 4. The experiments and results are provided in Sections 5 and 6, respectively. Finally, Section 7 outlines the concluding remarks.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading1",
+      "text": "2. Related Work",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Seizure detection using EEG signals has witnessed remarkable advancements with the application of deep learning techniques [13, 14, 15, 16]. In the recent years, numerous studies have shown the effectiveness of the sophisticated neural network architectures such as LSTM networks [11, 17, 18], and Transformers [2, 19] for enhancing the accuracy and reliability of seizure detection and prediction. This section presents an overview of the recent literature that exemplifies the contributions made in this direction.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "LSTM networks [20, 21, 22] have shown substantial promise in capturing temporal dependencies within EEG signals, making them well-suited for seizure detection and prediction tasks. Hezam et al. [13] proposed a novel hybrid LSTM model that leverages both short-term and long-term EEG patterns to achieve enhanced seizure detection accuracy. Similarly, the authors [23] introduced a stacked LSTM architecture to capture complex relationships in EEG signals and reported improved seizure prediction performance. Another approach involves a Generative Adversarial Network (GAN) model to generate preictal data, followed by LSTM for classification to predict outcomes [22]. Furthermore, research has extended beyond traditional LSTMs to their variants like Gated Recurrent Units (GRUs) [21]. A comparative study in [17], has shown its supriority over of LSTMs in terms of computational efficiency, while maintaining competitive performance in seizure detection tasks.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Recent advancements in the application of Transformers to sequential data have been extended to EEG analysis for seizure detection and predictions. Recently, a lightweight Transformer architecture has been proposed to enhance accuracy in detecting seizure patterns by capturing local and global dependencies within EEG signals [2]. Similarly, [19] introduced a Multi-channel Vision Transformer (MViT) for automated spatiotemporal spectral features learning in multi-channel EEG data to achieve state-of-the-art performance in seizure prediction. Researchers have also explored hybrid architectures that combine the strengths of LSTM and self-attention for classification and prediction from time-series data [18]. A recent study [24] introduced a hybrid model that employs a 1-D Convolutional",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "ARNN: Attentive Recurrent Neural Network for Multi-channel EEG Signals to Identify Epileptic Seizures",
+  "recall": 0.988,
+  "quality": [],
+  "usage": {
+    "input": 17840,
+    "output": 7408
+  }
+}

@@ -444,8 +444,10 @@ file are only what is left over after that: the wordmark and the two bars that w
 their own controls. **Two more used to be on that list and are not any more**, and both left for the
 better reason. Since 2026-08-31 the prose gutter is icons at every width, so there is
 nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)) —
-3.7rem of them since 2026-09-04, when they became a 2 × 2 pad of 24px targets
-([260904b-gutter-help-button-and-detached-streaming-chat.md](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md)); and
+3.7rem of them since 2026-09-04, when the targets grew to WCAG's 24px
+([260904b-gutter-help-button-and-detached-streaming-chat.md](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md)) —
+two columns wide, though only one of them is the line of buttons
+([260905b-gutter-back-to-a-vertical-line-and-a-help-prompt-that-admits-nearby-blocks.md](../plans/260905b-gutter-back-to-a-vertical-line-and-a-help-prompt-that-admits-nearby-blocks.md)); and
 since 2026-09-03 the mode band going full-screen is a *class*, not a query — `App.tsx` writes
 `band-covers` on `.reader` from `fit.modeW === 0`. That one could never have been a width: the
 crossover is the window minus the rail, so it moves with `?spine=0`, and the `@media (max-width:

@@ -21,7 +21,12 @@
  *  - `extractText` (src/blocks.ts) collapses every run of whitespace to one
  *    space, and inserts a space at every nested block boundary. So a paragraph
  *    containing a `<blockquote>` reads `…word quoted…` to the model and
- *    `…wordquoted…` to `Range.toString()`.
+ *    `…wordquoted…` to `Range.toString()`. **A `<pre>` is the exception since
+ *    2026-09-05** — `codeText` keeps its line breaks, blank lines included,
+ *    because in a code block whitespace is the content. Pass one already
+ *    tolerates that (the model retypes a newline as a space either way) and
+ *    pass two deletes whitespace outright, so nothing here had to change; the
+ *    sentence above simply stopped being true of every block.
  *  - The model retypes the quote rather than copying bytes, so a line break
  *    becomes a space, a run of spaces becomes one, and a curly apostrophe
  *    sometimes comes back straight.

@@ -443,6 +443,7 @@ describe("a checkpoint survives the job that paid for it", () => {
       });
       await expect(
         runPdfExtract({
+          frontMatter: null,
           bytes,
           url: "https://example.test/long.pdf",
           checkpoints: storeFor(article, jobs[0]!.slug),
@@ -465,6 +466,7 @@ describe("a checkpoint survives the job that paid for it", () => {
        */
       const retry = countingReader(pass);
       const result = await runPdfExtract({
+        frontMatter: null,
         bytes,
         url: "https://example.test/long.pdf",
         checkpoints: storeFor(articles[1]!, jobs[1]!.slug),
@@ -483,6 +485,7 @@ describe("a checkpoint survives the job that paid for it", () => {
       expect(await chunkRows(article)).toBe(total);
       const third = countingReader(pass);
       await runPdfExtract({
+        frontMatter: null,
         bytes,
         url: "https://example.test/long.pdf",
         checkpoints: storeFor(articles[2]!, jobs[2]!.slug),
@@ -517,6 +520,7 @@ describe("a checkpoint survives the job that paid for it", () => {
 
       const first = countingReader(pass);
       await runPdfExtract({
+        frontMatter: null,
         bytes,
         url: "https://example.test/paper.pdf",
         checkpoints: storeFor(),
@@ -531,6 +535,7 @@ describe("a checkpoint survives the job that paid for it", () => {
          bytes — this one must resume everything. */
       const again = countingReader(pass);
       await runPdfExtract({
+        frontMatter: null,
         bytes,
         url: "https://example.test/paper.pdf",
         checkpoints: storeFor(),
@@ -542,6 +547,7 @@ describe("a checkpoint survives the job that paid for it", () => {
       /* And the other article pays in full, for the identical document. */
       const stranger = countingReader(pass);
       await runPdfExtract({
+        frontMatter: null,
         bytes,
         url: "https://example.test/paper.pdf",
         checkpoints: storeFor(otherArticleId, OTHER_SLUG),

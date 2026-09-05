@@ -21,6 +21,7 @@ import {
   addUrlFromQuery,
   canonicalAddHref,
   carriedSearch,
+  CONTACT_HREF,
   PRIVACY_HREF,
   FEATURES_HREF,
   PRICING_HREF,
@@ -235,6 +236,18 @@ describe("the features route", () => {
      they asked for. */
   it("is left alone by settleAddress", () => {
     expect(settleAddress("/features", "", "")).toBeNull();
+  });
+});
+
+describe("the contact route", () => {
+  it("parses, with and without a trailing slash, and from its own constant", () => {
+    expect(parseRoute("/contact")).toEqual({ kind: "contact" });
+    expect(parseRoute("/contact/")).toEqual({ kind: "contact" });
+    expect(parseRoute(CONTACT_HREF)).toEqual({ kind: "contact" });
+  });
+
+  it("is not a prefix: an address under it is nobody's", () => {
+    expect(parseRoute("/contact/us")).toEqual({ kind: "not-found" });
   });
 });
 

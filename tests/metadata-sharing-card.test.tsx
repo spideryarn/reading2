@@ -21,6 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, PublicArtefacts } from "../src/types.js";
+import { SHARING_INVENTORY_UNKNOWN } from "../src/messages.js";
 import { CARD } from "../src/web/card.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -237,7 +238,11 @@ describe("the sharing card, on the page that owns it", () => {
     await open();
 
     expect(host.textContent).toContain("Only you can read this");
-    expect(host.textContent).toContain("We could not work out what a shared link would carry");
+    expect(host.textContent).toContain(SHARING_INVENTORY_UNKNOWN);
+    /* And the sentence still explains rather than merely refusing: the
+       constant assertion above proves the right message was reached for,
+       and moves with it; this one holds what the message has to say. */
+    expect(SHARING_INVENTORY_UNKNOWN).toContain("reload the page to try again");
     expect(host.textContent).not.toContain("Share with anyone");
   });
 

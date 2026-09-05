@@ -443,6 +443,22 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **The second look at a PDF's front matter** (src/pdf-frontmatter.ts).
+
+     `require_parameters` is the half that is load-bearing: the whole answer is
+     a JSON schema of three id lists, and an upstream that quietly ignored
+     `response_format` writes prose instead — which `parseAnswer` throws away,
+     so the article silently keeps whatever title the ladder would have given
+     it. That is a paid call with no effect and nothing saying so.
+
+     `order` is pinned for consistency with the rest of the chat wire rather
+     than for caching: this call sends three pages of records and no
+     `cache_control`, so there is no prefix here to keep landing on. */
+  "pdf-frontmatter": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* The same policy as `explain` and for the same two reasons. The upstream is
      pinned so that a reader working through a batch of questions keeps hitting
      the cached article rather than paying for it once per answer; and
@@ -664,8 +680,15 @@ export class ProviderRefused extends Error {
  *
  * Still a parsed number and never a string: nothing a provider wrote leaves
  * this function — see `ProviderRefused`.
+ *
+ * **Exported since 2026-09-05** for the deepening wave
+ * (src/hierarchy-deepen.ts), which meets its 429s on the Anthropic SDK's road
+ * rather than this one and so has an `APIError` with a `Headers` on it instead
+ * of a `ProviderRefused`. The header is the same header; a second parser for it
+ * would be a second opinion about what "a minute" means, and the two would
+ * disagree the day one of them learned about the HTTP-date form.
  */
-function retryAfterMs(headers: Headers): number | null {
+export function retryAfterMs(headers: Headers): number | null {
   const header = headers.get("retry-after");
   if (!header) return null;
   const seconds = Number(header);

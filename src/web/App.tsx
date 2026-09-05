@@ -30,6 +30,7 @@ import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
+import { ContactPage } from "./ContactPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
@@ -400,6 +401,16 @@ export function App() {
        this is — a 401 on the one page a stranger is most likely to be sent, for
        a line that is not about them. PricingPage.tsx § which plan. */
     if (route.kind === "pricing") return <PricingPage readerId={null} />;
+    /* Since 2026-09-05, and the least arguable exception of all of them: a page
+       whose whole subject is how to reach us is no use to somebody who cannot
+       reach it. Bare, like `PrivacyPage` above — signed out there is no shelf
+       for a corner logo to link at. ContactPage.tsx.
+
+       Deliberately not numbered: the two comments below say "sixth" and
+       "seventh", and they mean the order those branches were *written* rather
+       than their order in this list. Renumbering them for an insertion would
+       make three comments say something none of them was claiming. */
+    if (route.kind === "contact") return <ContactPage />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -524,6 +535,13 @@ function SignedIn({
             docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
             this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
         <FeaturesPage signedIn />
+      </>
+    );
+  if (route.kind === "contact")
+    return (
+      <>
+        <HomeLogo />
+        <ContactPage />
       </>
     );
   if (route.kind === "pricing")
@@ -2950,15 +2968,23 @@ function Reader({
         /* The gate, and only the gate — the body is `chatAboutBlock` above,
            which explains why it is `undefined` rather than a no-op here. */
         onChatAbout={owner ? chatAboutBlock : undefined}
-        /* **The same body, deliberately, and only until stage 3.** Pressing "?"
-           opens the same pre-filled draft and spends nothing, which is why the
-           button's own copy promises a question rather than an answer. What
-           replaces this is a launcher that sends once — the seam is a
-           `ChatTarget` variant, not a handler hoisted up here, because a token
-           arriving in this component re-renders the whole article:
-           docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md
-           § Stage 3. Gated on `owner` for the reason above; the two doors are
-           one capability. */
+        /* **One press, and it spends.** `helpAboutBlock` above either reopens
+           the conversation this block already has or mints a draft carrying
+           `help: true`, and `ChatDialog` sends that on mount — no composer, no
+           confirmation. The button's own copy names the AI for exactly this
+           reason (BlockGutter.tsx), and the accidental tap is a cost Greg
+           accepted on 2026-09-04 because one press was the point.
+
+           **This comment said the opposite until 2026-09-05**, describing the
+           stage-2 behaviour — "opens the same pre-filled draft and spends
+           nothing" — for a day after stage 3 landed and made it send. A comment
+           saying a button is free when it is not is the one direction this
+           particular mistake must never run. Found by GPT Sol.
+
+           The seam is a `ChatTarget` variant rather than a handler hoisted up
+           here, because a token arriving in this component re-renders the whole
+           article. Gated on `owner` for the reason above; the two doors are one
+           capability. */
         onHelp={owner ? helpAboutBlock : undefined}
         terms={termSelections}
         openTerm={term?.id ?? null}

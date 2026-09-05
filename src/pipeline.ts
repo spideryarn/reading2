@@ -88,6 +88,7 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
+import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { MAX_PAGES } from "./uploads.js";
 import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
@@ -427,6 +428,22 @@ export interface StepContext {
   /** Say something short about how this step is going. Shown live; not persisted. */
   report(detail: string): void;
   signal: AbortSignal;
+  /**
+   * **When this claimant stops** — `Date.now()`'s clock, and `undefined` where
+   * nobody imposed one (a command line, a test).
+   *
+   * The signal above says *"stop now"*; this says *when* that will be, which is
+   * a different and occasionally more useful thing: a step that fans out over
+   * several paid calls can decline to **start** one it cannot finish, and hand
+   * back with what it has bought already banked, rather than being aborted in
+   * the middle of a call nobody will ever read. The hierarchy step's deepening
+   * wave is the only reader today (src/hierarchy-deepen.ts § `runExpansionWave`).
+   *
+   * It is `LEASE_MS - DEADLINE_MARGIN_MS` after the claim, which is the same
+   * instant `src/jobs.ts` sets its own timer for — one number, passed, rather
+   * than two computed in two places.
+   */
+  deadlineAt?: number;
   /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
@@ -1730,6 +1747,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
 
       const result = await runPdfExtract({
+        frontMatter: openRouterFrontMatterReader(),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
@@ -1777,6 +1795,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           recall: result.recall,
           inputTokens: result.usage.input,
           outputTokens: result.usage.output,
+          /* **The front-matter pass's own tokens, beside the transcription's
+             rather than added to them.** Two models on two jobs, and this line
+             names one of them in `model`; a sum across both would be a number
+             whose unit nobody can state (src/models.ts § `Wire`). The money is
+             recorded centrally under `pdf-frontmatter` either way — this is so
+             the *step's* line stops implying the transcription was the whole
+             bill. GPT Sol, 2026-09-05. */
+          frontMatterInputTokens: result.frontMatterUsage.input,
+          frontMatterOutputTokens: result.frontMatterUsage.output,
           model: result.meta.method,
         },
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
@@ -2046,6 +2073,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         checkpoints,
         onProgress: ctx.report,
         signal: ctx.signal,
+        /* Only the deepening wave reads it, and only to decide whether to start
+           another scoped call — see `StepContext.deadlineAt`. With the flag off
+           it changes nothing at all. */
+        ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -2109,6 +2140,29 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              recommendation 2. */
           labelBatches: run.labelBatches,
           labelsResumed: run.labelsResumed,
+          /* What the label pass actually paid for, beside what it resumed. */
+          labelCalls: run.labelCalls,
+          /* **Was the tree bought or replayed?** Until 2026-09-05 this was
+             printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
+             docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+             deleted that CLI — so taking the deletion whole would have dropped
+             the one signal that says which. It belongs here anyway: it is the
+             field that says why a forced re-run was cheap, and without it the
+             only way to tell is to infer it from a token count, which is what
+             evals/deepen/ was reduced to doing. */
+          structureResumed: run.structureResumed,
+          /* **What the deepening wave did**, and `null` where nobody asked for
+             one — which is every article until stage 8 moves the flag
+             (src/hierarchy-deepen.ts § `DEEPEN_ENV`). Nested rather than eight
+             flat fields, because it is one feature's story and it is read as
+             one: how many sections were eligible, how many came back, what the
+             verdicts said, and what the wave could not do — a section too large
+             to ask about, a call the deadline would not admit, a 429. Every one
+             of those leaves a correct article and a shallower tree, which is
+             precisely the shape that needs a number rather than a symptom.
+             docs/reusable/silent-success.md. */
+          deepen: run.deepen,
+          deepenFailed: run.deepenFailed,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,
@@ -2155,6 +2209,32 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * (`scripts/checkpoints-sweep.ts`, `sweepPgCheckpoints`), which is where a
        * cache's lifetime belongs. src/store/checkpoints.ts § Retention.
        */
+      /**
+       * **The deepening clause is reader-scale, and the operator's numbers are
+       * deliberately not here.**
+       *
+       * `detail` is persisted with the step and rendered on the reader's
+       * progress card (`src/web/AddArticle.tsx`), so it takes the same shape as
+       * the `labelsDropped` clause above: a sentence for the one moment somebody
+       * is already watching. `withheld` and `uncheckpointed` are operator
+       * telemetry about checkpoint rows — "0 saved for retry, 0 not saved" is
+       * noise on a card — and they are in the log line above, which is where
+       * `src/jobs.ts` says a step's real numbers belong.
+       *
+       * **Silent when the flag is off**, because a clause about a feature nobody
+       * asked for reads, at zero, as "tried and found nothing" — the distinction
+       * `deepen: null` exists to keep. Silent at `targets === 0` for the same
+       * reason. A failure is *not* silent: the step succeeds and the reader gets
+       * a shallower tree than the article was going to get, and that should not
+       * be something only a log knows. ⟨Fable and GPT Sol, 2026-09-05, arbitrating
+       * where the counters went when the CLI that printed them was deleted.⟩
+       */
+      const deepened =
+        run.deepenFailed
+          ? ", deepening failed (tree kept)"
+          : run.deepen && run.deepen.targets > 0
+            ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
+            : "";
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
@@ -2162,7 +2242,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           `${run.internal} sections over ${run.blocks} blocks` +
           (run.labelsDropped > 0
             ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
-            : ""),
+            : "") +
+          deepened,
       };
     },
   },

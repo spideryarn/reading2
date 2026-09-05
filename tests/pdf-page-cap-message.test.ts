@@ -63,6 +63,7 @@ describe("the page-cap reader message (real PDF, real pass0/runPdfExtract)", () 
     let thrown: unknown;
     try {
       await runPdfExtract({
+        frontMatter: null,
         bytes,
         slug: "too-many-pages",
         checkpoints: memoryCheckpoints({ slug: "too-many-pages", articleId: "article-too-many-pages" }),

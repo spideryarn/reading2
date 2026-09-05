@@ -73,8 +73,21 @@ describe("a visitor's notice, in the strip the band takes over", () => {
        now: the sentence had to stop saying somebody sent this reader a
        link, because the public shelf brings readers nobody sent
        anything. A grep for the whole old sentence does not find a
-       fragment of it, which is how this went red on `dev`. */
-    expect(html).toContain(SHARED_WITH_YOU);
+       fragment of it, which is how this went red on `dev`.
+
+       Two guards on top, from GPT Sol, so that asserting a constant is
+       not weaker than asserting the sentence was:
+
+       - **Non-empty.** `toContain("")` is vacuously true, so an emptied
+         constant would satisfy an assertion whose whole job is proving
+         something was rendered.
+       - **Through the renderer, not raw.** Today's copy has no `&` or
+         `<`, so a raw compare happens to work; measured on 2026-09-05,
+         copy reading "read, interrogate & remember" makes a raw
+         `toContain` fail on the escaping — which would look exactly like
+         the staleness this change removes. */
+    expect(SHARED_WITH_YOU.trim(), "the shared notice copy is empty").not.toBe("");
+    expect(html).toContain(renderToStaticMarkup(<>{SHARED_WITH_YOU}</>));
   });
 
   it("is hidden under the same condition, beside the masthead's rule", () => {

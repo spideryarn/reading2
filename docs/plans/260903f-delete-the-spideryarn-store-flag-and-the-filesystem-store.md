@@ -4408,6 +4408,41 @@ now stated properly in `architecture.md` § Conventions (**ten of the fourteen i
 the predicate *the step declares a `stamp()` that `stepIsDone` compares*), and the rules file is
 Greg's to edit.
 
+##### The step-plan rule is enforced at a seam no test exercises <a id="stage-e-unrunnable-untested"></a>
+
+**Found 2026-09-05 from outside this plan, and written here because this is where whoever owes the
+test will look.** ⟨A registry annotation in `tests/jobs.test.ts` is read by whoever next trips the
+guard, not by the rule's author, so the evidence belongs here as well — a peer agent's point,
+2026-09-05.⟩
+
+`unrunnableStepPlan` refuses `blocks` without `hierarchy`, and `enqueue` throws a 400 on it. The rule
+is right and the trap it closes is real. **What is untested is the door.** `tests/jobs.test.ts`
+§ `describe("unrunnableStepPlan")` hands the pure predicate four lists and reads what comes back;
+nothing anywhere asserts that `enqueue` actually refuses, or that no job row is written when it does.
+
+**The cost is measured rather than hypothetical.** `evals/deepen/`'s free `--dry-run` — the rehearsal
+`evals/README.md` and [260904d](260904d-deepen-fat-sections.md) both say to run *before* a $40.90 paid
+run — asks for `["fetch","extract","blocks"]` and forces `["blocks"]`. After `dev` merged into that
+branch every phase threw at `enqueue`: exit 1, **zero jobs created, empty driving table** — and
+`npm test` stayed entirely green through it, because the predicate has a test and the seam does not.
+The dry run is being repaired on its own side (a free step that stands alone), which fixes the caller
+and leaves the hole.
+
+A test wants an article, an owner, and an assertion that no `jobs` row appears — the shape
+`tests/enqueue-owns-the-article.test.ts` already uses for the ownership refusal, whose comment makes
+exactly this point about a job that fails at claim still sitting at the head of the line.
+
+**The class**: *a rule enforced at a seam, with a test only for the predicate behind it.* The
+predicate test passes forever while the seam is free to stop calling it, be called with the wrong
+argument, or be bypassed — and every caller downstream fails somewhere that looks unrelated.
+[silent-success.md](../reusable/silent-success.md).
+
+This is also why the store-migration registry went red on `dev` and stayed red: the block arrived
+without its judgement. That was diagnosed and deliberately left in `58bda210`, on the correct
+grounds that annotating on the author's behalf buys a green gate and a worse test. The judgement is
+now written — truthfully, as a fact about that block — and it names this gap rather than closing it.
+The allowance was not raised, and the test above is still the author's to write.
+
 ##### What Sol's review of the built code changed, and the one thing it overturned
 
 Five findings, four fixed in `scripts/stage.ts` and one that is a decision for Greg. Every one was
