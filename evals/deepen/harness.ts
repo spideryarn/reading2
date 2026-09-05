@@ -930,7 +930,7 @@ export function assertSeamProof(proof: SeamProof): void {
  * and a harness that read one anyway would fall back to pairing on `where` —
  * the ordinal path — and report a boundary that moved as a verdict that held.
  */
-export const RECORDS_VERSION: DeepenRecordsFile["version"] = "deepen-records/2";
+export const RECORDS_VERSION: DeepenRecordsFile["version"] = "deepen-records/3";
 
 /** One records file, read back with its shape checked rather than cast. */
 export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile {

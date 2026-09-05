@@ -302,6 +302,18 @@ interface Draw {
   ledgerWallClockMs?: number | null;
   /** Lines of the ledger that could not be read. A total that is short must say so. */
   unreadable?: number;
+  /**
+   * Calls that finished after their collector had reported, so no row was ever
+   * written for them — process-wide, and so not attributable to this draw.
+   *
+   * The *other* way `money` below can be short, and deliberately a separate
+   * field: `unreadable` is a line on disk that will not parse, this is a line
+   * that does not exist. `observedSpend` and `checkLedgerComplete` are the
+   * sharper instrument for the same failure — they compare calls made against
+   * rows kept, per step — and this is the blunt one the store can offer any
+   * caller. See `LedgerRead` in src/store/contracts.ts.
+   */
+  lateCalls?: number;
   money?: Money;
   byStep?: StepSpend[];
   byAiJob?: StepSpend[];
@@ -679,6 +691,7 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
      this database were buying at the same moment. */
   const ledger = await costStore.forJob(job.id);
   draw.unreadable = ledger.unreadable;
+  draw.lateCalls = ledger.lateCalls;
   draw.money = totalMoney(ledger.rows);
   draw.byStep = aggregateByStep(ledger.rows);
   draw.byAiJob = aggregateByAiJob(ledger.rows);
@@ -785,6 +798,12 @@ function printDraw(draw: Draw): void {
       "   (fetch is a fixture read, so no network latency is in either)",
   );
   if (draw.unreadable) console.log(`  UNREADABLE    ${draw.unreadable} ledger line(s) could not be read`);
+  /* Said apart from UNREADABLE, because they send a reader to different places:
+     one is damage in the file, the other is a row the file never got. */
+  if (draw.lateCalls)
+    console.log(
+      `  LATE          ${draw.lateCalls} call(s) in this process finished after their collector reported, so no row was written`,
+    );
   if (draw.byStep?.length) {
     console.log("  by step");
     console.log(formatStepTable(draw.byStep));

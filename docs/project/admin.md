@@ -29,12 +29,41 @@ One route. One prefix. One address.
 | Where | What it does | Is it a gate? |
 |---|---|---|
 | [`src/routes.ts`](../../src/routes.ts) | anything in the `/api/admin` namespace, from anybody but one account id → **403** | **Yes.** This is the whole of it |
-| [`src/web/App.tsx`](../../src/web/App.tsx) | renders the shelf instead, for anybody else | No — a courtesy |
+| [`src/web/App.tsx`](../../src/web/App.tsx) | renders the shelf instead, at any address on `ADMIN_ONLY` | No — a courtesy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | draws the Admin link, or does not | No — a courtesy |
 
 The two courtesies are worth having and worth being honest about. The admin components are in the
 JavaScript bundle every signed-in reader downloads; hiding a link hides nothing. If the client half
 were deleted tomorrow the server would refuse exactly the same requests.
+
+### The client's list of addresses, and why it is a map of every route
+
+**`ADMIN_ONLY` in [`src/web/router.ts`](../../src/web/router.ts)** says which route kinds are the
+administrator's, and `SignedIn` in [`App.tsx`](../../src/web/App.tsx) reads it **once, above its
+branch chain** — the client's version of the server putting its check above the route table, and for
+the same reason: a check inside a branch has to be *remembered* by whoever adds the next page.
+
+`/design` is the proof that it does not get remembered. It moved onto the `/admin` index on
+2026-09-05 and stayed open to every signed-in reader, because the `if` was one line inside the
+`admin` arm and nothing carried it across. It is on the list since the same day.
+
+It is a `Record<Route["kind"], boolean>` rather than a set of two, so **a route added to the union
+without an answer here does not compile.** Adding the next administrator's page is an edit to a
+list; forgetting is not one of the available outcomes. What no mechanism can catch is answering
+*wrongly* — `false` for a page that should be `true` — which is why the entries are a list somebody
+reviews.
+
+**None of it protects `/design`, and the wording above is not hedging.** `DesignPage` ships in the
+bundle every signed-in reader downloads, and [`vercel.json`](../../vercel.json) rewrites every
+non-`/api/` address to `index.html`, so `/design` answers **200** to anybody who types it. A reader
+who wants the page can still have it. What changed is that nobody is *shown* it — which is all that
+was ever asked for, since the page reads no data at all and there is no server half it could have.
+A real gate would be an edge function of the kind `/read/:slug` uses
+([`src/public/page.ts`](../../src/public/page.ts)); it is not built, deliberately.
+
+[`tests/admin-only-routes.test.tsx`](../../tests/admin-only-routes.test.tsx) mounts the real `App`
+at each address and checks who gets what — the wire between the list and the branch chain, which
+neither a router test nor a page test touches.
 
 **The shelf, and deliberately not the 404 page** that arrived on 2026-09-03 for every address nobody
 minted ([library.md](library.md#an-address-nobody-minted)). It is the same argument as *403, not
@@ -561,9 +590,12 @@ rather than somewhere to be remembered.
 **The third of those is `/design`, and it is not an admin page.** It moved here off the shelf's
 masthead on 2026-09-05 — *"Move the Design link on the logged-in Homepage into /admin"* — because a
 page of colour tokens is developer furniture that every signed-in reader was being shown. The page
-itself is unchanged and ungated: anybody signed in can still type the address, which is fine because
-it reads no data at all, and because a drawn link was never a gate in the first place (§ The three
-refusals above). [design-css-overview.md](design-css-overview.md) is its written counterpart.
+itself is unchanged, and it is on `ADMIN_ONLY` since later the same day, so a reader who types the
+address gets their shelf. **That is a courtesy and not a gate**: the page is in everybody's bundle
+and the address answers 200 whoever asks (§ [The client's list of
+addresses](#the-clients-list-of-addresses-and-why-it-is-a-map-of-every-route) above). It needs no
+more than that, because it reads no data at all.
+[design-css-overview.md](design-css-overview.md) is its written counterpart.
 
 `/admin/users` is [`DataTable`](../../src/web/lib/DataTable.tsx) with sort chips — the same seam the
 shelf's table uses, which is what Greg meant by *"using Tanstack Table"*: the columns are the page's
@@ -645,7 +677,9 @@ The comparison that is a *check* rather than a report is elsewhere and stays the
 
 ## How it is checked
 
-Five suites, and the split is deliberate — no one of them could catch what the others catch.
+These suites, and the split is deliberate — no one of them could catch what the others catch. (The
+line used to say "five" and there were seven of them, which is the kind of number a doc should not
+be carrying: the table is the list.)
 
 | | What only it can see |
 |---|---|
@@ -654,6 +688,7 @@ Five suites, and the split is deliberate — no one of them could catch what the
 | `tests/admin-users-merge.test.ts` | the arithmetic: two owners kept apart, zeros rather than gaps |
 | `tests/admin-queries.test.ts` | what the SQL **means** — `verified`, the joins, `onTheShelf()` — read off `.toSQL()`, so it never skips |
 | `tests/admin-store.test.ts` | what the driver really returns, against a real database. Skips loudly without one |
+| `tests/admin-only-routes.test.tsx` | which page a reader and an administrator each get, at every address on `ADMIN_ONLY`, through the real `App` |
 | `tests/admin-page.test.tsx` | the page drawn: the empty account's row, the error states, a sort chip that really reorders |
 | `tests/auth-users-fence.test.ts` · `tests/owner-isolation.test.ts` | the two static guards |
 

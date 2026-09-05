@@ -38,11 +38,12 @@ import {
 } from "../api.js";
 import {
   beginTurn,
-  ChatConflict,
+  CHAT_SWEPT,
   deleteThread,
   finishTurn,
   loadThreads,
   renameThread,
+  requireTail,
   retryTurn,
   update as updateThreads,
   withEdit,
@@ -388,40 +389,8 @@ export const fsChatStore: ChatStore = {
   },
 };
 
-/** What both chat sweeps write. One constant, so they cannot drift. */
-export const CHAT_SWEPT = "The server stopped before this answer finished.";
 /** What both search sweeps write. */
 export const SEARCH_SWEPT = "The server stopped before this search finished.";
-
-/**
- * The stale-edit guard, shared by both stores.
- *
- * A stale tab editing an old question discards every turn added since it last
- * looked, and today nothing notices: `withEdit` checks only that its target
- * still exists and is a question. So tab A appends Q2 and A2, stale tab B edits
- * Q1 and deletes both, A's answer lands on a message that is gone, and the
- * reader — who saw a perfectly successful answer — reloads to find it missing.
- * The mutex orders those two writes; it does not make the result correct.
- *
- * Deliberately narrow: no thread version, because a version column would 409
- * two *appends* that succeed today, and inventing a failure mode is the one
- * thing this migration must not do. Only the destructive operation is guarded,
- * and only against its discard set having changed. `withRetry` has always had
- * exactly this guard, by insisting on the thread's real last message.
- */
-export function requireTail(
-  threads: ChatThread[],
-  threadId: string,
-  expectedTailId: string,
-): void {
-  const thread = threads.find((t) => t.id === threadId);
-  const tail = thread?.messages.at(-1);
-  if (tail?.id !== expectedTailId) {
-    throw new ChatConflict(
-      "This conversation has moved on since you opened it. Reload before editing.",
-    );
-  }
-}
 
 /**
  * Searches, on files. `attempt` is always `undefined`, which is today exactly.

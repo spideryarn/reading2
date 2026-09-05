@@ -144,9 +144,14 @@ function emptyReport(): BuildReport {
   return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 }
 
-const state = (root: CascadeNode, capReached: CascadeState["capReached"] = []): CascadeState => ({
+const state = (
+  root: CascadeNode,
+  capReached: CascadeState["capReached"] = [],
+  refused: CascadeState["refused"] = [],
+): CascadeState => ({
   root,
   capReached,
+  refused,
 });
 
 /* ------------------------------------------------- the stopping rule ----- */
@@ -1359,8 +1364,11 @@ describe("proposalFromTree", () => {
 
 describe("assertCascadeComplete", () => {
   const blocks = article(40);
-  const check = (root: CascadeNode, capReached: CascadeState["capReached"] = []) =>
-    assertCascadeComplete(state(root, capReached), blocks, CASCADE_RECIPE);
+  const check = (
+    root: CascadeNode,
+    capReached: CascadeState["capReached"] = [],
+    refused: CascadeState["refused"] = [],
+  ) => assertCascadeComplete(state(root, capReached, refused), blocks, CASCADE_RECIPE);
 
   it("throws when any node is still pending", () => {
     const root = expanded(0, 9, [terminal(0, 4), pending(5, 9)]);
@@ -1426,6 +1434,50 @@ describe("assertCascadeComplete", () => {
       { where: "root > child 1", range: [blockId(0), blockId(14)] as const, structuralBlocks: 15 },
     ];
     expect(() => check(root, recorded)).not.toThrow();
+  });
+
+  /**
+   * **A refused target is the second way a node the governor would split ends up
+   * terminal**, and it needs a record for exactly the reason the cap does.
+   *
+   * From 2026-09-05 a call the model refuses on every draw no longer fails the
+   * wave: its targets keep the shape wave 1 gave them and the wave publishes
+   * without them (`RefusedCall` in src/hierarchy-deepen.ts). That is the right
+   * behaviour and it creates precisely the state this guard exists to catch — a
+   * node `shouldExpand` says should have been split, sitting terminal. Silent,
+   * it is indistinguishable from one that legitimately stopped.
+   */
+  it("throws on a terminal node the governor would expand, unless a refusal says why", () => {
+    const root = expanded(0, 19, [terminal(0, 14), terminal(15, 19)]);
+    expect(() => check(root)).toThrow(/marked terminal but holds 15 structural block\(s\)/);
+
+    const refused = [
+      {
+        where: "root > child 1",
+        range: [blockId(0), blockId(14)] as const,
+        structuralBlocks: 15,
+        reason: "not-an-expansion",
+        draws: 3,
+      },
+    ];
+    expect(() => check(root, [], refused)).not.toThrow();
+  });
+
+  /** Bookkeeping that has drifted from the tree it describes explains nothing. */
+  it("throws on a refusal record naming no terminal node in the tree", () => {
+    const root = expanded(0, 9, [terminal(0, 4), terminal(5, 9)]);
+    const refused = [
+      {
+        where: "root > child 7",
+        range: [blockId(0), blockId(4)] as const,
+        structuralBlocks: 15,
+        reason: "not-an-expansion",
+        draws: 3,
+      },
+    ];
+    expect(() => check(root, [], refused)).toThrow(
+      /names root > child 7, which is not a terminal node/,
+    );
   });
 
   /** Bookkeeping that has drifted from the tree it describes explains nothing. */

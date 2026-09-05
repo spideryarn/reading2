@@ -11,18 +11,25 @@
  *
  * `index.ts` re-exports it, so a route does not have to know it moved house.
  *
- * **Not a fallback.** One adapter answers and the other is never consulted —
- * see [ai-calls-fs.ts](ai-calls-fs.ts) for why there is a filesystem one at
- * all, given that `files` is the default and a cost tracker that records
- * nothing by default is worse than none.
+ * **Not a fallback, and no longer a choice.** `costStore` is `pgCostStore`
+ * unconditionally: there is no flag, no branch, and **no `selected()`** — the
+ * hinge of 2026-09-05 took the last of them out, and
+ * [ai-calls-fs.ts](ai-calls-fs.ts) now has no importer outside its own tests
+ * and is deleted by stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
  *
- * **The test harness gets no special case**, and `selected()` below records the
- * one that used to be here and why it went.
+ * ⟨Until 2026-09-05 this paragraph said there was a filesystem adapter "given
+ * that `files` is the default", and pointed at a `selected()` "below" for the
+ * reasoning. Neither had been true since the hinge landed, and the second named
+ * a function that is not in this file — which is how a reader ends up looking
+ * for a decision nobody is making any more.⟩
+ *
+ * **The test harness gets no special case.**
  */
 
 import type { AiCallRow } from "../ai-spend.js";
 import { pgCostStore } from "./ai-calls-pg.js";
-import type { CostStore } from "./contracts.js";
+import type { CostStore, LedgerRead } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 
 /**
@@ -116,12 +123,7 @@ export const costStore: CostStore = guardedLedger;
  * was wrong. Callers that want one figure add them deliberately and say they
  * did.
  */
-export function totalRows(rows: readonly AiCallRow[]): {
-  credits: number;
-  upstream: number;
-  computed: number;
-  unpriced: number;
-} {
+export function totalRows(rows: readonly AiCallRow[]): LedgerMoney {
   let credits = 0;
   let upstream = 0;
   let computed = 0;
@@ -152,4 +154,95 @@ export function totalRows(rows: readonly AiCallRow[]): {
     else credits += r.creditsUsedNanos;
   }
   return { credits, upstream, computed, unpriced };
+}
+
+
+/* --------------------------------------------- a total that admits its gaps -- */
+
+/**
+ * **What a set of rows cost, in the pockets that must not be added blindly.**
+ *
+ * The return of `totalRows`, named so that `LedgerTotal` below can talk about it
+ * twice without the reader having to check that the two spellings agree.
+ */
+export interface LedgerMoney {
+  /** What OpenRouter deducted from our credits, in nano-dollars. */
+  credits: number;
+  /** What the inference was worth upstream on a BYOK call. A different pocket. */
+  upstream: number;
+  /** Our own arithmetic, for the calls that went straight to Anthropic. */
+  computed: number;
+  /** Calls that reported no money at all. The figures above are short by them. */
+  unpriced: number;
+}
+
+/**
+ * **The rows the ledger does not have** — the two ways a read is short, kept
+ * apart on purpose. `LedgerRead` in [contracts.ts](contracts.ts) says at length
+ * why merging them loses the thing a reader would go and do about it.
+ */
+export interface LedgerShortfall {
+  /** Lines that exist and would not parse. The money happened; the record is damaged. */
+  unreadable: number;
+  /**
+   * Calls that finished after their collector had reported, so no row was ever
+   * written. Process-wide and unattributable — "this may be short", not "short
+   * by n". See `LedgerRead`.
+   */
+  lateCalls: number;
+}
+
+/**
+ * **A ledger total, or a lower bound that says it is one.**
+ *
+ * A discriminated union rather than a figure with a `mayBeShort` flag beside it,
+ * and that is the whole design. The numbers live on different arms with
+ * different names, so `total.money` simply does not compile until the caller has
+ * established `complete === true`, and the incomplete arm offers `atLeast`
+ * instead — a name that cannot be printed as a bill without somebody noticing.
+ * A boolean field beside a total is a field a caller forgets; this is not.
+ */
+export type LedgerTotal =
+  | { complete: true; money: LedgerMoney }
+  | { complete: false; atLeast: LedgerMoney; shortfall: LedgerShortfall };
+
+/**
+ * **The only sanctioned way to turn a `LedgerRead` into money.**
+ *
+ * The failure it exists for, precisely. `costStore.forJob` reads
+ * `spideryarn.ai_calls`; a model call that was *started* and whose row was never
+ * inserted is invisible to it, because the row is written when the call
+ * finishes and a call still in flight when its collector closed never gets one
+ * (src/ai-spend.ts § `collectSpend`, which sets `closed` before draining the
+ * writes, deliberately). The query then comes back short with `unreadable: 0`,
+ * which reads exactly like a cheaper job — and on 2026-09-04 a run printed
+ * `$2.7331` as the bill when the real figure was higher.
+ *
+ * So a total off this ledger is only a total when nothing is known to be
+ * missing, and the type says so. `totalRows` is still there and still exported —
+ * the arithmetic is one implementation and stays one — but it takes bare rows
+ * and knows nothing about the read they came out of. **`totalRows(read.rows)` is
+ * therefore the way round this**, and it is left reachable rather than closed
+ * off for one reason worth writing down: evals/deepen/run.ts and
+ * evals/cost/report.ts already sum `ledger.rows` for their per-step and per-job
+ * breakdowns, where the caveat is reported separately, and narrowing the input
+ * type would break them for no gain in honesty. What this closes is the shape
+ * that actually caused the bug — a caller reading one figure and calling it the
+ * bill.
+ *
+ * **This does not recover the money**, and nothing at the reading end can. The
+ * fix that would is a row written when the call opens, so that a started call is
+ * on disk before it can be lost: docs/plans/260827q-ai-cost-tracking.md.
+ */
+export function totalLedger(read: LedgerRead): LedgerTotal {
+  const money = totalRows(read.rows);
+  /* Deliberately not `rows.length === 0 && ...`: a job whose every call was late
+     has no rows *and* is the worst case, because "spent nothing" and "we cannot
+     see what it spent" then look identical. */
+  if (read.unreadable === 0 && read.lateCalls === 0) return { complete: true, money };
+  return {
+    complete: false,
+    atLeast: money,
+    shortfall: { unreadable: read.unreadable, lateCalls: read.lateCalls },
+  };
 }

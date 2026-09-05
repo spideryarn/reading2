@@ -633,10 +633,24 @@ describe("the store-migration registry", () => {
        spot; there were two, and the claim was in the JSON.
 
        This assertion is what stops a future edit quietly dropping either. An
-       unexplained absence is indistinguishable from an oversight. */
+       unexplained absence is indistinguishable from an oversight.
+
+       **The first blind spot is retired, and the check is inverted rather than
+       deleted.** `tests/store-fs-write-chains.test.ts` went with `ai-calls-fs`
+       and `realtime-sessions-fs` in stage G, 2026-09-05 — its whole subject was
+       a module-scope lock in two modules that no longer exist. The witness JSON
+       is a dated measurement and still records the blind spot, correctly, as
+       what was true on 2026-09-03; what has to stay true is that the record and
+       the tree agree about which of those two states we are in. So the file's
+       *absence* is now what is asserted: if somebody reinstates it, this goes
+       red and the blind spot is live again. */
     expect(witness.knownBlindSpots.join(" ")).toMatch(/store-fs-write-chains/);
     expect(witness.knownBlindSpots.join(" ")).toMatch(/CALLS, NOT READS/);
-    expect(existsSync(path.join(REPO, "tests/store-fs-write-chains.test.ts"))).toBe(true);
+    expect(
+      existsSync(path.join(REPO, "tests/store-fs-write-chains.test.ts")),
+      "deleted in stage G with the two modules it was about — if it is back, the witness's " +
+        "first blind spot is live again and this assertion should be flipped back",
+    ).toBe(false);
     /* And the file the second blind spot hid is now classified, not merely
        described — the record and the remedy have to travel together. */
     expect(Object.keys(STORE_MIGRATION)).toContain("tests/store-artefacts-pg.test.ts");
