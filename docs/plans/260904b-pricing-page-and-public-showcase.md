@@ -307,7 +307,7 @@ product.
 | 4b — a Reader can reach Researcher | **on `dev`** (`47345d3a`); GPT Sol's six findings in flight |
 | 4 — byline and a takedown route | in flight |
 | 4c — showcase links from the marketing pages | **built, uncommitted** (2026-09-05) |
-| 5 — a public article counts half | not started; needs a migration |
+| 5 — a public article counts half | **built in this worktree**, not on `dev` yet |
 
 **What is Greg's and cannot be done for him:** flipping the showcase articles public, in the
 production UI rather than by SQL, so the `article_visibility_changes` row records that he confirmed
@@ -692,6 +692,109 @@ ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the
 - No rate limit beyond what the namespace has. Cluster C and S4 of that plan are still open.
 
 ## Log
+
+- **2026-09-05, stage 5 built** — a public article counts half, on a ledger that had no way of
+  saying which article a charge produced. Ten things worth knowing:
+  - **The three findings the design rested on were all confirmed by reading the code**, and one of
+    them was worse than the plan said. `ingest_events` had six columns and none named an article;
+    `jobs` really is hard-deleted (two `.delete(jobs)` sites in `pg-jobs.ts`); and `ai_calls.article_id`
+    really is a plain FK with `on delete set null`, so the precedent held.
+  - **The column is `drizzle/20260904235116_ingest_events_article_id.sql`**, generated with `--name`
+    and applied against `Target: postgresql://postgres@127.0.0.1:54362/postgres`. Verified by reading
+    `information_schema` and `pg_constraint` rather than the success line: `article_id uuid`,
+    nullable, `confdeltype = 'n'`.
+  - **`settleReservation` takes a discriminated `Settlement`**, and the compiler walked all four call
+    sites the moment the string went away — which is the whole argument for the union over an
+    optional argument. Proven red at `npm run typecheck` by weakening the union to
+    `{ kind: "succeeded"; articleId?: string } | "succeeded"`: two `@ts-expect-error` directives in
+    the new suite went *unused*, which is the failure this guard has.
+  - **The two units are branded types** (`Articles`, `HalfUnits`, `src/billing/half-units.ts`), and
+    branding *both* is what matters: a brand is assignable to `number`, so branding only the
+    half-unit side would still let a budget be passed where a tier's allowance belongs — which is
+    exactly the trap. The cost is `articles(…)` at the four boundaries where a plain number arrives.
+  - **The lock order needed an unlocked ownership probe in front of it**, which the design did not
+    anticipate. `lockBillingAccount` *writes* — it creates the anchor row — so putting it first in
+    `pgVisibilityStore.set` meant a stranger's `PUT` at somebody else's slug minted a billing row and
+    then 404ed. Caught by `tests/public-visibility-pg.test.ts` § *cannot be published by somebody who
+    does not own it*, which went **500 where 404 belongs** because the synthetic outsider has no
+    `auth.users` row for the foreign key. So the transaction now asks *is there anything here to
+    change* before it writes anything, and `lockedArticleQuery` remains the ownership check.
+  - **The anchor row is a real ordering fact and it reached a fixture.** `tests/owner-isolation.test.ts`
+    § the public-shelf teardown deletes its second account's `auth.users` row, which
+    `billing_accounts_owner_fk` now refuses — because sharing an article creates a billing anchor
+    where nothing created one before. The cleanup removes the billing row first, with the reason
+    written beside it. The two other suites that both share an article and delete an auth user were
+    checked and are unaffected.
+  - **`ingest_events` started reaching an article, so `ARTICLE_TABLE_COVERAGE` had to answer for it**
+    — the guard is derived from the schema, and the FK is what pulled the table into its view. The
+    verdict is **not exported, in both projections**, with the reason spelled out because
+    `manifest.json` derives its `omitted` list from that record: it is our accounting of what an
+    article cost *us*, it is Postgres-only so a rollback to `data/` has nothing to read it back, and
+    it is not one-to-one with an article. The entry names what would change that — a receipt, or a
+    per-article cost a reader is billed on.
+  - **`describePlan` grew a second shape rather than a rounding rule**, and `/admin/users` shows the
+    enforcement pair in half-slots and names the unit. Both because no rounding is correct:
+    `ceil(5/2)` says *"3 of 3 used"* while the wall still admits one. With nothing shared every
+    surface renders exactly what it rendered yesterday, which is the common case and the safest
+    diff. A precedence bug in the paid arm — `shared + a ? b : c` — was caught by an existing test
+    asserting the renewal date, not by a new one.
+  - **Red first, every claim, by mutating the mechanism and putting the text back.**
+    `PUBLIC_INGEST_COST` to 2 → six cases red (*expected 4 to be 3*, *expected 10 to be 5*, *expected
+    'refused' to be 'admitted'*); the `coalesce` dropped → three red (*expected { chargedFullPrice:
+    +0 } to deeply equal { chargedFullPrice: 1 }*); the wall loosened to `>` → five red (*expected
+    'admitted' to be 'refused'*); the offer grouped by row instead of by article, and again ordered
+    ascending → the offer case red both times (*to match object { shareToMakeRoom: 1 }*); the article
+    id dropped from the charge → two red (*expected null to be '8c8365…'*); the tier doubled before
+    the delta → the wall-level unit case red (*expected admitted to match { kind: 'refused', limit:
+    33 }*), and doubling inside `limitForPeriod` → also the pure one (*expected 183 to be 33*);
+    in-flight made half price → one red (*expected 1 to be 2*); the billing lock removed from the
+    visibility switch → the lock-order case red (*expected true to be false*); the offer made
+    unconditional → three red; and money planted in the sharing confirmation → the placement case red.
+  - **Two of the first tests were theatre and were rewritten.** *"charges a private article two
+    half-units and a public one one"* asserted `PRIVATE_INGEST_COST + PUBLIC_INGEST_COST`, so it
+    stayed green with the discount switched off — watched doing exactly that. And the offer case's
+    first fixture could not tell rows from articles, because at exactly the wall freeing one row is
+    always enough; it now needs three freed, from an article with three charged rows beside an
+    article with one.
+
+- **2026-09-05, GPT Sol reviewed stage 5's code. No money-charging or free-ingest defect** — it ran
+  an exhaustive check of the arithmetic and found the overdraft bounded at 7/6 and 41/40, with no
+  share/unshare/re-add cycle earning another ingest; the lock order, the join, the migration and the
+  branded units were all clean. What it found was three false sentences, one test gap and one
+  type-boundary gap, and all five are fixed:
+  - **The offer named a number and lost which articles could supply it.** Three charge-bearing
+    private articles at 6/6 beside one grandfathered article: *sharing one of your articles would
+    make room* is arithmetically right and points at four articles of which only three are meant.
+    The cheap fix — *"one of the articles counted against this allowance"* — is true and still not
+    actionable, because **nothing on any screen tells a charge-bearing article from a grandfathered
+    one**, so the reader cannot make the choice themselves and sharing is irreversible. So the query
+    returns the articles: `Refused.shareToMakeRoom` is a non-empty list of titles
+    (`coalesce(title_override, the revision's title, slug)`, the shelf's own expression), and the
+    sentence names up to three of them before going back to a qualified count. `/profile`'s
+    unconditional version is gone and asks the same query, only at the wall.
+  - **The unshare warning claimed a cost that does not exist** for a grandfathered article and for a
+    pre-migration charged row — and it sits on the press a takedown asks an owner to make, which is
+    the one place an invented cost is worst. Now conditional in words, with no new aggregate on the
+    path that opens an article.
+  - **The displayed numbers reverted to the invalid ratios.** Share six, then unshare all six: 12/6
+    with `used = 6` and nothing public, so `/profile` said *"6 of 3 articles used"*, `/admin/users`
+    said `6 / 3`, and the refusal said *"you have added all 3 articles a free account can add"*. A
+    ratio now needs `sharedHalfPrice === 0` **and** `used <= limit`; the refusals say the allowance
+    is spent rather than counting what was added; nothing claims a count *fits* an allowance it is
+    over.
+  - **The paid period filter for public rows had no behavioural test**, which is the one that could
+    have given away unbounded ingests. Proven before it was closed: reversing the paid bounds in the
+    public copy alone left `tests/billing-quota-sql.test.ts`, `billing-quota-race.test.ts` and
+    `billing-half-units.test.ts` green — 44 tests — with every paid public success dropped from
+    usage. The new case put rows at both bounds and asserted the wall: under the same mutation it
+    reads *expected { kind: 'refused' } to match { kind: 'admitted' }*.
+  - **The branding stopped short of its own comment.** `QuotaAdjustment.delta`,
+    `QuotaRules.maxAllowance` and `allowanceFor` were plain `number`, so a `HalfUnits` could reach a
+    delta or a clamp with no cast while the header claimed otherwise. All three are `Articles` now,
+    converted at four named boundaries, and a `@ts-expect-error` triple pins it — unbranding `delta`
+    makes `npm run typecheck` fail with *Unused '@ts-expect-error' directive*. It reached no further:
+    the wire shapes (`ReaderPlan`, `AdminUser`) stay plain numbers because `src/billing-plan.ts`
+    imports nothing, and the header now says where the brand stops instead of implying it does not.
 
 - **2026-09-05, GPT Sol reviewed stage 4c's code. No P0 and no P1**, and its verdict on the two
   questions that mattered was that nothing here puts a request, a token or owner-scoped data on a

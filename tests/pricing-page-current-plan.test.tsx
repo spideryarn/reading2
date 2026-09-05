@@ -127,7 +127,7 @@ const RESEARCHER_OFFER = {
 
 /** A free account with one of its three articles gone. */
 const FREE: BillingSummary = {
-  plan: { kind: "free", limit: 3, used: 1 },
+  plan: { kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, atLimit: false },
   manageable: false,
   purchase: { kind: "checkout", tiers: [READER_OFFER, RESEARCHER_OFFER] },
 };
@@ -148,6 +148,8 @@ const PAID_PLAN = {
   tierName: "Spideryarn Reader",
   limit: 20,
   used: 4,
+  sharedHalfPrice: 0,
+  atLimit: false,
   periodEnd: "2026-10-03T11:37:00.000Z",
   endsAt: null,
 } satisfies BillingSummary["plan"];

@@ -1808,6 +1808,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      by the same guard for the same reason. It calls `pgReady`, seeds its own
      owner and its own two tiers, and its oracle is rows it writes itself — so
      the private lane is right and nothing in it needs the shared stack. */
+  /* Stage 5's, 2026-09-05: a public article costs half a slot. It calls
+     `pgReady`, seeds its own owner and writes its own articles and ledger rows,
+     and its oracle is those rows — so the private lane is right and nothing in
+     it needs the shared stack. */
+  "tests/billing-half-units.test.ts": "private-postgres",
   "tests/billing-quota-adjustment.test.ts": "private-postgres",
   "tests/billing-quota-race.test.ts": "private-postgres",
   "tests/billing-settlement.test.ts": "private-postgres",
@@ -2289,6 +2294,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      the row. */
   "tests/billing-quota-adjustment.test.ts": {
     "0b1113b0-0000-4000-8000-00000000e3b0": { kind: "seeded" },
+  },
+  /* Stage 5's reader. `seedAuthUser` in `beforeEach`, and every row it writes —
+     the articles, the billing account, the ingest events — hangs off the
+     `auth.users` foreign key. */
+  "tests/billing-half-units.test.ts": {
+    "0b110a1f-0000-4000-8000-0000000000a1": { kind: "seeded" },
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },

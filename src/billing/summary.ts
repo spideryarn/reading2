@@ -37,12 +37,22 @@
 import { isAdmin } from "../admin.js";
 import { log } from "../log.js";
 import type { OwnerId } from "../owner.js";
-import { accountSnapshot, entitlementFromRow, hasLapsed, usageFor } from "../store/pg-billing.js";
+import {
+  accountSnapshot,
+  atTheWall,
+  entitlementFromRow,
+  halfUnitsUsed,
+  hasLapsed,
+  ingestsUsed,
+  sharingWouldMakeRoom,
+  usageFor,
+} from "../store/pg-billing.js";
 import type { BillingRow, Stale } from "../store/pg-billing.js";
 import { allTiers } from "../store/pg-tiers.js";
 import { STORE } from "../store/live.js";
 import { planEndsAt } from "../billing-plan.js";
 import type { BillingSummary, Purchase, ReaderPlan, TierOffer } from "../billing-plan.js";
+import { budgetFor, privateHeadroom } from "./half-units.js";
 import { stripeConfigured } from "./stripe.js";
 import { subscriptionState, tiersToOffer } from "./tiers.js";
 import type { Entitlement, Standing, TierRow } from "./tiers.js";
@@ -199,8 +209,18 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
   const usage = await usageFor(ownerId, entitlement);
   /* **In-flight counts as used**, because it counts at the wall (`refusalFor` in
      src/store/pg-billing.ts). A page that showed only settled successes would
-     say a slot was free and then watch the server refuse it. */
-  const used = usage.used + usage.inFlight;
+     say a slot was free and then watch the server refuse it.
+
+     **Three integers and no half-units**, which is the rule ../billing-plan.ts
+     states at length: `used` is a count of ingests, `sharedHalfPrice` is how
+     many of them are cheap right now, and whether the wall would refuse is asked
+     of the wall rather than reconstructed from the pair. */
+  const used = ingestsUsed(usage);
+  const counted = {
+    used,
+    sharedHalfPrice: usage.chargedHalfPrice,
+    atLimit: atTheWall(entitlement, usage),
+  };
 
   if (entitlement.tier === "paid") {
     /* The tier's own product name, or its id if the row has gone. `tierForPrice`
@@ -213,7 +233,7 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
       tierId: entitlement.tierId,
       tierName: name,
       limit: entitlement.limit,
-      used,
+      ...counted,
       periodEnd: entitlement.periodEnd.toISOString(),
       /* **Derived once, here, and sent as a date rather than as the two flags
          it came from** — `planEndsAt` says why. A cancellation through the
@@ -236,9 +256,28 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
     return summary({
       kind: "lapsed",
       limit: entitlement.limit,
-      remaining: Math.max(0, entitlement.limit - used),
+      /* **Further private articles, which is the wall's own answer** rather than
+         `limit - used`: the two are no longer two ends of one ratio now that a
+         public ingest costs half. `privateHeadroom` argues that its division is
+         exact, and it can never exceed the limit, which is what this arm of the
+         union exists to guarantee. */
+      remaining: privateHeadroom(halfUnitsUsed(usage), budgetFor(entitlement.limit)),
     });
   }
 
-  return summary({ kind: "free", limit: entitlement.limit, used });
+  /* **Asked of the ledger, and only at the wall.** The free arm's copy offers
+     sharing as a way out, and whether that is true cannot be worked out from the
+     three counts above — a charged row that predates `ingest_events.article_id`
+     cannot be cheapened at all, and an account that has unshared everything is
+     past the point where sharing everything would help. One grouped aggregate,
+     for the readers who are being refused and nobody else. See
+     `sharingWouldMakeRoom` (../store/pg-billing.ts). */
+  const sharingMakesRoom =
+    counted.atLimit && (await sharingWouldMakeRoom(ownerId, entitlement, usage));
+  return summary({
+    kind: "free",
+    limit: entitlement.limit,
+    ...counted,
+    ...(sharingMakesRoom ? { sharingMakesRoom: true as const } : {}),
+  });
 }

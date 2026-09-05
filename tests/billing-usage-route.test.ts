@@ -245,7 +245,13 @@ describe("GET /api/billing/usage", () => {
   dbIt("puts a reader with no billing row on the free tier, with nothing used", async () => {
     const reply = await get("/api/billing/usage", OWNER);
     expect(reply.status).toBe(200);
-    expect(reply.body.plan).toEqual({ kind: "free", limit: FREE_LIFETIME_INGESTS, used: 0 });
+    expect(reply.body.plan).toEqual({
+      kind: "free",
+      limit: FREE_LIFETIME_INGESTS,
+      used: 0,
+      sharedHalfPrice: 0,
+      atLimit: false,
+    });
     /* Nothing to manage: the Stripe customer that would hold a billing history
        is created by the first checkout, and the Portal route refuses without
        one. A button drawn here could only produce that refusal. */
@@ -265,7 +271,14 @@ describe("GET /api/billing/usage", () => {
       { releasedAt: new Date() },
     ]);
     const reply = await get("/api/billing/usage", OWNER);
-    expect(reply.body.plan).toEqual({ kind: "free", limit: FREE_LIFETIME_INGESTS, used: 3 });
+    expect(reply.body.plan).toEqual({
+      kind: "free",
+      limit: FREE_LIFETIME_INGESTS,
+      used: 3,
+      /* Nothing shared, so nothing is cheap — and three of three is the wall. */
+      sharedHalfPrice: 0,
+      atLimit: true,
+    });
   });
 
   dbIt("offers the tiers that have a Stripe price, with their real numbers", async () => {
@@ -317,6 +330,8 @@ describe("GET /api/billing/usage", () => {
       tierName: tier.name,
       limit: tier.limit,
       used: 2,
+      sharedHalfPrice: 0,
+      atLimit: false,
       periodEnd: period.end.toISOString(),
       endsAt: null,
     });
@@ -725,7 +740,18 @@ describe("the admin page's ingest aggregate", () => {
        windows are both returned because which one is right depends on the
        entitlement, and the entitlement is decided in TypeScript by the same
        function the wall uses — see `planFacts` in src/store/pg-admin.ts. */
-    expect(mine).toEqual({ owner: OWNER, lifetime: 3, inPeriod: 2, inFlight: 1 });
+    expect(mine).toEqual({
+      owner: OWNER,
+      lifetime: 3,
+      inPeriod: 2,
+      inFlight: 1,
+      /* None of them public, so none of them is cheap. The half-price columns
+         are counted over the same two windows as the two above, and never over
+         the reservations — an in-flight ingest is charged full price because
+         nobody yet knows whether the article will be shared. */
+      lifetimeShared: 0,
+      inPeriodShared: 0,
+    });
   });
 
   dbIt("counts an owner with no billing row at all, rather than dropping them", async () => {
@@ -738,6 +764,8 @@ describe("the admin page's ingest aggregate", () => {
       lifetime: 2,
       inPeriod: 0,
       inFlight: 0,
+      lifetimeShared: 0,
+      inPeriodShared: 0,
     });
   });
 });

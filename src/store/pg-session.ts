@@ -109,7 +109,7 @@ import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
-import { settleReservation } from "./pg-billing.js";
+import { RELEASED, settleReservation } from "./pg-billing.js";
 import { finishIn, releaseStepIn } from "./pg-jobs.js";
 import {
   JobDraftGone,
@@ -419,7 +419,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          one the plan's "both branches of `settleIn`" misses. The reader pressed
          Stop while the step ran, `releaseStepIn`'s own `case` ended the job
          instead of queueing it, and nothing below this line runs for it. */
-      await settleReservation(tx, await reservationOf(tx, transition.jobId), "released");
+      await settleReservation(tx, await reservationOf(tx, transition.jobId), RELEASED);
       return {
         settlement,
         announce: await discardAfterCancel(tx, slug, reasonFor(settlement.ending)),
@@ -517,7 +517,12 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
     await settleReservation(
       tx,
       await reservationOf(tx, transition.jobId),
-      ending.status === "done" ? "succeeded" : "released",
+      /* **The charge carries the article it is for**, and the type is what makes
+         that unforgettable — see `Settlement` in ./pg-billing.ts. `ref.articleId`
+         is this draft's article, already cross-checked against the locked row by
+         `lockArticleFor` above, so no second read is needed and no second read
+         could be more authoritative than this one. */
+      ending.status === "done" ? { kind: "succeeded", articleId: ref.articleId } : RELEASED,
     );
     return { settlement: settlementOf(transition, after), announce };
   };
