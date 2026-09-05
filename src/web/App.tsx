@@ -236,6 +236,7 @@ import {
 } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
+import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
   REFEREE_TEXT_ALREADY_SENT,
@@ -1485,9 +1486,11 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
 
   // Page → URL, once the reader stops moving.
   useEffect(() => {
-    const rows = sections.map((s) =>
-      document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(s.blockId)}"]`),
-    );
+    /* One pass over the table, not one document scan per section — see
+       rows.ts. This loop was 38.1% of all script time on a 2,046-block
+       article, and the largest single reason a mode switch there cost 4.7
+       seconds (Sentry SPIDERYARN-READING2-1M). */
+    const rows = rowsForBlockIds(sections.map((s) => s.blockId));
     let frame = 0;
     const measure = () => {
       frame = 0;
