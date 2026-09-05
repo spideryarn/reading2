@@ -368,6 +368,34 @@ Files: `App.tsx`, `styles.css`, `scroll.ts`, `layout.ts`. Docs: `web-client.md`,
 **Done when** Plain, Summary, Chat and Glossary show no bar for an owner, a visitor still sees the
 read-only chip, and nothing on the page is positioned as though a bar were there.
 
+**Stage 4's premise is wrong, and a browser pass is what showed it.** The plan says `--bar-bottom`
+falls to `var(--safe-top)` under a bar-less reader. Measured at 390×844 on 2026-09-05, that is the
+wrong instruction twice over:
+
+- **In any mode with a band open it is already refused**, and deliberately. A rule added 2026-08-31,
+  `:root:has(.controls:focus-within, .mode-band)`, pins the offset back to full height whenever a
+  panel exists — Greg had complained about losing the way out of Search mode. Its `:has()`
+  specificity (0,3,0) beats the hide rule's (0,2,0). Setting the token on `.reader` instead, as the
+  obvious implementation would, is a *nearer ancestor* and would quietly win over that guard.
+- **In Plain mode it is actively harmful**, because `--bar-bottom` is not the bottom of the bar. It
+  is the bottom of the **top chrome**, and the top chrome includes two `position: fixed` corner
+  controls of height `--bar-h` — the wordmark and the Feedback button — which never go away and take
+  no part in the hide-on-scroll.
+
+**And that is a live bug on `dev` today**, found by measuring rather than by reading: at 390×844 in
+Plain mode, scrolled far enough that `data-bars="hidden"`, the spine moves to `top: 0` and its top
+44px is underneath the wordmark. `document.elementFromPoint` at the rail's centre, 10px below its
+top, returns `a.logo.logo-home` — so the top of a scrubber a reader presses to move through the
+article is unreachable. Not introduced here; stage 4 would have extended it to every width.
+
+The second consequence is the one that decides the stage: **the `.controls` bar is what stops article
+prose from scrolling underneath those two corner controls.** It is opaque, full width, and reserves
+horizontal room at both ends through its own padding
+([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) § The bars have to reserve the space).
+Remove it and, once the reader scrolls, prose passes behind a wordmark and a Feedback button that
+have no background of their own. So stage 4 is not "render it conditionally" — it is a question
+about global chrome, and it is out with Fable as a design call.
+
 ### Stage 5 — a mode stops saying its own name
 
 **Added 2026-09-05, after looking at the stage-2 screenshots rather than at the code.** Greg's ask

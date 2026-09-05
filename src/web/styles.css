@@ -4155,6 +4155,26 @@ td.text.has-hit[data-hues="8"] {
   flex: none;
 }
 .band-head-icon { color: var(--ink-faint); flex: none; }
+/* **Chat is the only band with an `h2` left, and that is not an exemption.**
+   Every other one held the mode's own name, which the Dock at the foot of the
+   page is already saying — Greg, 2026-09-05: *"I think we can rely on the bottom
+   bar to tell us what mode we're in, so for example 'Summary' mode doesn't need
+   to say `Summary` at the top, nor o any other modes."* Chat's heading is the
+   open **thread's** title, so it was never naming the mode; it is also the
+   reason every declaration below exists — a thread title is the reader's first
+   sentence and can run to sixty characters.
+
+   **What went with the names, and what it moved.** The `h2` carried `flex: 1`,
+   so it was the heading that pushed a row's other child — `.gloss-count`,
+   `.quotes-count`, Remember's sub-mode switch, Diagram's caveat — over to the
+   right-hand edge. With no heading there is nothing to push with, and each of
+   those now sits at the left where the name used to be. That is the intended
+   look and not a regression to fix by adding `margin-left: auto`: a lone count
+   pinned to the right of an otherwise empty row reads as something that has lost
+   its label, which is exactly what it would be.
+
+   Summary and Search kept nothing at all, so their rows are gone rather than
+   empty. docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */
 .band-head h2 {
   flex: 1;
   margin: 0;

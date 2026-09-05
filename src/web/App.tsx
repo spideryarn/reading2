@@ -177,7 +177,7 @@ import {
   type Mode,
   type TermSort,
 } from "./params.js";
-import { ChevronDown, ChevronRight, ClipboardCheck } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -5661,8 +5661,9 @@ function RefereeBand({
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
       <div className="band-head">
-        <ClipboardCheck size={14} className="band-head-icon" />
-        <h2>Referee</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the "how this works" button beside it. */}
         <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
       </div>
 
