@@ -369,6 +369,37 @@ export interface CapReached {
 export interface CascadeState {
   root: CascadeNode;
   capReached: CapReached[];
+  /**
+   * Targets whose expansion call the model refused on every draw. Required for
+   * the same reason `capReached` is: a type that offers nowhere to put one
+   * invites `status: "terminal"` and a shrug. Arrived 2026-09-05, when a refused
+   * call stopped taking its whole wave down with it. `RefusedTarget`.
+   */
+  refused: RefusedTarget[];
+}
+
+/**
+ * **A target whose expansion call the model refused on every draw its budget
+ * allowed**, and which therefore stayed exactly as the wave before it left it.
+ *
+ * The second way a node the governor would have split ends up `terminal`, and it
+ * needs a record for the reason `capReached` does: silent, it is
+ * indistinguishable from a node that legitimately stopped, and it costs the
+ * reader a level. `RefusedCall` in src/hierarchy-deepen.ts is where one is made.
+ *
+ * `reason` and `draws` and nothing else: the *shape* of what the model actually
+ * said carries its own `why`, which is article-adjacent text, and lives on the
+ * node's `CandidateRecord` in the deepening records file instead.
+ */
+export interface RefusedTarget {
+  /** Its position in the cascade's own proposal — "root > child 2 > child 4". */
+  where: string;
+  range: readonly [string, string];
+  structuralBlocks: number;
+  /** The `ExpansionRefused` reason of the last draw. */
+  reason: string;
+  /** Draws made, counting the first. */
+  draws: number;
 }
 
 /**
@@ -1712,8 +1743,17 @@ export function assertCascadeComplete(
 ): void {
   const index = indexBlocks(blocks);
   const faults: string[] = [];
-  /** Where each `capReached` record says the governor was overruled. */
-  const recorded = new Map(state.capReached.map((c) => [c.where, c]));
+  /**
+   * **Where something says why a node the governor would have split is
+   * terminal.** Two kinds of record answer that question and they are different
+   * facts — the depth cap is deterministic and ours, a refusal is the model's —
+   * but this guard asks only whether *an* explanation exists, so they share one
+   * index here and stay separate everywhere else.
+   */
+  const recorded = new Map<string, unknown>([
+    ...state.capReached.map((c) => [c.where, c] as const),
+    ...state.refused.map((r) => [r.where, r] as const),
+  ]);
   const claimedTerminal = new Set<string>();
 
   /* Positions and block ids only, and the ids through `nameValue`. This message
@@ -1742,7 +1782,7 @@ export function assertCascadeComplete(
           faults.push(
             `${name(where, node)} is marked terminal but holds ` +
               `${structuralBlocksIn(node, blocks, index)} structural block(s) or an unresolved ` +
-              `heading, and no capReached record explains it`,
+              `heading, and neither a capReached nor a refusal record explains it`,
           );
         }
         break;
@@ -1768,7 +1808,9 @@ export function assertCascadeComplete(
      class of fault as the missing record above and just as invisible. */
   for (const where of recorded.keys()) {
     if (!claimedTerminal.has(where)) {
-      faults.push(`a capReached record names ${where}, which is not a terminal node in this tree`);
+      faults.push(
+        `a capReached or refusal record names ${where}, which is not a terminal node in this tree`,
+      );
     }
   }
 

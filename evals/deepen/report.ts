@@ -594,6 +594,91 @@ export const SIZE_BUCKETS: readonly { label: string; holds: (r: CandidateRecord)
   { label: "10+ blocks, 2000+ words", holds: (r) => r.structuralBlocks >= 10 && r.bodyWords >= 2000 },
 ];
 
+/** How often the targets that were asked came back refused on every draw. */
+export interface RefusedRate {
+  /** Targets the governor sent to the model — the only ones that could refuse. */
+  asked: number;
+  refused: number;
+  /** `null` where nothing was asked: an absence, not a rate of zero. */
+  rate: number | null;
+}
+
+export interface Q2RefusedRates {
+  overall: RefusedRate;
+  bySize: { bucket: string; rate: RefusedRate }[];
+  /** By the bound that forced the node open — the selector's own fingerprint. */
+  byBecause: { because: string; rate: RefusedRate }[];
+  /** Which refusals, by kind, commonest first then alphabetical. */
+  byReason: { reason: string; n: number }[];
+}
+
+/**
+ * **How often the model refused, and on what** — the check that prints something
+ * when we are defeated.
+ *
+ * A target refused on every draw no longer fails the wave: it keeps the shape
+ * wave 1 gave it and is recorded (`RefusedCall` in src/hierarchy-deepen.ts).
+ * That is the right behaviour and it converts a loud failure into a quiet
+ * absence, so this is what makes the absence loud again.
+ *
+ * **Bucketed because two different diseases wear the same symptom.** A model
+ * dodging genuinely fat sections shows up on `10+ blocks, 2000+ words` — the
+ * feature not working. A *selector* bug shows up only on tiny nodes forced open
+ * by `authored-heading` — us asking a question the protocol gives no honest way
+ * to answer, which is what killed the first paid run on Moby-Dick's four-block
+ * title page. Different cures, and a single overall rate hides each inside the
+ * other.
+ *
+ * The denominator is **targets that were asked**, never every candidate: a node
+ * the governor stopped was never at risk of refusing, and counting it would
+ * dilute the rate with nodes nobody spent anything on.
+ */
+export function refusedRates(records: readonly CandidateRecord[]): Q2RefusedRates {
+  const asked = records.filter((r) => r.effective.decision === "expand");
+  const rateOf = (over: readonly CandidateRecord[]): RefusedRate => {
+    const refused = over.filter((r) => r.refused !== undefined).length;
+    return { asked: over.length, refused, rate: over.length === 0 ? null : refused / over.length };
+  };
+  const becauses = [...new Set(asked.map((r) => r.effective.because))].sort();
+  const reasons = new Map<string, number>();
+  for (const r of asked) {
+    if (r.refused === undefined) continue;
+    reasons.set(r.refused.reason, (reasons.get(r.refused.reason) ?? 0) + 1);
+  }
+  return {
+    overall: rateOf(asked),
+    bySize: SIZE_BUCKETS.map((b) => ({ bucket: b.label, rate: rateOf(asked.filter(b.holds)) })),
+    byBecause: becauses.map((because) => ({
+      because,
+      rate: rateOf(asked.filter((r) => r.effective.because === because)),
+    })),
+    byReason: [...reasons]
+      .map(([reason, n]) => ({ reason, n }))
+      .sort((a, b) => b.n - a.n || a.reason.localeCompare(b.reason)),
+  };
+}
+
+export function formatRefusedRates(q: Q2RefusedRates): string {
+  const one = (r: RefusedRate): string =>
+    `${String(r.refused).padStart(4)}/${String(r.asked).padEnd(5)} ` +
+    `${r.rate === null ? "  NOT ASKED" : `${(r.rate * 100).toFixed(1).padStart(9)}%`}`;
+  const lines = [
+    "  refused, of the targets that were asked",
+    `    overall                  ${one(q.overall)}`,
+  ];
+  for (const b of q.bySize) lines.push(`    ${b.bucket.padEnd(24)} ${one(b.rate)}`);
+  lines.push("  by the bound that forced the node open");
+  for (const b of q.byBecause) lines.push(`    ${b.because.padEnd(24)} ${one(b.rate)}`);
+  if (q.byReason.length > 0) {
+    lines.push(
+      `  refusals: ${q.byReason.map((r) => `${r.reason} ${r.n}`).join(", ")}`,
+      "  A refusal on a TINY node forced open by `authored-heading` is a selector fault, not the " +
+        "model dodging; on a fat node it is the feature not working. They are different cures.",
+    );
+  }
+  return lines.join("\n");
+}
+
 export interface Q2YesRates {
   overall: YesRate;
   byWave: { wave: number; rate: YesRate }[];
@@ -716,6 +801,17 @@ export interface CostRow {
   unpriced: number;
   /** Ledger lines that could not be read at all. */
   unreadable: number;
+  /**
+   * **Calls that opened and never got a row**, which is the third way a bill is
+   * short and the only one no read can see. `unreadable` is a line on disk that
+   * will not parse; this is a line that does not exist — the request went out,
+   * its collector closed before the answer came back, and `collectSpend` writes
+   * nothing deliberately because the report had already been taken. A Postgres
+   * read says `unreadable: 0` over it, which is how the first paid run of
+   * 2026-09-05 came to print `$2.7331` as a total with four calls missing.
+   * `LedgerRead.lateCalls`.
+   */
+  lateCalls: number;
   /** `nanos / INCUMBENT_BOOK_NANOS`, for the book rows only. */
   vsIncumbent: number | null;
 }
@@ -737,6 +833,7 @@ export function costReport(
     nanos: number | null;
     unpriced: number;
     unreadable: number;
+    lateCalls: number;
     isBook: boolean;
   }[],
 ): Q4Cost {
@@ -745,12 +842,14 @@ export function costReport(
     nanos: r.nanos,
     unpriced: r.unpriced,
     unreadable: r.unreadable,
+    lateCalls: r.lateCalls,
     vsIncumbent: r.isBook && r.nanos !== null ? r.nanos / INCUMBENT_BOOK_NANOS : null,
   }));
   const findings: DeepenFinding[] = [];
   const unread = out.filter((r) => r.nanos === null);
   const unpriced = out.filter((r) => r.unpriced > 0);
   const unreadable = out.filter((r) => r.unreadable > 0);
+  const late = out.filter((r) => r.lateCalls > 0);
   if (rows.length === 0) {
     findings.push({
       kind: "not-answerable",
@@ -784,6 +883,18 @@ export function costReport(
       kind: "not-answerable",
       fatal: true,
       message: `${r.label}: ${r.unreadable} ledger line(s) could not be read, so this row is short.`,
+    });
+  }
+  for (const r of late) {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${r.label}: ${r.lateCalls} call(s) opened in this process and were never recorded — a ` +
+        "request whose collector closed before its answer came back gets no ledger row at all, " +
+        "on purpose, because the report had already been taken. So the figure beside this row " +
+        "is a FLOOR and not a bill. The count is process-wide rather than per job " +
+        "(`LedgerRead.lateCalls`), so it says that something here is short without saying which.",
     });
   }
   const priced = out.filter((r): r is CostRow & { nanos: number } => r.nanos !== null);
@@ -1335,14 +1446,16 @@ export function formatQ4(q: Q4Cost): string {
       (r.nanos === null ? "NOT READ ".padStart(10) : `$${(r.nanos / 1e9).toFixed(4).padStart(9)}`) +
       (r.vsIncumbent === null ? "" : `   ${r.vsIncumbent.toFixed(1)}x the incumbent $1.00`) +
       (r.unpriced > 0 ? `   (${r.unpriced} unpriced call(s) — short by an unknown amount)` : "") +
-      (r.unreadable > 0 ? `   (${r.unreadable} unreadable ledger line(s))` : ""),
+      (r.unreadable > 0 ? `   (${r.unreadable} unreadable ledger line(s))` : "") +
+      (r.lateCalls > 0 ? `   (${r.lateCalls} call(s) NEVER RECORDED — this row is a floor)` : ""),
   );
   lines.push(
     `  ${"TOTAL".padEnd(34)} ` +
       (q.totalNanos === null ? "NOT READ ".padStart(10) : `$${(q.totalNanos / 1e9).toFixed(4).padStart(9)}`) +
       (q.answerable
         ? ""
-        : "   INCOMPLETE — rows above are missing, unpriced or unreadable, so this is a floor"),
+        : "   INCOMPLETE — rows above are missing, unpriced, unreadable, or opened and never " +
+          "recorded, so this is a floor"),
   );
   lines.push(`  ${q.source}`);
   return lines.join("\n");

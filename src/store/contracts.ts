@@ -1363,16 +1363,70 @@ export interface VisibilityStore {
 /* -------------------------------------------------------- the AI ledger -- */
 
 /**
- * What a read of the ledger came back with — the rows, **and how many lines it
- * could not read**.
+ * What a read of the ledger came back with — the rows, **and the two different
+ * ways they can be fewer than the calls that were actually made**.
  *
- * Two fields rather than one because a total nobody can tell is short is worse
- * than no total. A truncated JSONL tail or a row that will not parse has to
- * reach the report rather than quietly reduce it.
+ * Three fields rather than one because a total nobody can tell is short is worse
+ * than no total, and because the two shortfalls are not the same fact:
+ *
+ * - **`unreadable`** — *a row exists and could not be parsed.* A truncated
+ *   JSONL tail, a hand-edited line, a row whose `cost_source` disagrees with its
+ *   own numbers. The money happened and the evidence is damaged. Always `0` from
+ *   Postgres, where a row either parsed on the way in or was never written.
+ * - **`lateCalls`** — *a row that should exist was never written at all.* The
+ *   money happened and there is no evidence whatsoever.
+ *
+ * They must not be added together into one "incomplete" count: a reader chasing
+ * the first goes and looks at the file, and a reader chasing the second has
+ * nothing to look at and must go to the logs. See `totalLedger` in
+ * [ai-calls.ts](ai-calls.ts), which is the only sanctioned way to turn this into
+ * money, and refuses to hand back a figure called a total when either is set.
+ *
+ * ## Why `lateCalls` is here at all, and what it does not mean
+ *
+ * The ledger table cannot know about a call that is still in flight. A row is
+ * written when a call *finishes* — `beginSpend` mints its id and adds it to the
+ * collector's `active` map before the request goes out, and `recordSpend` is
+ * what turns it into a row (src/ai-spend.ts). `collectSpend` sets `closed` on
+ * its box **before** draining the writes, deliberately, so anything finishing
+ * after the report has already been taken gets a warn line and a bump of
+ * `lateCalls()` and **no row, ever**. That is money spent that is in no total,
+ * and from the reading end absence is unknowable: the query comes back short,
+ * `unreadable: 0`, looking exactly like a cheaper job.
+ *
+ * So the only honest source is the process-side counter, and the store reads it.
+ * **Two things it is not**, both of which have to be said out loud or the number
+ * will be misread:
+ *
+ * 1. **It is not attributable to this read.** `lateCalls()` is process-global
+ *    and monotonic — a late call cannot be attributed to a job, because the
+ *    whole content of the failure is that nothing was written down about it.
+ *    So a non-zero value means *"a call somewhere in this process was never
+ *    recorded; this total may be short"*, never *"this job is short by n"*.
+ *    Once it is non-zero every later read in that process carries the caveat.
+ *    That is the conservative direction, and it is the price of not having the
+ *    row.
+ * 2. **It only sees this process.** `npm run cost` is a fresh process reading a
+ *    ledger the server wrote, so it will read `0` however many calls the server
+ *    lost. The caveat reaches the caller that ran the work — which is the one
+ *    that printed the wrong bill — and cannot reach anybody else.
+ *
+ * **The real fix is a row at call-open time**, so that a started call is on disk
+ * before it can be lost and a finish updates it — scoped in
+ * docs/plans/260827q-ai-cost-tracking.md. This is the honest stopgap until then:
+ * it cannot recover the money, but it stops a short figure being quoted as a
+ * whole one.
  */
 export interface LedgerRead {
   rows: AiCallRow[];
+  /** Rows that exist and would not parse. See above; never merged with the next. */
   unreadable: number;
+  /**
+   * Calls that finished after their collector had reported and so were never
+   * written — **process-wide, and not attributable to this read**. Read from
+   * `lateCalls()` in [../ai-spend.ts](../ai-spend.ts) at the moment of the query.
+   */
+  lateCalls: number;
 }
 
 /**
@@ -1404,8 +1458,13 @@ export interface CostStore {
   read(since?: string, until?: string): Promise<LedgerRead>;
   /**
    * Every call made by one pipeline job, across all the advances that ran it —
-   * **and how much of the ledger could not be read while looking**, because a
-   * job total that is short must be able to say so.
+   * **and both ways the answer can be short**, because a job total that is short
+   * must be able to say so. See `LedgerRead`: rows that would not parse, and
+   * rows that were never written because the call outlived its collector.
+   *
+   * Turn the result into money with `totalLedger`, never by summing the rows: a
+   * figure read straight off `rows` is one that cannot tell you it is short, and
+   * that is the bug this returns three fields to prevent.
    */
   forJob(jobId: string): Promise<LedgerRead>;
   /** How big the ledger has got, in bytes, or `null` where that is not a question. */

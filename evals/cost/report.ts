@@ -283,6 +283,13 @@ export interface Finding {
  *
  * Supplied by the runner from `AdvanceParts.onStepSpend`, which is an observer
  * on the queue and cannot change what it watches.
+ *
+ * **Still the sharp instrument, and still the only per-step one.** Since
+ * 2026-09-04 a `LedgerRead` also carries `lateCalls` — the process-wide count of
+ * calls that finished after their collector had reported and so left no row
+ * (src/store/contracts.ts) — which is enough to stop a bill being *quoted* as a
+ * total, and nowhere near enough to say which step lost what. This is what says
+ * that.
  */
 export interface StepObservation {
   step: string;

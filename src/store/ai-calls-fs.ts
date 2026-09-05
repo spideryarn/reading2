@@ -41,7 +41,7 @@
 import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
-import type { AiCallRow } from "../ai-spend.js";
+import { type AiCallRow, lateCalls } from "../ai-spend.js";
 import { processSingleton } from "../process-state.js";
 import type { CostStore, LedgerRead } from "./contracts.js";
 
@@ -344,7 +344,7 @@ export const fsCostStore: CostStore = {
          a fresh checkout has to be able to run the report. Any other error is
          real and is not swallowed. */
       if ((err as NodeJS.ErrnoException).code === "ENOENT")
-        return { rows: [], unreadable: 0 };
+        return { rows: [], unreadable: 0, lateCalls: lateCalls() };
       throw err;
     }
     /* **Keyed by row id, because a lost acknowledgement appends the line
@@ -388,15 +388,26 @@ export const fsCostStore: CostStore = {
       if (until && row.startedAt >= until) continue;
       byId.set(row.id, row);
     }
-    return { rows: [...byId.values()], unreadable };
+    return { rows: [...byId.values()], unreadable, lateCalls: lateCalls() };
   },
 
+  /**
+   * **Both shortfalls are carried through, and they are different facts.**
+   *
+   * `unreadable` was dropped by the first version, so a damaged line belonging
+   * to this job produced a short job total that looked confident (a GPT Sol
+   * review caught it). `lateCalls` is the same failure arriving from the other
+   * side: a call that finished after its collector had closed is in no line of
+   * this file at all, so no amount of care reading the file can notice it. The
+   * only thing that can is the counter the collector bumped —
+   * `lateCalls()` in ../ai-spend.ts — which is process-wide and therefore says
+   * "this may be short", never "this job is short by n". `LedgerRead` in
+   * contracts.ts has the long version, and names the real fix
+   * (docs/plans/260827q-ai-cost-tracking.md § a row at call-open time).
+   */
   async forJob(jobId: string): Promise<LedgerRead> {
-    /* **`unreadable` is carried through, not dropped.** The first version
-       returned the rows alone, so a damaged line belonging to this job produced
-       a short job total that looked confident. Raised by a GPT Sol review. */
-    const { rows, unreadable } = await this.read();
-    return { rows: rows.filter((r) => r.jobId === jobId), unreadable };
+    const { rows, unreadable, lateCalls: late } = await this.read();
+    return { rows: rows.filter((r) => r.jobId === jobId), unreadable, lateCalls: late };
   },
 
   async size(): Promise<number | null> {

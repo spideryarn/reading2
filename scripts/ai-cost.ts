@@ -58,6 +58,7 @@ import { formatNanos } from "../src/ai-spend.js";
 import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
 import { costStore, totalRows } from "../src/store/ai-calls.js";
+import type { LedgerRead } from "../src/store/contracts.js";
 import {
   type CredentialTally,
   type RealtimeCoverage,
@@ -464,7 +465,13 @@ async function reconcile(): Promise<void> {
   const { fingerprint } = usage;
 
   const month = thisMonth();
-  const { rows } = await costStore.read(month.since, month.until);
+  const read = await costStore.read(month.since, month.until);
+  const { rows } = read;
+  /* **Above the comparison, because a hole in our side is the first
+     explanation of a gap.** This range is the calendar month rather than the
+     one the report was asked for, so its own count is asked for rather than
+     reusing the one printed at the top. */
+  for (const note of shortfallNotes(read)) console.log(`\n${note}`);
   const mine = rows.filter((r) => r.credentialFingerprint === fingerprint);
   const others = rows.length - mine.length;
   const { credits, upstream } = totalRows(mine);
@@ -1230,6 +1237,44 @@ async function reconciliationLine(args: Args): Promise<void> {
   );
 }
 
+/**
+ * **The lines that say which figures below are short, and why** — nothing when
+ * the read was whole.
+ *
+ * Two notes and never one merged count, because they send a reader to two
+ * different places. `unreadable` is a line that exists on disk and will not
+ * parse: the money happened, the evidence is damaged, go and look at the ledger.
+ * `lateCalls` is a call that finished after its collector had already reported,
+ * so **no row was ever written** — there is nothing on disk to look at, and the
+ * warn line from `recordSpend` is the only trace. `LedgerRead` in
+ * src/store/contracts.ts is where that distinction is argued at length.
+ *
+ * **The second note says "this process" and it means it.** `lateCalls()` is a
+ * counter in one process's memory, and this report is a fresh process reading a
+ * ledger the server wrote — so it reads zero however many rows the server lost,
+ * and a zero here is not evidence of anything. That is the honest limit of a
+ * stopgap; the fix that would let any process see the hole is a row written when
+ * the call opens (docs/plans/260827q-ai-cost-tracking.md).
+ *
+ * Its own exported function for the reason `by` is one: `main` prints and cannot
+ * be asserted on, and a caveat nobody tests is a caveat that quietly stops
+ * appearing.
+ */
+export function shortfallNotes(read: LedgerRead): string[] {
+  const notes: string[] = [];
+  if (read.unreadable > 0)
+    notes.push(
+      `${read.unreadable} line(s) of the ledger could not be read, and are in no total below.`,
+    );
+  if (read.lateCalls > 0)
+    notes.push(
+      `${read.lateCalls} model call(s) in this process finished after their spend collector ` +
+        "had reported, so no row was ever written for them and they are in no total below. " +
+        "(This count only covers this process; a call the server lost is invisible here.)",
+    );
+  return notes;
+}
+
 async function main(): Promise<void> {
   loadEnvLocal();
   const args = parseArgs(process.argv.slice(2));
@@ -1237,7 +1282,8 @@ async function main(): Promise<void> {
     await ownersReport(args);
     return;
   }
-  const { rows, unreadable } = await costStore.read(args.since, args.until);
+  const read = await costStore.read(args.since, args.until);
+  const { rows } = read;
 
   console.log(`AI spend — ${args.label}`);
   console.log(`Ledger: ${costStore.describe()}`);
@@ -1248,10 +1294,7 @@ async function main(): Promise<void> {
      damaged has no rows *and* a non-zero count, and the first version returned
      before saying so — the one state where the count matters most was the one
      state it was never printed in. GPT Sol. */
-  if (unreadable > 0)
-    console.log(
-      `\n${unreadable} line(s) of the ledger could not be read, and are in no total below.`,
-    );
+  for (const note of shortfallNotes(read)) console.log(`\n${note}`);
 
   /* **Above the money, and above the early return.** Above the money because it
      changes how every figure below should be read: a `By article` total that is
