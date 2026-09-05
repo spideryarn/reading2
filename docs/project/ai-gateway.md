@@ -424,12 +424,18 @@ evidence and contains no complete ingest.
 line meaningless, and a permanent "thousands of calls reported no cost" warning burying the one
 signal that would show a real unpriced problem.
 
-Since 2026-09-02 [`costStore`](../../src/store/ai-calls.ts) hands out the **filesystem** adapter to
-anything running under the test harness, whatever `SPIDERYARN_STORE` says. Redirecting rather than
-refusing, because a store that threw under test would stop the route suites exercising the metering
-lifecycle at all — which is the half of the ledger those tests are the only cover for. The focused
-`pgCostStore` tests still go to Postgres, by importing the adapter directly and cleaning up after
-themselves. `tests/cost-store-under-test.test.ts` is what says the redirect is still there.
+From 2026-09-02 to 2026-09-05, [`costStore`](../../src/store/ai-calls.ts) answered that by handing
+the **filesystem** adapter to anything running under the test harness, whatever `SPIDERYARN_STORE`
+said — redirecting rather than refusing, because a store that threw under test would stop the route
+suites exercising the metering lifecycle at all.
+
+**It is now a database rather than a branch.** The `private-postgres` vitest lane mints a database
+for the run and drops it afterwards ([testing.md](testing.md)), so a fixture row goes through the
+real Postgres adapter into somewhere no report can see. That is what the redirect was standing in
+for, and it is stronger where it counts: while the redirect was in place **no route suite had ever
+put a row through `pgCostStore`**, which is the only adapter that deploys.
+[`tests/cost-store-under-test.test.ts`](../../tests/cost-store-under-test.test.ts) is what says the
+rows land in the private database and not in the developer's own.
 
 **And the report names its database**, not just its table: `npm run cost` prints
 `postgres: spideryarn.ai_calls at <host>/<db>`, password stripped. Local and remote Postgres are
@@ -538,9 +544,19 @@ Three properties of that write are load-bearing and none of them is obvious:
   request's own line as `aiWriteFailures`. The old app rethrew, which meant a Postgres hiccup could
   take down a reader-facing feature — [logging.md](logging.md) quotes it as the thing not to copy.
 
-**A CLI stage run is in the ledger too**, via one line at each stage's `isMain`
-([`src/cli-ledger.ts`](../../src/cli-ledger.ts)) — so `npm run hierarchy` is money that appears in
-`npm run cost`. `evals/` is not: it calls models outside both gateways, and the report says so on
+**A CLI stage run is in the ledger too** — but since 2026-09-05 by a different mechanism, and the
+difference is worth a sentence because it is why `src/cli-ledger.ts` now has one caller rather than
+eight. The stage commands go through the queue
+([setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue)), and
+`runStep` opens a `scopeKind: "job_step"` collector per step — so a stage driven from a terminal is
+scoped by the same thing that scopes it when a reader presses Add, and a CLI that *also* wrapped the
+run in `withLedger("cli", …)` would put one purchase in two scopes. Verified on the local database
+after the move: every call from `npm run ingest`, `npm run hierarchy` and the rest landed as
+`job_step` with a job id and a slug, and none as `cli`.
+
+`withLedger("cli", …)` is still what a CLI that is *not* a stage runner needs, via
+[`src/cli-ledger.ts`](../../src/cli-ledger.ts), and there is one: `npm run eval:pdf-read`.
+`evals/` is not in the ledger: it calls models outside both gateways, and the report says so on
 every run rather than being quietly partial.
 
 **That sentence was false for two of the eight until 2026-08-28.** `npm run labels` and

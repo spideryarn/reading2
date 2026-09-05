@@ -17,6 +17,7 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
+import { articles } from "../src/billing/half-units.js";
 import { FREE } from "../src/billing/tiers.js";
 import type { Entitlement } from "../src/billing/tiers.js";
 import { usageSql } from "../src/store/pg-billing.js";
@@ -29,7 +30,7 @@ const HOSTILE_OWNER = "'; drop table spideryarn.ingest_events; --";
 const PAID: Entitlement = {
   tier: "paid",
   tierId: "reader",
-  limit: 100,
+  limit: articles(100),
   periodStart: new Date("2026-09-01T00:00:00Z"),
   periodEnd: new Date("2026-10-01T00:00:00Z"),
 };
@@ -46,8 +47,12 @@ describe("the usage query", () => {
     const { sql, params } = dialect.sqlToQuery(usageSql(HOSTILE_OWNER, PAID));
     expect(sql).not.toContain("2026-09-01");
     expect(sql).not.toContain("drop table");
-    /* Three values: two bounds and the owner. */
-    expect(params).toHaveLength(3);
+    /* Five values: the owner, and the two bounds **twice** — the charged
+       predicate is built once per counted column, one for the rows at full price
+       and one for the rows whose article is public and costs half. Duplicated
+       binds rather than a duplicated *statement*, which is the property this
+       file is actually about. */
+    expect(params).toHaveLength(5);
     expect(params).toContain("2026-09-01T00:00:00.000Z");
     expect(params).toContain("2026-10-01T00:00:00.000Z");
   });
@@ -58,9 +63,26 @@ describe("the usage query", () => {
     const free = dialect.sqlToQuery(usageSql("owner", FREE));
     const paid = dialect.sqlToQuery(usageSql("owner", PAID));
     expect(free.params).toHaveLength(1);
-    expect(paid.params).toHaveLength(3);
+    expect(paid.params).toHaveLength(5);
     expect(free.sql).not.toContain("timestamptz");
     expect(paid.sql).toContain("timestamptz");
+  });
+
+  /**
+   * **The half-price join, and the direction it fails in.**
+   *
+   * A charged row whose article cannot be resolved — every row charged before
+   * `ingest_events.article_id` existed, and any row whose article was later
+   * deleted — must be charged **full** price. That is a `left join` plus a
+   * `coalesce`, and both halves are load-bearing: an inner join would drop those
+   * rows out of the count altogether, which is the ledger forgetting an ingest,
+   * and a bare `visibility = 'public'` without the coalesce would be `null` for
+   * them, which is neither branch and so counts in neither column.
+   */
+  it("resolves an unresolvable row as private, over a left join", () => {
+    const { sql } = dialect.sqlToQuery(usageSql("owner", PAID));
+    expect(sql).toContain("left join spideryarn.articles a on a.id = e.article_id");
+    expect(sql).toContain("coalesce(a.visibility, 'private') = 'public'");
   });
 
   it("counts in-flight reservations with no age limit, which is the bypass fix", () => {

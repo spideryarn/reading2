@@ -243,7 +243,7 @@ people to click through modals.
 
 Stage 2 rewrites `meta.json` on every run (see [below](#metajson-and-the-articles-identity)). A
 renamed title stored there would work perfectly and be silently undone by the next
-`npm run extract` — a bug that reports success, waits weeks, and then looks like the rename never
+a re-run of stage 2 — a bug that reports success, waits weeks, and then looks like the rename never
 happened. So the reader's title lives in shelf state and `describeArticle` prefers it, which is why
 a renamed article is called the same thing on the card, in the masthead and in the search results.
 `tests/shelf.test.ts` re-runs the rewrite and asserts the override survives.
@@ -588,8 +588,8 @@ have told us the card said 47 minutes and the masthead 54 — see
 
 ### The Shared badge
 
-An article anyone with the link can read wears a small globe and the word **Shared**, on the meta
-line of the card and in the title cell of the table — one component,
+An article anyone can read without signing in wears a small globe and the word **Shared**, on the
+meta line of the card and in the title cell of the table — one component,
 [`SharedBadge`](../../src/web/ShelfEntry.tsx), because a marker added to one of the shelf's two
 renderers looks finished from wherever you were standing. Hovering it gives the owner's own sentence
 from the sharing card, `SHARING_ON` in [`src/messages.ts`](../../src/messages.ts).
@@ -614,20 +614,29 @@ there is enough shared material for it to be worth anything — Greg's decision 
 [260902j-public-read-only-access-audit-and-improvements.md](../plans/260902j-public-read-only-access-audit-and-improvements.md).
 The visitor's side of the same fact is `ViewOnlyChip` in
 [`src/web/PublicChrome.tsx`](../../src/web/PublicChrome.tsx), and it says something else: *you may
-not change this*, where this says *anyone with the link can read this*.
+not change this*, where this says *anyone can read this without signing in*.
 
-**There is a second shelf now, and it is not this one narrowed.** `/read/public` lists every public
-article, to anybody, signed in or not — Greg, 2026-09-04: *"create a `/read/public/` page that lists
-Public-readable pages … to showcase what Spideryarn is capable of."* It is a separate query
-([`src/store/public-library.ts`](../../src/store/public-library.ts)), a separate DTO
-([`src/public-library-types.ts`](../../src/public-library-types.ts)) and a separate card, and none of
-them is a widened `LibraryEntry`: there is no `opens`, `lastOpenedAt`, `comments`, `titleOverridden`,
-`archivedAt` or `purpose`, because every one of those is a fact about a *person's* relationship with
-a document rather than about the document. The decision above is unchanged — this shelf is not a
-filter over the owner's — and the promise it changes (a shared article becomes *discoverable*, not
-only reachable by link) is
+**And that decision still stands next to a page that does exactly what it says there is no way to
+do**, which reads as a contradiction and is not — **they are two different shelves**, and this is
+the paragraph that says so rather than leaving the next reader to work it out.
+[public-shelf.md](public-shelf.md) is `/read/public`, and it lists *what anybody has shared*, to
+anybody, signed in or not — Greg, 2026-09-04: *"create a `/read/public/` page that lists
+Public-readable pages … to showcase what Spideryarn is capable of."* This shelf is *your articles*,
+nearly all of them private, and narrowing it to the shared few would be a control that answers a
+question its owner already knows the answer to. Nothing about the owner's shelf changed when that
+page arrived: no filter, no sort, no chip on a private card. The two lists share no query, no DTO
+and no card component, and none of the public ones is a widened `LibraryEntry` — there is no
+`opens`, `lastOpenedAt`, `comments`, `titleOverridden`, `archivedAt` or `purpose` on the wire,
+because every one of those is a fact about a *person's* relationship with a document rather than
+about the document.
+
+**What did change is the promise, and it is a promise this page makes.** Sharing used to mean
+*reachable by anyone with the link*; since the listing shipped it also means *listed publicly*, so
+the badge above, its hover sentence and the masthead's mark all say the wider thing —
+`SHARING_ON` in [`src/messages.ts`](../../src/messages.ts) is the one string the three are built
+from. The decision to widen it retroactively rather than grandfather anything is
 [260904b-pricing-page-and-public-showcase.md](../plans/260904b-pricing-page-and-public-showcase.md)
-§ 1.
+§ 1, and it rests on there being one account holder.
 
 The name `public` is reserved as an article slug, because `/read/public` would otherwise be an
 address two things claim: `isReservedSlug` in [`src/ingest.ts`](../../src/ingest.ts), refused at
@@ -749,17 +758,19 @@ which is where it was always meant to be
 
 Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
 
-- **The slug comes from the output filename, not from the URL.** Stage 3 names its blocks file after
-  the HTML file and stage 4 names the data directory after *that* ([`src/hierarchy.ts`](../../src/hierarchy.ts)),
-  so the basename is what the rest of the pipeline will call this article. Deriving it from the URL a
-  second time would be right for `npm run extract <url>` and wrong the moment anyone passed an
-  explicit filename — and the only symptom would be an article with no byline.
+- **The slug is passed in, and used to be read off the output filename.** Stage 3 named its blocks
+  file after the HTML file and stage 4 named the data directory after *that*, so the basename was
+  what the rest of the pipeline would call this article — and deriving it from the URL a second time
+  would have been right for `npm run extract <url>` and wrong the moment anyone passed an explicit
+  filename, with an article that had no byline as the only symptom. There is no filename to read one
+  off any more: `runExtract` takes the slug, and the command line that could pass one went on
+  2026-09-05.
 - **It is rewritten every run**, because re-extracting is how you refresh a page and the fetch date
   should follow.
 
 An article whose `meta.json` predates this still lists: the title falls back to the first `<h1>` and
-the date to the mtime of `blocks.json`. It just has no byline and no source link. Re-run
-`npm run extract` to fix that.
+the date to the mtime of `blocks.json`. It just has no byline and no source link.
+`npm run extract -- <slug> --force` fixes it.
 
 ## When this becomes Postgres
 
@@ -895,6 +906,14 @@ The filter keeps the route's `{ articles: [...] }` envelope, and that is the who
 fortnight testing `Array.isArray(body)` against a payload that has never been an array, so it
 returned the shelf untouched every single time and the test covering it had invented a third shape
 — [260903e-offline-shelf-filter-never-ran.md](../postmortems/260903e-offline-shelf-filter-never-ran.md).
+
+**Three deliberate limits, so nobody builds them by accident.** There is **no service worker and no
+sync queue** — the fallback is for a failed *transport*, not a general offline mode, and nothing a
+reader does offline is replayed when they return. The cache key is user-plus-URL, so one browser's
+two readers never see each other's shelf; eviction is whole-article rather than per-response, so a
+half-evicted article cannot half-open. And a remembered identity **never authorises a request**: what
+is cached is what this reader already fetched, not permission to fetch more.
+[260827r-offline-reading.md](../plans/260827r-offline-reading.md) has the reasoning.
 
 ## The fixture is always on the shelf
 

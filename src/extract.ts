@@ -27,12 +27,7 @@
    `readArticle` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
-import { writeFile, mkdir } from "node:fs/promises";
-import path from "node:path";
-import { fetchHtml } from "./fetch.js";
 import { escapeHtml } from "./html.js";
-import { slugFromUrl } from "./ingest.js";
-import { isMain } from "./is-main.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
@@ -139,33 +134,13 @@ ${sanitizeHtml(article.content ?? "")}
 </html>`;
 }
 
-/** Where `npm run extract -- <url>` puts its HTML when you don't say. */
-export function defaultOutFile(url: string): string {
-  return `output/${slugFromUrl(url) || "article"}.html`;
-}
-
-/**
- * The slug an output filename implies. **Command line only.**
- *
- * Taken from the OUTPUT FILE rather than from the URL, which looks like the
- * long way round given `defaultOutFile` just derived the filename from the URL
- * — but it is the only spelling that cannot drift. Stage 3 names its blocks
- * file after the HTML file, and stage 4 names the data directory after *that*
- * (src/hierarchy.ts). So the basename here is what the rest of the pipeline will call
- * this article, whether it was chosen by us or passed in on the command line.
- * Deriving it from the URL a second time would put meta.json in the
- * right-looking directory for `npm run extract <url>` and in the wrong one the
- * moment anybody passed an explicit filename — and the only symptom would be an
- * article with no byline.
- *
- * `runExtract` used to call this. It takes the slug directly now, because the
- * queue has always known it and there is no filename in that path to read one
- * off. The reasoning above still applies to `main()`, which is where an
- * explicit filename can arrive.
- */
-export function slugForOutFile(outFile: string): string {
-  return path.basename(outFile).replace(/\.[^.]+$/, "");
-}
+/* **`defaultOutFile` and `slugForOutFile` went on 2026-09-05**, with the
+   command line that was their only caller. They turned a URL into
+   `output/<slug>.html` and an output filename back into a slug, and the reason
+   the second read the *filename* rather than the URL was that an explicit
+   `outFile` on a command line is the only place the two can differ. There is no
+   such filename any more: `runExtract` takes its slug directly, and the article
+   is addressed by slug everywhere after it. */
 
 export interface ExtractResult {
   slug: string;
@@ -711,8 +686,7 @@ export class ReadabilityRefused extends Error {
  * `slugForOutFile`, on the reasoning that the basename is what stages 3 and 4
  * would name this article — true, and now moot: there is no filename here to
  * derive it from, and every caller already knows the slug. The command line
- * below still derives one that way, because an explicit `outFile` on the
- * command line is the only place the two can differ.
+ * that could pass an explicit filename is gone too.
  */
 export async function runExtract(opts: {
   html: string;
@@ -779,63 +753,17 @@ export async function runExtract(opts: {
 }
 
 /**
- * `npm run extract -- <url> [outFile]`
+ * **`npm run extract` used to be here, and it is `scripts/stage.ts` now.**
  *
- * **The one place left that writes stage 2's artefacts to a disk**, and it does
- * it here rather than inside `runExtract` because it is the only caller that
- * wants files: it exists so a person can open the page and see what extraction
- * did. The queue hands the same two artefacts to the store instead.
+ * It took a URL, fetched the page itself, ran `runExtract` and wrote
+ * `output/<slug>.html` and `data/<slug>/meta.json` by hand — two paths off
+ * `process.cwd()`, which under Postgres are files nothing reads.
  *
- * It writes to exactly where it always did — `output/<slug>.html` and
- * `data/<slug>/meta.json` — so the fixtures, the evals and anybody's muscle
- * memory are unaffected. It fetches the page itself, as it always did, and does
- * not read anything `npm run fetch` left behind — the two commands are separate
- * one-shot tools and neither feeds the other.
+ * `npm run extract -- <slug> [--force]` re-runs stage 2 on an article you
+ * already have, through the queue, into a draft revision that is published when
+ * the job settles. The contract is in `scripts/stage.ts`. It cannot take a URL
+ * any more: making an article from an address is `npm run ingest`.
  *
- * **Both paths below are relative to the process's cwd**, which is why they are
- * here and not in the stage. `data/…` is `<repo>/data/…` only when you started
- * in the repo root, and the queue used to pass `dataDir` in for exactly that
- * reason: a server started elsewhere would have written the metadata somewhere
- * the pipeline never looks, with the step still going green. A command line has
- * no such problem — it prints the resolved paths, and a person is reading them.
+ * `defaultOutFile` and `slugForOutFile` went with it — an explicit output path
+ * was a thing only a command line had.
  */
-async function main(): Promise<void> {
-  const url = process.argv[2];
-  if (!url) {
-    console.error("Usage: tsx src/extract.ts <url> [outFile]");
-    process.exit(1);
-  }
-  const outFile = process.argv[3] ?? defaultOutFile(url);
-
-  const html = await fetchHtml(url);
-  /* `slugForOutFile`, not `slugFromUrl`: an explicit `outFile` on the command
-     line is what stages 3 and 4 will name this article after, and deriving the
-     slug from the URL a second time would put meta.json in the right-looking
-     directory for the default case and the wrong one the moment anybody passed
-     a filename. The only symptom would be an article with no byline. */
-  const result = await runExtract({ html, url, slug: slugForOutFile(outFile) });
-
-  await mkdir(path.dirname(outFile), { recursive: true });
-  await writeFile(outFile, result.extractedHtml, "utf-8");
-  const metaFile = path.join("data", result.slug, "meta.json");
-  await mkdir(path.dirname(metaFile), { recursive: true });
-  await writeFile(metaFile, `${JSON.stringify(result.meta, null, 2)}\n`, "utf-8");
-
-  console.log(`Title: ${result.meta.title}`);
-  console.log(`Byline: ${result.meta.byline}`);
-  console.log(`Site: ${result.meta.siteName}`);
-  console.log(`Length (chars): ${result.length}`);
-  console.log(
-    `Notes: ${result.notes.notes} (${result.notes.markers} markers, ` +
-      `${JSON.stringify(result.notes.shapes)})`,
-  );
-  console.log(
-    `Callouts: ${result.callouts.containers} (${result.callouts.stamped} elements stamped, ` +
-      `${result.callouts.skipped} skipped, ${JSON.stringify(result.callouts.shapes)})`,
-  );
-  console.log(`Excerpt: ${result.excerpt}`);
-  console.log(`\nWritten to: ${path.resolve(outFile)}`);
-  console.log(`            ${path.resolve(metaFile)}`);
-}
-
-if (isMain(import.meta.url)) void main();

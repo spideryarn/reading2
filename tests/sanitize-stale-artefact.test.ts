@@ -24,11 +24,14 @@
  * A stamp nothing checks is decoration; a check on a stamp nobody writes never
  * fires. Both are pinned below.
  */
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { blocksArtefact } from "../src/blocks.js";
+import { STEPS } from "../src/pipeline.js";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
 import { sanitizeStoredBlocks } from "../src/sanitize.js";
 import { loadArticle } from "../src/api.js";
@@ -52,73 +55,100 @@ const dirtyBlock = (): Block => ({
 });
 
 /**
- * **These run the real command line, in a subprocess, and that is new.**
+ * **This ran the real command line in a subprocess until 2026-09-05, and now
+ * runs the real step.**
+ *
+ * The history is worth two paragraphs, because both moves were forced and both
+ * were about the same thing: *what actually writes the artefact*.
  *
  * Until 2026-08-31 `runBlocks` read a file and wrote two, so calling it from a
- * test exercised the writing. It no longer writes anything — the step hands its
- * return value to the artefact store, and `main()` in src/blocks.ts is the one
- * caller left that touches a disk. So a test that calls `runBlocks` can no
- * longer say anything at all about what lands in a `blocks.json`, which is what
- * this whole file is about; it would pass just as well against a `main()` that
- * had quietly dropped `blocksArtefact`.
+ * test exercised the writing. It stopped writing — the step hands its return
+ * value to the artefact store — and `main()` in src/blocks.ts became the one
+ * caller left that touched a disk. So the test moved to `npx tsx src/blocks.ts`
+ * in a child process, because a test that called `runBlocks` could no longer say
+ * anything about what lands in a `blocks.json`: it would pass just as well
+ * against a `main()` that had quietly dropped `blocksArtefact`.
  *
- * `npx tsx src/blocks.ts`, the way tests/validate-tree.test.ts runs its own
- * command. Slower, and the only version that is about the claim.
+ * On 2026-09-05 that `main()` went too — the stage CLIs moved onto the queue
+ * (`scripts/stage.ts`), and nothing in the repo writes a `blocks.json` from
+ * stage 3 any more. **So the subject moved again, to `STEPS.blocks.run`**, which
+ * is the one caller that turns `runBlocks`'s answer into the thing a store is
+ * handed. The claim is unchanged and is now made one layer closer to where it
+ * matters: the artefact that leaves stage 3 carries a stamp, and the stamp is
+ * true. Same mutation as before — drop `blocksArtefact` from the step's return
+ * and this goes red — with no subprocess and no 60-second timeout.
  */
 describe("the stamp stage 3 writes", () => {
-  const runCli = async (args: string[]) => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    return promisify(execFile)("npx", ["tsx", "src/blocks.ts", ...args]);
+  const stage3 = async (store: ReturnType<typeof memoryArtefacts>) => {
+    const dir = await mkdtemp(path.join(tmpdir(), "spya-stamp-"));
+    try {
+      const out = await STEPS.blocks.run(
+        {
+          slug: "a-slug",
+          dir,
+          htmlFile: path.join(dir, "a-slug.html"),
+          report: () => {},
+          signal: new AbortController().signal,
+          cacheArticle: false,
+        },
+        store,
+        nullCheckpointStore(),
+      );
+      return out.parts?.blocks as { sanitizer?: number; blocks: Block[] };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   };
 
-  it("puts the sanitiser version it used into blocks.json", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-stamp-"));
-    try {
-      const htmlFile = path.join(dir, "a.html");
-      await writeFile(htmlFile, `<!doctype html><html><body>${DIRTY_HTML}</body></html>`);
-      await runCli([htmlFile]);
-      const written = JSON.parse(await readFile(path.join(dir, "a.blocks.json"), "utf8"));
+  it("puts the sanitiser version it used into the blocks artefact", async () => {
+    const store = memoryArtefacts();
+    store.plant(
+      "a-slug",
+      "extract",
+      "extractedHtml",
+      `<!doctype html><html><body>${DIRTY_HTML}</body></html>`,
+    );
 
-      expect(written.sanitizer).toBe(SANITIZER_VERSION);
-      // And it really did sanitise, so the stamp is a claim about this file
-      // rather than a number copied in beside dirty content.
-      expect(JSON.stringify(written.blocks)).not.toContain("onerror");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  }, 60_000);
+    const written = await stage3(store);
+
+    expect(written.sanitizer).toBe(SANITIZER_VERSION);
+    // And it really did sanitise, so the stamp is a claim about this artefact
+    // rather than a number copied in beside dirty content.
+    expect(JSON.stringify(written.blocks)).not.toContain("onerror");
+  });
 
   it("is how an artefact from before the stamp becomes stamped", async () => {
-    // The migration, and there is deliberately no other one: `npm run blocks`
-    // rewrites blocks.json anyway, so the existing remedy now also records that
-    // it happened.
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-stamp-"));
-    try {
-      const htmlFile = path.join(dir, "a.html");
-      const jsonFile = path.join(dir, "a.blocks.json");
-      await writeFile(htmlFile, `<!doctype html><html><body>${DIRTY_HTML}</body></html>`);
-      await writeFile(jsonFile, JSON.stringify({ blocks: [dirtyBlock()] }));
+    // The migration, and there is deliberately no other one: re-running stage 3
+    // rewrites the blocks anyway, so the existing remedy now also records that
+    // it happened. `npm run blocks -- <slug> --force` is how somebody does it.
+    const store = memoryArtefacts();
+    store.plant(
+      "a-slug",
+      "extract",
+      "extractedHtml",
+      `<!doctype html><html><body>${DIRTY_HTML}</body></html>`,
+    );
+    /* The unstamped artefact *is* the baseline stage 3 reads, which is what
+       makes this the migration rather than a fresh ingest: the block keeps its
+       id (it is in the HTML too) and what comes back is stamped. Planted at
+       `("blocks", "blocks")`, which is where `previousBlocksFrom` looks — and
+       getting that wrong is loud rather than quiet, because an empty baseline
+       beside `hasEarlierBlocks` answering yes is `BaselineMissing`. */
+    store.plant("a-slug", "blocks", "blocks", { blocks: [dirtyBlock()] });
 
-      /* The unstamped file *is* the baseline the CLI reads, which is what makes
-         this the migration rather than a fresh ingest: the block keeps its id
-         (it is in the HTML too) and the file comes back stamped. */
-      await runCli([htmlFile, jsonFile]);
-      const written = JSON.parse(await readFile(jsonFile, "utf8"));
-      expect(written.sanitizer).toBe(SANITIZER_VERSION);
-      expect(written.blocks[0].id).toBe("spya-k3m9qt");
-      expect(JSON.stringify(written.blocks)).not.toContain("onerror");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  }, 60_000);
+    const written = await stage3(store);
+
+    expect(written.sanitizer).toBe(SANITIZER_VERSION);
+    expect(written.blocks[0]?.id).toBe("spya-k3m9qt");
+    expect(JSON.stringify(written.blocks)).not.toContain("onerror");
+  });
 });
 
 describe("every writer of a blocks.json stamps it", () => {
   /**
-   * **The half of this that was nearly missed.** Stage 3 stamps
-   * `output/<slug>.blocks.json`. The file the server actually opens is
-   * `data/<slug>/blocks.json`, and that one is written by **stage 4**, from
+   * **The half of this that was nearly missed.** Stage 3 stamped
+   * `output/<slug>.blocks.json`. The file the server actually opened was
+   * `data/<slug>/blocks.json`, and that one was written by **stage 4**, from
    * scratch — so a plain `{ blocks }` there silently dropped the stamp and every
    * article in the library read back as stale. Not unsafe: stale means
    * re-sanitise, and re-sanitising is correct. Useless, and worse than useless,
@@ -132,6 +162,14 @@ describe("every writer of a blocks.json stamps it", () => {
    * So this reads the source. A behavioural test cannot reach stage 4 without a
    * model call, and a test that only exercises `runBlocks` is exactly the one
    * that missed this.
+   *
+   * **There is one writer left in `src/`, and it is not a stage.** Both stages
+   * stopped writing files (2026-08-31), and their command lines — the last
+   * callers that did — went on 2026-09-05 with the move onto the queue
+   * (`scripts/stage.ts`). What remains is `db:export` in src/store/export.ts,
+   * writing rows out of Postgres into a directory, which is precisely the case
+   * the next test is about: a writer that has *not* sanitised anything and must
+   * not be allowed to certify that it has.
    */
   /* Comment lines are dropped first, or this file's own prose about writing a
      blocks.json counts as a writer of one. */
@@ -211,10 +249,17 @@ describe("every writer of a blocks.json stamps it", () => {
   });
 
   it("finds the writers at all", async () => {
-    // The control. The assertion above passes trivially against a regex that
-    // matches nothing, which is precisely how it would come to be believed.
+    /* The control. The assertion above passes trivially against a regex that
+       matches nothing, which is precisely how it would come to be believed.
+       It watched `src/hierarchy.ts` until 2026-09-05, when stage 4's command
+       line went and took the last `writeAtomic(path.join(outDir,
+       "blocks.json"), …)` with it — the control went red, correctly, and
+       naming the writer that is actually left is the repair. If this ever goes
+       red again, the question to ask first is whether *anything* still writes a
+       blocks.json: a rule with nothing to say is not the same as a rule being
+       obeyed. */
     const { readFileSync } = await import("node:fs");
-    const source = readFileSync(new URL("../src/hierarchy.ts", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../src/store/export.ts", import.meta.url), "utf8");
     expect(writers(source).length).toBeGreaterThan(0);
   });
 });

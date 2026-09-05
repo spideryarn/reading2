@@ -480,8 +480,9 @@ describe("the call itself", () => {
  * whole of `openRouterJson` untested here: the route it picks, the `provider`
  * block it attaches, the body it actually serialises, and — the expensive one —
  * whether one attempt writes exactly one spend row. `npm run labels` and `npm
- * run pdf` each spent for weeks with no ledger open, and a test that stops at
- * the seam cannot see that.
+ * run pdf` each spent for weeks with no ledger open — both commands have since
+ * gone, the first retired and the second renamed `npm run eval:pdf-read`
+ * (2026-09-05) — and a test that stops at the seam cannot see that.
  *
  * So: the real `withLedger("cli", …)`, the real gateway, and only `fetch` and
  * the ledger's STORE replaced. The store is mocked rather than the collector,

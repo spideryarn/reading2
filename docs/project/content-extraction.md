@@ -3,18 +3,22 @@
 Strips a rich HTML page (article/blog post) down to the main content — drops nav, ads, sidebars, comments — using [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View algorithm).
 
 - Script: `src/extract.ts`
-- Run: `npm run extract -- <url> [outFile]` (the output defaults to `output/<slug>.html`, with
-  the slug derived from the URL — it used to be a fixed `output/article.html`), **or paste the URL
-  into the homepage's add box** and the ingest queue runs it, along with the four stages after it —
-  [ingest-queue.md](ingest-queue.md). The CLI and the queue call the same function, so there is one
-  code path and no way for them to disagree.
+- Run: `npm run extract -- <slug> [--force]`, which re-runs this stage on an article you already
+  have, **or paste the URL into the homepage's add box** and the ingest queue runs it along with the
+  four stages after it — [ingest-queue.md](ingest-queue.md). Both are the same code path now rather
+  than two that agree: the command enqueues a job and advances it
+  ([setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue)).
+  Until 2026-09-05 it took a **URL**, fetched the page itself and wrote `output/<slug>.html` and
+  `data/<slug>/meta.json` by hand; making an article from an address is `npm run ingest` now.
 - The fetch itself is no longer here. Stage 1 is [`src/fetch.ts`](../../src/fetch.ts), which keeps
   what it got as a content-addressed object in the `sources` bucket, with a manifest naming it, so
   re-extracting costs nothing and does not ask the publisher again. Since 2026-08-31 it writes no
   files — [fetching.md § What stage 1 leaves behind](fetching.md#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk).
 - Output: a standalone, styled HTML page and the metadata, **both returned rather than written**. The
-  page is HTML and not Markdown, to avoid losing structure, links and images; the command line is the
-  only caller that puts either on a disk.
+  page is HTML and not Markdown, to avoid losing structure, links and images. Since 2026-09-05
+  nothing puts either on a disk from this stage; `npm run eval:pdf-read`, which is the *other*
+  extractor and a quality tool rather than a stage runner, still writes its two files for a person to
+  look at.
 - Dependencies: `@mozilla/readability` + `jsdom` (parses HTML into a DOM, since Node has none natively)
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
 
@@ -56,11 +60,26 @@ The differences that matter to a reader:
   ([`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)), so a second attempt at a document
   the first one ran out of time on buys only the chunks it has not got — and re-running after a
   *renderer* fix is free. A **prompt** change is deliberately not free: the key carries
-  `promptFingerprint()`. And `npm run pdf` remembers nothing between runs at all, because a command
+  `promptFingerprint()`. And `npm run eval:pdf-read` (`npm run pdf` until 2026-09-05) remembers
+  nothing between runs at all, because a command
   line has no article to key on and takes `nullCheckpointStore()`.
-- **It is checked, and it can fail.** The transcription is scored per page against the PDF's own text
-  layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
-  than writing a half-transcribed article that reads fluently.
+- **It is checked, and since 2026-08-30 it no longer fails.** The transcription is scored per page
+  against the PDF's own text layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)). This used to
+  `throw`, and the argument for throwing was the point of the whole stage — a model can drop a
+  paragraph, summarise one or invent one, and all three read as fluent English. What changed was
+  evidence, not opinion: the first PDFs on production were refused over rotated stamps, chart labels
+  and maths notation. Greg's call, 2026-08-30, against the stated order of capability then
+  robustness: *"publish it and say what looked wrong. A reader can see the note and judge; a reader
+  with no article cannot."* `1ed4407e`.
+
+  **The saying-so is the half that is not built.** The *score* is shown — the masthead's source note
+  and the metadata page's `Missed` row both report recall and pages checked. The specific complaints
+  go to `meta.quality`, and **nothing renders it**, so the sentence in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` — "if the reader does not look, nobody
+  looks" — currently describes a reader who cannot. Restoring a gate later means choosing which
+  failures are fatal, and the missing-run check is the one worth it; note that `coverageOf`'s
+  `missing` is *any requested page with no record at all*, so a gate on it as-is would refuse a blank
+  verso or a full-page figure, which is the false-refusal class that stood the old one down.
 - **A PDF can be too long, and on the queue's path it is refused in stage 1.** The cap is
   [`src/uploads.ts`](../../src/uploads.ts) § `MAX_PAGES` — a limit on what reading a document is
   allowed to cost, not a technical one — and since 2026-09-04 it is enforced where the bytes first
@@ -69,7 +88,7 @@ The differences that matter to a reader:
   the reader hears it in seconds instead of after a job card has been running. `pass0`'s own guard
   stays as the backstop for anything ingested before that, or re-extracted after the cap moves
   again — and it is the *only* guard for the stage CLIs, which do not go through the queue's stage 1
-  at all: `npm run fetch` stores whatever it fetched, and `npm run pdf` keeps the original before
+  at all: the queue stores whatever it fetched, and `npm run eval:pdf-read` keeps the original before
   `runPdfExtract` counts anything. Neither can reach a reader's job.
 - **A PDF that will not open at all is refused here, and says which way.** Locked with a password, or
   damaged past parsing — two sentences and two codes, `PDF_LOCKED` and `PDF_DAMAGED` in
@@ -78,14 +97,30 @@ The differences that matter to a reader:
   generic retryable one, which is a button that could never work
   ([copy.md](copy.md#the-four-rules), rule 2). Stage 1's page counter deliberately lets such a file
   through — a cost gate is not a validity gate — so this is where it lands.
-- **Sixteen chunks at a time, and the width buys latency rather than money.** `CHUNK_CONCURRENCY`
-  went 8 → 16 on 2026-09-04, measured against the step's 740-second deadline
-  ([`src/pdf-read.ts`](../../src/pdf-read.ts) has the table and the binding constraint). Cost is
-  unchanged by width — the system prompt is sent per chunk and nothing on this path is cached — so
-  what widening changes is memory and the request rate into one upstream. Both of those made the
-  429 the thing to fix: it used to be fatal at the first one, and now the chunk waits and asks
-  again, honouring the provider's own `Retry-After` in full up to `MAX_RETRY_AFTER_MS` (60 s) and
-  failing this attempt rather than truncating a wait the provider actually asked for.
+- **A hundred chunks at a time, and the width buys latency rather than money.** `CHUNK_CONCURRENCY`
+  went 8 → 16 → 100 on 2026-09-04, the last step measured on the live wire rather than argued from
+  the 740-second deadline: all 69 chunks of a 142-page paper fired at once came back in **69 s**,
+  twice, with nothing refused. End to end the step went **394 s → 248 s and 142 s** over two runs,
+  not 394 → 69, because it is now bounded by its slowest chunk asked twice rather than by how many
+  waves it needs — so further width buys nothing ([`src/pdf-read.ts`](../../src/pdf-read.ts) has the
+  table). **Cost and transcription quality are unchanged by width**, and the two runs prove it in
+  opposite directions: $0.49/9 notes and $0.62/17 notes against $0.63/12 at width 16. What varies is
+  how many chunks fail their check, which is model variance. Width buys latency and nothing else.
+- **The width is governed, not just raised.** A probe could not provoke a rate limit at 150, 250 or
+  even 400 concurrent requests, which says the ceiling is this account's own tier at the provider
+  rather than a shared pool — a fact about configuration that can change without telling us. So
+  `WidthGate` ([`src/concurrency.ts`](../../src/concurrency.ts)) halves the width on the first 429 of
+  an epoch, holds new requests briefly while that takes effect, and earns the width back one slot per
+  successful call. A hundred chunks meeting one overload therefore halve it once rather than a
+  hundred times. Underneath it the per-chunk retry is unchanged: the chunk waits and asks again,
+  honouring the provider's own `Retry-After` in full up to `MAX_RETRY_AFTER_MS` (60 s) and failing
+  this attempt rather than truncating a wait the provider actually asked for.
+- **A chunk is bounded by bytes as well as by words.** Words alone let a run of image-heavy pages
+  through, so `MAX_CHUNK_BYTES` (3 MB) is a *planning* bound on the encoded page images — distinct
+  from `MAX_ENCODED_BYTES` (30 MB), the hard request ceiling. Both are in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts), and the planning bound **cannot split a page**: a
+  single page heavier than it still goes out over the limit, which is the honest edge rather than an
+  oversight.
 - **A long PDF is expected to need two lease windows, and that is what the checkpoints are for.**
   Measured in a browser on 2026-09-04: a 144-page paper spent nearly all of the first window in
   `extract`, and `hierarchy` was cut off. The second window is a press of Retry rather than an

@@ -2,7 +2,26 @@
  * Pipeline stage 2, for a PDF — **pass 1: a model reads the pages**, and the
  * only part of PDF ingestion that costs money.
  *
- *   npx tsx src/pdf-read.ts evals/pdf/easy/source.pdf
+ *   npm run eval:pdf-read -- evals/pdf/easy/source.pdf
+ *
+ * **The command was `npm run pdf` until 2026-09-05, and the rename is the whole
+ * decision.** Stage E of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * moved the stage CLIs onto the queue, and this one looked like the fifth of
+ * them. It is not: it is the **PDF extraction-quality tool**. It prints the
+ * pages, the chunk plan and `report(checked)` — the per-chunk recall table from
+ * src/pdf-score.ts — then the title, the records, mean recall over N pages, the
+ * token counts and the retries. That is where the numbers in
+ * evals/pdf/README.md came from, and the queue path surfaces none of it: a
+ * job's entire `detail` for the extract step is the title. Converting this
+ * command would have retired the PDF quality tooling by omission.
+ *
+ * So the name split in two. **Ingesting a PDF is `npm run ingest --
+ * <file.pdf>`** (scripts/stage.ts), which mints an upload record, puts the
+ * bytes, claims, enqueues and notes the slug — the same five moves the browser
+ * makes. **Measuring how well we read one is this**, and it keeps writing
+ * `output/<slug>.html` and `data/<slug>/meta.json` for a person to look at,
+ * because those are a human artefact rather than store artefacts.
  *
  * See docs/plans/260826c-pdf-ingestion.md. Pass 0 (src/pdf.ts) has already said how many
  * pages there are, what the text layer holds, which lines are furniture and
@@ -58,7 +77,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import PQueue from "p-queue";
 import { stageCli } from "./cli-ledger.js";
-import { allOrStop } from "./concurrency.js";
+import { allOrStop, WidthGate } from "./concurrency.js";
 import { loadEnvLocal } from "./env.js";
 import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
@@ -181,7 +200,7 @@ const MAX_TOKENS = 16_000;
 const ATTEMPTS = 2;
 
 /**
- * How many chunks are transcribed at once.
+ * How many chunks are transcribed at once, at the widest.
  *
  * **This is the number that decides how long a PDF may be.** Chunks used to be
  * read one after another. The first PDF through the deployed pipeline took 135s
@@ -190,92 +209,110 @@ const ATTEMPTS = 2;
  * `LEASE_MS - DEADLINE_MARGIN_MS`, 740s (src/jobs.ts). So the whole question is
  * waves × call duration against 740s, and the width is what sets the waves.
  *
- * **Sixteen since 2026-09-04, up from eight, and the number is the width at
- * which the deadline stops being the binding constraint.** `MAX_PAGES` moved to
- * 250 the same day; the table is against that. Measured inputs: the real
- * 144-page paper (arXiv 2303.18223) plans **48 chunks of three pages and zero
- * one-page chunks**, 250 pages of the same prose extrapolates to ~84 chunks, and
- * the third column is the adversarial case the previous version of this comment
- * constructed — a hundred pages dense enough that `planChunks` makes a chunk of
- * each.
+ * **A hundred since 2026-09-04, up from sixteen, and this time it is one wave
+ * rather than a smaller number of them.** The previous version of this comment
+ * chose 16 as "the width at which the deadline stops being the binding
+ * constraint" and then argued that further width buys latency nobody is waiting
+ * on. Both halves were wrong, and the second one is the interesting mistake:
  *
- *     width │ 48 chunks (real) │ 84 chunks (250pp) │ 100 × 1 page
- *     ──────┼──────────────────┼───────────────────┼──────────────
- *        8  │  270s /  588s    │  495s / **1078s** │  585s / **1274s**
- *       12  │  180s /  392s    │  315s /   686s    │  405s / **882s**
- *     ► 16  │  135s /  294s    │  270s /   588s    │  315s /   686s
- *       24  │   90s /  196s    │  180s /   392s    │  225s /   490s
- *       32  │   90s /  196s    │  135s /   294s    │  180s /   392s
+ * - **Somebody was waiting on it.** Extract took **394 s** of the Kuhn paper's
+ *   19 m 41 s end-to-end run — a third of the wall clock, second only to
+ *   hierarchy. "The deadline is met" is not the same as "this is fast enough",
+ *   and the reader watching the progress bar cares about the second one.
+ * - **It cost a whole lease window.** Extract finishing at 394 s left 308 s on
+ *   the claim, short of `STEP_BUDGET_MS.hierarchy`, so the job handed back and
+ *   waited for a fresh window before it could start the table of contents. The
+ *   width was buying a hand-back. **It still hands back** — 248 s leaves ~450 s
+ *   against a 700 s budget — because `hierarchy` measured 658–778 s and no width
+ *   here makes that fit beside anything. What this buys is the *first* window
+ *   ending sooner, not one window instead of two.
  *
- * Each cell is `ceil(chunks / width) × 45s` and `× 98s`. **16 is the first width
- * where all three of these clear 740s even on the bound where every wave hits
- * the tail.** Past 16 the deadline stops binding *for them*, so further width is
- * the thing the next paragraph warns against — but read "these three" rather
- * than "any document": 250 pages dense enough to plan a chunk per page is a
- * fourth case, it does not fit, and § What is still not guaranteed below is
- * about it.
+ * **Measured, on the live wire** — `scripts/spike-pdf-width.ts chunks 100`, 2026-09-04, all 69
+ * real chunks of the 142-page Kuhn paper fired at once against
+ * `PDF_READER_MODEL` with `allow_fallbacks: false`, twice: **69.7 s and 68.7 s**,
+ * 69 of 69 answered, nothing refused, peak RSS 608 MB and 632 MB. A separate
+ * 100-request probe of single pages dispatched all hundred inside 304 ms and had
+ * every one answered, so the concurrency is real rather than something undici is
+ * quietly serialising.
+ *
+ * **The step does not go five times faster, and saying so would be the mistake
+ * this file keeps making.** 69 s is what the *wire* can do; the step around it
+ * has a `pass0`, a page measure, the cutting, a scoring pass per chunk and — the
+ * expensive one — `ATTEMPTS`, which asks a failing chunk again *after* its first
+ * answer rather than beside it. End to end, this command on the same document:
+ *
+ *     width │ fan-out │ calls │ asked twice │ spend   │ notes │ recall
+ *     ──────┼─────────┼───────┼─────────────┼─────────┼───────┼────────
+ *       16  │   394s  │  83   │     21      │ $0.6324 │  12   │  —
+ *      100  │   248s  │  79   │     10      │ $0.4899 │   9   │ 0.980
+ *      100  │   142s  │  83   │     14      │ $0.6212 │  17   │ 0.964
+ *
+ * So roughly **2x on the step**, not 5.7x. **The third row is here because the
+ * second one alone said something false.** On one sample width 100 looked
+ * cheaper *and* cleaner, and it was tempting to write that down; the repeat came
+ * back at the same price as width 16 with twice the quality notes. Spend and
+ * transcription quality are dominated by how many chunks happen to fail their
+ * check, which is model variance and has nothing to do with the width. **Width
+ * buys latency, and only latency** — which is what the paragraph above always
+ * said and what one flattering sample nearly overwrote.
+ *
+ * The interesting part is what the latency number means now: at 16 the step was
+ * *wave*-bound and width was the lever; at 100 it is **tail-bound** — one chunk
+ * asked twice, serially, while ninety-eight slots sit empty, and the spread
+ * between 248 s and 142 s is which chunk drew the long straw. Further width buys
+ * nothing at all. The next lever is the check-failure rate, which is 260904b §
+ * "Chasing the genuine transcription gaps".
+ *
+ * **Why the upstream does not mind, and why that is not reassuring.**
+ * `PDF_READER_MODEL` is served **BYOK** on this account: the width-100 probe
+ * moved `byok_usage_daily` by $0.35 and left `limit_remaining` untouched. So the
+ * ceiling is this account's own tier at the provider rather than a pool shared
+ * with every OpenRouter customer — which is a fact about *configuration*,
+ * changeable without telling us, and it says nothing about two readers uploading
+ * long papers at the same moment. **That is why the width is now governed rather
+ * than merely raised**: `WidthGate` (src/concurrency.ts) halves it on a 429 and
+ * earns it back a slot at a time, so 100 is the ambition and the gate is what
+ * happens when the ambition is wrong. Greg asked for both together, and the
+ * second half is the part that makes the first half safe.
  *
  * **Cost is unchanged by any of this.** `SYSTEM` is sent per chunk and there is
  * no prompt caching on this path, so spend is chunk count × prompt whatever the
  * width. Width buys latency, and nothing else.
  *
- * **Why a number rather than "all of them".** Unbounded was the ask, and two of
- * the three reasons against it survived being measured — **and the first of
- * them has since been fixed, so it no longer argues for anything.**
+ * **Memory: not a function of the width, and the 608 MB above is not evidence
+ * that it is.** `openPdfCuts` parses the source once and `runPdfExtract` takes
+ * every cut from that parse before the fan-out, so what grows is the *held
+ * cuts* — 29 MB of encoded bodies for this document, which are held at width 16
+ * too — plus the response bodies in flight. The old shape, one
+ * `PDFDocument.load(source)` per chunk, went 283 MB idle → 466 MB at 16 →
+ * 948 MB at 48 and would have been far past any ceiling at 100. The Vercel
+ * ceiling is almost certainly the 2 GB default (`vercel.json` sets no `memory`
+ * and Vercel does not allow it there) — **still unconfirmed**, because no
+ * credential on the box this was measured on can read the dashboard. 632 MB
+ * leaves room, and a longer document does not change the picture much, because
+ * `MAX_PAGES` bounds the held cuts.
  *
- * - **Memory: no longer a function of the width at all, since 2026-09-04.** The
- *   argument used to be that `cutPages` called `PDFDocument.load(source)` per
- *   chunk and pdf-lib eagerly parses the *whole source file* every time, so
- *   memory scaled with N × the **source** rather than N × the chunk. On the
- *   8.4 MB 142-page Kuhn paper, peak RSS went 283 MB idle → **466 MB with 16 in
- *   flight** → 948 MB at 48. `openPdfCuts` parses once and `runPdfExtract` takes
- *   every cut from that parse before the fan-out, so the same document now
- *   measures 260 MB idle → 276 MB after the one parse → 311 MB after measuring
- *   all 142 pages and cutting and *holding* all 71 chunks (22.9 MB of bytes).
- *   Flat in the width, and ~52 MB over baseline against ~183 MB at 16 and
- *   ~665 MB at 48. Same box, same file, same day. The Vercel ceiling is almost
- *   certainly the 2 GB default (`vercel.json` sets no `memory` and Vercel does
- *   not allow it there) — **still unconfirmed**, because no credential on the
- *   box this was measured on can read the dashboard.
- * - **Width past the point the deadline is met buys latency nobody is waiting
- *   on.** This is now the only reason of the two, and it is the one that holds
- *   the number where it is. Raising the width is out of scope here and stays
- *   deliberately unraised — see the plan's "Deliberately not doing".
+ * **What is still not guaranteed.** A refused chunk is survivable rather than
+ * impossible: `keepChunk` runs inside each chunk's own task the moment its call
+ * returns and passes its check, before `allOrStop` can reject and call `stop()`,
+ * and it is not wired to the abort signal — so an answered sibling is durably
+ * banked. What a fatal chunk costs is the money for requests still in flight,
+ * plus this attempt's assembly. The checkpoints are keyed on the article and a
+ * retry lands on the same article (`slugForRetry` in src/jobs.ts), so a document
+ * that overruns finishes across attempts instead of starting from zero.
  *
- * The third reason was **overstated and is corrected here**: *"a fatal chunk
- * costs the whole document"*. `keepChunk` runs inside each chunk's own task the
- * moment its call returns and passes its check, before `allOrStop` can reject
- * and call `stop()`, and it is not wired to the abort signal — so an answered
- * sibling is durably banked. What a fatal chunk actually costs is the money for
- * requests still in flight, plus this attempt's assembly.
- *
- * **What is still not guaranteed.** 250 pages dense enough to plan 250 one-page
- * chunks is 16 waves: **720s at the mean**, and far past 740s at the recorded
- * tail ⟨confirmed independently by GPT Sol, 2026-09-04⟩. That case is
- * *survivable* rather than *impossible* now, and the difference is the
- * checkpoints: they are keyed on the article, and a retry lands on the same
- * article since 2026-09-03 (`slugForRetry` in src/jobs.ts). So a document that
- * overruns finishes across attempts instead of starting from zero each time —
- * which is what makes raising the cap defensible rather than hopeful.
- *
- * **What happens next is a Retry, and this comment used to say otherwise.** It
- * claimed `settleExpired` requeues the overrun automatically, and that is a
+ * **What happens next is a Retry**, and this comment used to claim otherwise. It
+ * said `settleExpired` requeues the overrun automatically, and that is a
  * different event: `settleExpired` requeues a claim whose **lease lapsed** —
  * nobody came back — within `REQUEUE_BUDGET`. A step that hits its own deadline
  * unwinds cooperatively instead, and the walk ends the job as a **retryable
  * error** (src/jobs.ts § `DeadlineReached`), so the reader presses the button.
- * Watched happening on 2026-09-04: a 144-page paper's hierarchy step
- * self-cancelled at `ms: 740033` and nothing requeued it. Nothing is lost when
- * it does — every answered chunk is banked and the next attempt starts from
- * them — but "a second lease window arrives on its own" was never true, and the
- * 250-page cap was argued partly on this paragraph.
  *
  * Admission control on the planned chunk count against a measured p95 is still
- * the tidier answer and is still not built; the reason it is no longer urgent is
- * that the failure it prevents now costs a lease window and a click rather than
- * the document.
+ * the tidier answer and is still not built; at one wave it is also much less
+ * urgent than it was at five.
  */
-export const CHUNK_CONCURRENCY = 16;
+export const CHUNK_CONCURRENCY = 100;
 
 /**
  * Anthropic's own limit is on the whole encoded request; OpenRouter's providers
@@ -704,7 +741,10 @@ export interface PdfReader {
  * take, and structured output is exactly the parameter whose absence would look
  * like a model that suddenly writes prose.
  */
-export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
+export function openRouterReader(
+  model: string = PDF_READER_MODEL,
+  gate: WidthGate = sharedGate,
+): PdfReader {
   return {
     id: `${model}/${PROMPT_VERSION}`,
     async read(pdf, instruction, signal) {
@@ -739,8 +779,8 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
          can say which. `provider` moved into `AI_JOB_ROUTE` in src/ai-call.ts
          — `allow_fallbacks: false` is not a preference here, because an upstream
          that quietly ignores the JSON schema writes prose instead. */
-      const call = await pdfCall(() =>
-        openRouterJson(
+      const call = await pdfCall(async () => {
+        const answer = await openRouterJson(
           "pdf",
           {
             model,
@@ -772,27 +812,17 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
             },
           },
           ...(signal ? [{ signal }] : []),
-        ),
-        signal,
-      );
+        );
+        /* **Inside the retried call, not after it** — see `refuseBodyError`. */
+        refuseBodyError(answer.json as OpenRouterResponse | null);
+        return answer;
+      }, signal, gate);
       if (call.json === null) {
         throw new Error(
           "The transcription service sent something that is not JSON.",
         );
       }
       const json = call.json as OpenRouterResponse;
-      if (json.error) {
-        /* **The provider's own words are not repeated**, and this line used to
-           repeat them. A 200 carrying an `error` object is still the upstream
-           talking about *our request*, and our request here is the PDF the
-           reader uploaded — so a provider that echoes any of it back would put a
-           stranger's document into a pipeline failure, and from there into a log
-           that docs/project/logging.md forbids it from reaching. The same rule
-           `ProviderRefused` follows on the HTTP path, arriving by a route that
-           does not look like an HTTP error at all. Found by a GPT Sol review of
-           the code, which noticed the boundary had a back door. */
-        throw new Error("The transcription service refused this chunk.");
-      }
       const choice = json.choices?.[0];
       const parsed = parseRecords(choice?.message?.content ?? "");
       return {
@@ -808,6 +838,137 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
 }
 
 /**
+ * **What the gate learnt, logged whether the fan-out succeeded or not.**
+ *
+ * The lesson 260904c wrote down is *instrument the quantity, not the failure*:
+ * nothing recorded the ratio behind `estimateHierarchyTokens`, so an 8x
+ * overprediction was invisible until a document crossed the line.
+ * `scripts/spike-pdf-width.ts` could not provoke a 429 at 150, 250 or 400
+ * concurrent requests on 2026-09-04, so the expected reading of this line for
+ * ever is `refusals: 0, narrowed: false` — and the day it is not, that is the
+ * news, arriving as a number.
+ *
+ * **In a `finally`, and the first version was not** — it sat after the fan-out,
+ * so the one run whose numbers actually matter, the one that died of exhausted
+ * 429 retries, was the one run that never printed them. A line that reports
+ * every case except the interesting one is the shape it was written to avoid.
+ * ⟨GPT Sol, 2026-09-04, finding 6⟩
+ *
+ * **`refusals` is this run's, not the process's.** The gate is a singleton and
+ * its counters accumulate, so logging them raw meant every later job in a dev
+ * server repeated an earlier job's pushback as though it were its own. The
+ * difference against `before` is what this document met. `width` and `narrowest`
+ * stay absolute, because those are the gate's live state and that is the point
+ * of them.
+ */
+async function reportGate<T>(
+  before: { width: number; narrowest: number; refusals: number },
+  slug: string,
+  chunks: number,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } finally {
+    const after = sharedGate.report();
+    log("pipeline").info(
+      {
+        slug,
+        chunks,
+        gateWidth: after.width,
+        gateNarrowest: after.narrowest,
+        gateRefusals: after.refusals - before.refusals,
+        gateNarrowed: after.narrowest < before.narrowest,
+      },
+      "the pdf fan-out finished",
+    );
+  }
+}
+
+/**
+ * **A refusal that arrived wearing a 200**, raised where the retry and the gate
+ * can both see it.
+ *
+ * OpenRouter documents that a non-streaming generation failure can keep the HTTP
+ * 200 and put the provider's error in the body — `code: 429` included. This
+ * check used to sit *after* `pdfCall` returned, which meant such a refusal
+ * reached neither safety net: `withTransportRetries` never saw it, so it was
+ * never asked again, and `WidthGate` counted the call a success and awarded it a
+ * growth credit for failing. One of them cancelled the whole document, because
+ * `allOrStop` drops every sibling on the first rejection. At width 100 into one
+ * upstream that is the likeliest single point of failure there is.
+ * ⟨GPT Sol, 2026-09-04, finding 1 — the highest-severity one, and correct.⟩
+ *
+ * **A 429 becomes a `ProviderRefused`** so that it travels the same road as an
+ * HTTP 429 and every rule already written for one applies unchanged. Anything
+ * else stays a verdict: a 400 in a 200 is still a request this code got wrong,
+ * and asking again a hundred times over turns one bad request into three
+ * hundred.
+ *
+ * **No `Retry-After` is invented for it.** The header is not in the body, and
+ * `metadata` is the provider's own object — reading a number out of it would be
+ * trusting a shape nobody has promised. `null` means "use our own backoff",
+ * which is the honest answer.
+ *
+ * **The provider's own words are never repeated**, and this is the rule the
+ * original version of this check was written for: a 200 carrying an `error` is
+ * still the upstream talking about *our request*, and our request is the PDF the
+ * reader uploaded — so echoing any of it back would put a stranger's document
+ * into a pipeline failure and from there into a log that
+ * docs/project/logging.md forbids it from reaching. `ProviderRefused` builds its
+ * message from our own copy, and the empty body string here keeps it that way.
+ */
+function refuseBodyError(json: OpenRouterResponse | null): void {
+  const error = json?.error;
+  if (!error) return;
+  const code = (error as { code?: unknown }).code;
+  const kind = (error as { metadata?: { error_type?: unknown } }).metadata?.error_type;
+  if (code === 429 || code === "429" || kind === "rate_limit_exceeded") {
+    throw new ProviderRefused(429, "", new Headers());
+  }
+  /* **A numeric code is the provider's own status and is carried as one**, so
+     `withTransportRetries` refuses it once rather than three times — a 400 in a
+     200 is still a request this code got wrong, and asking again a hundred times
+     over turns one bad request into three hundred.
+
+     **Without a code there is nothing to be faithful to**, and inventing a
+     status would be claiming the provider said something it did not. So it stays
+     an ordinary `Error` and is retried like a dropped connection: an unknown
+     refusal genuinely might be transient, and two extra attempts on one chunk is
+     the cheaper mistake of the two available. */
+  if (typeof code === "number") throw new ProviderRefused(code, "", new Headers());
+  throw new Error("The transcription service refused this chunk.");
+}
+
+/**
+ * **What the gate counts as pushback**, and nothing else.
+ *
+ * `false` means *this error says nothing about how busy the upstream is* — a
+ * dropped connection, a 400, an abort — so the width must not move for it. A
+ * number or `null` means a 429, carrying the provider's own `Retry-After` where
+ * it sent one. Passed to `WidthGate.run` so that src/concurrency.ts never has to
+ * know what a `ProviderRefused` is.
+ */
+function rateLimitedFor(error: unknown): number | null | false {
+  if (error instanceof ProviderRefused && error.status === 429) return error.retryAfterMs;
+  return false;
+}
+
+/**
+ * **One gate for the process, not one per reader.**
+ *
+ * The thing being rationed is requests in flight to a single upstream, and that
+ * is a property of the account rather than of a job. Two ingests sharing a dev
+ * server would otherwise each believe they had the whole width, and a rate limit
+ * one of them provoked would teach the other nothing. On Vercel each job is its
+ * own invocation and this is a singleton over one job anyway, so the sharing
+ * costs nothing where it does not help.
+ *
+ * `openRouterReader` takes an override so a test can drive a gate it can see.
+ */
+const sharedGate = new WidthGate(CHUNK_CONCURRENCY);
+
+/**
  * The call, with this stage's own words for a refusal.
  *
  * `ProviderRefused.message` is written for a *reader* — it is the sentence a
@@ -816,9 +977,9 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
  * different audience, which is why the mapping is here rather than in the
  * transport.
  */
-async function pdfCall<T>(send: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+async function pdfCall<T>(send: () => Promise<T>, signal: AbortSignal | undefined, gate: WidthGate): Promise<T> {
   try {
-    return await withTransportRetries(send, signal);
+    return await withTransportRetries(send, signal, gate);
   } catch (error) {
     if (error instanceof ProviderRefused) {
       throw new Error(`The transcription service answered ${error.status}.`);
@@ -847,7 +1008,8 @@ const RATE_LIMIT_BACKOFF_MS = 2_000;
  *
  * A step's deadline is 740 s and up to `CHUNK_CONCURRENCY` chunks may be waiting
  * on one upstream; a guess measured in minutes spends the deadline doing
- * nothing. The provider's own number is a different question and has its own
+ * nothing. `TRANSPORT_ATTEMPTS` is three goes, so at most **two** of these waits
+ * are ever spent on one chunk. The provider's own number is a different question and has its own
  * ceiling below.
  */
 const MAX_BACKOFF_MS = 30_000;
@@ -856,19 +1018,23 @@ const MAX_BACKOFF_MS = 30_000;
  * **The longest `Retry-After` this step can afford to obey**, past which the
  * chunk gives up now rather than pretending.
  *
- * The arithmetic, at `CHUNK_CONCURRENCY` 16 against the 740 s deadline: 250
- * pages plan ~84 chunks, which is six waves, and a wave that meets a rate limit
- * costs its call plus this wait. `6 × (45 s + 60 s) = 630 s` still lands inside
- * 740 s; at 90 s it is 810 s and does not. So 60 s is the largest wait that
- * leaves the worst *ordinary* document finishing in one lease window.
+ * The arithmetic was written against `CHUNK_CONCURRENCY` 16, where 250 pages
+ * planned ~84 chunks and therefore six waves, and a wave that met a rate limit
+ * cost its call plus this wait: `6 × (45 s + 60 s) = 630 s` inside 740 s, where
+ * 90 s would have been 810 s and outside it. **At 100 the same document is one
+ * wave**, so the budget is `45 s + 60 s` against 740 s and this constant has
+ * enormous room — it is now bounded by what is *sensible to wait* rather than by
+ * what fits. It stays at 60 s because a provider asking for longer than a minute
+ * is describing a queue that a retry ten minutes from now will clear better than
+ * this claim will, and `TRANSPORT_ATTEMPTS` would spend three of them.
  *
  * **Longer than this is not truncated, it is refused.** ⟨GPT Sol, 2026-09-04⟩
  * Until then a `Retry-After: 600` was clamped to 30 s twice over — once where
  * the header was parsed and once here — and asked again at 30 s and 60 s, both
- * well inside a window the provider had just said was closed, by every one of
- * sixteen chunks at once. Truncating an instruction and obeying the truncation
- * is worse than not obeying it at all: it costs two more requests aimed at the
- * one thing that has asked us to stop, and it ends in the same failure.
+ * well inside a window the provider had just said was closed, by every chunk at
+ * once. Truncating an instruction and obeying the truncation is worse than not
+ * obeying it at all: it costs two more requests aimed at the one thing that has
+ * asked us to stop, and it ends in the same failure.
  *
  * What giving up costs is **this attempt**, not the document: every answered
  * chunk is already in the checkpoints, they are keyed on the article, and a
@@ -883,15 +1049,15 @@ const MAX_BACKOFF_MS = 30_000;
 const MAX_RETRY_AFTER_MS = 60_000;
 
 /**
- * How far apart sixteen chunks waking from one rate limit are spread.
+ * How far apart chunks waking from one rate limit are spread.
  *
- * **A wait is jittered, not fixed, and the reason is a measurement.** Sixteen
- * chunks that meet the same 429 and sleep the same duration come back as one
- * request burst: Sol's 16-call probe put every initial request inside 59 ms and
- * all sixteen retries inside a **15 ms window** — a synchronised herd aimed at
- * the single upstream that has just said *slow down*, on a path routed with
- * `allow_fallbacks: false`. Widening `CHUNK_CONCURRENCY` to 16 is what made that
- * worth fixing in the same stage.
+ * **A wait is jittered, not fixed, and the reason is a measurement.** Chunks
+ * that meet the same 429 and sleep the same duration come back as one request
+ * burst: Sol's 16-call probe put every initial request inside 59 ms and all
+ * sixteen retries inside a **15 ms window** — a synchronised herd aimed at the
+ * single upstream that has just said *slow down*, on a path routed with
+ * `allow_fallbacks: false`. That was worth fixing at width 16 and matters
+ * proportionally more at 100.
  *
  * Two shapes, because the two waits mean different things:
  *
@@ -901,13 +1067,14 @@ const MAX_RETRY_AFTER_MS = 60_000;
  * - **A `Retry-After`** is a floor rather than a guess: the provider said *not
  *   before this*, so the wait is the whole of it **plus** a draw from zero to
  *   this constant. Never less, or we are back to asking inside a window we were
- *   told about; spread, so the sixteen do not resume in lockstep the moment it
- *   ends.
+ *   told about; spread, so they do not resume in lockstep the moment it ends.
  *
- * **A shared gate would be better and is deliberately not built here**: sixteen
- * private clocks are politer than sixteen immediate retries and less polite than
- * one queue. That wants a token bucket in src/ai-call.ts, where every job on this
- * wire would benefit, rather than a second private one in this file.
+ * **The shared gate this used to say was missing now exists**: `WidthGate` in
+ * src/concurrency.ts halves the width on the first refusal of an epoch and holds
+ * new admissions briefly, so the private clocks here are the *second* line
+ * rather than the only one. What is still true is that the gate is this stage's
+ * rather than the wire's — a token bucket in src/ai-call.ts would serve every
+ * job — and the class docblock says why that trade was taken.
  */
 const RATE_LIMIT_SPREAD_MS = 1_000;
 
@@ -1010,24 +1177,34 @@ function backoffFor(asked: number | null, rateLimited: boolean, attempt: number)
  * rather than a separate errand.
  *
  * A 400 and a 402 stay verdicts: a request this code got wrong, and an account
- * with no credit. Asking again changes neither, and asking again *sixteen times
- * over* turns one bad request into forty-eight.
+ * with no credit. Asking again changes neither, and asking again a hundred times
+ * over turns one bad request into three hundred.
  *
  * The wait honours `Retry-After` in full where the provider sent one it can
  * afford (`MAX_RETRY_AFTER_MS`), gives up rather than truncating one it cannot,
  * doubles from `RATE_LIMIT_BACKOFF_MS` where there was no header at all, is
- * jittered in every case so that sixteen chunks do not come back as one
+ * jittered in every case so that the chunks do not come back as one
  * (`RATE_LIMIT_SPREAD_MS`), and is cut short by the step's own deadline
  * (`waitOrGiveUp`).
  *
- * **What this still does not do** is coordinate between chunks — see
- * `RATE_LIMIT_SPREAD_MS` for why the shared gate belongs in src/ai-call.ts
- * rather than here.
+ * **It does coordinate between chunks now**, which is what this said it did not:
+ * every attempt goes through the shared `WidthGate`, so the first 429 of an
+ * epoch halves the width for everybody and holds new admissions while that takes
+ * effect. This loop still owns *when this chunk asks again*; the gate owns *how
+ * many are asking at all*.
  */
-async function withTransportRetries<T>(send: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+async function withTransportRetries<T>(
+  send: () => Promise<T>,
+  signal: AbortSignal | undefined,
+  gate: WidthGate,
+): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await send();
+      /* **The gate wraps the attempt, not the loop**, so the wait below happens
+         with the slot given back rather than held idle, and so the gate is told
+         about a 429 that this loop then successfully retries — which is every
+         429 worth learning from. src/concurrency.ts § `WidthGate.run`. */
+      return await gate.run(send, rateLimitedFor, signal);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw error;
       const rateLimited = error instanceof ProviderRefused && error.status === 429;
@@ -1451,6 +1628,24 @@ export interface PdfExtractOptions {
    */
   onProgress?: (done: number, total: number, pages: number[], result: Check) => void;
   signal?: AbortSignal;
+  /**
+   * How many chunks may be in flight, for a test that needs a width it can
+   * afford to build a document for.
+   *
+   * **Added because deriving a test's fixture size from the production constant
+   * does not scale.** `tests/pdf-chunk-concurrency.test.ts` built
+   * `(CHUNK_CONCURRENCY + 4) * 2` pages so that it would plan more chunks than
+   * the queue is wide; at 16 that is 40 pages and quick, at 100 it is 208 and
+   * the test timed out. Worse, it made the production number the thing under
+   * test, which is the shape
+   * docs/postmortems/260904c-a-document-refused-for-an-answer-it-never-had-to-give.md
+   * names: a test that pins a constant can only ever agree with it.
+   *
+   * What the test actually claims is *the queue admits exactly its configured
+   * width* — true of any width, and cheapest to demonstrate at a small one.
+   * Production never passes this.
+   */
+  width?: number;
 }
 
 /**
@@ -1806,10 +2001,30 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const signal = opts.signal
     ? AbortSignal.any([opts.signal, fatal.signal])
     : fatal.signal;
-  const queue = new PQueue({ concurrency: CHUNK_CONCURRENCY });
+  /**
+   * **As wide as there are chunks, because the gate is the limiter now.**
+   *
+   * It was `CHUNK_CONCURRENCY`, and that quietly undid the thing the gate was
+   * built for. `WidthGate` releases a slot while a refused chunk waits out its
+   * backoff, precisely so another chunk can use it — but the waiting chunk still
+   * held its *p-queue* slot, so with 150 chunks and 100 refused, the gate sat at
+   * zero in flight while chunks 101–150 could not start for a minute.
+   * ⟨GPT Sol, 2026-09-04, finding 5⟩ Two nested limiters of the same width
+   * governing different lifetimes is one limiter too many.
+   *
+   * What p-queue is still here for is the settling contract below: `{ signal }`
+   * on `add` is what makes a cleared task reject rather than never settle. The
+   * *width* is `WidthGate`'s job, and `opts.width` stays for the tests that
+   * inject a reader which never reaches it.
+   */
+  const queue = new PQueue({ concurrency: opts.width ?? Math.max(1, chunks.length) });
   let completed = 0;
 
-  const readings = await allOrStop(
+  /* Snapshotted before the fan-out so the log below can report *this run's*
+     refusals rather than the process's running total — see `reportGate`. */
+  const before = sharedGate.report();
+  const readings = await reportGate(before, opts.slug, chunks.length, () =>
+    allOrStop(
     chunks.map((chunk, at) =>
       /* The signal goes to `add` as well as into the request. Without it a chunk
          still queued when a fatal one aborts would never run and never settle,
@@ -1971,7 +2186,9 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       fatal.abort();
       queue.clear();
     },
+    ),
   );
+
 
   /**
    * Phase 2, in page order rather than completion order — `readings` follows
@@ -2121,8 +2338,9 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 }
 
 /**
- * **Make sure the PDF itself is beside the article** — for `npm run pdf --
- * <file.pdf>`, which is the only route that gets here without a stage 1.
+ * **Make sure the PDF itself is beside the article** — for
+ * `npm run eval:pdf-read -- <file.pdf>`, which is the only route that gets here
+ * without a stage 1.
  *
  * Without it the article that command produces claims `source: "pdf"` while
  * `GET /api/source/:slug` returns 404 and the reader's "view the scanned pages"
@@ -2497,7 +2715,7 @@ const looksLikeAFilename = (s: string) =>
 async function main() {
   const input = process.argv[2];
   if (!input) {
-    console.error("Usage: tsx src/pdf-read.ts <file.pdf> [slug]");
+    console.error("Usage: npm run eval:pdf-read -- <file.pdf> [slug]");
     process.exit(1);
   }
   /* **In `main`, and before the first `await`** — the same position as the seven
@@ -2505,7 +2723,7 @@ async function main() {
      call that happens after the spending passes every check that only asks
      whether it happens at all (GPT Sol, 2026-08-28). See the note in
      src/ideas.ts for why it does not go deeper than `main`. Without it
-     `npm run pdf x.pdf` from a shell that has not exported the key stopped at
+     this command from a shell that has not exported the key stopped at
      "OPENROUTER_API_KEY is not set" with the key sitting unread in
      `.env.local`, which reads as a missing credential rather than an unread
      file. */
@@ -2583,6 +2801,19 @@ async function main() {
    src/ai-spend.ts. `npm run pdf` and `npm run labels` were the two stage CLIs
    missing this, both because the tail was copied without it — which is the whole
    argument for the tail being one call. tests/paid-cli-ledger.test.ts is what
-   stops a third appearing. Awaited rather than `void`ed, so flushing the ledger
+   stops a third appearing, and since 2026-09-05 this is the only file it has
+   left to watch: `npm run labels` was retired and `npm run hierarchy` went
+   through the queue, where the job's own `job_step` scope does this job.
+
+   **The ledger it opens is the *filesystem* one on a default shell**, and that
+   is worth knowing rather than fixing here. This npm script sets no
+   `SPIDERYARN_STORE`, so `costStore` is `data/_ai-calls.jsonl` — which stopped
+   being authoritative on 2026-09-02, so this command's spend does not reach
+   `npm run cost`. Pre-existing, unchanged by the rename deliberately (the
+   decision was that the quality tool keeps its behaviour), and it goes away with
+   the flag in stage F of
+   docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+   Until then, `SPIDERYARN_STORE=postgres npm run eval:pdf-read -- …` is the
+   spelling that lands in the real ledger. Awaited rather than `void`ed, so flushing the ledger
    and any failure in it stay part of the command finishing. */
 await stageCli(import.meta.url, main);

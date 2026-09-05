@@ -362,6 +362,21 @@ export interface AdminUser {
   planStatus?: string;
   /** Successful ingests over `ingestWindow`, plus reservations still in flight. */
   ingests: number;
+  /**
+   * How many of `ingests` are cheap right now — their article is public, so they
+   * cost half a slot each (src/billing/half-units.ts).
+   *
+   * **A count, not a total**, and the cell does its own arithmetic with it. The
+   * enforcement figure is in half-units and there is no rounding rule that makes
+   * one out of it look right beside an article limit — the whole argument is in
+   * src/billing-plan.ts § *Every number here is a whole article*. It is a fifth
+   * field for the same reason `ingestWindow` is a third: `12` beside `3` is not
+   * readable without it, and the page cannot work it out.
+   *
+   * Reservations in flight are never in here. They are charged full price
+   * because nobody yet knows whether the article will be shared.
+   */
+  ingestsShared: number;
   /** What that count is measured against — the tier's row, or the free three. */
   ingestLimit: number;
   /**

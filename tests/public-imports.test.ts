@@ -277,7 +277,7 @@ describe("the public API's tables", () => {
   }
 
   /**
-   * The five the public surface may name.
+   * The six the public surface may name.
    *
    * `articles` and `article_revisions` are the work itself; `revision_blocks` is
    * its prose; `block_identities` is the spine those ids hang on.
@@ -305,14 +305,39 @@ describe("the public API's tables", () => {
    *    src/store/pg-comments.ts, is **not** what serves it. That was the first
    *    proposal and GPT Sol blocked it.
    *
-   * A sixth line needs the same three sentences written about it, or it should
-   * not be here.
+   * **`searchRuns` is the sixth, on the same day**, and here are its three
+   * sentences. Greg decided that *"only owner can create new searches; everyone
+   * else can see the ones they have already created"*
+   * (docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4), and:
+   *
+   *  - the read is `publicSearchesQuery`, which names its columns and repeats
+   *    `publicSlug` in its own `where`;
+   *  - it refuses unfinished and failed runs in SQL (`PUBLIC_SEARCHES_WHERE`),
+   *    so the filtering is not a `map` somebody can widen;
+   *  - and the owner's `list` in src/store/pg-searches.ts is not what serves
+   *    it.
+   *
+   * It has a fourth of its own, because this table carries a column the wire
+   * must not: `source_hash` is selected and turns into the derived `stale`
+   * boolean before it reaches the DTO, which is the one place in this feature
+   * where a selected column is deliberately not a promise about the payload.
+   * src/store/public-reader.ts says so at the line where it stops.
+   *
+   * A seventh line needs the same three sentences written about it, or it
+   * should not be here.
    *
    * `article_visibility_changes` is deliberately **not** here. It is written by
    * the owner's switch and read by nobody yet, and when something does read it
    * that will be an owner-facing page, not this one.
    */
-  const ALLOWED = ["articles", "articleRevisions", "revisionBlocks", "blockIdentities", "comments"];
+  const ALLOWED = [
+    "articles",
+    "articleRevisions",
+    "revisionBlocks",
+    "blockIdentities",
+    "comments",
+    "searchRuns",
+  ];
 
   /**
    * **Detected through the import, not by grepping for the word.**
@@ -341,7 +366,7 @@ describe("the public API's tables", () => {
    * a second arm below for the snake_case names, which is where raw SQL would
    * spell them.
    */
-  it("imports only the four tables the article itself lives in", () => {
+  it("imports only the tables the allowlist names", () => {
     const tables = everyTable();
     /* The schema really does export the dangerous ones, so this is not passing
        for want of anything to find. */
@@ -457,7 +482,7 @@ describe("the public API's tables", () => {
    * still pass, and it would be passing over a public surface that had stopped
    * reading anything.
    */
-  it("and does name the four it is allowed, so the rule is not vacuous", () => {
+  it("and does name the ones it is allowed, so the rule is not vacuous", () => {
     const reader = readFileSync(path.join(ROOT, "src/store/public-reader.ts"), "utf8");
     for (const table of ["articles", "articleRevisions", "revisionBlocks"]) {
       expect(reader, table).toMatch(new RegExp(`\\b${table}\\b`));

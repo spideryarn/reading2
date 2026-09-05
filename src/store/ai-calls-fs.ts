@@ -57,6 +57,13 @@ const ROOT = path.resolve(import.meta.dirname, "..", "..");
  * of a cent that nobody had spent. Caught by running the report after the suite.
  * A ledger a test can write to is a ledger nobody can trust.
  *
+ * **It answers for fewer suites than it used to, and only this half is still
+ * live.** Between 2026-09-02 and 2026-09-05 `selected()` in ai-calls.ts sent
+ * *every* suite here, whatever the store flag said; that line is gone, and the
+ * suites that pin the flag to `postgres` now record into the run's own private
+ * test database. What still arrives is whatever leaves the flag unset and takes
+ * the `files` branch — which is most of the tree, until the hinge.
+ *
  * **Resolved per call, not once at load.** A constant looks tidier and is a trap
  * for the tests that need to redirect it: ESM hoists static imports, so a test
  * setting the variable in its own `beforeAll` had already loaded this module —

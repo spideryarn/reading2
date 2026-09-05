@@ -375,10 +375,12 @@ describe("when the re-ask comes back short too", () => {
      * `droppedBudget` is per batch and cannot see the article, so the floor of
      * one is spendable once per batch however small the batches are. Nineteen
      * paragraphs losing one is 94.7% covered, under `COVERAGE_FLOOR` — and
-     * `generateHierarchy` would have refused it while `npm run labels -- <dir>` merged
-     * and wrote `tree.json` regardless, because the only check was in the
-     * caller. Both paths run `assertEveryBlockLabelled`, so that is where it
-     * goes. GPT Sol's review of stage 1b, finding 4.
+     * `generateHierarchy` would have refused it while `npm run labels -- <dir>`
+     * merged and wrote `tree.json` regardless, because the only check was in the
+     * caller. Both paths ran `assertEveryBlockLabelled`, so that is where it
+     * goes — and when that second path was deleted on 2026-09-05 the check
+     * needed no thought, which is the argument for where it lives. GPT Sol's
+     * review of stage 1b, finding 4.
      *
      * Nineteen is the boundary rather than a round number: twenty would come out
      * at exactly 0.95 and be allowed.

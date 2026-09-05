@@ -3734,9 +3734,17 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
+    /**
+     * **The other copy of `CheckpointNamespace`** (src/store/checkpoints.ts),
+     * and the two are checked against each other by *"the checkpoints namespace
+     * CHECK lists exactly the namespaces the type has"* in
+     * tests/db-schema.test.ts. Adding a name to the union without adding it here
+     * is a write Postgres refuses — and the callers deliberately treat a failed
+     * checkpoint write as a `warn`, so the only symptom would be the bill.
+     */
     check(
       "checkpoints_namespace",
-      sql`${t.namespace} in ('hierarchy-labels','hierarchy-structure','pdf-chunk')`,
+      sql`${t.namespace} in ('hierarchy-deepen','hierarchy-labels','hierarchy-structure','pdf-chunk')`,
     ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
@@ -4037,6 +4045,29 @@ export const billingAccounts = spideryarn.table(
       "billing_accounts_subscription_needs_customer",
       sql`${t.stripeSubscriptionId} is null or ${t.stripeCustomerId} is not null`,
     ),
+    /* **And the four columns a subscription writes belong to one.** They are
+       written in a single `UPDATE` by `syncSubscriptionFromStripe`
+       (../billing/sync.ts), all of them on every sync and all of them to null
+       together, so any of them set without an id is a row nothing in this
+       codebase can have produced.
+
+       It is here because that row was **schema-valid and it spent money**.
+       `status = 'active'` with a known price and a readable period made
+       `entitlementFromRow` answer *paying Reader* while every "do they already
+       have a subscription" test — which reads the id — said no, so `/profile`
+       offered a Reader the Reader plan and pressing it would have opened a
+       second, concurrently billed subscription. GPT Sol found it on 2026-09-04;
+       `subscriptionState` (../billing/tiers.ts) is the code half, which fails
+       closed for the same row, and this is the half that holds for every writer.
+
+       `num_nonnulls` rather than four disjunctions, the same idiom as
+       `billing_accounts_quota_delta_is_dated` below: it says the rule instead of
+       encoding it. `cancel_at_period_end` is not in the list — it is `not null`
+       with a default of false, so it has no "unset" to mean anything by. */
+    check(
+      "billing_accounts_subscription_fields_need_subscription",
+      sql`${t.stripeSubscriptionId} is not null or num_nonnulls(${t.status}, ${t.priceId}, ${t.currentPeriodStart}, ${t.currentPeriodEnd}) = 0`,
+    ),
     /* A delta without a period cannot be applied and a period without a delta
        says nothing, so one of the two alone is a bug rather than a state.
        `num_nonnulls` rather than a pair of disjunctions because it says the rule
@@ -4145,6 +4176,49 @@ export const ingestEvents = spideryarn.table(
     succeededAt: timestamp("succeeded_at", { withTimezone: true }),
     /** Set when the job failed, was cancelled, or never became a job at all. */
     releasedAt: timestamp("released_at", { withTimezone: true }),
+    /**
+     * **The article this charge produced** — written in the same statement that
+     * sets `succeeded_at`, and null on every other kind of row.
+     *
+     * ## Why it had to exist
+     *
+     * A currently-public article costs **half** what a private one does
+     * (docs/project/billing.md § *A public article counts half*), and usage is
+     * recomputed live from `articles.visibility` rather than credited once — so
+     * the usage query has to get from a charged row to the article it produced.
+     * Before this column there was no route. `slug` is diagnostic and worse than
+     * mutable: it is the pre-allocation stem for a URL add and **null** for an
+     * upload. The only other path, `ingest_events → jobs.ingest_event_id →
+     * jobs.slug → articles.slug`, fails at both hops — jobs are hard-deleted by
+     * the reader and by the retention sweep, and a slug is not identity.
+     *
+     * `ai_calls.article_id` is the precedent: a real foreign key with
+     * `on delete set null`. The *text-not-a-key* reasoning recorded there is
+     * about `job_id`, which points at something disposable; an article is not.
+     *
+     * ## Nullable for ever, so the type is the only guard
+     *
+     * Every row charged before 2026-09-05 has no way to be backfilled, so a
+     * `NOT NULL` constraint is impossible. `usageSql` therefore reads
+     * `coalesce(visibility, 'private')` over a **left** join: a row that cannot
+     * be resolved is charged **full price**, which is the direction that cannot
+     * be gamed. The guard against a future caller quietly charging a public
+     * article full price for ever is in the type: `settleReservation` takes a
+     * discriminated outcome that *carries* the article id, so a successful
+     * settlement cannot be expressed without one.
+     *
+     * ## Deleting an article silently raises its owner's usage
+     *
+     * `on delete set null` turns each of that article's charged rows back into
+     * full price. **There is no article-deletion path in the app today** —
+     * archiving is the only removal the interface offers — so this is a policy
+     * written down rather than a defect: if one is ever built it must take the
+     * owner's `billing_accounts` lock first (see the lock order in
+     * src/store/pg-billing.ts) and say what it will cost, exactly as unsharing
+     * does. The alternative — `on delete restrict` — would make the ledger able
+     * to veto a deletion, which is worse.
+     */
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
     /**
      * What the article was called at the time — **diagnostic only**. A slug is
      * mutable, so it could never be this row's identity; it is here so that a

@@ -26,7 +26,13 @@ import type { ArticleSharing, PublicArtefacts, Visibility } from "../src/types.j
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SHARING_ON, sharingConfirmBody } from "../src/messages.js";
+import {
+  SHARING_NOT_PERSONALISED,
+  SHARING_ON,
+  SHARING_PERSONALISED,
+  SHARING_RIGHTS_CONFIRM,
+  sharingConfirmBody,
+} from "../src/messages.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -258,7 +264,15 @@ describe("finding out who can read this", () => {
  */
 it("tells the owner a shared article is listed, not merely reachable by link", () => {
   for (const copy of [SHARING_ON, sharingConfirmBody("A piece")]) {
-    expect(copy).toMatch(/\blist(?:s|ed)\b/);
+    expect(copy).toMatch(/\banyone can read\b/i);
+    /* **`publicly` is load-bearing, and the first version of this left it
+       out.** GPT Sol asked the opposite question of this guard — what rewrite
+       stays green while telling an owner the wrong thing — and answered it:
+       *"Anyone can read this without signing in, and it's listed only in your
+       private library."* matched an inflection of *list* and passed. The
+       material consent change is public discoverability, so that is the word
+       the assertion has to hold. */
+    expect(copy).toMatch(/\blist(?:s|ed)(?: it)? publicly\b/i);
     expect(copy).not.toMatch(/with the link can read/);
   }
 });
@@ -273,7 +287,10 @@ describe("turning it on", () => {
     );
     expect(share?.disabled).toBe(true);
     // And the reason is on the page rather than in a tooltip.
-    expect(host.textContent).toContain("I have the right to share this article's text");
+    expect(host.textContent).toContain(SHARING_RIGHTS_CONFIRM);
+    /* And the reason is an affirmation of a right to share, which is what
+       makes the disabled button legitimate rather than merely explained. */
+    expect(SHARING_RIGHTS_CONFIRM).toContain("I have the right to share");
     expect(calls.filter((c) => c.method === "PUT")).toEqual([]);
   });
 
@@ -348,13 +365,22 @@ describe("what the dialog says about the reader's profile", () => {
        exists with the field somehow missing — defensive, and the branch has to
        be total. */
     await openDialog(withKinds(undefined as unknown as ArticleSharing["personalised"]));
-    expect(host.textContent).toContain("may have been written for your reader profile");
+    expect(host.textContent).toContain(SHARING_PERSONALISED);
+    /* And the constant still hedges. The line above proves the component
+       reached for the right sentence and cannot go stale on a re-word; it
+       cannot notice the sentence being re-worded into a claim, because the
+       component and this file would import the same new value and both
+       move together. This one holds the requirement. */
+    expect(SHARING_PERSONALISED).toContain("may have been written");
   });
 
   it("says plainly when none were", async () => {
     await openDialog(withKinds([]));
 
-    expect(host.textContent).toContain("Nothing here was written for your reader profile");
+    expect(host.textContent).toContain(SHARING_NOT_PERSONALISED);
+    /* Definite, not hedged — the requirement this case exists for, and the
+       half an imported constant cannot check on its own. */
+    expect(SHARING_NOT_PERSONALISED).toContain("Nothing here was written");
     // And NOT the hedge, which would leave the owner assuming the general case.
     expect(host.textContent).not.toContain("may have been written");
   });
@@ -848,6 +874,28 @@ describe("what a shared link carries", () => {
 
     expect(host.textContent).toContain("Anyone who opens it gets these");
     expect(host.textContent).toContain("These stay with you");
-    expect(host.textContent).toContain("never your own work on it");
+  });
+
+  /**
+   * **And the one-line summary under that third column is gone**, because it
+   * was a hand-written claim about a derived list and the list outgrew it.
+   *
+   * It said *"A shared link carries the piece and what the model wrote about
+   * it, never your own work on it"* — on a card whose first column, since
+   * 2026-09-04, lists *Your comments and notes* and *Search*. GPT Sol found it
+   * reviewing the other half of the same day's work.
+   *
+   * Asserted as a *phrase that must not appear* rather than as a missing
+   * element, because the failure this guards against is somebody writing the
+   * summary back in a slightly different place. src/messages.ts, at
+   * `NOT_SHARED_HEADING`, is where the argument lives.
+   */
+  it("and no longer summarises that column with a claim the list contradicts", async () => {
+    await mount(SHARED);
+
+    expect(host.textContent).not.toContain("never your own work on it");
+    /* The positive control for the negative above: the column it was under is
+       still on the card, so this is not passing because nothing rendered. */
+    expect(host.textContent).toContain("These stay with you");
   });
 });

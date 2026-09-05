@@ -218,6 +218,44 @@ export function structureHash(tree: Tree): string {
 }
 
 /**
+ * **A checkpoint key, from a canonical request object.** Sixteen hex
+ * characters, which is what every checkpoint caller mints and what
+ * `CHECKPOINT_KEY_RE` (src/store/checkpoints.ts) is happiest with.
+ *
+ * `JSON.stringify` of an object *the caller* builds, so **the order of that
+ * object's literals is part of the key**. Re-ordering them changes every key,
+ * which costs one call per article and nothing else — a key that does not match
+ * is simply a miss — but it is worth knowing before somebody sorts the fields
+ * of a canonical request thinking it is free.
+ *
+ * It hashes whatever it is given and knows nothing about checkpoints, which is
+ * why it is here rather than in either caller. It arrived as `structureKey` in
+ * src/hierarchy.ts on 2026-09-04 and moved on 2026-09-05, when
+ * src/hierarchy-deepen.ts needed the identical two lines: that file will be
+ * imported by src/hierarchy.ts at stage 5, so a copy left behind there would
+ * have been a value import closing a cycle the `npm run cycles` gate refuses.
+ * The old name is still exported from src/hierarchy.ts, aliased to this.
+ *
+ * **`JSON.stringify` can throw**, on a `BigInt` or a circular object, and it can
+ * return `undefined` for a bare function or symbol — which would hash the four
+ * characters of `undefined` and give every such request the same key. Neither is
+ * reachable from a canonical request built out of a wire body, and both are
+ * cheap to refuse, so they are refused rather than trusted: a checkpoint layer
+ * whose keys silently collapse is one that serves one article's answer for
+ * another's.
+ */
+export function checkpointKey(canonical: unknown): string {
+  const json = JSON.stringify(canonical);
+  if (json === undefined) {
+    throw new TypeError(
+      `A checkpoint key must be a digest of something JSON can render, and this is a ` +
+        `${typeof canonical}. See checkpointKey in src/source-hash.ts.`,
+    );
+  }
+  return createHash("sha256").update(json, "utf8").digest("hex").slice(0, 16);
+}
+
+/**
  * The three metadata fields a prompt head is allowed to be judged on.
  *
  * **Named as a type, and narrow on purpose.** `Meta` carries `fetchedAt`,

@@ -1,6 +1,6 @@
 # Hierarchy
 
-Pipeline stage 4 — `hierarchy`, `npm run hierarchy`. Builds the nested structure that the Hierarchy
+Pipeline stage 4 — `hierarchy`, `npm run hierarchy -- <slug> [--force]`. Builds the nested structure that the Hierarchy
 sidebar and the [granularity zoom](granularity-zoom.md) view both render. Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
@@ -125,6 +125,8 @@ have to be the same.
 
 Inherited from [the tree](granularity-zoom.md#the-tree): **every node covers a contiguous range of
 blocks, and a node's children exactly partition its range** — no gaps, no overlaps, no reordering.
+And since 2026-09-05, **no child may cover its parent's whole range** unless it is a leaf; see
+[a rung that restates its parent](#restated-rung).
 Contiguity is in `blocks.json` **array order**, not in the id string; random ids carry no ordering
 (see [block-ids.md](block-ids.md#the-cost-we-accepted)). Never write `if (id > start && id < end)`.
 
@@ -271,9 +273,16 @@ previous section's tail, `planChildRanges` believed the start, and `buildTree` d
 out of range. `droppedHeadings: 59` was counting that, and it read as the author's structure being
 overruled. It was not.
 
-So the repair is code, in `snapStartsToHeadings` ([`src/hierarchy.ts`](../../src/hierarchy.ts)): a
-kept child whose start is the block after a heading run **it names** moves back to the run's first
-heading. Three things about it are load-bearing.
+So the repair is code, in `snapStartsToHeadings`
+([`src/heading-snap.ts`](../../src/heading-snap.ts)): a kept child whose start is the block after a
+heading run **it names** moves back to the run's first heading. Three things about it are
+load-bearing.
+
+It sits in a file of its own because **both** derivations run it — `planChildRanges` in
+[`src/hierarchy.ts`](../../src/hierarchy.ts) and `normaliseExpansion` in
+[`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) — and those two cannot import each
+other. It is the one piece of the tiling rule they literally share, because it was the one piece
+they disagreed about.
 
 - **The child's own `sourceHeading` has to match a heading in the run**, read with the same
   `sameHeading` that decides whether a claim is backed. The unconditional rule — snap any start that
@@ -323,17 +332,72 @@ That is the genuine capacity conflict between the prompt's depth and fan-out num
 who numbered three deep, and it is stage 8b of
 [260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
 
-**When the wave cascade is wired up it needs the same thing.**
+**The wave cascade runs the same snap**, since 2026-09-05.
 [`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) fixes each answer's ranges before the
 next call is made, precisely so no subtree is generated against a range that later moves — and it
 tells its caller to hand the final `buildTree` a fresh report because "there is nothing left for it
-to mend". The snap is now something left for it to mend. Nothing wires that module into the pipeline
-or the evals today, so this is a note for whoever does.
+to mend". For a while the snap *was* something left for it to mend, and that mattered from wave 2
+on: a scoped call would be shown a slice `planChildRanges` had derived while its own answer was
+derived by a rule with no snap in it. Both now call
+[`src/heading-snap.ts`](../../src/heading-snap.ts), and a differential test hands a normalised answer
+to the real `buildTree` and requires it to change no range and record no repair. Nothing wires that
+module into the pipeline or the evals yet.
+
+**Where the two derivations still differ, on purpose**: a child whose start falls outside its
+parent. `planChildRanges` clamps it back inside and keeps the article — right for a whole-document
+call, which names a boundary in an article it has all of. `normaliseExpansion` refuses it as
+`ExpansionRefused("outside-parent")` and the batch is re-asked, because a scoped call is shown its
+parent's blocks and nothing else, so a start outside them is an answer about a stretch of the article
+that call never saw. **Every claimed start is checked, the first child's included**, and only then is
+the first kept child *pinned* to its parent's start — the rule that children cover their parent
+rather than a clamp of a claim. The pin used to sit above the check, which exempted the opening claim
+from it, and a first `start` naming a block in a *sibling* section therefore passed all four gates
+with that sibling's title, gist and verdict attached to this parent's prose (GPT Sol's review of
+stage 4, 2026-09-05).
+
+#### A rung that restates its parent is spliced away <a id="restated-rung"></a>
+
+**No child may cover its parent's whole range.** A node whose sole child holds the same blocks it
+does gives the reader two adjacent gist columns of identical extent, neither marked `continuation`,
+so both render in full and both are fisheye items — one rung finer buying a restatement of the same
+paragraphs, against [granularity-zoom.md](granularity-zoom.md)'s promise that level N is a
+compression of level N+1.
+
+Measured on 2026-09-05 across every saved tree under `evals/` and `data/`: **243 unary internal
+nodes, and all 243 have a child covering the parent's whole range** — not one covers only part of it.
+35 of them have an *internal* child and are the redundant rungs; the other 208 have a **leaf** child,
+which is the ordinary shape of a one-block section growing its single leaf and is not a fault. That
+is why the rule is a **range** statement rather than a count: the range form survives contact with
+the leaf-growing step, with a one-block section, and with a supplement holding exactly one note.
+
+[`collapseRestatedRungs`](../../src/hierarchy.ts) **splices, it does not refuse** — the
+grandchildren come up, the redundant node goes, and it repeats until no child covers the whole of the
+node it hangs under (a chain of three over one paragraph is real: `waves.fowler-phrenology.r1`). The
+parent's `title` and `gist` survive and the child's are discarded, because in the nine corpus cases
+where the two names differ the parent is the coarser one every time — *"Writing at Work"* over *"The
+Pressure to Write"* — which is what that rung is for. It adopts the child's `sourceHeading` where it
+has none of its own: both held the same range, so a claim backed for one is backed for the other.
+
+**The asymmetry with `normaliseExpansion` is deliberate.** It goes on *refusing* a one-child answer
+(`ExpansionRefused`), because the disposition follows the recourse: a scoped cascade call can be
+retried and a better answer is worth asking for, and a whole-document answer cannot be retried
+mid-build. Refusing there is what cost four of thirteen articles the day `planChildRanges` learned to
+derive rather than reject.
+
+[`checkTree`](../../src/tree-invariants.ts) says the same thing about a *stored* tree, and it never
+did before 2026-09-05 — `git log -S` finds nobody adding, removing or arguing about such a rule, so
+the silence was a gap rather than a decision. Re-checked over the 103 saved trees it reports exactly
+the 35 and nothing else; rebuilt through the new `buildTree` they all collapse, none survives, and no
+tree's leaf layer changes.
 
 #### Measurement is what stands where the bounds stood
 
 Every boundary the model got wrong is recorded with its position, direction and size; dropped
-sections and unbacked heading claims are counted beside them. All of it reaches `HierarchyRun`, the CLI's
+sections, unbacked heading claims and restated rungs are counted beside them. A collapsed rung is its
+own figure rather than another kind of repair, and that is arithmetic rather than tidiness: a repair
+is a *boundary that moved* and its `size` is how many blocks changed hands, while a collapse moves
+none — it would have to enter as a repair of size 0, inflating the count while contributing nothing
+to the two numbers that say what a repair cost. All of it reaches `HierarchyRun`, the CLI's
 `Repaired:` line **every run including at zero**, the queue's log, and `evals/hierarchy-structure` per
 result — the way `strandedSupplement` already is. A repair nobody is told about is the same shape as
 the bug it repaired ([silent-success.md](../reusable/silent-success.md)).
@@ -659,7 +723,8 @@ So the stage now does three things instead of dying, in rising order of risk:
   bound, not a second copy of it: the batching is invisible from `checkCoverage`, so small sections
   each spending their floor of one would stay inside budget and still cost the article a fifth of its
   rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
-  `generateLabels`, so `npm run labels` gets it too — it used to be enforced only by `generateHierarchy`,
+  `generateLabels`, so every caller gets it — it used to be enforced only by `generateHierarchy`,
+  while `npm run labels` (retired 2026-09-05) went round it,
   which made the backstop depend on which command you typed.
 
 **The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
@@ -683,8 +748,9 @@ It used to write the three files itself, in a fixed order with the tree last. Th
 about three *separate* writes: `writeFile` truncates before it has anything to put there, and
 *existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
 kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
-both halves of that, and the ordering survives only in `npm run hierarchy`'s own `main()`, which really
-does write three files into a directory.
+both halves of that. **The ordering survived in `npm run hierarchy`'s own `main()` until 2026-09-05,
+and now survives nowhere**: that command goes through the queue, so there are no three files and no
+order to get right. Nothing in this repo writes stage 4's artefacts separately any more.
 
 `labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
 whole-or-nothing write gives us "whole or not there" and not "still true". A complete set of labels
@@ -858,58 +924,56 @@ stage 4 creates them itself from `blocks.json`. The model never chooses leaf ran
 the internal grouping and writes the `navLabel` text. That removes an entire class of partition
 error from the model's job.
 
-The prompt rules below inherit from
+The prompt's rules inherit from
 [granularity-zoom.md § Generation](granularity-zoom.md#generation) and
 [vision.md § Principles](vision.md#principles).
 
-````text
-You are building a nested table of contents for an article. It goes all the way
-down to individual paragraphs, and it will be rendered as a navigation sidebar.
+**The live prompt is [`SYSTEM`](../../src/hierarchy.ts) and it is not copied here.** A copy was, for
+a fortnight, and it went stale without a word: it still said *"Do not write a `gist` field — that is
+a later stage"* long after the gists moved back into this call, and it had never gained *"Go 3
+levels deep"*. `tests/hierarchy-structure-request-parity.test.ts` pins the real bytes, so that is
+the one to read and the one that fires when they move.
 
-You receive the article as a numbered list of blocks. Each block has an id
-(e.g. spya-k3m9qt), a tag, its text, and a NOT-GISTABLE marker on some.
+What it asks for, in one line each, so this page can be read without opening the source: internal
+nodes only, tiling their parent exactly; the article's own headings as hard boundaries; a proposed
+boundary inside any run of more than ~9 blocks; 5–9 children per node; three levels; a 2–6 word
+title, copied verbatim from the author's heading where there is one; and one gist sentence per
+internal node, a claim or a move rather than a topic label.
 
-STRUCTURE
+**A second prompt is being built beside it**, for the scoped call that deepens one section at a time
+— [`EXPAND_SYSTEM`](../../src/hierarchy-expand.ts). It is called by nothing yet;
+[260904d](../plans/260904d-deepen-fat-sections.md) is where it is going. The rule it states that
+`SYSTEM` does not is the precedence between the two that collide on a book: an authored heading
+always begins a child, and the 5–9 fan-out applies only where the model is inventing the boundaries
+itself. It also asks, since `expand/2`, for the children **in document order** — which
+`normaliseExpansion` had always required, dropping any start not strictly after the previous one, and
+which the prompt had never said, so five otherwise-valid children listed out of order lost a real
+section under a valid-looking tree.
 
-Produce a tree of INTERNAL nodes only. Every node covers a contiguous range of
-blocks, and a node's children exactly partition its range — no gaps, no
-overlaps, no reordering. The first child starts where its parent starts; the
-last child ends where its parent ends.
-
-- The article's own headings are HARD boundaries. A node must begin at a
-  heading block wherever one exists. Never merge across a heading.
-- Where a run between headings is longer than ~9 blocks, propose your own
-  boundaries inside it at genuine topic shifts, and give those nodes titles.
-- Aim for 5–9 children per node so each level is an even stride.
-- Do NOT emit leaf nodes for individual blocks. Stop at the level above.
-
-TITLES (internal nodes)
-
-- 2–6 words. A title is a landmark, scanned at a glance.
-- Where the author gave the section a heading, use that heading's text
-  UNCHANGED and repeat it in `sourceHeading`. Rewrite it ONLY if it shares no
-  content word with its section body, or is a stock label ("Introduction",
-  "Background", "Part Two"). Rewriting should be rare.
-- No trailing punctuation.
-
-OUTPUT
-
-JSON only:
-
-{"root": {"title": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
-          "sourceHeading": "...", "children": [ ... ]}}
-
-Use only block ids that appear in the input. Do not invent ids. Do not write a
-`gist` field — that is a later stage.
-````
+**And those scoped calls checkpoint**, in [`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts)
+(2026-09-05), under a namespace of their own — see
+[database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for). One row per call rather than per parent, keyed
+on a digest of the wire request plus four things a scoped call no longer carries implicitly: a hash
+of the whole body, a **frozen** hash of the wave-1 tree, the recipe, and the call's own targets.
+That body hash is `expansionBodyHash` and not `hashBlocks`: the article's shared fingerprint covers
+`[id, text, role, treatment]`, and this stage also reads `words` (the forced-open ceiling), `kind`
+(the heading rule, and `max_tokens` through it), `tag` and `gistable` (both printed to the model, and
+`gistable` is the unit the terminal-blocks floor counts in). A block reclassified `p` → `h2` with its
+text untouched kept its key while the model was shown a heading.
+Frozen is the load-bearing word — a key that carried the tree *as it stands* would move whenever a
+neighbouring parent's answer landed, so a resumed attempt would miss every row the previous one
+wrote, under exactly the load the checkpoint exists for. A stored answer is re-read through the same
+`readExpansion` a fresh one goes through, against the parent as it is now, and one that no longer
+derives is a miss the next answer overwrites. Still called by nothing: the wiring and the wave's
+concurrency are stage 5.
 
 **The nav labels are not in this response.** They were, and it is what took the stage over the
 128,000-token ceiling — one per gistable block is the only output in the pipeline that grows with the
 article without a bound. They are now a second pass with a prompt of its own, in
 [`src/labels.ts`](../../src/labels.ts): 6–20 words, a claim or a move rather than a topic label, the
 author's distinctive vocabulary verbatim, nothing for a NOT-GISTABLE block, and no meta-narration.
-See [Two passes](#two-passes) above; the live prompt is the one in the source, and this block is the
-structure half only.
+See [Two passes](#two-passes) above; the live prompt is the one in the source, and the summary above
+is the structure half only.
 
 ### Verify, always
 

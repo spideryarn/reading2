@@ -149,6 +149,7 @@ import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";
 import { currentOwnerId, DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
+import { bareArticles } from "./helpers/bare-article.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { FIXTURE_ROOT } from "./helpers/require-fixture.js";
 import { scratchArticleInPg, SCRATCH_SOURCE, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -673,6 +674,31 @@ async function removeRows(slugs: readonly string[]): Promise<void> {
   await getDb().delete(jobsTable).where(inArray(jobsTable.slug, [...slugs]));
   await getDb().delete(articles).where(inArray(articles.slug, [...slugs]));
 }
+
+/**
+ * **A bare `articles` row under each of this file's own slugs**, added
+ * 2026-09-05.
+ *
+ * `enqueue` refuses a bare-slug request for an article the reader does not have
+ * (src/jobs.ts), and the `running a job` block queues several. It seeded nothing
+ * on purpose — the comment above says so, and the reason still holds: what it
+ * wants is an article with **no address**, so `fetch` fails and the job's
+ * failure is what gets asserted. A row with no revision is exactly that;
+ * `articleExists` left-joins the published revision precisely so an article
+ * whose ingest never finished still counts. ./helpers/bare-article.ts.
+ *
+ * **Two of `OWN_SLUGS` are deliberately not seeded**, and getting that wrong is
+ * how this was first written: `test-advance-token` and `test-advance-sweeps`
+ * queue straight into the store through `queueJob` as `DEV_OWNER_ID`, never
+ * through `enqueue`, and then let `lockOrCreateArticle` create the article at
+ * claim time. A row seeded here under the *environment* owner is somebody else's
+ * as far as that function is concerned, and it refused with *"the slug … already
+ * belongs to another reader"*.
+ */
+beforeAll(async () => {
+  if (!reachable) return;
+  await bareArticles([SLUG, "test-enqueue-busy-article"]);
+}, 60_000);
 
 afterAll(async () => {
   if (!reachable) return;

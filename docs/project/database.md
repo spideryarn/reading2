@@ -87,6 +87,21 @@ able to write them without passing through our server — a serverless function 
 Storage additionally holds a copy at `sha256/<hash>.pdf`, keyed by its own contents so two readers
 with the same paper converge on one object.
 
+**What the bucket will accept is a decision, and it is enforced on both sides.** `sources` declares
+five types in [`supabase/config.toml`](../../supabase/config.toml) — PDF, HTML, and PNG/JPEG/GIF for
+the article images that arrived with [260829b](../plans/260829b-hosting-the-articles-images.md) — and
+our own byte-sniffing in [`src/assets.ts`](../../src/assets.ts) independently admits those same three
+image kinds. **SVG is absent from both on purpose**, an SVG being a script-bearing document rather
+than a picture; Storage answers `415` to one even under the service key, measured against the running
+container. So it cannot be stored today even by mistake, which is the point of having the line twice.
+
+The hazard is that the two sides are widened separately, and the doc that owns that hazard is
+[deployment.md § the bucket checks](deployment.md#who-can-reach-it) — `bucketDrift` in
+[`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) compares declared against running. It
+exists because the allowlist has drifted on production twice
+([260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md)). Adding an
+image format means the config, the sniffer, and a thought about what the sanitiser now has to survive.
+
 So there are now **two** stores under the filesystem era, and the seam between them is
 [`src/store/blobs.ts`](../../src/store/blobs.ts). That is early rather than premature: the eventual
 design has *every* raw document — fetched or uploaded, HTML or PDF — as an object with the row
@@ -1226,6 +1241,17 @@ Two stages keep working state that has to **survive their own failure**: `hierar
 batch of nav labels as it comes back, and the PDF reader records each transcribed chunk. A 429 eight
 batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
+**Four namespaces**, and the list is `CheckpointNamespace` in
+[`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
+and three that all belong to the `hierarchy` step — `hierarchy-structure` (the one whole-document
+call for the tree), `hierarchy-deepen` (each scoped call that splits a section too fat to read,
+[`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts)) and `hierarchy-labels` (the nav-label
+batches). They are separate because they are separate questions with separate prices: a run that
+dies in the labels must not buy the tree again. Adding one is a migration, since the CHECK on the
+table is the other copy of the list — and since 2026-09-05 `tests/db-schema.test.ts` inserts a row
+under every name, so the two cannot drift in silence. Before that they could, and the symptom would
+have been a `warn` nobody reads and a bill that goes up.
+
 They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), with
 [`checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) writing the `checkpoints` table. A stage is
 handed one through **[`StoreSession.checkpoints`](../../src/store/session.ts)** — the third argument
@@ -1269,7 +1295,12 @@ What to know before touching any of it:
   delete a file that was not its own, machinery that existed only because the unit of deletion — one
   file holding every batch — was larger than the unit of work. One row per batch removes the hazard
   rather than guarding it.
-- **The key is 16 lower-case hex characters**, and the `checkpoints_key_format` CHECK says so. Both
+- **The key is 16 lower-case hex characters by practice, not by contract.** What
+  `checkpoints_key_format` and `CHECKPOINT_KEY_RE` (`src/store/checkpoints.ts`) actually allow is 1
+  to 128 of `[a-z0-9_-]` starting on a letter or digit; every producer so far happens to mint 16 hex
+  and there is no reason to break the habit. Read the regex as the rule and the habit as the habit —
+  this line said the CHECK pinned the length until 2026-09-05, which would have misled anyone adding
+  a checkpoint on its authority. Both
   producers are checked against it by the tests that own them — `tests/labels-batching.test.ts` on
   the real `batchFingerprint`, `tests/pdf-read.test.ts` on the keys a real run stores. Add a
   third checkpoint and its key has to satisfy that too; a `:` separator or upper-case hex would land

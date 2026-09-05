@@ -131,7 +131,30 @@ describe("what @vercel/nft collects for the API function", () => {
         .filter((w) => /pdf\.worker|@napi-rs\/canvas|pdfjs-dist/.test(w));
       expect(unresolved, "nft could not resolve something pdf.js needs").toEqual([]);
     },
-    120_000,
+    /* **Ten minutes, because the trace really does take that long here.**
+       120_000 until 2026-09-05, when this file was one of three red on `dev`
+       and the only one whose failure was the clock rather than the code: run
+       alone it still timed out, so it was not test-parallelism either.
+
+       Measured rather than guessed. The same `nodeFileTrace` call, run outside
+       vitest against the same `api-dist/vercel.js` on the box at load ~85,
+       finished in **441s** and every assertion above held — all six MUST_SHIP
+       files traced, both MUST_NOT absent, no `.node` binary, no unresolved
+       warning. So every property this test checks passed, and the budget was
+       the only thing that did not.
+
+       **Why it is slower is not established here**, and the comment said so too
+       confidently until GPT Sol pushed back, 2026-09-05: that is one timing,
+       under load ~85, with no controlled run to compare against. Two candidates,
+       and it may be both — the box was busy, and the trace has grown, from the
+       2470 files the comments above record, to 3,031, to **4,413** on that run.
+       The growth is worth someone's attention on its own; see
+       docs/plans/260905a-three-reds-on-dev-after-the-deploy-sweep.md.
+
+       This is a gate, so the cost is real: a slow `npm run check` gets slower.
+       The alternative — narrowing `base` back off `/` — is the bug e1a3bff2
+       fixed, and is not worth reopening to save minutes. */
+    600_000,
   );
 
   it("has a build to inspect", () => {

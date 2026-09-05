@@ -1026,6 +1026,21 @@ export type ArtifactReads = Pick<
 >;
 
 /**
+ * Everything `copyArtefacts` asks of the store it copies **from** — two
+ * methods, checked rather than assumed (src/store/copy-artefacts.ts).
+ *
+ * A third narrowing of `ArtifactStore`, and the header on `ArtifactReads`
+ * argues why these are not folded together: each names a *capability somebody
+ * is given*, and a type that is the union of three jobs is a type that stops
+ * refusing anything. This one exists so that a **source that cannot write** —
+ * `tests/helpers/fixture-artefacts.ts`, a reader over the committed corpus —
+ * can be a source without seven throwing stubs standing in for methods the copy
+ * never calls. `ArtifactStore` is assignable to it, so every existing caller
+ * passes unchanged.
+ */
+export type ArtifactSource = Pick<ArtifactStore, "read" | "stampFor">;
+
+/**
  * Refused before the write: this product is not one a commit may act on.
  *
  * **Its own type so that it survives `guardDbStore`.** The transactional

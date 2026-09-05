@@ -204,6 +204,45 @@ The cost is that only one answer is visible at a time, and there is no way to se
 the article at once. Marginal cards or a column remain the better long-term answer — this is
 explicitly "until we come up with a better plan".
 
+### Copying the passage <a id="copying-the-passage"></a>
+
+**A selection is not always the start of a comment — sometimes the reader just wanted the sentence.**
+Greg, 2026-09-05:
+
+> When I select some text in the article to copy it to the clipboard, it automatically pops up the
+> Comment panel, so then I would have to reselect it in the Comment panel to be able to then copy it.
+
+Opening the box takes the focus and the selection with it, so the one thing a selection most often
+means outside this app had become the one thing it could no longer do. There is a Copy button in the
+box's header now, beside Close, and it puts `anchor.quote` on the clipboard: the reader's own words,
+with no id and no attribution attached. The block's citable address is a different thing and already
+has its own button in the gutter ([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)).
+
+It copies and does nothing else — it does not save, does not close, and buys nothing. Three states
+rather than two, because a copy that quietly failed is
+[silent-success](../reusable/silent-success.md) with a clipboard on it, and `navigator.clipboard` is
+undefined in every insecure context.
+
+**The interesting failures are all the same one, and none of them shows in a screenshot: the button
+saying something true about a copy that is no longer the copy in front of the reader.** `App` keeps
+one `AnnotateDialog` mounted and swaps its `anchor`, so a tick from passage A sat there over passage
+B's words with A still on the clipboard; a write still in flight when the reader moved on reported
+success over the new passage; and of two presses the *older* outcome landed last and reported failure
+over a clipboard holding exactly what was asked for. The fixes are a `key` on the anchor and a press
+token, both in [`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) with the reasoning beside
+them, and each has a test that was red first. GPT Sol found all three reviewing the built code,
+2026-09-05. [`tests/annotate-dialog-copy.test.tsx`](../../tests/annotate-dialog-copy.test.tsx).
+
+> [!NOTE]
+> **There are now seven clipboard call sites in the client and they have drifted apart.**
+> `BlockGutter` carries an operation token, this one now does too, and
+> [`ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) dereferences `navigator.clipboard` with no guard
+> at all while [`AccessSharing.tsx`](../../src/web/AccessSharing.tsx) returns silently where there is
+> none, under a comment promising it reports failures. GPT Sol's recommendation, 2026-09-05, is a
+> headless `useClipboardCopy` owning the guard, the tri-state outcome, the token and the timer, with
+> each caller keeping its own icons and announcement. Not done — it is a change to seven call sites,
+> two of which have live bugs, and wants its own review. **Greg's call.**
+
 ### The two questions a selection raises <a id="the-two-questions"></a>
 
 **A selection is ambiguous about what is being asked, and for a long time the prompt only heard one
@@ -604,7 +643,7 @@ must not be able to dress itself up as the article.
 |---|---|
 | [`src/web/selection.ts`](../../src/web/selection.ts) | mouse selection → `{ blockId, quote, start }`, clamped to one block |
 | [`src/web/annotate.ts`](../../src/web/annotate.ts) | re-find a quote, and draw the `<mark>` runs over it |
-| [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a box, and the tick-box |
+| [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a Copy button, a box, and the tick-box |
 | [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, and the client-minted id |
 | [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |

@@ -70,6 +70,7 @@
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { WebsitePlans } from "./PlanCards.js";
+import { PublicShowcase } from "./PublicShowcase.js";
 import { FEATURES_HREF, PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -262,6 +263,16 @@ export function LandingPage() {
             Everything it does, with pictures →
           </Link>
         </p>
+
+        {/* **The tile above claims that a public article shares its expensive
+            generated work; this is where a stranger can go and see one.** Every
+            link in it is derived from the same listing `/read/public` draws, so
+            an article that stops being public leaves nothing behind on this
+            page — which is the whole design, and the two cheaper mechanisms it
+            was chosen over are argued in PublicShowcase.tsx. The same block is
+            on `/features`, and deliberately not on `/pricing`, which must make
+            no request at all signed out. */}
+        <PublicShowcase />
 
         {/* --------------------------------------------------- what it holds to --
             Two lines shorter than it was. "A companion, not a replacement" and

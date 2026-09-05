@@ -51,6 +51,15 @@ So: kill the **listening** PID (`lsof -ti :PORT`, or find the `vite` child), the
 actually free before starting another. And prove *which code* is being served before you trust a
 single thing the browser tells you — the `curl` below is the whole of it, and it takes one second.
 
+**Never `pkill -f vite`**, which is what an agent tidying up after itself reaches for. The box runs
+one dev server per worktree across 5273–5277, so a pattern kill is tree-wide however local the
+intention: on 2026-09-03 a browser subagent finished its check, ran it, and killed every other
+agent's server. Nothing durable was lost — dev servers, not work — but each of those sessions then
+saw a failure that looked like its own bug, with nothing to tell them otherwise. It was noticed only
+because the subagent reported it unprompted. Same reasoning as naming your own files in a commit: on
+a shared tree, every broad-match command is somebody else's problem. **Put the constraint in the
+prompt when you dispatch browser work** — capture the PID at launch, kill only that.
+
 **And the port you were given can change hands while you work.** A dev server killed by memory
 pressure — a full `npm test` on a loaded box will do it — frees its port, and the next peer's Vite
 walks up and takes it. Your automation goes on signing in and answering, from another worktree's

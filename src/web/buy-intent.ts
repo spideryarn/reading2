@@ -139,8 +139,9 @@ export function buyIntentIsFresh(intent: BuyIntent, now = Date.now()): boolean {
  * not the shape this file wrote. The caller still has to decide whether the
  * reader may buy that tier at all — this says only what was asked for, never
  * that it is allowed, and never that it is *still* current: see PricingPage.tsx,
- * which checks `buyIntentIsFresh` again alongside `summary.canCheckout` and
- * `summary.offers` before anything is posted.
+ * which checks `buyIntentIsFresh` again alongside `summary.purchase` — the same
+ * list the cards are drawn from, so a marker cannot buy something the page would
+ * not have offered — before anything is posted.
  */
 export function takeBuyIntent(): BuyIntent | null {
   const store = storage();

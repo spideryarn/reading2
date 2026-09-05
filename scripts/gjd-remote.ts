@@ -68,7 +68,7 @@ import {
   stagingPath,
   uploadDestination,
 } from "./gjd-remote-upload.js";
-import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
+import { haveTerminal, parseDuration, sshInvocation, waitHandover, waitPreamble } from "./gjd-remote-run.js";
 import {
   LOG_SCHEMA,
   type LogRecord,
@@ -2515,9 +2515,27 @@ async function cmdNewClaude(
       timeZoneName: "short",
     });
     console.log(green(`✓ created '${name}'`) + dim(` — Claude starts in ${opts.wait.label}, about ${clock}`));
-    // Not attaching, on purpose: there is nothing to watch but a sleep, and a
-    // tab held open for two hours is a tab you stop trusting. Said out loud
-    // rather than done quietly, because --wait did not ask for this.
+    // Attaching, like every other launch: the pane you land in is the pane
+    // Claude appears in when the sleep ends, so this is the one wait you can
+    // sit through. Why that is so, and what it costs on a long one, is on
+    // `waitHandover` — including why no terminal is not an error here.
+    const handover = waitHandover({
+      attach: opts.attach,
+      // NOT `interactiveStdin() !== null`, which is what this said first: that
+      // is the descriptor to attach WITH, and it says "inherit" for a stdin it
+      // has never looked at. See haveTerminal.
+      terminal: haveTerminal({ keyboard: interactiveStdin(), stdinIsTty: process.stdin.isTTY === true }),
+    });
+    if (handover.kind === "attach") {
+      // "close the tab", not a detach key: the box's tmux has NO prefix and no
+      // bindings at all, so every keystroke belongs to whatever runs inside it
+      // (infra/hetzner/provision.sh, `set -g prefix None`). Telling somebody to
+      // press ctrl-b d would be telling them to type `^Bd` into Claude.
+      console.log(dim(`  attaching — the pane becomes Claude when the wait is over; close the tab to leave it running`));
+      attach(name, opts.transport);
+    } else if (handover.why === "no-terminal") {
+      console.log(dim(`  no terminal here, so nothing to attach to — the session is waiting either way`));
+    }
     console.log(dim(`  nothing runs until then — gjd-remote resume ${name}, or gjd-remote kill ${name}`));
     return;
   }
@@ -4994,7 +5012,8 @@ ${bold("SESSIONS")}
       -d, --dir DIR         a directory on the box, skipping the repo question
           --repo OWNER/NAME which repo, when you are not standing in it
           --wait DURATION   create it now, start Claude later ${dim("— 45s, 15m, 2h, 1d")}
-          --no-attach       create it, but stay here
+                            attaches too; the pane becomes Claude when it is over
+          --no-attach       create it, but stay here ${dim("— what a long --wait wants")}
   new-shell [name]        a persistent shell, no Claude Code
       -d, --dir DIR         a directory on the box
           --repo OWNER/NAME which repo, when you are not standing in it
@@ -5189,8 +5208,18 @@ ${bold("STARTING LATER")}
   Use it to spread work out when several sessions at once would be too much
   RAM, or too much of the usage allowance, in one go.
   The waiting happens ON THE BOX, in the session's own pane, so closing the
-  laptop makes no difference to it. It does not attach — there is nothing to
-  watch but a sleep — and ${dim("gjd-remote kill")} calls it off.
+  laptop makes no difference to it, and ${dim("gjd-remote kill")} calls it off.
+  ${bold("It attaches, like any other launch")}, and the pane you land in says how long it
+  has left. It is the SAME pane Claude appears in when the sleep ends, so you can
+  sit through the wait and start talking; close the tab and it keeps running on
+  the box — the box's tmux has no prefix key, so closing IS how you detach.
+  ${bold("For a long wait, say --no-attach")} — not because the connection cannot take it
+  (mosh rides through a closed lid; see WHAT SURVIVES WHAT below) but because
+  that tab is now yours for fifteen hours. ${dim("--no-attach")} gives you the shell back,
+  and it is how you queue several waited jobs from one of them. Whatever happens
+  to the attach, the job on the box is untouched — ${dim("gjd-remote resume")} returns.
+  Off a terminal altogether — a cron job, another agent — it says there is
+  nothing to attach to and exits 0, because the session is waiting regardless.
   ${bold("The directory and PATH are checked before the wait, not after")}, so a job that
   could never have worked says so now rather than in two hours' time.
   ${bold("A waiting session does not survive the box rebooting")} — nothing does, and

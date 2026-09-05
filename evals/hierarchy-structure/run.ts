@@ -131,6 +131,16 @@ export interface ArmResult {
      */
     droppedChildren: string[];
     droppedHeadings: string[];
+    /**
+     * **Rungs that restated their parent and were spliced away.** The one figure
+     * here an arm can score entirely on its own: a proposal whose every boundary
+     * was believed, whose sections were all stored and whose heading claims all
+     * held up, and which still handed the reader a level that compressed
+     * nothing. Without it such an answer scores `ok` with an empty `repaired`
+     * block and no warning line — which is the shape this whole field exists to
+     * stop. src/hierarchy.ts § `collapseRestatedRungs`.
+     */
+    collapsedRungs: string[];
   };
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
   vsDisk?: TreeAgreement;
@@ -338,18 +348,23 @@ function print(r: ArmResult): void {
      pipeline produced rather than one the model did.** A repaired answer is a
      success worth having and a fault worth knowing about, and the line that
      says "valid" cannot say both. */
+  /* `?? []` rather than a required read: a run file written before 2026-09-05
+     has no `collapsedRungs`, and this printer is pointed at old artefacts. */
+  const collapsedRungs = r.repaired?.collapsedRungs ?? [];
   if (
     r.repaired &&
     (r.repaired.ranges > 0 ||
       r.repaired.droppedChildren.length > 0 ||
-      r.repaired.droppedHeadings.length > 0)
+      r.repaired.droppedHeadings.length > 0 ||
+      collapsedRungs.length > 0)
   ) {
     console.log(
       `  repaired      ${r.repaired.ranges} misaligned boundary(ies) moving ` +
         `${r.repaired.blocks} block(s), largest ${r.repaired.largest}` +
         `${r.repaired.where.length ? ` [${r.repaired.where.join("; ")}]` : ""}, ` +
         `${r.repaired.droppedChildren.length} dropped section(s), ` +
-        `${r.repaired.droppedHeadings.length} unbacked heading claim(s) — ` +
+        `${r.repaired.droppedHeadings.length} unbacked heading claim(s), ` +
+        `${collapsedRungs.length} restated rung(s) — ` +
         `this answer was NOT valid as written`,
     );
   }
@@ -607,6 +622,12 @@ async function main(): Promise<void> {
                      because the tree it produced is perfectly valid. */
                   droppedChildren: chose.built.droppedChildren,
                   droppedHeadings: chose.built.droppedHeadings,
+                  /* The other way an arm's answer is worth less than its score:
+                     a rung the reader would have read twice, removed before it
+                     reached the tree. Not a repair — a collapse moves no blocks
+                     — so it is counted apart rather than folded into `ranges`.
+                     ⟨GPT Sol's review of stage 3, F1.⟩ */
+                  collapsedRungs: chose.built.collapsedRungs,
                 },
               }
             : {}),
@@ -656,8 +677,8 @@ async function main(): Promise<void> {
   /* The marker goes on last, and only if every cell it promised has a row.
      `--repeat` means one expected cell can have several results, so the test is
      coverage, not a count. */
-  const filled = new Set(runFile.results.map((r) => `${r.arm} ${r.slug}`));
-  const missing = runFile.expected.filter((e) => !filled.has(`${e.arm} ${e.slug}`));
+  const filled = new Set(runFile.results.map((r) => `${r.arm}\u0000${r.slug}`));
+  const missing = runFile.expected.filter((e) => !filled.has(`${e.arm}\u0000${e.slug}`));
   if (missing.length === 0) {
     runFile.completedAt = new Date().toISOString();
   } else {

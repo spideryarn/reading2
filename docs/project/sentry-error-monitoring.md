@@ -27,9 +27,15 @@ A failed ingest step arrives tagged `step`, `slug` and `jobId`, from `captureFai
 
 ## What reaches it, and what does not
 
-**Capture is an explicit call beside the log line, never a side effect of logging.** Six seams:
-[`src/routes.ts`](../../src/routes.ts)'s outer catch and its three streams, and
+**Capture is an explicit call beside the log line, never a side effect of logging.** The seams are
+[`src/routes.ts`](../../src/routes.ts)'s outer catch, a call on each streaming route's own failure,
+a second on several of them for a failure to *record* the result, and
 [`src/jobs.ts`](../../src/jobs.ts)'s failed step and pump.
+
+**The count moves every time a mode ships, so ask rather than read it here** — this paragraph said
+"three streams" until 2026-09-05, by which time `routes.ts` alone held thirteen. Ask with
+`grep -c 'captureFailure(' src/routes.ts`, and note the trailing `(`: without it the import line is
+counted too and the answer is one too many.
 
 **The rule for the request seams is the status we answered with**, `>= 500` — the same threshold
 `logRequest` uses to choose between `warn` and `error`, so the log and the tracker cannot come to

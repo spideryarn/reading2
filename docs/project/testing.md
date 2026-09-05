@@ -452,7 +452,7 @@ Those pixel assertions are nonetheless **deliberately coupled** to the widths qu
 that changing a constant breaks the tests and forces the doc to be edited in the same breath. A doc
 quoting numbers the code no longer produces is worse than a doc quoting none.
 
-## The two things to know before adding a test
+## The three things to know before adding a test
 
 1. **`example/` is a fixture as well as a placeholder.** Several tests read
    [`example/blocks.json`](../../example/README.md) and `example/tree.json`. Changing them by hand
@@ -460,6 +460,28 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
 2. **`src/validate-tree.ts` is a CLI**, with top-level `await` and `process.exit`. It's exercised as
    a subprocess, so its tests are slower (~1.5s) than everything else combined. If it ever grows a
    pure `validateTree(blocks, tree)` export, move those tests to it.
+3. **Which artefact store to hand it, and never `createFsArtifactStore`.** Three answers, and the
+   choice is *what the test is about* rather than what is cheapest to construct:
+   - the test is about **an article existing in Postgres** — a route, a reader, a comment to hang
+     somewhere: [`scratchArticleInPg`](../../tests/helpers/scratch-article.ts), or
+     [`loadArticleIntoPg`](../../tests/helpers/load-article.ts) when the corpus slug itself is the
+     subject. Both read the fixture tree through
+     [`fixture-artefacts.ts`](../../tests/helpers/fixture-artefacts.ts) and write through the real
+     `pgArtifactsIn`;
+   - the test is **not about storage** and just needs somewhere for a stage to put its product:
+     [`memoryArtefacts()`](../../tests/helpers/memory-artefacts.ts), or `memoryArtefactsFrom(root,
+     slug)` to start from a fixture on disk. It applies the same shape rules as the real stores;
+     it **copies on the way in and out**, so a value it handed you is not the one it holds, like
+     both real stores and unlike a `Map`; and it deliberately does **not** put
+     `extractedHtml` and `stampedHtml` at one address the way the filesystem does;
+   - the test is about **a job**, and the article is only there so the job may name it:
+     [`bareArticles`](../../tests/helpers/bare-article.ts), which inserts an `articles` row and
+     nothing else. Five suites needed it the day `enqueue` started refusing a bare-slug request for
+     an article the reader does not have (2026-09-05), and a bare row is enough because
+     `articleExists` left-joins the published revision on purpose — an article whose ingest crashed
+     still counts as existing;
+   - the test really is about **the adapter** — that is stage G's cohort, and the answer is in
+     [`store-migration-registry.ts`](../../tests/store-migration-registry.ts).
 
 ## Rendering a component, without a testing library
 
@@ -546,6 +568,21 @@ Two habits it made explicit and worth carrying to the next eval:
 `evals/` is typechecked by the root `tsconfig.json` — it runs the same way the pipeline stages do.
 The typecheck guard ([typechecking.md](typechecking.md)) is what noticed it belonged to no project.
 
+### An eval run in a worktree measures the fixture cut, not the corpus
+
+`npm run worktree:setup` fills `data/` from `tests/fixtures/data-root/`, and those are **fixture
+cuts**: `data/constitution` is 84 blocks in a worktree and 360 in the primary. So an eval run there
+silently measures short articles while the write-up names long ones — which cost a session's
+headline numbers on 2026-09-04, found by GPT Sol reading `run.json` rather than the write-up.
+
+Every result row already carries `blocksSha256.matchesManifest`, and in a worktree it says `false`.
+**Nobody reads it**, which is the whole problem: the eval is not wrong, it is honest and unheard.
+Before quoting any eval number, check that field and the block count of what actually ran.
+
+Do not fix it by copying the primary's corpus in. `cp -rn` skips existing files, so it appears to
+work and changes nothing; copying the whole corpus brings articles the manifest does not describe.
+Run evals in the primary, or make the cut deliberate and say so in the write-up.
+
 ## A known limit, pinned by a test
 
 A block with neither text nor a `src` — in practice only `<hr>` — gets a **fresh id on every
@@ -614,6 +651,24 @@ when judging whether HEAD itself is broken, reproduce in a worktree with `node_m
 `.env.local` linked and `data/` **copied** (tests delete under it) — not in the shared working tree,
 which always carries other agents' edits. "26 files fail" from a clean checkout is this, not a
 broken commit.
+
+### Run the suite in tmux, because a killed run and a passing run look the same
+
+**A backgrounded `npm test` on the remote box is killed under load and reported as a success.**
+Measured 2026-09-03 at load ~100: the run took SIGTERM, emitted nothing, and the harness announced
+*"completed (exit code 0)"* — because that is the wrapper's status, not the suite's. A subagent hit
+the same thing the same day by passing `--reporter=basic`, which vitest 4 does not have: the run
+never started and was again reported as exit 0.
+
+So run it in `tmux` and judge it by the suite's own `Test Files` line, never by an exit code that
+reached you through something else:
+
+```
+tmux new-session -d -s gate "npm test -- --reporter=dot > LOG 2>&1; echo EXIT=\$? >> LOG"
+```
+
+"It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
+section belongs to — [silent-success.md](../reusable/silent-success.md).
 
 ### `.env.local` is loaded into tests
 

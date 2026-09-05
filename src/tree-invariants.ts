@@ -323,6 +323,44 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
         }
         const childSpan = span(child);
         if (!childSpan) continue;
+        /**
+         * **No child may cover its parent's whole range** — unless it is a leaf.
+         *
+         * A rung that restates the one above it gives the reader two adjacent
+         * gist columns of identical extent, neither marked `continuation`, so
+         * both render in full and both are fisheye items. One rung finer buys a
+         * restatement of the same paragraphs, against
+         * docs/project/granularity-zoom.md's promise that level N is a
+         * compression of level N+1.
+         *
+         * **A range statement, not a count**, and the exemption is why. In a
+         * built tree a leaf is always *grown* — `buildTree` mints them from a
+         * range, never from a proposal — so a leaf child covering the whole of
+         * its parent means the parent spans exactly one block, which is the
+         * ordinary shape of a one-block section (208 instances across every
+         * saved tree, none of them a fault) and of a supplement holding exactly
+         * one note block (docs/plans/260829a-footnotes-finish-upfront-sol.md §
+         * F6). Phrased over `children.length` it would flag all of those, and a
+         * validator whose errors are mostly false teaches people to stop
+         * reading it — see `sameHeading` above.
+         *
+         * Silent here until 2026-09-05, and the silence was a gap rather than a
+         * decision: `git log -S` finds nobody ever adding, removing or arguing
+         * about such a rule, while `assertCascadeComplete` has rejected the
+         * shape all along. `buildTree` now splices these away
+         * (src/hierarchy.ts § `collapseRestatedRungs`); this is what says so for
+         * every *other* producer of a tree, and for the ones already stored.
+         */
+        if (
+          child.children.length > 0 &&
+          childSpan[0] === mySpan[0] &&
+          childSpan[1] === mySpan[1]
+        )
+          fail(
+            `${node.id} → ${childId}: covers its parent's whole range, so one rung finer ` +
+              `restates the same blocks instead of compressing them ` +
+              `(granularity-zoom.md#the-tree)`,
+          );
         if (childSpan[0] !== cursor)
           fail(
             `${node.id} → ${childId}: starts at index ${childSpan[0]}, expected ${cursor}` +

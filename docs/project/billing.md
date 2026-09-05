@@ -215,6 +215,16 @@ it silently shows somebody the base-currency price.
 - **The lookup key is the identity, not the name.** Never change one on a tier that has been sold:
   it is how a re-run finds the price it made last time instead of minting a second one.
 
+**And a fourth, which is a class rather than a mistake: adding a value to a billing dimension turns
+rules that were harmless into policy.** While a dimension has one value — one paid tier, one
+currency, one billing period — a tie-break nobody chose, an enumerated menu, or an assumption that
+an interval is monthly all behave correctly by accident. Add the second value and each becomes a
+decision that was never made. So a change here is not finished when the rows and
+[`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) are done: audit subscription selection's
+tie-break, the Portal's configured menu, anything that reads an interval, and the quota arithmetic
+above. [260904a](../postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md)
+names this as the next likely failure class, and its four faults are what it looks like when it fires.
+
 ### Tax: the two fields that decide what a reader is charged
 
 Both live in [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts), both were found by driving a
@@ -517,8 +527,8 @@ and puts a link beside it when — and only when — the message's code is one o
 
 | code | goes to | because |
 |---|---|---|
-| `pay-free` | `/pricing` | never subscribed, so `canCheckout` is true and the prices are the answer to *what would carrying on cost* |
-| `pay-limit` | `/profile` | a working subscription at its ceiling. There is **nothing to buy** — `canCheckout` is false while any non-terminal subscription exists, so `/pricing` draws this reader no button. The Portal *can* switch tiers since 2026-09-04 — see [Reader → Researcher](#reader-researcher-open-at-stripe-closed-in-our-own-ui) — so this destination is under review; the reset date and the subscription are what help meanwhile |
+| `pay-free` | `/pricing` | never subscribed, so every tier is on sale to them and the prices are the answer to *what would carrying on cost* |
+| `pay-limit` | `/profile` | a working subscription at its ceiling. **Both of the old reasons have expired and the destination has not moved**: the Portal has taken a plan switch since 2026-09-04, and since later that day `/pricing` offers a Reader the tier above too — see [Reader → Researcher](#reader-researcher-open-at-stripe-and-open-in-our-own-ui). What is still only on `/profile` is the reset date, and where a capped subscriber should land is Greg's call rather than an inference from the fixed fact |
 | `pay-lapsed` | `/profile` | the client cannot tell a terminal lapse (may check out again) from `unpaid`/`incomplete` (may not) — `hasLapsed` covers both. `/profile` draws the cards when checkout is allowed **and** the Portal when there is a customer, so it is the destination that is never a dead end |
 
 (All three pointed at `/pricing` for a few hours on 2026-09-04, until a GPT Sol review of that day's
@@ -570,6 +580,8 @@ step on an article you already have is free. A failed ingest is free. Archiving 
 give the slot back — and archiving is the only removal the interface offers
 ([library.md](library.md#archive-and-undo-is-the-confirmation)).
 
+**And a public article costs half of one** — see below.
+
 It is an **abuse boundary against model spend**, not an invoice. Nothing is derived from it and it
 reconciles against nothing; the subscription is a fixed charge. (Cost attribution lives in
 `ai_calls` — [database.md](database.md) — and the two ledgers are deliberately separate.)
@@ -592,6 +604,136 @@ account. A plain "count, then decide" cannot: twenty requests all read zero and 
 
 **Nothing that opens its own transaction, and nothing that touches the network, may be called
 between the lock and the commit.** That is the rule a later change is most likely to break.
+
+### A public article counts half
+
+Greg, 2026-09-04:
+
+> please also change how we price Public-readable articles - they are half-price, i.e. they only
+> count as a half-article against the user's article-quota (e.g. free users can make 6 Public
+> articles, $10 users can make twice as many if Public, etc etc). … The intention is to incentivise
+> people to make articles Public, because then more people benefit from them.
+
+**Live recomputation, not a credit.** Usage is derived from `articles.visibility` every time it is
+asked, so sharing lowers it and unsharing puts it straight back. The two alternatives fail in ways
+that matter: a credit granted once makes share-then-unshare free slots for ever unless clawed back,
+which is the ledger growing a second kind of row; and charging half at add time misses the article
+you decide to share three weeks later, which is most of them.
+
+**The arithmetic is in half-units, and that is not a stylistic preference.** A private ingest costs
+**2**, a currently-public one **1**, and a tier's budget is its article allowance doubled. No
+fraction goes near money, and `usageOf`'s `Number.isInteger` assertion — which exists to stop a
+silent *"this account has used nothing"* — keeps working untouched.
+[`src/billing/half-units.ts`](../../src/billing/half-units.ts) holds the two units, as two branded
+types so that one cannot be passed where the other belongs.
+
+**In flight costs full price**, because nobody yet knows whether the article will be shared. It fails
+safe: the cheaper guess would let a burst through a budget that does not fit it.
+
+Four things to know before touching any of it.
+
+- **Every tier, delta, proration and clamp stays in *articles*.** `quota_limit_delta` is a signed
+  count of whole ingests, so a Researcher's 150 with a stored −117 means 33. Doubling the tier
+  *before* `limitForPeriod` yields `300 − 117 = 183` half-units where the answer is `(150 − 117) × 2
+  = 66` — ninety-one articles for somebody entitled to thirty-three. `budgetFor` is therefore applied
+  only at the admission and usage seam, and **no stored delta was migrated**. GPT Sol found it in the
+  design review and rated it the one that would have cost real money.
+- **The wall admits a half-unit of overdraft, knowingly.** `used < budget` never let anybody exceed
+  the limit *only because a reservation cost exactly one*; at two, five-of-six admits an ingest that
+  settles at seven. The money-safe `used + 2 <= budget` would make Greg's own sentence — six public
+  articles on a free account — false, so the overdraft is taken. It is one half-unit, once: at seven
+  everything is refused, and sharing the new article returns them to six, which is still refused.
+  Both halves are pinned by `tests/billing-half-units.test.ts`.
+- **The discount starts from the day it shipped.** A charged row is resolved to its article through
+  `ingest_events.article_id`, added 2026-09-05; every row charged before that has nothing to resolve
+  and there is no way to backfill one, because jobs are hard-deleted and a slug is not identity. The
+  usage query is a `left join` with `coalesce(visibility, 'private')`, so **an unresolvable row is
+  charged full price** — the direction that cannot be gamed. Said out loud rather than discovered:
+  *an article you shared last week does not become cheaper; the discount applies to what you add from
+  now on.* Articles added before billing launched have no ledger row at all and already cost nothing.
+- **It is a statement about ingests, not about articles.** Cardinality is N charged rows : 1 article
+  — a re-added URL adopts the shelf's article and charges again — so sharing that article halves
+  *both* rows. Defensible, since they did pay for two ingests, and the copy must not promise
+  otherwise.
+- **The period is filtered twice, once per counted column**, and only the full-price copy had a
+  behavioural test until 2026-09-05. Reversing the paid bounds in the *public* copy alone keeps the
+  generated SQL's parameter count and values identical, so the shape test stays green — and with no
+  paid public row anywhere in the suite, 44 tests passed while every paid public success vanished
+  from usage, which is sequential public ingests without bound. Watched doing exactly that before the
+  case was written; `tests/billing-half-units.test.ts` § *a paid period counts public rows by its own
+  bounds* is what now fails on it. GPT Sol, 2026-09-05.
+
+**The lock order is `billing_accounts` before `articles`, everywhere.** Usage is now a function of a
+column a different request can change at any moment, so every visibility change creates the owner's
+billing anchor if absent, locks that row, and only then locks the article
+([`src/store/pg-visibility.ts`](../../src/store/pg-visibility.ts)). Without it an unshare can commit
+between an admission's usage read and its reservation. It does **not** let two ingests consume one
+slot; a consistent order is also what stops the two deadlocking, so it is applied everywhere or
+nowhere, and `read committed` is then sufficient.
+
+**Deleting a public article would silently raise its owner's usage** — `on delete set null` turns
+each of its charged rows back into full price. There is no article-deletion path in the app today, so
+this is a policy written at the column rather than a defect: if one is ever built it takes the same
+billing lock and warns the same way unsharing does.
+
+**Where a reader meets it.** The unshare side of the sharing card says what taking it down costs
+(`UNSHARING_COSTS_ALLOWANCE`) — a statement of consequence, with no tick-box and no second
+confirmation, because a cost attached to taking something down is a cost attached to acting on a
+complaint. **It is conditional, and that is not politeness**: an article added before billing has no
+ledger row and one charged before `article_id` existed resolves to nothing, so for both of those
+owners the unconditional version was a cost that does not exist — invented, on the press a takedown
+asks somebody to make. **Money never appears inside the sharing confirmation**, where the rights
+tick-box lives.
+
+And all three quota refusals carry a *conditional* offer — *sharing “this one” would make room* —
+computed by grouping the charged rows by article inside the entitlement window and taking the largest
+groups first, so it is silent for the reader who has already shared everything and for the reader
+whose rows all predate the discount. Copy cannot rescue a false offer; conditionality has to (Fable,
+2026-09-04).
+
+**The offer names the articles rather than counting them**, since 2026-09-05, and the reason is worth
+keeping. *Sharing one of your articles would make room* is arithmetically right and points at a
+library in which a grandfathered article — no ledger row, indistinguishable on screen — sits beside
+the three that are actually counted. Share that one and usage does not move, and sharing is
+irreversible in the way that matters: it republishes somebody else's article to strangers. Nothing on
+any surface tells the two apart, so the reader cannot make that choice for themselves. Past three
+articles the sentence goes back to a count, with *counted against this allowance* rather than *of
+your articles*. GPT Sol, 2026-09-05.
+
+`/profile` says the same thing and asks the same query (`sharingWouldMakeRoom`), only when the wall
+has refused. It offered sharing unconditionally until the same day, which was false for every account
+whose rows predate the column — that is every row charged before 2026-09-05.
+
+**No surface ever divides a half-unit.** There is no rounding rule that is correct: `ceil(5/2)` says
+*"3 of 3 used"* while the wall still admits one, and `floor` says *"2 of 3"* while two and a half are
+gone. So the marketed limit stays in articles, the enforcement budget is a separately named field,
+and any surface that shows usage is handed integer counts it adds up itself — `/profile` and
+`/pricing` through `describePlan`, and `/admin/users`, which shows the enforcement pair in half-slots
+and names the unit rather than printing a fraction.
+
+**And a ratio is only printed while it is one.** *N of the allowance* needs both that nothing is
+public *and* that there are no more ingests than the allowance sells: unshare six public articles on
+a free account and `used` stays at six with nothing shared, which printed *"6 of 3 articles used"* on
+`/profile`, *"6 / 3"* on `/admin/users`, and *"you have added all 3 articles a free account can add"*
+in the refusal — the invalid ratio this whole design exists to avoid, arrived at from the other
+direction. The refusals now say the *allowance* is spent rather than counting what was added, and
+neither page claims a count *fits* an allowance it is over. GPT Sol, 2026-09-05.
+
+### The allowance prorates, and the column holds a delta
+
+**A mid-period tier change moves the limit by what the money actually bought**, because Stripe
+prorates the price and we used to hand over the allowance whole — upgrade with an hour left, take the
+full allowance, downgrade before the roll, repeat. *Nobody uses 130 ingests in an hour* is not an
+answer: the quota is an abuse boundary against a script, and a script can. Upgrading on day 27 of 30
+takes a Reader from 20 to 33, not to 150.
+
+The two facts to hold before touching it: the stored column is a **delta**, not an absolute, and it
+is applied at the sync rather than at the change. So **writing an absolute limit — a support fix, a
+seed script — silently opts that reader out of every future tier change.** The arithmetic, the
+accrual model behind it, and the three shapes that were proposed and refuted are all in
+[`src/billing/quota-adjustment.ts`](../../src/billing/quota-adjustment.ts) and
+[260903i](../plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md); if it is ever
+wrong, the inputs are the place to look and not the formula.
 
 ### Which requests spend a slot, and why the wall is at the routes
 
@@ -863,7 +1005,7 @@ to pay" page for a second one, so the gap is real rather than theoretical.
 
 **Greg's call, 2026-09-03: not worth closing.** It takes two Checkout pages opened before either is
 paid, and then two card forms filled in on purpose — `useBilling`'s `if (busy) return` already eats
-the double-click, and `hasOpenSubscription` already turns the ordinary second attempt into the
+the double-click, and `subscriptionState` already turns the ordinary second attempt into the
 Portal.
 
 What was weighed and passed over, so nobody re-derives it:
@@ -1151,13 +1293,14 @@ any time. See [admin.md](admin.md).
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.
-- **A subscriber is offered no plan change**, below. Stripe has permitted the switch since
-  2026-09-04; `canCheckout` is not tier-aware, so nothing draws the button.
+- ~~**A subscriber is offered no plan change**~~ — **done, 2026-09-04**. Stripe permitted the
+  switch that morning and the gate became tier-aware that evening; a Reader is offered Researcher on
+  both pages, through the Portal. [Reader → Researcher](#reader-researcher-open-at-stripe-and-open-in-our-own-ui).
 
 The order is in
 [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
 
-### Reader → Researcher: open at Stripe, closed in our own UI
+### Reader → Researcher: open at Stripe, and open in our own UI
 
 **The Stripe half was shut, and is now open.** Found by GPT Sol on 2026-09-03 and then confirmed
 against the live Portal configuration, which is the half that matters: `subscription_update` read
@@ -1191,15 +1334,64 @@ back **absent, not empty**, unless the read asks for
 `expand: ["features.subscription_update.products"]` — so an un-expanded response reads `enabled: true`
 and looks fine while offering nowhere to go.
 
-> [!WARNING]
-> **The dead end has moved out of Stripe and into our own UI, and it is still open.** `canCheckout`
-> ([`src/billing/summary.ts`](../../src/billing/summary.ts)) means *"has no open subscription"* — a
-> subscription id whose status is not terminal, the same question `startCheckout` asks — and not *"has
-> nowhere to go"*. Every plan button is gated on it: the offers on `/profile`
-> ([`src/web/BillingSection.tsx`](../../src/web/BillingSection.tsx)), and both the per-tier button and
-> the plan cards on [`src/web/PricingPage.tsx`](../../src/web/PricingPage.tsx). So a paying Reader is
-> drawn no button anywhere, and the switch Stripe now permits is one nothing offers. Closing it means
-> making the gate **tier-aware**: a Reader may not buy Reader again, and may buy Researcher.
+#### And then the dead end moved into our own UI, where it was closed the same day
+
+`canCheckout` ([`src/billing/summary.ts`](../../src/billing/summary.ts)) meant *"has no open
+subscription"* — the same question `startCheckout` asks — and not *"has somewhere to go"*, while
+every plan button on both pages was gated on it. So a paying Reader was drawn no button anywhere and
+the switch Stripe had just permitted was one nothing offered.
+
+**The gate is now the offer.** `canCheckout` and `offers` are both gone from the wire, replaced by
+one field: `purchase`, a discriminated union in
+[`src/billing-plan.ts`](../../src/billing-plan.ts) — `checkout` or `switch` over a **non-empty** list
+of tiers, `top` for somebody already on the largest, `none` for everybody else. Deleting both names
+rather than changing the meaning of one is what made the compiler walk every call site; putting the
+list *inside* the union is what makes *"nothing to buy, and here is the catalogue"* — a paying
+Reader's state on the live account — unbuildable.
+
+- **Higher is decided by `ingests_per_period`**, not `sort_order` (a display column that nothing
+  makes ascend with what a tier sells) and not price (three currencies, and nothing makes them
+  agree). It is the key `choiceRules` and `nextQuotaAdjustment` already rank by, and
+  `tests/billing-tiers.test.ts` pins that a dearer tier allows more. **A tie is not higher**: an
+  equal allowance is a button that takes money and changes nothing, so it is not offered.
+- **The comparison is against the tier's own row, never `Entitlement.limit`** — that number carries
+  the prorated override a mid-period switch leaves behind (a Researcher who moved up on day 27 is
+  entitled to 33 this month), and ranking it would offer them the plan they are on. `Standing` takes
+  a `TierRow`, so the wrong number cannot be passed.
+- **Filtering never reorders.** `offerableTiers` sorts, `tiersToOffer` only filters, and `PlanCards`
+  draws what it is handed — nothing downstream would put a jumbled ladder right.
+- **The button says what the press does**: *Switch to Researcher* on `/pricing`, *Switch plan* on
+  `/profile`, over `switchingPlan(purchase.from)` — the press opens the hosted Portal, where the plan
+  is chosen again and confirmed, Stripe invoices the difference at once, the renewal date does not
+  move, and the added allowance is prorated. A button reading *Upgrade* would have named something
+  the press does not do.
+- **…except out of a trial, where all three of those claims are false**, which is why the sentence
+  is a function of `purchase.from` rather than one string. `trialing` is an entitled status, so a
+  trialling reader reaches the same `switch` arm — and the Portal's `trial_update_behavior:
+  "end_trial"` means the press ends the trial rather than adjusting a paid month: there is no
+  difference to invoice, the period restarts, and because the period *start* moves
+  `nextQuotaAdjustment` writes no delta, so the whole new allowance arrives rather than a
+  part-month share. We do not sell trials, so this is a state that should not occur and is not
+  prevented; the answer was separate copy rather than refusing the switch, because the capability
+  was never the thing that was wrong. GPT Sol, 2026-09-04.
+- **A Researcher is told why there is no button** (`noHigherPlan`), on both pages. Prices with
+  nothing to press and nothing said is the page this whole feature exists to stop existing.
+- **And *"do they already have a subscription?"* is now asked once**, by `subscriptionState`
+  ([`src/billing/tiers.ts`](../../src/billing/tiers.ts)), rather than written out separately in the
+  summary and in `startCheckout`. Those two spellings both read *a subscription id with a
+  non-terminal status*, while entitlement asks something else again and **never reads the id at
+  all** — so a row with `status = 'active'`, a known price and a readable period but no
+  `stripe_subscription_id` made them disagree: entitlement said *paying Reader*, the sale gate said
+  *sell them anything*, and pressing *Get Reader* would have opened a second, concurrently billed
+  subscription for the plan they were already on. GPT Sol found it on 2026-09-04. The row is now
+  refused by `billing_accounts_subscription_fields_need_subscription`, and the shared predicate
+  fails closed to the Portal if one ever appears anyway.
+- **Nothing is offered for sale when Stripe is not configured.** Priced rows in Postgres and no
+  `STRIPE_SECRET_KEY` used to draw a full set of buttons whose only possible outcome was *billing is
+  not available*; `readBillingSummary` now emits `purchase: none` before the ranking is reached.
+  `manageable` is deliberately untouched — it answers *is there billing history to look at*, and
+  hiding the Portal link from somebody whose subscription is real and whose deployment is merely
+  misconfigured helps nobody.
 
 Two lessons outlived the bug, and neither of them is about Stripe:
 

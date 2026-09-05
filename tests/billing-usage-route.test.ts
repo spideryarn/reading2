@@ -123,8 +123,8 @@ async function sweep(): Promise<void> {
 
 /* -------------------------------------------------------------- fixtures -- */
 
-/** The `reader` tier's Stripe price, **read from the table** rather than named here. */
-async function readerTier(): Promise<{ priceId: string; name: string; limit: number }> {
+/** A tier's Stripe price, **read from the table** rather than named here. */
+async function tierRow(id: string): Promise<{ priceId: string; name: string; limit: number }> {
   if (!pool) return { priceId: "", name: "", limit: 0 };
   const { rows } = await pool.query<{
     stripe_price_id: string | null;
@@ -132,7 +132,8 @@ async function readerTier(): Promise<{ priceId: string; name: string; limit: num
     ingests_per_period: number;
   }>(
     `select stripe_price_id, product_name, ingests_per_period
-       from spideryarn.billing_tiers where id = 'reader' and active`,
+       from spideryarn.billing_tiers where id = $1 and active`,
+    [id],
   );
   const row = rows[0];
   if (!row?.stripe_price_id) {
@@ -141,7 +142,7 @@ async function readerTier(): Promise<{ priceId: string; name: string; limit: num
        without it is one this suite cannot say anything useful about, and saying
        so beats passing quietly. */
     throw new Error(
-      "billing_tiers has no active 'reader' row with a stripe_price_id — run " +
+      `billing_tiers has no active '${id}' row with a stripe_price_id — run ` +
         "npx tsx scripts/stripe-setup.ts --apply",
     );
   }
@@ -150,6 +151,21 @@ async function readerTier(): Promise<{ priceId: string; name: string; limit: num
     name: row.product_name,
     limit: row.ingests_per_period,
   };
+}
+
+/** The tier a `/pricing` press would buy first. */
+const readerTier = () => tierRow("reader");
+
+/**
+ * What the reply says may be bought: the door, and the tier ids behind it.
+ *
+ * Read off the wire rather than through `purchasableTiers`, so this asks what a
+ * browser would actually receive — a summary built with the field missing
+ * altogether reads as `absent` here rather than as an empty list.
+ */
+function purchaseOf(body: Record<string, unknown>): { kind: string; ids: string[] } {
+  const purchase = body.purchase as { kind: string; tiers?: { id: string }[] } | undefined;
+  return { kind: purchase?.kind ?? "absent", ids: (purchase?.tiers ?? []).map((t) => t.id) };
 }
 
 /** Put a billing row in, the way the webhook's sync would have written one. */
@@ -229,13 +245,19 @@ describe("GET /api/billing/usage", () => {
   dbIt("puts a reader with no billing row on the free tier, with nothing used", async () => {
     const reply = await get("/api/billing/usage", OWNER);
     expect(reply.status).toBe(200);
-    expect(reply.body.plan).toEqual({ kind: "free", limit: FREE_LIFETIME_INGESTS, used: 0 });
+    expect(reply.body.plan).toEqual({
+      kind: "free",
+      limit: FREE_LIFETIME_INGESTS,
+      used: 0,
+      sharedHalfPrice: 0,
+      atLimit: false,
+    });
     /* Nothing to manage: the Stripe customer that would hold a billing history
        is created by the first checkout, and the Portal route refuses without
        one. A button drawn here could only produce that refusal. */
     expect(reply.body.manageable).toBe(false);
-    /* And there is plainly something to sell them. */
-    expect(reply.body.canCheckout).toBe(true);
+    /* And there is plainly something to sell them, through the Checkout door. */
+    expect(purchaseOf(reply.body).kind).toBe("checkout");
   });
 
   dbIt("counts a free reader's successes for ever, and their reservations too", async () => {
@@ -249,18 +271,24 @@ describe("GET /api/billing/usage", () => {
       { releasedAt: new Date() },
     ]);
     const reply = await get("/api/billing/usage", OWNER);
-    expect(reply.body.plan).toEqual({ kind: "free", limit: FREE_LIFETIME_INGESTS, used: 3 });
+    expect(reply.body.plan).toEqual({
+      kind: "free",
+      limit: FREE_LIFETIME_INGESTS,
+      used: 3,
+      /* Nothing shared, so nothing is cheap — and three of three is the wall. */
+      sharedHalfPrice: 0,
+      atLimit: true,
+    });
   });
 
   dbIt("offers the tiers that have a Stripe price, with their real numbers", async () => {
     const tier = await readerTier();
     const reply = await get("/api/billing/usage", OWNER);
-    const offers = reply.body.offers as {
-      id: string;
-      name: string;
-      ingestsPerPeriod: number;
-      amounts: Record<string, number>;
-    }[];
+    const offers = (
+      reply.body.purchase as {
+        tiers?: { id: string; name: string; ingestsPerPeriod: number; amounts: Record<string, number> }[];
+      }
+    ).tiers ?? [];
     const reader = offers.find((o) => o.id === "reader");
     /* Read back against the row rather than against a constant here — the whole
        reason tiers are rows is that these numbers change without a deploy. */
@@ -302,6 +330,8 @@ describe("GET /api/billing/usage", () => {
       tierName: tier.name,
       limit: tier.limit,
       used: 2,
+      sharedHalfPrice: 0,
+      atLimit: false,
       periodEnd: period.end.toISOString(),
       endsAt: null,
     });
@@ -309,8 +339,8 @@ describe("GET /api/billing/usage", () => {
   });
 
   dbIt("will not offer to sell beside a subscription that is not over", async () => {
-    /* **`canCheckout`, and the list it is decided by is shorter than
-       "unentitled".** `unpaid` entitles nothing — so this account is `lapsed`
+    /* **The list this is decided by is shorter than "unentitled".** `unpaid`
+       entitles nothing — so this account is `lapsed`
        and would be refused an ingest — and it is a subscription Stripe still
        holds and may still collect on, so `startCheckout` sends them to the
        Portal rather than selling a second one. Tier cards drawn beside that are
@@ -324,7 +354,9 @@ describe("GET /api/billing/usage", () => {
     });
     const reply = await get("/api/billing/usage", OWNER);
     expect(reply.body.plan).toMatchObject({ kind: "lapsed" });
-    expect(reply.body.canCheckout).toBe(false);
+    /* Not `top` either — that would say they are on the largest plan, which is a
+       sentence, and this account is not on a plan at all. */
+    expect(purchaseOf(reply.body)).toEqual({ kind: "none", ids: [] });
     /* And the Portal *is* offered, because that is where they need to go. */
     expect(reply.body.manageable).toBe(true);
   });
@@ -339,22 +371,180 @@ describe("GET /api/billing/usage", () => {
     });
     const reply = await get("/api/billing/usage", OWNER);
     expect(reply.body.plan).toMatchObject({ kind: "lapsed" });
-    expect(reply.body.canCheckout).toBe(true);
+    expect(purchaseOf(reply.body).kind).toBe("checkout");
   });
 
-  dbIt("will not offer to sell to somebody who already pays", async () => {
+  /* ------------------------------------------- one tier up, and no further -- */
+
+  /**
+   * **A paying Reader is offered Researcher, and not Reader.**
+   *
+   * The gate was a boolean meaning *has no open subscription*, so this account
+   * was drawn no button on either page while Stripe's Portal would have taken
+   * the switch — docs/project/billing.md § *Reader → Researcher*. Watched failing
+   * on 2026-09-04 against a `tiersToOffer` whose filter was removed: the answer
+   * came back `switch` over both tiers, which is a button offering a Reader the
+   * plan they are already on.
+   */
+  dbIt("offers a paying Reader the tier above, through the Portal", async () => {
     const tier = await readerTier();
     const period = livePeriod();
     await givenAccount({
-      customer: "cus_usage_subscribed",
-      subscription: "sub_usage_subscribed",
+      customer: "cus_usage_reader",
+      subscription: "sub_usage_reader",
       status: "active",
       priceId: tier.priceId,
       periodStart: period.start,
       periodEnd: period.end,
     });
     const reply = await get("/api/billing/usage", OWNER);
-    expect(reply.body.canCheckout).toBe(false);
+    /* **`switch`, not `checkout`.** `startCheckout` returns the hosted Portal to
+       anybody holding an open subscription, so a card labelled as a purchase
+       would name something the press does not do. */
+    expect(purchaseOf(reply.body)).toEqual({ kind: "switch", ids: ["researcher"] });
+  });
+
+  /**
+   * **The row that would have sold a Reader a second Reader subscription cannot
+   * be written at all.**
+   *
+   * `status = 'active'` with a known price and a readable period makes
+   * `entitlementFromRow` answer *paid Reader*, while the subscription id — the
+   * column every "do they already have one" test reads — is null. The two
+   * questions were asked separately, so they disagreed: this route answered
+   * `checkout` over `["reader", "researcher"]`, and pressing *Get Reader* would
+   * have opened a second, concurrently billed subscription for the plan the
+   * reader is already on. GPT Sol found it on 2026-09-04, and it was watched
+   * failing here on 2026-09-05 exactly that way before the fix.
+   *
+   * Two halves went in, and this is the one that holds for every writer: the
+   * insert below is refused by
+   * `billing_accounts_subscription_fields_need_subscription`. The code half —
+   * `subscriptionState` failing closed if it ever meets one anyway — is over
+   * fixture rows in tests/billing-tiers.test.ts, because the state this asserts
+   * is unreachable cannot also be handed to the route.
+   */
+  dbIt("cannot even hold a row that claims a plan with no subscription behind it", async () => {
+    if (!pool) return;
+    const tier = await readerTier();
+    const period = livePeriod();
+    const write = pool.query(
+      `insert into spideryarn.billing_accounts
+         (owner_id, stripe_customer_id, stripe_subscription_id, status, price_id,
+          current_period_start, current_period_end)
+       values ($1, $2, null, 'active', $3, $4, $5)`,
+      [OWNER, "cus_usage_ghost", tier.priceId, period.start, period.end],
+    );
+    await expect(write).rejects.toThrow("billing_accounts_subscription_fields_need_subscription");
+    /* **And the same row *with* its subscription id goes in**, so this cannot
+       pass because the insert was malformed in some other way. */
+    await givenAccount({
+      customer: "cus_usage_ghost",
+      subscription: "sub_usage_ghost",
+      status: "active",
+      priceId: tier.priceId,
+      periodStart: period.start,
+      periodEnd: period.end,
+    });
+    expect(purchaseOf((await get("/api/billing/usage", OWNER)).body).kind).toBe("switch");
+  });
+
+  /**
+   * **Nothing is on sale when Stripe is not configured.**
+   *
+   * The tiers are perfectly good rows in Postgres and `STRIPE_SECRET_KEY` is
+   * missing, so every card drawn from them ends in the 503 `orBillingUnavailable`
+   * answers. Nothing in the summary asked, so a free reader was shown *Get
+   * Reader* and a subscriber *Switch plan*, and pressing either produced
+   * "billing is not available just now". GPT Sol, 2026-09-04, finding 4.
+   *
+   * The plan itself is unaffected, which is the point of putting the check on
+   * `purchase` alone: a quota is a fact about the ledger and does not stop being
+   * true because a key is missing.
+   */
+  dbIt("offers nothing at all when this deployment has no Stripe key", async () => {
+    vi.stubEnv("STRIPE_SECRET_KEY", "");
+    try {
+      const reply = await get("/api/billing/usage", OWNER);
+      expect(purchaseOf(reply.body)).toEqual({ kind: "none", ids: [] });
+      /* And it is still an answer about a plan, not an error. */
+      expect(reply.status).toBe(200);
+      expect(reply.body.plan).toMatchObject({ kind: "free" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    /* **The mirror**, so this cannot pass on a machine that never had a key: the
+       same reader, the same rows, with the key back. */
+    expect(purchaseOf((await get("/api/billing/usage", OWNER)).body).kind).toBe("checkout");
+  });
+
+  /**
+   * **A trialling Reader is offered the switch, and told what it really does.**
+   *
+   * `trialing` is an entitled status (`ENTITLED_STATUSES`, src/billing/tiers.ts),
+   * so this account reaches the `switch` arm — and until 2026-09-05 the sentence
+   * beside the button was the paid one, every clause of which is false here: the
+   * Portal ends the trial (`trial_update_behavior: "end_trial"`), so there is no
+   * difference to invoice, the period does not stay put, and the allowance is not
+   * prorated. `from` is what carries that as far as the page. GPT Sol, finding 2.
+   */
+  dbIt("says a trialling reader's switch is out of a trial, not out of a paid month", async () => {
+    const tier = await readerTier();
+    const period = livePeriod();
+    await givenAccount({
+      customer: "cus_usage_trial",
+      subscription: "sub_usage_trial",
+      status: "trialing",
+      priceId: tier.priceId,
+      periodStart: period.start,
+      periodEnd: period.end,
+    });
+    const purchase = (await get("/api/billing/usage", OWNER)).body.purchase as {
+      kind: string;
+      from?: string;
+    };
+    expect(purchase).toMatchObject({ kind: "switch", from: "trial" });
+  });
+
+  /**
+   * The top of the ladder, which is the case that has to say something rather
+   * than draw an empty gap.
+   */
+  dbIt("offers a Researcher nothing, and says that is because they are at the top", async () => {
+    const tier = await tierRow("researcher");
+    const period = livePeriod();
+    await givenAccount({
+      customer: "cus_usage_researcher",
+      subscription: "sub_usage_researcher",
+      status: "active",
+      priceId: tier.priceId,
+      periodStart: period.start,
+      periodEnd: period.end,
+    });
+    const reply = await get("/api/billing/usage", OWNER);
+    /* `top` rather than `none`: the page has a sentence for one and nothing to
+       say for the other, and a Researcher looking at three prices with no button
+       is owed the sentence. */
+    expect(purchaseOf(reply.body)).toEqual({ kind: "top", ids: [] });
+  });
+
+  /**
+   * **Ascending, because nothing downstream will fix it.**
+   *
+   * `PlanCards` draws plans in the order it is handed them and promotes nothing,
+   * so a filtered list that came back jumbled would read as unrelated offers
+   * rather than a ladder. Asked of the allowance rather than of a hardcoded pair
+   * of ids, so a third tier joins the assertion by existing.
+   */
+  dbIt("hands the tiers over cheapest first", async () => {
+    const reply = await get("/api/billing/usage", OWNER);
+    const { ids } = purchaseOf(reply.body);
+    const rows = await Promise.all(ids.map((id) => tierRow(id)));
+    const allowances = rows.map((t) => t.limit);
+    expect(allowances).toEqual([...allowances].sort((a, b) => a - b));
+    /* And the seeded catalogue really is more than one row, so the assertion
+       above is not vacuously true of a list of one. */
+    expect(ids.length).toBeGreaterThan(1);
   });
 
   dbIt("says when a cancelled subscription ends, so the page cannot say it renews", async () => {
@@ -550,7 +740,18 @@ describe("the admin page's ingest aggregate", () => {
        windows are both returned because which one is right depends on the
        entitlement, and the entitlement is decided in TypeScript by the same
        function the wall uses — see `planFacts` in src/store/pg-admin.ts. */
-    expect(mine).toEqual({ owner: OWNER, lifetime: 3, inPeriod: 2, inFlight: 1 });
+    expect(mine).toEqual({
+      owner: OWNER,
+      lifetime: 3,
+      inPeriod: 2,
+      inFlight: 1,
+      /* None of them public, so none of them is cheap. The half-price columns
+         are counted over the same two windows as the two above, and never over
+         the reservations — an in-flight ingest is charged full price because
+         nobody yet knows whether the article will be shared. */
+      lifetimeShared: 0,
+      inPeriodShared: 0,
+    });
   });
 
   dbIt("counts an owner with no billing row at all, rather than dropping them", async () => {
@@ -563,6 +764,8 @@ describe("the admin page's ingest aggregate", () => {
       lifetime: 2,
       inPeriod: 0,
       inFlight: 0,
+      lifetimeShared: 0,
+      inPeriodShared: 0,
     });
   });
 });

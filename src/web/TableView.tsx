@@ -158,6 +158,13 @@ interface Props {
    */
   onChatAbout?: ((blockId: BlockId) => void) | undefined;
   /**
+   * The reader pressed "?" beside a paragraph — the same capability as
+   * `onChatAbout`, passed the same way and absent for a visitor for the same
+   * reason. BlockGutter.tsx has the argument for why it is its own callback
+   * rather than a flag on that one.
+   */
+  onHelp?: ((blockId: BlockId) => void) | undefined;
+  /**
    * Every glossary term this article has, so every one can be underlined.
    *
    * **A list since 2026-08-26, and it used to be the one the reader had
@@ -281,6 +288,7 @@ function TableViewInner({
   openChat,
   onOpenChat,
   onChatAbout,
+  onHelp,
   terms,
   openTerm,
   hitMarks,
@@ -1070,10 +1078,46 @@ function TableViewInner({
                    `kind-callout` is still emitted for revisions extracted in the
                    few hours that kind existed, and the stylesheet answers to
                    both. */
-                /* `has-marks` says this row draws all three gutter slots, and
-                   the stylesheet floors its height so none of them can hang
-                   below the row and take a click meant for the next one.
-                   § the gutter in styles.css has the reasoning. */
+                /* `gutter-pad` says this row's gutter is the full three-slot
+                   column rather than a single 24px slot, and the stylesheet
+                   floors the row's height to match so nothing can hang below it
+                   and take a click meant for the next row. § the gutter in
+                   styles.css has the reasoning.
+
+                   **The condition is the reader's capability, not what is on
+                   the row.** `onChatAbout` is what BlockGutter renders the chat
+                   button from, and `onHelp` the "?" beneath it, so a reader who
+                   has them is a reader whose gutter is the whole column —
+                   floored on every row, so their paragraphs do not jump when
+                   they mark one. A visitor has neither, so their gutter stays
+                   one slot tall and the article keeps its old rhythm.
+
+                   **Both callbacks are asked about, and an earlier draft asked
+                   about one.** It read `onChatAbout || comments` on the
+                   reasoning that App gates both callbacks on `owner`, so the
+                   chat button and the "?" can only ever agree. That is true of
+                   today's single caller and **false at this component's
+                   boundary**, which is where a condition has to hold: an
+                   `onHelp`-only caller drew a permalink in the first slot and a
+                   "?" below it with no floor — the exact overhang class that
+                   work existed to remove, reintroduced through the props. GPT
+                   Sol's stage 2 review, 2026-09-04;
+                   `tests/gutter-pad-floor.test.tsx` is the invariant written
+                   down, watched red first.
+
+                   **`comments` left this condition on 2026-09-05, and it is not
+                   a relaxation of that rule.** The rule is still *anything that
+                   can be drawn below the first slot floors the row*; what moved
+                   is the bookmark, which is now `grid-area: 1 / 1` and so draws
+                   nothing below the first slot. A comment therefore costs the
+                   row no height at all, where it used to cost 24px. **If the
+                   bookmark is ever moved down the column, this condition has to
+                   get `comments` back** — the coupling is asserted from both
+                   ends, in `tests/gutter-pad-floor.test.tsx` and in
+                   `tests/gutter-target-size.test.ts`.
+
+                   It was `has-marks`, meaning "this block has a comment", until
+                   2026-09-04; the name went with the meaning. */
                 /* `note` on every block of the notes region and `note-open` on
                    its first, which is the one that carries the rule across the
                    column and the heading. Both come off the note index rather
@@ -1084,7 +1128,7 @@ function TableViewInner({
                   block.context ? ` ctx-${block.context.type}` : ""
                 } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }${cmtsByBlock.has(block.id) ? " has-marks" : ""}${
+                }${onChatAbout || onHelp ? " gutter-pad" : ""}${
                   notes?.noteOf.has(block.id) ? " note" : ""
                 }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,
@@ -1149,6 +1193,7 @@ function TableViewInner({
                   chatCount={chatCounts.get(block.id) ?? 0}
                   onOpenComment={onOpenComment}
                   onChatAbout={onChatAbout}
+                  onHelp={onHelp}
                   onJump={onJump}
                   announce={announce}
                 />

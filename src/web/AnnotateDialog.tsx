@@ -46,9 +46,16 @@
  * beside the model's own valence in `CriteriaPanel`). It changes nothing about
  * the three decisions above: placing is optional, saving with no placement is
  * the ordinary case, and it stays one press.
+ *
+ * ## And a fifth, since 2026-09-05: a selection is not always a comment
+ *
+ * Opening this box takes the focus and the selection with it, so a reader who
+ * only wanted the sentence on their clipboard had to re-select it in here.
+ * `CopyQuote`, at the foot of this file, is the one press that replaces that,
+ * and carries the reasoning.
  */
 import { useEffect, useRef, useState } from "react";
-import { MessageSquarePlus, X } from "lucide-react";
+import { ClipboardCheck, Copy, MessageSquarePlus, TriangleAlert, X } from "lucide-react";
 
 import type { ChatAnchor } from "../types.js";
 import { mintId } from "../ids.js";
@@ -185,15 +192,31 @@ export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
           <MessageSquarePlus size={12} aria-hidden="true" />
           Comment
         </span>
-        <button
-          type="button"
-          className="annotate-close"
-          onClick={onCancel}
-          title="Close (Esc)"
-          aria-label="Close"
-        >
-          <X size={15} />
-        </button>
+        <span className="annotate-head-actions">
+          {/* **Keyed on the passage, and that key is the whole fix for a false
+              success.** `App` keeps one `AnnotateDialog` mounted and swaps its
+              `anchor` — which is why the body, the tick-box and the placement
+              all need the reset effect above. A tick left over from passage A
+              is worse than those, because it is a claim about the clipboard:
+              copy A, select B inside 1.6s, and an unkeyed button sits there
+              saying "copied" over B's words with A still on the clipboard. The
+              key remounts it, so the state and the in-flight write both go with
+              the passage they belonged to. GPT Sol's review of the built code,
+              2026-09-05. */}
+          <CopyQuote
+            key={`${anchor.blockId}:${anchor.start}:${anchor.quote}`}
+            text={anchor.quote}
+          />
+          <button
+            type="button"
+            className="annotate-close"
+            onClick={onCancel}
+            title="Close (Esc)"
+            aria-label="Close"
+          >
+            <X size={15} />
+          </button>
+        </span>
       </header>
 
       <div className="annotate-body">
@@ -282,5 +305,142 @@ export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
         </p>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Put the selected passage on the clipboard.
+ *
+ * **Why this exists.** Selecting prose opens this box, and the box takes the
+ * focus — so a reader who was only trying to copy a sentence finds their
+ * selection gone and has to re-select the quote in here to get it. Greg,
+ * 2026-09-05. One press instead.
+ *
+ * What is copied is `anchor.quote` — the reader's own words, exactly as the
+ * blockquote above shows them, with no id and no attribution bolted on. This is
+ * the ordinary "I want that sentence" case; the block's citable address is a
+ * different thing and already has its own button in the gutter (BlockGutter).
+ *
+ * The three states, the statement-not-optional-chain guard and the live region
+ * are all `ChatPanel`'s `CopyAnswer`, deliberately: a copy button that silently
+ * does nothing is the shape docs/reusable/silent-success.md is about, and
+ * `navigator.clipboard` is undefined in every insecure context — which includes
+ * reading this app at `http://192.168.1.x:5273` from a phone.
+ *
+ * **The live region is a sibling of the button, not a child of it, and that is
+ * the one place this deliberately departs from `CopyAnswer`.** `button` is one
+ * of the ARIA roles whose children are *presentational*, so a live region
+ * nested inside one is announced at the screen reader's discretion and several
+ * of them drop it — which would leave the failure case silent in the very
+ * component written to stop a silent failure. Outside the button it is an
+ * ordinary live region with nothing arguing about it. `CopyAnswer` has the same
+ * shape and the same doubt; it was left alone here rather than changed
+ * underneath a feature it is not part of.
+ */
+/**
+ * What the button is currently saying, and **a fresh object every time it says
+ * it**.
+ *
+ * The identity is load-bearing, which is why this is an object and not the
+ * bare union it started as. The revert timer hangs off an effect keyed on this
+ * value, and `setState("copied")` when the state is *already* `"copied"` is a
+ * no-op React bails out of — so a second successful copy just before the first
+ * timer expired inherited the old timer and flashed for whatever was left of
+ * it. A new object is never `Object.is`-equal to the last one, so every
+ * outcome re-runs the effect and every outcome gets its own full 1.6 seconds.
+ */
+type Said = { kind: "idle" | "copied" | "failed" };
+
+function CopyQuote({ text }: { text: string }) {
+  const [said, setSaid] = useState<Said>({ kind: "idle" });
+  /**
+   * Which press this is.
+   *
+   * `writeText` is a promise and two presses can be in flight at once, so
+   * without a token the *older* one's outcome lands last and wins: press twice,
+   * the second succeeds, the first rejects a moment later, and the button
+   * reports failure over a clipboard that holds exactly what was asked for.
+   * `BlockGutter` already carries this token; this is the half of the house
+   * pattern the first version left out. Found by GPT Sol, 2026-09-05.
+   */
+  const press = useRef(0);
+  /* Cleared on a timer, and the timer is cleaned up: closing the box mid-tick
+     would otherwise leave one running over a component that is gone. */
+  useEffect(() => {
+    if (said.kind === "idle") return;
+    const timer = setTimeout(() => setSaid({ kind: "idle" }), 1600);
+    return () => clearTimeout(timer);
+  }, [said]);
+  return (
+    <>
+      <button
+        type="button"
+        className="annotate-copy"
+        title={
+          said.kind === "failed"
+            ? "Your browser would not allow the copy — an insecure connection is the usual reason"
+            : "Copy the passage"
+        }
+        /* Fixed, never the outcome. A control whose name changes under the
+           reader is a different control as far as anything scripted or spoken
+           is concerned; what happened is the status region's job, below. */
+        aria-label="Copy the passage"
+        onClick={() => {
+          const mine = ++press.current;
+          const settle = (kind: Said["kind"]) => {
+            if (press.current === mine) setSaid({ kind });
+          };
+          /* A statement rather than `navigator.clipboard?.writeText(…)`: the
+             optional chain short-circuits the whole expression, `.catch`
+             included, so with no clipboard object nothing throws, nothing
+             rejects, and the button reports nothing at all. */
+          if (!navigator.clipboard) {
+            settle("failed");
+            return;
+          }
+          navigator.clipboard
+            .writeText(text)
+            .then(() => settle("copied"))
+            .catch(() => settle("failed"));
+        }}
+      >
+        {said.kind === "copied" ? (
+          <ClipboardCheck size={15} />
+        ) : said.kind === "failed" ? (
+          /* **Not an X**, which is the glyph on the Close button six pixels to
+             the right: a failed copy drew a second X beside the first one, and
+             the only thing distinguishing them was a `title` no touch device
+             shows. */
+          <TriangleAlert size={15} />
+        ) : (
+          <Copy size={15} />
+        )}
+      </button>
+      {/* Drawn *and* announced. A glyph swapping inside a button is not an
+          event, so without this a screen reader cannot tell a copy that worked
+          from one the browser refused.
+
+          **Outside the button, and that is the one place this departs from
+          `ChatPanel`'s `CopyAnswer`.** `aria-label` on a button hides its
+          descendants from assistive technology, and `button` is in any case one
+          of the roles whose children are presentational — so a status region
+          nested in one is announced at the screen reader's discretion, which
+          would leave the failure silent in the very component written to stop a
+          silent failure. `CopyAnswer` has the same shape and the same doubt; it
+          was left alone rather than changed underneath a feature it is not part
+          of.
+
+          `role="status"` rather than a bare `aria-live`, and rendered at every
+          state including the empty one: a region has to be in the document
+          *before* its text changes, and one that appears already holding its
+          message is announced by nobody. */}
+      <span className="sr-only" role="status" aria-atomic="true">
+        {said.kind === "copied"
+          ? "Passage copied."
+          : said.kind === "failed"
+            ? "Copy refused by the browser."
+            : ""}
+      </span>
+    </>
   );
 }
