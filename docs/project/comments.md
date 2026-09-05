@@ -518,6 +518,15 @@ with an extra instruction saying the reader has read an answer and asked you to 
 properly. It **replaces** the answer rather than adding one: a comment is one question and one
 answer, and a second would need a schema that can hold two and a panel that can show them.
 
+It is offered on a comment that has an answer — `done` or `error` — and on **no other**. It used to
+be offered on anything that was not `pending`, which included `status: "none"`: every bookmark and
+every note written without ticking "Also ask the AI". Those are exactly what `beginAnswer` refuses
+with a 409, *"was never a question, so there is nothing to answer"* — so a reader who wrote
+*"what is the evidence for this?"* as a plain comment was offered a button labelled **Search the
+web** and told, on pressing it, that they had never asked anything. Fixed 2026-09-05 while
+diagnosing report 1X; `tests/comment-dialog-search-the-web.test.tsx` renders all four statuses, so
+narrowing it too far goes red as well.
+
 > [!WARNING]
 > **The extra instruction goes after the cache breakpoint, and the tool definition does not change at
 > all.** The cached prefix is *tools + system + article*. Putting the instruction in `SYSTEM` costs a

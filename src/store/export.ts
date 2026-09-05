@@ -634,6 +634,12 @@ export async function exportArticle(
                the instruction that produced it, and nothing reports an error.
                GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 6. */
             stance: row.stance,
+            /* Beside `stance` and for the identical reason its comment gives:
+               this projection is built from named fields, so a new column is
+               easy not to add and its absence is silent. `false` becomes an
+               absent key via `compact`, which is what the filesystem store
+               writes for a question nobody pressed "?" for. */
+            help: row.help ? true : null,
             editedAt: row.editedAt?.toISOString() ?? null,
           }) as ChatMessage,
         ),

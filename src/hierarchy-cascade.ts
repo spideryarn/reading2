@@ -1377,7 +1377,7 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
 
   /* Planned into a report of its own and merged into the caller's only once the
      answer has survived every refusal below — see § "The caller's `report`". */
-  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 
   if (children.length === 0) {
     throw new ExpansionRefused(
@@ -1526,6 +1526,11 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
   report.repairs.push(...planned.repairs);
   report.droppedChildren.push(...planned.droppedChildren);
   report.droppedHeadings.push(...planned.droppedHeadings);
+  /* An expansion writes depth-2 and deeper nodes, where `questionFor` keeps
+     none — so this is normally empty. It is carried anyway, because a count
+     that is only summed on some paths is a count that means one thing here
+     and another there. */
+  report.droppedQuestions.push(...planned.droppedQuestions);
   return built;
 }
 
@@ -1660,6 +1665,14 @@ export function proposalFromTree(tree: Tree): ModelNode {
          round trip is lossy in exactly the case that says something has gone
          strange upstream. */
       ...(node.gist !== undefined ? { gist: node.gist } : {}),
+      /* **And the question, for exactly the reason above.** Left out of the
+         first draft of SPIDERYARN-READING2-1V, and GPT Sol reproduced what that
+         cost: four questions before `deepenTree`, zero after it. Deepening any
+         one section rebuilds the whole tree through this function, so a field
+         missing here is not degraded on the deepened branch — it is gone from
+         the article. The rule this paragraph states is the rule; a new field on
+         `TreeNode` belongs on this list the day it is added. */
+      ...(node.question !== undefined ? { question: node.question } : {}),
       ...(node.sourceHeading !== undefined ? { sourceHeading: node.sourceHeading } : {}),
       ...(children.length > 0 ? { children } : {}),
     };

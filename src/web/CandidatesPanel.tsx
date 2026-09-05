@@ -154,7 +154,7 @@ export function CandidatesBand({
        answer is for an editor deciding who to invite, and how the reader likes
        their own reading explained has no bearing on it. No `at`: the brief is
        about the whole paper. */
-    send(null, CANDIDATES_OPENING, null, false, undefined, undefined, "candidates");
+    send(null, CANDIDATES_OPENING, null, { useProfile: false, kind: "candidates" });
   };
 
   return (
@@ -167,7 +167,7 @@ export function CandidatesBand({
       error={error}
       onAsk={(question) => {
         if (!thread) return;
-        send(thread.id, question, null, false, undefined, undefined, "candidates");
+        send(thread.id, question, null, { useProfile: false, kind: "candidates" });
       }}
       onStop={(messageId) => thread && stop(thread.id, messageId)}
       onStart={startBrief}

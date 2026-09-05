@@ -447,6 +447,28 @@ function Entry({
           )
         )}
 
+        {/* **The claim, then the thread it leaves open.** SPIDERYARN-READING2-1V,
+            Greg 2026-09-05: *"a bit more in the form of Socratic questions that
+            encourage the reader to read the actual text to get the full
+            answers."*
+
+            *"A bit more"* is the whole brief, and it is why this is a second
+            line rather than a rewritten gist. A panel of nothing but questions
+            fails the first thing [vision.md](../../docs/project/vision.md) asks
+            of this feature — *scan before you commit* — because a reader
+            deciding whether to descend needs to know what the section says. So
+            the gist keeps saying it, and the question is the door.
+
+            **Root and parts only**, enforced in `questionFor` rather than
+            merely asked for: one per section on a fifty-section article is
+            noise, and at the default `deep=1` these are the only rows drawn
+            anyway.
+
+            Absent on every article whose hierarchy predates 2026-09-05, and
+            nothing marks the gap — unlike a missing gist, which says so above,
+            because a missing gist is a fault and this is not. */}
+        {entry.question && <p className="summ-question">{entry.question}</p>}
+
         {/* Where this section starts and ends, as two ids you can press.
             The same pair a gist cell carries in TableView, and here for the
             same two reasons: it is the address of the section, and it is the

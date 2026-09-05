@@ -163,7 +163,7 @@ async function streaming(): Promise<ReturnType<typeof controllableStream>> {
   await mount();
 
   act(() => {
-    api().send(THREAD, "and what about this?", null, false);
+    api().send(THREAD, "and what about this?", null, { useProfile: false });
   });
   act(() => {
     turn.frame("begin", {
@@ -319,7 +319,7 @@ describe("mutating a conversation before the server has named it", () => {
     await mount();
     let id = "";
     act(() => {
-      id = api().send(null, "why?", null, false);
+      id = api().send(null, "why?", null, { useProfile: false });
     });
     await settle();
     return { id, turn };

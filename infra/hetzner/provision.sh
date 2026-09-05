@@ -1202,20 +1202,18 @@ check "no npm-global codex beside the native one" 'root=$(npm root -g) && test -
 # before the model is reached, while `codex --version` above goes on passing.
 # That is what happened on 2026-09-05 -- a table without `default_permissions`
 # became an error, on 0.150.1 and 0.153.4 alike -- and nothing on the box said
-# so; the repo's fix is the `default_permissions = ":workspace"` line it now
-# carries, and this check is what would have caught it here.
-#
-# The probe brings its OWN CODEX_HOME, for two reasons: a project's
-# `.codex/config.toml` is read only when the project is trusted (measured
-# 2026-09-05: an untrusted directory's config is ignored in silence, git repo or
-# not), and the real ~/.codex must not be touched by a check.
+# so. This check is what would have caught it here.
 #
 # BOTH DIRECTIONS, and the negative one is the load-bearing half: without it the
 # check would pass just as happily on a codex that had stopped reading project
-# configs at all, which is the same silent nothing it is here to detect. The
-# verdict is the failure STRING rather than an exit code -- `codex doctor` exits
-# 1 on an unauthenticated box whatever the config says, and provisioning runs
-# before the human logs codex in.
+# configs at all, which is the same silent nothing it is here to detect.
+#
+# What it does NOT prove, both GPT Sol's, 2026-09-05: the probe's project is
+# deliberately trusted, so this is schema compatibility and not the operational
+# readiness of any checkout (an untrusted one reads no project config at all --
+# scripts/run-codex.ts is where that is caught); and it runs at provisioning
+# time only, so a later `codex update` can still break the schema underneath a
+# box that passed.
 CODEX_CFG_PROBE=$(mktemp)
 cat > "$CODEX_CFG_PROBE" <<'PROBE'
 set -eu
@@ -1226,14 +1224,27 @@ set -eu
 d=$(cd "$(mktemp -d)" && pwd -P); h=$(mktemp -d)
 trap 'rm -rf "$d" "$h"' EXIT
 mkdir -p "$d/.codex"
+# Its OWN CODEX_HOME: a project's `.codex/config.toml` is read only when the
+# project is trusted, and the real ~/.codex is not a check's to write.
 printf '[projects."%s"]\ntrust_level = "trusted"\n' "$d" > "$h/config.toml"
 cd "$d"
-printf 'default_permissions = ":workspace"\n[permissions.review.filesystem]\n"/" = "read"\n' > "$d/.codex/config.toml"
-good=$(CODEX_HOME="$h" timeout 60 codex doctor 2>&1 || true)
+# The structured verdict rather than the report's prose: `codex doctor` exits 1
+# on an unauthenticated box whatever the config says -- and provisioning runs
+# before the human logs codex in -- so the exit code cannot be the signal. The
+# `select` makes a schema change fail CLOSED: no schemaVersion 1, no verdict, no
+# pass. GPT Sol's, 2026-09-05; `--json` measured on 0.152.1 and 0.153.4.
+verdict() {
+  CODEX_HOME="$h" timeout 60 codex doctor --json 2>/dev/null \
+    | jq -er 'select(.schemaVersion == 1) | .checks["config.load"].status'
+}
+# The shape the repos actually carry, `:workspace_roots` included, so a codex
+# that kept `default_permissions` and dropped the relative-path token still
+# fails here. It is a COPY of that shape, not the file itself -- provisioning
+# has no checkout -- so .codex/config.toml stays the authority on the real one.
+printf 'default_permissions = ":workspace"\n[permissions.review.filesystem]\n"/" = "read"\n"/tmp" = "write"\n[permissions.review.filesystem.":workspace_roots"]\n"node_modules/.cache" = "write"\n' > "$d/.codex/config.toml"
+test "$(verdict)" = ok
 printf '[permissions.review.filesystem]\n"/" = "read"\n' > "$d/.codex/config.toml"
-bad=$(CODEX_HOME="$h" timeout 60 codex doctor 2>&1 || true)
-case "$good" in *"could not be loaded"*) exit 1 ;; esac
-case "$bad" in *"could not be loaded"*) ;; *) exit 1 ;; esac
+test "$(verdict)" = fail
 PROBE
 chmod 0644 "$CODEX_CFG_PROBE"
 check "codex accepts a repo-shaped [permissions] config" 'timeout 180 su - '"$USER_NAME"' -c "bash '"$CODEX_CFG_PROBE"'"'

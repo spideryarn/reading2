@@ -290,6 +290,38 @@ describe("the chat button", () => {
     paint();
     expect(host.querySelector(".block-chat")?.classList.contains("has")).toBe(false);
   });
+
+  it("offers to open one of them, rather than promising a new one", () => {
+    /* **This assertion has been red once on purpose**, the way the "?" copy
+       below was. Until 2026-09-05 the chip said *"Chat about this paragraph (2
+       already)"* over a press that started a third — it advertised state it
+       would not show, which is the report that produced the fix
+       (docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md).
+       "Open a conversation" is the verb the press now performs.
+
+       *"(2 total)"* rather than *"your conversations (2)"*: the count is the
+       set, and the click opens one of it. Copy that promised the set would be
+       the button reporting more than it does. GPT Sol, F-05. */
+    paint(undefined, 2);
+    const b = host.querySelector(".block-chat") as HTMLButtonElement;
+    expect(b.getAttribute("title")).toBe("Open a conversation about this paragraph (2 total)");
+    /* **The same sentence, and that is the fix** — unlike the permalink and the
+       "?", whose two names diverge on purpose. The accessible name here used to
+       be the bare singular, so the number on screen was the one thing a screen
+       reader could not hear. */
+    expect(b.getAttribute("aria-label")).toBe(
+      "Open a conversation about this paragraph (2 total)",
+    );
+  });
+
+  it("still offers to start one on a paragraph with none", () => {
+    // The other half, unchanged — with nothing to open there is nothing to
+    // count, and the press really does begin a conversation.
+    paint();
+    const b = host.querySelector(".block-chat") as HTMLButtonElement;
+    expect(b.getAttribute("title")).toBe("Chat about this paragraph");
+    expect(b.getAttribute("aria-label")).toBe("Chat about this paragraph");
+  });
 });
 
 /**

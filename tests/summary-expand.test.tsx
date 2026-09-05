@@ -492,3 +492,73 @@ describe("an article with nothing to outline", () => {
     expect(host.querySelector(".summ-quiet")).toBeNull();
   });
 });
+
+/**
+ * **The Socratic question sits under the claim, and only on the rows that have
+ * one.** SPIDERYARN-READING2-1V — Greg, 2026-09-05:
+ *
+ * > Tweak the prompt that generates the Summary mode to be a bit more in the
+ * > form of Socratic questions that encourage the reader to read the actual
+ * > text to get the full answers
+ *
+ * *"A bit more"* is what these assertions are really about. The gist stays —
+ * a reader deciding whether to descend needs to know what the section says,
+ * which is vision.md's *scan before you commit* — and the question is an extra
+ * line beside it, not a replacement for it. A version that swapped one for the
+ * other would satisfy the word "Socratic" and lose the panel's whole job.
+ *
+ * The absence case is the other half, and it is the common one: every article
+ * whose hierarchy was built before 2026-09-05 has no questions at all, and the
+ * panel has to look exactly as it always did rather than drawing a gap or a
+ * "no question" line. A missing gist says so on screen; a missing question
+ * must not (src/types.ts § `TreeNode.question`).
+ */
+describe("the Socratic question in the panel", () => {
+  const asked = (): SummaryNode => {
+    const t = tree();
+    t.question = "Why should any of this change how you read?";
+    const parts = t.children;
+    if (parts[0]) parts[0].question = "How does the first part earn its claim?";
+    if (parts[1]) parts[1].question = "What follows if the second part is right?";
+    return t;
+  };
+
+  const questions = () => [...host.querySelectorAll(".summ-question")].map((p) => p.textContent);
+
+  it("draws one under the article and one under each part, keeping every gist", () => {
+    act(() => {
+      root.render(
+        createElement(SummaryPanel, {
+          root: asked(),
+          deep: 1,
+          onDeep: () => {},
+          atRow: null,
+          onJump: () => {},
+        }),
+      );
+    });
+
+    expect(questions()).toEqual([
+      "Why should any of this change how you read?",
+      "How does the first part earn its claim?",
+      "What follows if the second part is right?",
+    ]);
+    expect(
+      [...host.querySelectorAll(".summ-text")].map((p) => p.textContent),
+      "a question replaced a gist instead of joining it — the panel stopped saying what the article says",
+    ).toEqual([
+      "The gist of the whole thing.",
+      "The gist of the first part.",
+      "The gist of the second part.",
+    ]);
+  });
+
+  it("draws nothing at all for an article built before the field existed", () => {
+    /* `beforeEach` already rendered exactly that tree. */
+    expect(questions()).toEqual([]);
+    expect(
+      host.textContent,
+      "an article with no questions grew a placeholder where a question would go",
+    ).not.toContain("?");
+  });
+});

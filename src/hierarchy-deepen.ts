@@ -465,6 +465,7 @@ export function readExpansion(opts: {
     droppedChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    droppedQuestions: [],
   };
   const read = targets.map((target, i) => {
     /* `parseExpansionAnswer` returns exactly `targets.length` entries, in
@@ -2017,7 +2018,7 @@ interface WaveReading {
 }
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 }
 
 /**
@@ -2050,6 +2051,7 @@ function readWaveAnswers(opts: {
     report.droppedChildren.push(...call.reading.report.droppedChildren);
     report.droppedHeadings.push(...call.reading.report.droppedHeadings);
     report.collapsedRungs.push(...call.reading.report.collapsedRungs);
+    report.droppedQuestions.push(...call.reading.report.droppedQuestions);
     for (const answered of call.reading.targets) {
       const candidate = byTarget.get(answered.target);
       if (candidate === undefined) {

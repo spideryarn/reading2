@@ -1428,7 +1428,7 @@ export async function proveTheSeam(slug: string): Promise<SeamProof> {
   const blocks = probeBlocks();
   const first = blocks[0]!.id;
   const last = blocks.at(-1)!.id;
-  const empty = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  const empty = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
   const proposal: ModelNode = {
     title: "The Whole Probe",
     gist: "It argues one thing at length, in two parts.",
