@@ -102,6 +102,12 @@ and the count is printed and stored. It used to throw: on 2026-08-28 one 502 at 
 ended a fifty-five-minute run with nothing written down. A thinned table and a full one must not
 look alike, which is why the lost calls are named rather than merely survived.
 
+Both benchmarks close on a **coverage** block from [`coverage.ts`](coverage.ts) — what came back
+against what was sent, per arm — and **exit 1 if any arm answered nothing at all**, so a run that
+measured nothing cannot be `&&`-chained as if it had. `calls` in either results file is
+`{ attempted, answered, lost }` for the same reason: it used to be the *planned* product, under a
+name that claimed to say what happened.
+
 Conditions are **interleaved**, rotating by clip and by run, so a slow half-hour upstream is spread
 across all of them rather than landing on whichever condition was in the loop. The first two rounds
 ran in blocks and nothing in the output would have said so.

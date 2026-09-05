@@ -43,6 +43,13 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   actually succeeded, which is not the same question as whether it exited 0. Split out for the same
   reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
   See [Building a box](#building-a-box).
+- [`scripts/gjd-remote-host.ts`](../../scripts/gjd-remote-host.ts) — **which address to ssh to, and
+  which of the three sources said so**: `GJD_REMOTE_HOST`, then this machine's own
+  `/etc/gjd-remote-host`, then Terraform state. The file is what lets the box drive itself without
+  being told; the rule the tests hold is that only `ENOENT` means "no file", because a broad catch
+  turns a bad line in `/etc` into an error message about Terraform.
+  [`tests/gjd-remote-host.test.ts`](../../tests/gjd-remote-host.test.ts), and
+  [Running `gjd-remote` from the box](#running-gjd-remote-from-the-box).
 - [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — what `push-env` is allowed to send.
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
@@ -399,17 +406,30 @@ not come out of Terraform state, and no private key at all — `~/.ssh` held `au
 nothing else. Every command died at `Permission denied (publickey)`, so the tool that manages the
 sessions was the one tool a session could not use.
 
-Provisioning now gives the box a keypair that reaches **only itself**, and sets `GJD_REMOTE_HOST`
-in `/etc/profile.d/`. So from any session on the box, `gjd-remote ls` and the rest just work.
+Provisioning now gives the box a keypair that reaches **only itself**, and writes
+**`/etc/gjd-remote-host`** — one line, `127.0.0.1` — which
+[`scripts/gjd-remote-host.ts`](../../scripts/gjd-remote-host.ts) reads when `GJD_REMOTE_HOST` is
+unset, ahead of Terraform. So from any shell on the box, login or not,
+`npx tsx scripts/gjd-remote.ts ls` and the rest just work. There is no `gjd-remote` on the box's
+PATH, so the `npx tsx` form is the only one that runs.
 
-**Except from an agent's tool shell, which is not a login shell** and so never reads
-`/etc/profile.d/`. `GJD_REMOTE_HOST` is unset there, the address falls back to Terraform state, and
-the command dies looking for a `tofu` the box does not have — which reads as "gjd-remote cannot run
-here" rather than as one missing variable. Until the fallback lives in the tool itself, put it on
-the command: `GJD_REMOTE_HOST=127.0.0.1 npx tsx scripts/gjd-remote.ts …`. There is no `gjd-remote`
-on the box's PATH either, so the `npx tsx` form is the only one that runs.
+**It was an export in `/etc/profile.d/` until 2026-09-05, and that was wrong for every agent.**
+`/etc/profile.d/` is read by login shells only; an agent's tool shell is not one, so the variable
+was unset, the address fell through to a `tofu` the box has not got, and the tool died reporting a
+**Terraform** problem. That reads as "gjd-remote cannot run here", and it was believed twice — once
+in an agent's memory, once in `feedback-reports.md`. The export is deleted, so there is one answer
+to the question rather than two that disagree by shell.
 
-It grants nothing. Anyone who can read `~/.ssh/id_ed25519_loopback` already has a shell here, which
+The comment beside that export said a login shell was enough, "tmux sessions get one (`exec bash -l`
+at the end of every job script)". They do not: that line runs **after** `claude` exits, so Claude
+and every tool shell under it come from a stock-PATH non-login bash. It is the same class this file
+already learned from `claude` on PATH a few lines down — **verifying the convenient path instead of
+the path the work takes** — which is why provisioning now checks the file's contract and probes the
+loopback **with the address read out of that file**, rather than with a second copy of `127.0.0.1`
+that could quietly stop matching it.
+[The plan](../plans/260905d-gjd-remote-resolves-the-box-address-without-an-env-var.md).
+
+Neither the key nor the file grants anything. Anyone who can read `~/.ssh/id_ed25519_loopback` already has a shell here, which
 is all the key can get them; the box still has no key to GitHub, to the laptop, or anywhere else.
 To undo it, delete the key, its line in `authorized_keys`, and the `gjd-remote-loopback` block in
 `~/.ssh/config`.
@@ -417,8 +437,11 @@ To undo it, delete the key, its line in `authorized_keys`, and the `gjd-remote-l
 Three separate things have to be true at once — the key, the `authorized_keys` line, and a `Host`
 block, because ssh will not **offer** a non-default key name on its own and `gjd-remote` passes no
 `-i`. Each can be present while the connection still fails, so `provision.sh` checks the connection
-rather than the files, and checks `GJD_REMOTE_HOST` separately: the ssh can be perfect and
-`gjd-remote ls` still die on the address. Both are in `doctor`'s report by way of the verify block.
+rather than the files, and checks the address file separately: the ssh can be perfect and
+`gjd-remote ls` still die on the address. Both are in `doctor`'s report by way of the verify block,
+and `doctor` prints which of the three sources answered — `gjd-remote → 127.0.0.1 (from
+/etc/gjd-remote-host)` — because the address is the first thing to doubt when a command talks to the
+wrong machine.
 
 The `~/.ssh/config` block is **appended behind a marker, never written whole**. `/home` is the
 persistent volume, so a config Greg adds by hand outlives the server that provisioning rebuilds, and

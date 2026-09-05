@@ -286,7 +286,7 @@ cost of a structure call per article.
 
 Absence is ordinary and draws nothing: the panel looks exactly as it did before this existed. That
 is unlike a missing *gist*, which says so on screen, and the asymmetry is deliberate —
-[`types.ts` § `TreeNode`](../../src/types.ts), on its `question` field.
+the comment on `TreeNode`'s [`types.ts` § `question`](../../src/types.ts).
 
 ## A summary is a door
 

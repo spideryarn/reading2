@@ -70,6 +70,9 @@
 import fs from "node:fs";
 import { loadEnvLocal } from "../../src/env.js";
 import { transcribeWith, vocabularyFor } from "../../src/transcribe.js";
+/* **What came back, against what was sent**, shared with the other benchmark
+   so neither can report a clean run over an arm that answered nothing. */
+import { callCounts, coverageLines, coverageOf, exitCodeFor } from "./coverage.js";
 import { checkInventedDetectorWorks, edits, has, invented } from "./score.js";
 
 loadEnvLocal();
@@ -77,6 +80,13 @@ if (!process.env.OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is not 
 
 const DIR = new URL(".", import.meta.url).pathname;
 const RUNS = Number(process.env.RUNS ?? 3);
+/* **The denominator, so it is checked where it is read.** `for (run = 0; run <
+   RUNS; run++)` runs `ceil(RUNS)` times, so `RUNS=1.5` would make two calls per
+   clip and record one and a half as attempted — every rate below then over a
+   population that never existed. GPT Sol's review, item 1. */
+if (!Number.isInteger(RUNS) || RUNS < 1) {
+  throw new Error(`RUNS must be a positive whole number, not ${JSON.stringify(process.env.RUNS)}`);
+}
 
 /**
  * The models worth an hour, and the reason each survived the gate.
@@ -399,22 +409,37 @@ console.log(
 
 /* **Who answered, counted rather than asserted.** A row that is anything but
    the arm's own model at the full call count is a row measuring something else.
-   `(none)` means the response named no model, which is not agreement. */
+   `(none)` means the response named no model, which is not agreement.
+
+   **And counted against what was sent, not only against itself.** The verdict
+   used to be a `clean` flag falsified only by an answer naming another model,
+   so an arm whose every call was lost had nothing to filter and was reported
+   under "every call named the model it was sent to" — the same bug as the
+   comment at the check above, one level up, which is why the judgement now
+   lives in `coverage.ts` where a test can hand it an arm that answered
+   nothing. */
 console.log("\nWhat answered, per arm:");
-let clean = true;
-for (const a of ARMS) {
-  const seen = whoAnswered.get(a.name) ?? new Map<string, number>();
-  const odd = [...seen].filter(([m]) => m !== a.model);
-  if (odd.length) clean = false;
+const coverage = coverageOf(
+  ARMS.map((a) => ({
+    name: a.name,
+    sentTo: a.model,
+    attempted: utterances.length * RUNS,
+    answers: whoAnswered.get(a.name) ?? new Map<string, number>(),
+  })),
+);
+for (const row of coverage.arms) {
   console.log(
-    `  ${a.name.padEnd(30)} ${[...seen].map(([m, n]) => `${m === a.model ? "as sent" : m} ×${n}`).join(", ")}`,
+    `  ${row.name.padEnd(30)} ${`${row.answered}/${row.attempted}`.padStart(7)}  ${
+      row.answered === 0
+        ? "NOTHING CAME BACK"
+        : row.answers.map(([m, n]) => `${m === row.sentTo ? "as sent" : m} ×${n}`).join(", ")
+    }`,
   );
 }
-console.log(
-  clean
-    ? "  — every call named the model it was sent to (an upstream swap serving the\n    same model would not show here; see the comment at the check)"
-    : "  — SOME ROWS ARE NOT ABOUT THE MODEL THEY NAME",
-);
+for (const line of coverageLines(coverage)) console.log(line);
+/* Only ever raised, never cleared: an exit code already set is somebody else's
+   failure and this is not the place to overrule it. */
+if (exitCodeFor(coverage) === 1) process.exitCode = 1;
 
 const out = `${DIR}results-models.json`;
 fs.writeFileSync(
@@ -425,6 +450,11 @@ fs.writeFileSync(
       runs: RUNS,
       arms: ARMS,
       spentUsd: spent,
+      /* **The plan and the outcome, each under its own name.** `attempted` is
+         what the run set out to make and `answered` is what came back, so a
+         thinned run cannot be read as a full one by anybody holding only this
+         file. `lost` below is the same shortfall by name. */
+      calls: callCounts(coverage),
       lost,
       /** Stored in full, so the "as sent" line in the output can be audited. */
       whoAnswered: Object.fromEntries(
