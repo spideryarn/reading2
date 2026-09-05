@@ -38,21 +38,49 @@ const OPENING_CHARS = 60;
  * short, plain, and something a person would actually say. It appears in the
  * transcript above the answer, attributed to them.
  *
- * **"here, or somewhere earlier" is the load-bearing half.** Greg, 2026-09-04:
- * *"even though it's a question mark for a specific block, often the confusion
- * is wider in scope than just that block, so the LLM is going to have to use
- * its judgment on that."* An earlier draft said *"explain this and surrounding
+ * **It reaches in both directions, and neither half names a window.** Greg has
+ * asked for each on a different day, and the sentence has to carry both.
+ *
+ * *"here, or somewhere earlier"* is the far half. Greg, 2026-09-04: *"even
+ * though it's a question mark for a specific block, often the confusion is
+ * wider in scope than just that block, so the LLM is going to have to use its
+ * judgment on that."* An earlier draft said *"explain this and surrounding
  * blocks"*, which names a window — and a window is the one thing we know is
  * usually wrong, because the thing you needed was three sections ago or in a
  * definition you skimmed. So this asks for the *gap* rather than for a radius.
- * docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
  *
- * The model is told the rest — that a "?" was pressed, and what to do about it
- * — in the anchor addendum rather than here, because this text is the reader's
- * and instructions to the machine do not belong in it. src/converse.ts
- * § anchorSection.
+ * *"or maybe what's around it"* is the near half, and it is newer. Greg,
+ * 2026-09-05: *"the prompt for the chat should leave room implicitly for the
+ * question/explanation to cover nearby blocks too."*
+ *
+ * **It is a widening rather than a reversal, and the honest reason is the
+ * second clause, not the first.** An earlier draft of this comment claimed
+ * *around* differs in kind from *surrounding blocks* — that one says where to
+ * look and the other says how far. GPT Sol refused it, rightly: both invoke a
+ * local vicinity and the difference is one of degree. What actually keeps the
+ * 2026-09-04 decision intact is that the unbounded escape hatch is **still
+ * there** — the sentence admits the neighbours *and* goes on asking about
+ * somewhere earlier, so a model whose answer lies three sections back is still
+ * being asked for it. Drop that second clause and this becomes the wording Greg
+ * refused, whatever the first one says.
+ * docs/plans/260905b-gutter-back-to-a-vertical-line-and-a-help-prompt-that-admits-nearby-blocks.md.
+ *
+ * **And this sentence is the whole of the help-specific instruction**, which is
+ * worth knowing before shortening it. This comment used to say the rest arrived
+ * "in the anchor addendum … src/converse.ts § anchorSection", in the present
+ * tense, and there is no addendum: it was stage 4 of the 260904b plan and was
+ * never built, so there is no `help` flag in routes.ts, converse.ts or types.ts
+ * and `anchorSection` has one branch for a quote and one for a bare block.
+ * Nothing anywhere else says a "?" was pressed.
+ *
+ * That is a smaller claim than "the whole message", which an earlier draft of
+ * this sentence made and GPT Sol corrected: `askAboutBlock` below still prepends
+ * the block id and the opening words, and `buildConverseMessages` still sends
+ * the article, the system prompt and the anchor line. This is the only part that
+ * is here *because* the press was a "?".
  */
-export const HELP_QUESTION = "I don't get this. What am I missing — here, or somewhere earlier?";
+export const HELP_QUESTION =
+  "I don't get this, or maybe what's around it. What am I missing — here, or somewhere earlier?";
 
 /**
  * The first message of a conversation started from a block.

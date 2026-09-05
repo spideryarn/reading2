@@ -22,8 +22,10 @@
  * for a retained browser fixture and did not block on one; this is the part of
  * it that is deterministic, runs in milliseconds, and needs no Chrome — the
  * *sizes*, which is where the commit-blocking failure was. The rendered
- * geometry is still checked by hand through `preview-gutter.html`, and the
- * numbers are in docs/plans/260904b-… § Built, and measured.
+ * geometry is checked by a Playwright pass against real Chrome whenever this
+ * layout moves, and the numbers are written into the plan of the day — most
+ * recently docs/plans/260905b-… § What Greg is looking at. (This sentence used
+ * to name a `preview-gutter.html`; there is no such file in the repo.)
  *
  * The other half of its job is the copy: `layout.ts` holds `BLK_SLOT_MIN_PX`
  * and `BLK_SLOT_REM` because the lone-column cap has to know the gutter's real
@@ -117,9 +119,9 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
        hangs out of its row is an input bug — it sits inside the upper row's
        `<tr>`, so pointing at it marks the wrong row active.
 
-       Three rules, because there are three shapes: the pad, an ordinary row, and
-       a heading whose gutter hangs from the *bottom* and therefore needs the slot
-       plus that offset rather than `--blk-top`. The second one is newer than the
+       Three rules, because there are three shapes: the full column, an ordinary
+       row, and a heading whose gutter hangs from the *bottom* and therefore needs
+       the slot plus that offset rather than `--blk-top`. The second one is newer than the
        other two — a 24px target in a 39px row fits by 0.04px at a 16px root, and
        `--blk-slot`'s px floor turns that into a 1.56px overhang at 12px, because
        the row keeps shrinking with the root and the target stops.
@@ -128,7 +130,19 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
        there and are written off the same tokens. What they actually measure is
        docs/plans/260904b-… § Built, and measured. */
     expect(rule("td.text.gutter-pad")).toContain(
-      "height: calc(var(--blk-top) + var(--blk-slot) * 2 + var(--block-pad))",
+      "height: calc(var(--blk-top) + var(--blk-slot) * 3 + var(--block-pad))",
+    );
+    /* And the grid has to declare the rows the floor reserves. **Not because
+       the control would go unplaced** — an earlier version of this comment said
+       so and GPT Sol corrected it: grid creates an implicit row and puts the "?"
+       in it quite happily. The failure is subtler and worse. An implicit row is
+       `auto`, so it is sized by its content — a 12px glyph, not a 24px slot —
+       which silently drops the target below WCAG's floor and unpins the fixed
+       positions the `grid-area`s exist to give. The row would have made room and
+       the grid would not have used it. Two declarations, one number, three
+       thousand lines apart. */
+    expect(rule("td.text.gutter-pad .blk-gutter")).toContain(
+      "grid-template-rows: repeat(3, var(--blk-slot))",
     );
     expect(rule("td.text")).toContain("height: calc(var(--blk-top) + var(--blk-slot) + var(--block-pad))");
     expect(rule("td.text.kind-heading:not(.gutter-pad)")).toContain(
@@ -182,23 +196,53 @@ function touchBlock(): string {
 }
 
 /**
- * **The fourth cell, and the three ways it could be drawn and still be
+ * **The foot of the line, and the three ways it could be drawn and still be
  * unusable** — stage 2 of docs/plans/260904b-…: a "?" in the wrong cell, a "?"
  * that never appears on a device with no hover, and a "?" inside a container
  * that is `pointer-events: none`. The last is not hypothetical — it is exactly
  * what `.blk-cmt` would have shipped as, and the only reason it did not is a
  * declaration somebody remembered to write.
  */
-describe('the "?" is the fourth cell of the pad', () => {
-  it("names row 2 / column 2, which stage 1 left empty on purpose", () => {
-    expect(rule(".blk-help")).toContain("grid-area: 2 / 2");
-    /* And the pad is still a map rather than a queue: four slots, four cells,
-       no two the same. Auto-placement is what used to shunt the chat button
-       along when a comment arrived. */
+describe("the three affordances are one vertical line, and the mark is not in it", () => {
+  it("puts the permalink, the chat button and the '?' down one column", () => {
+    /* **Greg's ask, 2026-09-05**: *"They are no longer in a vertical line. The
+       three are arranged in an L-shape."* The three are the affordances — the
+       address, the door into chat, and the "?" — and they are column 2, rows 1
+       to 3, against the prose. Asserted as a *column* rather than three
+       separate cells because "they line up" is the property that was lost. */
+    const line = [".blk-permalink", ".block-chat", ".blk-help"].map((sel) =>
+      /grid-area:\s*([^;]+);/.exec(rule(sel))?.[1]?.trim(),
+    );
+    expect(line).toEqual(["1 / 2", "2 / 2", "3 / 2"]);
+  });
+
+  it("keeps the bookmark OUT of the line, in the first row of the other column", () => {
+    /* **Two separate things hang off this one declaration, and neither is
+       obvious from it.**
+
+       *It is not an affordance.* The other three are buttons revealed on hover;
+       this is the reader's own mark, visible at rest. Standing it at a
+       different x is what says so — and it is why the column reads as three,
+       which is what Greg counted.
+
+       *And it is what lets the floor be three slots instead of four.* A
+       bookmark below the line would have to be row 4, so a commented row would
+       floor at 111.1px instead of 87.1 and the mark would sit 48px from its own
+       words — beside the *next* paragraph, to the eye. In row 1 a comment draws
+       nothing new below the first slot, so it needs no floor at all, which is
+       why `TableView` keys `gutter-pad` on the two callbacks alone.
+       `tests/gutter-pad-floor.test.tsx` asserts that half and points back here.
+
+       Fable's arbitration, 2026-09-05, in
+       docs/plans/260905b-gutter-back-to-a-vertical-line-…md. */
+    expect(rule(".blk-cmt")).toContain("grid-area: 1 / 1");
+    /* And the gutter is still a map rather than a queue: four children, four
+       cells, no two the same. Auto-placement is what used to shunt the chat
+       button along when a comment arrived. */
     const cells = [".blk-permalink", ".block-chat", ".blk-cmt", ".blk-help"].map((sel) =>
       /grid-area:\s*([^;]+);/.exec(rule(sel))?.[1]?.trim(),
     );
-    expect(cells).toEqual(["1 / 1", "1 / 2", "2 / 1", "2 / 2"]);
+    expect(new Set(cells).size).toBe(4);
   });
 
   it("is an affordance: hidden at rest, revealed on hover and on focus", () => {
