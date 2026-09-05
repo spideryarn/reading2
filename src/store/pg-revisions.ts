@@ -1361,11 +1361,48 @@ export async function recordStepRun(
  * It collects rather than returning early, because a draft with three things
  * wrong should say three things. `PublishRefused` takes the list.
  */
+/**
+ * **Is this draft's tree the one it was handed, untouched?**
+ *
+ * One boolean over the wire, computed by Postgres: `jsonb` equality is over the
+ * normalised value, so key order and whitespace cannot make an untouched tree
+ * look edited — which a deep-equal in TypeScript over two parsed trees would
+ * have to be careful about, and a `JSON.stringify` comparison would get wrong.
+ * Neither tree is loaded to answer it.
+ *
+ * `is not distinct from` rather than `=` so that *both* null reads as unchanged:
+ * a draft carrying no tree from a base that had none is not an edit. It is
+ * refused a line earlier anyway, by `it has no tree`.
+ *
+ * Returns **false** when there is no base — the article's first publication —
+ * which is the fail-closed answer: nothing was carried, so everything is new,
+ * so everything is checked.
+ */
+async function treeCarriedUnchanged(
+  tx: Tx,
+  revisionId: string,
+  basedOnRevisionId: string | null,
+): Promise<boolean> {
+  if (!basedOnRevisionId) return false;
+  const rows = await tx.execute<{ same: boolean }>(sql`
+    select (d.${sql.identifier("tree")} is not distinct from b.${sql.identifier("tree")}) as same
+    from ${articleRevisions} d, ${articleRevisions} b
+    where d.${sql.identifier("id")} = ${revisionId}::uuid
+      and b.${sql.identifier("id")} = ${basedOnRevisionId}::uuid
+  `);
+  return rows.rows[0]?.same === true;
+}
+
 async function reasonsNotToPublish(
   tx: Tx,
   revisionId: string,
   blocks: Block[],
   tree: Tree | null,
+  /**
+   * True when this draft's tree is byte-for-byte the one the article is already
+   * serving — see the branch that reads it below.
+   */
+  treeIsCarriedForward: boolean,
 ): Promise<string[]> {
   const reasons: string[] = [];
 
@@ -1374,11 +1411,51 @@ async function reasonsNotToPublish(
   // Nothing below can say anything useful without both.
   if (!blocks.length || !tree) return reasons;
 
+  /**
+   * **A publication is judged on the tree it changes, not the tree it carries.**
+   *
+   * `beginDraftIn` copies the base revision's tree into every draft verbatim, so
+   * a glossary or quotes or debate step — none of which looks at the tree —
+   * arrives here holding the tree the article is *already serving*. Refusing that
+   * publication protects nobody: the tree in question is in front of readers
+   * either way, and the only thing the refusal removes is the glossary.
+   *
+   * On 2026-09-05 that cost eleven hours of availability. `c8e2cc7e` added a new
+   * `checkTree` rule that morning and fixed the producer in the same commit
+   * (`collapseRestatedRungs`, src/hierarchy.ts), but nothing migrated the trees
+   * already stored — so roughly one article in twenty could no longer publish
+   * *anything*, for ever, and each attempt completed and paid for its model call
+   * before being refused at this line. Four times on `nagel-bat`, one of them
+   * $0.2454, each reported to the reader as "trying again is worth a go".
+   * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
+   *
+   * **This is deliberately narrow, and the narrowness is the point.** Only
+   * `checkTree`'s problems are exempted, and only when the tree is unchanged.
+   * A publication that builds or alters a tree is judged in full — which is
+   * where this gate was always aimed, and what stops the exemption becoming a
+   * way to launder a broken tree in by starting from a broken one
+   * (tests/store-publish-guards.test.ts § "still refuses a bad tree that this
+   * draft actually changed"). Re-running `hierarchy` still repairs the article,
+   * because `buildTree` splices the shape away.
+   *
+   * It also fixes the class rather than the instance: the next invariant anybody
+   * tightens over stored trees will report rather than wedge.
+   */
   const { problems } = checkTree(blocks, tree);
-  // Capped, because a tree whose root range is wrong reports once per block and
-  // the message would otherwise be a megabyte of prose in a log line.
-  for (const problem of problems.slice(0, 10)) reasons.push(problem);
-  if (problems.length > 10) reasons.push(`… and ${problems.length - 10} more tree problems`);
+  if (problems.length && treeIsCarriedForward) {
+    /* Not silence. The tree is bad and somebody has to be able to find out,
+       so it goes to the log the way a refusal would — ids and the problems
+       themselves, which is what `sanitise` withholds from Sentry. */
+    logger.warn(
+      { revisionId, problems: problems.slice(0, 10), problemCount: problems.length },
+      "publishing over a carried-forward tree that checkTree rejects — re-run hierarchy to repair it",
+    );
+  } else {
+    // Capped, because a tree whose root range is wrong reports once per block and
+    // the message would otherwise be a megabyte of prose in a log line.
+    for (const problem of problems.slice(0, 10)) reasons.push(problem);
+    if (problems.length > 10) reasons.push(`… and ${problems.length - 10} more tree problems`);
+  }
 
   const runs = await tx
     .select()
@@ -1624,7 +1701,12 @@ export async function publishRevisionIn(
 
   const blocks = await storedBlocks(tx, revisionId);
   const tree = draft.tree as Tree | null;
-  const reasons = await reasonsNotToPublish(tx, revisionId, blocks, tree);
+  /* Safe to ask against `basedOnRevisionId`: the branch above has just proved,
+     under the article lock, that it is `article.currentRevisionId`. So "the tree
+     it was copied from" and "the tree readers are being served" are the same
+     row, and no second lock or read is needed to say so. */
+  const carried = await treeCarriedUnchanged(tx, revisionId, draft.basedOnRevisionId);
+  const reasons = await reasonsNotToPublish(tx, revisionId, blocks, tree, carried);
 
   if (reasons.length) throw new PublishRefused(slug, reasons);
 
