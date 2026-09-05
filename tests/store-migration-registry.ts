@@ -783,8 +783,10 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**, and it was the largest of them — though less by " +
-      "depth than by breadth, because eight of its ten blocks are pure functions with no store " +
-      "under them at all. **It was split first**: `sweepStopped`, `writeOnce`'s temp file, the " +
+      "depth than by breadth, because most of its blocks are pure functions with no store " +
+      "under them at all: eight of the ten it had **on 2026-09-04**, which is a dated count and " +
+      "not a live inventory — `describe(\"unrunnableStepPlan\")` arrived later, with Stage E. " +
+      "**It was split first**: `sweepStopped`, `writeOnce`'s temp file, the " +
       "interrupted marker and `STEPS[name].outputs` went to " +
       "`tests/jobs-fs-adapter.test.ts`, because their subject is the adapter rather than the " +
       "queue and this map cannot give one file two verdicts. What is left — the queue's " +
