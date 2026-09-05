@@ -1038,6 +1038,98 @@ And a smaller one worth knowing: **the first click of a `--modes` run is a click
 page loaded in**, which costs 20-30ms and looks like the fastest switch in the table. The report
 prints `first` and `later mean` separately for exactly that reason.
 
+## Startup, 2026-09-05 — and everything above this line is about a page already running
+
+The first measurement here of what the browser downloads **before** anything on this page applies.
+[`scripts/measure-startup.ts`](../../scripts/measure-startup.ts) is the harness: it drives Chrome
+over CDP against a production build served by `npx vite preview`, clears and disables the cache per
+run, and takes bytes from `Network.loadingFinished.encodedDataLength` — **wire bytes, not `ls`**.
+
+```bash
+npx tsx scripts/measure-startup.ts --base http://localhost:4291 \
+  --sign-in-via http://localhost:4292 --local-sign-in --email dev-admin@spideryarn.local \
+  --paths "/,/read/scaling-hypothesis,/design,/admin" --runs 3 --json out.json
+```
+
+**Time-to-readable-prose** is defined in that script's header and printed with every result: the
+first *frame* on which a prose block has non-empty text, with a `MutationObserver` lower bound
+reported beside it and a hard failure if the probe saw no frames or no prose. Routes with no prose
+get a separately labelled TTFT, which is a different measurement and must not be compared with it.
+
+### The two numbers that decide how a startup change may be reported
+
+**Bytes here have a noise floor of exactly zero.** 24 runs, five entry points, two auth states, two
+batches hours apart, one unchanged build: `454,911 B` every single time. That makes initial requested
+JS a structural assertion wearing a number, and the only startup figure on this page worth gating on.
+
+**Times here cannot see a few percent, and it is not close.** A second batch on the *same* build,
+with the box's load average at 115, moved the reader route's median TTRP from **2,735 ms to
+10,784 ms**. On loopback the whole 445 kB transfers in 137–242 ms, so a 2.5% change in it is four to
+six milliseconds — three orders of magnitude under that. The box also produced only 5–15 frames a
+second, so a frame-based timestamp is quantised at 70–200 ms before any of the above. **Quote the
+2,505–10,984 ms spread whenever you report a startup timing**, so nobody mistakes silence for a null
+result.
+
+Two traps this turned up:
+
+- **`vite preview` gzips on GET but not on HEAD.** `curl -I` reports `Content-Length: 1490905` and
+  no `Content-Encoding`; the GET delivers 445,506 bytes. Trusting the HEAD reports emitted size as
+  wire size and inflates every saving by about 3×. The script records `content-encoding` per
+  response and prints it.
+- **A 200 on an old chunk hash does not mean the server is stale.** `curl` for a *previous* build's
+  `main-*.js` answers **200** — because the SPA fallback serves `index.html` for anything it does not
+  recognise, `Content-Type: text/html`. A freshness check by status code passes on a genuinely stale
+  server too. Check the entry hash in the served HTML, and the content type.
+- **`/read/constitution` is not readable on this box** — signed in as the seeded
+  `dev-admin@spideryarn.local` it answers *"This document isn't shared"*. Startup runs use
+  `/read/scaling-hypothesis` (public, 12,646 words, 186 rows). Two runs on different slugs are not
+  comparable.
+
+### What lazy-loading /admin and /design was actually worth
+
+[260905i](../plans/260905i-lazy-load-admin-and-design-routes.md), A4 of the architecture review.
+Initial requested JS, gzip, from the build:
+
+**Wire bytes**, three runs each, cache disabled, byte-identical in every run:
+
+| Route | before | after | Δ |
+|---|---:|---:|---:|
+| `/` signed out | 2 reqs, 454,911 B | 4 reqs, 448,770 B | **−6,141 B (−1.35%)** |
+| `/` signed in (shelf) | 2 reqs, 454,911 B | 4 reqs, 448,770 B | **−6,141 B (−1.35%)** |
+| `/read/scaling-hypothesis` | 2 reqs, 454,911 B | 4 reqs, 448,770 B | **−6,141 B (−1.35%)** |
+| `/design` | 2 reqs, 454,911 B | 5 reqs, 455,470 B | **+559 B** |
+| `/admin` | 2 reqs, 454,911 B | 5 reqs, 455,246 B | **+335 B** |
+
+**6,141 wire bytes, 1.35%** — and three things in that table matter more than the headline.
+
+**Do not read it as "main shrank from 1,490 kB to 1,101 kB".** The split gave rolldown new splitting
+points, so what `main` now shares with the two lazy chunks was hoisted into two **new shared
+chunks** — `supabase-*` and `useNow-*` — that `main` then imports *statically*. The trace shows all
+three issued within a millisecond of each other. They are startup requests, and quoting `main` alone
+would claim a 26% win that does not exist.
+
+**Raw bytes fell 33,231 and only 6,141 of that survived gzip.** Four chunks compress against four
+dictionaries. That is the whole reason the realised saving came in at 1.35% against the 2.5% an
+emitted-size *deletion* spike had predicted — a deletion never pays the split's compression cost. If
+anyone later "corrects" 1.35% upward from the raw figure, this paragraph is why they should not.
+
+**The two lazy routes now cost slightly more**, +559 B and +335 B, because they fetch a fifth chunk.
+That is the right trade and it belongs in the record beside the win.
+
+**This was not landed as a speed improvement and should not be cited as one.** It was landed as a
+boundary: [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) walks the
+static import closure from `boot.tsx`/`main.tsx` and fails if admin or design code is in it, so the
+next thing added to the administrator's table cannot arrive in every reader's startup unnoticed.
+Two incidental results worth knowing: the `[INEFFECTIVE_DYNAMIC_IMPORT] src/web/lib/supabase.ts`
+line is gone from the build, and the Supabase SDK is now a separately cacheable chunk.
+
+**And the ceiling for the rest of it, measured so nobody has to guess.** Stubbing *every* secondary
+route — Landing, Features, Pricing, Contact, Privacy, Public shelf, Not-found, Add, Profile, Admin,
+Design — to `() => null` and rebuilding gives 420.76 kB gzip against the 457.53 kB baseline. So the
+whole secondary-route surface is worth **8%**, and the other 92% is the reader, the shelf and the
+modes, which A4 requires to stay eager. Anyone hoping route splitting will halve this bundle should
+start from that number.
+
 ## What we still do not know
 
 Said plainly, because the fixes above are all real and none of them has been shown to be *the* 5.5%:

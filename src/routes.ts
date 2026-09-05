@@ -6754,10 +6754,12 @@ export async function serveAuthenticatedApi(
        **403, not 404.** The usual rule here is that a thing you may not see
        does not exist (docs/project/auth.md § Whose data is it), and it is the
        right rule for another reader's article — a 404 refuses to confirm it is
-       there. It buys nothing at all here: the admin page's code is in the
-       JavaScript bundle every signed-in reader downloads, so its existence is
-       not a secret and pretending otherwise would only make a real refusal
-       unreadable in a log. */
+       there. It buys nothing at all here: the admin page's code is a public
+       asset served to anybody who requests it, so its existence is not a secret
+       and pretending otherwise would only make a real refusal unreadable in a
+       log. (Since 2026-09-05 it is not in every reader's *initial* download —
+       src/web/LazyPage.tsx — which changed the startup cost and nothing about
+       who may have it.) */
     if (adminNamespace && !isAdmin(user.id)) {
       /* One case is worth a line, and only one: the administrator's own address
          on an id we do not know. Fixed prose, nothing interpolated — see
