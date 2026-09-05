@@ -369,9 +369,25 @@ export function hostOf(url: string): string {
  * `normaliseUrl`'s own comments say `http` and `https` can serve different
  * pages. So: same scheme, same host, same port, same path, same query.
  *
- * The path is decoded where it can be, so `/%78` and `/x` are one request, and
- * a trailing dot is dropped from the host — two under-refusals the same review
- * found. `new URL` has already lowercased the host and dropped a default port.
+ * The path is normalised **only where percent-encoding is meaningless**, so
+ * `/%78` and `/x` are one request, and a trailing dot is dropped from the host —
+ * two under-refusals the same review found. `new URL` has already lowercased the
+ * host and dropped a default port.
+ *
+ * **Unreserved characters only, and that is the whole of the 2026-09-05 fix**
+ * (GPT Sol's F30). This decoded the entire pathname, which made
+ * `https://x.test/a%2Fb` and `https://x.test/a/b` the same target — and they are
+ * two different requests: one asks for a single path segment whose name contains
+ * a slash. RFC 3986 § 6.2.2.2 says an encoded *unreserved* character (`A-Z a-z
+ * 0-9 - . _ ~`) is equivalent to the character itself and nothing else is, so
+ * that is exactly what is folded here; `%2F`, `%3F`, `%23` and the rest of the
+ * delimiters stay encoded and stay distinct. Non-ASCII needs no case: `new URL`
+ * has already percent-encoded it, on both sides of every comparison.
+ *
+ * Wrong in the over-matching direction is what costs something. In chat it is
+ * `read_web_page` telling the model a page is "already open" when it is a
+ * different page; in Debate it drops a legitimate annotation from
+ * `returnedSources` and files its row under `selfSource`.
  *
  * **It lived in src/chat-tools.ts until 2026-09-05**, and moved here unchanged
  * when a second feature needed the same identity rather than a second opinion
@@ -382,18 +398,26 @@ export function requestTarget(url: string): string | null {
     const u = new URL(url);
     if (u.protocol !== "http:" && u.protocol !== "https:") return null;
     const host = u.hostname.replace(/\.$/, "");
-    let path = u.pathname;
-    try {
-      path = decodeURIComponent(path);
-    } catch {
-      /* A stray percent. The raw path is still a fine identity; it just will not
-         match its own decoded spelling, which is the conservative direction. */
-    }
+    /* A stray percent is left alone rather than throwing — `decodeURIComponent`
+       on the whole path used to throw on one, and an unpaired `%` in an href is
+       an ordinary thing for a hand-written page to have. */
+    const path = u.pathname.replace(ESCAPE, (_whole, hex: string) => {
+      const ch = String.fromCharCode(Number.parseInt(hex, 16));
+      /* An escape we keep is upper-cased, RFC 3986 § 6.2.2.1: `%2f` and `%2F`
+         are one spelling of one byte, and leaving them apart would trade the
+         over-match this fix removes for a new under-match. */
+      return UNRESERVED.test(ch) ? ch : `%${hex.toUpperCase()}`;
+    });
     return `${u.protocol}//${host}${u.port ? `:${u.port}` : ""}${path}${u.search}`;
   } catch {
     return null;
   }
 }
+
+/** One percent-escape, whatever case its hex digits are written in. */
+const ESCAPE = /%([0-9A-Fa-f]{2})/g;
+/** RFC 3986's unreserved set — the only characters whose encoding means nothing. */
+const UNRESERVED = /[A-Za-z0-9\-._~]/;
 
 /**
  * Would fetching these two ask a server for the same thing?

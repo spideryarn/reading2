@@ -116,6 +116,11 @@ Product calls arbitrated by Fable, 2026-09-05, except where marked as Greg's.
    error needs a home. That keeps both of those where they are rather than moving them into the
    Dock, which is the follow-up if the inconsistency turns out to grate.
 
+   **Revisited and reversed the same day**, after measuring it: see § Stage 4, abandoned. The
+   follow-up named in the last sentence turned out to be the *prerequisite* rather than the
+   follow-up, and is now [260905g](260905g-move-the-wordmark-and-feedback-button-into-the-dock.md).
+   Greg chose that over both keeping the strip and dropping it with the corners patched.
+
 ## Stages
 
 Each ends with `npm test`, `npm run typecheck` and `npm run check` green, a browser pass at 1440×900
@@ -343,7 +348,39 @@ and pressing ← / → visibly moves the aim including onto the prose.
   unitless zero in a `calc` sum with a length makes the whole declaration invalid — which would have
   dropped every gist's sticky `top` silently.
 
-### Stage 4 — the bar disappears when it has nothing in it
+### Stage 4 — the bar disappears when it has nothing in it — **abandoned**
+
+**Not built. Superseded by [260905g](260905g-move-the-wordmark-and-feedback-button-into-the-dock.md),
+Greg's call, 2026-09-05**, having measured what it would actually buy. This section is kept as
+written, below the reasoning, because the *next* attempt needs to know why the obvious version does
+not work.
+
+Decision 8 above records Greg choosing this over a blank strip. He chose it before anyone had
+measured it, and the measurement changed the answer, so it went back to him rather than being
+quietly kept or quietly dropped.
+
+**What killed it.** `.controls` is not only a bar: it is what holds the wordmark and the Feedback
+button off the article. Both are `position: fixed` in the top corners at `height: var(--bar-h)`, and
+neither reserves its own space — the bars reserve it for them, through padding
+([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) § The bars have to reserve the space).
+Remove the bar and prose scrolls up behind two controls with no background of their own.
+
+Where the 44px would have landed, worked through with Fable: **nothing** on a phone (the bar already
+leaves on scroll), **nothing** in Hierarchy (the pills keep it), **nothing** in a band mode (the band
+sits at `--bar-bottom` and you would pad it straight back), a genuine win in Plain above ~1080px, and
+**worse** between 732 and 1080px, where the centred column reaches the left edge and the wordmark
+lands on the top line of prose.
+
+And the cost nobody had priced: **`commentError` puts the bar back**, so a comment-transport hiccup
+would slide the spine, the band and every sticky gist 44px in a 180ms animation. A layout that jumps
+on an error path is worse than a strip that is always there.
+
+So the real answer is to move the two corner controls into the Dock, after which this stage is free
+and honest. That is 260905g.
+
+---
+
+*As originally written:*
 
 Render `.controls` only when it has content.
 
@@ -367,6 +404,34 @@ Files: `App.tsx`, `styles.css`, `scroll.ts`, `layout.ts`. Docs: `web-client.md`,
 
 **Done when** Plain, Summary, Chat and Glossary show no bar for an owner, a visitor still sees the
 read-only chip, and nothing on the page is positioned as though a bar were there.
+
+**Stage 4's premise is wrong, and a browser pass is what showed it.** The plan says `--bar-bottom`
+falls to `var(--safe-top)` under a bar-less reader. Measured at 390×844 on 2026-09-05, that is the
+wrong instruction twice over:
+
+- **In any mode with a band open it is already refused**, and deliberately. A rule added 2026-08-31,
+  `:root:has(.controls:focus-within, .mode-band)`, pins the offset back to full height whenever a
+  panel exists — Greg had complained about losing the way out of Search mode. Its `:has()`
+  specificity (0,3,0) beats the hide rule's (0,2,0). Setting the token on `.reader` instead, as the
+  obvious implementation would, is a *nearer ancestor* and would quietly win over that guard.
+- **In Plain mode it is actively harmful**, because `--bar-bottom` is not the bottom of the bar. It
+  is the bottom of the **top chrome**, and the top chrome includes two `position: fixed` corner
+  controls of height `--bar-h` — the wordmark and the Feedback button — which never go away and take
+  no part in the hide-on-scroll.
+
+**And that is a live bug on `dev` today**, found by measuring rather than by reading: at 390×844 in
+Plain mode, scrolled far enough that `data-bars="hidden"`, the spine moves to `top: 0` and its top
+44px is underneath the wordmark. `document.elementFromPoint` at the rail's centre, 10px below its
+top, returns `a.logo.logo-home` — so the top of a scrubber a reader presses to move through the
+article is unreachable. Not introduced here; stage 4 would have extended it to every width.
+
+The second consequence is the one that decides the stage: **the `.controls` bar is what stops article
+prose from scrolling underneath those two corner controls.** It is opaque, full width, and reserves
+horizontal room at both ends through its own padding
+([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) § The bars have to reserve the space).
+Remove it and, once the reader scrolls, prose passes behind a wordmark and a Feedback button that
+have no background of their own. So stage 4 is not "render it conditionally" — it is a question
+about global chrome, and it is out with Fable as a design call.
 
 ### Stage 5 — a mode stops saying its own name
 
@@ -409,6 +474,36 @@ mode docs describe their band's head.
 **Done when** no band names the mode the Dock is already naming, Chat still shows its thread title,
 Glossary's and Timeline's counts are still where they were, and Summary and Search have one fewer
 row.
+
+**Landed 2026-09-05**, and it needed one thing the stage had assumed rather than checked.
+
+**The Dock was not, in fact, naming the mode.** A band is 400px of the window, so opening one is
+itself what pushes the bar onto fit rung 1 — where every mode label but Plain's is hidden
+([`dock-fit.ts`](../../src/web/dock-fit.ts), `styles.css` § the bar's fit ladder). So after this
+stage, Summary at 1440×900 had no "Summary" in the band *and* none in the bar: a highlighted glyph
+and a tooltip were the whole of it. The premise the stage rests on was false at exactly the widths
+where it matters, and the browser pass could not see it — it was asked whether the nine bands looked
+right, and they did. **Found by reading a screenshot, not a report.**
+
+Fixed by keeping the active mode's label on rung 1. The ladder absorbs it because the ladder is
+*measured*: Summary, Timeline, Glossary and Chat all came back `scrollWidth === clientWidth === 1440`
+with the word shown, on the rung they were already on.
+
+**Rung 2 was tried and measured out.** At 390×844 in a band mode the bar already overflows —
+`scrollWidth` 617 against `clientWidth` 390 — and the word took it to 758. That is 141px more of a
+row the reader has to drag sideways, to reveal a word only legible after dragging. A bar that scrolls
+cannot tell you anything you have not scrolled to.
+
+Two things the pass found that are recorded rather than changed:
+
+- **Remember's default sub-view still shows a heading.** Recall reuses `ChatPanel`, whose `h2` is the
+  open thread's own title — so the table above is right about *Quiz* and over-claims about Remember.
+- **Diagram's row is empty** until a kind with point projections is chosen: `ScatterNote` renders
+  only for `drift` and `trail`. Pre-existing, and it leaves an 18px bordered strip in the other kinds.
+
+One design question the pass raised and I overruled after looking myself: it judged Timeline's lone
+`29 events` as reading "half-finished" beside Glossary's count-plus-pill. On the screenshot it reads
+as an ordinary quiet count above a divider and a list. Left as is for all four.
 
 ## The reviews
 

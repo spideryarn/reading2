@@ -57,7 +57,7 @@ vi.mock("../src/ai-call.js", () => ({
 
 const { readArticle } = await import("../src/article-input.js");
 const { isBodyEvidence } = await import("../src/block-policy.js");
-const { modelFor } = await import("../src/models.js");
+const { CAPABLE_MODEL, modelFor } = await import("../src/models.js");
 const { STEPS, stepIsDone } = await import("../src/pipeline.js");
 const { BASELINE, STAMP_SOURCE } = await import("../src/store/artifacts.js");
 const { memoryArtefactsFrom } = await import("./helpers/memory-artefacts.js");
@@ -247,17 +247,30 @@ describe("what the store records when the debate step has run", () => {
    * **The model in the stamp is the one this task resolves to, not
    * `CAPABLE_MODEL`.**
    *
-   * Asserted against `modelFor("debate")` rather than against a literal, so the
-   * assertion is about the *resolver* — which is the thing that differs from
-   * every neighbouring stage, and the thing an override changes. A stamp naming
-   * the constant would agree with this on a machine with no override set, so
-   * this is a weaker test than it looks and is written down as such: what it
-   * catches is somebody copying `model: CAPABLE_MODEL` in from the stage next
-   * door, on the day the two constants differ.
+   * **The override is set here, and that is the whole test** (GPT Sol's F32).
+   * Until 2026-09-05 this asserted `debate.generator === modelFor("debate")` on
+   * a bare machine, where the two are the same string — so a stage that had
+   * copied `model: CAPABLE_MODEL` in from the door next door passed it, which
+   * is the one failure the case is named for. With `SPIDERYARN_DEBATE_MODEL`
+   * set the two answers differ, and only a stage that really asks the resolver
+   * can give the right one.
    */
-  it("stamps the model this task resolves to", async () => {
-    const debate = await runAndWrite();
-    expect(debate.generator).toBe(modelFor("debate"));
+  it("stamps the model this task resolves to, not the constant next door", async () => {
+    vi.stubEnv("SPIDERYARN_DEBATE_MODEL", "test-only/debate-override");
+    try {
+      /* The premise, asserted rather than assumed: with the override in place
+         the resolver and the constant are two different strings, so the
+         assertion below can tell them apart. */
+      expect(modelFor("debate")).toBe("test-only/debate-override");
+      expect(modelFor("debate")).not.toBe(CAPABLE_MODEL);
+
+      const debate = await runAndWrite();
+      expect(debate.generator).toBe("test-only/debate-override");
+      const stamp = await STEPS.debate.stamp?.(ctxFor(), store);
+      expect(stamp?.model).toBe("test-only/debate-override");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

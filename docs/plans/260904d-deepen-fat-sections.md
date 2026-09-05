@@ -1864,6 +1864,107 @@ claim that `1228-h.html` was missing was true of this worktree only.⟩
 wave. That fixes the blast radius, not the question. This section asks whether we are putting a bad
 question to the model at all.
 
+#### What stage 5b actually measured <a id="stage-5b-results"></a>
+
+**Run `evals/results/deepen-5b-2026-09-05-e5aq8o9s/`, 2026-09-05, $8.98 and a floor.** Three passes of
+Moby-Dick (2,569 blocks) landed; the fourth hit its claim deadline and the run stopped itself rather
+than re-claiming, so **phases C and D were never bought and questions 4 and 5 are absent rather than
+zero**. Every number below is over three passes of one book, which is the sample — not a corpus.
+
+⟨A first attempt the same afternoon died at $2.73 in phase A, on the title-page refusal
+[§ A refused target no longer fails the wave](#refused-target-not-the-wave). Its single pass showed
+**4 raw yeses in 224 candidates**, which was read here as "the model barely contributes and the
+feature might be retired". **Three complete passes say the opposite**, and the retraction is the
+point: a partial pass from a wave that then threw is not evidence, and it was quoted as though it
+were.⟩
+
+##### Question 1 — the verdict is stable. The *division* is not.
+
+| | |
+|---|---|
+| verdict flips | **0 of 27 matched ranges — 0.0%** |
+| fan-out changed | **15 parents** |
+| boundaries moved at equal fan-out | 0 |
+
+Two different findings wearing one question. The model never once changed its mind about *whether* a
+section wants another level. It changed its mind about *how to divide one* on 15 of the 22 parents
+that appeared in all three passes — `root > child 6 > child 3` came back with 10, then 7, then 6
+children. **Stage 6 is governed by the verdict, and the verdict is what held still**; the tree the
+reader sees is what moved.
+
+##### Question 2 — it does not always say yes, and where it says yes is the story
+
+| bucket | raw yes |
+|---|---|
+| under the floor (<10 blocks) | 0 / 216 |
+| 10+ blocks, <800 words | 0 / 23 |
+| 10+ blocks, 800–2,000 words | 0 / 51 |
+| **10+ blocks, 2,000+ words** | **18 / 42 — 42.9%** |
+| overall | 18 / 332 — 5.4% |
+
+Not one request to go deeper on a small section, across 290 chances. This is the answer the question
+was designed to get, and it is a good one: **the verdict is selective**, so the yes-rate gate stage 6
+was going to need may not have much to gate.
+
+**Refusals: 0 of 121 targets asked**, in every bucket and under every forcing bound. The title page
+that killed the first run expanded cleanly three times here, so `not-an-expansion` is **luck of the
+draw rather than a property of the node** — which makes the per-target fix right and the
+[open question](#open-heading-rule-tiny-nodes) *harder*, not easier: the bad question gets a usable
+answer most of the time, so the refusal rate will not reliably tell us we are asking it.
+
+##### Question 3 — the heading rule is doing the work, not the model
+
+| | expand | | stop | |
+|---|---|---|---|---|
+| authored-heading | **100** | | divisibility-floor | 221 |
+| forced-open | 15 | | verdict | 68 |
+| unassessed-ceiling | 3 | | no-verdict | 9 |
+| verdict | **3** | | | |
+
+**100 of the 121 expansions came from the heading rule; the model's verdict independently opened
+three.** A bound overruled a stated verdict 34 times in 332 assessed (10.2%) — `authored-heading` 19,
+`forced-open` 15.
+
+So the honest answer to *"how often does a bound overrule the model?"* is that the question is
+slightly wrong. Overruling is rare; **pre-empting is the norm.** The model is mostly being asked
+about sections a mechanical rule has already decided to open, and it agrees or is ignored. That is
+the strongest available argument for settling
+[the heading-rule question](#open-heading-rule-tiny-nodes) before stage 6, because the rule under
+question is the one producing five sixths of the tree's new depth.
+
+##### Question 4 — the cost, as a floor
+
+| pass | |
+|---|---|
+| A book ingest, deepening on | $3.4845 — 3.5× the incumbent $1.00 |
+| B forced hierarchy, repeat 2 | $2.5355 — 2.5× |
+| B forced hierarchy, repeat 3 | $2.9563 — 3.0×, **one call never recorded** |
+| **total** | **$8.9763, INCOMPLETE — a floor** |
+
+Every row came in **well under the plan's estimate** ($8.40 and $7.40): the estimates were upper
+bounds from arithmetic, and the checkpoint resume is worth more than they assumed. The total refused
+to present itself as a bill, which is `LedgerTotal` working on its first real outing —
+[§ A refused target no longer takes the wave with it](#refused-target-not-the-wave).
+
+##### Question 5 — not measured, and it did not need to be
+
+Phase D never ran. **The deadline answered itself in phase B**: the book's `hierarchy` step took
+**574.5 s, then 516.2 s, then overran the 740 s claim deadline** and was handed back — uncontended,
+on a box at load 9–18.
+
+**This is the failure the whole plan exists to remove, and the cascade has made it worse rather than
+better.** A step that is marginal alone will not survive `DEFAULT_JOB_CONCURRENCY = 3`, and phase D
+would have been buying a more precise account of a thing already established. Nothing downstream
+should be built until this is answered; it belongs beside
+[stage 8](#stage-8) rather than after it.
+
+##### One job is still held
+
+`evaldeepen-e5aq8o9s-book-spya-yynkqz` (job `spya-fm4y2w`) is `queued` at requeue window 1 with paid
+answers in its checkpoint rows, deliberately **not** cleaned up — partial paid work is resumable only
+while its article exists. Resume it or delete the article by hand; leaving it costs a row, and
+`SPIDERYARN_DEEPEN_REASK` naming that slug is what would make a re-claim buy the whole wave again.
+
 ### Stage 6 — recursion, once the verdict has earned it
 
 Waves 3 and beyond, governed by the verdict, with the depth cap and the yes-rate gate. Only if stage

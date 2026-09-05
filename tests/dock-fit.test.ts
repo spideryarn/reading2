@@ -244,7 +244,7 @@ describe("the stylesheet backs the ladder", () => {
 
   /**
    * The bar has two shapes — one `.dock-modes` segment on the reading view,
-   * thirteen loose `.dock-mode` links on the metadata and tweets pages. Rung 1
+   * fourteen loose `.dock-mode` links on the metadata and tweets pages. Rung 1
    * knew only the first until GPT Sol found it, so on those pages it did nothing
    * and the ladder went straight to rung 2, taking every label with it.
    */
@@ -264,6 +264,54 @@ describe("the stylesheet backs the ladder", () => {
    */
   it("the keepLabel exception is never out-specified", () => {
     expect(outSpecified(CSS)).toEqual([]);
+  });
+
+  /**
+   * **The mode you are in keeps its word at rung 1, and the reason is that
+   * something else stopped saying it.**
+   *
+   * Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
+   * mode we're in, so for example 'Summary' mode doesn't need to say `Summary`
+   * at the top."* Stage 5 of
+   * docs/plans/260905d-declutter-the-reading-view-top-bars.md removed the name
+   * from every band's title row on the strength of that — and the premise was
+   * false at exactly the widths where it mattered, because **a band is 400px of
+   * the window and so opening one is itself what puts the bar on rung 1**,
+   * where every mode label but Plain's is hidden. Summary at 1440×900 then had
+   * no "Summary" anywhere: a highlighted glyph, and a tooltip for anyone who
+   * thought to hover.
+   *
+   * Nothing above could see it. The ladder is correct, the rungs are correct,
+   * the bar fits — and the reader cannot tell which of thirteen modes is open.
+   * It was found by looking at a screenshot, so what this test pins is the
+   * *rule's existence*, which is the part that can silently go.
+   *
+   * **Rung 1 only, deliberately, and rung 2 was measured before being dropped**:
+   * at 390×844 in a band mode the bar already overflows (`scrollWidth` 617
+   * against 390) and the word took it to 758 — 141px more of a row the reader
+   * must drag sideways, to reveal a word only legible once dragged. A bar that
+   * scrolls cannot tell you anything you have not scrolled to. If that rule
+   * ever appears for rung 2, this test should be the thing that asks why.
+   */
+  it("the open mode keeps its label at rung 1, and only there", () => {
+    /* **Comments stripped first**, which is not tidiness. `CSS` here is the raw
+       file, and this stylesheet quotes its own selectors in prose constantly —
+       the rule below has a twenty-line comment above it naming both
+       `dock-fit-1` and `dock-fit-2`. Splitting the raw text on braces leaves
+       that comment glued to the front of the selector it introduces, so the
+       negative assertion would read the *comment's* mention of rung 2 and fail
+       against correct CSS. Checked both ways before writing it down.
+       `tests/aimed-column.test.ts` strips for the same reason. */
+    const shows = CSS.replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("}")
+      .map((block) => block.split("{")[0] ?? "")
+      .filter((sel) => sel.includes(".dock-btn.on") && sel.includes(".dock-btn-label"));
+    expect(shows.length, "no rule keeps the active mode's label").toBeGreaterThan(0);
+    expect(shows.some((sel) => sel.includes("dock-fit-1"))).toBe(true);
+    expect(
+      shows.some((sel) => sel.includes("dock-fit-2")),
+      "rung 2 was measured and rejected — see this test's comment",
+    ).toBe(false);
   });
 
   /**

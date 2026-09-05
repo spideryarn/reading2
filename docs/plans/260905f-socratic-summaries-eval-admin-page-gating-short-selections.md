@@ -354,7 +354,116 @@ half of Greg's ask is kept, because it needs no extra tokens and the measurement
 direction. Making section gists longer is a change to a shared contract with a paid failure mode and
 an eval baseline behind it, and it deserves its own piece of work.
 
+## Stage C as built, and the six places it differs from this plan
+
+The harness is `evals/summaries/` — [`evals/README.md` § `summaries/`](../../evals/README.md) is the
+map, and this section records only what changed from the design above. **No paid call has been
+made**; the plumbing was proved with `--stub` and `--stub-judge good|bad`, and the calibration gate
+has been watched passing and failing.
+
+1. **The corpus is real articles, not the fixture cut.** § *The eval, cut down* recorded that the
+   local `data/` root is five fixture-cut `toc/2` trees, and that was true of `data/`. The database
+   is a different matter: `npm run db:export -- --out output/summaries-corpus` returned **31 articles
+   with a current revision**, printing `Target: postgresql://postgres@127.0.0.1:54362/postgres` —
+   read rather than assumed. Ten are pinned in `evals/summaries/corpus.ts`, seven of them in the
+   default run: 72 to 357 blocks, one to twenty-five headings, three carrying the current generic
+   questions. The export is byte-deterministic, verified by exporting twice and comparing twelve
+   hashes, so **both `blocks.json` and `tree.json` are pinned** — the tree is an *input* here, so a
+   re-carve is a different measurement wearing the same slug.
+2. **The inversion holds on real articles.** § *The inversion, measured across the corpus* carried a
+   caveat that its five documents were the fixture cut. On the exported corpus the root gist is the
+   longest median row in **nine of ten**, the exception being `openai-huggingface` where root and
+   depth-1 tie at 27 words. The worst root is Wolfram's, at 49. `tests/summaries-eval.test.ts` pins
+   the claim and names the exception.
+3. **Seven arms, not four, because the GISTS change needed its own.** § *Three requests, not one*
+   says the language and length changes "are true regardless of how i turns out" — so there is a
+   `gists-only` arm, and V1–V4 are one block away from *it* rather than two blocks away from
+   production. `ArmSpec.isolatedAgainst` is a field the template did not have: `comparison` alone
+   could say either "two variables changed" or "one did", and both were true of different pairs.
+4. **The gist and the question are judged in separate lineups.** The anchors are all question-shaped
+   single lines; in a lineup where every other candidate was a gist-and-question pair the judge could
+   have clustered them by shape and rejected them for looking odd — the gate passing for the wrong
+   reason. Whether the row wants the gist, the question or both is asked afterwards, as its own
+   question, which is where P1-1's open outcome actually lands.
+5. **Judge instability is measured as a mean-rank spread, and two earlier versions were wrong.**
+   Averaging how far one arm moves *inside one lineup* between repeats gives about 2.3 ranks for a
+   random judge over seven arms, while the mean ranks it would be compared against are averages over
+   a hundred-odd lineups and differ by tenths — a threshold that would have swallowed every real gap
+   and printed *"not separable"* for ever, a wrong answer wearing the clothes of caution. So the
+   threshold is the spread of an arm's **mean** rank across repeats. The code review then killed the
+   rest of it: the generation floor was a difference of means between two *exchangeable* recipes, so
+   it cancels and trends to zero as the corpus grows, and `max()` of two statistics on different
+   sampling scales is not a test. The floor is **paired** per lineup now and is reported rather than
+   used as the threshold, and a leader must additionally **lead in every repeat's own table** and sit
+   on a clean bill.
+6. **The judge gets no repo.** GPT Sol through `scripts/run-codex.ts`, `--sandbox read-only` against
+   an empty temp directory: a judge that can open `evals/summaries/variants.md` can read the arms,
+   the anchors and the key, and the blinding would be decoration.
+
+**V4 is the only variant that needs a change to `src/hierarchy.ts`** — the two-line `questionFor`
+patch in `evals/summaries/variants.md`, since Greg's literal reading order puts the hint after the
+question mark and `questionFor` appends a second one. Stage C builds the instrument only, so the
+harness applies V4's rule to V4's lines and **the test asserts production's own `questionFor` doing
+the mangling**: P1-4 is now a red test rather than a sentence.
+
+## The code review, and the six defects it found before a penny was spent
+
+GPT Sol on the built harness, 2026-09-05: *"The fixed-tree bakeoff is a defensible cheap screen. I
+would not run the paid panel yet: several guards can go green without supporting the result they
+claim to support."* Six P0s, all fixed, each now with a test that would have been red:
+
+- **The calibration gate passed over a ranking with nothing real in it.** A judgement naming the five
+  anchors and none of the seven arms produced no inversions, no unranked anchors, and `passed: true`.
+  The ranking must be a permutation of the lineup, and now is.
+- **The judge saw the first 1,800 characters of a 30,187-character section.** The material anchors 3
+  and 5 quote is nowhere in that opening, so the judge could have ranked the two anchors that matter
+  at the bottom for being *unsupported by the excerpt* — the gate passing while measuring excerpt
+  coverage. It sees windows sampled across the range now, and is told it is reading one.
+- **Coverage was clean over an arm that wrote no questions at all.** A gist counted as the whole of
+  what an arm was asked for, so an arm with every question dropped — or one that answered only its
+  easy sections — was clean, ranked over fewer lineups, and could still lead. The denominator is the
+  plan (gists **and** questions), and a run that is not clean cannot name a leader.
+- **The instability calculation compared two different articles' roots.** Node ids are per-tree, so
+  `n0001` is every article's root; the repeat-to-repeat comparison keyed on the node id alone. Plus
+  the noise-floor and threshold errors in point 5 above.
+- **Stub and live could be mixed into a convincing fake report.** Live generation judged by the stub
+  produced a full ranking with no STUB banner. Both directions are refused, and the report names its
+  judge.
+- **Judging materials — real article prose — were written under `evals/results/`, which is
+  committed.** A run lives under `output/summaries-runs/` now; only `results.md` is promoted by hand.
+
+Three P1s were fixed alongside: the outline the arm saw contained only the rows it was asked to
+write for, while both GISTS blocks say *"write a parent's gist from its children"* and those children
+are a depth below (it goes to depth 2 as context now); the axes were collected and never displayed, so the harness could not
+support its own independent claims, and the key file was written *before* judging where a tool-using
+judge could read it. Two are recorded rather than fixed and are visible in the output: "axes before
+preference" is a request a single response cannot enforce (two calls would fix it), and the row-form
+question cannot see an arm's gist beside its own question, so it cannot settle the rendering.
+
+**And nothing here covers the cascade.** `EXPAND_SYSTEM` has no question field (P1-5), so whichever
+variant wins still needs the same block there. The harness says so in `arms.ts`, in every run file
+and in every results file, rather than letting a reader assume otherwise.
+
 ## Decisions and assumptions taken without asking
 
-(To be filled in as they arise — this is an autonomous run, so questions go here rather than to
-chat.)
+- **The eval lives at `evals/summaries/`, and `variants.md` is the source of the prompt text** rather
+  than a description of it: `variants-file.ts` parses the fenced blocks and the arms send them
+  verbatim. Transcribing four forty-line blocks into TypeScript would have been two homes for one
+  fact, and the day somebody fixed a typo in V2 the arm on the wire would be the one nobody edited.
+  The parse throws on every failure, because a lenient one yields an empty QUESTIONS block, plausible
+  output anyway, and a variant that scored.
+- **The incumbent arm's rules are sliced out of the live `SYSTEM`** through the exported
+  `structureRequest`, for the reason `tests/hierarchy-eval-incumbent-parity.test.ts` exists: a
+  literal here would drift the way `hierarchy-structure`'s `effort` did, and a paragraph of prose
+  looks right at a glance in a way a wrong enum does not.
+- **`withLedger("eval", …)`, not `evals/cost/harness.ts`.** That harness is job-queue plumbing — an
+  eval-scoped step registry, a fixture stage-1 step, a local-database gate — and none of it applies
+  to an eval that calls `streamMessage` directly. `withLedger` is what `evals/quiz.ts`,
+  `evals/referee-*.ts` and `evals/prompt-caching.ts` use, and because the calls go through the
+  gateway seam at production's model and effort there is **no declared bypass to add** to
+  `src/spend-declarations.ts`.
+- **Default depth 1**, which is `MAX_QUESTION_DEPTH`. `--depth 2` exists because the
+  no-meta-narration rule applies at every depth, but every extra depth multiplies every arm's output
+  tokens and the plan defers longer depth-2 gists anyway.
+- A full run is 49 calls, roughly 660k input and 50k output tokens. Prompt caching does not help: the
+  system block differs per arm and comes first, so each arm re-reads the article.

@@ -14,7 +14,7 @@
  * The fix is deliberately narrow — no thread version, which would 409 two
  * *appends* that succeed today — so the only edits refused are those whose
  * discard set has changed underneath them. `expectedTailId` in
- * src/store/contracts.ts and `requireTail` in src/store/fs.ts are the server's
+ * src/store/contracts.ts and `requireTail` in src/chat.ts are the server's
  * half, and tests/store-chat-tail-guard.test.ts pins those.
  *
  * **This is the half nothing else can see.** The guard is optional in the

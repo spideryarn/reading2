@@ -278,8 +278,10 @@ export function QuizPanel({
   return (
     <aside className="mode-band gloss quiz" aria-label="Quiz">
       <div className="band-head">
-        <MessageCircleQuestionMark size={14} className="band-head-icon" />
-        <h2>Remember</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the Recall | Quiz control, which is the one thing here the
+            Dock does *not* say. */}
         {subMode}
       </div>
 

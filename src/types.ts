@@ -3541,6 +3541,46 @@ export interface DebateGroup<Row> {
 }
 
 /**
+ * **Did this group lose anything at all?**
+ *
+ * Here rather than in src/debate.ts, where it started, for the reason the types
+ * above are here: the panel draws the foot line this answers, and
+ * tests/client-imports.test.ts will not let `src/web/` import a module with a
+ * CLI and two model calls in it. The stage re-exports it, so it still has one
+ * name on the server side.
+ *
+ * **A sum of every field rather than `Object.values`**, so a *fourth* group-two
+ * loss reason added to `DebateLosses` is a compile error at this line rather
+ * than a number silently folded into a sentence nobody re-read.
+ */
+export function anyLost(lost: DebateLosses): boolean {
+  return (
+    lost.uncited +
+      lost.selfSource +
+      lost.unverifiedSource +
+      lost.directnessUnverified +
+      lost.claimNotInBlock +
+      lost.unknownBlockId +
+      lost.malformed >
+    0
+  );
+}
+
+/**
+ * **How many distinct pages actually contribute to the rows shown.**
+ *
+ * The other half of the sentence `returnedSources` exists for: *"The search
+ * returned evidence from N pages; M contribute to the rows shown"*, which the
+ * foot line prints whenever the two differ. Rows are deliberately **not**
+ * deduplicated by URL — one review can answer two different claims, and two
+ * rows about one page is a real answer — so the count of rows and the count of
+ * pages are different numbers and the sentence needs this one.
+ */
+export function distinctSources(rows: readonly { url: string }[]): number {
+  return new Set(rows.map((r) => r.url)).size;
+}
+
+/**
  * The artefact. The `debate` column on `article_revisions`.
  *
  * **Two groups, from two separately metered model calls** — not one call
@@ -3581,6 +3621,32 @@ export interface Debate {
   /** About what it claims. */
   claims: DebateGroup<ClaimDebateRow>;
   elapsedMs: number;
+}
+
+/**
+ * **Is this value a debate document at all?** — the one shallow shape check,
+ * asked by all three readers.
+ *
+ * `SHAPE.debate` (src/store/artifacts.ts) asked only whether `direct` was an
+ * object, so `{"direct":{}}` passed it; `readDebate` (src/debate.ts) required
+ * both groups' rows; and the Postgres reader served any non-null JSONB
+ * unchecked. Three answers to one question, which is the drift `SHAPE` exists
+ * to prevent — GPT Sol's F29.
+ *
+ * **Both row arrays, and nothing about their contents.** Two empty groups is a
+ * perfectly good artefact and the commonest one, so this cannot ask for rows;
+ * what it has to tell apart is a *half-written or hand-edited document*, and a
+ * missing `claims` is exactly that.
+ *
+ * Here rather than in src/debate.ts for the reason `anyLost` is: the store's
+ * shape table is reachable from the client, and it may not import a module with
+ * a CLI and two model calls in it (tests/client-imports.test.ts). The stage
+ * re-exports it, so the server side still has one name for it.
+ */
+export function isDebateDocument(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown } };
+  return Array.isArray(doc.direct?.rows) && Array.isArray(doc.claims?.rows);
 }
 
 /**

@@ -211,7 +211,7 @@ Ranked by what they cost against what they are worth.
 - **Eleven more of the same class are still in the tree**, and they are named rather than moved. The
   full list, and what each one's duplication costs, is in
   [the plan](../plans/260902j-one-job-claimed-by-many-servers-and-the-money-it-spends.md) — the two
-  worth knowing here are [`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts)'s `writing`,
+  worth knowing here are `src/store/ai-calls-fs.ts`'s (deleted 2026-09-05) `writing`,
   the ledger's own append mutex, whose duplication can corrupt the file this bug was diagnosed from;
   and the four stores that say *"read-modify-write serialised per process"* in those words
   ([`src/comments.ts`](../../src/comments.ts), [`src/chat.ts`](../../src/chat.ts),

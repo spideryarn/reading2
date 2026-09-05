@@ -443,6 +443,150 @@ judge the rule as it stands, never re-tuned.
 a `waves` arm's parallel calls, double-counts concurrent seconds on top of it; a results file
 written before that date has no `elapsedMs` and should not have one reconstructed for it.
 
+## `summaries/` — is a Socratic summary line better than the gist we ship?
+
+```
+npm run db:export -- --out output/summaries-corpus     # the corpus, once — read the Target: line
+npx tsx evals/summaries/run.ts plan                    # free: what a run would buy, and from where
+npx tsx evals/summaries/run.ts generate --stub         # free: no model, no network, every seam
+npx tsx evals/summaries/run.ts generate                # 7 arms x 7 documents = 49 calls
+npx tsx evals/summaries/run.ts judge --run <dir> --repeats 3
+npx tsx evals/summaries/run.ts report --run <dir>
+```
+
+**A run lands under `output/summaries-runs/`, which is gitignored**, because a judging prompt carries
+thousands of words of a reader's article. What gets copied into `evals/results/summaries/` by hand is
+`results.md`, which has arm names, counts and ranks in it and no article prose.
+
+Stage C of
+[260905f](../docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md), and
+the one thing to carry away before anything else: **it is a screen that rejects bad variants, not a
+verdict that ships one.** Both advisers reached that from opposite directions — Fable from what the
+reader is doing in the Summary panel, GPT Sol from what a model judge cannot settle — and the final
+instrument is Greg reading three or four variants *rendered*. This exists so what he reads is the
+best of seven rather than the first of one.
+
+The seven arms are the incumbent, the incumbent again (the generation noise floor), a
+GISTS-block-only arm, and Fable's four question variants
+([`summaries/variants.md`](summaries/variants.md), which is the **source** of the prompt text rather
+than a description of it — `variants-file.ts` parses the fenced blocks and the arms send them
+verbatim). Adding a fifth variant is a `## V5` section in that file plus one entry in `ARMS`.
+
+### Every arm is a `bakeoff`, the control included
+
+Production asks for structure, titles, gists and questions in **one** long-context response. This
+runs the variants over a **fixed existing tree** and asks only for wording, which is why it costs a
+few dollars instead of $8–20 and two hours. By `hierarchy-structure/arms.ts`'s own discipline that
+makes every arm here a `bakeoff` and none of them `isolated` — the control arm is production's
+*rules* under a different request, not production's call — and what it cannot catch is an
+interaction between the new wording and the structure the model proposes in the same breath. It also
+touches nothing in `EXPAND_SYSTEM`, which has no question field at all, so no result from it covers
+the deepening cascade. Every results file repeats all of that.
+
+`isolatedAgainst` is the one thing the template did not have: an arm names the *other arm* it
+differs from in a single block, so `v1` is one block away from `gists-only` and `v2`–`v4` are one
+block away from `v1`, even though all five are two blocks away from production.
+
+### The calibration gate, which is the reason it is worth building
+
+Three things have to hold before a ranking is read at all, and the first was missing until GPT Sol
+found it: **the ranking must be a permutation of the lineup**. Without that check, a judgement naming
+the five anchors and none of the seven real lines passed — no inversions to find, no anchors
+unranked, a green gate over an ordering of nothing. The judge is also shown **windows sampled across
+each section** rather than its first 1,800 characters: the calibration node is 30,187 characters
+long, and the material anchors 3 and 5 quote is nowhere in its opening, so head-only truncation let
+the judge reject the two anchors that matter for being unsupported by the *excerpt*.
+
+Blinding cannot blind this intervention — **a question visibly identifies itself**, so a judge primed
+to value "a door" prefers the arms that look like doors however the labels are shuffled (GPT Sol's
+P1-3 on the plan). So five known-bad lines go into one lineup: a fabricated count, a neutral lookup
+question, an answer-leaking question, a title-only line, and the gist with a question mark on it.
+**All five must rank below every real line, or the run reports no ranking at all** — not a ranking
+with a warning on it. `MAX_ANCHOR_INVERSIONS` is 0, declared before the run rather than argued after
+one, and the gate has been watched doing both things (`--stub-judge good` / `--stub-judge bad`).
+
+Anchors 3 and 5 are the two that matter, because they are the most *informative* lines on the page.
+A judge measuring information rather than the door-or-wall criterion rates them highly, which is
+exactly the failure being detected. Anchor 1's fabricated count is a real trap, not a synthetic one:
+its node has six children while its gist and its prose both say four.
+
+`anchors.ts` asserts all four facts about that node — id, title, depth, child count, and that anchor
+5 really is its gist — and refuses to run if the tree has been re-carved. Without that, a re-ingest
+would leave the gate passing over nothing.
+
+### Two resolutions, and three things a leader has to survive
+
+The **incumbent run twice** measures how much the model wobbles; **the same frozen output judged
+again under a fresh seeded shuffle** (`--repeats`) measures how much the judge does. The shuffle is
+seeded (mulberry32 over an FNV-1a of the run id, slug and repeat) precisely so a repeat differs in
+labels alone.
+
+**The threshold is judge instability alone, in mean-rank units**, and taking the larger of the two
+was wrong twice over — GPT Sol's P0-4 on the code. The generation floor was
+`|mean(incumbent) − mean(incumbent-repeat)|`, and those two recipes are *exchangeable*, so opposite
+movements cancel and that number trends to **zero as the corpus grows** however far apart the runs
+landed on any row; it is a **paired** per-lineup figure now. And the two quantities were on different
+sampling scales, so `max()` of them was arithmetic between statistics that share the word "ranks"
+and nothing else. The paired generation floor is printed beside the judge's *per-lineup churn*,
+which is the only thing on its scale.
+
+A leader is named only when **all three** hold: it beats the threshold, it led in **every repeat's
+own table** (an ordering that does not reproduce under a fresh shuffle is not an ordering), and the
+run was a clean bill — otherwise an arm that answered only its easy sections leads by having
+answered less. When any fails, the report prints the table and says which, rather than reaching for
+a winner.
+
+### The arm sees the whole tree and writes for part of it
+
+The outline in the prompt goes down to depth 2 even when only the root and depth-1 rows are asked
+for, with the rest marked *"context only"*. Both GISTS blocks say *"write a parent's gist from its
+children"*, and a depth-1 node's children are at depth 2 — showing only the requested rows told the
+model to do something the prompt had made impossible, and it would have worked from the raw prose
+instead, quietly and differently from production, which has the whole tree in front of it because it
+just wrote it.
+
+### The axes are reported, and the ordering is a request
+
+Seven axes per candidate — fidelity, distinctiveness, triage, orientation, simplicity, leakage,
+factuality of the shape hint — asked before any preference, and **aggregated into the report**.
+Collecting them and printing only the ranking, which is what the first version did, meant the
+harness could not support one of the independent claims it exists to make.
+
+"Before" is an instruction in the prompt and in the schema, **not something a text model can be
+forced into**: one response carries both, so preference can still colour the earlier fields. Two
+calls would fix it and are not built. Until then, an axis that agrees with the ranking is weak
+evidence and one that *disagrees* is the interesting one. The anchors appear in the axes table
+(where their scores are the diagnostic — anchor 1 should score 1 on fidelity) and not in the ranking
+table (where they are a gate, not a competitor).
+
+### What is deliberately not scored
+
+`shapeFacts` counts yes/no openers, bracketed hints, counted hints and meta-narration phrases, and
+**none of them is a defect**. V3 relaxes production's "not yes/no" rule on purpose — that relaxation
+*is* its axis, and it is the arm that can falsify the plan's central bet — so a scorer docking a
+point for yes/no would decide against it before the judge read a word. `tests/summaries-eval.test.ts`
+pins that.
+
+`v4` is the only arm that would need a change to `src/hierarchy.ts` if it won: Greg's literal reading
+order puts the hint after the question mark, and `questionFor` appends a second one, so the stored
+value becomes *"…consciousness? (4 arguments)?"*. The harness applies V4's rule to V4's lines only,
+the report names the arm, and the test asserts **production's own `questionFor` doing the mangling**
+— so the cost of that variant is a red test rather than a sentence.
+
+### The corpus is real articles, pinned by two hashes
+
+`summaries/corpus.ts` is a committed manifest of ten documents out of local Postgres — 19 to 2,046
+blocks (72 to 357 among the seven a default run scores), one to 252 headings, two of them carrying
+the current generic questions. `npm run db:export`
+is byte-deterministic (checked by exporting twice and comparing twelve hashes), so **both**
+`blocks.json` and `tree.json` are pinned: the tree is an *input* to this eval, not an output, so a
+re-carve is a different measurement wearing the same slug. Drift is reported in the run file and in
+every results file, never thrown and never swallowed.
+
+The plan measured the root-gist inversion on the fixture cut and flagged the caveat. It holds on real
+articles: the root gist is the longest median row in nine of the ten, the exception being
+`openai-huggingface` where root and depth-1 tie at 27 words.
+
 ## `cost/` — what does one article actually cost us?
 
 ```
