@@ -38,8 +38,17 @@ url  title  start_index  end_index  content
 | Default engine, same article | 20 | 234 – 9,858 |
 | Exa engine, article with none | 9 | 237 – 6,063 |
 
-So `Citation.excerpt` is real and free, and Stage 1 of the plan stands exactly as written. The
-2026-09-01 range (250–5,300) is confirmed for Exa.
+So the extract is real and already paid for. The 2026-09-01 range (250–5,300) is confirmed for Exa.
+
+> **Corrected 2026-09-05, and left visible rather than deleted.** This paragraph originally ended
+> *"So `Citation.excerpt` is real and free, and Stage 1 of the plan stands exactly as written."* It
+> did not: a GPT Sol review (F5) showed that widening `Citation` would have started storing
+> third-party page extracts on every chat message and comment, for three features that show none of
+> them. **Do not add `excerpt` to `Citation`.** What landed instead is a separate `SearchEvidence`
+> and an opt-in `collectSearchEvidence`
+> ([the plan](260905f-debate-mode-what-the-web-says-about-this-piece.md) § Stage 1). A results doc
+> is a dated record, but a recommendation inside one that the next reader would act on is worth
+> correcting in place.
 
 ### 3. **The engine choice is a cost decision, not an evidence decision** — the plan was wrong here
 
@@ -120,7 +129,50 @@ instruction (*"If no one (or few people) have written about this piece, let's ju
    **120 s** is defensible and should be re-measured at the end of Stage 2 rather than left as a
    guess.
 6. **Cost is now a known number, not a worry**: ~$0.07 a run at Exa. Worth putting in front of Greg
-   beside the other per-step costs, since this is a step a reader can press.
+   beside the other per-step costs, since this is a step a reader can press. — **Superseded by Stage
+   0b below: it is a known number and still a worry.**
+
+## Stage 0b — is `max_total_results` an enforced ceiling? Yes. Is it a spend ceiling? **No.**
+
+Two adversarial calls, 2026-09-05, Exa engine, a system prompt ordering **"at least twelve separate
+web searches, be thorough, do not stop early"** against a topic with abundant coverage. The question
+was whether `max_total_results` is honoured, or advisory the way `max_uses` turned out to be —
+[`src/converse.ts`](../../src/converse.ts) records a probe that asked for 2 and got 6.
+
+| `max_total_results` | searches actually run | annotations returned | cost | elapsed |
+|---|---|---|---|---|
+| 4 | **36** | 4 — capped | $0.1008 | 10.3 s |
+| 20 | **24** | 19 — under cap | $0.1352 | 10.0 s |
+
+**The cap is real and holds to the row.** Annotations never exceeded it, under a prompt written
+specifically to make them.
+
+**But it bounds what comes back, not what we pay for.** With the cap set to 4 the provider ran
+**thirty-six searches** and billed for all of them — ten cents to deliver four results. Nothing in
+the request bounds the *number of searches*, and the number of searches is what costs money. Both
+`max_uses` and `max_total_results` are result caps, and neither is a budget.
+
+Three consequences, all of which changed the plan:
+
+1. **The prompt must not ask for thoroughness**, which is counter-intuitive enough to be worth
+   stating as a rule. The two probes above differ from the well-behaved Stage 0 call ($0.066, 7
+   searches) mainly in being *told to be exhaustive* — and that instruction tripled the search count
+   while the evidence returned stayed capped. Exhaustiveness buys nothing here and costs triple.
+   Write for restraint; let the cap do the limiting.
+2. **The honest cost figure is higher than Stage 0's.** Worst observed for a *single* pass is
+   **$0.135**, so a two-pass run is **up to ~$0.27**, typically $0.13–0.20 — comparable to the
+   illustrated diagram, which
+   [experimental-features.md](../project/experimental-features.md) calls the dearest and slowest
+   thing in the app. That is for a step a reader can press, so it went in front of Greg rather than
+   into a footnote.
+3. **The only real bound is the deadline and the ledger.** Since no parameter caps spend, the stage
+   needs an abort deadline that actually fires, and `webSearches` on the `ai_calls` row — recorded on
+   this wire since 2026-09-02 ([`src/ai-call.ts`](../../src/ai-call.ts)) — is the alarm. A run that
+   made 36 searches shows up nowhere else.
+
+**What this did not measure**, and should not be read as measuring: whether a *restrained* prompt on
+a *typical* article costs less than $0.135. Both probes were adversarial by design. The real
+distribution comes from Stage 2's first runs against the shelf.
 
 ---
 

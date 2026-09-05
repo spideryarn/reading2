@@ -77,19 +77,54 @@ is the mode's most common output; it must not be an inference.
 
 - **Pass A — direct reception.** Prompted with the article's exact URL, title and byline, and nothing
   else to search for. Must report a positive web-search count; zero, or unreadable search accounting,
-  **fails the pass and writes no conclusion** rather than writing an empty one.
-- **Pass B — the argument around the claims.** Prompted with the article's claims.
+  **fails the pass**.
+- **Pass B — the argument around the claims.** Prompted with the article's claims. Runs only if pass
+  A succeeded, so a failure costs one call rather than two.
 
-**The empty state says what is true**: *"This search did not find any responses to this piece."*
+**Two passes are one atomic step** (Sol's F16). The first draft said a failed pass A "writes no
+conclusion" and stopped there, which left three bad options for whoever built it: show the empty
+sentence over a failure, throw pass B away silently, or invent a half-artefact nobody designed. So:
+**a failure of either pass — zero or unreadable search accounting, malformed JSON,
+`finish_reason: "length"`, timeout, provider refusal — fails the whole step and writes no artefact**,
+and the panel shows the job-failure and retry state every other stage already has. Only a *successful*
+pass A that kept no direct rows may say the search found nothing.
+
+**Three empty states, and they are different sentences.** Collapsing them is the silent-success
+failure ([silent-success.md](../reusable/silent-success.md)):
+
+| what happened | what the panel says |
+|---|---|
+| pass A succeeded, no candidate pages | *"This search did not find any responses to this piece."* |
+| candidates returned, every direct row lost to `unverifiedSource` (F18) | *"The search returned possible responses, but the excerpts provided were not enough to verify them."* |
+| either pass failed | the ordinary job-failure state, with retry |
+
 Never *"No one has written about it."* We cannot see the query, so what we have is evidence of a
-bounded search, not a claim about the web. Two passes cost about **$0.13 a run** at Exa (Stage 0
-measured $0.066 each); that is named here so it is a decision rather than a surprise.
+bounded search, not a claim about the web. **Cost: up to ~$0.27 a run**, typically $0.13–0.20 — see
+§ The spend ceiling, where Stage 0b's numbers replaced the $0.13 the first draft quoted.
+
+**What makes a group-one row admissible — the check the first draft never made.** Sol's F15, and it
+is the finding that matters most in this round: two separately metered passes prove *a search ran*,
+they do not prove that anything it returned is a **response to this piece**. Stage 0 is the exact
+counterexample — a direct-reception search for an invented post returned nine real, unrelated pages,
+and any one of them could supply a genuine quotation and survive every defence the plan had. So:
+
+- `articleReferenceQuote` — words **from the source's own extract**, located by the spaced matcher,
+  in which that page names *this* article: its exact title, its URL, or its title together with the
+  byline. Without that witness the row is counted as `directnessUnverified` and **may not appear in
+  group one at all**; it may appear in group two only if it independently meets that group's contract
+  below.
+
+That is a strict rule and it will cost real rows — a review that says only *"Seth's recent essay"*
+fails it. That is the right direction to fail in: **group one's whole claim is that these pages are
+about this piece**, and an unproved claim there is worse than a short list. It also makes the honest
+empty state, which Greg asked for by name, the common case rather than an embarrassment.
 
 **What makes a group-two row admissible** is the second half of Greg's instruction, and it is the
 only thing standing between this mode and nine sourdough blogs presented as critical reception:
 
 - `claimQuote` — the article's own words for the claim being answered, **located in `blockId` by
-  [`findQuote`](../../src/quote-match.ts)**, not merely asserted;
+  [`findQuote`](../../src/quote-match.ts) in its `"spaced"` mode** (§ Attribution rule 2), not merely
+  asserted;
 - `blockId` — where the article makes it;
 - `sourceQuote` — see § Attribution below;
 - `applies` — how the outside piece bears on that claim;
@@ -128,7 +163,7 @@ reconciling them later: `Comment.valence` is **the referee's own placement** of 
 criterion ([`src/types.ts`](../../src/types.ts)) — a person's judgment, stored as such. This would be
 the model grading strangers' articles: same shape, different instrument.
 
-### 4. Three orthogonal fields — my call, overturned, and Greg was right
+### 4. Two orthogonal fields — my call overturned, then half of the overturn overturned
 
 The first draft made the icon a *derived* property of a single `relation` field, on the grounds that
 two overlapping vocabularies drift and the one that drifts is the one the colour comes from. **Sol
@@ -141,15 +176,47 @@ refused it and is correct**, so it is recorded here as a reversal rather than qu
 - **A `qualifies` row can be broadly supportive or broadly hostile**, and collapsing that loses
   exactly the at-a-glance distinction Greg asked for.
 
-So three closed fields, each doing one job:
+So **two** closed fields, each doing one job:
 
 | field | values |
 |---|---|
 | `relation` | `disputes` · `qualifies` · `extends` · `corroborates` · `unclear` — **groups the list** |
-| `sourceRole` | `independent` · `author-follow-up` — **draws a badge** |
 | `valence` | `positive` · `negative` · `neutral` · `unknown` — **draws the icon and colour**, from a total `VALENCE_APPEARANCE` record |
 
-No numeric valence is computed or stored, in keeping with § 3. `unclear` and `unknown` are **not
+**`sourceRole` was the third, and Sol's F19 cut it in round two.** The reasoning is the one this plan
+already used to cut the source-kind classifier three sections down, and it applies here with equal
+force: *"by the article's own author"* is a **fact-shaped claim**, drawn as a badge, that nothing in
+the returned evidence verifies — a repost, a quotation or a namesake earns the badge just as easily.
+Having cut one unverifiable classifier and kept another of the same kind, the line was arbitrary; it
+is now principled.
+
+**The obvious repair is the wrong one**, and it should be refused explicitly, because the next reader
+will reach for it: do **not** move `follow-up` into `relation` as a sixth value. That is precisely the
+mixing F9 refused — provenance and relation are orthogonal, and an author's later post can dispute,
+qualify, extend or corroborate their earlier piece. A single field would force a choice between
+saying *who wrote it* and saying *what it does*, and lose whichever it did not pick.
+
+**So what F9 required survives, and what F19 removed is only the badge.** F9's objection was that
+*deriving* valence from relation makes "the author later corrected this" **neutral by construction**.
+Valence remains its own independent field, so it does not: an author's self-correction still appears,
+still as `disputes` or `qualifies`, still with a negative icon. What v1 does not do is *assert* the
+authorship — the host and title sit at the top of every row, so a reader looking at the same byline
+on the same site can see it for themselves, which is the free version.
+
+**Where it comes back, and why then rather than now.** Authorship is partly *verifiable*: the source's
+host matching the article's host, or the article's byline located in the source's own extract by the
+same matcher every other quote goes through. That is a badge we could stand behind. It is also a
+second search-time contract for a field nothing else depends on, so it is Deliberately not in v1 —
+listed there rather than left as an idea in a review.
+
+**`valence` needs a stated target or it means three things** (F19's second half): it is the model's
+estimate of *the cited passage's stance toward the row's target* — the article itself in group one,
+the `claimQuote` in group two. Not the passage's tone, and not its stance toward some third subject.
+Without that, "positive" could mean a friendly register, agreement with one claim, or praise for the
+whole piece.
+
+`relation`, `valence` and `applies` are visibly grouped on screen under **"AI interpretation"**, and
+no numeric valence is computed or stored, in keeping with § 3. `unclear` and `unknown` are **not
 failure states and must be drawn as calmly as the rest** — [timeline.md](../project/timeline.md)'s
 rule about undated rows is the closest thing in the app to this problem: *ten of twenty-six rows carry
 no date, and drawing an undated row like a dated one throws away what the article actually said.* A
@@ -208,20 +275,58 @@ enough here:
    `url_citation` annotations, not "a URL that parses". `isWebUrl` is necessary and nowhere near
    sufficient: a plausible title beside a real-looking address is exactly what a model produces well.
    The **title** comes from the search result, never from the model.
-2. **Every row carries a `sourceQuote` that `findQuote` locates in that URL's own extract.** Failure
+2. **A citation whose request target is the article's own `meta.url` is inadmissible in either
+   group**, and is counted as `selfSource`. Stage 0 already saw the article itself come back among
+   its own annotations, and such a row passes every other defence here — real URL, real quote from
+   that URL, real claim quote — while presenting the piece as a response to itself. Compare with the
+   **same request identity chat already uses**, [`sameTarget`](../../src/chat-tools.ts) — same scheme,
+   host, port, path and query, fragments ignored, path decoded where it can be — which exists for the
+   neighbouring case of the model fetching the open article by appending a block fragment. Do not
+   reach for `urlKey`: the shelf's notion of sameness folds `http` into `https` and `www.` into the
+   bare host, which is generous in the wrong direction here. Tests cover the exact spelling, a
+   fragment-bearing one, and a percent-encoded path.
+3. **Every row carries a `sourceQuote` that `findQuote` locates in that URL's own extract.** Failure
    **drops the whole row** and increments `unverifiedSource` — it does not merely drop the quote. The
    first draft let a row survive as "a paraphrase, labelled as one", and Sol's F2 is right that this
    is precisely the hole: a model can attach an invented critique to an unrelated but real annotation
    URL, and a label saying "paraphrase" does not stop it being read as evidence. **No row survives as
    an unchecked paraphrase.** The stored substring is the matched source characters, not the model's
    spelling of them.
-3. **`relation`, `valence` and `applies` are labelled on screen as the model's reading of that source
+4. **Every quote check calls `findQuote(haystack, quote, undefined, "spaced")`, never the default.**
+   Sol's F14, and it is the plan walking into a trap the codebase had already marked: `findQuote`'s
+   default is `"forgiving"`, whose second pass **deletes whitespace entirely** and therefore accepts
+   *fall a part* as a quotation of *fall apart*. Its own docblock
+   ([`src/quote-match.ts`](../../src/quote-match.ts)) says the forgiving pass exists for the
+   **browser**, comparing against rendered text, and that on the **server** it "buys nothing and costs
+   the guarantee" — the exact guarantee this mode is built on. The rule applies to all three checks —
+   `sourceQuote`, `claimQuote`, `articleReferenceQuote` — and each **persists the matched slice of the
+   haystack it was checked against, never the model's spelling**. A mutation test proves the default
+   matcher would accept a split token and that Debate rejects it. (That docblock also records
+   `validateHits` and `validateOccurrences` still passing the default as a *known gap*; Debate must
+   not become the third.)
+5. **`relation`, `valence` and `applies` are labelled on screen as the model's reading of that source
    passage** — not as facts about the page.
 
 What this still cannot prove, said plainly because the panel must say it too: that the source passage
 means what the model says it means. The excerpt in the tooltip is the reader's one-action check —
 [vision.md](../project/vision.md#principles) principle 4, legible provenance, pointed outside the
 article.
+
+**The extract is incomplete evidence, not the page** (Sol's F18), and every rule above inherits that.
+Exa returned 236–4,945 characters per annotation, of pages that may run to tens of thousands, and
+[`MAX_EVIDENCE_EXCERPT`](../../src/openrouter-stream.ts) bounds it again at 8,000. So a real, apt
+quotation that simply falls outside the slice the search engine chose gets its row dropped. That is
+the right direction to fail in — we lose a true row rather than admit an unchecked one — but it has
+two consequences the plan must own rather than discover:
+
+- **it biases what survives** toward passages a search engine surfaced, which is not the same as the
+  passages that matter, and the panel discloses that v1 verifies against search extracts rather than
+  full pages;
+- **it makes a third empty state real**, the middle row of the table in § 2: candidates returned and
+  none verifiable is not the same fact as no candidates, and must not be shown with the same sentence.
+
+Fetching the full page to widen the haystack is deliberately deferred — it is a second network
+budget, a second injection surface, and § Deliberately not in v1 is where it is recorded.
 
 ### The engine is a cost decision, not an evidence decision
 
@@ -230,14 +335,30 @@ measurement in [`src/converse.ts`](../../src/converse.ts) § `webSearchTool` (de
 annotations). Stage 0 found the default engine returning **20** annotations on the non-streaming
 path, every one carrying `content`.
 
-**This does not make the 2026-09-01 measurement wrong**, and nothing here should be read as saying so:
-that probe was on the **streaming** path, where annotations arrive as deltas as the answer is
-composed; this one is non-streaming, where the finished message arrives with annotations attached.
-Different code paths at OpenRouter, plainly behaving differently. The narrow established claim is:
-**for a non-streaming call, both engines supply the evidence rule 1 needs.**
+**This does not make the 2026-09-01 measurement wrong**, and nothing here should be read as saying so.
+But the first draft then went too far the other way, and Sol's F20 is right to catch it: it said the
+two code paths were *"plainly behaving differently"*, which asserts a **cause** from two observations
+taken on different days, with different prompts, tool parameters and routing. Streaming is a
+*plausible* explanation, not an established one; provider changes, sampling and provider policy are
+all unexcluded confounders.
 
-So Exa is chosen on cost — $0.066 against $0.115, for adequate annotations — and the comment in the
-code must say *cost*, so nobody later "fixes" it to say something untrue.
+What is established is narrow and worth stating as exactly itself: **the current non-streaming
+default-engine call returned annotations, and the earlier streaming default-engine probe did not.**
+Neither result explains the other.
+
+So **Exa is provisional, and chosen on cost** — $0.066 against $0.115 in one matched non-streaming
+comparison — and the comment in the code must say *cost*, so nobody later "fixes" it to say something
+untrue. Two things keep that honest:
+
+- **"adequate annotations" was never measured as the thing that matters.** The default engine returned
+  twice as many annotations with longer extracts, and under rule 3's quote check *both* of those raise
+  the number of rows that survive. The comparison that would settle the engine is **kept verified rows
+  per dollar**, not annotations per dollar, and it has not been run.
+- so the engine choice is **reversible by one parameter** and is written down as a provisional call
+  rather than a finding. If Debate's kept-row rate turns out poor in practice, re-probe before
+  re-designing: same model, provider policy, prompt, caps and day, a 2×2 of default/Exa ×
+  streaming/non-streaming, keeping raw frames, usage, provider and generation id. That is a
+  measurement worth doing when there is a rate to compare, and premature before Stage 2 exists.
 
 **One thing to hand to whoever owns Referee**, not acted on here because it is another stage's code
 ([architecture.md § Stage ownership](../project/architecture.md#stage-ownership)): Candidates'
@@ -262,16 +383,54 @@ already carries it for a reader who can judge. Revisit with a label that says wh
 
 ## The spend ceiling
 
-`max_uses` is **not a budget** and must never be described as one: a probe asking for 2 got 6
-([`src/converse.ts`](../../src/converse.ts)). `max_total_results` is the cap that was honoured to the
-row, and `STEP_BUDGET_MS` only decides whether a step may start ([`src/jobs.ts`](../../src/jobs.ts)) —
-it is not a cost limit, and a job requeue buys the call again.
+**Stage 0b ran, and it half-refuted this section's first draft.** `max_total_results` *is* enforced,
+to the row — asked for 4, got 4; asked for 20, got 19. But it caps **what comes back, not what we pay
+for**, and searches are what cost money:
 
-So: one metered request per pass, with `engine: "exa"`, an explicit `max_total_results`, `max_results`,
-a completion ceiling and an abort deadline. **Stage 0b proves the cap** with an adversarial prompt
-asking for far more searches than allowed, checking returned annotations against ledger
-`webSearches`; if the cap is not demonstrably enforced, stop and re-plan. The per-attempt ceiling and
-the worst case across the queue's requeue allowance both go in this doc.
+| `max_total_results` | searches actually run | annotations returned | cost |
+|---|---|---|---|
+| 4 | **36** | 4 — capped | $0.1008 |
+| 20 | **24** | 19 — under cap | $0.1352 |
+
+So `max_uses` is **not a budget** — a probe asking for 2 got 6
+([`src/converse.ts`](../../src/converse.ts)) — and `max_total_results` is **not a spend ceiling**
+either. Both are result caps; the search count is unbounded. `STEP_BUDGET_MS` only decides whether a
+step may start ([`src/jobs.ts`](../../src/jobs.ts)), and a requeue buys the call again.
+
+**The counter-intuitive consequence, which is the one to carry into the prompt:** what drove 36
+searches was the instruction to *be thorough*. The well-behaved Stage 0 call ran 7 searches for
+$0.066; ordering exhaustiveness tripled the search count and bought **no extra evidence**, because
+the results were capped regardless. So Debate's prompt is written for **restraint**, not
+thoroughness, and the cap does the limiting.
+
+The ceiling is therefore made of three things, none of them a parameter:
+
+1. **a prompt written for restraint** rather than exhaustiveness;
+2. **an abort deadline that actually fires**;
+3. **`webSearches` on the `ai_calls` ledger row as the alarm** — recorded on this wire since
+   2026-09-02 ([`src/ai-call.ts`](../../src/ai-call.ts)), and a run showing 36 searches will show up
+   nowhere else.
+
+**Quote the mode's cost as up to ~$0.27 for a two-pass run**, typically $0.13–0.20 — not the $0.13 the
+first draft quoted from Stage 0's well-behaved call. That is near the illustrated diagram, which
+[experimental-features.md](../project/experimental-features.md) calls the dearest and slowest thing in
+the app, and it is a number Greg should see rather than inherit. Two mitigations are already in the
+design: the passes are **sequential**, so a failed pass A costs one call rather than two (§ 2), and
+the step is behind the experimental switch.
+
+**Four caps, and their scope is stated because it is otherwise ambiguous** (Sol's F22 — implemented
+naively inside each pass, one `MAX_DEBATE_ROWS = 30` silently permits sixty stored rows):
+
+| constant | scope | v1 value |
+|---|---|---|
+| `MAX_DIRECT_SEARCH_RESULTS` | provider results, pass A | 12 |
+| `MAX_CLAIM_SEARCH_RESULTS` | provider results, pass B | 12 |
+| `MAX_DIRECT_ROWS` | stored rows, group one | 12 |
+| `MAX_CLAIM_ROWS` | stored rows, group two | 12 |
+
+The artefact maximum is the sum of the two row caps. **Counts and loss reasons are stored per group**,
+never only summed, or a foot line cannot say which of the two searches lost rows; a total may be
+derived for telemetry.
 
 ## What is counted, and what is shown
 
@@ -279,15 +438,41 @@ the worst case across the queue's requeue allowance both go in this doc.
 every validation counter can still read zero — which is why Candidates keeps a separate `omitted`
 ([`src/referee-candidates.ts`](../../src/referee-candidates.ts)). The artefact stores:
 
-`reportedRows` · `keptRows` · `omittedOverCap` · and **every validation loss by reason**
-(`uncited`, `unverifiedSource`, `claimNotInBlock`, `unknownBlockId`, `sourceNotPublishable`).
+**`returnedSources`** · `reportedRows` · `keptRows` · `omittedOverCap` · and **every validation loss by
+reason** (`uncited`, `selfSource`, `unverifiedSource`, `directnessUnverified`, `claimNotInBlock`,
+`unknownBlockId`), **each stored per group**.
 
-Rows beyond `MAX_DEBATE_ROWS` are **counted before iteration stops**. A malformed answer, or
+**`returnedSources` is new in round two and it closes a real hole** (Sol's F13). Annotations arrive
+**independently of what the model says** — Stage 0's probe answered with the single word `DONE` and
+Exa still returned ten source annotations. So a model can be handed evidence from ten pages, report
+three rows, have all three validate, and every counter above reads clean: `reportedRows === keptRows
+=== 3`, no loss sentence, and seven pages the search returned never entered the answer at all.
+`reportedRows` counts *the model's output* and must never be allowed to stand in for *what the search
+found*. So each pass stores `returnedSources` — the number of unique **admissible** annotation URLs,
+after the `isWebUrl` and `selfSource` refusals — and the foot line says *"The search returned evidence
+from N pages; M contribute to the rows shown"* whenever the count of distinct row URLs differs from
+it. A mutation drops one valid annotation URL from otherwise-valid JSON and asserts the sentence.
+
+Rows beyond a group's row cap are **counted before iteration stops**. A malformed answer, or
 `finish_reason: "length"`, **fails the step and writes no artefact** rather than storing a truncated
-list that looks complete. The panel and the public DTO show a loss sentence whenever
-`reportedRows !== keptRows`. Tests mutate each filter and the cap and assert the exact on-screen
-sentence — the ✧ line Quotes already draws, for the same reason
-([silent-success.md](../reusable/silent-success.md)).
+list that looks complete.
+
+**Generation-time losses and public-boundary losses are counted separately** (Sol's F17). The first
+draft put `sourceNotPublishable` in the stored artefact and then had the foot line fire on
+`reportedRows !== keptRows` — but that loss is *created later*, when the public DTO re-judges URLs, so
+the stored counts stay equal and **the visitor sees a shorter list with no sentence at all**, which is
+precisely the failure this section exists to prevent. So:
+
+- **the stored artefact holds generation-time losses only**, and `sourceNotPublishable` is not among
+  them;
+- **public projection computes `publicKeptRows` and `sourceNotPublishable`** at the boundary;
+- **the owner's foot compares `reportedRows` with stored `keptRows`; the visitor's compares
+  `reportedRows` with `publicKeptRows`.**
+
+A public-only URL mutation must leave the owner's counts unchanged *and* make the visitor's foot say
+exactly one row was omitted — that pair of assertions is the test, not either half alone. Tests mutate
+each filter and each cap and assert the exact on-screen sentence — the ✧ line Quotes already draws,
+for the same reason ([silent-success.md](../reusable/silent-success.md)).
 
 ## `searchedAt`, and why it is not staleness
 
@@ -302,9 +487,26 @@ without the artefact declaring itself invalid.
 
 ## Security
 
-Everything in [chat-tools.md § Security](../project/chat-tools.md) holds: `untrusted()` fencing with
-delimiter breaking, our words outside the fence, extracts rendered as **text and never as markup**.
-Two things are specific to this stage:
+**The first draft claimed chat's fence and cannot have it** (Sol's F21), and this is the correction
+that matters most in this section. In chat, *our own code* fetches the page and then wraps the text
+with `untrusted()` — delimiter-broken — before the **next** model request
+([`src/chat-tools.ts`](../../src/chat-tools.ts)). Debate's `openrouter:web_search` runs **inside the
+provider**: the model consumes the page extract during the call, and our process first sees those
+characters in the response. There is no point at which we could fence them. Saying "everything in
+chat-tools.md § Security holds" would hand the next reader a defence that is not there.
+
+Stated correctly:
+
+- **Prompt injection from a searched page is a residual risk of this mode**, not a mitigated one. A
+  hostile page can try to steer which sources are selected and how they are labelled.
+- **What bounds the consequence** is that this step has **no write-capable tools** — it searches and
+  returns JSON, nothing else — and that every claim it makes is re-checked by us afterwards against a
+  URL the search itself returned and a quote located in that URL's own extract (§ Attribution). An
+  injected instruction cannot manufacture a source; at worst it influences which real sources appear
+  and how they are characterised, and the characterisation is already labelled as the model's reading.
+- **Rendering is text and never markup**, which does still hold, and is ours.
+
+Two more things are specific to this stage:
 
 - **The excerpt is stored and later shown to a signed-out visitor**, which chat's fetched pages never
   were. Every row's URL is re-judged at the boundary by
@@ -328,9 +530,12 @@ Each ends green and commit-worthy. Sol reviews at the end of every stage.
 `url_citation` carries `content` (236–4,945 chars under Exa); Exa costs $0.066 and ~10 s a call; and
 an article with no reception yields nine plausible, correctly-cited, entirely irrelevant pages.
 
-**Stage 0b, still to run**: the adversarial cap probe under § The spend ceiling.
+**Stage 0b — done, 2026-09-05.** The adversarial cap probe. `max_total_results` is enforced to the row
+but is not a spend ceiling: with the cap at 4 the provider ran 36 searches for $0.10. Numbers, and the
+three things the ceiling is actually made of, under § The spend ceiling; raw output in the spike
+results doc.
 
-### Stage 1 — `SearchEvidence`, kept away from `Citation`
+### Stage 1 — `SearchEvidence`, kept away from `Citation` — **done, 2026-09-05**
 
 The first draft grew `Citation` itself and claimed "existing callers unaffected". **That was false**
 (Sol's F5): `collectCitations` is shared by Chat, Explain and Referee Criteria; chat citations are
@@ -343,6 +548,20 @@ and an **opt-in** evidence collector are used only by Debate (and available to C
 doc already names this as its first follow-up). Tests prove the excerpt is retained on the opted-in
 path and **absent** from ordinary chat and comment persistence. Frames copied from a live response,
 not imagined ones.
+
+**As built.** `SearchEvidence` in [`src/types.ts`](../../src/types.ts); `content` added to the
+`Annotation` wire interface, and `collectSearchEvidence` beside `collectCitations`, in
+[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts). The two collectors are two lines each
+over one private `collectAnnotated`, so the `isWebUrl` refusal, the discriminator and the dedupe have
+a single implementation and cannot drift — the exact failure that made this file the home of those
+rules in the first place. `MAX_EVIDENCE_EXCERPT` is **8,000 characters**: above every Exa extract
+Stage 0 measured (max 4,945), so it does not bite on the engine we use, but a bound on the engine
+nobody measured — the default engine returned 9,858 on the same probe and OpenRouter publishes no
+ceiling. Truncation is silent and fails in the safe direction: a `sourceQuote` living past the cap is
+not found, and § Attribution then **drops the row and counts it** rather than keeping one whose
+evidence was never read. Nothing is wired to the new collector yet; that is Stage 2's job.
+`tests/collect-citations.test.ts` gained a `collectSearchEvidence` block whose frames carry all five
+live keys.
 
 ### Stage 2 — the stage and the artefact
 
@@ -364,19 +583,33 @@ re-measured at the end of this stage rather than left a guess.
 
 ### Stage 3 — the band
 
-`MODES` and the five client tables; the band branch and its owner/visitor pair; `DebatePanel.tsx`;
-the two groups; the `VALENCE_APPEARANCE` icons and the `sourceRole` badge; the ⓘ excerpt card
-(`ProseHoverCard`, which already takes pointer events and carries a link out); the foot line.
-`useDebate` on `useOrderedRead` and `useStepJob`, with `useAutoRun` so **only an owner pressing an
-empty mode** starts the job — arrival and visitor rendering never POST. `CACHEABLE`. Behind the
-experimental switch, `experimental: true` in `MODES_UI`, reason in the table there.
+**The owner band only** — the visitor half moves to Stage 4, and that split is Sol's F23. The first
+draft built the owner/visitor pair here while `PUBLIC_PROJECTIONS`, the public DTO, the URL filtering
+and the public loss counts all arrived a stage later, which means a "green" Stage 3 would have
+implemented the visitor side against a type and a sanitisation boundary that did not exist yet. The
+visitor branch is written **after** the thing it must not bypass.
+
+`MODES` and the five client tables; the band branch, owner path only; `DebatePanel.tsx`; the two
+groups; the `VALENCE_APPEARANCE` icons; the "AI interpretation" grouping of `relation`/`valence`/
+`applies` (§ 4); the ⓘ excerpt card (`ProseHoverCard`, which already takes pointer events and carries
+a link out); the owner foot line, comparing `reportedRows` with stored `keptRows`. `useDebate` on
+`useOrderedRead` and `useStepJob`, with `useAutoRun` so **only an owner pressing an empty mode** starts
+the job — arrival never POSTs. `CACHEABLE`. Behind the experimental switch, `experimental: true` in
+`MODES_UI`, reason in the table there.
 
 ### Stage 4 — the shared link, and the docs
 
-`PUBLIC_PROJECTIONS` (a missing line here is the one silent failure in the whole public path —
-`tests/public-projection-columns.test.ts`), the public DTO with `publicCitationUrl` per row and the
-`sourceNotPublishable` count, the export put-chain. `docs/project/debate.md`, its line under
-[reading-view-overview.md](../project/reading-view-overview.md), and its row in
+The public contract first, then the visitor: `PublicDebate`; `PUBLIC_PROJECTIONS` (a missing line here
+is the one silent failure in the whole public path); the public DTO with `publicCitationUrl` per row,
+dropping the row on refusal; `publicKeptRows` and `sourceNotPublishable` computed **at the boundary**,
+not read from the artefact (§ What is counted).
+
+**`tests/public-projection-columns.test.ts` does not exist and Stage 4 creates it.** The first draft
+cited it as an existing protection; it is not one of the sixteen `tests/public-*` files in the tree,
+and a plan that names a guard which is not there is worse than one that names none. Sol's F23.
+
+Then the visitor branch and its foot line, the export put-chain, `docs/project/debate.md`, its line
+under [reading-view-overview.md](../project/reading-view-overview.md), and its row in
 [experimental-features.md](../project/experimental-features.md).
 
 ## Deliberately not in v1
@@ -402,6 +635,16 @@ experimental switch, `experimental: true` in `MODES_UI`, reason in the table the
 - **The upstream piece** — what *this* article is responding to. Reception in reverse, often the best
   critique available, and it may belong in group one.
 - **The source-kind classifier** — see § "Authoritative sources".
+- **A *verified* author badge.** `sourceRole` was cut as a model guess (§ 4), but authorship is partly
+  checkable: the source's host matching the article's host, or the article's byline located in the
+  source's own extract by the same spaced matcher. That is a badge we could stand behind. Out of v1
+  because it is a second search-time contract for a field nothing else depends on — and if it comes
+  back it comes back as a *check*, never as a value the model reports.
+- **Fetching the source page to widen the haystack.** Every quote is checked against the search
+  engine's extract, so a real quotation outside that slice loses its row (§ Attribution). Fetching the
+  page would recover those, at the price of a second network budget and a second injection surface,
+  and chat's `read_web_page` already has the machinery. Worth doing if `unverifiedSource` turns out to
+  be the dominant loss in practice — which the counts will say.
 
 ## The simpler option passed over
 
@@ -430,6 +673,36 @@ against the tree first and both held (`STAGE_EFFORT` is keyed on `ArticleStage`,
 | F10 | P1 rea. Nothing carries the search date to a visitor | **Fixed** — `searchedAt` in both DTOs and on screen; distinct from `stale` |
 | F11 | P2 est. "First pipeline stage on the chat wire" is false | **Fixed** — § The wire, stated correctly |
 | — | Closing note: drop the source-kind classifier from v1 | **Accepted** |
+
+## Review ledger — GPT Sol, round 2, 2026-09-05
+
+Verdict: **refused again**, on F13, F14, F15, F17. All twelve findings accepted, one of them partly.
+Four of Sol's code citations were checked against the tree before acting and **all four held** —
+`findQuote`'s default is `"forgiving"` and its own docblock says the server must not use it;
+`sameTarget`/`requestTarget` exist in `chat-tools.ts` and already refuse the open article; `untrusted()`
+is applied by our code *after* our own fetch; and `tests/public-projection-columns.test.ts` is not one
+of the sixteen `tests/public-*` files in the tree.
+
+Sol's closing line is the fair summary of round one's design: *"the source-relationship proof still
+stops one step too early: it proves that two passages exist, not that one answers the other."*
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F12 | P1 rea. The article can cite itself as part of its own debate | **Fixed** — `selfSource` refusal on `sameTarget` identity, § Attribution rule 2 |
+| F13 | P1 est. `reportedRows` does not count the sources the search returned | **Fixed** — `returnedSources` per pass, and a foot line when it differs from the rows shown |
+| F14 | P1 est. The plan invokes `findQuote` in its documented-unsafe default mode | **Fixed** — all three checks use `"spaced"` and persist the matched slice; § Attribution rule 4 |
+| F15 | P1 est. Two passes prove a search ran, not that any group-one page is a response | **Fixed** — `articleReferenceQuote` required for group one; failure counts `directnessUnverified` and demotes to group two at best |
+| F16 | P1 rea. A failed pass is indistinguishable from an empty result | **Fixed** — the two passes are one atomic step; three distinct empty states tabulated in § 2 |
+| F17 | P1 est. A public-only drop evades the loss line the plan advertises | **Fixed** — generation-time and boundary losses counted separately; owner and visitor feet compare different pairs |
+| F18 | P1 rea. An incomplete extract is treated as evidence the search found nothing | **Fixed** — its own empty sentence, the survivor bias disclosed, full-page fetch listed as deferred |
+| F19 | P1 rea. `sourceRole` is the same unverifiable classifier v1 claims to have cut | **Fixed** — `sourceRole` cut; `valence`'s target defined; "AI interpretation" grouping. **Not** by folding `follow-up` into `relation`, which would reinstate F9 |
+| F20 | P2 rea. Streaming is a plausible explanation, not an established cause | **Fixed in part** — the causal claim withdrawn and Exa made provisional-on-cost. The demanded 2×2 re-probe is **deferred, not accepted as a gate**: the comparison that would settle it is kept verified rows per dollar, and there is no kept-row rate to compare until Stage 2 exists |
+| F21 | P2 est. Debate cannot apply chat's `untrusted()` fence to server-side search input | **Fixed** — § Security rewritten; injection named as residual, with what actually bounds it |
+| F22 | P2 est. Neither cap's scope is specified across the two passes | **Fixed** — four named caps with values and per-group scope; counts stored per group |
+| F23 | P2 est. Stage 3's visitor implementation precedes its public contract | **Fixed** — Stage 3 is owner-only; Stage 4 builds the contract, creates the missing test, then the visitor |
+
+**Two rounds is the limit** ([engineering-manager.md](../reusable/engineering-manager.md)), so this
+plan now goes to build. Stage-end reviews continue against code, which is where they are worth more.
 
 ---
 
