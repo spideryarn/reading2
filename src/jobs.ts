@@ -43,7 +43,6 @@
  */
 import { createHash } from "node:crypto";
 import {
-  type AiCallRow,
   type SpendReport,
   collectSpend,
   emptySpend,
@@ -59,7 +58,8 @@ import { mintId } from "./ids.js";
    is still what every laptop runs. Stage 4 deletes the branch and this import
    with it. Deliberately not routed through src/store/index.ts, which is the
    *reader's* store. */
-import { costStore, totalRows } from "./store/ai-calls.js";
+import { costStore, totalLedger } from "./store/ai-calls.js";
+import type { LedgerRead } from "./store/contracts.js";
 import { pgJobStore } from "./store/pg-jobs.js";
 /* The refusal a publication answers with, by name, because the walk has to tell
    it apart from a database fault: one is a draft that is not fit to be an
@@ -1214,8 +1214,12 @@ async function jobSpend(job: Job, jlog: Log): Promise<Record<string, unknown>> {
     jlog.warn({ ...errorFields(err) }, "could not read what this job cost");
     return { aiCostStatus: "unavailable" };
   }
-  const { rows, unreadable } = read;
-  return jobSpendFields(rows, unreadable);
+  /* **The whole read goes through, not the rows.** It used to be destructured
+     here into `(rows, unreadable)`, which quietly threw away the third field the
+     day one arrived — and the third field is the one that says a row was never
+     written at all. `LedgerRead` travels intact so that the arithmetic below
+     cannot be handed a total with its caveat already removed. */
+  return jobSpendFields(read);
 }
 
 /**
@@ -1224,16 +1228,43 @@ async function jobSpend(job: Job, jlog: Log): Promise<Record<string, unknown>> {
  * Exported for [tests/job-spend-fields.test.ts](../tests/job-spend-fields.test.ts),
  * for the same reason `by` in scripts/ai-cost.ts is: every bug this line has had
  * was in **what the number includes**, and none of them showed up in a type.
+ *
+ * **It takes the whole `LedgerRead`**, not rows and a count, since 2026-09-04.
+ * There are two ways the read can be short and they are different facts — a row
+ * that will not parse, and a row that was never written because the call
+ * outlived its collector — so the totalling goes through `totalLedger`, which
+ * will not hand back a figure called a total while either is set. The failure
+ * that forced it: a job whose calls were still in flight when the collector
+ * closed read back as a complete, plausible, smaller bill, and one run printed
+ * `$2.7331` when the real figure was higher. The fix that would actually recover
+ * the money is a row written at call-open time —
+ * docs/plans/260827q-ai-cost-tracking.md.
  */
-export function jobSpendFields(
-  rows: readonly AiCallRow[],
-  unreadable: number,
-): Record<string, unknown> {
+export function jobSpendFields(read: LedgerRead): Record<string, unknown> {
+  const total = totalLedger(read);
+  /* **The caveat is computed before the empty check, and printed on both
+     sides of it.** A job every one of whose calls went missing has no rows *and*
+     is the worst case: without this, "spent nothing" and "we cannot see what it
+     spent" are the same empty object.
+
+     Two counts and never one. `partial` outranks `may-be-short` because an
+     unreadable line is a row we know is there and cannot count, while a late
+     call is process-wide and may have belonged to another job — but both counts
+     are emitted whenever they are non-zero, because they send a reader to two
+     different places: the ledger file, and the warn lines. */
+  const short = total.complete
+    ? {}
+    : {
+        aiCostStatus: total.shortfall.unreadable > 0 ? "partial" : "may-be-short",
+        ...(total.shortfall.unreadable > 0 ? { aiUnreadable: total.shortfall.unreadable } : {}),
+        ...(total.shortfall.lateCalls > 0 ? { aiLateCalls: total.shortfall.lateCalls } : {}),
+      };
+  const rows = read.rows;
   if (rows.length === 0) {
-    /* An unreadable ledger and a job that spent nothing must not look the same,
-       so a damaged ledger says so even when it has no rows to show for this
-       job. */
-    return unreadable > 0 ? { aiCostStatus: "partial", aiUnreadable: unreadable } : {};
+    /* An incomplete ledger and a job that spent nothing must not look the same,
+       so a ledger with a hole in it says so even when it has no rows to show for
+       this job. */
+    return short;
   }
   /* **All three pockets.** `computed` was dropped here until 2026-09-02 — zero
      at the time, because our own arithmetic is only ever used by the declared
@@ -1244,7 +1275,9 @@ export function jobSpendFields(
      docs/project/ai-gateway.md, and the `byok_upstream_nanos` trap — which was
      spelt `upstream_inference_nanos` until 2026-09-02, and the rename is the
      point: the old name did not say that adding it is conditional. */
-  const { credits, upstream, computed, unpriced } = totalRows(rows);
+  const { credits, upstream, computed, unpriced } = total.complete
+    ? total.money
+    : total.atLeast;
   const nanos = credits + upstream + computed;
   return {
     aiCalls: rows.length,
@@ -1259,11 +1292,13 @@ export function jobSpendFields(
     ...(computed > 0 ? { aiComputedNanos: computed } : {}),
     ...(unpriced > 0 ? { aiUnpriced: unpriced } : {}),
     /* **The total is short and this is the only place that can say so.** A
-       damaged line is a call that happened and cannot be read; a partial total
-       presented as a whole one is the failure this ledger exists to prevent.
-       GPT Sol raised it — the first version dropped `unreadable` on the floor
-       between the store and this line. */
-    ...(unreadable > 0 ? { aiCostStatus: "partial", aiUnreadable: unreadable } : {}),
+       damaged line is a call that happened and cannot be read; a late one is a
+       call that happened and left no line at all. A partial total presented as a
+       whole one is the failure this ledger exists to prevent. GPT Sol raised the
+       first half — the first version dropped `unreadable` on the floor between
+       the store and this line — and the second half is the same fault arriving
+       from the other side, found on 2026-09-04. */
+    ...short,
   };
 }
 

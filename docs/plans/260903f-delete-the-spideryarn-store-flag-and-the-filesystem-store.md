@@ -5020,6 +5020,136 @@ postcondition querying for leaked test identifiers; do not delete them.** Teardo
 a no-op leaves shared rows behind and produces cross-agent failures that look like somebody else's
 bug.
 
+#### G's cohort, frozen before any edit — 42 files, and the manifest's predicate sees 29 of them
+
+**The prediction, with its predicate in the same sentence** — the rule stages C and D each paid
+for once, and which this freeze exists to obey:
+
+> Stage G's cohort is **42 test files**, under the predicate *"has an `import` line naming a
+> condemned module or `src/api.js`, or calls `contextPaths(`, or reaches the filesystem store by
+> no import at all"*. Of those I predict **8 die**, **~25 are edited to drop a filesystem arm or
+> a single case**, and **~5 must have assertions ported** — because the predicate that governs a
+> file's **fate** is *whether the condemned module is its subject*, which is a different question
+> from the one that governs its **membership**.
+
+Two predicates, and keeping them apart is the whole of this freeze. Membership is about imports;
+fate is about assertions. Stage A's manifest used the first to answer the second, and that is
+where its three errors come from.
+
+The count, by how a file gets in (`scripts/` scratch: `g-cohort2.py`, run 2026-09-05):
+
+| | files | |
+|---|---|---|
+| A — imports a condemned `src/store/*` module | 29 | what stage A's manifest can see |
+| B — imports `src/api.ts` | +6 | invisible to A |
+| C — calls `contextPaths()`, neither of the above | +4 | invisible to A |
+| D — reaches by no import at all | +3 | invisible to **both** witnesses |
+| **total** | **42** | |
+
+**The manifest's predicate sees 29 of 42.** The thirteen it misses are
+`api`, `billing-settlement`, `jobs-commit-path`, `library`, `metadata-visibility-fs`,
+`pg-session-exact-base`, `public-imports`, `sanitize-stale-artefact`, `shelf`, `slug`,
+`store-artefact-manifest`, `store-carry-forward`, `store-session-isolation`.
+
+##### The third blind spot: the filesystem store has a room outside `src/store/`
+
+`src/api.ts` **is** the filesystem article reader — it reads `blocks.json` and `tree.json` off
+disk (`api.ts:217` `loadArticle`, through `candidateDirs`/`readJson`), and `src/store/fs.ts:113`
+assembles sixteen of its exports into `fsArticleReader`. It is instrumented by **nothing**:
+`CONDEMNED` (`vitest.witness.config.ts:44`), `TARGETS`
+(`scripts/store-migration-candidates.ts:57`) and `INSTRUMENTED`
+(`scripts/store-migration-witness.ts:94`) are the same eight `src/store/*.ts` modules, and
+`src/api.ts` is on none of them.
+
+So a test that calls `loadArticle` off `src/api.ts` executes the filesystem reader and **records
+nothing** — and the hole check at `store-migration-registry.test.ts:606` unions
+`ranAndTouchedNothing` into `accounted`, so the witness's silence is read as a clean bill.
+Measured against the committed witness:
+
+```
+tests/library.test.ts                 ranAndTouchedNothing: True   registry entry: False
+tests/sanitize-stale-artefact.test.ts ranAndTouchedNothing: True   registry entry: False
+tests/api.test.ts                     touched:              True   registry entry: True
+```
+
+`api.test.ts` was caught only by accident: it calls `articleMetadata`, which at `api.ts:1121`
+constructs `createFsArtifactStore` — an instrumented module, reached through a different door.
+The other two call `loadArticle`/`listArticles`, which never enter `src/store/` at all.
+
+`KNOWN_BLIND_SPOTS` (`store-migration-witness.ts:110`) records two, and this is neither. The two
+it knows are about *how* the instrument watches — a read rather than a call, a second module id.
+**This one is about where it looks**: the scope was defined as a directory, and the condemned
+implementation had a room outside it. A guard whose scope is drawn from the same assumption as
+the thing it guards agrees with the bug — [silent-success.md](../reusable/silent-success.md), and
+the fourth time this job has hit it.
+
+Naming the class, because it is not the one already written down: **the instrument's scope was a
+directory, and the condemned thing was a behaviour.** Every one of `fs.ts`'s sixteen imports from
+`../api.js` was visible in plain source for the whole job.
+
+##### Stage A's manifest is wrong on three files, all over-condemning
+
+Over-condemning is the direction that loses coverage silently, because a deleted assertion leaves
+nothing behind to go red.
+
+- `tests/pipeline-artifact-store.test.ts` — filed `filesystem-adapter-behaviour`, reason *"Every
+  claim is about `PATHS`, `pathFor` and `has()` parsing"*. It has **14 `describe` blocks and 54
+  cases**, among them `sameStamp`, `metaRawSha256`, glossary currency through the stamp, and a
+  14-case block driving a hand-rolled `ArtifactReads` fake. **~18 cases survive**; four die.
+- `tests/stage2c-raw-bytes.test.ts` — filed `filesystem-adapter-behaviour`. **One** of ~30 cases
+  uses the condemned import; the rest are `fsBlobs`/`writeRaw`, and `blobs-fs.ts` is out of scope.
+- `tests/store-realtime-sessions.test.ts` — the entry says *"Its Postgres half currently always
+  skips"*, inherited from the file's own header. **It cannot skip.** Stage F rewrote this file's
+  readiness handling (46 in, 54 out, `1481e196`), and `grep` now finds `skip` in it only inside
+  two comments; `describe(name, …)` at `:88` has no `skipIf`. The header contradicts itself
+  besides — the `beforeAll` at `:218` records *"All seven failed the first time they were allowed
+  to execute"*, which is a suite that ran. The header, the registry entry and the truth are three
+  different things, and the first two agree only because one copied the other.
+
+I wrote all three at stage A. They are one error, not three: a file classified by **what it
+imports** rather than by **what it asserts** — and an import list cannot see an assertion.
+
+##### Applied literally, G's own brief deletes coverage
+
+Stage G's brief says *"Each group deletes its filesystem-adapter behaviour tests from stage A's
+manifest in the same commit as its subject"*, and starts the groups with **uploads**.
+`tests/store-uploads-parity.test.ts` is the **only file in the tree that exercises `pgUploadStore`
+as a store contract** — the others (`upload-acquire`, `an-upload-is-queued-only-once-its-bytes-arrive`)
+are route-level. Its eleven cases reach Postgres through a `stores` array with two entries.
+Deleting the file to remove one entry loses all eleven: one-of-two-claims-wins, the three failure
+reasons, evidence through settle, an illegal transition, newest-first. **The correct edit is four
+lines.** The same shape holds for `store-jobs-parity` (52 Postgres cases behind the same framing),
+`store-reader-parity`, `store-realtime-sessions`, `store-ai-calls` and `source-store`.
+
+##### The plan's third stage-G instruction describes work stage B already did
+
+> **Job teardown is 11 files, not the appendix's eight.** They become permanent no-ops —
+> `readdir(...).catch(() => [])` over a directory that will never exist. **Replace each with a
+> database postcondition querying for leaked test identifiers; do not delete them.**
+
+**There is no such teardown.** `grep -rn "catch(() => \[\])" tests/ src/ scripts/` returns two hits
+on this tree: a *comment* at `tests/store-artefact-manifest.test.ts:78` recording that this used to
+be there three times, and one unrelated line in `scripts/live-spike.ts`. Stage B converted them;
+`tests/jobs.test.ts:61` records its own conversion in prose.
+
+Where the 11 came from: the plan review said *"the scan finds 11 files **referring to** job
+directories or helpers"*, and the plan restated that as *"job teardown is 11 files"*. Counted three
+ways today — teardowns that actually walk a jobs directory: **1**; files doing any filesystem job
+cleanup in a hook: **4**; files merely mentioning `data/_jobs` or `JOBS_DIR`: **~21**, nearly all
+header prose recording that the sweep was already converted. None of the four becomes a silent
+no-op, because all four are suites whose subject *is* `jobs-fs` and which die with it.
+
+**This is the C-and-D freeze error again, and this time it happened between two documents rather
+than inside one head**: a measurement taken with one predicate ("refers to") was reported with a
+narrower one ("does teardown in"), and nothing in between asked whether they were the same set.
+That is why this freeze states its predicate in the same sentence as its number.
+
+##### What would falsify this freeze
+
+Not "the suite is green". Each group's commit must show, for the files it touches, either a ported
+assertion running green in its new home, or an explicit line in the plan saying what was dropped
+and why. **A file deleted with no such line is the failure mode**, and no gate can see it.
+
 ### H — tighten the contracts the filesystem store was weakening
 
 `attempt` becomes required in comments, search and referee. **Chat needs the return type split

@@ -70,6 +70,8 @@ import {
   peakConcurrency,
   q1Gate,
   rangeOf,
+  formatRefusedRates,
+  refusedRates,
   type RecordsPass,
   requireRanges,
   usablePasses,
@@ -531,8 +533,8 @@ describe("the bound tally", () => {
 describe("the cost report", () => {
   it("compares the book rows against the incumbent and never the article rows", () => {
     const q = costReport([
-      { label: "A book ingest", nanos: 8_400_000_000, unpriced: 0, unreadable: 0, isBook: true },
-      { label: "C article", nanos: 3_400_000_000, unpriced: 0, unreadable: 0, isBook: false },
+      { label: "A book ingest", nanos: 8_400_000_000, unpriced: 0, unreadable: 0, lateCalls: 0, isBook: true },
+      { label: "C article", nanos: 3_400_000_000, unpriced: 0, unreadable: 0, lateCalls: 0, isBook: false },
     ]);
     expect(q.rows[0]!.vsIncumbent).toBeCloseTo(8.4);
     expect(q.rows[1]!.vsIncumbent).toBeNull();
@@ -550,8 +552,8 @@ describe("the cost report", () => {
    */
   it("keeps a job whose ledger was never read, as UNKNOWN rather than as absent", () => {
     const q = costReport([
-      { label: "A book ingest", nanos: 8_400_000_000, unpriced: 0, unreadable: 0, isBook: true },
-      { label: "D article 2", nanos: null, unpriced: 0, unreadable: 0, isBook: false },
+      { label: "A book ingest", nanos: 8_400_000_000, unpriced: 0, unreadable: 0, lateCalls: 0, isBook: true },
+      { label: "D article 2", nanos: null, unpriced: 0, unreadable: 0, lateCalls: 0, isBook: false },
     ]);
     expect(q.rows).toHaveLength(2);
     expect(q.rows[1]!.nanos).toBeNull();
@@ -565,11 +567,31 @@ describe("the cost report", () => {
 
   it("refuses a bill carrying an unpriced or unreadable call", () => {
     expect(
-      costReport([{ label: "A", nanos: 1, unpriced: 2, unreadable: 0, isBook: false }]).answerable,
+      costReport([{ label: "A", nanos: 1, unpriced: 2, unreadable: 0, lateCalls: 0, isBook: false }])
+        .answerable,
     ).toBe(false);
     expect(
-      costReport([{ label: "A", nanos: 1, unpriced: 0, unreadable: 3, isBook: false }]).answerable,
+      costReport([{ label: "A", nanos: 1, unpriced: 0, unreadable: 3, lateCalls: 0, isBook: false }])
+        .answerable,
     ).toBe(false);
+  });
+
+  /**
+   * **The third way a bill is short, and the one no read can see.**
+   *
+   * `unreadable` is a line on disk that will not parse. A *late* call is a line
+   * that does not exist: the request went out, its collector closed before the
+   * answer came back, and `collectSpend` deliberately writes no row because the
+   * report had already been taken. A Postgres read reports `unreadable: 0` over
+   * it, which is why the first paid run printed `$2.7331` as a total when four
+   * calls had opened and never recorded.
+   */
+  it("refuses a bill whose collector saw a call that never got a row", () => {
+    const q = costReport([
+      { label: "A", nanos: 1, unpriced: 0, unreadable: 0, lateCalls: 4, isBook: false },
+    ]);
+    expect(q.answerable, "a floor was reported as a total").toBe(false);
+    expect(q.findings[0]?.message).toMatch(/never recorded|late/i);
   });
 
   /* An empty table is an absence and read exactly like a measured zero. */
@@ -1959,6 +1981,111 @@ describe("the driving table over an empty run", () => {
     ]);
     expect(printed).toMatch(/book ingest/);
     expect(printed).not.toMatch(/NO JOBS/);
+  });
+});
+
+/**
+ * **The check that prints something when we are defeated.**
+ *
+ * A target the model refuses on every draw no longer fails the wave — it keeps
+ * the shape wave 1 gave it and is recorded (`RefusedCall`). That is right, and
+ * it turns a loud failure into a quiet absence, so the eval has to be the thing
+ * that makes the absence loud again.
+ *
+ * **Two diseases wear the same symptom and only the bucket tells them apart.** A
+ * model dodging genuinely fat sections shows up on `10+ blocks, 2000+ words` —
+ * that is the feature not working. A *selector* bug shows up only on tiny nodes
+ * forced open by `authored-heading` — that is us asking a question the protocol
+ * gives no honest way to answer, which is what killed the first paid run on
+ * Moby-Dick's four-block title page. Different cures, and a single overall rate
+ * would hide both inside each other.
+ */
+describe("how often the model refused, and on what", () => {
+  const rec = (over: Partial<CandidateRecord>): CandidateRecord =>
+    ({
+      where: "root > child 1",
+      range: ["spya-aaaaaa", "spya-bbbbbb"],
+      wave: 1,
+      depth: 1,
+      rawVerdict: null,
+      effective: { decision: "expand", because: "verdict" },
+      overriddenBy: null,
+      structuralBlocks: 12,
+      bodyWords: 3000,
+      authoredHeadings: 0,
+      retries: 0,
+      fanOut: null,
+      model: "m",
+      effort: "low",
+      promptVersion: "p",
+      ...over,
+    }) as CandidateRecord;
+
+  const refusal = { reason: "not-an-expansion", draws: 3, shape: { sections: 1, perSection: [] } };
+
+  it("is silent where nothing was refused", () => {
+    const q = refusedRates([rec({}), rec({})]);
+    expect(q.overall.refused).toBe(0);
+    expect(q.overall.rate).toBe(0);
+  });
+
+  it("counts a refusal only against the targets that were actually asked", () => {
+    /* A node the governor stopped was never asked, so it cannot have refused —
+       counting it in the denominator would dilute the rate with nodes that were
+       never at risk. */
+    const q = refusedRates([
+      rec({ effective: { decision: "stop", because: "divisibility-floor" } }),
+      rec({ refused: refusal }),
+      rec({}),
+    ]);
+    expect(q.overall.asked).toBe(2);
+    expect(q.overall.refused).toBe(1);
+    expect(q.overall.rate).toBe(0.5);
+  });
+
+  it("separates a model dodging fat sections from a selector forcing tiny ones", () => {
+    const q = refusedRates([
+      /* The feature not working: a genuinely fat section, refused. */
+      rec({ structuralBlocks: 30, bodyWords: 5000, refused: refusal }),
+      /* The selector bug: Moby-Dick's title page, four blocks and 21 words,
+         forced open because `By Herman Melville` is an h2 no child starts on. */
+      rec({
+        structuralBlocks: 4,
+        bodyWords: 21,
+        authoredHeadings: 2,
+        effective: { decision: "expand", because: "authored-heading" },
+        refused: refusal,
+      }),
+    ]);
+    const fat = q.bySize.find((b) => b.bucket === "10+ blocks, 2000+ words");
+    const tiny = q.bySize.find((b) => b.bucket === "under the floor (<10 blocks)");
+    expect(fat?.rate.refused).toBe(1);
+    expect(tiny?.rate.refused).toBe(1);
+    const heading = q.byBecause.find((b) => b.because === "authored-heading");
+    expect(heading?.rate.refused, "the forcing bound is what names the selector bug").toBe(1);
+    expect(q.byBecause.find((b) => b.because === "verdict")?.rate.refused).toBe(1);
+  });
+
+  /* Q2 prints only on a paid run, so nothing else here would ever have run this
+     formatter — and an unexercised formatter is the one that throws at $40.90.
+     `NOT ASKED` rather than `0.0%` is the assertion that matters: an empty
+     bucket is an absence, not a clean bill. */
+  it("prints a bucket nobody was asked about as an absence, not a zero", () => {
+    const printed = formatRefusedRates(refusedRates([rec({ structuralBlocks: 4, bodyWords: 21 })]));
+    expect(printed).toMatch(/NOT ASKED/);
+    expect(printed).toMatch(/under the floor/);
+    expect(printed).toMatch(/selector fault|forced the node open/);
+  });
+
+  it("says which reasons the refusals gave, so a schema fumble is not read as a decline", () => {
+    const q = refusedRates([
+      rec({ refused: { ...refusal, reason: "not-an-expansion" } }),
+      rec({ refused: { ...refusal, reason: "malformed-answer" } }),
+    ]);
+    expect(q.byReason).toEqual([
+      { reason: "malformed-answer", n: 1 },
+      { reason: "not-an-expansion", n: 1 },
+    ]);
   });
 });
 

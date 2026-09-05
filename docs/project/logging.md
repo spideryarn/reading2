@@ -239,6 +239,21 @@ queried back out of the ledger by `job_id`. Two fields exist on that line only:
 - **`aiCostStatus: "partial"`, with `aiUnreadable`** — some of the ledger would not parse, so the
   total below it is short by that many calls. GPT Sol found the first version dropping that count
   between the store and this line, which turned a short total into a confident one.
+- **`aiCostStatus: "may-be-short"`, with `aiLateCalls`** — a model call somewhere in this process
+  finished after its collector had reported, so **no row was ever written for it** and no query can
+  see it. Added 2026-09-04, after a run printed `$2.7331` as the bill when the real figure was
+  higher. It is a weaker claim than the two above and says so in its name: `lateCalls()` is
+  process-wide, so it cannot be attributed to *this* job — the whole content of the failure is that
+  nothing was written down about the call. Kept as a separate count from `aiUnreadable` because they
+  send a reader to different places: one is a line on disk that will not parse, the other is a line
+  that does not exist, whose only trace is the `warn` beside it. Where both are true the line says
+  `"partial"` and carries both counts.
+
+`totalLedger` in [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) is what makes this hard to
+forget: it will not hand back a figure called a total while either count is set, so a caller has to
+narrow past the caveat before it can read a number. The fix that would actually recover the money is
+a row written when the call *opens* rather than when it finishes
+([260827q](../plans/260827q-ai-cost-tracking.md)).
 
 **Several fields rather than one number, because a bare total cannot be checked.** `aiCalls` is the
 thing nobody can guess from outside — one step is often several calls, since `summarise` batches per
@@ -258,10 +273,14 @@ added one and it was a counter nobody could read. It is counted process-wide by 
 instead, beside `unscopedCalls()`, and each increment writes its own `warn` line — the counter alone
 lives in one process's memory where nobody reads it, and the line is the part that reaches a person.
 
-**`npm run cost` deliberately does not print either counter.** It is a different process and would
-start them both at zero, so the pair of noughts would be reassuring and mean nothing. What it asks
-instead is the question the rows can answer: how many reported no cost, and how much went on calls
-that failed.
+**`npm run cost` never prints either counter as a nought**, and that is the point: it is a different
+process and starts them both at zero, so a reassuring pair of zeroes would mean nothing at all. Since
+2026-09-04 it does say so when the late count is *not* zero — one line, above the money, from
+`shortfallNotes` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts), because a report that could
+have said "some of this is missing" and did not is the failure being designed against. In practice
+that line never appears, for exactly the reason above; the counter is a **server-side** signal, and
+what reaches a person is the `warn` line beside the late finish. What the report asks instead is the
+question the rows can answer: how many reported no cost, and how much went on calls that failed.
 
 All of them are omitted together when a step made no calls. Most steps in most jobs are cached or free,
 and four zeroes on every line is noise that makes the lines that matter harder to find.

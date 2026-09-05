@@ -45,9 +45,6 @@ const CONDEMNED = [
   "fs",
   "artifacts-fs",
   "jobs-fs",
-  "uploads-fs",
-  "ai-calls-fs",
-  "realtime-sessions-fs",
   "copy-artefacts",
   "data-root",
 ];
@@ -57,7 +54,7 @@ const BASENAME_RE = new RegExp(`(?:^|/)(${CONDEMNED.join("|")})\\.(?:js|ts)$`);
 const PREFIX = "\0fsw:";
 
 /** Every export of a condemned module, so the wrapper can re-export all of
- *  them. All eight declare their exports (`export const …`, `export function
+ *  them. All of them declare their exports (`export const …`, `export function
  *  …`), checked 2026-09-04; an `export { … }` list would be **missed and the
  *  wrapper would fail loudly** at the importing test's first named import,
  *  which is the right way round for this to break. */
