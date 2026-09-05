@@ -797,9 +797,21 @@ rather than blanked, and if none survives the key comes off entirely.
 
 ## Deliberate limits
 
-- **A selection under 8 characters is ignored.** Every one of these costs a model call, and a
-  double-click that skidded should not fire one. `MIN_SELECTION_CHARS` in
+- **A selection under 2 characters is ignored** — and 2 is the whole floor, deliberately.
+  It was 8 until 2026-09-05, on the ground that *"every one of these costs a model call"*; that
+  reason died on 2026-08-28, when saving became free and the model became a tick-box, and the
+  constant outlived it. Meanwhile it refused `AI`, `GDP`, `Ryle` and `qualia` — the short selection
+  [§ The two questions a selection raises](#the-two-questions) calls *almost always the second
+  question*. What is left at 2 is the one-character skid, kept because a one-character quote is the
+  case `resolveMark` is likeliest to re-anchor over the wrong words
+  ([§ Anchoring](#anchoring)). `MIN_SELECTION_CHARS` in
   [`selection.ts`](../../src/web/selection.ts).
+- **A selection the floor refuses opens nothing at all** — not a comment box, and *not the mark it
+  happened to end in*. `readSelection` answers `"too-short"` rather than `null` so its caller can
+  tell a refused drag from no drag; collapsing the two is what made a skid inside a commented phrase
+  reopen that comment, against the rule that a real selection wins over the mark it lands in.
+  `SelectionRead` in [`selection.ts`](../../src/web/selection.ts), and
+  `tests/short-selection-in-a-mark.test.tsx`.
 - **A selection spanning two blocks is clamped to the first.** A comment addresses one block —
   that is what makes it storable against the id spine — and silently doing the first paragraph beats
   appearing to ignore the drag.

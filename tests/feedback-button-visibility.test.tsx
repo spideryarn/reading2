@@ -129,12 +129,17 @@ describe("the Feedback button", () => {
   });
 
   /* A second signed-in route, so the claim is "every signed-in page" rather than
-     "the shelf". `/design` is the cheapest one that is not the shelf: it is the
-     only signed-in page that fetches nothing, so this stays a test about where
-     the button is mounted rather than about a fixture. */
+     "the shelf". `/privacy` fetches nothing, so this stays a test about where
+     the button is mounted rather than about a fixture.
+
+     **It used to be `/design`, and that stopped being a second page on
+     2026-09-05** without this file noticing: the design reference joined the
+     administrator's list (router.ts § `ADMIN_ONLY`), so an ordinary reader
+     there is shown the shelf — and the assertion below went on passing, against
+     the very page it was written to be different from. */
   it("is drawn on a signed-in page that is not the shelf", async () => {
     session.user = { id: "reader-1", email: "reader@example.com" };
-    await show("/design");
+    await show("/privacy");
     expect(document.querySelector(".fb-button")).not.toBeNull();
   });
 });

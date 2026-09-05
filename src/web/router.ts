@@ -129,7 +129,15 @@ export type Route =
    * and it has an address you can reload.
    */
   | { kind: "add-upload"; uploadId: string }
-  /** The design reference — every primitive on one page. See DesignPage.tsx. */
+  /**
+   * The design reference — every primitive on one page. See DesignPage.tsx.
+   *
+   * **On the administrator's list since 2026-09-05** (`ADMIN_ONLY` below), which
+   * is a courtesy and not a gate: it reads no data at all, so there is nothing
+   * behind it that could refuse anybody, and the page is in every signed-in
+   * reader's bundle either way. It is on the list because it is developer
+   * furniture, not because it is privileged.
+   */
   | { kind: "design" }
   /**
    * Profile, rather than an article — `/profile`. See ProfilePage.tsx and
@@ -165,8 +173,9 @@ export type Route =
    * places to answer it.
    *
    * **Parsing this says nothing about being allowed to see it.** The route
-   * exists for everybody; App.tsx renders the shelf instead for anybody who is
-   * not the administrator — **and deliberately not the 404 page**, which is
+   * exists for everybody; `ADMIN_ONLY` below is what App.tsx reads to render
+   * the shelf instead for anybody who is not the administrator — **and
+   * deliberately not the 404 page**, which is
    * where an address this file does not recognise goes since 2026-09-03. The
    * reason is docs/project/admin.md's: these pages are in every signed-in
    * reader's bundle, so 403 is the honest posture and a 404 would be pretending
@@ -242,6 +251,64 @@ export type Route =
    * than a refusal.
    */
   | { kind: "not-found" };
+
+/**
+ * **Which pages are the administrator's, and it is a courtesy rather than a
+ * gate.**
+ *
+ * Read once at the top of `SignedIn` (App.tsx): a signed-in reader who is not
+ * the administrator gets the shelf at any address answering `true` here. Say
+ * plainly what that is and is not:
+ *
+ * - **It hides nothing.** `AdminPage.tsx` and `DesignPage.tsx` are in the
+ *   JavaScript bundle every signed-in reader downloads, and vercel.json rewrites
+ *   every non-`/api/` address to `index.html`, so these paths answer 200 to
+ *   anybody. A reader who wants to see the design reference can still see it.
+ * - **The only real refusal is the server's**, on the `/api/admin` namespace,
+ *   above the route table in src/routes.ts. It would refuse a hand-written
+ *   `fetch` from any of these pages just the same, and it would refuse
+ *   identically if this file had never heard of an administrator.
+ * - **`/design` has nothing behind it to refuse.** It reads no data at all, so
+ *   there is no server half for it and none is wanted: it is on this list
+ *   because it is developer furniture that every reader was being shown, not
+ *   because it is privileged. docs/project/admin.md § The three refusals.
+ *
+ * **Why a map of every kind rather than a set of two.** The failure this
+ * replaces is `/design` itself: it was moved onto the `/admin` index on
+ * 2026-09-05 and the check stayed where it was, one `if` inside the `admin`
+ * branch, because a per-branch check has to be *remembered*. That is the same
+ * argument src/routes.ts makes for putting the server's check above the route
+ * table. A `Record<Route["kind"], boolean>` is exhaustive, so adding a member to
+ * the union above without answering the question here does not compile —
+ * the next administrator's page joins the gate by editing a list, and
+ * forgetting is not one of the available outcomes.
+ *
+ * What no mechanism can catch is answering it *wrongly* — writing `false` for a
+ * page that should be `true`. That is a judgment, and it is why the entries are
+ * a list somebody reviews rather than a rule somebody infers.
+ */
+const ADMIN_ONLY: Record<Route["kind"], boolean> = {
+  library: false,
+  read: false,
+  "public-library": false,
+  add: false,
+  "add-upload": false,
+  design: true,
+  profile: false,
+  login: false,
+  admin: true,
+  privacy: false,
+  features: false,
+  pricing: false,
+  contact: false,
+  callback: false,
+  "not-found": false,
+};
+
+/** Is this one of the administrator's pages? See `ADMIN_ONLY` above — cosmetic. */
+export function adminOnly(route: Route): boolean {
+  return ADMIN_ONLY[route.kind];
+}
 
 /**
  * The path segment for each view. `article` has none — the reading view is the
