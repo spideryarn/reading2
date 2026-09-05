@@ -1,6 +1,6 @@
 # Main app architecture review: review disposition and delivery
 
-Status as of 2026-09-05: reviewed documentation-only candidate; all review findings closed. No application
+Status as of 2026-09-05: reviewed documentation published to `dev`; all review findings closed. No application
 architecture change has been implemented by this work.
 
 Up: [Proposal](260905e-main-app-architecture-review.md) ·
@@ -51,5 +51,13 @@ received the required [narrow check](260905e-main-app-architecture-review-f8-pro
 closed; no established blocking finding is overruled or left to an unreviewed post-review fix.
 This is readiness to land the documentation, not authorisation to build every proposed stage.
 
-Candidate commit SHA: pending. This field will be filled after the reviewed files are committed;
-its follow-up metadata commit does not imply any application work was implemented.
+Reviewed candidate commit: **`959ee994c01b00b5cd0005b60387ad80f50edd3d`**. Its ten changed paths are
+exactly this work's two proposals, evidence, closure, three review prompts and three returned reviews.
+Inspect with `git show --stat 959ee994c01b00b5cd0005b60387ad80f50edd3d`; do not use a broad merge-base
+range that includes peer work. Returned review text received whitespace-only cleanup before commit.
+
+The first push met a peer update. After fetching and inspecting its non-overlapping documentation
+change, `git merge --no-edit origin/dev` integrated it without conflict. The reviewed candidate
+then reached `origin/dev` through **`a4c2d35e79fbf3c5e4a532a9d99c0e4e7785fd18`**, confirmed by a
+successful `git push origin HEAD:dev` and matching local/remote-tracking SHA. This final metadata
+update binds the live review to that durable candidate; it makes no application or design change.

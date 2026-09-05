@@ -736,7 +736,7 @@ reader depend on an increasingly elaborate framework of its own.
 - [x] Production client build and dated output baseline.
 - [x] GPT Sol review of this proposal and its implementation contracts; all findings closed.
 - [x] Documentation checks and repository validation recorded honestly; full check is not green.
-- [ ] Commit and push documentation to `dev`; record candidate SHA in the review artefact.
+- [x] Commit and push documentation to `dev`; candidate SHA recorded in the review artefact.
 
 The [evidence record](260905e-main-app-architecture-evidence.md) contains commands and results.
 The [review disposition](260905e-main-app-architecture-review-closure.md) records the independent
