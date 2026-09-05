@@ -4700,6 +4700,23 @@ export const linkSummaries = spideryarn.table(
      * deliberately not `urlKey`. src/urls.ts, and GPT Sol's P1-2.
      */
     target: text("target").notNull(),
+    /**
+     * **Which sighting of that link this summary is about** — the id of the
+     * block the reader's own pointer was in.
+     *
+     * In the key rather than beside it, because a destination linked twice in
+     * one article is two questions: the answer is *how does this stand to the
+     * paragraph you are standing in*, and the two paragraphs are different. The
+     * four fingerprints below would already make the other mention a miss — the
+     * passage is inside `context_hash` — but a miss on a shared key is the two
+     * of them overwriting each other, paying for a model call on every glance
+     * from one to the other. docs/project/links.md; GPT Sol, 2026-09-05, P1-1.
+     *
+     * Rows written before 2026-09-05 carry `''`, which is not a block id any
+     * article has, so none of them can be read again; they expire and the sweep
+     * takes them. The migration says the same thing at more length.
+     */
+    blockId: text("block_id").notNull(),
     /** `pending` while somebody is generating it; `ready` once there is one. */
     status: text("status").notNull(),
     /** The summary itself. Null on a `pending` row and never otherwise. */
@@ -4746,7 +4763,7 @@ export const linkSummaries = spideryarn.table(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.ownerId, t.articleId, t.target] }),
+    primaryKey({ columns: [t.ownerId, t.articleId, t.target, t.blockId] }),
     check("link_summaries_status", sql`${t.status} in ('pending','ready')`),
     /**
      * The union, as a constraint — `link_previews_shape`'s argument, one table

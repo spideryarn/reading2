@@ -22,6 +22,11 @@
  * 4. **It is another reader's article or it is nothing.** The store resolves the
  *    slug through `articleIdForOwned`, so a slug that is not this reader's is
  *    not found rather than answered.
+ * 5. **Two mentions of one destination are two rows.** The key carries the block
+ *    the anchor sits in, so the second mention is neither answered with the
+ *    first one's summary nor left rewriting its row. P1-1, 2026-09-05;
+ *    tests/link-summary-occurrence.test.ts is the half of that finding above the
+ *    store.
  *
  * Skips loudly when there is no database; tests/helpers/pg-ready.ts.
  */
@@ -66,7 +71,13 @@ const INPUTS: SummaryInputs = {
   model: "openai/gpt-5.6-luna",
 };
 
-const key = { slug: MINE, target: TARGET };
+/** The block the reader's pointer is in, and the other mention of the same page. */
+const HERE = "spya-aaaaaa";
+const AND_AGAIN = "spya-cccccc";
+
+const key = { slug: MINE, target: TARGET, blockId: HERE };
+/** The same reader, the same article, the same address — forty pages later. */
+const laterKey = { slug: MINE, target: TARGET, blockId: AND_AGAIN };
 
 beforeAll(async () => {
   const db = getDb();
@@ -92,10 +103,14 @@ afterAll(async () => {
 });
 
 /** Take the claim and fill it, which is what one successful call does. */
-async function store(inputs: SummaryInputs, summary: string): Promise<void> {
-  const claim = await pgLinkSummaryStore.claim(key, inputs, LEASE_MS);
+async function store(
+  inputs: SummaryInputs,
+  summary: string,
+  at: typeof key = key,
+): Promise<void> {
+  const claim = await pgLinkSummaryStore.claim(at, inputs, LEASE_MS);
   if (claim.kind !== "claimed") throw new Error(`expected to win the claim, got ${claim.kind}`);
-  await pgLinkSummaryStore.fill(key, claim.claimId, summary, ONE_FORTNIGHT());
+  await pgLinkSummaryStore.fill(at, claim.claimId, summary, ONE_FORTNIGHT());
 }
 
 describe("the link-summary cache", () => {
@@ -243,13 +258,51 @@ describe("the link-summary cache", () => {
     });
   });
 
+  it("keeps a row per mention, because two mentions are two questions", async () => {
+    await runAsOwner(DEV_OWNER_ID, async () => {
+      /* **The four-column key, and the reason for the fourth column.** The four
+         fingerprints would already make the other mention a *miss* — the
+         passage is inside `contextHash` — so a shared key would be correct and
+         would have the two of them rewriting one row over each other, paying
+         for a model call on every glance from one to the other. Two rows is
+         what makes the cache a cache for the case this feature got wrong.
+
+         The context hashes differ here as they would in life: the two answers
+         are about two different paragraphs. */
+      await store(INPUTS, "How it stands to the opening.");
+      await store(
+        { ...INPUTS, contextHash: "eeeeeeeeeeeeeeee" },
+        "How it stands to the later passage.",
+        laterKey,
+      );
+      expect(await pgLinkSummaryStore.read(key, INPUTS)).toBe("How it stands to the opening.");
+      expect(
+        await pgLinkSummaryStore.read(laterKey, { ...INPUTS, contextHash: "eeeeeeeeeeeeeeee" }),
+      ).toBe("How it stands to the later passage.");
+    });
+  });
+
+  it("does not answer for one mention with the other one's summary", async () => {
+    await runAsOwner(DEV_OWNER_ID, async () => {
+      /* The failure this whole change is about, at the layer that would hide
+         it: a store keyed on `(owner, article, target)` hands the second mention
+         the first one's answer, and it reads perfectly. */
+      await store(INPUTS, "About the opening paragraph.");
+      expect(await pgLinkSummaryStore.read(laterKey, INPUTS)).toBeNull();
+      /* And a claim for the other mention is not somebody else's `pending`. */
+      expect(await pgLinkSummaryStore.claim(laterKey, INPUTS, LEASE_MS)).toMatchObject({
+        kind: "claimed",
+      });
+    });
+  });
+
   it("cannot be asked about somebody else's article", async () => {
     await runAsOwner(DEV_OWNER_ID, async () => {
       /* Owner-scoped at the store, through `articleIdForOwned` — a slug that is
          not this reader's is not found rather than answered, which is the same
          property `loadArticle` gives the route. Two locks, one door. */
       await expect(
-        pgLinkSummaryStore.read({ slug: THEIRS, target: TARGET }, INPUTS),
+        pgLinkSummaryStore.read({ slug: THEIRS, target: TARGET, blockId: HERE }, INPUTS),
       ).rejects.toThrow();
     });
   });

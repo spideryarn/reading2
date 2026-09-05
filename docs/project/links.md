@@ -712,9 +712,11 @@ separate things"* — which is also a different `profile_hash` and therefore a d
 Two things that are the same shape as the fetch half and one that is not:
 
 - **A different cache, with a different key.** `link_previews` is ownerless because what a page says
-  about itself is the same for everybody; `link_summaries` is keyed `(owner, article, target)`
-  because this is about *this reader reading this piece*. The owner is **in the primary key** here
-  where `glossary_lookups` keeps it beside one — an article has one owner today, so it is redundant,
+  about itself is the same for everybody; `link_summaries` is keyed
+  `(owner, article, target, block)` because this is about *this reader reading this passage of this
+  piece* — the block is the fourth column since
+  [the mention the pointer is on](#the-mention-the-pointer-is-on-and-not-the-first-one).
+  The owner is **in the primary key** here where `glossary_lookups` keeps it beside one — an article has one owner today, so it is redundant,
   and the day `articles` stops being one row per owner an article-keyed row would start serving one
   reader's personalised summary to another.
 - **Four fingerprints are compared on every read**: the destination's text, the article context
@@ -735,21 +737,60 @@ measured price the fuse is about fifteen pence a day. Cache hits bypass all of i
 `link_previews.excerpt`, so a destination behind a bot challenge, a PDF, or a page whose text
 Readability could not reach gets the free card and nothing more.
 
-### Two known limitations, and the second is the one to fix first
+### The mention the pointer is on, and not the first one
+
+**A destination linked twice in one article used to be summarised against the first of the two**,
+and it was the sharpest thing wrong with this feature: the answer was about a real relationship in
+this piece, it was fluent, and it was about the wrong sentence, which is a worse failure than saying
+nothing. Not rare, either — the noema essay has two such pairs in sixty-two links. Found by GPT Sol,
+2026-09-05, P1-1; fixed the same day.
+
+The card now sends the **block the hovered anchor sits in** (`?block=`, read off the row the way
+every other feature here addresses text — [block-ids.md](block-ids.md)), `linkInArticle` resolves
+*that* sighting, and the block joins the summary's key so the two mentions are two rows rather than
+one they take turns overwriting.
+
+Five things about it are worth knowing before touching it:
+
+- **The data was already there.** `ArticleLink.blockIds` has been *every* block a link appears in
+  since 2026-08-27, in document order, because a GPT Sol review made exactly this point about the
+  chat tool: keeping only the first occurrence gives "a wrong answer wearing a block id"
+  ([chat-tools.md](chat-tools.md)). Nothing new is extracted; the fix is choosing.
+- **Two shapes, and handling one of them is the likely bug.** `articleLinks` dedupes on address
+  *plus text*, so two mentions under the **same** words are one row with two `blockIds` and two
+  mentions under **different** words are two separate rows. `tests/link-summary-occurrence.test.ts`
+  holds both, and the second is the one that stays green through the wrong fix.
+- **A block that does not check out is a refusal, not a fallback.** It has to be a block of this
+  article *and* one this link actually occurs in. A nominated block that quietly became the first
+  mention would let a caller have any paragraph of their own article summarised against any link in
+  it — the same request-shaped surface stage 2's P1-1 was about — and would look exactly like the
+  feature working. A caller that names *no* block still gets the first mention, which is what a
+  client from before this existed sends.
+- **The tab's own cache is keyed on the block too.** It sits in front of the server and never asks
+  twice, so leaving it keyed on `(slug, url)` would have kept the bug alive on the client after the
+  server was right.
+- **And where there is no block, the client does not ask at all.** A link in a chat answer, in the
+  sources under one, or in a figure's lightbox sits in no paragraph; the server's `"first"` fallback
+  would hand it a fluent paragraph about a passage the reader is nowhere near. The free card and the
+  fetched preview still land. The fallback stays on the server, where it is for a client from before
+  the parameter existed.
+
+### The two limitations that are left
 
 **An article already on your shelf gets no summary**, because no preview row is ever fetched for a
 page we already hold — and that is exactly the case where *how does it stand to this one* would be
 most interesting. Summarising from our own stored extraction is the repair.
 
-**A destination linked twice in one article is summarised against the first of the two.** The client
-sends `(slug, url)` and `linkInArticle` takes the first match, so hovering the *second* mention gets
-— and caches — the paragraph the *first* one sits in. That is the sharpest thing wrong with this
-feature: the answer is about a real relationship in this piece, it is fluent, and it is about the
-wrong sentence, which is a worse failure than saying nothing. It is not rare either — the noema
-essay has two such pairs in sixty-two links. The fix is to send the hovered anchor's **block id**,
-check that occurrence against the target, and put it in the summary's identity so the two mentions
-are two rows. GPT Sol, 2026-09-05, and it is a change to what the card sends rather than a tweak,
-which is why it is written here rather than done.
+**Two links to one destination inside a single paragraph are still one question.** The block is the
+finest thing the card can name, so where an author writes the same address twice in one block under
+two different phrases, the second hover gets the first anchor's *words* — the paragraph is right and
+the label is not. The same goes for `…/x#one` and `…/x#two` in one block, which are one request
+target. Found by GPT Sol reviewing this fix, 2026-09-05, and **left**: telling two anchors in one
+block apart needs an anchor-level discriminator — an index the browser counts and the server's own
+parse has to agree with, block id by block id — which is a new contract to keep in step for a
+failure that is bounded (the right passage, the wrong phrase) and rarer than the one it would
+follow. Worth doing when something shows it happening, and cheap to add on top of `LinkOccurrence`,
+which is already the pair rather than the id.
 
 ## What is deliberately not built yet
 
@@ -839,10 +880,24 @@ mutation rather than merely being green:
   no tools at all — because OpenRouter drops a parameter a provider does not take *silently*, so the
   only symptom of getting any of them wrong is a bill.
 - [`tests/link-summary-cache.test.ts`](../../tests/link-summary-cache.test.ts) — the four
-  fingerprints, the claim, and the fencing token. Making `matches` ignore the profile hash reddens
-  the profile case and nothing else; making it ignore the context hash reddens the re-extraction
-  case; making `claim` stop refusing a second caller reddens single-flight. `tests/fetch-allowance.test.ts`
-  gains the day and the fuse, and a sweep that keeps only the shorter window reddens both.
+  fingerprints, the claim, the fencing token, and the row per mention. Making `matches` ignore the
+  profile hash reddens the profile case and nothing else; making it ignore the context hash reddens
+  the re-extraction case; making `claim` stop refusing a second caller reddens single-flight.
+  `tests/fetch-allowance.test.ts` gains the day and the fuse, and a sweep that keeps only the
+  shorter window reddens both.
+
+**Stage 4 adds two more**, both watched red under mutation:
+
+- [`tests/link-summary-occurrence.test.ts`](../../tests/link-summary-occurrence.test.ts) — *which*
+  mention, in both of the shapes `articleLinks` produces, plus the refusals. Letting
+  `linkInArticle` fall back to the first sighting instead of refusing reddens five cases; reading
+  the passage off `blockIds[0]` again reddens exactly one — the same-anchor-text case, which is why
+  a fixture carrying only the other shape would have proved nothing. Dropping the block from the
+  store's address reddens the two new cases in the cache suite.
+- [`tests/no-block-no-summary.test.tsx`](../../tests/no-block-no-summary.test.tsx) — the client
+  does not ask for a relative summary when the link is in no paragraph. The assertion is the
+  *request list*, because a card drawn without a summary and a card whose summary was never asked
+  for look identical; taking the early return out reddens it.
 
 The asynchronous half has tests only either side of the wire, and **the reason given here for that
 has now been wrong twice.** The first version said a test of the hook would be a test of a mock; a

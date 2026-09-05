@@ -2127,7 +2127,7 @@ export interface RatePolicy {
 
 /**
  * **How the destination stands to the piece the reader is holding**, cached per
- * reader, per article, per address.
+ * reader, per article, per address, per mention.
  *
  * `LinkPreviewStore` above is the ownerless half — what a page says about
  * itself, fetched once for everybody. This is the owned half, and the two must
@@ -2139,7 +2139,7 @@ export interface RatePolicy {
  * generic.** The claim protocol is the same idea — one advisory lock, a
  * `pending` row with a lease, a `claim_id` that fences the destructive writes —
  * and the *data* is not: a preview is a five-member union keyed by one string, a
- * summary is one string keyed by three and validated against four fingerprints.
+ * summary is one string keyed by four and validated against four fingerprints.
  * A generic over both would have to take the columns, the validity test and the
  * key builder as parameters, which is more machinery than the second copy and
  * harder to read than either. The protocol is written down in one place — this
@@ -2199,6 +2199,16 @@ export interface SummaryKey {
   slug: string;
   /** `requestTarget(url)` — never `urlKey`. */
   target: string;
+  /**
+   * **The block the hovered anchor sits in**, which is what makes two mentions
+   * of one destination two rows rather than one row they take turns rewriting.
+   *
+   * Always the *resolved* sighting rather than what a client asked for —
+   * `linkInArticle`'s `LinkOccurrence` — so a request that named no block is
+   * keyed under the first one rather than under a blank. src/db/schema.ts §
+   * `linkSummaries`.
+   */
+  blockId: string;
 }
 
 /**
