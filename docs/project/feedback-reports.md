@@ -67,11 +67,30 @@ It is [engineering-manager.md](../reusable/engineering-manager.md), with the rep
 
 1. **Read the queue, in full, before starting anything.** Two reports that turn out to be one bug
    become one agent's brief; the rest are independent and the fan-out below assumes it.
-2. **One background Opus agent per report**, each in **its own worktree** (`EnterWorktree`, then
-   `npm run worktree:setup` — [worktrees.md](worktrees.md)), each running
-   [engineering-manager.md](../reusable/engineering-manager.md) with its own subagents beneath it.
-   **Three at a time at most**: they share one local Supabase, one dev server and one box, and past
-   three the tests start going red for reasons that are nobody's bug.
+2. **One `gjd-remote` session per report**, not a background subagent — so that each report is a
+   real Claude session on the box, which Greg can open a tab on with `gjd-remote resume-all` or
+   steer through Claude Code remote control while it runs
+   ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)):
+
+   ```
+   gjd-remote new-claude --no-attach -p - <<'EOF'
+   User feedback: <the reader's words, verbatim> — <Sentry short id and link, and the url, slug
+   and kind tags>. Proceed autonomously, following docs/reusable/engineering-manager.md and
+   docs/project/feedback-reports.md: your own worktree, land it on dev, and finish with the
+   bookkeeping in the three-ways-a-report-ends section.
+   EOF
+   ```
+
+   `-p -` takes the prompt from stdin, so the reader's own words need no escaping; `--no-attach` so
+   the launcher can start the next one instead of being handed the terminal. Each session runs
+   [engineering-manager.md](../reusable/engineering-manager.md) in **its own worktree**
+   (`EnterWorktree`, then `npm run worktree:setup` — [worktrees.md](worktrees.md)), with its own
+   subagents beneath it. **Three at a time at most**: they share one local Supabase, one dev server
+   and one box, and past three the tests start going red for reasons that are nobody's bug.
+
+   **This step runs from the laptop**, because `gjd-remote` ssh's *into* the box and cannot be run
+   from it. A loop already on the box does the reading and the triage, then hands Greg the launch
+   commands rather than fanning out itself.
 3. **Each agent decides for itself** what to build, using § Who sent it above — Fable and GPT Sol are
    its calls to make, not this loop's.
 4. **It lands on `dev` and stops there**: green tests, a GPT Sol review of the code,
