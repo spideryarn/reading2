@@ -934,6 +934,14 @@ measure each other.
 day. The unit is **click to next painted frame** — two `requestAnimationFrame`s after `btn.click()`
 returns, so the handler's synchronous work and the frame that shows it are both inside it.
 
+**Scope of every number below, as a dated example rather than a fact:** run 2026-09-05 on the
+Hetzner box, production build served by `vite preview`, `SPIDERYARN_STORE=postgres`, signed in as
+`dev-admin@spideryarn.local` via `--sign-in-via` against a dev server on another port. Slugs
+`m1-kuhn-spya-a2zrjb` (2,046 blocks) and `scaling-hypothesis` (186 blocks) in the local store. The
+bundle hash was checked on every rebuild, because this page records a day lost to `vite preview`
+serving one bundle to both ports. Three other agents were on the box, which is what the spread in
+the numbers is.
+
 ### The other axis nothing here had varied: length
 
 Every measurement above was taken on 360 or 551 blocks. Run the same clicks on **2,046 blocks**

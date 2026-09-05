@@ -22,8 +22,8 @@ quadratic in article length. Nothing on
 performance work were all about scrolling.
 
 **Two native DOM calls were 52.8% of all script.** Finding the DOM row for every section ran one
-whole-document `querySelector` scan *per section*, and three effects re-read `document.fonts.ready`
-on every mode switch. Both are now one cheap operation —
+whole-document `querySelector` scan *per section*, and the spine re-read `document.fonts.ready` on
+every mode switch. Both are now one cheap operation —
 [`rows.ts`](../../src/web/rows.ts) and [`fonts.ts`](../../src/web/fonts.ts).
 
 **Hierarchy −39%, Summary −33%, Outline −63%**; main-thread busy over the window fell 82% → 66.5%.

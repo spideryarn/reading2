@@ -37,10 +37,8 @@ and 400ms.
 
 Store is Postgres (`SPIDERYARN_STORE=postgres`), per CLAUDE.md.
 
-## Assumptions and open questions
-
-- Recorded here rather than asked, because this is an unattended run.
-- (filled in as the work goes)
+Questions, decisions and assumptions from this run are recorded rather than asked — there was nobody
+in the chat to read them. They are under § Assumptions and open questions, below the fix.
 
 ## Measurements
 
