@@ -38,7 +38,14 @@ import type { Block } from "./types.js";
    same answer now builds a different tree — a document part-way through the
    stage would otherwise resume onto the old boundaries and nothing would say
    so. One replayed call per article in flight, and that is the whole cost. */
-export const PROMPT_VERSION = "toc/4";
+/* Bumped to 5 for the Socratic `question` on the root and depth-1 nodes
+   (SPIDERYARN-READING2-1V). This one IS a prompt change — SYSTEM asks for a new
+   field — so a checkpoint written under toc/4 must not be resumed onto it, or
+   the article part-way through the stage would come out with questions on some
+   parts and none on others, and nothing would say why.
+
+   docs/plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md. */
+export const PROMPT_VERSION = "toc/5";
 
 /**
  * How hard the model thinks before it starts writing.

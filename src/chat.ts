@@ -256,6 +256,19 @@ export interface Turn {
    * instruction produced it.
    */
   stance?: RememberStance;
+  /**
+   * The reader pressed the "?" beside a paragraph rather than typing this
+   * question — **only meaningful when this turn creates the thread**, in the
+   * sense that the "?" only ever sends a first question. But unlike `anchor` and
+   * `kind` above, it does **not** belong to the thread: it is written onto the
+   * **user message** this turn creates, so that a retry or an edit of that
+   * question inherits it without anybody arranging it.
+   *
+   * That is the whole reason it is not a fourth `ThreadKind` and not a column on
+   * `chat_threads` — see `ChatMessage.help` in src/types.ts. `true` or absent;
+   * there is no `false`.
+   */
+  help?: true;
 }
 
 /**
@@ -294,7 +307,7 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question, anchor, kind, stance }: Turn,
+  { threadId, question, anchor, kind, stance, help }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
@@ -316,6 +329,13 @@ export function withTurn(
     text: question,
     createdAt: at,
     status: "done",
+    /* **On the reader's row, and only ever here.** The mirror of `stance` on the
+       reply below: one says how the answer was asked for, the other how it was
+       written. Conditional spread rather than `help: help`, because
+       `exactOptionalPropertyTypes` is on and the two stores are compared field
+       for field — an explicit `undefined` and an absent key are not the same
+       thing. See `Turn.help`. */
+    ...(help ? { help } : {}),
   };
   const reply: ChatMessage = {
     id: mintUniqueId(ids),

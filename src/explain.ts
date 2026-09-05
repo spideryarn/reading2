@@ -576,10 +576,24 @@ export async function* explainStream({
         yield { type: "delta", text: piece };
       }
       const counted = whereSearchCountCameFrom(chunk.usage);
-      if (counted.searches !== null) {
-        searches = counted.searches;
-        from = counted.from;
-      }
+      if (counted.searches !== null) searches = counted.searches;
+      /* **Assigned whenever accounting arrived, not only when a count was
+         found** — and the difference is the whole point of the field.
+
+         `from` used to be written inside the `if` above. `whereSearchCountCameFrom`
+         returns `searches: null` in exactly the case where `from` is `"neither"`,
+         so the one branch that reports the alarm was the one branch that skipped
+         the assignment, and `"neither"` — the value whose only job is to say
+         *OpenRouter has renamed the field again* — could never be logged. What
+         production printed instead was `no-usage`, beside populated token counts
+         out of the same `usage` object: the tripwire lying about which fault it
+         had seen. docs/reusable/silent-success.md, and
+         tests/search-usage-tripwire.test.ts.
+
+         Guarded on `chunk.usage` rather than assigned unconditionally, because
+         most chunks carry no usage at all and would otherwise reset a real
+         answer to `"no-usage"` on the way past. */
+      if (chunk.usage) from = counted.from;
       // Held for the log line after the loop: the usage chunk is normally the
       // last of all and carries no choices, so it would otherwise be seen and
       // dropped.

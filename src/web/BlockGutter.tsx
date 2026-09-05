@@ -575,12 +575,31 @@ export function BlockGutter({
             setOpen(false);
             onChatAbout(id);
           }}
+          /* **The same sentence in both, when there is something to open.**
+             It used to say *"Chat about this paragraph (3 already)"* over a
+             press that started a fourth — the chip advertised state it would
+             not show. Since 2026-09-05 a press opens one of the three
+             (App.tsx § `chatAboutBlock`), so the verb is "Open a
+             conversation", and *"(3 total)"* says the count is the set rather
+             than promising the reader all of it.
+
+             **`title` and `aria-label` are one string here**, unlike the
+             permalink and the "?" beside it, and the divergence is what was
+             wrong rather than what was right: the accessible name was the bare
+             singular, so the count on screen was the one thing a screen reader
+             could not hear. Nothing about the count is decoration.
+
+             With no conversation on the block, both are unchanged. */
           title={
             chatCount
-              ? `Chat about this paragraph (${chatCount} already)`
+              ? `Open a conversation about this paragraph (${chatCount} total)`
               : "Chat about this paragraph"
           }
-          aria-label="Chat about this paragraph"
+          aria-label={
+            chatCount
+              ? `Open a conversation about this paragraph (${chatCount} total)`
+              : "Chat about this paragraph"
+          }
         >
           <MessageSquare size={12} aria-hidden="true" />
           {/* Every conversation anchored to this block, selections included —

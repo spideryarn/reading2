@@ -205,7 +205,7 @@ describe("the list arriving", () => {
 
     let made = "";
     await act(async () => {
-      made = api().send(null, "why?", null, false);
+      made = api().send(null, "why?", null, { useProfile: false });
     });
     await settle();
     expect(sentTo).toBe(made);
@@ -246,7 +246,7 @@ describe("the list arriving", () => {
 
     let made = "";
     await act(async () => {
-      made = api().send(null, "why?", null, false);
+      made = api().send(null, "why?", null, { useProfile: false });
     });
     await settle();
     await act(async () => {
@@ -288,7 +288,7 @@ describe("the list arriving", () => {
 
     let made = "";
     await act(async () => {
-      made = api().send(null, "why?", null, false);
+      made = api().send(null, "why?", null, { useProfile: false });
     });
     await settle();
     /* The stream really did end — otherwise this is the previous test again. */
