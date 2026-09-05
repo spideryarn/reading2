@@ -961,6 +961,22 @@ export interface ConverseRequest {
    */
   stance?: RememberStance | undefined;
   /**
+   * The passage this whole conversation is about, when it was started from one.
+   *
+   * **The caller passes the THREAD's anchor, not the request body's** — the rule
+   * `kind`, `stance` and `help` already follow, and here it is the only possible
+   * source anyway: a thread is anchored once, on the turn that creates it, so
+   * every later turn's body has nothing to offer.
+   *
+   * Handed straight to `buildConverseMessages`, whose `anchor` option carries
+   * the reasoning for why it is re-sent every turn rather than left in the
+   * reader's first message. That docblock said "sent on every turn" from the day
+   * it was written and this field did not exist, so nothing sent it: found by a
+   * GPT Sol review of docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md,
+   * finding 2.
+   */
+  anchor?: ChatAnchor | null;
+  /**
    * **The reader pressed "?" rather than typing this question.**
    *
    * Per turn, and the caller reads it off the **stored user row** rather than
@@ -1337,6 +1353,7 @@ export async function* converse({
   useTools = true,
   kind = "chat",
   stance,
+  anchor = null,
   help = false,
   /* **`kind` above is what this reads**, and the order of these two lines is
      therefore load-bearing: a destructuring default may use a binding declared
@@ -1388,6 +1405,10 @@ export async function* converse({
        same value as an absent key — the same rule the `anchor` spread follows
        in `withTurn`. */
     ...(stance ? { stance } : {}),
+    /* Unconditional, and `null` rather than absent when there is none: the
+       option's type admits null and `anchorSection` returns "" for it, so an
+       unanchored conversation builds the byte-identical message it always did. */
+    anchor,
     /* Unconditional, unlike `stance` above: it is a plain boolean rather than an
        optional value, so `false` is a real answer and not an absent key. It adds
        nothing to the message when false — `helpSection` returns "" and the join

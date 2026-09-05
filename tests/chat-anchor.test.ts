@@ -21,7 +21,12 @@
  *    returned thread, and both "does not re-anchor" tests fail;
  *  - drop the `blockIdentities` insert from the chat seeder, and "survives an
  *    export and an import" fails on the foreign key, taking the whole
- *    transaction with it.
+ *    transaction with it;
+ *  - delete `help` from `src/store/export.ts`'s message projection, and the
+ *    same test fails on the "?" press; delete it from the chat seeder in
+ *    tests/helpers/seed-reader-state.ts instead, and it fails there too. Both
+ *    run on 2026-09-05, because two hand-written field lists that agree are
+ *    still two places a column can go missing without a word.
  *
  * **And one that did not**, recorded because the obvious reading of the code is
  * wrong: naming the anchor columns in `upsertThread`'s `onConflictDoUpdate` set
@@ -430,6 +435,16 @@ when("the anchor, stored", () => {
                     text: "what does this mean?",
                     createdAt: "2026-08-26T00:00:00.000Z",
                     status: "done",
+                    /* **The "?" press, carried through the same round trip as
+                       the anchor.** Both projections that touch it —
+                       `src/store/export.ts`'s rollback and this file's restore
+                       in tests/helpers/seed-reader-state.ts — are hand-written
+                       field lists, which is exactly how `tools` went missing
+                       from an export once already; both name `help` correctly
+                       and nothing carried one, so a future edit could drop it
+                       in silence. Asserted below. GPT Sol's review of the built
+                       code, finding 3. */
+                    help: true,
                   },
                   {
                     id: "spya-msgbbb",
@@ -466,7 +481,17 @@ when("the anchor, stored", () => {
       const returned = JSON.parse(
         await readFile(path.join(out, "data", slug, "chat.json"), "utf8"),
       ) as { threads: ChatThread[] };
-      expect(returned.threads.find((t) => t.id === THREAD)?.anchor).toEqual(SELECTION);
+      const restored = returned.threads.find((t) => t.id === THREAD);
+      expect(restored?.anchor).toEqual(SELECTION);
+      /* Reddened by deleting `help` from either projection: the export's line
+         and the seeder's each fail this on their own. */
+      expect(restored?.messages[0]?.help, "the \"?\" press did not survive the round trip").toBe(
+        true,
+      );
+      /* And it is still only on the reader's row. `compact` turns `false` into
+         an absent key, which is what the filesystem store writes, so the
+         assertion is absence rather than `false`. */
+      expect(restored?.messages[1]).not.toHaveProperty("help");
     } finally {
       await rm(out, { recursive: true, force: true });
       await rm(dir, { recursive: true, force: true });

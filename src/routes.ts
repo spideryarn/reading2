@@ -2319,6 +2319,66 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, `A ${wantedKind} conversation is about the whole article and cannot be anchored`);
   }
   const wanted = parseAnchor(anchor);
+  /* **`help: true` has a meaning, and the meaning is checked, not just the
+     shape.**
+
+     Far above, `help` is validated as absent-or-literally-`true`. That is the
+     wire; this is the contract, and it is one sentence — `ChatMessage.help` in
+     src/types.ts: *the paragraph "?" button created this thread*. Without these
+     three checks the flag was accepted on a later turn of an existing
+     conversation, on an unanchored one, on a selection chat, and on a Remember
+     or Candidates thread. Every one of those stores a press nobody made **and**
+     answers the request with the teaching prompt, so the row and the answer are
+     both wrong and agree with each other.
+
+     Refused rather than dropped, which is the posture the anchor rule just
+     above takes and for the same reason: a client whose request is silently
+     reinterpreted has no way to learn that it was, and neither has the reader.
+
+     All three are checked here, before `loadArticle` and before anything is
+     written, so a bad body is an ordinary JSON 400 rather than an `error` frame
+     inside a 200 stream — and the first of them is stated a second time under
+     `inTurnOrder`, where the read is safe from a thread appearing between the
+     look and the write. `help === true` is the only truthy value that can reach
+     here.
+
+     The real client sends exactly what these allow: `helpAboutBlock` in
+     src/web/App.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
+     on the send that creates the thread — pinned by *still lets through the
+     thing the real client sends* in tests/chat-help-route.test.ts, so tightening
+     this any further goes red rather than quiet.
+
+     GPT Sol's review of the built code, finding 1. */
+  if (help === true) {
+    /* A thread already exists under this id, so this turn is not creating one.
+       `storedKind` is defined for exactly the threads that exist, and it was
+       loaded a few dozen lines up for the character cap, so this costs nothing.
+
+       **Checked again under `inTurnOrder` below**, and that is not belt and
+       braces: this read is outside the lock, so a thread can be created between
+       it and the write. Here for the sentence and the fast refusal; there for
+       the guarantee — the division `withTurn`'s own kind check already
+       describes. */
+    if (storedKind !== undefined) {
+      throw httpError(400, 'A "?" press starts a conversation; a later question in one is not one');
+    }
+    /* Absent means chat — the default `withTurn` applies to a thread it is
+       creating — so the effective kind is what is checked, not the field. And
+       it can be read off the body alone because the rule above has established
+       that this turn creates the thread. */
+    if ((wantedKind ?? "chat") !== "chat") {
+      throw httpError(
+        400,
+        `A ${wantedKind} conversation is about the whole article, not a passage, so it cannot be a "?" press`,
+      );
+    }
+    if (!wanted || "quote" in wanted) {
+      throw httpError(
+        400,
+        'A "?" press is about a whole paragraph: send anchor: { blockId }, with no quote',
+      );
+    }
+  }
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
   // 404 rather than an `error` frame inside a 200 stream.
   const article = await loadArticle(slug);
@@ -2399,6 +2459,32 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
       if (existing && existing.kind !== wantedKind) {
         throw httpError(409, "That conversation is already a different kind");
+      }
+    }
+    /* **And a "?" press CREATES a conversation**, read again under the lock.
+
+       The same rule refused this request far above, before `loadArticle`, off a
+       load taken outside `inTurnOrder`. That one is the sentence a reader's
+       client gets and the reason nothing was loaded for a request that was
+       never going to run; this one is the guarantee, and it is here for the
+       reason the two checks above it give — the thread cannot be created
+       between the look and the write. Same division as `kind`, whose store-side
+       twin is inside `withTurn`'s transaction.
+
+       A later question in an existing conversation is the reader typing. A flag
+       saying otherwise puts a press in the database that nobody made **and**
+       answers an ordinary follow-up with the teaching prompt.
+
+       400 rather than 409, unlike its two neighbours: they describe a request
+       that would have been fine against a different conversation, and this one
+       is a client sending a field it has no business sending at all. */
+    if (help === true) {
+      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
+      if (existing) {
+        throw httpError(
+          400,
+          'A "?" press starts a conversation; a later question in one is not one',
+        );
       }
     }
     return wantsRetry
@@ -2596,6 +2682,23 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conversation is. GPT Sol's review of docs/plans/260827ah-review-mode.md,
          finding 5. */
       kind: thread.kind,
+      /* **The passage, from the THREAD, on every turn** — same rule as `kind`
+         just above, and this one had never been kept. `buildConverseMessages`
+         has documented since 2026-08-26 that the structural anchor is sent every
+         turn *because* `recentHistory` drops the oldest turns, so a passage that
+         lives only in the reader's first message stops being sent while the
+         panel and the database still say the thread is anchored to it. Nothing
+         passed it, so on the chat path that was never true.
+
+         `?? null` rather than a conditional spread: the option's type admits
+         null, `anchorSection` returns "" for it, and `exactOptionalPropertyTypes`
+         refuses an explicit `undefined`. Nothing moves above the `cache_control`
+         breakpoint — the line lands in the final user message, beside the
+         profile and the position. GPT Sol's review of the built code, finding 2.
+
+         The quote stays fenced in `anchorSection`: the passage is the article's
+         words, and the article is untrusted — docs/project/security.md. */
+      anchor: thread.anchor ?? null,
       /* And the stance from the reply row, for the same reason one step down:
          `withTurn` wrote the request's, `withRetry` carried over the replaced
          answer's, `withEdit` took it from the answer it is replacing. Reading

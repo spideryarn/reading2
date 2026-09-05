@@ -318,3 +318,173 @@ when("a help press, end to end", () => {
     expect(finalUser(1)).toContain(HELP_LINE);
   });
 });
+
+/**
+ * **What `help: true` is allowed to describe.**
+ *
+ * The shape check above only says the value is literally `true`. The *meaning*
+ * is narrower, and it is written down in one place — `ChatMessage.help` in
+ * src/types.ts: the paragraph "?" button created this thread. Three facts follow
+ * from that sentence, and each of them is refused rather than dropped, the same
+ * posture the anchor rule a few lines above it in `streamChat` takes, and for the
+ * same reason: a client that gets a 200 for a request the server then quietly
+ * reinterprets has no way to learn it was reinterpreted, and neither has the
+ * reader — except in the row, which now says a button was pressed that was not.
+ *
+ * The create-the-thread rule is stated **twice** in `streamChat` — once off a
+ * load taken before `loadArticle`, for the sentence and the fast refusal, and
+ * once under `inTurnOrder`, where the read is safe from a thread appearing
+ * between the look and the write. Both were watched refuse on their own:
+ * deleting the early one leaves *refuses a help flag on a later turn* green
+ * through the second (run 2026-09-05). One test cannot distinguish them, which
+ * is the honest state of a fast path and its guarantee.
+ *
+ * GPT Sol's review of the built code, finding 1.
+ */
+when("what help: true is allowed to claim", () => {
+  /** What the "?" actually sends, bar the anchor, which needs `BLOCK`. */
+  const helpPress = {
+    threadId: "spya-aaaaaa",
+    question: "About this block: I could not follow it.",
+    help: true as const,
+  };
+
+  it("refuses a help flag on a later turn of a conversation that exists", async () => {
+    /* The "?" *creates* a thread. A second question in one is the reader
+       typing, and a flag saying otherwise would put a press in the database
+       that nobody made — and answer an ordinary follow-up with the teaching
+       prompt. */
+    const first = await post(`/api/chat/${SLUG}`, { ...helpPress, anchor: { blockId: BLOCK } });
+    expect(first.frames.some((f) => f.event === "begin")).toBe(true);
+
+    /* The **same** anchor on the follow-up, which `sameAnchor` lets through, so
+       the only rule this request breaks is the one under test. Sending no
+       anchor would break the whole-block rule as well and be refused by
+       whichever is checked first — a test that cannot say which rule it
+       proved. */
+    const second = await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "and what follows from that?",
+      anchor: { blockId: BLOCK },
+      help: true,
+    });
+    expect(second.status).toBe(400);
+    /* Each refusal is pinned to its OWN sentence rather than to "a 400 was
+       returned": four rules that all produced one message would be one rule
+       with three tests agreeing with it. */
+    expect(String(second.body?.error)).toMatch(/starts a conversation/i);
+  });
+
+  it("refuses a help flag with no anchor at all", async () => {
+    const r = await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "About this block: I could not follow it.",
+      help: true,
+    });
+    expect(r.status).toBe(400);
+    expect(String(r.body?.error)).toMatch(/whole paragraph/i);
+    expect(await threads()).toHaveLength(0);
+  });
+
+  it("refuses a help flag on a selection-anchored chat", async () => {
+    /* A selection is the reader dragging over a phrase and asking about it —
+       a different gesture, with a different anchor, and not a "?" press. */
+    const block = article!.blocks.find((b) => b.id === BLOCK)!;
+    const quote = block.text.slice(0, 20);
+    const r = await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "what does this mean?",
+      anchor: { blockId: BLOCK, quote, start: block.text.indexOf(quote) },
+      help: true,
+    });
+    expect(r.status).toBe(400);
+    expect(String(r.body?.error)).toMatch(/whole paragraph/i);
+    expect(await threads()).toHaveLength(0);
+  });
+
+  it("refuses a help flag on a thread of another kind", async () => {
+    /* Remember and Candidates are about the whole piece; the "?" is beside one
+       paragraph. Sent without an anchor, so the refusal under test is the kind
+       one rather than the anchor rule that already refuses an anchored
+       Remember. */
+    const r = await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "here is what I took from it",
+      kind: "remember",
+      help: true,
+    });
+    expect(r.status).toBe(400);
+    expect(String(r.body?.error)).toMatch(/remember conversation is about the whole article/i);
+    expect(await threads()).toHaveLength(0);
+  });
+
+  it("still lets through the thing the real client sends", async () => {
+    /* `helpAboutBlock` in src/web/App.tsx mints exactly this: a draft with a
+       whole-block anchor, no kind, and `help: true` on the send that creates
+       the thread. If this goes red the rules above have locked the reader out
+       of the button they were written for. */
+    const r = await post(`/api/chat/${SLUG}`, { ...helpPress, anchor: { blockId: BLOCK } });
+    expect(r.status).not.toBe(400);
+    const [thread] = await threads();
+    expect(thread?.messages[0]?.help).toBe(true);
+  });
+});
+
+/**
+ * **The passage reaches the model on every turn, not only the first.**
+ *
+ * `buildConverseMessages` says so at length beside its `anchor` option, and
+ * gives the reason: `recentHistory` keeps the most recent turns, so a passage
+ * that lives only in the reader's first message stops being sent while the panel
+ * and the database still say the thread is anchored to it. The route never
+ * passed `thread.anchor`, so that had never been true on the chat path — a
+ * docblock asserting a behaviour in the present tense that the code did not
+ * have. GPT Sol's review of the built code, finding 2.
+ *
+ * Asserted **through the route**, on the request that goes to the model. The
+ * builder-level test in tests/help-prompt.test.ts hands `buildConverseMessages`
+ * an anchor itself, so it cannot see whether anybody passes one.
+ */
+when("the passage a conversation is anchored to", () => {
+  const anchorLine = () => `This conversation is about block ${BLOCK}`;
+
+  it("is in the turn that creates the thread", async () => {
+    await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "About this block: I could not follow it.",
+      anchor: { blockId: BLOCK },
+      help: true,
+    });
+    expect(sent).toHaveLength(1);
+    expect(finalUser(0)).toContain(anchorLine());
+  });
+
+  it("is still there on a follow-up that names no anchor", async () => {
+    await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "About this block: I could not follow it.",
+      anchor: { blockId: BLOCK },
+      help: true,
+    });
+    await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "and what follows from that?",
+    });
+    expect(sent).toHaveLength(2);
+    expect(
+      finalUser(1),
+      "The stored anchor never reached `converse`, so a follow-up is answered " +
+        "about an article with no passage picked out — and after ~20 turns the " +
+        "first message carrying it has left the history window too.",
+    ).toContain(anchorLine());
+  });
+
+  it("says nothing about a passage when the conversation has none", async () => {
+    await post(`/api/chat/${SLUG}`, {
+      threadId: "spya-aaaaaa",
+      question: "what is this piece for?",
+    });
+    expect(sent).toHaveLength(1);
+    expect(finalUser(0)).not.toContain("This conversation is about block");
+  });
+});

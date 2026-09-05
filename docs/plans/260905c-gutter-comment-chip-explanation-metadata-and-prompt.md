@@ -398,6 +398,113 @@ This is an unattended run, so these are recorded rather than raised.
   overruled above: the preflight count is reported, the `UPDATE` is Greg's to run. It is a heuristic
   rewrite of real readers' stored rows, and the migration stays additive.
 
+## Built, and what changed on the way
+
+**Stage 1 — `77e045a6`.** `threadFor`, `chatAboutBlock` reopening, the truthful copy, the
+`New conversation` link, six pure cases and a click-level regression test.
+
+Red first, and reddened twice more deliberately, which is the part worth keeping: flipping
+`block ?? selection` to `selection ?? block` failed *exactly* the whole-block-beats-selection case
+and nothing else, and wiring the new-conversation door to `chatAboutBlock` failed by reopening the
+thread the reader was standing in. A test that only ever passes is a test that proves nothing.
+
+Two places the plan was wrong about the code:
+
+- **There were no exact-string tests on the chat button's copy** — only on the "?". Two were added
+  rather than any weakened.
+- **Every `ChatAnchor` carries a `blockId`, selection anchors included**, so the New-conversation
+  link also lights on a selection-anchored thread. Kept deliberately: the chip now reopens the
+  selection thread there, so this is the only remaining way to start a whole-block one. Only an
+  unanchored Chat-band thread gets no button, and there is a test for it.
+
+**Stage 2 — `078bf436`.** 1R, 1S and 1X together, with a migration that
+`Target: postgresql://postgres@127.0.0.1:54362/postgres` confirms went to the local database.
+
+The column gained a **`chat_messages_help_user_only` CHECK** that this plan did not ask for and
+should have: `help` may only be true on a `user` row, so an assistant message cannot claim to have
+been a question.
+
+### The `send` refactor earned itself on the way in
+
+`useChat.send` took nine positional arguments and its call sites read
+`send(…, undefined, undefined, sourceCommentId)`. Adding a tenth is the shape that lets a field land
+in the wrong slot, and this repo has already lost `kind` that way
+(`tests/chat-kind-reaches-the-server.test.tsx` is the write-up). It is an options object now.
+
+It fought harder than predicted — 21 call sites rather than 5 — but the compiler found every one,
+**except the one that mattered**: `tests/help-sends-once.test.tsx` fakes `useChat` inside a
+`vi.mock` factory, so nothing type-checks it, and it went on destructuring the old positions. It
+went red in the full suite and is fixed. **A mock is a place the compiler cannot see**, which is
+worth knowing next time a signature moves.
+
+### Found and left alone — then fixed, one review later
+
+`converse` never passed an `anchor` to `buildConverseMessages` — `ConverseRequest` had no such
+field — so `anchorSection`'s docblock claim that the passage is *"sent on every turn"* was not true
+on the chat path. Noticed here, left alone on the ground that a prompt change nobody asked for does
+not belong in a feedback batch. **GPT Sol's review of the built code confirmed it (F-02, P1) and it
+is now fixed** — see § Stage 4.
+
+### Stage 4 — GPT Sol's review of the built code
+
+Three findings, all taken. [The review](260905c-gutter-comment-chip-code-review-sol.md); the verdict
+was *land it with these changes*. Each one got a failing test first, and the two mutation runs under
+F-03 are the part worth keeping.
+
+**F-01, P1 — `help: true` was shape-validated and not meaning-checked.** The route refused a
+non-`true` value and refused one on a retry or an edit, and then handed `help` to every ordinary
+`begin`. So it was accepted on a later turn of an existing thread, on an unanchored thread, on a
+selection-anchored chat, and on a Remember or Candidates thread — each of which stores a press nobody
+made *and* answers the request with the teaching prompt, with nothing on screen disagreeing.
+
+The contract is one sentence (`ChatMessage.help`): the paragraph "?" created this thread. `streamChat`
+now requires all three of it — the turn **creates** the thread, the anchor is **whole-block**
+(`{ blockId }`, no quote), the effective kind is **`chat`** — each its own 400 with its own sentence,
+**refused rather than dropped**, which is the posture the anchor rule beside it already takes. Checked
+before `loadArticle` and before anything is written, so a bad body is an ordinary JSON 400 rather than
+an `error` frame inside a 200 stream.
+
+Two of the three are shapes of the request body and are settled there. The third is a fact about
+stored state, so it is **stated twice**: once early, off the load the character cap already takes, for
+the sentence and for not loading an article the request was never going to use; and once under
+`inTurnOrder`, where the read is safe from a thread appearing between the look and the write — the
+division `kind` already follows, whose store-side twin lives inside `withTurn`'s transaction. Both
+were watched refuse on their own; deleting the early one leaves the test green through the second.
+
+Four refusal tests in `tests/chat-help-route.test.ts`, each pinned to its own sentence rather than to
+"a 400 came back" — four rules producing one message would be one rule with three tests agreeing with
+it. And a fifth, *still lets through the thing the real client sends*, so tightening this further goes
+red rather than quiet: `helpAboutBlock` mints a whole-block draft with no kind, which is exactly what
+the rules allow.
+
+**F-02, P1 — the stored anchor never reached `converse`.** Fixed here rather than deferred again: it
+is confirmed, small, and sits directly under the `helpSection()` this work added, whose first line
+says *"the reader pressed the '?' beside this passage"* — only reliably true if the passage is in
+front of the model. `ConverseRequest` gained an `anchor`, `converse` passes it through, and the route
+passes `thread.anchor ?? null` — **from the thread, never from the request body**, the rule `kind`,
+`stance` and `help` already follow.
+
+Nothing moved above the `cache_control` breakpoint: the anchor line lands in the final user message
+beside the profile and the position, and `tests/help-prompt.test.ts` and `tests/article-prompt.test.ts`
+are both still green. `anchorSection` still fences the quote — the article is untrusted
+([security.md](../project/security.md)) — and that was not touched.
+
+Asserted **at the route**, on the request that goes out, because Sol's point was that the existing
+builder-level test hands `buildConverseMessages` an anchor itself and therefore cannot see whether
+anybody passes one. The test that matters is the follow-up turn, which names no anchor: red before
+the fix with the final user message reading `and what follows from that?` and nothing else.
+
+**F-03, P2 — no positive `help: true` export test.** `src/store/export.ts` and
+`tests/helpers/seed-reader-state.ts` both hand-build a message projection and both name `help`
+correctly, but nothing carried one, so a future edit could drop it in silence — the exact seam those
+files' own comments warn about, and the way `tools` went missing once already.
+
+The fixture in `tests/chat-anchor.test.ts`'s round trip (`chat.json` → `seedChatFromFiles` → Postgres
+→ `exportArticle` → `chat.json`) now carries `help: true` on its user row, which covers **both**
+projections in one pass. Reddened twice to prove it can be: delete the export's line and it fails;
+restore that, delete the seeder's, and it fails again. Both mutations are recorded in the file's own
+header beside the two that were already there.
+
 ## Questions for Greg, if he wants them answered
 
 Neither blocks this work.

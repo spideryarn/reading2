@@ -189,10 +189,14 @@ describe("the request body a help turn actually sends", () => {
       blocks,
       history: [],
       question: base.question,
-      /* No `anchor` here, and that is not an oversight: `ConverseRequest` has no
-         such field. The anchor line is a `buildConverseMessages` option that the
-         chat route does not currently pass — noticed 2026-09-05 and left alone,
-         because it is a separate question from where `help` goes. */
+      /* No `anchor` here, deliberately: this pair of requests differs in `help`
+         and in nothing else. `ConverseRequest.anchor` does now exist and the
+         chat route does pass the thread's — the omission this comment used to
+         record was GPT Sol's finding 2, fixed the same day. Where the anchor
+         reaches the model is asserted through the route, in
+         tests/chat-help-route.test.ts, because a builder-level test that hands
+         `buildConverseMessages` an anchor itself cannot see whether anybody
+         passes one. */
       slug: "a-piece",
       ...(help ? { help } : {}),
     })) {

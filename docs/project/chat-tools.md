@@ -421,17 +421,38 @@ says nothing at all about where an answer comes from
 ## The "?" says so, and the answer teaches
 
 A press of the "?" in the gutter sends `help: true` on the POST body, validated as **absent or
-literal `true`** — a 400 otherwise, never coerced — and accepted **only on a new question**. It is
-stored on the reader's own message row (`chat_messages.help`, `ChatMessage.help`), and the route
-reads it back off **storage** rather than off the request, exactly as it already does for `kind` and
-`stance`. That is what makes a retry or an edit of a help question still a help question: a
-thread-level flag would have had to be refused on a turn that creates no thread, and pressing "Try
-again" on an explanation would then have been answered with the ordinary prompt.
+literal `true`** — a 400 otherwise, never coerced. It is stored on the reader's own message row
+(`chat_messages.help`, `ChatMessage.help`), and the route reads it back off **storage** rather than
+off the request, exactly as it already does for `kind` and `stance`. That is what makes a retry or an
+edit of a help question still a help question: a thread-level flag would have had to be refused on a
+turn that creates no thread, and pressing "Try again" on an explanation would then have been answered
+with the ordinary prompt.
+
+**And the meaning is enforced, not only the shape.** `help: true` means one thing —
+*the paragraph "?" created this thread* — so `streamChat` refuses it unless all three hold: the turn
+**creates** the thread, the anchor is a **whole block** (`{ blockId }`, no quote), and the effective
+kind is **`chat`**. Refused rather than dropped, the posture the anchor rule beside it already takes:
+a request the server silently reinterprets stores a press nobody made *and* answers with the teaching
+prompt, and nothing on screen says so. The first of the three is checked twice — early for the
+sentence, and again under `inTurnOrder` so a thread cannot appear between the look and the write.
+Each violation is its own 400 with its own sentence;
+`tests/chat-help-route.test.ts` pins all four, and pins that what `helpAboutBlock` sends still gets
+through. Found by GPT Sol reviewing the built code, 2026-09-05.
 
 The instruction it buys is `helpSection()` in [`src/converse.ts`](../../src/converse.ts), joined into
 the **final user message** between the anchor and the stance — below the `cache_control` breakpoint,
 so a help turn and an ordinary one share one cached article prefix
 ([prompt-caching.md](prompt-caching.md)). `tests/help-prompt.test.ts` pins the byte identity.
+
+And the anchor it sits beside is really there now. `buildConverseMessages` had documented since
+2026-08-26 that the passage is **sent on every turn** — because `recentHistory` keeps only the most
+recent turns, so a passage living in the reader's first message stops being sent while the panel and
+the database still say the thread is anchored to it — but `ConverseRequest` had no `anchor` field and
+the route passed none, so on the chat path it had never happened. Fixed 2026-09-05 in the same review:
+the route passes `thread.anchor`, from the thread and never from the request body, and
+`tests/chat-help-route.test.ts` asserts it on the request that goes **out**, on a follow-up turn that
+names no anchor. The quote stays fenced in `anchorSection` — the article is untrusted
+([security.md](security.md)).
 
 **No UI.** Reports 1R and 1S asked for metadata and for a better answer; the conversation list gets
 no help tag.
