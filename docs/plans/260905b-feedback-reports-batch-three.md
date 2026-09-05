@@ -11,7 +11,10 @@ named here rather than quietly dropped.
 
 This is an unattended run, so questions, decisions and assumptions land in this file, not in chat.
 
-## The nine
+## The reports
+
+Nine to begin with; four more (1T, 1V, 1W, 1X) arrived two hours later while the first wave was
+still running, from a second article. Thirteen in total.
 
 | id | kind | one line |
 |---|---|---|
@@ -24,6 +27,10 @@ This is an unattended run, so questions, decisions and assumptions land in this 
 | [1Q](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1Q) | problem | clicking a comment chip opens a *new* comment instead of the one that is there |
 | [1R](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1R) | suggestion | mark a comment made by the ? button as a request-for-explanation |
 | [1S](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1S) | suggestion | that explanation should teach: summary first, then analogy or worked example |
+| [1T](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1T) | suggestion | the Design link belongs in /admin, not on the logged-in homepage |
+| [1V](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1V) | suggestion | Summary mode should ask Socratic questions that send you back to the text |
+| [1W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1W) | suggestion | reopening an article should put you back where you were |
+| [1X](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1X) | problem | a comment asking for evidence did not search the web |
 
 ## How they were grouped
 
@@ -41,6 +48,20 @@ Not one agent per report — **one agent per set of files**, because three workt
   - **1P** — Illustrated / Lightbox, on its own.
   - **1M** — the sluggishness. Measure before touching anything; a symptom is a lead, not a
     diagnosis.
+  - **1T + 1W** — two small pieces of client state: a link that moves, and a view that should be
+    where you left it.
+- **Wave 3**
+  - **1V** — the Summary prompt, once nothing else is editing prompts.
+
+**1X went to the wave-1 comments agent mid-flight**, rather than waiting for a slot, because it lands
+in [`src/explain.ts`](../../src/explain.ts) — the same file that agent is already rewriting for 1S.
+Two worktrees editing one system prompt is a conflict you can see coming.
+
+That file also makes 1X more interesting than it reads. Model-invoked web search is *already there*:
+its header records Greg asking for it on 2026-08-25, "but encourage the model to ask for it unless
+it's very sure". So the capability exists and did not fire — a bug or a too-weak encouragement, not a
+feature request. The same file already records one round of exactly this, where the working shape and
+the broken one "look fine in a dialog", which is why the first mistake survived.
 
 ## Decisions and assumptions taken without asking
 
