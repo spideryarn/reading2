@@ -37,6 +37,7 @@ import {
   checkpointWriter,
   estimate,
   formatEstimate,
+  jobIntegrityFindings,
   parseRecordsFile,
   readRecordsDir,
   RECORDS_VERSION,
@@ -44,7 +45,7 @@ import {
   recordsFilePrefix,
   requeueVerdict,
   type SeamProof,
-  startBarrier,
+  startRendezvous,
   type StepPlans,
   treeDigest,
 } from "../evals/deepen/harness.js";
@@ -1677,6 +1678,100 @@ describe("the driving table over an empty run", () => {
   });
 });
 
+/* ===================================== a job that stopped, and what it left == */
+
+/**
+ * **DPN-18 and DPN-19 — two ways a paid job can stop having lost the evidence it
+ * was bought for, while `stopIfCompromised` sees nothing to stop for.**
+ *
+ * That function reads *findings*, and only findings. So anything that is not
+ * turned into one is, to the run, indistinguishable from a clean job — and the
+ * next phase is purchased.
+ *
+ * 1. **A terminal status that is not `done`.** A phase-B `hierarchy` writes valid
+ *    deepening records and then label generation throws. `driveJob` records
+ *    `jobStatus: "error"` and nothing else happens: phase C is bought over a
+ *    repeat that never finished.
+ * 2. **`done`, deepening on, and no records file.** `saveDeepenRecords` swallows
+ *    filesystem and hard-link failures on purpose — instrumentation must not
+ *    fail a reader's article — and `readRecordsDir` then returns `[]`. Which
+ *    `driveJob` printed as "no records file — nobody asked". But **"nobody
+ *    asked" and "asked and the record was lost" are different facts**, and Q1-Q3
+ *    are computed entirely out of those records. This is the seam where the two
+ *    got confused.
+ *
+ * `--dry-run` is exempt from the first because failing at the last free step is
+ * the whole shape of the rehearsal, and from the second because it never turns
+ * deepening on at all.
+ */
+describe("what a stopped job has to have left behind", () => {
+  const base = { label: "book hierarchy forced (repeat 2)", dryRun: false, requeued: false };
+
+  it("is fatal when a paid job ends `error`", () => {
+    const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: true });
+    expect(f.filter((x) => x.fatal)).toHaveLength(1);
+    expect(f[0]?.kind).toBe("not-answerable");
+    expect(f[0]?.message).toMatch(/error/);
+  });
+
+  for (const status of ["queued", "running", "cancelled"] as const) {
+    it(`is fatal when a paid job ends \`${status}\``, () => {
+      const f = jobIntegrityFindings({ ...base, status, deepenFlag: true, hasRecords: true });
+      expect(f.some((x) => x.fatal)).toBe(true);
+    });
+  }
+
+  it("says nothing about a paid job that ended `done` with its records", () => {
+    expect(
+      jobIntegrityFindings({ ...base, status: "done", deepenFlag: true, hasRecords: true }),
+    ).toEqual([]);
+  });
+
+  /* The requeue already has its own finding, with the reason a re-claim would
+     buy the wave again. A second one saying "not done" adds noise, not fact. */
+  it("leaves a requeued job to the requeue finding", () => {
+    expect(
+      jobIntegrityFindings({ ...base, requeued: true, status: "queued", deepenFlag: true, hasRecords: true }),
+    ).toEqual([]);
+  });
+
+  /**
+   * A dry run's jobs stop at `extract` and therefore end `error`: the article
+   * never publishes. That is what the rehearsal is.
+   */
+  it("says nothing about a dry run's job, whatever it ended as", () => {
+    expect(
+      jobIntegrityFindings({ ...base, dryRun: true, status: "error", deepenFlag: true, hasRecords: false }),
+    ).toEqual([]);
+  });
+
+  it("is fatal when a paid deepen-on job finished `done` with no records file", () => {
+    const f = jobIntegrityFindings({ ...base, status: "done", deepenFlag: true, hasRecords: false });
+    expect(f.filter((x) => x.fatal)).toHaveLength(1);
+    expect(f[0]?.kind).toBe("no-records");
+    expect(f[0]?.message, "the message must not read as `nobody asked`").toMatch(/lost|not written/i);
+  });
+
+  /* Phase C's flag-off half is *supposed* to write nothing, and the whole of
+     `checkInertness` rests on it. */
+  it("says nothing when deepening was off and nothing was written", () => {
+    expect(
+      jobIntegrityFindings({ ...base, status: "done", deepenFlag: false, hasRecords: false }),
+    ).toEqual([]);
+  });
+
+  it("reports both when a paid job ended `error` with nothing written", () => {
+    const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: false });
+    expect(f.map((x) => x.kind).sort()).toEqual(["no-records", "not-answerable"]);
+    expect(f.every((x) => x.fatal)).toBe(true);
+  });
+
+  it("names the job it is about, so a findings block says which phase lost it", () => {
+    const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: true });
+    expect(f[0]?.message).toContain(base.label);
+  });
+});
+
 /* ========================================= phase D, lined up before it counts == */
 
 /**
@@ -1687,72 +1782,174 @@ describe("the driving table over an empty run", () => {
  * two load articles start at `fetch` and get there only after stages 1-3. So the
  * run could spend $40.90 and then report question 5 unanswerable.
  *
- * The barrier holds the **book** back — not the load jobs — because the book's
- * step needs 658-778 s against a 740 s deadline and cannot spend seconds
- * waiting inside its own claim.
+ * **DPN-20 — and the first fix was a latch, not a rendezvous.** `announce` only
+ * *recorded* an arrival: load1 could announce, run its whole measured step and
+ * finish before load2 announced at all, and `wait` would then report `"all"` and
+ * release the book into a window load1 had already left. Q5 refuses that
+ * afterwards — correctly — but only once phase D has spent. So `arrive` **holds
+ * the caller** until every load step and the book are at the same entry, and all
+ * three are released together.
+ *
+ * The book still waits **outside** a claim: its step needs 658-778 s against a
+ * 740 s deadline. The two load steps wait *inside* theirs, which is what the
+ * bounded timeout is for.
  */
-describe("the phase-D start barrier", () => {
+describe("the phase-D start rendezvous", () => {
   const never = new Promise<void>(() => undefined);
+  /* Two turns of the microtask queue: enough for anything `arrive` returns to
+     have settled if it was ever going to. */
+  const settle = async (): Promise<void> => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
 
-  it("opens as soon as every load job has reached the measured step", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
-    b.announce("load1");
-    b.announce("load2");
-    const out = await b.wait(never);
+  /**
+   * **The DPN-20 case itself.** With a latch this passes vacuously — nothing
+   * holds load1 — and the phase measures two windows that never overlapped.
+   */
+  it("holds the first load step at its entry until the second one gets there", async () => {
+    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    let released1 = false;
+    let released2 = false;
+    void r.arrive("load1").then(() => {
+      released1 = true;
+    });
+    await settle();
+    expect(released1, "load1 ran its measured step before load2 was anywhere near it").toBe(false);
+    void r.arrive("load2").then(() => {
+      released2 = true;
+    });
+    const out = await r.wait(never);
     expect(out.why).toBe("all");
     expect(out.arrived).toEqual(["load1", "load2"]);
+    await settle();
+    expect([released1, released2], "the release did not reach both held steps").toEqual([true, true]);
   });
 
-  it("waits for the second one rather than opening on the first", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
-    b.announce("load1");
-    setTimeout(() => b.announce("load2"), 10);
-    const out = await b.wait(never);
-    expect(out.why).toBe("all");
-    expect(out.arrived).toHaveLength(2);
+  it("releases nobody until the wait ends, and then everybody", async () => {
+    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    const ran: string[] = [];
+    void r.arrive("load1").then(() => ran.push("load1"));
+    void r.arrive("load2").then(() => ran.push("load2"));
+    await settle();
+    expect(ran, "a load step ran its measured step before the book was released").toEqual([]);
+    await r.wait(never);
+    await settle();
+    expect([...ran].sort()).toEqual(["load1", "load2"]);
+  });
+
+  it("says how long each held step waited at the entry", async () => {
+    let clock = 0;
+    const r = startRendezvous({ expected: 2, timeoutMs: 60_000, now: () => clock });
+    void r.arrive("load1");
+    clock = 5_000;
+    void r.arrive("load2");
+    clock = 8_000;
+    const out = await r.wait(never);
+    expect(out.held).toEqual([
+      { slug: "load1", ms: 8_000 },
+      { slug: "load2", ms: 3_000 },
+    ]);
   });
 
   /* A step that ran twice — a re-driven job — must not count as two jobs. */
-  it("counts jobs, not announcements", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 20 });
-    b.announce("load1");
-    b.announce("load1");
-    const out = await b.wait(never);
+  it("counts jobs, not arrivals", async () => {
+    const r = startRendezvous({ expected: 2, timeoutMs: 20 });
+    void r.arrive("load1");
+    void r.arrive("load1");
+    const out = await r.wait(never);
     expect(out.why).toBe("timed out");
     expect(out.arrived).toEqual(["load1"]);
   });
 
   /**
-   * **A load job that fails before its measured step never announces anything**,
-   * and the book must still be driven — the run reports an unlined-up phase
-   * rather than hanging on one that can no longer line up.
+   * **A load job that fails before its measured step never arrives**, and the
+   * book must still be driven — the run reports an unlined-up phase rather than
+   * hanging on one that can no longer line up. **And the survivor must be let
+   * go**: a rendezvous that only ever opens on success wedges the other load job
+   * inside its own claim until the lease expires.
    */
-  it("gives up when the load jobs have finished without getting there", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 60_000 });
-    const out = await b.wait(Promise.resolve("both jobs failed"));
+  it("lets the survivor go when the other load job has died", async () => {
+    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    const out = await r.wait(Promise.resolve("the other load job failed"));
     expect(out.why).toBe("jobs finished first");
-    expect(out.arrived).toEqual([]);
+    expect(out.arrived).toEqual(["load1"]);
+    await settle();
+    expect(released, "a held load step was left waiting for a job that will never arrive").toBe(true);
   });
 
-  it("gives up on its own deadline when nothing happens at all", async () => {
-    const b = startBarrier({ expected: 2, timeoutMs: 5 });
-    const out = await b.wait(never);
+  it("gives up on its own deadline, and lets go when it does", async () => {
+    const r = startRendezvous({ expected: 2, timeoutMs: 5 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    const out = await r.wait(never);
     expect(out.why).toBe("timed out");
+    await settle();
+    expect(released).toBe(true);
   });
 
-  /* The race is genuinely racy: a job announcing in the same tick as the last
+  /**
+   * **The failure release.** If the phase throws between the arrivals and the
+   * wait — an `enqueue` that rejects, a checkpoint write that blows up — nothing
+   * would ever call `wait`, and two claims would sit at the entry until their
+   * leases ran out. `release()` is what the `finally` calls.
+   */
+  it("can be released by a phase that never reaches the wait", async () => {
+    const r = startRendezvous({ expected: 2, timeoutMs: 60_000 });
+    let released = false;
+    void r.arrive("load1").then(() => {
+      released = true;
+    });
+    r.release();
+    await settle();
+    expect(released).toBe(true);
+  });
+
+  it("is idempotent, so the finally after a wait changes nothing", async () => {
+    const r = startRendezvous({ expected: 2, timeoutMs: 60_000, now: () => 0 });
+    void r.arrive("load1");
+    void r.arrive("load2");
+    const out = await r.wait(never);
+    r.release();
+    expect(out.why).toBe("all");
+  });
+
+  /* An arrival after the gate has opened — a step re-driven late — must not
+     hang, and must not report a negative wait. */
+  it("does not hold a step that arrives after the release", async () => {
+    let clock = 0;
+    const r = startRendezvous({ expected: 1, timeoutMs: 60_000, now: () => clock });
+    void r.arrive("load1");
+    clock = 100;
+    await r.wait(never);
+    clock = 200;
+    let released = false;
+    void r.arrive("load2").then(() => {
+      released = true;
+    });
+    await settle();
+    expect(released).toBe(true);
+  });
+
+  /* The race is genuinely racy: a job arriving in the same tick as the last
      one settles is lined up, and must not be reported as missing. */
   it("says `all` where everyone arrived, however the wait happened to end", async () => {
-    const b = startBarrier({ expected: 1, timeoutMs: 60_000 });
+    const r = startRendezvous({ expected: 1, timeoutMs: 60_000 });
     const settled = Promise.resolve().then(() => {
-      b.announce("load1");
+      void r.arrive("load1");
     });
-    const out = await b.wait(settled);
+    const out = await r.wait(settled);
     expect(out.why).toBe("all");
   });
 
   it("does not wait at all for nobody", async () => {
-    const b = startBarrier({ expected: 0, timeoutMs: 60_000 });
-    expect((await b.wait(never)).why).toBe("all");
+    const r = startRendezvous({ expected: 0, timeoutMs: 60_000 });
+    expect((await r.wait(never)).why).toBe("all");
   });
 });

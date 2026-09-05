@@ -527,8 +527,8 @@ prints the bill, and buys nothing. `--spend` is the only way to spend.
 Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
 `{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
 the flag off and then on, which must come out byte-identical; and three jobs at once at
-`DEFAULT_JOB_CONCURRENCY` for the wall clocks, with a start barrier so that "at once" is true of the
-measured *step* and not merely of the three promises.
+`DEFAULT_JOB_CONCURRENCY` for the wall clocks, with a start rendezvous so that "at once" is true of
+the measured *step* and not merely of the three promises.
 
 **A pre-spend review refused the first version of it**, and the thirteen findings are worth
 reading before touching any of this — GPT Sol, 2026-09-05. Two of them decide whether the run is
@@ -565,14 +565,19 @@ Four things in it are worth copying:
   nothing. `SPIDERYARN_DEEPEN_REASK` names the slugs to re-buy, the run refuses to start unless it
   names the book and neither article, and afterwards `checkRepeatBoughtItsWave` asks the ledger
   whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
-- **The load phase is lined up before it is measured, and concurrency is measured over the STEPS'
-  windows, never the jobs'.** The arithmetic demanding three overlapping `hierarchy` windows was
-  right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
+- **The load phase is started together before it is measured, and concurrency is measured over the
+  STEPS' windows, never the jobs'.** The arithmetic demanding three overlapping `hierarchy` windows
+  was right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
   measured step at once, while the two load articles start at `fetch` and get there only after
-  stages 1-3. The two load jobs are driven first and announce their measured step as it begins; the
-  book is driven only once both have (`startBarrier`), and it waits **outside** a claim, because its
-  own step needs 658-778 s against a 740 s deadline. A barrier that does not open is reported, not
-  waited on for ever. All three phase-D promises
+  stages 1-3. The two load jobs are driven first and are **held at the entry** to their measured
+  step; the book is driven once both are there, and all three are released together
+  (`startRendezvous`). Merely *announcing* an arrival was not enough and was the first fix: load1
+  could announce, run its whole step and finish before load2 announced at all. The book waits
+  **outside** a claim, because its own step needs 658-778 s against a 740 s deadline; the two load
+  steps wait inside theirs, so the wait is bounded and what it cost is reported. A rendezvous that
+  does not open is reported, not waited on for ever. **What this guarantees is a shared start, not a
+  shared window** — the queue's cap is global and shared, so whether the three overlap for long
+  enough is still `peakConcurrency`'s to decide. All three phase-D promises
   stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
   agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the

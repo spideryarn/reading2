@@ -46,8 +46,9 @@ import {
   type CheckpointNamespace,
   type CheckpointStore,
 } from "../../src/store/checkpoints.js";
-import type { StepName } from "../../src/types.js";
+import type { JobStatus, StepName } from "../../src/types.js";
 import type { CostFixture } from "../cost/fixtures.js";
+import type { DeepenFinding } from "./report.js";
 
 /* ------------------------------------------------------- the file on disk -- */
 
@@ -235,19 +236,29 @@ export function assertStepPlansRunnable(
 
 /* ------------------------------------------------ the measured step, lined up -- */
 
-/** What the run learned from waiting for the load jobs to reach the measured step. */
-export interface BarrierOutcome {
-  /** The slugs whose measured step announced itself, in the order they did. */
+/** What the run learned from lining the load jobs up with the book. */
+export interface RendezvousOutcome {
+  /** The slugs whose measured step reached the entry, in the order they did. */
   arrived: string[];
   /** How many the run was waiting for. */
   expected: number;
   /** Why the wait ended. Only `"all"` means the phase is lined up. */
   why: "all" | "timed out" | "jobs finished first";
   ms: number;
+  /**
+   * **How long each held step stood at the entry**, in arrival order.
+   *
+   * Not decoration. The hold is *inside* the load job's claim and after its
+   * step's clock has started, so every one of these milliseconds is both a
+   * millisecond off that claim's 740 s deadline and a millisecond added to the
+   * `hierarchy` window question 5 reads. `runPhaseD` says so out loud when it is
+   * more than a moment.
+   */
+  held: { slug: string; ms: number }[];
 }
 
 /**
- * **An eval-only start barrier, so that phase D's three measured windows can
+ * **An eval-only start rendezvous, so that phase D's three measured windows can
  * actually intersect.**
  *
  * The arithmetic in `peakConcurrency` was right and the phase did not arrange
@@ -258,29 +269,45 @@ export interface BarrierOutcome {
  * below three makes question 5 unanswerable *after* the money has gone.
  * ⟨GPT Sol, DPN-15.⟩
  *
- * **The book waits, and it waits outside a claim.** The two load jobs are driven
- * first and announce themselves as their measured step begins; only then is the
- * book's job driven at all. Making the *book* wait inside its own claim was the
- * obvious shape and is the wrong one: its `hierarchy` step needs 658-778 s
- * against a 740 s deadline, so seconds spent waiting are seconds taken off the
- * one step in the run with no headroom.
+ * **The first fix was a latch and this one is a rendezvous, which is the whole
+ * of DPN-20.** Announcing an arrival is not the same as being *at* the entry
+ * when the others get there: load1 could announce, run its whole measured step
+ * and finish before load2 announced, and the wait would still end `"all"` and
+ * release the book into a window load1 had already left. So `arrive` **holds its
+ * caller** until everyone is at the entry, and `wait` releases all of them at
+ * once. ⟨GPT Sol, DPN-20.⟩
  *
- * **It gives up rather than hanging.** A load job that fails before its measured
- * step never announces anything, so the wait ends on the jobs finishing or on a
- * deadline, and the run says which — an unlined-up phase is a finding, not a
- * silence. Pure but for the clock, so every ending can be exercised.
+ * **The book waits outside a claim; the load steps wait inside theirs.** That
+ * asymmetry is deliberate and it is not free. The book's `hierarchy` needs
+ * 658-778 s against a 740 s deadline and has no seconds to spare, so it is
+ * driven last and never holds. The two load steps have headroom, and what they
+ * pay is in `held` — see `RendezvousOutcome.held` and pick the timeout with it
+ * in mind.
+ *
+ * **It gives up rather than hanging, and lets go when it does.** A load job that
+ * fails before its measured step never arrives, so the wait ends on the jobs
+ * settling or on a deadline; either way the gate opens, because a rendezvous
+ * that only opened on success would wedge the survivor inside its own claim
+ * until the lease ran out. `release()` is the same door for a phase that throws
+ * before it reaches `wait` at all. Pure but for the clock, so every ending can
+ * be exercised.
  */
-export function startBarrier(opts: {
+export function startRendezvous(opts: {
   expected: number;
   timeoutMs: number;
   now?: () => number;
 }): {
-  announce: (slug: string) => void;
-  wait: (abandonIf: Promise<unknown>) => Promise<BarrierOutcome>;
+  /** Called by a held step. Resolves when everyone is at the entry, or gave up. */
+  arrive: (slug: string) => Promise<void>;
+  /** Called by the book. Ends the wait, releases everyone, and says what it saw. */
+  wait: (abandonIf: Promise<unknown>) => Promise<RendezvousOutcome>;
+  /** The failure door: release whoever is held, for a phase that will never wait. */
+  release: () => void;
 } {
   const now = opts.now ?? (() => Date.now());
   const startedAt = now();
   const arrived: string[] = [];
+  const waiting: { slug: string; at: number }[] = [];
   let everyone: () => void = () => undefined;
   const all = new Promise<"all">((resolve) => {
     everyone = () => resolve("all");
@@ -288,12 +315,27 @@ export function startBarrier(opts: {
   /* Zero to wait for is already lined up — otherwise the caller would wait out
      the whole deadline to be told nothing was expected. */
   if (opts.expected <= 0) everyone();
+
+  let openedAt: number | null = null;
+  let openGate: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    openGate = resolve;
+  });
+  /* Idempotent: `wait` opens the gate and the caller's `finally` opens it again,
+     and the second one must not move the clock the first one stamped. */
+  const open = (): void => {
+    if (openedAt === null) openedAt = now();
+    openGate();
+  };
+
   return {
-    announce(slug: string): void {
+    arrive(slug: string): Promise<void> {
       if (!arrived.includes(slug)) arrived.push(slug);
+      waiting.push({ slug, at: now() });
       if (arrived.length >= opts.expected) everyone();
+      return gate;
     },
-    async wait(abandonIf: Promise<unknown>): Promise<BarrierOutcome> {
+    async wait(abandonIf: Promise<unknown>): Promise<RendezvousOutcome> {
       let timer: NodeJS.Timeout | undefined;
       const alarm = new Promise<"timed out">((resolve) => {
         timer = setTimeout(() => resolve("timed out"), opts.timeoutMs);
@@ -304,16 +346,88 @@ export function startBarrier(opts: {
         abandonIf.then(() => "jobs finished first" as const),
       ]);
       if (timer !== undefined) clearTimeout(timer);
-      /* `arrived.length` rather than `why`: a job that announced itself in the
+      open();
+      /* `arrived.length` rather than `why`: a job that reached the entry in the
          same tick as the last one settled must not be reported as missing. */
       return {
         arrived: [...arrived],
         expected: opts.expected,
         why: arrived.length >= opts.expected ? "all" : why,
         ms: now() - startedAt,
+        /* Computed here rather than in the released continuations, which do not
+           run until after this object has been built. A step that arrives after
+           the gate opened waited for nothing, and must not report a negative. */
+        held: waiting.map((w) => ({ slug: w.slug, ms: Math.max(0, (openedAt ?? now()) - w.at) })),
       };
     },
+    release: open,
   };
+}
+
+/* --------------------------------------- a job that stopped, and what it left -- */
+
+/**
+ * **Two ways a paid job can stop having lost the evidence it was bought for**,
+ * turned into findings so that `stopIfCompromised` can see them.
+ *
+ * That function reads findings and only findings, so anything not made into one
+ * is, to the run, a clean job — and the next phase is purchased over it.
+ *
+ * 1. **A terminal status that is not `done`** (DPN-18). A phase-B `hierarchy`
+ *    writes valid deepening records and then label generation throws; the job
+ *    ends `error`, `driveJob` records that, and phase C is bought anyway.
+ * 2. **`done`, deepening on, and no records file** (DPN-19). `saveDeepenRecords`
+ *    swallows filesystem and hard-link failures on purpose — instrumentation
+ *    must not fail a reader's article — and `readRecordsDir` then returns `[]`,
+ *    which `driveJob` printed as "nobody asked". But **"nobody asked" and "asked
+ *    and the record was lost" are different facts**, and questions 1-3 are
+ *    computed entirely out of those records. This is the seam where the two got
+ *    confused. ⟨GPT Sol, DPN-18/DPN-19.⟩
+ *
+ * **`--dry-run` is exempt from the first**, and that is the rehearsal's shape
+ * rather than an excuse: its step list stops at `extract`, so the article never
+ * publishes and the job is *expected* to end at its last free step
+ * (`stepsFor`). It never turns deepening on, so the second cannot arise.
+ *
+ * A requeued job is left to its own finding, which already says the thing that
+ * matters about it — that re-claiming it would buy the whole wave again.
+ *
+ * Pure, and separate from `driveJob`, so every one of these can be watched
+ * without a database — tests/deepen-eval.test.ts.
+ */
+export function jobIntegrityFindings(opts: {
+  label: string;
+  dryRun: boolean;
+  requeued: boolean;
+  status: JobStatus | undefined;
+  deepenFlag: boolean;
+  hasRecords: boolean;
+}): DeepenFinding[] {
+  if (opts.dryRun) return [];
+  const findings: DeepenFinding[] = [];
+  if (!opts.requeued && opts.status !== "done") {
+    findings.push({
+      kind: "not-answerable",
+      fatal: true,
+      message:
+        `${opts.label}: the job stopped at \`${opts.status ?? "unknown"}\` rather than \`done\`. ` +
+        "Whatever it bought before it stopped is on the ledger, but this job did not finish the " +
+        "steps the run was buying it for, so nothing measured over it is a whole measurement and " +
+        "no later phase may be purchased on top of it.",
+    });
+  }
+  if (opts.deepenFlag && !opts.hasRecords) {
+    findings.push({
+      kind: "no-records",
+      fatal: true,
+      message:
+        `${opts.label}: deepening was ON and no records file was written — the records were LOST, ` +
+        "not never asked for. `saveDeepenRecords` swallows filesystem and hard-link failures on " +
+        "purpose, so this reads downstream as `nobody asked`; it is not. Questions 1-3 are " +
+        "computed out of these records and are short by this whole pass.",
+    });
+  }
+  return findings;
 }
 
 /* ------------------------------------------------- the requeue, refused -- */

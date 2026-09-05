@@ -136,14 +136,16 @@ import {
   assertSeamProof,
   assertStepPlansRunnable,
   checkpointWriter,
-  startBarrier,
+  startRendezvous,
   type CostEstimate,
   estimate,
   fileFixture,
   formatEstimate,
+  jobIntegrityFindings,
   listRecordsDir,
   readRecordsDir,
   recordingCheckpoints,
+  type RendezvousOutcome,
   requeueVerdict,
   type SeamProof,
   type StepPlans,
@@ -179,15 +181,47 @@ import {
 const JOB_TIMEOUT_MS = 40 * 60_000;
 
 /**
- * **How long phase D holds the book back waiting for the two load jobs to reach
- * the measured step**, before giving up and driving it anyway.
+ * **How long phase D's rendezvous may hold anybody at the entry** before it
+ * gives up, lets go, and drives the book anyway.
  *
- * Generous on purpose — it is not a budget, it is a refusal to hang. A load job
- * that fails before its measured step never announces anything, and the wait
- * ends on the jobs settling rather than on this. What this covers is the one
- * that neither announces nor settles. `startBarrier`.
+ * The old number was 15 minutes and "generous on purpose", which was safe while
+ * the barrier was a latch and nobody was actually held. It is not safe now. A
+ * held load step is holding **its own claim**, whose effective deadline is
+ * `EFFECTIVE_DEADLINE_MS` (740 s), and it is holding it *after* its step's clock
+ * has started — so every second here is a second off that job's lease and a
+ * second added to the `hierarchy` window question 5 reads.
+ *
+ * Three minutes is chosen against the thing being waited for rather than against
+ * patience: both load jobs start from `fetch` on the same bytes at the same
+ * instant, so they reach `hierarchy` within seconds of each other unless
+ * something is already wrong — a shared box serialising them on a claim slot,
+ * most likely (`STANDING_NOTES`). Waiting longer than this would not rescue that
+ * case; it would only spend the survivor's lease on it. `startRendezvous`.
  */
-const LOAD_BARRIER_TIMEOUT_MS = 15 * 60_000;
+const LOAD_RENDEZVOUS_TIMEOUT_MS = 3 * 60_000;
+
+/**
+ * **A hold long enough to be worth saying out loud**, in the run's notes.
+ *
+ * Below this, the wait is the ordinary jitter of two jobs reaching the same step;
+ * above it, a reader comparing the load jobs' `hierarchy` clocks against
+ * `STEP_BUDGET_MS.hierarchy` is reading a number with idle waiting inside it.
+ */
+const NOTABLE_HOLD_MS = 5_000;
+
+/**
+ * **How long any one read of the ledger may take before it gives up and says
+ * so** — both the one `driveJob` makes the instant a job stops and the eight the
+ * end-of-run reconciliation makes.
+ *
+ * A read of a local Postgres is milliseconds. The number is not a performance
+ * budget: it is what stops a database fault from delaying, for ever, the thing
+ * the reader is actually waiting for. Reconciliation sits between a thrown phase
+ * and the exception that killed the run ⟨GPT Sol, DPN-17⟩; `driveJob`'s read
+ * sits inside phase D's `allSettled`, so one read that never answers is a phase
+ * that never reaches reporting at all ⟨DPN-21⟩.
+ */
+const LEDGER_READ_DEADLINE_MS = 60_000;
 const BUSY_BACKOFF_MS = 500;
 
 /** The deadline a claimant works to, which is what question 5 is measured against. */
@@ -428,12 +462,18 @@ interface JobSpec {
   steps: readonly StepName[];
   force: readonly StepName[];
   /**
-   * **Say so when this step begins**, so phase D can hold the book back until
-   * the two load jobs have their measured step under way — `startBarrier`. The
-   * hook wraps the step in this job's own registry, so it sees the real start
+   * **Hold this step at its entry until phase D says go** — `startRendezvous`.
+   *
+   * Not "say so when it begins", which is what this was and which was only half
+   * of what phase D needs: a step that announces and then runs to completion
+   * before its neighbour announces has told the truth and lined nothing up
+   * (DPN-20). So the hook is *awaited*, and the step does not start until every
+   * party is at the same entry.
+   *
+   * It wraps the step in this job's own registry, so it holds the real start
    * rather than a guess made from outside. Absent on every other job.
    */
-  announce?: { step: StepName; began: (slug: string) => void };
+  announce?: { step: StepName; arrive: (slug: string) => Promise<void> };
 }
 
 /** A job the queue has taken, and the registry that must drive it. */
@@ -484,7 +524,13 @@ async function withLevers<T>(
 }
 
 /**
- * **One step that says when it began**, and nothing else about it changed.
+ * **One step held at its entry**, and nothing else about it changed.
+ *
+ * The `await` is the whole of DPN-20: this used to call the hook and carry
+ * straight on into the step, which records an arrival and lines nothing up.
+ * Held, the step genuinely does not start until the rendezvous opens — and the
+ * hold is inside the claim, which is what `LOAD_RENDEZVOUS_TIMEOUT_MS` is
+ * measured against.
  *
  * The overlay is on this job's own registry rather than on the shared `STEPS`,
  * so it cannot reach a job that did not ask for it — including one another agent
@@ -500,8 +546,8 @@ function announcing(
     ...base,
     [announce.step]: {
       ...step,
-      run: (ctx: Parameters<typeof step.run>[0], store: Parameters<typeof step.run>[1], checkpoints: Parameters<typeof step.run>[2]) => {
-        announce.began(ctx.slug);
+      run: async (ctx: Parameters<typeof step.run>[0], store: Parameters<typeof step.run>[1], checkpoints: Parameters<typeof step.run>[2]) => {
+        await announce.arrive(ctx.slug);
         return step.run(ctx, store, checkpoints);
       },
     },
@@ -650,9 +696,21 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
      landed; `checkScope` asks whether it landed in the eval's bucket at all
      (this eval drives jobs with no `fetch` step, so the fixture check cannot
      stand in for it — DPN-01); `checkLedgerComplete` asks whether every call the
-     collectors saw has a row (DPN-02). Both are the cost eval's, imported. */
+     collectors saw has a row (DPN-02). Both are the cost eval's, imported.
+
+     **Under a deadline, and for the same reason the end-of-run re-read is**
+     (`withDeadline`, DPN-17). This read is on phase D's path: three jobs finish
+     into three of these, and one that never answers is one `allSettled` never
+     settles, so the phase — and every finding and every number after it —
+     waits for ever on a database that has gone away. A read that gives up says
+     the spend is UNKNOWN, which is a fact the run can print.
+     ⟨GPT Sol, DPN-21.⟩ */
   try {
-    const ledger = await costStore.forJob(job.id);
+    const ledger = await withDeadline(
+      costStore.forJob(job.id),
+      LEDGER_READ_DEADLINE_MS,
+      `the ledger read for ${spec.label} (job ${job.id})`,
+    );
     record.unreadable = ledger.unreadable;
     record.money = totalMoney(ledger.rows);
     record.byStep = aggregateByStep(ledger.rows);
@@ -709,6 +767,24 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
         "the bill, and this pass expanded nothing. It is excluded from questions 1-3.",
     });
   }
+
+  /* **Did this job stop having lost what it was bought for?** Two facts that
+     were nowhere in the findings and so, to `stopIfCompromised`, looked exactly
+     like a clean job: a terminal status that is not `done` (DPN-18), and
+     deepening on with no records file at all — LOST, not "nobody asked"
+     (DPN-19). Both are pure and both are exercised in
+     tests/deepen-eval.test.ts; `jobIntegrityFindings` is where they are stated.
+     ⟨GPT Sol.⟩ */
+  findings.push(
+    ...jobIntegrityFindings({
+      label: spec.label,
+      dryRun: ctx.dryRun,
+      requeued: driven.requeuedAt !== null,
+      status: record.jobStatus,
+      deepenFlag: record.deepenFlag === true,
+      hasRecords: record.stats != null,
+    }),
+  );
   record.findings = findings;
 
   console.log(
@@ -721,18 +797,33 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
       `   hierarchy step ${record.hierarchyMs === null || record.hierarchyMs === undefined ? "—" : `${(record.hierarchyMs / 1000).toFixed(1)}s`}`,
   );
   if (record.byAiJob?.length) console.log(formatStepTable(record.byAiJob));
-  console.log(
-    `  deepening ${
-      record.stats === null
-        ? "no records file — nobody asked"
-        : `${record.stats.expanded}/${record.stats.targets} section(s), ${record.stats.calls} call(s) ` +
-          `(${record.stats.resumed} resumed, ${record.stats.withheld} withheld, ${record.stats.outOfTime} out of time), ` +
-          `yes ${record.stats.verdicts.rawYes}/${record.stats.verdicts.rawYes + record.stats.verdicts.rawNo}`
-    }`,
-  );
+  console.log(`  deepening ${deepeningLine(record)}`);
   if (findings.length > 0) console.log(formatFindings(findings));
   await ctx.checkpoint();
   return record;
+}
+
+/**
+ * **What one job's deepening pass did**, in a line — and *which* nothing, where
+ * it did nothing.
+ *
+ * "No records file — nobody asked" was printed for both of the two facts DPN-19
+ * is about: deepening off and nothing asked for (true, and phase C's whole
+ * point), and deepening on with the file lost (false, and fatal). The finding
+ * says so properly; this says so where a reader is watching the run.
+ */
+function deepeningLine(record: JobRecord): string {
+  const s = record.stats;
+  if (s != null) {
+    return (
+      `${s.expanded}/${s.targets} section(s), ${s.calls} call(s) ` +
+      `(${s.resumed} resumed, ${s.withheld} withheld, ${s.outOfTime} out of time), ` +
+      `yes ${s.verdicts.rawYes}/${s.verdicts.rawYes + s.verdicts.rawNo}`
+    );
+  }
+  return record.deepenFlag === true
+    ? "NO RECORDS FILE, and deepening was ON — this pass's records were LOST"
+    : "no records file — deepening was off, so nobody asked";
 }
 
 /* -------------------------------------------------------------- the answers -- */
@@ -1123,7 +1214,7 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
  * DPN-15. It cannot work: a job that stops short of a publishable article
  * **fails**, and a failed job's draft revision is rolled back, so the second job
  * opens on an article with no fetched document at all. The `--dry-run` of
- * 2026-09-05 showed exactly that, four jobs deep, for free. `startBarrier` is
+ * 2026-09-05 showed exactly that, four jobs deep, for free. `startRendezvous` is
  * Sol's other suggestion and the one that survives contact.
  */
 export function stepsFor(dryRun: boolean): StepPlans {
@@ -1239,9 +1330,9 @@ async function main(): Promise<void> {
   console.log(`  C  ${articleSlugs[0]}   ingest ${ingest.join(",")}   deepen OFF`);
   console.log(`  C  ${articleSlugs[0]}   ${rerun.join(",")} forced   deepen ON    (must be inert)`);
   console.log(
-    `  D  three at once: ${articleSlugs[1]} and ${articleSlugs[2]} ingest, and — once BOTH have ` +
-      `reached \`${rerun[0] ?? "hierarchy"}\` — ${bookSlug} ${rerun.join(",")} forced ` +
-      `(repeat ${args.repeats + 1})`,
+    `  D  three at once: ${articleSlugs[1]} and ${articleSlugs[2]} ingest, HELD at the entry to ` +
+      `\`${rerun[0] ?? "hierarchy"}\` until ${bookSlug} ${rerun.join(",")} forced ` +
+      `(repeat ${args.repeats + 1}) is there too, then all three released together`,
   );
 
   console.log("\nWhat it will check");
@@ -1256,7 +1347,7 @@ async function main(): Promise<void> {
     "every ledger row carries scopeKind \"eval\", so nothing here is billed to Product",
     "every call each step's own collector saw has a ledger row, and the ledger is re-read at the end to say whether the numbers stood still",
     "phase C: the published tree is unchanged, the flag-off pass wrote no records file, and deepen.targets is 0 — an eligible section makes it an invalid control, not a note",
-    "phase D: the two load jobs are driven first and the book only once BOTH have reached the measured step, so the three windows can intersect at all",
+    "phase D: the two load steps are HELD at their entry until the book reaches the same entry and all three are released together — a shared START, which is what the run can arrange; whether the three windows then stay open together is `peakConcurrency`'s to measure, below",
     "phase D: the hierarchy STEPS' own windows reach concurrency 3, and three of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement",
     "a re-asking pass that hands its claim back at its own deadline is STOPPED, not re-driven: re-claiming it buys the whole wave again",
     "candidates paired across repeats on parent-plus-range, never on `where` — refused outright if the range is missing",
@@ -1686,21 +1777,41 @@ async function runPhases(opts: {
   await ctx.checkpoint();
   if (stopIfCompromised(ctx, [on], "the load phase (D)")) return;
 
-  /* D — three at once, and lined up so that "at once" is true of the STEP.
-     Its own function because it is the only phase with machinery of its own:
-     the start barrier, and the drain that has to finish before the levers can
-     be restored. */
+  /* D — three at once, and started together so that "at once" is true of the
+     STEP. Its own function because it is the only phase with machinery of its
+     own: the start rendezvous, and the drain that has to finish before the
+     levers can be restored. */
   await runPhaseD({ ctx, args, runTag, articleFiles, articleSlugs, liveBookSlug, steps: opts.steps, deepen });
 }
 
 /**
- * **Phase D — three jobs at once, and the barrier that makes "at once" true of
- * the measured STEP rather than only of the three promises.**
+ * **Phase D — three jobs at once, and the rendezvous that makes the three
+ * measured steps START together rather than merely the three promises.**
  *
  * Separated from the other three because it is the only one with machinery of
  * its own, and because both of its hazards live here: the windows that have to
- * intersect (`startBarrier`, DPN-15) and the drain that has to finish before
- * the levers are restored (DPN-06).
+ * intersect (`startRendezvous`, DPN-15/DPN-20) and the drain that has to finish
+ * before the levers are restored (DPN-06).
+ *
+ * ## What this phase guarantees, exactly
+ *
+ * **Guaranteed**, when the rendezvous ends `"all"`: the three `hierarchy` steps
+ * are released within one turn of the event loop of each other, so all three
+ * windows are open at the same instant and no load step can have finished before
+ * the book began.
+ *
+ * **Not guaranteed, and measured instead:** that they stay open together for
+ * long enough to be worth anything. The queue's concurrency cap is global,
+ * shared, and read at claim time (`DEFAULT_JOB_CONCURRENCY` = 3), so another
+ * agent's job on this box can serialise two of these three however neatly they
+ * started; the load articles' `hierarchy` is much shorter than the book's and
+ * will close long before it; and the rendezvous can end `"timed out"` or
+ * `"jobs finished first"`, in which case even the shared start is gone.
+ *
+ * So `peakConcurrency` is still what decides whether question 5 may be quoted,
+ * and it is a measurement rather than a formality. The rendezvous removes one
+ * specific way of failing it — three windows that never had a reason to
+ * coincide — and does not replace it.
  */
 async function runPhaseD(opts: {
   ctx: RunContext;
@@ -1731,17 +1842,23 @@ async function runPhaseD(opts: {
   }
 
   /**
-   * **The barrier, and which way round it goes.**
+   * **The rendezvous, and which way round it goes.**
    *
    * The two load jobs start at `fetch` and reach the measured step only after
    * stages 1-3; the book's job is a forced `hierarchy` and is there at once. So
-   * the book is **driven last**, when both load jobs have announced that their
-   * measured step has begun — and it waits outside a claim, because its own
+   * the book is **driven last**, and it waits outside a claim, because its own
    * step needs 658-778 s against a 740 s deadline and has no seconds to spare.
-   * `startBarrier` says what it saw; a phase that did not line up is a finding.
-   * ⟨GPT Sol, DPN-15.⟩
+   *
+   * **The two load steps are held**, which is the difference between this and
+   * the latch it replaced: announcing an arrival let load1 run its whole step
+   * and finish before load2 announced, and the wait still ended `"all"`
+   * (DPN-20). They wait inside their own claims, so the wait is bounded by
+   * `LOAD_RENDEZVOUS_TIMEOUT_MS` and what it cost is reported.
+   *
+   * `startRendezvous` says what it saw; a phase that did not line up is a note
+   * here and a refusal in `budgetReport`. ⟨GPT Sol, DPN-15, DPN-20.⟩
    */
-  const barrier = startBarrier({ expected: 2, timeoutMs: LOAD_BARRIER_TIMEOUT_MS });
+  const rendezvous = startRendezvous({ expected: 2, timeoutMs: LOAD_RENDEZVOUS_TIMEOUT_MS });
   const measuredStep = rerun[0] ?? "hierarchy";
 
   const loadQueued: QueuedJob[] = [];
@@ -1756,7 +1873,7 @@ async function runPhaseD(opts: {
         ingress: loadIngress[i]!,
         steps: ingest,
         force: [],
-        announce: { step: measuredStep, began: barrier.announce },
+        announce: { step: measuredStep, arrive: rendezvous.arrive },
       }),
     );
   }
@@ -1789,20 +1906,45 @@ async function runPhaseD(opts: {
        waited for cannot surface as an unhandled rejection. `allSettled` below
        still sees the rejection itself. */
     for (const p of loadDriving) void p.catch(() => undefined);
-    const lined = await barrier.wait(Promise.allSettled(loadDriving));
+    let lined: RendezvousOutcome;
+    try {
+      lined = await rendezvous.wait(Promise.allSettled(loadDriving));
+    } finally {
+      /* **The failure release.** `wait` opens the gate on every ending it has,
+         but a throw between the load jobs starting and the wait returning has
+         no ending at all — and two steps held at the entry would then sit there
+         holding their claims until the leases ran out. Idempotent, so calling it
+         after a wait that already opened changes nothing. */
+      rendezvous.release();
+    }
     console.log(
-      `  barrier: ${lined.arrived.length}/${lined.expected} load job(s) reached \`${measuredStep}\`` +
-        ` after ${(lined.ms / 1000).toFixed(1)}s — ${lined.why}. Driving the book now.`,
+      `  rendezvous: ${lined.arrived.length}/${lined.expected} load job(s) held at ` +
+        `\`${measuredStep}\` after ${(lined.ms / 1000).toFixed(1)}s — ${lined.why}. ` +
+        "Releasing all three now.",
     );
+    /* **What the hold cost**, which is not nothing: it was spent inside each
+       load job's claim and inside its measured step's own clock. A reader
+       comparing those clocks against `STEP_BUDGET_MS.hierarchy` has to know. */
+    const notable = lined.held.filter((h) => h.ms >= NOTABLE_HOLD_MS);
+    if (notable.length > 0) {
+      const said = notable.map((h) => `${h.slug} ${(h.ms / 1000).toFixed(1)}s`).join(", ");
+      console.log(`  held at the entry: ${said}`);
+      ctx.runFile.notes.push(
+        `Phase D held ${said} at the entry to \`${measuredStep}\` waiting for the others. That ` +
+          "wait is INSIDE each load job's claim and inside its measured step's clock, so those " +
+          "jobs' `hierarchy` times are that much longer than the work took and their claims had " +
+          "that much less of the 740 s deadline left.",
+      );
+    }
     if (lined.why !== "all") {
       /* **Not fatal on its own.** `budgetReport`'s peak-concurrency gate is what
          decides whether question 5 was measured; this says why it was not, at
          the moment it happened, rather than leaving a reader to infer it from
          three wall clocks an hour later. */
       ctx.runFile.notes.push(
-        `Phase D's start barrier ended "${lined.why}" after ${(lined.ms / 1000).toFixed(1)}s with ` +
-          `${lined.arrived.length} of ${lined.expected} load job(s) at \`${measuredStep}\`, so the ` +
-          "book's measured step was not held back to meet them.",
+        `Phase D's start rendezvous ended "${lined.why}" after ${(lined.ms / 1000).toFixed(1)}s ` +
+          `with ${lined.arrived.length} of ${lined.expected} load job(s) at \`${measuredStep}\`, ` +
+          "so the three measured steps were not started together.",
       );
       console.log(
         "  WARNING: the phase did not line up. The three windows may not intersect, and question " +
@@ -1828,16 +1970,6 @@ async function runPhaseD(opts: {
 
 /* -------------------------------------------------------------- the report -- */
 
-/**
- * **How long the end-of-run reconciliation may spend on the database before it
- * gives up and says so.**
- *
- * Eight reads of a local Postgres are milliseconds. The number is not a
- * performance budget: it is what stops a database fault from delaying, for ever,
- * the exception that actually killed the run — reconciliation is on the path
- * between a thrown phase and the reader being told about it. ⟨GPT Sol, DPN-17.⟩
- */
-const LEDGER_REREAD_DEADLINE_MS = 60_000;
 
 /**
  * **A promise with a deadline, and a rejection that names what it was waiting
@@ -1901,7 +2033,7 @@ async function reconcileLedgerAgain(jobs: readonly JobRecord[]): Promise<DeepenF
           j,
           now: await withDeadline(
             costStore.forJob(j.jobId),
-            LEDGER_REREAD_DEADLINE_MS,
+            LEDGER_READ_DEADLINE_MS,
             `the ledger re-read for ${j.phase} ${j.label}`,
           ),
           err: null as unknown,
