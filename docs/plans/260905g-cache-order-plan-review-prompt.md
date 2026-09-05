@@ -135,3 +135,7 @@ Spend most of the run elsewhere.
    would in fact pass today, making it a test that proves nothing?
 
 Do not change any file.
+
+---
+
+**Landed as `942b5827`** on `dev`, 2026-09-05 — closing the live pre-commit candidate above.

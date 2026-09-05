@@ -99,3 +99,7 @@ Refuse only on an established P0 or P1, and name what established it.
    found nothing throwing for an unrelated reason). Anything made worse?
 
 Do not change any file.
+
+---
+
+**Landed as `942b5827`** on `dev`, 2026-09-05 — closing the live pre-commit candidate above.

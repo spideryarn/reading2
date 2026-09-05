@@ -119,3 +119,7 @@ Worth less than anything you find yourself.
    now than in Stage 2.
 
 Do not change any file.
+
+---
+
+**Landed as `942b5827`** on `dev`, 2026-09-05 — closing the live pre-commit candidate above.

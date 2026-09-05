@@ -152,3 +152,7 @@ Worth less than anything you find yourself.
    this app can produce?
 
 Do not change any file.
+
+---
+
+**Landed as `942b5827`** on `dev`, 2026-09-05 — closing the live pre-commit candidate above.
