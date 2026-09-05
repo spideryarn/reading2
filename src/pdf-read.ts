@@ -81,7 +81,14 @@ import { allOrStop, WidthGate } from "./concurrency.js";
 import { loadEnvLocal } from "./env.js";
 import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
-import { log } from "./log.js";
+import { errorFields, log } from "./log.js";
+import {
+  type FrontMatterDecision,
+  type FrontMatterReader,
+  openRouterFrontMatterReader,
+  readFrontMatter,
+  withFrontMatterHidden,
+} from "./pdf-frontmatter.js";
 import {
   PDF_DAMAGED,
   PDF_LOCKED,
@@ -123,7 +130,7 @@ import { ProviderRefused, openRouterJson } from "./ai-call.js";
  * constant only invalidates a cache if somebody remembers to bump it, and the
  * person who forgets is the person who just changed the prompt.
  */
-export const PROMPT_VERSION = "pdf-v2";
+export const PROMPT_VERSION = "pdf-v3";
 
 /* `MAX_PAGES` — the cost cap on how long a document may be — is imported from
    src/uploads.ts, where it lives beside `MAX_UPLOAD_BYTES`, the other half of
@@ -338,6 +345,18 @@ const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
  * indistinguishable from a page whose last paragraph was lost. Transcribing and
  * labelling them costs a few hundred output tokens and buys a gate tight enough
  * to fail a page for one missing sentence. src/pdf.ts § `RecordType`.
+ *
+ * **`publisher` in rule 5, and the sentence added to rule 6, are the same
+ * lesson a third time** (2026-09-05). A journal masthead was reaching the
+ * reading view as body prose, and sometimes reaching `meta.title` as the
+ * article's name, because rule 6 said *leave running headers out* and page 1's
+ * banner is only a running header once you have seen page 2. Telling the model
+ * to drop it would have broken the check exactly as dropping footnotes did. So
+ * it is transcribed and labelled, like everything else, and rule 6 now says
+ * outright that a banner printed once at the top of the first page belongs to
+ * rule 5 however large it is set — the contradiction between the two rules was
+ * GPT Sol's finding, not something we noticed writing them.
+ * docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md
  */
 export const SYSTEM = `You transcribe pages of a PDF into structured records, verbatim.
 
@@ -355,7 +374,14 @@ Rules, in order of importance:
 5. Transcribe EVERYTHING on the page, including the parts a reader will not be shown. A footnote is
    type "footnote"; an entry in a references or bibliography list is type "reference"; a publisher's
    or library's cover or rights page is type "cover". Label them and move on — do not leave them out.
-6. The ONLY things to leave out are running headers, running footers and page numbers.
+   The publisher's own furniture printed among the article is type "publisher": a journal masthead or
+   banner, "Contents lists available at …", a journal homepage or DOI line, an ISSN or copyright or
+   licence line, "Available online <date>", a received/revised/accepted date block, a "Downloaded
+   from … on <date>" watermark, an arXiv or preprint stamp in the margin. The article's own title,
+   authors, affiliations, abstract and keywords are NOT "publisher" — they are the article.
+6. The ONLY things to leave out are running headers, running footers and page numbers. A banner or
+   masthead printed once, at the top of the FIRST page, is not a running header however large it is
+   set: transcribe it under rule 5 as type "publisher".
 7. For a figure, emit ONE record of type "figure" whose text is the caption exactly as printed
    (empty string if there is none). For a table, emit a "table" record for the caption AND then
    record(s) of type "tabledata" carrying the cells as printed, reading across each row in turn.
@@ -378,6 +404,7 @@ const RECORD_TYPES: RecordType[] = [
   "footnote",
   "reference",
   "cover",
+  "publisher",
   "tabledata",
 ];
 
@@ -395,7 +422,7 @@ const RECORD_TYPES: RecordType[] = [
  * cannot be made without the cache noticing, which is the property that was
  * wanted from the constant in the first place.
  */
-function promptFingerprint(): string {
+export function promptFingerprint(): string {
   return createHash("sha256")
     .update(`${PROMPT_VERSION}\u0000${SYSTEM}\u0000${JSON.stringify(SCHEMA)}`)
     .digest("hex")
@@ -1301,6 +1328,7 @@ const ELEMENT: Record<RecordType, string> = {
   footnote: "p",
   reference: "p",
   cover: "p",
+  publisher: "p",
   tabledata: "p",
 };
 
@@ -1567,10 +1595,35 @@ export interface PdfExtractResult {
   extractedHtml: string;
   meta: Meta;
   pages: number;
-  /** How many model calls it took. One per page range. */
+  /**
+   * How many **transcription** calls it took. One per page range.
+   *
+   * Not every model call the stage makes any more: since 2026-09-05 there is
+   * also the front-matter pass, whose tokens are `frontMatterUsage` below.
+   * Deliberately not folded in — one number covering two models on two jobs is
+   * a number whose unit nobody can name (src/models.ts § `Wire`).
+   */
   chunks: number;
   isScan: boolean;
   records: number;
+  /**
+   * The records themselves, mended, in page order — **the thing `extractedHtml`
+   * was rendered from**, handed back rather than only counted.
+   *
+   * The *presentation* copy, so anything the front-matter pass set aside is
+   * `publisher` here and was not in what the scorer graded. `records` above
+   * counts the originals, and the two numbers agree: hiding retypes, never
+   * deletes.
+   *
+   * Nothing in the pipeline reads it: `src/pipeline.ts` wants the count and the
+   * HTML. It is here for `evals/pdf/titles.mts`, which buys a transcription
+   * once and then runs several title arms over it offline — an eval that
+   * re-transcribed per arm would be comparing arms that read different records,
+   * and the fault it measures is model variance on a genuinely ambiguous line.
+   * Returning the array costs nothing: it is already in memory, and this is a
+   * reference to it.
+   */
+  transcript: PdfRecord[];
   /** Faults found in text v1 transcribes and does not show. Logged, never fatal. */
   notes: string[];
   /** Chunks that failed their check once and passed on the second ask. */
@@ -1579,7 +1632,18 @@ export interface PdfExtractResult {
   stripped: number;
   /** `null` for a scan: there was no text layer to check the transcription against. */
   recall: number | null;
+  /** What the transcription cost, in tokens. `frontMatterUsage` is the rest. */
   usage: { input: number; output: number };
+  /**
+   * What the front-matter pass cost, in tokens — zero when it was turned off.
+   *
+   * Its own field rather than added to `usage`: a different model on a different
+   * job, and a total across two of those is a total whose unit nobody can name.
+   * The *money* is already recorded centrally under `pdf-frontmatter` by
+   * `openRouterJson`, so this is about the stage's own report being honest
+   * rather than about billing. GPT Sol, 2026-09-05.
+   */
+  frontMatterUsage: { input: number; output: number };
 }
 
 export interface PdfExtractOptions {
@@ -1619,6 +1683,23 @@ export interface PdfExtractOptions {
   checkpoints: CheckpointStore;
   slug: string;
   reader?: PdfReader;
+  /**
+   * Who decides which of the first records are the article and which are the
+   * publisher's — src/pdf-frontmatter.ts.
+   *
+   * **Required, unlike `reader` above, and that is the point.** `null` means
+   * *do not make that call at all* — what the eval's tidy-off arm and every
+   * test that must not spend want. A reader means make it.
+   *
+   * There is no default, because the two ways of being wrong are not
+   * symmetrical. A test that forgot would try to spend, and
+   * `tests/helpers/no-paid-calls` catches that loudly. A **caller** that forgot
+   * would quietly ingest every PDF without the pass and nothing would say so,
+   * which is the shape docs/reusable/silent-success.md is about. A required
+   * field cannot be forgotten by either: it is a compile error, the same reason
+   * `checkpoints` above is not optional.
+   */
+  frontMatter: FrontMatterReader | null;
   /**
    * Called once per finished chunk, with what the check made of it.
    *
@@ -1695,6 +1776,48 @@ function usableChunkReading(
     return null;
   }
   return value as ChunkReading;
+}
+
+/**
+ * The front-matter pass, and **every way it can fail is a fall back to the
+ * ladder** — except one.
+ *
+ * A refusal, a timeout, a body that is not JSON, an answer naming ids that are
+ * not there: all of them return `null`, are logged, and cost the article
+ * nothing but the title it would have had anyway. That is the right trade for a
+ * pass whose whole job is an improvement.
+ *
+ * **An abort is not one of them.** A caller's deadline or a cancelled job must
+ * propagate: quietly publishing a worse title because the clock ran out is the
+ * failure that looks like success (docs/reusable/silent-success.md), and the
+ * caller asked to stop rather than to settle. GPT Sol, 2026-09-05.
+ *
+ * **It is not checkpointed, and that is a decision with a number on it.** Sol
+ * asked for one keyed on the raw hash and this pass's fingerprint. A checkpoint
+ * namespace is a CHECK constraint on a live table, so it costs a migration, a
+ * stored shape and a validator — against a call that is a few tenths of a cent
+ * beside a transcription of tens of cents that *is* checkpointed. So a retry
+ * re-buys this and only this. Revisit it if the pass ever grows.
+ */
+async function frontMatterOrNothing(
+  records: PdfRecord[],
+  opts: PdfExtractOptions,
+): Promise<{ decision: FrontMatterDecision | null; usage: { input: number; output: number } }> {
+  const reader = opts.frontMatter;
+  if (!reader) return { decision: null, usage: { input: 0, output: 0 } };
+  try {
+    return { decision: await readFrontMatter(records, reader, opts.signal), usage: reader.usage() };
+  } catch (err) {
+    if (opts.signal?.aborted) throw err;
+    log("pipeline").warn(
+      { slug: opts.slug, step: "extract", ...errorFields(err) },
+      `extract ${opts.slug}: the front-matter pass was no help; using the title ladder`,
+    );
+    /* A failed call still cost what it cost, so the usage comes back either
+       way — a refusal that reported nothing is the one shape that would make
+       the stage's figure quietly too small. */
+    return { decision: null, usage: reader.usage() };
+  }
 }
 
 /**
@@ -2277,17 +2400,53 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   }
 
   all.sort((a, b) => a.page - b.page);
+
+  /**
+   * **The second look at the front matter** — src/pdf-frontmatter.ts, and the
+   * order around it is the whole of what makes it safe.
+   *
+   * It comes *after* the scoring loop, because the score is a score of what the
+   * model wrote and nothing here may change that.
+   *
+   * It comes **before `renderHtml`**, and that is the part with evidence behind
+   * it: `renderHtml` joins a `continues` record onto the one before it unless
+   * something unrendered intervenes, so on the Kuhn paper `Available online
+   * 26 January 2024` renders glued to the article paragraph that follows.
+   * Hiding it first breaks that join and leaves the paragraph whole —
+   * `tests/pdf-frontmatter-wiring.test.ts` asserts both halves.
+   *
+   * It also comes before `mendSeamHyphens`, for **consistency rather than a
+   * demonstrated fault**: that function deliberately mirrors `renderHtml`'s
+   * cursor so that it only repairs a boundary `renderHtml` will actually join,
+   * and running it over a different set of record types than the renderer will
+   * see breaks the property it was written to have. Stated honestly because it
+   * is *not* tested — GPT Sol reproduced identical output with the two
+   * operations reversed on the fixture we had, since `mendSeamHyphens` acts only
+   * across a page boundary and a publisher line rarely sits on one. Production
+   * keeps the safe order; nobody has built the case that distinguishes them.
+   *
+   * And it works on a **clone**. The originals stay exactly as the checkpoints
+   * hold them and the scorer graded them; only `type` changes, and only on the
+   * copy. GPT Sol, 2026-09-05.
+   */
+  const { decision: front, usage: frontMatterUsage } = await frontMatterOrNothing(all, opts);
+  const presented = withFrontMatterHidden(all, front?.setAside ?? []);
+  if (front?.notes.length) notes.push(...front.notes);
   /* After the scoring loop above, and it has to be: the baseline still has the
      word in two halves, so repairing before measuring would read as an invented
      word on one page and a missing one on the next. See mendSeamHyphens. */
-  const mended = mendSeamHyphens(all, pass);
+  const mended = mendSeamHyphens(presented, pass);
   /* Rung 4 of the ladder wants **a name**, and the two origins spell one
      differently: an uploaded file has the reader's own filename, and a fetched
      one has the last segment of its URL. Worked out here rather than inside
      `titleFrom`, so that function keeps taking one string and stays testable
      without a URL. `decodeURIComponent` can throw on a hand-mangled escape,
      which used to take the whole stage with it. */
-  const title = titleFrom(mended, pass, lastName(opts));
+  /* **Rung 0.** A title built out of records the front-matter pass named is a
+     copy of the transcription, so it outranks even a plausible-looking metadata
+     title — which is a claim the file's producer made about itself and can be a
+     leftover template. src/pdf-frontmatter.ts. */
+  const title = front?.title ?? titleFrom(mended, pass, lastName(opts));
 
   /**
    * The mean recall, **and how many pages it is a mean of** — which is the
@@ -2309,6 +2468,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const meta: Meta = {
     slug: opts.slug,
     title,
+    /* **The first byline a PDF has ever had.** Not decoration: Referee mode
+       excludes a paper's own authors from the reviewer shortlist by reading
+       `meta.byline`, and src/referee-candidates.ts already names "a PDF ingested
+       with no byline" as the case it cannot handle. Until now every PDF was a
+       paper by nobody — on the shelf card, in the masthead, and in that panel.
+       Fable, 2026-09-05. */
+    ...(front?.byline ? { byline: front.byline } : {}),
     ...(opts.url ? { url: opts.url } : {}),
     fetchedAt: new Date().toISOString(),
     source: "pdf",
@@ -2329,6 +2495,8 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     chunks: chunks.length,
     isScan: pass.isScan,
     records: all.length,
+    transcript: mended,
+    frontMatterUsage,
     recall,
     notes,
     retries,
@@ -2665,11 +2833,41 @@ export function wordsOf(pass: Pass0, pages: number[]): Set<string> | null {
  * Pass 0's "biggest line on page 1" is deliberately not in the ladder: on a
  * library scan the biggest line on page one belongs to the library.
  */
-function titleFrom(records: PdfRecord[], pass: Pass0, name: string): string {
+export function titleFrom(records: PdfRecord[], pass: Pass0, name: string): string {
   if (pass.metaTitle && !looksLikeAFilename(pass.metaTitle)) return pass.metaTitle;
   const firstPage = pass.pages[0]?.page ?? 1;
-  const heading = records.find(
+  const headings = records.filter(
     (r) => r.page === firstPage && r.type === "heading1" && r.text.trim(),
+  );
+  /**
+   * **Skip a heading pass 0 has already called furniture, while a better one is
+   * still on the page.** Rung 3 below has always consulted `pass.furniture`;
+   * this rung did not, and it answers first — which is the asymmetry the
+   * Elsevier report turned on. `progress in biophysics and molecular biology` is
+   * the *first* entry in that document's furniture set.
+   *
+   * **"While a better one remains" is the whole of the safeguard**, and it is
+   * not optional: plenty of journals print the article's own title as the verso
+   * running head, so it is furniture by this test and it is also the answer.
+   * Rejecting it outright would lose the title on exactly those documents.
+   *
+   * It is still a heuristic rather than a proof, and GPT Sol was right to say so
+   * (2026-09-05). A page 1 that carries the true title *and* a generic
+   * `Research Article` heading, where the true title also runs as a header,
+   * loses to the generic one — reproduced, and pinned in
+   * `tests/pdf-title.test.ts` § "loses the title to a generic heading".
+   *
+   * **The corpus cannot see that case**, and an earlier version of this comment
+   * said it could. No fixture's gold title appears in its own full-document
+   * furniture set — checked with production `foldLine` across all ten — so the
+   * only evidence about this rung is that unit test and the measurement below,
+   * which is that on `evals/pdf/titles/` it changes **nothing**: zero
+   * wrong→right, zero right→wrong, over ten documents and thirty samples.
+   * It is kept as a free guard against the reported failure, not as something
+   * shown to help. docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md.
+   */
+  const heading = (
+    headings.find((r) => !pass.furniture.has(foldLine(r.text))) ?? headings[0]
   )?.text.trim();
   if (heading) return heading;
   /* Furniture excluded, for the same reason the biggest line is not in this
@@ -2748,6 +2946,7 @@ async function main() {
   console.log(`Pages:  ${pass.pages.length}${pass.isScan ? " (a scan — no text layer)" : ""}`);
   console.log(`Chunks: ${planChunks(pass).map((c) => c.pages.join("–")).join(", ")}`);
   const result = await runPdfExtract({
+    frontMatter: openRouterFrontMatterReader(),
     bytes,
     url,
     /* **Nothing is remembered between runs of this command**, and that is a
@@ -2791,6 +2990,14 @@ async function main() {
       `${result.usage.input === 0 ? "   (every chunk came from the cache)" : ""}` +
       `${result.retries.length ? `, ${result.retries.length} chunk(s) asked twice` : ""}`,
   );
+  /* On its own line, and only when there was one — a "0 in, 0 out" row for a
+     call that never happened reads as a call that cost nothing. */
+  if (result.frontMatterUsage.input || result.frontMatterUsage.output) {
+    console.log(
+      `         ${result.frontMatterUsage.input} in, ${result.frontMatterUsage.output} out` +
+        ` reading the front matter`,
+    );
+  }
   console.log(`Written: ${path.resolve(outFile)}`);
 
 }

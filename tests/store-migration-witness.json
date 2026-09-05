@@ -1,5 +1,5 @@
 {
-  "what": "Witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact — see the plan's 'Counts are perishable'. Regenerate with: npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json",
+  "what": "Witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact \u2014 see the plan's 'Counts are perishable'. Regenerate with: npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json",
   "measured": "2026-09-05T02:10:24.757Z",
   "store": "default (SPIDERYARN_STORE unset => files)",
   "instrumentedModules": [
@@ -13,7 +13,7 @@
     "src/store/data-root.ts"
   ],
   "notInstrumented": [
-    "src/store/blobs-fs.ts — selected by credentials, out of scope"
+    "src/store/blobs-fs.ts \u2014 selected by credentials, out of scope"
   ],
   "unresolved": [
     "tests/gjd-remote-tab-lifecycle.test.ts"
@@ -828,6 +828,7 @@
     "tests/passage-mode-cleanup.test.tsx",
     "tests/pdf-bundle-trace.test.ts",
     "tests/pdf-chunk-concurrency.test.ts",
+    "tests/pdf-frontmatter-wiring.test.ts",
     "tests/pdf-page-cap-message.test.ts",
     "tests/pdf-page-cap.test.ts",
     "tests/pdf-read-failure-sentences.test.ts",
@@ -836,6 +837,8 @@
     "tests/pdf-seam-hyphens.test.ts",
     "tests/pdf-sideways.test.ts",
     "tests/pdf-source-parsed-once.test.ts",
+    "tests/pdf-title.test.ts",
+    "tests/pdf-titles-eval.test.ts",
     "tests/pdf-without-canvas.test.ts",
     "tests/pdf.test.ts",
     "tests/perf-probe.test.ts",
