@@ -337,14 +337,32 @@ describe('the "?"', () => {
     expect(bubbled).toBe(0);
   });
 
-  it("promises a question, not an answer", () => {
-    /* Stage 2 opens a composer and sends nothing, so the copy may not imply an
-       answer is coming — GPT Sol's condition on this stage being coherent on
-       its own. "Explain this" becomes true in stage 3 and is a lie today. */
+  it("says who is being asked, because pressing it spends", () => {
+    /* **This assertion has been red once on purpose and that was the point.**
+       Through stage 2 the button opened a composer and sent nothing, so the
+       copy read "Ask for help with this paragraph" — a promise of a question,
+       because "Explain this" would have reported an answer nobody had bought.
+       Stage 3 makes one press send, and this exact-string check is what stopped
+       the sentence staying true-sounding while the behaviour moved underneath
+       it. GPT Sol's condition on stage 2 being coherent alone; the red was
+       watched when the copy changed.
+
+       "the AI" rather than a bare verb, because that is the word the reader has
+       to see before the finger lands: this is the one control in the gutter
+       that costs money without a confirmation. */
     paint();
     const b = host.querySelector(".blk-help") as HTMLButtonElement;
-    expect(b.getAttribute("title")).toBe("Ask for help with this paragraph");
-    expect(b.getAttribute("aria-label")).toBe("Ask for help with this paragraph");
+    expect(b.getAttribute("title")).toBe("Ask the AI for help with this paragraph");
+    /* Shorter, and divergent on purpose — the same split the permalink above
+       makes. A screen reader announces this on focus with three more buttons
+       queued behind it in the same gutter, so the accessible name stops at the
+       verb while the tooltip has room for the paragraph. */
+    expect(b.getAttribute("aria-label")).toBe("Ask the AI for help");
+    /* A `toContain("AI")` stood here and could never have contributed a
+       failure: the exact equality two lines up already decides it. GPT Sol,
+       2026-09-05 — the same species as the `(hover: none)` helper that read the
+       wrong block, and worth naming twice because it is the one that keeps
+       coming back. */
   });
 
   it("draws the same 12px ink as the other three", () => {

@@ -54,6 +54,7 @@ import { COVERAGE_FLOOR, generateLabels, isHeading, mergeLabels, type LabelsFile
 import { hashBlocks } from "./source-hash.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
+import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
@@ -846,6 +847,26 @@ export interface BuildReport {
    * loses only the mark saying the author wrote it.
    */
   droppedHeadings: string[];
+  /**
+   * **Rungs that restated their parent and were spliced away**, by position in
+   * the model's proposal — see `collapseRestatedRungs`.
+   *
+   * **A field here rather than another `kind` of `PartitionRepair`, and the
+   * alternative is wrong for an arithmetic reason.** A repair is a *boundary
+   * that moved*, and `size` is how many blocks changed hands; `repairedBlocks`
+   * sums those, `largestRepair` maxes them, and both are the numbers anyone
+   * reads. A collapse moves **no** blocks — the parent's range and the
+   * discarded child's are identical, which is the whole definition of the
+   * shape — so it would have to enter as a repair of size 0. That is a repair
+   * that inflates `repairedRanges` while contributing nothing to the two
+   * figures that say what a repair cost, which is precisely the way to make a
+   * count stop meaning anything (see `repairedBlockCount`). It is a different
+   * kind of loss, so it gets its own figure, exactly as `droppedChildren` did
+   * and for the same reason.
+   *
+   * Normally 0, and reported at 0 like the two above.
+   */
+  collapsedRungs: string[];
 }
 
 export interface PartitionRepair {
@@ -863,7 +884,9 @@ export interface PartitionRepair {
    * `heading` is the odd one out and deliberately a `kind` rather than a
    * quiet mend: **the model's two claims agreed and were both one block late**,
    * putting the section's own heading in the section before it, so nothing
-   * above can see it. `snapStartsToHeadings` has the measurement it comes from.
+   * above can see it. src/heading-snap.ts has the measurement it comes from,
+   * and is the one derivation rule this file and src/hierarchy-cascade.ts
+   * literally share.
    */
   kind: "gap" | "overlap" | "short" | "over" | "heading";
   /**
@@ -935,8 +958,8 @@ export interface PartitionRepair {
  *
  * ⟨GPT Sol's review of the heading snap, 2026-09-04, finding 1⟩ A boundary can
  * now be recorded **twice at two coordinates**: `recordBoundaryFaults` records
- * it where the model named it, and `snapStartsToHeadings` records it where it
- * ended up. Grouping by `at` cannot see those as one movement, so their sizes
+ * it where the model named it, and `snapStartsToHeadings` (src/heading-snap.ts)
+ * records it where it ended up. Grouping by `at` cannot see those as one movement, so their sizes
  * are summed — and their *blocks* overlap, because a snap moving back inside
  * ground a `gap` already covers moves nothing new. The union per boundary is
  * `max(gap, snap)` for a gap and `gap + snap` for an overlap. On the 142-page
@@ -1199,10 +1222,13 @@ function planChildRanges(
      up, so running it afterwards would compare the answer with a value we chose
      ourselves — a section moved back onto its heading would report a phantom
      `overlap` against its own correct start, and the snap would be invisible in
-     the telemetry that exists to watch it. `snapStartsToHeadings` records its
-     own repairs; nothing else measures it. */
+     the telemetry that exists to watch it. The snap (src/heading-snap.ts)
+     returns its own repairs; nothing else measures it. **It is shared with
+     `normaliseExpansion`**, which derives the cascade's tilings and had no snap
+     at all until 2026-09-05 — two rules over one tree, where a boundary moved
+     or did not depending on which call had produced the parent. */
   recordBoundaryFaults(kept, spans, parent, where, repairs);
-  snapStartsToHeadings(children, kept, blocks, where, repairs);
+  repairs.push(...snapStartsToHeadings(children, kept, blocks, where));
 
   const plans: ChildPlan[] = children.map(() => ({ keep: false }));
   for (const [k, child] of kept.entries()) {
@@ -1220,112 +1246,6 @@ function planChildRanges(
 
   return plans;
 }
-
-/**
- * **A section that begins one paragraph below the heading it names is moved
- * back onto it.**
- *
- * Measured on a 142-page Kuhn paper, 2026-09-04 (Fable): of the model's 82
- * non-root nodes, 24 started *on* a heading block and **53 on the block
- * immediately after one**, and every unbacked `sourceHeading` claim reproduced
- * was at that offset. The model was not overruling the author — it named the
- * author's heading correctly and put the boundary one block late. The heading
- * then fell into the previous section's tail, this file believed the start, and
- * `buildTree` dropped the claim as out of range. `droppedHeadings: 59` was
- * counting that.
- *
- * So the answer is code rather than a prompt line: a prompt can be ignored, and
- * the model was already doing what a prompt would have asked for.
- *
- * ## Why the claim has to match
- *
- * The obvious rule — snap any start that sits one block after a heading — takes
- * headings the model deliberately left in the section before it. The fixture is
- * already in tests/hierarchy-repairs.test.ts: a model that puts "The First
- * Part" inside child 1 and starts child 2 on the paragraph beneath it has
- * proposed a boundary, and moving that heading forward would invent a different
- * one. **Requiring the child's own `sourceHeading` to name a heading in the run
- * makes this self-evidencing** — it only ever honours a claim the answer
- * already made, which is also why it can be a repair rather than a heuristic.
- * The `typeof` guard is not decoration: `sourceHeading` is model output behind
- * a cast, and `sameHeading` throws inside `.replace` on a number.
- *
- * ## The run, and the floor under it
- *
- * Headings come in runs — an `h2` directly beneath an `h1` — and the section
- * begins at the *first* of the run, not the nearest, because the `h1` above it
- * introduces the same prose. The floor is the previous kept child's start: a
- * section cannot begin where its predecessor begins, so a run reaching back to
- * a heading the previous section starts on is entered at the first block after
- * it. That is the real case of a sub-section under a part title, not a corner.
- *
- * The first kept child is never snapped — it is pinned to its parent's start,
- * because nothing else can supply that block.
- *
- * Mutates `kept` in place, and records one `PartitionRepair` per boundary it
- * moved. `at` is where the boundary *ended up*, as everywhere else, which is
- * what lets `repairedBlockCount` see the pin it cascades into one level down as
- * the same movement rather than a second one.
- */
-function snapStartsToHeadings(
-  children: ModelNode[],
-  kept: KeptChild[],
-  blocks: Block[],
-  where: string,
-  repairs: PartitionRepair[],
-): void {
-  const heading = (i: number) => blocks[i]?.kind === "heading";
-  for (let k = 1; k < kept.length; k++) {
-    const child = kept[k]!;
-    const start = child.start;
-    // Already on a heading, or not one block after one: nothing to do. This is
-    // the no-op on every document the model gets right.
-    if (heading(start) || !heading(start - 1)) continue;
-
-    const claim = children[child.childIndex]?.sourceHeading;
-    if (typeof claim !== "string" || claim.trim() === "") continue;
-
-    let first = start - 1;
-    while (heading(first - 1)) first -= 1;
-    // The floor: never back onto, or past, the previous section's own start.
-    first = Math.max(first, kept[k - 1]!.start + 1);
-    /* **And never past a heading the previous section itself names.** The floor
-       above stops the run reaching a heading the previous section *starts on*,
-       which is not the same thing. A section can begin on a preamble and quote
-       the `h1` further down; taking that `h1` forward would strip its
-       provenance and leave its title and gist describing prose its own heading
-       is no longer in. One matched heading justifies moving that heading, not
-       every heading above it. ⟨GPT Sol, finding 2⟩ */
-    const prior = children[kept[k - 1]!.childIndex]?.sourceHeading;
-    if (typeof prior === "string" && prior.trim() !== "") {
-      for (let j = start - 1; j >= first; j--) {
-        if (sameHeading(blocks[j]!.text, prior)) {
-          first = j + 1;
-          break;
-        }
-      }
-    }
-    if (first >= start) continue;
-
-    /* The claim must name one of the headings actually being moved. Read with
-       `sameHeading`, the same tolerant comparison `buildTree` and `checkTree`
-       use to decide whether a claim is backed — a match by any other rule would
-       move a boundary to make a badge that then gets dropped anyway. */
-    const named = blocks.slice(first, start).some((b) => sameHeading(b.text, claim));
-    if (!named) continue;
-
-    repairs.push({
-      where: `${where} > child ${child.childIndex + 1}`,
-      kind: "heading",
-      at: first,
-      size: start - first,
-    });
-    child.start = first;
-  }
-}
-
-/** One kept child: where it sits in the model's proposal, and where it starts. */
-type KeptChild = { childIndex: number; start: number };
 
 /**
  * **What the model got wrong, measured against the tiling derived from it** —
@@ -1413,6 +1333,168 @@ function recordBoundaryFaults(
 }
 
 /**
+ * **A rung that restates its parent buys the reader nothing, so it is spliced
+ * away** — the grandchildren come up, the redundant node goes, and this repeats
+ * until no child covers the whole of the node it hangs under.
+ *
+ * ## What the shape is, and why it is not a judgment call
+ *
+ * Two adjacent gist columns of identical extent, neither marked `continuation`,
+ * so both render in full and both are fisheye items. One rung finer buys a
+ * restatement of the same paragraphs, against
+ * [granularity-zoom.md](../docs/project/granularity-zoom.md)'s promise that
+ * level N is a compression of level N+1.
+ *
+ * Measured on 2026-09-05 across every saved tree under `evals/` and `data/`:
+ * 243 unary internal nodes, and **all 243 have a child covering the parent's
+ * whole range** — not one covers only part of it. 35 of them have an internal
+ * child and are the rungs this removes; the other 208 have a *leaf* child,
+ * which is the ordinary, correct shape of a one-block section and is why the
+ * rule is phrased over ranges rather than over `children.length`.
+ * docs/plans/260904d-deepen-fat-sections.md § The unary internal node was a bug
+ * in `buildTree`.
+ *
+ * ## It collapses, it never refuses
+ *
+ * `planChildRanges`'s whole design is that it derives and that nothing about it
+ * can refuse — the day it refused instead cost four of thirteen articles. So
+ * this is a splice, not a rejection, and it is deliberately asymmetric with
+ * `normaliseExpansion` (src/hierarchy-cascade.ts), which goes on **refusing** a
+ * one-child answer. The disposition differs because the recourse does: a scoped
+ * cascade call can be retried and a better answer is worth asking for, and a
+ * whole-document answer cannot be retried mid-build.
+ *
+ * ## Why here rather than inside `planChildRanges`
+ *
+ * `planChildRanges` derives *ranges*, one plan per proposed child of one node.
+ * This is a *structural* edit that reaches a level further down — it needs the
+ * discarded rung's own children, which that function is never shown — so it
+ * sits between the derivation and the recursion, which is the only place that
+ * holds both.
+ *
+ * ## The parent's title and gist survive
+ *
+ * A product call, and the corpus is one-sided: in the nine cases where the two
+ * titles differ, the parent is the coarser name every time — *"Writing at
+ * Work"* over *"The Pressure to Write"*, *"The Disappearing Writers"* over
+ * *"Few People Who Can Write"* — which is what that rung is for. The caller
+ * adopts the discarded rung's `sourceHeading` where it has none of its own,
+ * which is sound because both nodes hold the same range: a claim backed for one
+ * is backed for the other, and an unbacked one is dropped anyway.
+ *
+ * ## Two things the loop is careful about
+ *
+ * **Boundary faults from a discarded rung are thrown away with it.** They name
+ * a node the finished tree does not hold, and they measure a boundary that the
+ * next iteration re-derives from scratch against the same parent range —
+ * keeping them would charge the article twice for one slip and point `where` at
+ * nothing. **Dropped children are kept**, because a section the model proposed
+ * and we did not store is a real loss whether or not the rung above it survived.
+ *
+ * Returns the children to actually build, their plans, and the `where` prefix
+ * they should be numbered from — which is the *discarded* rung's position, so
+ * every message and every counter still names a child by where it sits in the
+ * model's own proposal.
+ */
+function collapseRestatedRungs(
+  children: ModelNode[],
+  parent: readonly [number, number],
+  index: Map<string, number>,
+  blocks: Block[],
+  where: string,
+  repairs: PartitionRepair[],
+  droppedChildren: string[],
+  collapsedRungs: string[],
+): { children: ModelNode[]; plans: ChildPlan[] | null; where: string; absorbed: ModelNode[] } {
+  /* In range: both came out of `index`, which is built over `blocks`. */
+  const wholeStart = blocks[parent[0]]!.id;
+  const wholeEnd = blocks[parent[1]]!.id;
+  const absorbed: ModelNode[] = [];
+  let here = children;
+  let at = where;
+
+  for (;;) {
+    const faults: PartitionRepair[] = [];
+    const plans = planChildRanges(here, parent, index, blocks, at, faults, droppedChildren);
+    /* **The rule as a range statement**: no child may cover its parent's whole
+       range. With ordered starts and derived ends that coincides with "exactly
+       one child kept" — the first kept child is pinned to the parent's start
+       and the last one ends at its end — but the range form is the one that
+       survives contact with the leaf-growing step below and with a one-block
+       section, which legitimately grows a single leaf over the whole of itself. */
+    const rung = plans?.findIndex(
+      (p) => p.keep && p.range[0] === wholeStart && p.range[1] === wholeEnd,
+    );
+    if (plans === null || rung === undefined || rung === -1) {
+      repairs.push(...faults);
+      return { children: here, plans, where: at, absorbed };
+    }
+
+    const redundant = here[rung]!;
+    at = `${at} > child ${rung + 1}`;
+    collapsedRungs.push(at);
+    absorbed.push(redundant);
+    here = redundant.children ?? [];
+    /* Nothing underneath it: this node becomes the deepest internal one and
+       grows the leaves the discarded rung would have grown. Terminates because
+       every pass descends one level into a finite proposal. */
+    if (here.length === 0) return { children: here, plans: null, where: at, absorbed };
+  }
+}
+
+/**
+ * **The `sourceHeading` a proposed node may keep — its claim, if a heading
+ * block inside its range backs it up.** An authored heading the node does not
+ * contain is dropped, not thrown on.
+ *
+ * `sourceHeading` is provenance, not structure. Its only consumer is the `§`
+ * badge that tells the reader the author wrote this heading and we did not
+ * (src/web/TableView.tsx, ContextList.tsx, Spine.tsx) — so an unbacked claim is
+ * a badge that would lie, and the whole cost of dropping it is that one node
+ * stops claiming an authorship it never had. Throwing, by contrast, costs the
+ * reader the article: four structure calls in four made the same wrong claim on
+ * the same document, which makes a refusal not an occasional loss but a
+ * guaranteed failure loop for it
+ * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
+ *
+ * **Read with `sameHeading`, over the same range, so this is a repair and not a
+ * second opinion.** `checkTree` asks the identical question later, against the
+ * full block array; this one asks it against `body`, which within a node's
+ * range is a subset. So anything kept here is kept there, and the invariant can
+ * no longer fail on a claim this let past — which is the property that makes
+ * the repair worth having rather than a disagreement waiting to surface
+ * downstream (src/tree-invariants.ts).
+ *
+ * `wrote` is `!== undefined`, not "is a usable string": a number, or a string
+ * of spaces, is a claim this stage threw away too, and counting only the
+ * well-formed ones would make "nothing is repaired quietly" false in exactly
+ * the case that says the model's output has gone strange. GPT Sol's review.
+ *
+ * The `typeof` guard is not decoration: `mn` is model output behind a cast, and
+ * a number here would reach `sameHeading` and throw inside a `.replace` on a
+ * string that is not one.
+ */
+function backedHeading(
+  mn: ModelNode,
+  lo: number | undefined,
+  hi: number | undefined,
+  blocks: Block[],
+): { wrote: boolean; kept: string | undefined } {
+  const wrote = mn.sourceHeading !== undefined && mn.sourceHeading !== null;
+  const claim =
+    typeof mn.sourceHeading === "string" && mn.sourceHeading.trim() !== ""
+      ? mn.sourceHeading
+      : undefined;
+  const backed =
+    claim !== undefined &&
+    lo !== undefined &&
+    hi !== undefined &&
+    lo <= hi &&
+    blocks.slice(lo, hi + 1).some((b) => b.kind === "heading" && sameHeading(b.text, claim));
+  return { wrote, kept: backed ? claim : undefined };
+}
+
+/**
  * Flatten the model's nested proposal into the stored map, and grow the leaf
  * layer underneath it. Every block gets exactly one leaf; a leaf carries a
  * navLabel only if its block is gistable and the model wrote one.
@@ -1434,6 +1516,7 @@ export function buildTree(
   const repairs = report?.repairs ?? [];
   const droppedChildren = report?.droppedChildren ?? [];
   const dropped = report?.droppedHeadings ?? [];
+  const collapsed = report?.collapsedRungs ?? [];
   const nodes: Record<NodeId, TreeNode> = {};
   let counter = 0;
   const nextId = () => `n${String(++counter).padStart(4, "0")}`;
@@ -1469,47 +1552,11 @@ export function buildTree(
     const lo = index.get(range[0]);
     const hi = index.get(range[1]);
 
-    /**
-     * **An authored heading the node does not contain is dropped, not thrown on.**
-     *
-     * `sourceHeading` is provenance, not structure. Its only consumer is the
-     * `§` badge that tells the reader the author wrote this heading and we did
-     * not (src/web/TableView.tsx, ContextList.tsx, Spine.tsx) — so an unbacked
-     * claim is a badge that would lie, and the whole cost of dropping it is
-     * that one node stops claiming an authorship it never had. Throwing, by
-     * contrast, costs the reader the article: four structure calls in four made
-     * the same wrong claim on the same document, which makes a refusal not an
-     * occasional loss but a guaranteed failure loop for it
-     * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
-     *
-     * **Read with `sameHeading`, over the same range, so this is a repair and
-     * not a second opinion.** `checkTree` asks the identical question later,
-     * against the full block array; this one asks it against `body`, which
-     * within a node's range is a subset. So anything kept here is kept there,
-     * and the invariant can no longer fail on a claim this line let past —
-     * which is the property that makes the repair worth having rather than a
-     * disagreement waiting to surface downstream (src/tree-invariants.ts).
-     *
-     * The `typeof` guard is not decoration: `mn` is model output behind a cast,
-     * and a number here would reach `sameHeading` and throw inside a `.replace`
-     * on a string that is not one.
-     */
-    const wrote = mn.sourceHeading !== undefined && mn.sourceHeading !== null;
-    const claim =
-      typeof mn.sourceHeading === "string" && mn.sourceHeading.trim() !== ""
-        ? mn.sourceHeading
-        : undefined;
-    const backed =
-      claim !== undefined &&
-      lo !== undefined &&
-      hi !== undefined &&
-      lo <= hi &&
-      blocks.slice(lo, hi + 1).some((b) => b.kind === "heading" && sameHeading(b.text, claim));
-    /* `wrote`, not `claim`: a number, or a string of spaces, is a claim this
-       stage threw away too, and counting only the well-formed ones would make
-       "nothing is repaired quietly" false in exactly the case that says the
-       model's output has gone strange. GPT Sol's review. */
-    if (wrote && !backed) dropped.push(where);
+    /* An authored heading the node does not contain is dropped, not thrown on
+       — `backedHeading` has the whole argument, and the cascade's own copy of
+       this question is in src/hierarchy-cascade.ts. */
+    const heading = backedHeading(mn, lo, hi, blocks);
+    if (heading.wrote && heading.kept === undefined) dropped.push(where);
 
     const node: TreeNode = {
       id,
@@ -1519,7 +1566,7 @@ export function buildTree(
       range,
       title: mn.title,
       ...(mn.gist ? { gist: mn.gist } : {}),
-      ...(backed ? { sourceHeading: claim } : {}),
+      ...(heading.kept !== undefined ? { sourceHeading: heading.kept } : {}),
     };
     nodes[id] = node;
     if (lo !== undefined && hi !== undefined && lo > hi) {
@@ -1557,26 +1604,58 @@ export function buildTree(
        * messages for those, and planning around an endpoint that means nothing
        * would bury them.
        */
-      const plans =
+      const settled =
         lo !== undefined && hi !== undefined
-          ? planChildRanges(mn.children, [lo, hi], index, blocks, where, repairs, droppedChildren)
-          : null;
-      /* `flatMap`, because a plan can say a child is not built at all. `where`
-         still counts children by their position in the *model's* proposal, so
-         a dropped child does not renumber its siblings in any message or
-         report — the numbers a reader compares against the answer stay put. */
-      node.children = mn.children.flatMap((c, i) => {
-        const plan = plans?.[i];
-        if (plan !== undefined && !plan.keep) return [];
-        return [visit(c, id, depth + 1, `${where} > child ${i + 1}`, plan?.range)];
-      });
-      /* Kept, and it should now never fire on a planned node: a list of ordered
-         split points tiles its parent by construction. That is the point of
-         leaving it here — it is the standing proof that `planChildRanges` is
-         total, and the day it fires is the day that stopped being true. It
-         still does real work on the nodes that were not planned. */
-      assertChildrenPartition(node, nodes, index, where);
-      return id;
+          ? collapseRestatedRungs(
+              mn.children,
+              [lo, hi],
+              index,
+              blocks,
+              where,
+              repairs,
+              droppedChildren,
+              collapsed,
+            )
+          : { children: mn.children, plans: null, where, absorbed: [] as ModelNode[] };
+
+      /* **A discarded rung's `sourceHeading` comes up with its children, where
+         this node has none of its own.** Both held the same range, so a claim
+         backed for one is backed for the other, and an unbacked one is simply
+         not adopted — the same question, asked with the same `backedHeading`.
+
+         An unadopted claim is deliberately **not** counted in `droppedHeadings`,
+         which means "the node kept its title and lost only the mark" and is
+         false for a node that no longer exists. The loss is counted once, as
+         the collapse. */
+      for (const rung of settled.absorbed) {
+        if (node.sourceHeading !== undefined) break;
+        const claimed = backedHeading(rung, lo, hi, blocks).kept;
+        if (claimed !== undefined) node.sourceHeading = claimed;
+      }
+
+      /* Empty only when every proposed child was a restatement of this node and
+         the innermost of them had nothing under it: fall through and grow the
+         leaves the discarded rungs would have grown. */
+      if (settled.children.length > 0) {
+        /* `flatMap`, because a plan can say a child is not built at all.
+           `settled.where` still counts children by their position in the
+           *model's* proposal — through any collapsed rung, so the path stays
+           the one a reader can follow in the answer — and a dropped child does
+           not renumber its siblings in any message or report. */
+        node.children = settled.children.flatMap((c, i) => {
+          const plan = settled.plans?.[i];
+          if (plan !== undefined && !plan.keep) return [];
+          return [visit(c, id, depth + 1, `${settled.where} > child ${i + 1}`, plan?.range)];
+        });
+        /* Kept, and it should now never fire on a planned node: a list of
+           ordered split points tiles its parent by construction. That is the
+           point of leaving it here — it is the standing proof that
+           `planChildRanges` is total, and the day it fires is the day that
+           stopped being true. It still does real work on the nodes that were
+           not planned. */
+        assertChildrenPartition(node, nodes, index, where);
+        return id;
+      }
     }
 
     // Deepest internal node — grow its leaves.
@@ -1827,6 +1906,17 @@ export interface HierarchyRun {
    */
   droppedChildren: number;
   droppedHeadings: number;
+  /**
+   * **Rungs that restated their parent and were spliced away** — a node whose
+   * sole child covered the whole of it, which would have shown the reader the
+   * same paragraphs twice at two levels. src/hierarchy.ts §
+   * `collapseRestatedRungs`.
+   *
+   * Reported at 0 like the three above. It is not a `repairedRanges`, because
+   * a collapse moves no blocks; see `BuildReport.collapsedRungs` for why that
+   * distinction is arithmetic rather than tidiness.
+   */
+  collapsedRungs: number;
   labelled: number;
   internal: number;
   /**
@@ -2028,7 +2118,7 @@ export async function generateHierarchy(opts: {
    */
   const treeFrom = (answer: string): { tree: Tree; built: BuildReport } => {
     const { root } = parseJson(answer);
-    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
+    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
     let tree: Tree;
     try {
       tree = appendSupplement(buildTree(root, {}, body, slug, built), groups);
@@ -2427,6 +2517,7 @@ export async function generateHierarchy(opts: {
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedChildren: built.droppedChildren.length,
     droppedHeadings: built.droppedHeadings.length,
+    collapsedRungs: built.collapsedRungs.length,
     labelled: Object.values(parts.tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
@@ -2581,7 +2672,11 @@ async function main(): Promise<void> {
         ? ` moving ${run.repairedBlocks} block(s), largest ${run.largestRepair}`
         : "") +
       `, ${run.droppedChildren} dropped section(s)` +
-      `, ${run.droppedHeadings} unbacked heading claim(s)`,
+      `, ${run.droppedHeadings} unbacked heading claim(s)` +
+      /* A rung whose sole child covered the whole of it, spliced away. Printed
+         at zero with the rest, because a repair nobody is told about is the
+         same shape as the bug it repaired. */
+      `, ${run.collapsedRungs} restated rung(s)`,
   );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);

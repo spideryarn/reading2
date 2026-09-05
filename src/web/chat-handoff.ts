@@ -31,6 +31,30 @@
 const OPENING_CHARS = 60;
 
 /**
+ * **What the "?" in the gutter sends, in the reader's own voice.**
+ *
+ * The button is one press and no typing, so this sentence stands in for words
+ * the reader never got to choose — which is the whole argument for it being
+ * short, plain, and something a person would actually say. It appears in the
+ * transcript above the answer, attributed to them.
+ *
+ * **"here, or somewhere earlier" is the load-bearing half.** Greg, 2026-09-04:
+ * *"even though it's a question mark for a specific block, often the confusion
+ * is wider in scope than just that block, so the LLM is going to have to use
+ * its judgment on that."* An earlier draft said *"explain this and surrounding
+ * blocks"*, which names a window — and a window is the one thing we know is
+ * usually wrong, because the thing you needed was three sections ago or in a
+ * definition you skimmed. So this asks for the *gap* rather than for a radius.
+ * docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
+ *
+ * The model is told the rest — that a "?" was pressed, and what to do about it
+ * — in the anchor addendum rather than here, because this text is the reader's
+ * and instructions to the machine do not belong in it. src/converse.ts
+ * § anchorSection.
+ */
+export const HELP_QUESTION = "I don't get this. What am I missing — here, or somewhere earlier?";
+
+/**
  * The first message of a conversation started from a block.
  *
  * Greg's call, 2026-08-26: the id **and** the opening words, not the bare id —
