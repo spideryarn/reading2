@@ -139,12 +139,20 @@
    styles/tokens.css. That file stays the single source of truth; this block
    only tells Tailwind where to look.
 
-   `inline` is the load-bearing keyword. Without it Tailwind copies the
-   RESOLVED value at build time, and `tw:bg-background` would freeze whatever
-   --background happened to be when the CSS compiled — silently disagreeing
-   with a hand-written `var(--background)` the moment anyone changes the token.
-   With it, Tailwind emits `background-color: var(--background)` and the two
-   can never drift.
+   `inline` is the load-bearing keyword. With it, Tailwind emits
+   `background-color: var(--background)` — our token, read at use time, so a
+   utility and a hand-written `var(--background)` can never disagree. Without
+   it, it emits `background-color: var(--tw-color-background)` and declares
+   `--tw-color-background: var(--background)` on `:root, :host` in @layer theme
+   — an indirection that RESOLVES AT :root. Nothing looks wrong until somebody
+   overrides `--background` on a subtree (a themed panel, a print stylesheet):
+   the hand-written `var(--background)` follows the override, the utility keeps
+   the root value, and the two disagree with no way to see why.
+
+   (That paragraph said the un-`inline`d form "copies the RESOLVED value at
+   build time", which is not what 4.3.3 does; checked 2026-09-05 by compiling
+   this file with the keyword removed. The conclusion was right for the wrong
+   reason. GPT Sol.)
 
    Note --color-highlight. The orange is deliberately NOT called `accent`:
    in shadcn's vocabulary --accent is a raised dark hover SURFACE, and both
@@ -175,16 +183,49 @@
 
   /* The reading view's own semantic names, so components can use them as
      utilities instead of reaching for arbitrary `[var(--…)]` values.
+
+     **Four of these arrived three weeks late, and nothing said so.** Until
+     2026-09-05 this list held only `ink-faint`, `rule-strong`, `highlight-wash`
+     and `highlight-ink` — while `src/web` wrote `tw:text-ink`, `tw:border-rule`
+     and `tw:bg-surface-raised` in twenty places. A v4 utility whose theme key
+     is missing EMITS NOTHING: no rule, no warning, no build error. The class
+     stays on the element and the property falls back to its own default —
+     text inherits, a background goes transparent, a border colour becomes
+     currentColor — so `SharedNotice` asked for a raised panel with a rule round
+     it and rendered flat, and the list on the public metadata page telling you
+     what a shared link carries drew its "✓ built" and "— not built" rows in
+     the same grey. Nothing about any of that looks broken; it looks designed.
+     Two authors hit it, worked
+     out exactly what was wrong, and wrote a comment about the workaround
+     instead — Tooltip.tsx and Library.tsx both said "`--ink-soft` … is not
+     bridged into Tailwind's theme". `tests/tailwind-utilities-resolve.test.ts`
+     is why it cannot happen again; docs/plans/260905f-… is the whole story.
+
      --color-highlight-wash especially: it is the ORANGE MIXED INTO THE PAGE,
      an opaque blend, and NOT the same colour as Tailwind's `bg-highlight/20`,
      which composites the orange over whatever is behind it. The difference
      shows wherever the wash sits on --panel rather than --page — which is
      exactly where the active gist cell and the active spine band put it. Use
      this name; do not "simplify" it to an opacity modifier. */
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
   --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
   --color-rule-strong: var(--rule-strong);
+  --color-surface-raised: var(--surface-raised);
   --color-highlight-wash: var(--highlight-wash);
   --color-highlight-ink: var(--highlight-ink);
+
+  /* **A name here opens EVERY colour-shaped utility, not the one you wanted.**
+     `--color-rule` was added so `tw:border-rule` would work; it also makes
+     `tw:text-rule` and `tw:bg-rule` compile perfectly well, into a hairline
+     colour used as words. `tests/css-tokens.test.ts` § "no component reaches a
+     surface token through a Tailwind text utility" is what catches that, and
+     it had `rule`, `surface-raised`, `panel` and `highlight-wash` on an
+     EXCLUSION list until 2026-09-05 — on the reasoning that they were not in
+     this block, so `tw:text-rule` could not compile and there was nothing to
+     guard. Adding a name to this block invalidates that reasoning. If you add
+     one, check that guard covers it. */
 
   --font-sans: var(--font-ui);
   --font-mono: var(--font-mono);
