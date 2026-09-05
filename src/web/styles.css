@@ -14281,7 +14281,9 @@ td.text.kind-heading .blk-gutter[data-open] {
   line-height: 1.5;
   color: var(--ink-soft);
 }
-.fb-email { color: var(--ink); font-family: var(--font-mono); font-size: 0.75rem; }
+/* `.fb-email` was here. It set the reader's own address in mono inside the
+   sentence above, and the sentence went on 2026-09-05 — FeedbackDialog.tsx
+   § Props. */
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-label { font-size: 0.78rem; font-weight: 600; }

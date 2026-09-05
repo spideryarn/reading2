@@ -592,8 +592,16 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   glossary: 120_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
      effort, with a shorter answer than the glossary's because a quote is copied
-     rather than composed. Never measured on its own. */
-  quotes: 120_000,
+     rather than composed. Never measured on its own.
+
+     **Raised from 120s on 2026-09-05, when `suggestedQuotes` doubled.** The one
+     measurement there has ever been is 11.9s for five quotes
+     (docs/project/quotes.md § The first real run), and the answer is what got
+     longer — so the old number is not wrong, it is a headroom claim about a
+     call half this size. Raising it costs sixty seconds before a genuinely hung
+     call is declared dead; not raising it risks killing a good one the reader
+     has already paid for. */
+  quotes: 180_000,
   /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read

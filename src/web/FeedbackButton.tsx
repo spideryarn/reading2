@@ -61,11 +61,6 @@ import { FeedbackDialog } from "./FeedbackDialog.js";
 import { useRoute } from "./router.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 
-interface Props {
-  /** Shown in the dialog, never sent — the server takes the address from the auth gate. */
-  readerEmail: string | null;
-}
-
 /**
  * **Where they were, as the address bar has it.**
  *
@@ -90,7 +85,7 @@ interface Props {
  * happens.
  */
 
-export function FeedbackButton({ readerEmail }: Props) {
+export function FeedbackButton() {
   const route = useRoute();
   const [open, setOpen] = useState(false);
 
@@ -153,7 +148,6 @@ export function FeedbackButton({ readerEmail }: Props) {
       <FeedbackDialog
         open={open}
         onClose={() => setOpen(false)}
-        readerEmail={readerEmail}
         where={{
           url: location.href,
           /* **The slug stays, beside the URL rather than inside it.** It is

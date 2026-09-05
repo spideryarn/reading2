@@ -236,3 +236,43 @@ describe("the pages that mount it", () => {
     expect(declares).toEqual(["LandingPage.tsx", "Library.tsx"]);
   });
 });
+
+/**
+ * **One address on the site, and it is not a person's.**
+ *
+ * Greg, 2026-09-05, having found his own address in the feedback dialog:
+ *
+ * > Remove that sentence, and remove any other mentions in the UI of my
+ * > personal email address, greg@gregdetre.com. The only email address we
+ * > should include on the site is hello@spideryarn.com.
+ *
+ * `ADMIN_EMAIL` (src/admin.ts) is not going anywhere — it is the label on an
+ * identity, for logs and for the seed, and docs/project/admin.md is clear that
+ * the gate compares ids and never it. What this pins is the *other* half: that
+ * nothing the browser renders reaches for it. `FeedbackDialog.tsx` did, on the
+ * failed-send fallback, which was the one screen in the app that asks a reader
+ * to write to us — and named a person while doing it.
+ *
+ * An import rather than a text match, so that a comment quoting Greg's original
+ * request (`AdminPage.tsx` has one) is not a failure.
+ */
+describe("the one address a reader is shown", () => {
+  const WEB = path.join(import.meta.dirname, "..", "src", "web");
+
+  const browserFiles = readdirSync(WEB).filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"));
+
+  it("is never the administrator's, anywhere the browser loads", () => {
+    const reaching = browserFiles.filter((f) =>
+      /import\s*\{[^}]*\bADMIN_EMAIL\b[^}]*\}\s*from\s*["'][^"']*admin\.js["']/.test(
+        readFileSync(path.join(WEB, f), "utf8"),
+      ),
+    );
+    expect(reaching).toEqual([]);
+  });
+
+  it("found files to look at, rather than matching nothing", () => {
+    /* The filter above is the kind that passes by reading zero files.
+       docs/reusable/silent-success.md. */
+    expect(browserFiles.length).toBeGreaterThan(50);
+  });
+});

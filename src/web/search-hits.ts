@@ -592,7 +592,8 @@ export function resolveIdea(
 }
 
 /**
- * One quote, resolved into the same `Found` every search hit and idea becomes.
+ * **All the quotes the panel is showing**, resolved into the same `Found` every
+ * search hit and idea becomes.
  *
  * A quote is a `{blockId, text, start}`, which is what `resolveOne` already
  * takes — so this is a shape change and nothing else, and that is deliberate: a
@@ -600,7 +601,14 @@ export function resolveIdea(
  * the first. The prose gets the same wash, the rail gets the same lane, and the
  * panel steps through it with the same component.
  *
- * Three fields worth a word:
+ * **Plural since 2026-09-05**, and that is the whole of one feedback report.
+ * It took one quote — the selected one — so quotes mode drew nothing at all
+ * until a row was pressed, and the `?bar=` slider changed the list without
+ * changing the page. Greg asked to be able to *"skim through it just reading
+ * the stuff that is marked"*, which is what search already does through this
+ * same pipe: one call, every passage, marked at once.
+ *
+ * Four fields worth a word:
  *
  * - **`confidence: null`.** A search hit's confidence answers *is this what you
  *   asked for*, and nobody asked the article a question. The value a literal
@@ -609,10 +617,18 @@ export function resolveIdea(
  * - **`reasoning` is the model's `reason`**, which the panel shows in a tooltip
  *   rather than as body text. It reaches the prose hover card too, which is the
  *   right place for it: it is a caption on the passage either way.
- * - **A real `slot`, and `runId` is the quote's own id.** One lane per quote,
- *   and a slot so the paragraph bar has a hue — `blockHues` drops `null` slots,
- *   so a quote without one would paint the rail and leave the bar blank, which
- *   looks like a rendering bug and is not one.
+ * - **A real `slot`**, so the paragraph bar has a hue — `blockHues` drops `null`
+ *   slots, so a quote without one would paint the rail and leave the bar blank,
+ *   which looks like a rendering bug and is not one. Slot `0` for every quote:
+ *   the categorical palette says *which search found this*, and there is only
+ *   one thing here that found anything.
+ * - **`runId` is `QUOTES_RUN` and not the quote's own id**, which is the one
+ *   thing the plural version had to change. The rail packs one lane per run id
+ *   (spine-marks.ts § `laneOrder`) and the gutter is ten pixels, so an id per
+ *   quote gives a sixteen-lane rail of 1.5px marks laid over each other and
+ *   ordered sideways by an arbitrary string. **The quotes are one source**, the
+ *   way the literal matcher is one source; the identity of the individual quote
+ *   stays in `key`, which is what the mark, the ring and the hover card read.
  *
  * **The `text` here is the article's own characters**, not the model's typing —
  * src/quotes.ts § `place` slices the block. So this re-find is looking for the
@@ -625,8 +641,13 @@ export function resolveIdea(
  * drift by every character `extractText` collapsed or inserted, so the hint
  * would pick a repeat rather than disambiguate between them. See the parameter
  * below.
+ *
+ * A quote naming a block the article no longer has is dropped and the rest are
+ * kept, which is `resolveOne`'s rule and matters more here than anywhere else:
+ * the quotes stamp does not cover the article's text, so a stale artefact is
+ * the ordinary case rather than the exceptional one.
  */
-export function resolveQuote(
+export function resolveQuotes(
   blocks: Block[],
   /**
    * **No `start`, deliberately** — see the note in the docstring above.
@@ -645,25 +666,55 @@ export function resolveQuote(
    * block — which is why the general fix is an occurrence ordinal and is not
    * built.
    */
-  quote: { id: string; slot: number; blockId: BlockId; text: string; reason?: string },
+  quotes: readonly { id: string; blockId: BlockId; text: string; reason?: string }[],
 ): Found[] {
-  const one = resolveOne(page(blocks), {
-    /* The same three-part key shape as a hit and an occurrence, with `0` for
-       the index: a quote is exactly one passage, so there is no second one to
-       tell apart — and keeping the shape means nothing downstream has to know
-       which of the three sources it is looking at. */
-    key: `${quote.id}:${quote.blockId}:0`,
-    blockId: quote.blockId,
-    runId: quote.id,
-    slot: quote.slot,
-    quote: quote.text,
-    confidence: null,
-    /* A quote is a line worth keeping. Which is a judgement of a sort, and not
-       one with two ends. */
-    valence: null,
-    reasoning: quote.reason ?? "",
-  });
-  return one ? [one] : [];
+  const at = page(blocks);
+  const out: Found[] = [];
+  for (const quote of quotes) {
+    const one = resolveOne(at, {
+      key: quoteMarkKey(quote.id, quote.blockId),
+      blockId: quote.blockId,
+      runId: QUOTES_RUN,
+      slot: 0,
+      quote: quote.text,
+      confidence: null,
+      /* A quote is a line worth keeping. Which is a judgement of a sort, and not
+         one with two ends. */
+      valence: null,
+      reasoning: quote.reason ?? "",
+    });
+    if (one) out.push(one);
+  }
+  /* Document order, so the marks are in the order the reader meets them
+     whatever `?rank=` the panel is listing them in. Nothing downstream sorts a
+     `Found[]`, and `blockMatches` counts in whatever order it is handed. */
+  return orderFound(out, "document");
+}
+
+/**
+ * The one identity every quote's marks share, and therefore its single lane in
+ * the rail — see `resolveQuotes` above for why it is not the quote's own id.
+ *
+ * A literal string rather than `null`, which is the literal matcher's and means
+ * *no colour of its own*; quotes do have one, `slot: 0`.
+ */
+export const QUOTES_RUN = "quotes";
+
+/**
+ * A quote's key among the marks — **one place, because two places drift.**
+ *
+ * The same three-part shape as a hit and an occurrence, with `0` for the index:
+ * a quote is exactly one passage, so there is no second one to tell apart, and
+ * keeping the shape means nothing downstream has to know which of the sources
+ * it is looking at.
+ *
+ * Exported because the band needs it to say *which quote the reader pressed*
+ * (`mark.hit[data-hit-open]`) without walking the resolved list — and computing
+ * that string in two files is how the ring comes to be about a quote that is
+ * not the selected one.
+ */
+export function quoteMarkKey(id: string, blockId: BlockId): string {
+  return `${id}:${blockId}:0`;
 }
 
 /**
