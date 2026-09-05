@@ -487,6 +487,14 @@ const MODES_UI = [
      so on a phone the bar is eight icons and one word, and the word is the exit.
      Cheap to change to a size bump if it does not read.
 
+     **And since 2026-09-05 it is the only way out**, the `×` in the controls
+     bar having gone with the rest of that bar. It inherits the contract the `×`
+     was written to keep (GPT Sol, 2026-08-31): closing a band goes to `plain`
+     *by name*, never to `DEFAULT_MODE`. They are the same mode today and they
+     are different questions — *where a reader lands with no instructions* and
+     *what closing a panel means* have no reason to agree — so this row says
+     `"plain"` as a literal, and moving the default cannot silently redirect it.
+
      It is also **not the fix for the problem Greg hit**, and that is worth
      saying here so nobody thinks it was: on a phone the bar this button sits in
      is exactly what an on-screen keyboard covers, and what slides away when you

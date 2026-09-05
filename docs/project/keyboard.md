@@ -53,8 +53,9 @@ what your hand is doing.
 **We have since bought a small piece of exactly that**, and it is worth being clear about the price.
 ← / → set a level and it stays set, which is a state you can be wrong about. Three things keep it
 cheap: any mouse movement clears it, so it cannot outlive the moment you stop thinking about it; the
-controls bar and the lit column header say what it is, the same two indicators the pointer already
-had; and it can only ever hold a level that is on screen. It is a mode you leave by accident rather
+lit column header says what it is, the indicator the pointer already had; and it can only ever hold
+a level that is on screen. (The controls bar said it too, in words, until 2026-09-05 —
+[§ The aim is visible before you press anything](#the-aim-is-visible-before-you-press-anything).) It is a mode you leave by accident rather
 than one you have to remember to leave, which is the only kind this view can afford.
 
 ## What each zone means
@@ -140,10 +141,10 @@ The blur on click survives all of that, and still earns its place: nothing eats 
 focused button still takes Enter and Space, and leaving focus on it after a mouse click is not what
 the reader asked for.
 
-Both indicators already exist and both keep working: the aimed column header lights up — exactly
-one column, even where the arc and Parts share a stride, because the reader has to be able to see
-which of the two another → would leave — and the controls bar names the level. That matters more for the keys than it did for the pointer — with the
-pointer, where you are aiming is where your hand is.
+The aimed column header lights up — exactly one column, even where the arc and Parts share a
+stride, because the reader has to be able to see which of the two another → would leave. That
+matters more for the keys than it did for the pointer — with the pointer, where you are aiming is
+where your hand is. There was a second indicator beside it until 2026-09-05; see below.
 
 At the ends of the ladder the key is handed back to the browser rather than swallowed, the same
 concession ↑ / ↓ make at the ends of the article. So → at the finest column still pans an
@@ -155,16 +156,21 @@ the table by adding one attribute, and why a new panel would too.
 
 ## The aim is visible before you press anything
 
-Two places say it, because either one alone has a hole:
+An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
+running it. So the aim is drawn:
 
 - **The column header lights up** as the pointer crosses into it (`thead th.nav-aim`). Quieter than
   an `.on` button in the controls bar, deliberately: it follows the mouse, and something that changes
   on every sideways twitch must not shout.
-- **The controls bar names the level** — `↑↓ Sections`. This is the one that still works when the
-  aimed zone is the spine, which has no header, or is nothing at all.
 
-An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
-running it.
+**Two places said it until 2026-09-05, and one of them has gone.** The controls bar carried an
+`↑↓ Sections` readout, and it was the half that still worked when the aimed zone is the spine —
+which has no header — or is nothing at all. It went with the rest of the bar
+([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), leaving the lit header as the
+only indicator and the spine's aim unnamed. **The header goes too, in stage 3 of that plan**, which
+owes the aim a replacement: a tint on the aimed column's cells, which can name the spine and the
+prose column as well as a gist. Until it lands, this section describes one indicator with a known
+hole rather than two that covered each other.
 
 ## Five rules, each with a reason
 

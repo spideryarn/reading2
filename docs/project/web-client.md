@@ -93,9 +93,10 @@ So *a mode is open* and *a band is open* are two questions now, named `inMode` a
 below already exists because of.
 
 "Permanent" means *no mode takes it away*, which is the claim Greg's framing is making, and it is
-still true. It is not a promise the reader cannot put the rail away themselves: the `Spine` pill in
-the controls bar does exactly that, in every mode, and it is the one granularity-bar control that
-stays on screen in one ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
+still true. It is not a promise the reader cannot put the rail away themselves: `?spine=0` does
+exactly that, in every mode. There was a `Spine` pill in the controls bar until 2026-09-05, and it
+was the one granularity-bar control that stayed on screen in a mode; now the rail is simply on
+unless the URL says otherwise ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
 [url-state.md](url-state.md) for `?spine=`). The prose is the half with no off switch: `?text=0` hides it
 in the hierarchy mode and nowhere else, which is what `proseVisible` in
 [`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice. (Plain is not an
@@ -159,7 +160,7 @@ it, not by reasoning about it. The file itself carries the long version; this is
 | Guard | Without it |
 |---|---|
 | `prefix(tw)` on both imports | Tailwind's scanner is a plain **text** scanner — it pulls bare words out of source and emits a utility for any that matches a utility name. It found 18 in `src/web/`, two of which collide with live class names, and `.outline` drew a 1px border round the whole table in outline mode (`/?text=0`) |
-| `@layer app` on the `styles.css` import | Unlayered declarations beat layered ones whatever the order. Every place a shadcn component goes is already covered by a descendant rule (`.controls button`, `.cmt-nav button`, `.cmt-dialog header`), so a utility you deliberately wrote would lose twice over and say nothing |
+| `@layer app` on the `styles.css` import | Unlayered declarations beat layered ones whatever the order. Every place a shadcn component goes is already covered by a descendant rule (`.cmt-nav button`, `.cmt-dialog header`, `.cmt-dialog button.linky`), so a utility you deliberately wrote would lose twice over and say nothing |
 | `source(none)` + an explicit `@source "../../src/web"` | v4 auto-detects sources from the project root. It scanned `docs/`, found the `tw:flex` and `tw:rounded-md` written as **examples in the migration plan's prose**, and compiled them into the production bundle — seven utilities no component used. It then happened again from a doc comment inside [`lib/utils.ts`](../../src/web/lib/utils.ts) |
 | `@custom-variant dark (&)` | Tailwind compiles `dark:` to `@media (prefers-color-scheme: dark)`, and this page is dark with no media query — see [§ Dark mode](#dark-mode) |
 
@@ -221,10 +222,12 @@ second is the one that mattered:
   change them — but that had to happen first.
 - `.controls button.linky` — the `auto` control, the one thing in that bar that never became a
   `Toggle` — only ever overrode border-colour, underline and inline padding, and leaned on the base
-  rule for the rest. It now states its box in full. Two of its declarations look like dead weight
-  and are not: the `1px solid transparent` border is 2px of box and is what keeps it the same
-  height as the pills beside it, and the `border-radius` has nothing to round but is what keeps the
-  focus ring a lozenge, because an outline follows `border-radius` whether or not a border shows.
+  rule for the rest, so it was made to state its box in full. Both it and the `×` went on
+  2026-09-05, when the bar was cut down to the granularity pills
+  ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), and their rules went with
+  them. The lesson outlives them and is written above `.mode` in `styles.css`: **any button put
+  back in this bar states its own reset in full**, because there is no `.controls button` left to
+  inherit one from.
 
 `.controls button.on` was genuinely dead before it was deleted: Radix marks state with
 `data-state="on"`, never a class.

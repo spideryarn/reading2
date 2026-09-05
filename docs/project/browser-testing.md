@@ -405,13 +405,13 @@ The view has two modes and the second is easy to forget:
 
 | URL | What you're looking at |
 |---|---|
-| `/` | reading mode: column headers `Article L0 │ Parts L1 │ Sections L2 │ Text verbatim` (the first reads `Argument L0` once `arc.json` exists), and a controls bar of `Spine · Arg · L1 · L2 · Para · Text` — [granularity-zoom.md § What the bar calls each column](granularity-zoom.md#what-the-bar-calls-each-column) |
+| `/` | reading mode: column headers `Article L0 │ Parts L1 │ Sections L2 │ Text verbatim` (the first reads `Argument L0` once `arc.json` exists), and a controls bar of `Arg · L1 · L2 · Para` and nothing else — [granularity-zoom.md § What the bar calls each column](granularity-zoom.md#what-the-bar-calls-each-column) |
 | `/?text=0` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
 | `/?at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
 | `/?cols=0,1&text=1` | an explicit column choice, which pins the columns and takes them off auto-fit |
 | `/?spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
-| `/?text=0&spine=1` | the rail kept in outline mode, where it is off by default. The one combination that proves `?spine=` is three-state rather than two |
+| `/?text=0` (again) | since 2026-09-05 the rail is **on** here too, where it used to be off by default. `?text=0&spine=0` is the combination that proves `?spine=` still bites |
 | `/?mode=chat&spine=0` | the rail hidden with a mode band open, which is the only way `fitMode` returns `off`. Both smallest terms of the sticky bars' `left` at once |
 | `/?slug=<slug>` | a different article; defaults to `example` |
 
@@ -654,9 +654,11 @@ with a frame count before believing otherwise:
 ```
 
 
-1. **Slide the pointer across the columns without pressing anything.** The header underline and the
-   `↑↓ …` label in the controls bar should follow it, and they should agree. Over the spine both
-   should say *Parts*; over the masthead or the controls bar, *Sections*.
+1. **Slide the pointer across the columns without pressing anything.** The header underline should
+   follow it. The controls bar carried an `↑↓ …` label saying the same thing until 2026-09-05, and
+   it was the half that could name the spine, which has no header — so over the spine there is now
+   nothing to check until stage 3 of
+   [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) gives the aim its own tint.
 2. **Park in each column and press ↓.** The distance travelled should get shorter as you move right:
    a part, a section, a paragraph.
 3. **Scroll to the middle of a section and press ↑.** It should go to the top of *that* section, not
@@ -769,7 +771,7 @@ the emitted CSS, not the page:
 ```js
 // in the dev server, over the served stylesheet text
 [...document.styleSheets].flatMap(s => [...s.cssRules]).filter(r => r.constructor.name === 'CSSLayerBlockRule').map(r => r.name)
-// 'app' must be there, and it must contain `.controls button` — not sit empty
+// 'app' must be there, and it must contain a `.controls`/`.masthead` rule — not sit empty
 ```
 
 Adding `layer(app)` and finding the page unchanged is *also* what total failure looks like, so check

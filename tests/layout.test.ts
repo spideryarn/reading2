@@ -121,11 +121,12 @@ describe("which levels get given up", () => {
   });
 
   it("a phone-width outline is the leaf column at full width", () => {
-    // showText: false, so the leaf column is the detail column and the spine is
-    // off. Nothing to scroll sideways to.
+    // showText: false, so the leaf column is the detail column. It takes the
+    // whole window less the rail, which since 2026-09-05 is on here too — see
+    // "hiding the spine" below. Nothing to scroll sideways to either way.
     const f = fit({ windowWidth: 390, showText: false });
     expect(f.columns).toEqual([3]);
-    expect(f.widths).toEqual([390]);
+    expect(f.widths).toEqual([378]);
     expect(f.overflowing).toBe(false);
   });
 
@@ -224,8 +225,8 @@ describe("the leaf column", () => {
     // L0 stays closed here too — automatic fit is the same negotiation in
     // outline mode, and this file stays free of mode names on purpose.
     expect(f.columns).toEqual([1, 2, 3]);
-    // No prose, so no rail either: the table already is the whole-article view.
-    expect(f.spine).toBe("off");
+    // The rail is there as well, since 2026-09-05 — see "hiding the spine".
+    expect(f.spine).toBe("on");
   });
 
   it("rides beside the prose when explicitly asked for", () => {
@@ -254,13 +255,14 @@ describe("the table always has room for its own width", () => {
 
 /**
  * The reader's own hand on the rail — `?spine=`, added 2026-08-26 for the pill
- * in the controls bar. Three states, and the third one is the point: absent is
- * not the same as on.
+ * in the controls bar. The pill went on 2026-09-05 and the parameter stayed:
+ * three states still, but the point moved. Absent used to differ from *on*;
+ * now it differs from *off*.
  */
 describe("hiding the spine", () => {
-  it("is off by default in outline mode and on in reading mode", () => {
+  it("is on by default, in outline mode as well as reading mode", () => {
     expect(fit({ windowWidth: 1600 }).spine).toBe("on");
-    expect(fit({ windowWidth: 1600, showText: false }).spine).toBe("off");
+    expect(fit({ windowWidth: 1600, showText: false }).spine).toBe("on");
   });
 
   it("goes away when asked, and gives its width to the table", () => {
@@ -287,11 +289,14 @@ describe("hiding the spine", () => {
     expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("on");
   });
 
-  // The reason the parameter has no default: `null` has to keep meaning
-  // "nobody has touched this", or the `auto` control has nothing to put back.
-  it("absent is not the same as true", () => {
-    expect(fit({ windowWidth: 1600, showText: false, showSpine: null }).spine).toBe("off");
+  // Absent and `true` now agree, and the parameter still has three states
+  // because `false` is the one that has to be distinguishable from both:
+  // App.tsx puts `null` back when Search or Ideas opens with the rail hidden,
+  // and that only works if "nobody has touched this" is still a thing to say.
+  it("absent means on; only an explicit false takes the rail away", () => {
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: null }).spine).toBe("on");
     expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("on");
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: false }).spine).toBe("off");
   });
 
   it("keeps the fit monotonic in window width", () => {
@@ -379,7 +384,7 @@ describe("the article on its own stops at the measure", () => {
     // one-line labels capped at 800px would just be a narrower list.
     const f = fit({ windowWidth: 1600, showText: false, chosen: [] });
     expect(f.columns).toEqual([3]);
-    expect(f.widths).toEqual([1600]);
+    expect(f.widths).toEqual([1588]); // the window, less the rail
     expect(f.alone).toBe(false);
   });
 });

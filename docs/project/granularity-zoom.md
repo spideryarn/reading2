@@ -258,19 +258,21 @@ Consequences worth knowing:
 
 ### What the bar calls each column
 
-The controls bar reads left to right in the order the things it names stand on screen — the rail,
-then the columns coarse to fine, then the prose, then whether any of it has been pinned by hand:
+The controls bar is a row of pills, one per column, coarse to fine — and since 2026-09-05 that is
+all it is:
 
 ```
-  Spine │ GRANULARITY  Arg  L1  L2  Para │ Text │ fit │ reading
-    ↑                  ↑                   ↑       ↑     ↑
-   the rail        the columns          the prose  |    which mode
-                                              nothing pinned
+  Arg   L1   L2   Para
+  └─ the columns, coarse to fine ─┘
 ```
 
-- **`Spine`** is the rail, and it is leftmost because the rail is — Greg, 2026-08-27: move it "to
-  the furthest-left (to mirror its column position)". It is also the one control that survives a
-  mode band ([the spine](#the-spine-a-birds-eye-rail)).
+Greg, 2026-09-05: *"The top bars are really crowded and confusing … everything we're showing is
+useful and understandable."* So the `Spine` toggle, the `GRANULARITY` label, `Text`, `fit`/`auto`,
+the `reading`/`outline` chip, the `↑↓` readout and the tree-version chip all went —
+[260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) has what each one was for. The
+rail is simply on now, and the prose is simply there; `?spine=0` and `?text=0` still work and
+nothing on screen writes them ([url-state.md](url-state.md)).
+
 - **`Arg`** is the L0 column: one sentence per part on where the argument stands
   ([the arc](#the-arc)). Named for what it holds rather than for its depth, Greg 2026-08-27 — and it
   keeps the name on an article with no `arc.json` yet, where the column falls back to the root gist.
@@ -282,7 +284,6 @@ then the columns coarse to fine, then the prose, then whether any of it has been
   ([the paragraph outline](#both-at-once-the-paragraph-outline-beside-the-prose)), and it only
   appears in reading mode. It was `L3` — a number that comes from the tree's depth, so it was the
   one pill whose label was different on different articles.
-- **`Text`** is the article's own words, and `fit`/`auto` is the layout state, not a column.
 
 The short names are `columnPill` in [`tree.ts`](../../src/web/tree.ts), the full names the column
 headers use are `columnLabel` beside it, and the tooltips are `columnHint`, built *from*
@@ -418,24 +419,19 @@ Four decisions worth keeping:
   width the old behaviour looked like a considered trade. The sweep is still a test:
   `tests/layout.test.ts` asserts that no width ever shows fewer columns than a narrower one, which
   is the check that would catch the next width spent conditionally.)
-- **In outline mode it disappears by default.** The table there *is* a whole-article overview, so a
-  bird's-eye rail beside it would be a second copy of the same thing; the width goes back to the
-  columns. Decided in [`layout.ts`](../../src/web/layout.ts) § `fitView`, not in the rail itself, so
-  that one function answers every "how wide is anything" question.
-- **The reader can overrule all of that** — a `Spine` pill, the **leftmost control in the bar**,
-  added 2026-08-26 at Greg's request for "a button in the top bar to show/hide the Spine (just as we
-  can with L0, L1, etc)". It sat between `Text` and `auto` until 2026-08-27, when Greg moved it to
-  the far left "to mirror its column position": the bar now runs left to right in the order the
-  things it names stand on screen, rail first and then the columns. It writes
-  [`?spine=`](url-state.md), and like `?cols=` it has **three** states rather than two: absent is *automatic*, which is everything above, and is not the
-  same as on. That distinction is what lets a reader keep the rail in outline mode and lose it in
-  reading mode, and it is what the `auto` control puts back — `auto` now clears `?spine=` as well as
-  `?cols=`, and the word `fit` beside the pills means neither has been touched.
+- **It is on unless the URL says otherwise**, in every mode, outline included — Greg, 2026-09-05:
+  *"we don't need the 'Spine' button (let's just default to always showing it)"*. Decided in
+  [`layout.ts`](../../src/web/layout.ts) § `fitView`, not in the rail itself, so that one function
+  answers every "how wide is anything" question.
 
-  On or off is the whole of it, and since the expanded rail went there is nothing else it could
-  say. It is the one granularity-bar control that **stays on screen in a mode** (chat, glossary,
-  search, summary), where the rail is otherwise unconditional — the rest are hidden there because
-  the columns they name are gone, which is the opposite case.
+  It used to be off by default in outline mode, on the argument that the table there *is* a
+  whole-article overview and a rail beside it is a second copy of the same thing. That argument is
+  still true and no longer wins: the `Spine` pill that could have put the rail back went with the
+  rest of the controls bar, and a rail nobody can ask for cannot default to absent.
+- **`?spine=0` is the only thing that takes it away**, and the parameter keeps **three** states
+  rather than two ([url-state.md](url-state.md)): absent means *nobody has touched this*, which is
+  what entering Search or Ideas restores for a reader who had hidden the rail. Nothing in the UI
+  writes it any more.
 
   One consequence worth knowing before you touch it: the rail's width is taken out of the prose
   column's, so hiding it **rewraps every paragraph in the article**. Every row changes height, which

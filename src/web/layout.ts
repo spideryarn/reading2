@@ -370,23 +370,30 @@ export function fitView({
   };
 
   /**
-   * In outline mode the table *is* a whole-article overview, so a bird's-eye
-   * rail beside it would be a second copy of the same thing; the space goes
-   * back to the columns instead. That is what the reader gets by default, and
-   * `showSpine` is how they say otherwise in either direction.
+   * **The rail is on unless the URL says otherwise** — Greg, 2026-09-05: "we
+   * don't need the 'Spine' button (let's just default to always showing it)".
+   * The pill that asked the question went with the rest of the controls bar
+   * (docs/plans/260905d-declutter-the-reading-view-top-bars.md), so nothing on
+   * screen can turn the rail on any more and a default of "off" would be a
+   * state the reader has no way out of. `?spine=0` still wins outright — same
+   * rule `chosen` follows, that the window must not overrule a choice somebody
+   * made — which is why the parameter stays three-state rather than boolean.
    *
-   * Automatic is therefore "on wherever there is prose", which is that rule
-   * written as one word. An explicit `?spine=` wins outright, both ways: the
-   * reader may keep the rail in outline mode, and may take it away in reading
-   * mode. Same rule `chosen` follows — the window must not overrule a choice
-   * somebody made.
+   * **What this overrules, and it was a real argument**: until 2026-09-05 the
+   * default was `showSpine ?? showText`, on the reasoning that in outline mode
+   * the table *is* a whole-article overview, so a bird's-eye rail beside it is
+   * a second copy of the same thing and the 12px is better spent on the
+   * columns. Still true, and now outweighed by the rail being unaskable-for.
    *
    * The window width is not consulted at all, and used to be: the rail had a
    * labelled 13rem form that appeared when it was affordable, and deciding
    * *when* was the fiddliest arithmetic in this file. One width means the
-   * question no longer exists.
+   * question no longer exists — the rail is 12px at every size, so there is no
+   * width at which it fails to fit.
+   *
+   * Note this is now the same rule `fitMode` follows, phrased the same way.
    */
-  const spine: SpineMode = (showSpine ?? showText) ? "on" : "off";
+  const spine: SpineMode = (showSpine ?? true) ? "on" : "off";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   /**

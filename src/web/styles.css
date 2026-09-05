@@ -531,9 +531,12 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    would make a checked PDF look broken. The scan wording carries its own weight
    without any help from the colour.
 
-   **Not `.provenance`**, which this was for a few hours and which is taken:
-   there is a `.provenance` chip further down this file — monospace, in a dashed
-   box, right-aligned — and being declared later it simply won. The masthead
+   **Not `.provenance`**, which this was for a few hours. The name was taken at
+   the time: there was a `.provenance` chip further down this file — monospace,
+   in a dashed box, right-aligned, holding the tree version — and being declared
+   later it simply won. That chip went on 2026-09-05 with the rest of the
+   controls bar, so the collision is gone and the name is free; the class is
+   still not worth reclaiming, since `.source-note` says what this is. The masthead
    line came out as a debug-looking box beside a sans-serif facts line, and no
    test could see it. A Sonnet subagent driving Chrome caught it, by reading the
    *computed* styles rather than by looking at the screenshot: 10.88px Geist
@@ -637,123 +640,32 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   transition: transform 0.18s ease;
 }
 
-.controls-label {
-  font-size: 0.68rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  margin-right: 0.3rem;
-}
-
-/* The granularity pills used to be styled from here, by a `.controls button`
+/* **There is no `.controls button` rule at all, and that is not an oversight.**
+   The granularity pills used to be styled from here, by a `.controls button`
    block plus `:hover` and `.on`. They are shadcn `Toggle`s now, carrying the
    PILL string in App.tsx, and Radix marks the on state with `data-state="on"`
    rather than a class — so `.controls button.on` had stopped matching anything
-   at all, and the rest was being overridden a declaration at a time.
+   at all, and the rest was being overridden a declaration at a time. So any
+   button ever put back in this bar states its own reset in full: there is
+   nothing here to inherit one from.
 
-   What is left is the one control in this bar that never became a Toggle. It
-   is spelled out in full rather than leaning on a shared button reset, because
-   there is no longer a shared button reset to lean on. */
+   Two such buttons lived here until 2026-09-05 and both were deleted with the
+   rest of the bar (App.tsx § the controls bar): a `.linky` `auto`, and a
+   `.mode-close` `×`. `.linky` survives elsewhere and is still what it always
+   was — a shape, not a shared class; see `.cmt-dialog button.linky`. */
 
-/* A control that reads as a link rather than a toggle — it does something once
-   rather than being on or off. */
-.controls button.linky {
-  /* `font: inherit` is the load-bearing half of any button reset: without it
-     the UA supplies its own 13.3px Arial. Everything below restates what this
-     button used to inherit, so the pixels are unchanged. */
-  font: inherit;
-  font-size: 0.75rem;
-  padding: 0.22rem 0.3rem;
-  /* Transparent, not absent. The border is 2px of box, and the pills beside it
-     have one — drop it and this control alone shrinks from 27.6px to 25.6px.
-     The text does NOT move: `.controls` centres its items, so a symmetric
-     border shrinks and re-centres. What moves is everything else — the outer
-     rect, so every item after it slides 2px left; the hit area; and the bounds
-     the focus ring is drawn around.
-
-     The radius is not dead either, despite there being nothing to round. An
-     outline follows `border-radius` (Chrome always, Safari since 16.4), and it
-     does so independently of the transparent border — so this line is the one
-     that keeps the keyboard focus ring a lozenge instead of a rectangle. */
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-faint);
-  cursor: pointer;
-  /* Only the colour ever moves. The old rule also animated background and
-     border-color, but this control's are both permanently transparent — the
-     `.controls button:hover` border was already losing to the transparent one
-     above it, on source order at equal specificity. */
-  transition: color 0.12s;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.controls button.linky:hover { color: var(--highlight); }
-
-/* **The way out of a mode** — App.tsx, beside the chip naming the mode you are
-   in. It was a `.linky` reading `back to contents` until 2026-08-31; the reason
-   it is an icon now, and names no destination, is in App.tsx where the button is.
-
-   Sized off `.linky` deliberately rather than off `.chat-icon`, which is the
-   other × in the app: this one sits in a row of pills and has to line up with
-   them, and `.linky` is the control in that row whose box was already worked out
-   against the pills (see its own note on the transparent border). Square, so the
-   glyph is centred rather than sitting in a lozenge meant for words. */
-.controls button.mode-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font: inherit;
-  /* The same 27.6px box the pills and `.linky` come out at, taken as a square. */
-  width: 1.725rem;
-  height: 1.725rem;
-  padding: 0;
-  margin-left: 0.35rem;
-  /* Transparent and 999px for the two reasons `.linky` spells out: the border is
-     2px of box the pills beside it also spend, and an outline follows
-     `border-radius`, so this is what keeps the focus ring round. */
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-faint);
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
-}
-.controls button.mode-close:hover {
-  color: var(--highlight);
-  border-color: var(--highlight);
-}
-
+/* A word in the bar that states rather than acts. **One consumer left**: the
+   read-only chip a visitor gets (PublicChrome.tsx § `ViewOnlyChip`), which
+   writes `mode on`. The chips it was designed alongside — the mode's name,
+   `fit`, `reading`/`outline` — all went on 2026-09-05, and it stays because a
+   visitor's footing is the one fact in this bar that outranks the controls.
+   Nothing to do with `.mode-band`, which is the middle column. */
 .mode {
   font-size: 0.68rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
   margin-left: 0.5rem;
-}
-
-.provenance {
-  margin-left: auto;
-  font-size: 0.68rem;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  border: 1px dashed var(--rule-strong);
-  border-radius: 4px;
-  padding: 0.1rem 0.45rem;
-}
-
-/* What ↑ / ↓ are currently aimed at, in words. The aim follows the pointer
-   (keynav.ts), and the column header lights up to match — but the aimed zone
-   can be the spine, which has no header, so this is the one place that can
-   always say it. See docs/project/keyboard.md. */
-.keynav {
-  font-size: 0.68rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  margin-left: 0.6rem;
-  white-space: nowrap;
 }
 
 /* ----------------------------------------------------------------- table -- */
@@ -9449,16 +9361,17 @@ line.diag-now {
 }
 .annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
 
-/* **The fourth `.linky`, and it had never been styled.** The class is scoped on
-   purpose — `.controls`, `.cmt-dialog`, `.chat-dialog` — and this panel's root
+/* **The fourth `.linky`, and it had never been styled.** The class was scoped on
+   purpose — `.controls`, `.cmt-dialog`, `.chat-dialog`, the first of those since
+   deleted with the controls bar on 2026-09-05 — and this panel's root
    is `.annotate-dialog`, so `AnnotateDialog`'s Cancel matched no rule at all
    and rendered as bare text beside `.annotate-save`'s bordered box. Found
    2026-09-04 by sweeping every `className="linky"` for an ancestor that styles
    it; the sharing card, `BillingSection` and `SettingsSection` had the same bug
-   and are fixed in their own files. `App.tsx`'s is inside `.controls` and was
-   always fine.
+   and are fixed in their own files. `App.tsx`'s was inside `.controls` and was
+   always fine; it has since been deleted along with that bar.
 
-   Written out in full here rather than by widening one of the other three,
+   Written out in full here rather than by widening one of the other two,
    which is the rule this file already states above `.cmt-dialog button.linky`:
    a shape, not a shared class. This one is `.cmt-dialog`'s, because Cancel in
    the comment panel and Cancel in this one are the same control in the same
@@ -11874,16 +11787,13 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
      deletion machine. Items keep their size and the row scrolls instead. */
   .controls > * { flex: none; }
 
-  /* The four things in the bar that a phone cannot use or does not need:
-     the section label above the pills (the pills say `L2`, which is the part
-     that matters), the ↑↓ hint (a phone has no arrow keys), the `fit`/`auto`
-     and `reading`/`outline` chips, and the tree version. `.mode.on` is NOT in
-     this list — in a mode band it is the only thing on screen naming which mode
-     you are in. */
-  .controls-label,
-  .keynav,
-  .controls .mode:not(.on),
-  .controls .provenance { display: none; }
+  /* **Four rules were here and there is nothing left for them to hide.** They
+     took the section label, the ↑↓ hint, the `fit`/`auto` and
+     `reading`/`outline` chips and the tree version off a phone — everything in
+     the bar this width could not use — while sparing `.mode.on`, the read-only
+     chip. On 2026-09-05 the desktop bar was cut down to what a phone was
+     already getting (App.tsx § the controls bar), so the two widths now agree
+     by construction rather than by a list somebody has to maintain. */
 
   /* The masthead's left padding follows `--logo-w` on its own (§ shell), but its
      generous vertical padding does not, and it is the first thing between the

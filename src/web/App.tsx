@@ -135,7 +135,6 @@ import {
   buildOutline,
   buildSummaryTree,
   columnHint,
-  columnLabel,
   columnPill,
 } from "./tree.js";
 import {
@@ -178,11 +177,7 @@ import {
   type Mode,
   type TermSort,
 } from "./params.js";
-/* The mode's own name, from the one file that spells it — so the bar's close
-   button, the dock's button and the browser tab cannot say three things.
-   src/title-text.ts § MODE_LABEL. */
-import { MODE_LABEL } from "../title-text.js";
-import { ChevronDown, ChevronRight, ClipboardCheck, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardCheck } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -1684,15 +1679,21 @@ function Reader({
   );
 
   const [cols, setCols] = useQueryState("cols", colsParam);
-  const [showText, setShowText] = useQueryState("text", textParam);
+  /* Read-only since 2026-09-05: the `Text` pill that wrote it went with the
+     rest of the controls bar, so `?text=0` is something a reader arrives with
+     rather than something they can ask for here. Outline mode itself is
+     unchanged — docs/project/url-state.md § `?text=`. */
+  const [showText] = useQueryState("text", textParam);
 
   /**
    * Whether the reader has had a view about the spine — see params.ts §
    * spineParam and layout.ts § showSpine.
    *
-   * `null` until they press the pill, and `null` is not the same as `true`:
-   * absent means the rail follows the window and the mode as it always has, and
-   * that is what the `auto` control puts back.
+   * `null` means the rail is on, which is what it means for everybody who has
+   * never touched the parameter — the pill that wrote it went on 2026-09-05.
+   * Nothing on this page writes it any more except the one line below that puts
+   * `null` *back* when Search or Ideas opens with the rail hidden, and that
+   * still needs the third state: "nobody has touched this" is what it restores.
    */
   const [showSpine, setShowSpine] = useQueryState("spine", spineParam);
 
@@ -2666,37 +2667,6 @@ function Reader({
     setCols([...next].sort((a, b) => a - b));
   };
 
-  /**
-   * The rail, on or off — Greg, 2026-08-26: "a button in the top bar to
-   * show/hide the Spine (just as we can with L0, L1, etc)".
-   *
-   * **First in the bar, and outside the mode/contents split below**, since
-   * 2026-08-27 — Greg: move it "to the furthest-left (to mirror its column
-   * position)". The bar reads left to right in the order the things it names
-   * stand on screen, and the rail is left of every column, so its pill is left
-   * of every pill. Being outside the split is the same fact stated in code:
-   * every other control here belongs to one half or the other, and this one
-   * belongs to both. The granularity pills go in a mode because the columns
-   * they name are not there, and a control that looks live and does nothing is
-   * worse than no control; the spine is the opposite case, on screen in every
-   * mode, so the pill that hides it is too.
-   *
-   * `pressed` reads the resolved layout rather than the parameter, so the pill
-   * says what is actually on screen — unpressed in outline mode, where nobody
-   * chose anything and the rail is gone anyway. Pressing it then writes the
-   * explicit `?spine=1` that overrules that.
-   */
-  const spineToggle = (
-    <Toggle
-      className={PILL}
-      pressed={fit.spine !== "off"}
-      onPressedChange={(on) => void setShowSpine(on)}
-      title="Spine — show or hide the bird's-eye rail of the whole article down the left edge"
-    >
-      Spine
-    </Toggle>
-  );
-
   return (
     <div
       /* `text-alone` says the article is the only thing on the page, so the
@@ -2764,156 +2734,59 @@ function Reader({
           dismissible: it is what this page is, not a notification.
           PublicChrome.tsx. */}
       {!owner && <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />}
+      {/* **What is left of this bar after 2026-09-05**, and the list of what
+          went is the point — Greg: *"The top bars are really crowded and
+          confusing … They're all unnecessary and confusing."* Gone: the `Spine`
+          toggle (the rail is simply on now — layout.ts § `spine`), the `Mode`
+          and `Granularity` labels, the mode-name chip, the `×`, the `Text`
+          pill, `fit`/`auto`, the `reading`/`outline` chip, the `↑↓` readout and
+          the tree-version chip. Every one of them was defensible on its own and
+          the sum was unreadable; the reasoning for each is in the git history
+          and in docs/plans/260905d-declutter-the-reading-view-top-bars.md.
+
+          Two things say what the old chrome said, more quietly: the Dock at the
+          foot of the page names the open mode and is the way out of it, and
+          the URL still carries `?spine=`, `?text=` and `?cols=` for anybody who
+          wants to pin the layout by hand (docs/project/url-state.md). */}
       <div className="controls">
-        {/* First of all, before even the spine: what footing you are reading
-            on outranks every control that follows, and this bar is the one
-            piece of chrome that is on screen at every scroll position. */}
+        {/* First of all: what footing you are reading on outranks every control
+            that follows, and this bar is the one piece of chrome that is on
+            screen at every scroll position. */}
         {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
-        {/* Leftmost of the *view* controls, because the rail it names is
-            leftmost — and before the mode/contents split, because it is the one
-            control that survives both. See `spineToggle` above. */}
-        {spineToggle}
         {/* The granularity controls belong to the table-of-contents mode, so
             they go with it. Leaving them on screen in another mode would offer
             columns that are not there — a control that looks live, does
-            nothing, and gives the reader no way to tell which. The mode's own
-            name takes their place so the bar still says what the middle band
-            is. */}
-        {inMode ? (
+            nothing, and gives the reader no way to tell which. Nothing takes
+            their place: the mode's name is on the Dock, and saying it twice is
+            what this bar was full of. */}
+        {!inMode && (
           <>
-            <span className="controls-label">Mode</span>
-            {/* **The label, not the mode id.** `.mode { text-transform:
-                uppercase }` means these look identical for all thirteen today —
-                which is exactly the problem: the id is a URL token and the label
-                is a product noun, and the two are one rename apart. Renaming
-                Referee to Reviewer in `MODE_LABEL` and the Dock would have left
-                this bar saying REFEREE, in the one place on screen that names
-                the open mode. src/title-text.ts § MODE_LABEL is the one word. */}
-            <span className="mode on">{MODE_LABEL[mode]}</span>
-            {/* **The way out, and it is an icon now.** It said `back to contents`
-                until 2026-08-31 — a 12px grey text link in a bar of pills, and
-                measured against the rest of the bar it was the quietest thing in
-                it. Greg asked for an icon and for the word `contents` to go, the
-                mode having been called Hierarchy since 2026-08-29.
-
-                **It names no destination on screen**, which is the other half
-                of the change. `back to Hierarchy` was the obvious rename and it
-                commits the bar to a claim that stops being true the moment the
-                default moves — which it did, the same day. `×` says *close
-                this*.
-
-                **It goes to `plain` by name, not to `DEFAULT_MODE`**, and the
-                two happen to be the same mode today. GPT Sol asked for the
-                literal, 2026-08-31, and the reason is that they are different
-                contracts: *where the reader lands with no instructions* and
-                *what closing a panel means* have no reason to agree, and if the
-                default moves again this button would silently start opening
-                whatever it moved to. Closing a band means the article, and
-                `plain` is the mode that is the article.
-
-                **Rejected: remembering which band-less mode the reader came
-                from.** One `useRef` and the same button starts doing two
-                different things depending on history the reader cannot see —
-                and a ref resets on remount, so it would be *mostly* consistent,
-                which is worse than either answer taken plainly.
-
-                Not rendered in Plain, where `bandOpen` is false: there is
-                nothing to close, and it would land where it already is.
-                docs/plans/plain-mode-and-the-way-out.md § 3. */}
-            {bandOpen && (
-              <button
-                type="button"
-                className="mode-close"
-                onClick={() => void setMode("plain")}
-                title={`Close ${MODE_LABEL[mode]} and go back to the article`}
-                aria-label={`Close ${MODE_LABEL[mode]}`}
+            {gistDepths.map((d) => (
+              <Toggle
+                key={d}
+                className={PILL}
+                pressed={shownGists.includes(d)}
+                onPressedChange={() => toggle(d)}
+                title={columnHint(d, geometry.leafDepth, d === 0 && !!arcCells)}
               >
-                <X size={14} aria-hidden />
-              </button>
+                {columnPill(d, geometry.leafDepth)}
+              </Toggle>
+            ))}
+            {/* The paragraph outline, beside the prose rather than instead of
+                it. Only offered in reading mode: in outline mode this column is
+                the view, and turning it off would leave nothing. */}
+            {showText && (
+              <Toggle
+                className={PILL}
+                pressed={leafOn}
+                onPressedChange={() => toggle(geometry.leafDepth)}
+                title={columnHint(geometry.leafDepth, geometry.leafDepth)}
+              >
+                {columnPill(geometry.leafDepth, geometry.leafDepth)}
+              </Toggle>
             )}
           </>
-        ) : (
-          <>
-          <span className="controls-label">Granularity</span>
-          {gistDepths.map((d) => (
-            <Toggle
-              key={d}
-              className={PILL}
-              pressed={shownGists.includes(d)}
-              onPressedChange={() => toggle(d)}
-              title={columnHint(d, geometry.leafDepth, d === 0 && !!arcCells)}
-            >
-              {columnPill(d, geometry.leafDepth)}
-            </Toggle>
-          ))}
-          {/* The paragraph outline, beside the prose rather than instead of it.
-              Only offered in reading mode: in outline mode this column is the
-              view, and turning it off would leave nothing. */}
-          {showText && (
-            <Toggle
-              className={PILL}
-              pressed={leafOn}
-              onPressedChange={() => toggle(geometry.leafDepth)}
-              title={columnHint(geometry.leafDepth, geometry.leafDepth)}
-            >
-              {columnPill(geometry.leafDepth, geometry.leafDepth)}
-            </Toggle>
-          )}
-          <Toggle
-            className={PILL}
-            pressed={showText}
-            onPressedChange={() => setShowText((v) => !v)}
-            title="Hide the text to collapse the table into a whole-article outline"
-          >
-            Text
-          </Toggle>
-          {/* `fit` means nothing has been pinned down by hand, so it has to
-              watch both parameters: a reader who has hidden the rail but left
-              the columns alone is not on automatic, and would otherwise have no
-              way back. `auto` clears the pair for the same reason.
-
-              **The pair, deliberately, and it does cost something** — GPT Sol
-              named it, 2026-08-26: you cannot hand the rail back to automatic
-              while keeping columns you chose. The bar gets one "nothing is
-              pinned" affordance rather than one per parameter, because two
-              would be two more words in a bar that is already dense, to undo a
-              state almost nobody is in. Say `auto` resets the layout, not the
-              columns.
-
-              There is no `auto` in a mode, and it is not needed: `fitMode`
-              turns the rail off only for an explicit `?spine=0`, so pressing
-              the pill back on there is indistinguishable from automatic. */}
-          {cols === null && showSpine === null ? (
-            <span
-              className="mode"
-              title="The columns and the spine are following the window width"
-            >
-              fit
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="linky"
-              onClick={() => {
-                void setCols(null);
-                void setShowSpine(null);
-              }}
-              title="Let the columns and the spine follow the window width again"
-            >
-              auto
-            </button>
-          )}
-          <span className="mode">{showText ? "reading" : "outline"}</span>
-          </>
         )}
-        {/* The aim, said out loud. The arrows are useless as an experiment if
-            you cannot tell what they are pointing at before you press one. */}
-        <span
-          className="keynav"
-          title="Up and down arrows step through this level — left and right arrows, or the pointer, change which level that is"
-        >
-          ↑↓ {columnLabel(navDepth, geometry.leafDepth, navDepth === 0 && !!arcCells)}
-        </span>
         {/* Failures of the comment transport belong here rather than in the
             dialog: if the fetch never landed there is no dialog to put them in. */}
         {commentError && (
@@ -2921,9 +2794,6 @@ function Reader({
             comments: {commentError}
           </span>
         )}
-        <span className="provenance" title={article.tree.generator}>
-          {article.tree.version}
-        </span>
       </div>
       <TableView
         article={article}
@@ -2952,6 +2822,13 @@ function Reader({
         columns={fit.columns}
         layout={fit}
         showText={proseOn}
+        /* **The only thing left that says what ← / → are aiming at.** The bar
+           used to carry an `↑↓ Sections` readout beside it, on the argument
+           that the arrows are useless if you cannot tell what they point at
+           before you press one. That went on 2026-09-05 with the rest of the
+           bar; the lit column header is what remains, and it goes too in stage
+           3 of docs/plans/260905d-declutter-the-reading-view-top-bars.md, which
+           owes the aim a quieter indicator of its own. */
         navDepth={navDepth}
         arcCells={arcCells}
         arcPending={capability.kind === "owner" && capability.arc.working}
