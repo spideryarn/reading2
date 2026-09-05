@@ -192,7 +192,7 @@ _(updated at the end of every stage)_
 
 `CommentStore.patchMark` ([`src/store/contracts.ts`](../../src/store/contracts.ts), whose allowlist
 table and its "four operations" heading both grew a fifth row), `patchCommentMark` in
-[`src/comments.ts`](../../src/comments.ts) wired into [`src/store/fs.ts`](../../src/store/fs.ts),
+[`src/comments.ts`](../../src/comments.ts) wired into `src/store/fs.ts`,
 `patchMark` in [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts), and
 `PATCH /api/comments/:slug/:id/mark` in [`src/routes.ts`](../../src/routes.ts). Both fields always,
 each a value or `null`; a body naming only one is a 400 with `[cmt-mark-pair]`.

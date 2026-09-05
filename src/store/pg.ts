@@ -31,7 +31,6 @@
 
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
-import { describeArticle, titleFor } from "../api.js";
 import type { Assets } from "../assets.js";
 import { ASSETS_VERSION } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
@@ -81,7 +80,13 @@ import {
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
 } from "../illustrated.js";
 import type { Illustrated } from "../illustrated-plate.js";
-import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "../library-scalars.js";
+import {
+  deriveLibraryScalars,
+  describeArticle,
+  headingTitleOf,
+  titleFor,
+  type LibraryScalars,
+} from "../library-scalars.js";
 import { log } from "../log.js";
 import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";

@@ -53,7 +53,6 @@ generated answer. Whatever the reader made while it was on is still there when i
 | | |
 |---|---|
 | Column | `spideryarn.reader_profiles.experimental_since timestamptz null` — [`drizzle/0037_experimental_features_and_callout_blocks.sql`](../../drizzle/0037_experimental_features_and_callout_blocks.sql) |
-| Filesystem | `experimentalSince` in `data/reader.json` — [`src/profile.ts`](../../src/profile.ts) |
 | Contract | `readExperimental` / `writeExperimental` on `ReaderStore` — [`src/store/contracts.ts`](../../src/store/contracts.ts) |
 | Wire | `experimentalSince` on `GET`/`PATCH /api/reader`; `PATCH` takes `{ experimental: boolean }`, **one field per request** |
 | Client | [`experimental-store.ts`](../../src/web/experimental-store.ts) — one module-level store for the whole client, session-bound, read through [`useExperimental`](../../src/web/useExperimental.ts). **All the reasoning lives there**: three states rather than two, one write at a time, the races an account switch opens, and why anonymous asks for nothing |
@@ -74,8 +73,7 @@ all is an **error** in the client, not an "off" — that is the same defect one 
 **One change per `PATCH`.** A body naming both `profile` and `experimental` is a 400: they are two
 store operations with no transaction across them, so a combined request could commit the profile,
 fail on the switch, and answer with an error. Nothing sends both today. If something needs to, the
-fix is one store operation that patches both — a single queued merge on the filesystem, a single
-upsert in Postgres.
+fix is one store operation that patches both — a single upsert in Postgres.
 
 **Three states in the client, not two.** On, off, and *we have not read it yet* — the checkbox stays
 disabled until the server answers, while a save is in flight, and when what is on screen came out of

@@ -445,8 +445,6 @@ describe("the blocks step reports itself done under a Postgres-shaped store", ()
   const ctx = (): StepContext => ({
     slug: "empty-blocks-probe",
     url: "https://example.test/empty",
-    dir: "/nonexistent",
-    htmlFile: "/nonexistent/empty-blocks-probe.html",
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,

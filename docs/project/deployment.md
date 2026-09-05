@@ -193,8 +193,8 @@ The test suite is **not hermetic**, and the worktree is empty of everything
 gitignored, so the gate materialises `data/` **and `output/`** in it and links
 `.env.local`.
 
-For its first day it copied only `data/`. `output/` is the other half of the same
-filesystem artefact store ([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)),
+For its first day it copied only `data/`. `output/` was the other half of the same
+filesystem artefact store (`src/store/artifacts-fs.ts`, deleted 2026-09-05),
 fourteen test files read from it, and the result was **13 failures and 202
 cascade-skips at every commit** — so the `test` gate could not go green, and
 `--force-gate=test` became the only way anybody deployed. Measured on two
@@ -1001,10 +1001,10 @@ writes to a local filesystem, which a serverless host does not have:
   **It is not the upload path, and it is not PDFs.** Greg pasted an ordinary
   HTML article URL on 2026-08-28 and got the same string from step `fetch`. The
   same wall stops every URL and every document; stages 1 and 2 run fine on that
-  article locally, so nothing about the *content* is involved. `/var/data` comes
-  from [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts)'s
-  `path.resolve(import.meta.dirname, "..", "..")` — on a laptop that is the repo
-  root, and in a bundle at `/var/task/api-dist/vercel.js` it is `/var`. It
+  article locally, so nothing about the *content* is involved. `/var/data` came
+  from `artifacts-fs.ts`'s (deleted 2026-09-05)
+  `path.resolve(import.meta.dirname, "..", "..")` — on a laptop that was the repo
+  root, and in a bundle at `/var/task/api-dist/vercel.js` it was `/var`. It
   therefore cannot fail on anybody's machine.
 
   **`/tmp` is not the shortcut it looks like**, and this is written down because

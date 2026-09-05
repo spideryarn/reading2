@@ -255,7 +255,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - One process, one command: `npm run dev`. The API is currently mounted as **Vite dev middleware**
   ([`vite.config.ts`](../../vite.config.ts)) rather than as a separate server, so there is nothing to
   run in a second terminal while the ideas are still moving. The reads live in
-  [`src/api.ts`](../../src/api.ts) as a plain transport-free `loadArticle(slug)` — that is the seam a
+  `src/api.ts` as a plain transport-free `loadArticle(slug)` — that is the seam a
   standalone Node server wraps when one is needed, so choosing Express or Hono stays a deferred
   decision rather than a revisited one.
 - `loadArticle` looks in `data/<slug>/`, and in [`example/`](../../example/README.md) — the
@@ -263,7 +263,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   `data/example/` still supersedes the fixture with no code change. It used to fall back to the
   fixture for *every* slug, which meant an article with no tree yet, or no article at all, was
   answered with the fixture's prose under the reader's own address; the reasoning for taking that
-  away is on `candidateDirs` in [`src/api.ts`](../../src/api.ts), and the security half of it is in
+  away is on `candidateDirs` in `src/api.ts`, and the security half of it is in
   [security.md § Why it survived being looked at](security.md#why-it-survived-being-looked-at).
 - API is thin: `GET /api/article/<slug>` returns `meta + blocks + tree`. The client has everything
   it needs for every zoom level in one payload; zooming must never hit the network. `GET /api/library`

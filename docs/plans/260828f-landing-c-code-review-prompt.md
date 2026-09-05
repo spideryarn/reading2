@@ -15,7 +15,7 @@ you have caught three of them already.
 rather than deleted. The plan is [`docs/plans/260827aa-delete-the-importer.md`](260827aa-delete-the-importer.md); its
 § The build order for C is the item list. The seam is `ArtifactStore` in
 [`src/store/artifacts.ts`](../../src/store/artifacts.ts), already implemented over the filesystem in
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts).
+`src/store/artifacts-fs.ts`.
 
 Your three previous rounds are [`260827ac-artifacts-pg-shape-sol.md`](260827ac-artifacts-pg-shape-sol.md),
 [`260827au-c1-c2-code-review-sol.md`](260827au-c1-c2-code-review-sol.md) and, most recently,

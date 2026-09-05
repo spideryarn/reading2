@@ -12,8 +12,9 @@
  * ## Why it is `pg-revisions.ts` and not `revisions.ts`
  *
  * The plan said `src/store/revisions.ts`. Every unprefixed file in this
- * directory is either store-agnostic (`contracts.ts`) or the filesystem
- * (`fs.ts`, `artifacts-fs.ts`), and every Postgres adapter is `pg-*` —
+ * directory was either store-agnostic (`contracts.ts`) or the filesystem
+ * (`fs.ts`, `artifacts-fs.ts`, both deleted 2026-09-05), and every Postgres
+ * adapter is `pg-*` —
  * `pg-chat`, `pg-comments`, `pg-lookups`, `pg-searches`, `pg-shelf`. A bare
  * `revisions.ts` would read as the seam rather than as one adapter, and there
  * is no filesystem notion of a draft revision for a seam to sit above:

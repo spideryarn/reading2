@@ -48,7 +48,9 @@ stages ticking over while you watch. Since 2026-08-26 the watching happens on a 
 > job-scoped directory, and every late step's `run` takes the article through `readArticle(ctx.slug,
 > store)` instead of opening a path. `tests/claim-session-postgres.test.ts` § *"runs a late single
 > step that reads the article from the store, not from its empty root"* ingests under one job id and
-> then runs `["arc"]` under a second, which is exactly the shape above.
+> then runs `["arc"]` under a second, which is exactly the shape above. (The job-scoping this
+> paragraph contrasts against — `src/job-scope.ts` and `src/store/data-root.ts` — was itself deleted
+> 2026-09-05, once every store was Postgres.)
 
 > **Superseded, and kept.** *"This does not make an ingest work on Vercel, and the section below
 > saying it nearly does is the mistake worth not repeating."* Every stage still writes
@@ -699,11 +701,15 @@ pipeline already knows.
 
 ### A step is done when *all* its files are there
 
-`extract` writes the HTML **and** `meta.json`. `hierarchy` writes `tree.json` **and** its copy of
-`blocks.json`. Each step declares an `outputs` list rather than a single artefact, and counts as
-done only when every one of them is present — because a crash between the two writes would
+`extract` makes the HTML **and** the metadata. `hierarchy` makes the tree, the labels **and** its
+copy of the blocks. Each step declares a `produces` list rather than a single artefact, and counts
+as done only when every one of them is readable — because a crash between two writes would
 otherwise leave a step reporting itself finished with half its output, and the stage after it
 consuming the missing half.
+
+(It declared an `outputs` list of repository paths beside `produces` until 2026-09-05, and the pair
+existed so the swap to kinds could be checked against the old declaration. The paths went with the
+filesystem store.)
 
 **There are two copies of `blocks.json`, and it matters here.** Stage 3 writes
 `output/<slug>.blocks.json`; stage 4 copies it into `data/<slug>/blocks.json` as it writes the tree,
@@ -902,17 +908,17 @@ ever. A URL or upload mint is the exception, governed by reservation instead. A 
 is a **404, not a 403** ([auth.md](auth.md)); a slug *nobody* has is allowed through, because a
 random short id means no other reader can ever come to want that name.
 
-**What serialising is protecting is corruption, not ambiguity.**
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) keys every artefact write, the
-`beginStep`/`finishStep` marker and `interrupted()` on `(slug, step)` in one shared `data/<slug>/`
-directory with no job scoping, and on a laptop there is no per-job scratch to save it. Two jobs
-running at once on one article would overwrite each other's output outright.
+**What serialising is protecting is corruption, not ambiguity.** Under the filesystem store,
+`src/store/artifacts-fs.ts` (deleted 2026-09-05) keyed every artefact write, the
+`beginStep`/`finishStep` marker and `interrupted()`, on `(slug, step)` in one shared `data/<slug>/`
+directory with no job scoping, and on a laptop there was no per-job scratch to save it. Two jobs
+running at once on one article would have overwritten each other's output outright.
 ### On the filesystem, "one process" had to be made true
 
 The files adapter has always said its fence holds within one process and not across two, and that is
 still what it promises. What it did not survive was **one process with two copies of the module in
 it**: saving anything the server imports restarts the Vite dev server in place, re-evaluating
-[`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts) with empty Maps while the request inside a step
+`src/store/jobs-fs.ts` with empty Maps while the request inside a step
 carries on. The new copy swept the `running` job back to `queued` and the browser started the same
 eight-minute model call again — eleven times on one job, on 2026-08-30, at $5.43.
 
@@ -1380,10 +1386,12 @@ So in practice: the server dies during `hierarchy`, you press Retry, and `fetch`
 are skipped in milliseconds while `hierarchy` starts again. That is "picks up from where it started" for
 the case that matters — the two model calls, which are the expensive part.
 
-**The check used to be existence, and it is not any more.** A step now declares `produces` — the
-*kinds* of thing it makes, `tree`, `labels`, `blocks` — beside the old `outputs` list of paths, and
-an **artefact store** ([`src/store/artifacts.ts`](../../src/store/artifacts.ts), file adapter
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)) answers whether they are all there.
+**The check used to be existence, and it is not any more.** A step declares `produces` — the
+*kinds* of thing it makes, `tree`, `labels`, `blocks` — which stood beside an `outputs` list of
+repository paths until that went with the filesystem store on 2026-09-05, and
+an **artefact store** ([`src/store/artifacts.ts`](../../src/store/artifacts.ts) — the file adapter,
+`src/store/artifacts-fs.ts`, was deleted 2026-09-05; `src/store/artifacts-pg.ts` is the only one now)
+answers whether they are all there.
 It answers by **parsing**, not by `stat`ing, which is the fix for the truncation hazard this section
 used to list as unbuilt: a `writeFile` killed halfway leaves a file that exists and will not parse,
 and that used to report its step done. `stepIsDone` takes a store, so the same question will be
@@ -1846,7 +1854,7 @@ loop, which is what a browser tab does. So "one code path per stage, and no way 
 drift" stopped being a discipline and became a fact about the shape.
 
 They had to move. Each of the five was a thin argv wrapper doing its own `fs.writeFile` to a path off
-`process.cwd()` — reaching neither the artefact store nor `data-root.ts` — so under Postgres they
+`process.cwd()` — reaching neither the artefact store nor `data-root.ts` (deleted 2026-09-05) — so under Postgres they
 wrote files nothing reads and reported success. And the command line could not live in the stage
 module: every Postgres artefact write is fenced on a running `jobs` row and a draft revision, so a
 standalone run has to reach `src/jobs.ts`, and `jobs.ts` → `pipeline.ts` → `blocks.ts` means a

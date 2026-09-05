@@ -230,13 +230,12 @@ not exist until exchange one has landed. And an append that fails stops the ones
 a second exchange stored with the first missing is worse than losing both, because nothing about it
 looks wrong.
 
-**The guarantee is Postgres's, not the filesystem's.** On Postgres the article row lock serialises
-the read, the tail check and the insert inside one transaction, so two tabs and a replayed request
-are both safe. The filesystem store is safe within one process, under its mutex. **Two processes
-sharing `data/` are not**: both read the same tail, both pass the check, both write a whole
-snapshot, and the last rename wins with no 409 anywhere. That is the filesystem store's standing
-limitation rather than this feature's, and it is named here because the sentence above would
-otherwise read as a promise it cannot keep.
+**The guarantee is Postgres's.** The article row lock serialises the read, the tail check and the
+insert inside one transaction, so two tabs and a replayed request are both safe. Until 2026-09-05
+there was a filesystem store too, safe only within one process, under its own mutex — two processes
+sharing `data/` were not: both read the same tail, both passed the check, both wrote a whole
+snapshot, and the last rename won with no 409 anywhere. That limitation was the filesystem store's,
+not this feature's, and it went when the filesystem store did.
 
 ## What a spoken row carries that a typed one does not
 

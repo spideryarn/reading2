@@ -270,7 +270,9 @@ Two things are worth knowing about the two new sites:
 - **The new title comes back from the server, not from the input.** Clearing the field sends
   `title: null`, and what the reader should then see is whatever the extractor last found — a string
   neither page has. So `useArticleRename` reports `entry.title` from the response, which is
-  `titleFor`'s answer to "what is this article called now" ([`src/api.ts`](../../src/api.ts)).
+  `titleFor`'s answer to "what is this article called now"
+  ([`src/library-scalars.ts`](../../src/library-scalars.ts) — it lived in `src/api.ts` until that
+  file went with the filesystem store on 2026-09-05).
 - **The reading view cannot say whether the title on screen is the reader's own.** `GET
   /api/article/:slug` deliberately does not carry the superseded title — the same refusal
   `LibraryEntry` makes — so the editor's hint has a third state there: `undefined` for *we do not
@@ -328,8 +330,10 @@ text.
 
 | Store | Where |
 |---|---|
-| `files` | `data/<slug>/shelf.json` — [`src/shelf.ts`](../../src/shelf.ts) |
-| `postgres` | four columns on `spideryarn.articles`: `archived_at`, `title_override`, `opens`, `last_opened_at` |
+| `postgres` | four columns on `spideryarn.articles`: `archived_at`, `title_override`, `opens`, `last_opened_at` — [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) |
+
+The filesystem half — `data/<slug>/shelf.json`, and the writes in `src/shelf.ts` — was deleted on
+2026-09-05.
 
 Columns on `articles` and **not** on `article_revisions`, which is the load-bearing part: a revision
 is one extraction, and re-extracting must not un-archive an article, forget its title or reset the
@@ -350,12 +354,11 @@ Hovering the date line gives everything the card has no room for: when it was ad
 often you have opened it, how many questions you have asked, which optional stages have produced
 something, and the size in words, blocks, parts and sections.
 
-**What it deliberately does not say.** Chat threads and saved searches are per-article reader state
-that has *not* moved to Postgres — [`src/chat.ts`](../../src/chat.ts) and
-[`src/searches.ts`](../../src/searches.ts) write files in both modes, and the `chat_threads` /
-`search_runs` tables exist but nothing touches them. A count that reads 7 on the filesystem and 0 in
-Postgres is worse than no count at all, because it looks like an answer. They go in when step 10 of
-[260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md) lands.
+**What it deliberately does not say.** Chat threads and saved searches are per-article reader state,
+and now live in Postgres like everything else — `chat_threads` via
+[`src/store/pg-chat.ts`](../../src/store/pg-chat.ts), `search_runs` via
+[`src/store/pg-searches.ts`](../../src/store/pg-searches.ts). The tooltip still doesn't show a count
+for either; nobody has wired that read into it.
 
 ## Finding an article, and finding a passage in one
 
@@ -382,36 +385,31 @@ errors and Undo → search → `ShelfControls` → the "n of m" count → the li
 | Store | How |
 |---|---|
 | `postgres` | a generated `tsvector` column on `revision_blocks`, GIN index, `websearch_to_tsquery` to parse, `ts_rank_cd` to sort — [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) |
-| `files` | scan every `blocks.json` in memory, fold, substring-match, rank by count damped by length — [`src/library-search.ts`](../../src/library-search.ts) |
 
-**The two do not agree, and it is worth being precise about how far that goes**, because the first
-version of this paragraph got it wrong. It said they agreed on the *set* of block ids for a
-single-word query. They do not: Postgres matches English lexemes, so `writes` finds "writing" and
-"write-nots" while `the` finds nothing at all (a stop word); the filesystem scan matches substrings,
-so it finds `the` inside "theory" and misses every inflection. Single words were exactly the case the
-old claim called safe. A cross-family review caught it, 2026-08-26.
+Until 2026-09-05 there was a second implementation, a filesystem scan of every `blocks.json` in
+`src/library-search.ts`'s `searchLibrary`, deleted along with the rest of the filesystem store. It is
+worth keeping why the two were never a matched pair, because the first version of this paragraph got
+it wrong: it said they agreed on the *set* of block ids for a single-word query. They did not —
+Postgres matches English lexemes, so `writes` found "writing" and "write-nots" while `the` found
+nothing at all (a stop word); the filesystem scan matched substrings, so it found `the` inside
+"theory" and missed every inflection. Single words were exactly the case the old claim called safe. A
+cross-family review caught it, 2026-08-26. Postgres is now the only implementation, so there is
+nothing left to diverge from.
 
-What they *do* share, and what a test may hold them to: an exact word that appears verbatim, is not a
-stop word, and has no inflections in the corpus is found by both, in the same blocks. Ranking is
-never comparable — `ts_rank_cd` with normalisation flag 1 on one side, a count damped by paragraph
-length on the other. The divergence is written down rather than papered over, because a hand-built
-near-copy of `websearch_to_tsquery` would be worse than an obviously simpler thing that admits what
-it is.
-
-**The one thing they must agree about exactly is `excludeSlug`**, because it is not a matching rule.
-It is a promise that a named article is absent from the results, and both adapters keep it the same
-way: inside the query, before the cap. Nothing on this page uses it — the shelf's box searches
-everything — but chat's `search_library` does, to leave out the article the reader has open, and it
-had to become a store argument rather than a filter over the results for a reason worth knowing about
-before you write the next one of these. Filtering afterwards means the cap is spent first, so one
-loud article can empty the list and the caller reports finding nothing. The whole story is in
+**`excludeSlug` is not a matching rule.** It is a promise that a named article is absent from the
+results, kept inside the query, before the cap. Nothing on this page uses it — the shelf's box
+searches everything — but chat's `search_library` does, to leave out the article the reader has open,
+and it had to become a store argument rather than a filter over the results for a reason worth
+knowing about before you write the next one of these. Filtering afterwards means the cap is spent
+first, so one loud article can empty the list and the caller reports finding nothing. The whole story
+is in
 [chat-tools.md § The reader's own article ate its own search results](chat-tools.md#the-readers-own-article-ate-its-own-search-results);
 the contract is `LibrarySearchOptions` in [`src/store/contracts.ts`](../../src/store/contracts.ts).
 
 The hit carries **the whole paragraph**, not a snippet, and the client cuts it. Trimming on the
-server would mean the two adapters trimming differently — Postgres knows which *stems* matched, not
-which characters, so it would either return the whole thing anyway or call `ts_headline` and hand
-back a second flavour of highlighting to reconcile with the client's own. One highlighter.
+server would mean reconciling two flavours of highlighting — Postgres knows which *stems* matched,
+not which characters, so it would either return the whole thing anyway or call `ts_headline` and hand
+back a second flavour to reconcile with the client's own. One highlighter.
 
 What was considered and deferred, with the research behind it in
 [260826e-postgres-search.md](../research/260826e-postgres-search.md): **BM25** (`pg_search`/ParadeDB is not available
@@ -662,7 +660,7 @@ different moments:
 | **filesystem** | at read, over the artefacts the directory walk just loaded | its return value |
 | **Postgres** | at **publish**, inside the transaction that writes the blocks and the tree | the five columns it wrote |
 
-`describeArticle` in [`src/api.ts`](../../src/api.ts) *receives* those five and assembles the card.
+`describeArticle` in `src/api.ts` *receives* those five and assembles the card.
 It used to derive them itself, which made it a second implementation — and the two had **already
 diverged once**, over the `excerpt` rung of the blurb's fallback, found in review rather than by a
 test.
@@ -778,7 +776,7 @@ the date to the mtime of `blocks.json`. It just has no byline and no source link
 See [database.md](database.md) for the store as a whole, and
 [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) for the schema and the risks.
 
-[`src/api.ts`](../../src/api.ts) is the seam, and it is the only file that knows there are
+`src/api.ts` is the seam, and it is the only file that knows there are
 directories. Above it the client sees two types, both already shaped as rows:
 
 - `Article` — one article in full, `GET /api/article/:slug`
@@ -821,11 +819,10 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl`, `isSlug` — shared by the extractor, the add box and the server |
-| [`src/api.ts`](../../src/api.ts) | `listArticles()`, `describeArticle()` — **the Postgres seam** |
-| [`src/library-scalars.ts`](../../src/library-scalars.ts) | **the two derivations both stores share**: the card's five numbers and blurb, and the `<h1>` a missing title falls back to |
-| [`src/shelf.ts`](../../src/shelf.ts) | archived, renamed, opened — `data/<slug>/shelf.json` |
-| [`src/library-search.ts`](../../src/library-search.ts) | searching every article at once, filesystem half |
-| [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | the same two things, in SQL |
+| `src/api.ts` | `listArticles()`, `describeArticle()` — **the Postgres seam** |
+| [`src/library-scalars.ts`](../../src/library-scalars.ts) | **the two derivations every reader shares**: the card's five numbers and blurb, and the `<h1>` a missing title falls back to |
+| [`src/shelf.ts`](../../src/shelf.ts) | `MAX_TITLE_CHARS`, and `loadShelf` for fixtures — the writes moved to Postgres |
+| [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | archived, renamed, opened, and searching every article at once — all of it, in SQL |
 | [`src/web/useShelf.ts`](../../src/web/useShelf.ts) | the shelf and its verbs, client side, including Undo — and **which of the saved copy and the live answer wins** |
 | [`src/web/lib/cached-shelf.ts`](../../src/web/lib/cached-shelf.ts) | reading the saved shelf back, and refusing to draw a body an older deployment wrote |
 | [`src/web/useLibrarySearch.ts`](../../src/web/useLibrarySearch.ts) | the debounced half of the box, and dropping late responses |
@@ -924,7 +921,7 @@ clone has no `data/` at all, and an empty homepage reads as a broken app rather 
 Note it is listed under its **directory name** and not under the slug inside its own `meta.json` —
 that one names the full Noema article the fixture is an excerpt of, and listing it there would
 collide with the real thing. `loadArticle("example")` resolves by falling through
-([`src/api.ts`](../../src/api.ts)), so the slug that lists is the slug that opens.
+(`src/api.ts`), so the slug that lists is the slug that opens.
 
 ## See also
 

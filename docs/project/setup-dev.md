@@ -412,8 +412,8 @@ here before ([260831b-finish-the-database-move.md](../plans/260831b-finish-the-d
 **Changed on 2026-09-05**, in stage E of
 [260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
 The five that were left had the same fault as the eight above, only quieter: each did a bare
-`fs.writeFile` to a path off `process.cwd()`, reaching neither the artefact store nor `data-root.ts`.
-Under Postgres they wrote files nothing reads, and reported success.
+`fs.writeFile` to a path off `process.cwd()`, reaching neither the artefact store nor `data-root.ts`
+(deleted 2026-09-05). Under Postgres they wrote files nothing reads, and reported success.
 
 They are [`scripts/stage.ts`](../../scripts/stage.ts) now — one script, four npm names, `enqueue`
 then `advanceJob` in a loop. **It is the same code the queue runs**, which is what makes a re-run

@@ -317,7 +317,7 @@ Three things follow, and all three are refusals rather than fallbacks:
   and stage 2 fell back to reading `raw.html`; nothing writes `raw.html` now, so the fallback had
   nothing to fall back to. Two articles in the local corpus were relying on it — `data/constitution`
   and `data/noema-mythology-of-conscious-ai`. The function survives for one caller,
-  `articleMetadata` in [`src/api.ts`](../../src/api.ts), which shows the metadata page where a
+  `articleMetadata` in `src/api.ts`, which shows the metadata page where a
   document came from. `slugIsSpokenFor` was the other until 2026-08-31, when every slug gained a
   short id and the collision question it answered stopped existing.
 - **An object that is absent, corrupt, or longer than the manifest says, throws** —

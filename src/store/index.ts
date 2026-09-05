@@ -393,7 +393,8 @@ export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore)
  * `data/<slug>/raw.pdf` off the disk itself, whatever `SPIDERYARN_STORE` said,
  * so under `postgres` it reported *"that article did not come from a PDF"*
  * about a PDF sitting in the `sources` bucket — and on a deployment it was the
- * jobless `dataRoot()` caller that src/store/data-root.ts names by route.
+ * jobless `dataRoot()` caller that src/store/data-root.ts named by route,
+ * before that file was deleted 2026-09-05.
  * docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
  * `guarded(...)` like the reads above it, because there really are two

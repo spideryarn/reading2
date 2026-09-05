@@ -2,8 +2,23 @@
  * The seam between a stage and the store: a stage returns a product, and a
  * short commit afterwards writes it, checks it, and finishes the step.
  *
- * docs/plans/260827aa-delete-the-importer.md § D1 splits in two — this is D1a, the shape
- * on the filesystem, where there is no transaction to hold.
+ * docs/plans/260827aa-delete-the-importer.md § D1 splits in two — this is D1a,
+ * `fsStoreSession`: the shape with no transaction to hold, where `write`, the
+ * postcondition, `finishStep` and the job transition happen one after another.
+ *
+ * ## The store under it is a fake, and that is not a compromise
+ *
+ * Every case here drove `createFsArtifactStore` over a `mkdtemp` until
+ * 2026-09-05, when the filesystem store was deleted
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § G). Nothing in this file was ever asking a question about files: it needed
+ * *somewhere* for a carried artefact to sit so that a refusal could be told
+ * apart from a write that happened to fail, and a temp directory was the
+ * cheapest somewhere to build. `helpers/memory-artefacts.ts` is that somewhere
+ * now, and `fsStoreSession` takes an injected `ArtifactStore`, so the session
+ * under test is the production one. The seeding that went through `writeFile`
+ * on a path goes through `plant`, which is the same act — a value in the store
+ * that this run did not write.
  *
  * ## The bug these were written against
  *
@@ -20,19 +35,16 @@
  *
  * So `commit` takes the **product**, not a closure, and validates before any
  * write. The test that matters is `refuses over an artefact carried from a
- * previous run`: against an empty directory a refusal proves nothing, because
+ * previous run`: against an empty store a refusal proves nothing, because
  * there is no old artefact for the missing part to be mistaken for.
  */
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { assertProduced, STEP_ORDER, UNCONVERTED_STEPS } from "../src/pipeline.js";
 import type { PipelineStep, StepContext, StepProduct } from "../src/pipeline.js";
 import { fsStoreSession } from "../src/store/session.js";
 import type { JobSettles, JobTransition, StoreSession } from "../src/store/session.js";
-import { createFsArtifactStore, pathFor } from "../src/store/artifacts-fs.js";
-import type { ArtifactLocations } from "../src/store/artifacts-fs.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
+import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
 import type { LabelsFile } from "../src/labels.js";
 import type { Job, StepName, Tree } from "../src/types.js";
@@ -77,14 +89,13 @@ function labelsSaying(label: string): LabelsFile {
  * A step that declares two artefacts, standing in for `hierarchy`.
  *
  * The name is a real one because `UNCONVERTED_STEPS` is keyed by `StepName` and
- * the filesystem session consults it; the `produces` list is narrowed to two so
+ * `fsStoreSession` consults it; the `produces` list is narrowed to two so
  * that "returned one of the two" is a single missing kind rather than a crowd.
  */
 function stepProducing(name: StepName, produces: PipelineStep["produces"]): PipelineStep {
   return {
     name,
     label: "Testing the seam",
-    outputs: () => [],
     produces,
     /* **It throws rather than returning something, and that is the honest
        shape.** These cases hand `checkProduct` and `commit` a product directly —
@@ -195,8 +206,8 @@ const RELEASE: JobTransition = {
   fields: {},
 };
 
-let dir: string;
-let at: ArtifactLocations;
+/** The store behind `watched`, kept so a case can `plant` a carried artefact. */
+let held: MemoryArtifactStore;
 let ctx: StepContext;
 let watched: Watched;
 let jobs: FakeJobs;
@@ -209,33 +220,33 @@ function sessionFor(unconverted?: ReadonlySet<StepName>): StoreSession {
   });
 }
 
-beforeEach(async () => {
-  dir = await mkdtemp(path.join(tmpdir(), "store-session-"));
-  at = { dir, htmlFile: path.join(dir, `${SLUG}.html`) };
+beforeEach(() => {
+  held = memoryArtefacts();
   ctx = {
     slug: SLUG,
-    dir: at.dir,
-    htmlFile: at.htmlFile,
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
   };
-  watched = watch(createFsArtifactStore(() => at));
+  watched = watch(held);
   jobs = fakeJobs();
 });
 
-afterEach(async () => {
-  await rm(dir, { recursive: true, force: true });
-});
-
-/** Whatever is in the file, or `null` if there is none. */
-async function textAt(step: StepName, kind: Parameters<typeof pathFor>[2]): Promise<string | null> {
-  try {
-    return await readFile(pathFor(at, step, kind), "utf-8");
-  } catch {
-    return null;
-  }
+/**
+ * **What a previous run left**, which is `writeFile` on a path until 2026-09-05.
+ *
+ * `plant` rather than `write`, deliberately: `write` is the call under test in
+ * half of these cases and `watched` counts it, so seeding through it would make
+ * *"wrote despite an incomplete product"* count the setup.
+ */
+function carried(step: StepName, tree?: Tree, labels?: LabelsFile): void {
+  if (tree) held.plant(SLUG, step, "tree", tree);
+  if (labels) held.plant(SLUG, step, "labels", labels);
 }
+
+/** Whatever the store holds for that artefact, or `null` if it holds nothing. */
+const heldAt = <K extends "tree" | "labels">(step: StepName, kind: K) =>
+  watched.store.read(SLUG, step, kind);
 
 describe("commit validates the product before it writes anything", () => {
   it("refuses a step that returned one of the two artefacts it declares", async () => {
@@ -248,23 +259,27 @@ describe("commit validates the product before it writes anything", () => {
 
     expect(watched.writes, "wrote despite an incomplete product").toBe(0);
     expect(watched.finishes, "finished a step it refused").toBe(0);
-    expect(await textAt("hierarchy", "tree")).toBeNull();
-    expect(await textAt("hierarchy", "labels")).toBeNull();
+    expect(await heldAt("hierarchy", "tree")).toBeNull();
+    expect(await heldAt("hierarchy", "labels")).toBeNull();
   });
 
   /**
-   * **The one that matters.** An empty directory cannot tell a refusal from a
+   * **The one that matters.** An empty store cannot tell a refusal from a
    * write that happened to fail, and it has no old artefact for the missing
    * part to be mistaken for — which is the whole failure mode. So both
    * artefacts are seeded from an earlier run first, and the assertion is that
-   * the old bytes are still there afterwards, unchanged, both of them.
+   * the old values are still there afterwards, unchanged, both of them.
+   *
+   * **`toEqual`, not `toBe`, since 2026-09-05.** The old bytes were compared as
+   * strings off two `readFile`s; the store hands back a detached copy on every
+   * read, so identity is the wrong question and equality is the same one this
+   * always asked.
    */
   it("refuses over an artefact carried from a previous run, and leaves it alone", async () => {
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Old")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Old")), "utf-8");
+    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
     const before = {
-      tree: await textAt("hierarchy", "tree"),
-      labels: await textAt("hierarchy", "labels"),
+      tree: await heldAt("hierarchy", "tree"),
+      labels: await heldAt("hierarchy", "labels"),
     };
 
     const session = sessionFor();
@@ -279,14 +294,15 @@ describe("commit validates the product before it writes anything", () => {
     /* Both halves. The old `labels` surviving is what stops the postcondition
        being satisfied by a carried copy; the old `tree` surviving is what says
        validation ran *before* the write rather than after it. */
-    expect(await textAt("hierarchy", "labels"), "the carried artefact was touched").toBe(before.labels);
-    expect(await textAt("hierarchy", "tree"), "the new tree was written anyway").toBe(before.tree);
+    expect(await heldAt("hierarchy", "labels"), "the carried artefact was touched").toEqual(
+      before.labels,
+    );
+    expect(await heldAt("hierarchy", "tree"), "the new tree was written anyway").toEqual(before.tree);
   });
 
   /** `{ parts: {} }` is the same hole with a truthy object in it. */
   it("refuses an empty parts object, which is not the same as no parts", async () => {
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Old")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Old")), "utf-8");
+    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
 
     const session = sessionFor();
     const step = stepProducing("hierarchy", ["tree", "labels"]);
@@ -312,12 +328,11 @@ describe("commit validates the product before it writes anything", () => {
  * in the code.
  *
  * So this commits a **complete** product over artefacts a previous run left,
- * and asks what is actually on disk afterwards.
+ * and asks what the store actually holds afterwards.
  */
 describe("a converted step, committed", () => {
   it("writes the new artefacts over the carried ones, and finishes the step", async () => {
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Old")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Old")), "utf-8");
+    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
 
     const session = sessionFor();
     const step = stepProducing("hierarchy", ["tree", "labels"]);
@@ -354,8 +369,7 @@ describe("a step that writes its own artefacts inside run", () => {
   it("is accepted with no parts while it is marked unconverted", async () => {
     /* What an unconverted stage does today: it wrote these itself, during
        `run`, and returns a one-line detail and nothing else. */
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Mine")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Mine")), "utf-8");
+    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
 
     const session = sessionFor(new Set<StepName>(["hierarchy"]));
     const step = stepProducing("hierarchy", ["tree", "labels"]);
@@ -368,8 +382,7 @@ describe("a step that writes its own artefacts inside run", () => {
   });
 
   it("is refused with no parts once it is no longer marked unconverted", async () => {
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Mine")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Mine")), "utf-8");
+    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
 
     const session = sessionFor(new Set<StepName>());
     const step = stepProducing("hierarchy", ["tree", "labels"]);
@@ -419,7 +432,7 @@ describe("assertProduced still catches a step that claims to have written and di
   });
 
   it("is unchanged as a function: half of what a step declares is still missing", async () => {
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Half")), "utf-8");
+    carried("hierarchy", treeSaying("Half"));
     const step = stepProducing("hierarchy", ["tree", "labels"]);
     await expect(assertProduced(step, ctx, watched.store)).rejects.toThrow(
       /hierarchy finished without writing labels/,
@@ -438,8 +451,7 @@ describe("the edges of what a product may be", () => {
        undefined`, is written nowhere, and then passes the postcondition against
        the `labels.json` the previous run left. The same hole as a missing part,
        through a door the obvious check does not watch. */
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Old")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Old")), "utf-8");
+    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
 
     const parts = Object.create({ labels: labelsSaying("Inherited") }) as Record<string, unknown>;
     parts.tree = treeSaying("New");
@@ -460,9 +472,10 @@ describe("the edges of what a product may be", () => {
   });
 
   it("refuses an artefact the step does not declare, before writing the ones it does", async () => {
-    /* The filesystem adapter writes what it recognises and then throws on the
-       unknown `(step, kind)` pair, so a product with one extra key leaves the
-       step neither written nor untouched. Refused up front instead. */
+    /* An adapter writes what it recognises and then throws on the unknown
+       `(step, kind)` pair — the filesystem one did, and the Postgres one does —
+       so a product with one extra key leaves the step neither written nor
+       untouched. Refused up front instead. */
     const session = sessionFor();
     const step = stepProducing("hierarchy", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
@@ -484,7 +497,7 @@ describe("the edges of what a product may be", () => {
       ),
     ).rejects.toThrow(/arc/);
     expect(watched.writes, "wrote before noticing the extra artefact").toBe(0);
-    expect(await textAt("hierarchy", "tree"), "the declared artefacts were written anyway").toBeNull();
+    expect(await heldAt("hierarchy", "tree"), "the declared artefacts were written anyway").toBeNull();
   });
 
   it("refuses a step that declares nothing, which could never be done", async () => {
@@ -529,7 +542,7 @@ describe("what the run phase can reach", () => {
   it("still answers, and answers about the real store", async () => {
     /* A facade that returns undefined for everything would pass the test above.
        This is the other half: the six really delegate. */
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Real")), "utf-8");
+    carried("hierarchy", treeSaying("Real"));
     const session = sessionFor();
     const tree = await session.reads.read(SLUG, "hierarchy", "tree");
     expect(tree?.nodes.n0000?.title).toBe("Real");
@@ -541,17 +554,16 @@ describe("what the run phase can reach", () => {
 /**
  * The job transition is part of the commit, not something that follows it.
  *
- * On the filesystem it is still the next write rather than the same one — there
- * is no transaction to share — but it is inside the same call, which is the
- * whole of what D1a can buy and exactly where D1b puts the boundary.
+ * In `fsStoreSession` it is still the next write rather than the same one —
+ * there is no transaction to share — but it is inside the same call, which is
+ * the whole of what D1a can buy and exactly where D1b puts the boundary.
  */
 describe("the job moves on inside the commit", () => {
   it("releases the claim once the step is committed, and not before", async () => {
     const session = sessionFor(new Set<StepName>(["hierarchy"]));
     const step = stepProducing("hierarchy", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Mine")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Mine")), "utf-8");
+    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
 
     const settled = await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
     expect(jobs.releases).toBe(1);
@@ -571,8 +583,7 @@ describe("the job moves on inside the commit", () => {
     const session = sessionFor(new Set<StepName>(["hierarchy"]));
     const step = stepProducing("hierarchy", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
-    await writeFile(pathFor(at, "hierarchy", "tree"), JSON.stringify(treeSaying("Mine")), "utf-8");
-    await writeFile(pathFor(at, "hierarchy", "labels"), JSON.stringify(labelsSaying("Mine")), "utf-8");
+    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
 
     const settled = await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
     expect(settled.kind).toBe("ended");

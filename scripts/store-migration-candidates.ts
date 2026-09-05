@@ -33,8 +33,11 @@
  * be re-checked rather than believed.
  *
  * **This witness does not subsume a text grep and must not replace one.** A test
- * that reads a condemned file's *source* — `tests/slug.test.ts` does exactly
- * that to `jobs-fs.ts` — has no import edge and is invisible here.
+ * that reads a condemned file's *source* has no import edge and is invisible
+ * here. The one live example was `tests/slug.test.ts`, which `readFileSync`d
+ * `jobs-fs.ts` to check the `data/_jobs/` path it built; both the case and the
+ * module went in stage G, 2026-09-05. **The claim is not retired with it** —
+ * there is nothing stopping the next one, and it would be just as invisible.
  *
  * Not a grep, and deliberately a different route to the answer than the
  * manifest's own predicate — docs/reusable/silent-success.md: a guard that
@@ -52,14 +55,15 @@ import { type AstNode, parseSource, walkAst } from "../tests/helpers/ts-ast.js";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The filesystem-store modules this migration deletes. NOT `blobs-fs.ts`,
- *  which is selected by credentials rather than by `SPIDERYARN_STORE`. */
+/** The modules this walk reports reach for. NOT `blobs-fs.ts`, which is
+ *  selected by credentials rather than by `SPIDERYARN_STORE`.
+ *
+ *  **`artifacts-fs.ts` and `data-root.ts` went on 2026-09-05** with stage G's
+ *  last adapter group, and `copy-artefacts.ts` survives stage D's
+ *  store-agnostic `ArtifactSource`. One name left, and it names a module
+ *  nothing is deleting — see `CONDEMNED` in vitest.witness.config.ts. */
 const TARGETS = [
-  "src/store/fs.ts",
-  "src/store/artifacts-fs.ts",
-  "src/store/jobs-fs.ts",
   "src/store/copy-artefacts.ts",
-  "src/store/data-root.ts",
 ];
 
 /** Reported apart: the leaf everything reads the flag through, so lumping it in

@@ -1,6 +1,13 @@
 /**
- * The two job stores, asked the same questions — the record both invocations
- * can see, and the fence that stops the wrong one writing.
+ * The job store's contract — the record every invocation can see, and the fence
+ * that stops the wrong one writing.
+ *
+ * **It was two stores asked the same questions until 2026-09-05**, and the name
+ * on the file is from then. What it holds now is not half a comparison: every
+ * case below is a literal assertion about what a job store must do, which is why
+ * the filesystem arm could be deleted without porting anything. The one thing
+ * that went with it is the *contrast* — "the same rules, differently enforced"
+ * is no longer a claim anybody can check, because there is one enforcement.
  *
  * Most of what is worth testing here is **the refusals**, because every one of
  * them is a thing that reads as success if it is got wrong:
@@ -13,12 +20,12 @@
  * before they were believed, and each says which weakening. A test that has
  * never failed proves nothing — docs/reusable/silent-success.md.
  *
- * **The filesystem adapter is honest about being one process** and this file
- * does not pretend otherwise: its single-running rule and its attempt tokens
- * are variables in memory, so what it promises holds within one process and not
- * across two. That is what the Postgres adapter is for, and running both
- * through the same cases is how "the same rules, differently enforced" stays a
- * claim somebody checked.
+ * The filesystem adapter was honest about being one process and this file did
+ * not pretend otherwise: its single-running rule and its attempt tokens were
+ * variables in memory, so what it promised held within one process and not
+ * across two. That is what the Postgres adapter was for, and it is now the only
+ * one — the fence below is `claimIn`'s single `update … where id = $id and
+ * status = 'queued'`, which no second copy of anything can get past.
  */
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -33,13 +40,6 @@ import { INTERRUPTED } from "../src/messages.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import type { ExpirySettlement, JobStore } from "../src/store/jobs.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
-import {
-  expireLeaseForTests,
-  fsJobStore,
-  reattachAttemptForTests,
-  forgetForTests,
-  stampFinishedForTests,
-} from "../src/store/jobs-fs.js";
 import { pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
 import { expectClaimed } from "./helpers/expect-claimed.js";
@@ -265,26 +265,20 @@ interface Adapter {
   forgetAll(ids: string[]): Promise<void>;
 }
 
+/**
+ * **One entry since 2026-09-05, and the loop stays anyway.**
+ *
+ * `src/store/jobs-fs.ts` went in stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * and its entry went with it. What is below the loop is **not** a set of
+ * store-to-store comparisons that lost their other half: every one of the
+ * fifty-three cases is a literal assertion about what a job store must do, and
+ * they are the queue's contract written down. So the loop survives its own
+ * plural — flattening it would be a fifty-three-case diff nobody could review,
+ * for the sake of deleting one `for`, and the `Adapter` seam is still what keeps
+ * `expire`/`reattach`/`stampFinished` out of the cases themselves.
+ */
 const ADAPTERS: Adapter[] = [
-  {
-    name: "the filesystem store",
-    store: fsJobStore,
-    async expire(id) {
-      expireLeaseForTests(id);
-    },
-    async reattach(id, attempt) {
-      reattachAttemptForTests(id, attempt);
-    },
-    async stampFinished(id, iso) {
-      await stampFinishedForTests(id, iso);
-    },
-    /* By id. `resetForTests` alone cleared the maps and left every record in
-       `data/_jobs/` — which is where a job actually lives — so each run of this
-       file leaked its ~20 `queued` records, and retention never touches those. */
-    async forgetAll(ids) {
-      await forgetForTests(ids);
-    },
-  },
   {
     name: "Postgres",
     store: pgJobStore,
@@ -562,10 +556,12 @@ for (const adapter of ADAPTERS) {
      * and a `finally`. See `claim` for why refusing rather than waiting is the
      * contract anyway.
      *
-     * Postgres only: the filesystem adapter has no lock to take, because it has
-     * no second process to take it from.
+     * `it.skipIf(adapter.name !== "Postgres")` until 2026-09-05, because the
+     * filesystem adapter had no lock to take — it had no second process to take
+     * one from. There is one store now, so it is a plain case and the one
+     * `skipped` this file used to report is gone.
      */
-    it.skipIf(adapter.name !== "Postgres")(
+    it(
       "will not claim while another claimant holds the queue lock",
       async () => {
         const job = aJob();

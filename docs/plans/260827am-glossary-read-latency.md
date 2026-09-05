@@ -55,7 +55,7 @@ And the bytes, estimated from the same article's artefacts on disk:
 
 Roughly 0.9 MB from Supabase to a Vercel function, plus 80–180 ms of jsdom, to answer a request
 whose body is 10 KB. On the filesystem store none of this happens
-([`src/api.ts:305`](../../src/api.ts) reads two files and does not sanitise), which is why it does
+(`src/api.ts:305` reads two files and does not sanitise), which is why it does
 not reproduce locally.
 
 **Both numbers are laptop-and-disk evidence, not wire evidence**, and Sol was right to say so.

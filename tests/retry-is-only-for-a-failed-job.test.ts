@@ -328,7 +328,6 @@ function fakeStep(
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: STEPS[name].produces,
     async run(): Promise<StepProduct> {
       await body();

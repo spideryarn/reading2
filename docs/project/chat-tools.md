@@ -544,9 +544,10 @@ which this file said out loud at the time, and it stayed true.
 
 The fix is an argument on the store contract, `excludeSlug`, so the exclusion happens **inside the
 query, before the cap** — `LibrarySearchOptions` in [`src/store/contracts.ts`](../../src/store/contracts.ts),
-kept by both adapters ([`src/library-search.ts`](../../src/library-search.ts) drops the directory
-before it reads it, [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) puts a `ne` in the `WHERE`
-clause). The over-fetch is gone with it: once nothing is filtered afterwards, asking for four times
+kept by the one adapter there now is: [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) puts a
+`ne` in the `WHERE` clause. (A second adapter, the filesystem scan in `src/library-search.ts`, kept
+the same rule by dropping the directory before it read it, until it was deleted on 2026-09-05.) The
+over-fetch is gone with it: once nothing is filtered afterwards, asking for four times
 the cap is paying to rank and return rows nobody reads. `capped` and the hit count now mean what they
 say, which they did not before — the tool used to tell the model "there were more matches than are
 shown" when the only extra matches were in the article on the reader's screen.

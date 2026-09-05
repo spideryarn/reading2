@@ -144,7 +144,7 @@ stranger sees and what they don't is a line the schema already draws.
 **But the read seams deliberately cross it.** `loadGlossary` attaches the reader's own lookups to
 the glossary at the read seam, on purpose and with a comment saying why
 ([`src/store/pg.ts`](../../src/store/pg.ts)); `loadArticle` runs the meta through `titleFor()` so the
-masthead shows the reader's private rename ([`src/api.ts`](../../src/api.ts)). Those are correct for
+masthead shows the reader's private rename (`src/api.ts`). Those are correct for
 the owner and are exactly the leaks a public route must not inherit.
 
 **3. There is a precedent for a rule above the route table.** The admin check is a prefix test on

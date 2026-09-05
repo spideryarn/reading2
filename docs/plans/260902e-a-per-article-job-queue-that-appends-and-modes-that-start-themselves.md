@@ -288,7 +288,7 @@ queued when nobody is looking.
 Sol found it, and it is worth writing out because the mistake is an easy one. Stop on a *queued* job
 settles it terminal at once, so it leaves the line by itself and there is nothing to skip. Stop on a
 *running* job leaves it `running` with `cancelling` set until its claimant releases or its lease
-expires (`requestCancel`, [`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts):480) — and
+expires (`requestCancel`, `src/store/jobs-fs.ts`:480) — and
 `jobs_one_running_per_slug` still covers that row, exactly as § 1j requires for write safety. So
 skipping it in the predecessor query buys the successor nothing: it would pass the FIFO check and
 then take a unique violation, or have to classify that as `busy` anyway. **The successor unblocks
@@ -356,7 +356,7 @@ of them says which one it means.
 `.limit(1)` and no `order by` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts):160-169), and
 compares `sameWork` against **that one row**. So once a slug can hold several active jobs, a request
 that duplicates the *second* of them is told `sameWork: false` and is reallocated or refused, and
-the reader pays twice for work already in flight. [`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts):329
+the reader pays twice for work already in flight. `src/store/jobs-fs.ts`:329
 has the same defect through `.find(...)`. § 1c is the fix, and this is why it is not optional
 tidying.
 
@@ -413,10 +413,10 @@ invariant is, and its own test stops mocking the error it is about.
 ### 1j. What serialising is actually protecting
 
 Worth writing down, because it is the reason the answer to Greg is a line and not parallelism.
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts):561-644 keys every artefact write, the
+`src/store/artifacts-fs.ts`:561-644 keys every artefact write, the
 `beginStep`/`finishStep` attempt marker and `interrupted()` on `(slug, step)` in one shared
 `data/<slug>/` directory, with no job scoping — and `chooseDataRoot`'s local branch
-([`src/store/data-root.ts`](../../src/store/data-root.ts):160) returns the repository root, so on a
+(`src/store/data-root.ts`:160) returns the repository root, so on a
 laptop there is no per-job scratch to save it. Two jobs running at once on one article would
 overwrite each other's markers and artefacts outright. That is corruption, not ambiguity, and the
 order rule in § 1f is what keeps it unreachable.

@@ -1,8 +1,9 @@
 /**
  * The artefact store, backed by Postgres — one draft revision, one job's claim.
  *
- * The other half of the seam src/store/artifacts-fs.ts opened. Same interface,
- * same questions, and the answers come from `article_revisions`,
+ * This was the other half of the seam src/store/artifacts-fs.ts opened, until
+ * that file was deleted 2026-09-05 and Postgres became the only store. Same
+ * interface, same questions, and the answers come from `article_revisions`,
  * `revision_blocks` and `revision_step_runs` instead of from `data/<slug>/`.
  *
  * This file is landing C of docs/plans/260827aa-delete-the-importer.md, and it is what
@@ -183,7 +184,9 @@ export type Site =
 
 /**
  * Every place this project puts a pipeline artefact in Postgres. **The one
- * place**, and the exact counterpart of `PATHS` in src/store/artifacts-fs.ts.
+ * place** — until 2026-09-05 it was also the exact counterpart of `PATHS` in
+ * src/store/artifacts-fs.ts; now that file is gone, this is the only such
+ * table there is.
  *
  * Keyed by step and then by kind, for the same reason that one is: `blocks`
  * appears under two steps and the HTML appears as two kinds. The keys of the
@@ -713,9 +716,10 @@ export async function hasArtefacts(
 /**
  * Did a run of this step start and never finish?
  *
- * `status = 'running'`, which is what src/store/artifacts-fs.ts spends a marker
- * file to express. The interface's own comment predicted this would be the same
- * concept in both stores, and it is.
+ * `status = 'running'`, which is what src/store/artifacts-fs.ts used to spend a
+ * marker file to express, before that file was deleted 2026-09-05. The
+ * interface's own comment predicted this would be the same concept in both
+ * stores, and it was — there is only one store now.
  *
  * A row that ended in `error` is **not** interrupted: it finished, badly. The
  * distinction matters because `stepIsDone` refuses an interrupted step outright

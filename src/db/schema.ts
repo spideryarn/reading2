@@ -2038,10 +2038,11 @@ export const jobs = spideryarn.table(
      * unique — it is the URL contract — so two owners can build toward one
      * name, and until 2026-08-30 only `jobs_only_one_running` (above, and gone)
      * stopped them doing it at once. What this protects is not ambiguity but
-     * corruption: src/store/artifacts-fs.ts keys every artefact write, the
-     * attempt marker and `interrupted()` on `(slug, step)` in one shared
-     * `data/<slug>/` directory with no job scoping, so two claimants on one
-     * article overwrite each other's output outright.
+     * corruption: until it was deleted 2026-09-05, src/store/artifacts-fs.ts
+     * keyed every artefact write, the attempt marker and `interrupted()` on
+     * `(slug, step)` in one shared `data/<slug>/` directory with no job
+     * scoping, so two claimants on one article would overwrite each other's
+     * output outright.
      *
      * It is a backstop, not the mechanism. The order rule in
      * src/store/pg-jobs.ts § `claim` — no older active row for this slug — is

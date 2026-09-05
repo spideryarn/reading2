@@ -60,8 +60,9 @@ export interface RawSourceStore {
    * Size and type, or `null` if there is no such object.
    *
    * **`null` means absent and nothing else.** Every other failure throws. The
-   * distinction is the one src/store/artifacts-fs.ts already draws and the one
-   * Sol asked for by name: a Storage 503 read as "absent" turns a transient
+   * distinction is the one src/store/artifacts-fs.ts drew, before it was
+   * deleted 2026-09-05, and the one Sol asked for by name: a Storage 503 read
+   * as "absent" turns a transient
    * outage into "your file never arrived", which is a lie the reader acts on by
    * uploading 11 MB again.
    */
