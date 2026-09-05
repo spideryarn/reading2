@@ -1,0 +1,27 @@
+{
+  "section": {
+    "title": "Principles of Classification",
+    "blocks": 30,
+    "words": 7390
+  },
+  "elapsed": 16,
+  "usage": {
+    "input_tokens": 14889,
+    "output_tokens": 1361,
+    "output_tokens_details": {
+      "thinking_tokens": 220
+    },
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "server_tool_use": null,
+    "service_tier": "standard",
+    "speed": "standard"
+  },
+  "stop": "end_turn",
+  "raw": "{\"children\": [\n{\"start\":\"spya-mb2psk\",\"title\":\"Classification Topics Overview\",\"gist\":\"Darwin lists the classification questions—natural system, affinities, morphology, embryology, rudimentary organs—he will address.\",\"sourceHeading\":\"CLASSIFICATION, groups subordinate to groups...\",\"needsDeeper\":false,\"why\":\"Single list, not several arguments.\"},\n{\"start\":\"spya-tu03uw\",\"title\":\"Groups Within Groups\",\"gist\":\"Divergence and extinction from dominant species naturally produce the nested groups-within-groups seen in classification.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"One sustained argument using the diagram.\"},\n{\"start\":\"spya-ztm2qa\",\"title\":\"The Natural System Debated\",\"gist\":\"Darwin argues the Natural System reflects genealogical descent rather than an arbitrary scheme or a plan of creation.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"Single continuous argument on meaning of natural system.\"},\n{\"start\":\"spya-ud02kz\",\"title\":\"Value of Characters\",\"gist\":\"Classificatory importance of a character depends on constancy and correlation, not on its physiological or adaptive importance.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"One sustained argument across several examples.\"},\n{\"start\":\"spya-d40x4f\",\"title\":\"Embryonic and Chained Affinities\",\"gist\":\"Embryonic characters and chains of intermediate forms both reveal true descent-based affinity even without one shared definition.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"Connected discussion of two related classificatory clues.\"},\n{\"start\":\"spya-qk0atb\",\"title\":\"Rank and Genealogy\",\"gist\":\"Geographic distribution aids classification, group ranks are largely arbitrary, and true classification must be strictly genealogical, as illustrated by languages.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"One extended argument with a supporting analogy.\"},\n{\"start\":\"spya-zrem2e\",\"title\":\"Descent in Varieties and Species\",\"gist\":\"Just as varieties are classed by descent despite differences, species classification already tacitly relies on descent for sexes, larvae, and monsters.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"Continuous argument building one claim about descent.\"},\n{\"start\":\"spya-j8sgvq\",\"title\":\"Analogical versus Real Affinity\",\"gist\":\"Descent explains why trifling but correlated characters mark true affinity while adaptive resemblances between distinct lines are misleading.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"One sustained argument distinguishing affinity types.\"},\n{\"start\":\"spya-s6snj5\",\"title\":\"Dominance, Extinction, Aberrance\",\"gist\":\"Dominant groups spread and supplant others while extinction isolates aberrant forms, explaining complex radiating affinities and the section's summary.\",\"sourceHeading\":\"\",\"needsDeeper\":false,\"why\":\"Sequence of related claims culminating in one summary.\"},\n{\"start\":\"spya-mzbeg7\",\"title\":\"Morphology\",\"gist\":\"Shared structural plans across species, like the homologous bones of limbs, reveal unity of type beneath varied functions.\",\"sourceHeading\":\"Morphology\",\"needsDeeper\":false,\"why\":\"Single topic heading, one sustained point.\"}\n]}"
+}

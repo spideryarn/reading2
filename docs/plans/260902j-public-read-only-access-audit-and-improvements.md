@@ -357,6 +357,16 @@ transport then refuses. Not public-specific — the owner's route has the same c
 guessed at: reproduce on a deployment first, then choose between streaming the payload and refusing
 to share it cleanly.
 
+**Partly measured on 2026-09-04**, by
+[260904c](260904c-more-modes-on-a-shared-link.md#the-measurement-the-architectural-call-owed),
+which owed the same number for a different reason. Through `loadArticle` itself, on the five public
+articles in the **local** database: the largest payload is **418.8 KB, 9.5% of the cap**, and 85% of
+it is `blocks`. That settles the half that plan was asking about — the reader work it had just added
+is 0.09% of the cap across the whole shelf — and it leaves **this** cluster exactly where it was,
+because the article that would breach the ceiling is a book-length one nobody has ingested yet, and
+it would breach it on prose. The measurement to take is still the one written above: a long PDF, on
+a deployment.
+
 ### Rejected on this pass
 
 Recorded so the next sweep does not re-propose them.

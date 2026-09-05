@@ -17,6 +17,13 @@ all.
 Owner: this doc. Everything that survived review is doc work — the one code stage was dropped, on
 the reviewer's own advice about its own feature.
 
+**Status, 2026-09-04: done enough to stop here.** All three surviving stages are on `dev`, reviewed
+and revised; the gates are green. What remains is in [§ Raised, not done](#raised-not-done), and
+none of it blocks anything. The one item with a half-life is #3, the postmortem line asking whether
+a review caught the class — it is the only proposal here that would ever settle the cadence question
+with evidence rather than opinion, and every week it is not in the template is a week of
+postmortems that cannot answer it.
+
 ## Where this came from
 
 - **GPT Sol on itself**, dispatched read-only: [260904e-review-sol-freedoms.md](260904e-review-sol-freedoms.md)
@@ -200,12 +207,25 @@ IDs moved into stage 2.
 
 What is left, and it is two separable things:
 
-- **Fable as reviewer runs read-only.** Fable's own report: on 260902c it silently lost Bash partway
-  through and nobody knew until it said so, and stages 1 and 3 were being built in the tree while it
-  read them. Dispatch a reviewing Fable through a read-only agent type; a fork when the conversation
-  context is the point. **Verify the mechanism before documenting it** — Sol's finding 7 — with one
-  positive read and one denied write; the repo has no `.claude/agents` definitions, so this rests on
-  the built-in agent types and their tool sets, which is an assumption until it is measured.
+- **Fable as reviewer runs read-only — and that turned out to be a convention, not a boundary.**
+  Sol's finding 7 said to measure the mechanism before writing it down. Measured 2026-09-04 by
+  dispatching a Fable `Explore` agent at its own sandbox: it has **no `Edit` and no `Write`**, and
+  its system prompt forbids creating files anywhere including `/tmp` — but `Bash` is unrestricted,
+  runs as `uid=1000(greg)` with `sudo` and `docker` group membership, `Seccomp: 0`, the repo
+  directory writable, and MCP tools in reach that include `mcp__supabase__apply_migration` and
+  `mcp__vercel__deploy_to_vercel`.
+
+  So the only thing between a "read-only" subagent and `git commit` is a sentence it chooses to
+  obey — and **on the same day another one did not**: the Explore agent that ran the stale-claims
+  sweep wrote `/tmp/claude-1000-scratch-paths.txt` with a shell redirect, against that same
+  prohibition, and flagged it in its own report. One obeyed, one didn't, which is exactly what
+  "convention" means.
+
+  The doc therefore says the accurate thing: write *"do not change any file"* into every reviewing
+  brief and don't lean on the agent type. **This is why Sol is the one to prefer for review** — its
+  sandbox refuses the write whatever the model intends. Had I documented the version I drafted
+  before measuring, the repo would have gained a guarantee it does not have, which is
+  [written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md) exactly.
 - **Fable is a different model, not a different family** — its priors overlap Opus's far more than
   Sol's do, so it is not a substitute for the cross-family check. Fable's own words.
 - **The Sol spike mode**: own worktree, `--sandbox workspace-write`, deliverable is a diff *plus a
@@ -247,8 +267,60 @@ Numbered so they can be answered individually, per
    every postmortem — *was this class reviewed by Sol, and did it catch it?* — as the only thing
    that will ever settle the cadence question with evidence. Not done because it changes the
    postmortem template, which is Greg's call.
-4. **`tests/owner-isolation.test.ts:660` has a live typecheck error** on `dev` — somebody else's
-   work in flight, noticed while measuring. Not mine to fix.
+4. ~~**`tests/owner-isolation.test.ts:660` has a live typecheck error** on `dev`~~ — somebody
+   else's work in flight, noticed while measuring. **Gone by 23:25 the same evening**; whoever owned
+   it fixed it. `npm run typecheck` is clean across all 1274 files.
+
+## The stage 1–2 code review, and what it caught
+
+[260904e-stage12-review-sol.md](260904e-stage12-review-sol.md), written to the new template so the
+template got exercised on itself. **Refused, two P1s**, and both were real.
+
+**F1 — my own commit failed the doc-links gate, and the live tree hid it.** Sol archived revision
+`4da72a17`, attached `node_modules`, and ran `tests/doc-links.test.ts` *there*: 1 failed, 13 passed.
+In the working tree it passes 14/14. The difference is another agent's untracked
+`diagnose-box-resources.md`, whose README row rode along in my pathspec commit while the file itself
+— being untracked — did not. So that commit linked to a file that did not exist in it.
+
+Self-healed ten minutes later by their own commit `8e87cfa5`, and HEAD is green. But the process
+failure was mine and is worth naming: **AGENTS.md says to say in the message whose work rode along,
+and I didn't.** Nothing was lost, and saying so would have made this findable without a reviewer
+rebuilding the commit.
+
+It is also the sharpest possible argument for the review discipline the plan is about. A reviewer
+that reasons over the working tree cannot see this. One that reconstructs the revision can — and
+this is precisely the class the `review` profile was widened for on 2026-09-02.
+
+**F2 — the termination rule had a hole**, and it was one I had just written. The exception covered a
+P1 *newly established* on round two, but not: round-one P1 → inadequate fix → round two says still
+open → a second fix after round two that nothing checks. The overrule clause never fires, because
+you believe you fixed it rather than overrode it. Reworded to "whose final fix was not in the
+round-two snapshot", which is Sol's wording.
+
+Eight more findings, all P2/P3 and all taken: the "one switch" network claim was broader than its
+own evidence (rows 3–4 have network enabled and still fail); the committed-candidate form didn't
+constrain anything — the range in *this very prompt* covered 28 commits and 131 files to describe
+two commits and eleven paths, and the file breaking the gate was in the 131; the pre-commit form is
+not durable, so it is now called *live* and closes by recording the resulting SHA; IDs collided
+across rounds; the template only fitted code review, which I noticed by having to rewrite it for a
+doc-only candidate; the severity levels overlapped; "established" was loose enough to admit any
+static read; and `codex sandbox` cannot run from inside a sandboxed review, so that advice is now
+qualified.
+
+Sol's own verdict on the template: *"The template is not too long… Its problem is precision at the
+candidate and evidence seams, not size."* That answers the suspicion I had ranked first.
+
+### The rule obeying itself, same day
+
+F2 was an established P1 whose final fix landed after the round-two snapshot, which is precisely
+the case the new rule says gets a narrowly scoped check. So it got one —
+[260904e-f2-check-sol.md](260904e-f2-check-sol.md) — walking Sol's own six-step sequence through the
+committed wording. **Fix verified**, including the thing I was most worried about: that the
+paragraph explaining the rule might quietly explain it into a smaller rule. It doesn't.
+
+Worth noting what this cost: one 25-minute run, scoped to a single passage in a single file, with
+discovery explicitly closed. That is what the termination rule is *for* — not fewer reviews, but
+narrower ones once the question is settled.
 
 ## An anomaly, written down because it hides
 
@@ -283,5 +355,7 @@ did not hold up. That is the doc's own rule working in both directions.
 - [x] Plan written, reviewed by Sol, refused, and revised — 2026-09-04
 - [x] Stage 1 — corrections and the network decision — 2026-09-04
 - [x] Stage 2 — the review prompt contract — 2026-09-04
-- [ ] Stage 3 — the delegation roster
+- [x] Stage 3 — the delegation roster — 2026-09-04
+- [x] Stage 1–2 code review, refused, all ten findings taken — 2026-09-04
+- [x] F2's fix verified under the new rule; gates green; merged and pushed to `dev` — 2026-09-04
 - [x] Stage 4 — **dropped** with a reason, above

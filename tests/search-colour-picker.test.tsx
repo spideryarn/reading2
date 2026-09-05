@@ -47,22 +47,29 @@ async function mount(runs: SavedSearch[] = RUNS): Promise<void> {
   await act(async () => {
     root.render(
       <SearchPanel
+        /* The owner's arm: the picker under test is one of the four verbs that
+           moved onto `SearchAccess` on 2026-09-04, and a visitor has no such
+           control at all — which is what `visitorRuns` below asserts. */
+        access={{
+          kind: "owner",
+          loaded: true,
+          loadFailed: false,
+          error: null,
+          onAsk: () => {},
+          onRetry: () => {},
+          onRecolour: (id, colour) => recoloured.push([id, colour]),
+          onDelete: () => {},
+        }}
         matcher="meaning"
         onMatcher={() => {}}
         find={null}
         onFind={() => {}}
         runs={runs}
-        loaded
-        loadFailed={false}
         active={[]}
         slots={assignSlots(runs)}
         onToggle={() => {}}
         onSolo={() => {}}
         onToggleAll={() => {}}
-        onAsk={() => {}}
-        onRetry={() => {}}
-        onRecolour={(id, colour) => recoloured.push([id, colour])}
-        onDelete={() => {}}
         found={[]}
         all={[]}
         order="document"
@@ -72,7 +79,6 @@ async function mount(runs: SavedSearch[] = RUNS): Promise<void> {
         onGate={() => {}}
         openKey={null}
         onOpen={() => {}}
-        error={null}
       />,
     );
   });
@@ -266,5 +272,41 @@ describe("the colour picker on a saved search", () => {
       expect(swatch.getAttribute("style")).toContain(`--cat-rgb: var(--cat-${slot}-rgb)`);
     }
     expect(document.querySelector(".srch-picker")?.outerHTML).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+  });
+});
+
+/**
+ * **One empty state, not two** — the owner's side of a bug found on a visitor's
+ * screen.
+ *
+ * A signed-out browser pass on 2026-09-04 met *"Whoever added this article
+ * hasn't searched it."* immediately followed by *"Nothing matched. The model
+ * found nothing in this article that matches."* — two empty states saying
+ * different things about one article, the second an answer to a question nobody
+ * had asked.
+ *
+ * **It was never visitor-specific.** `Results` guarded only on `!loaded`, so an
+ * owner with no saved searches fell through every case to the last one and got
+ * the same pair; it had been that way since the ticks landed. The comment above
+ * that guard had claimed the opposite in as many words — *"with no saved
+ * searches at all, `Saved` above is already explaining that, and two empty
+ * states stacked is one too many"* — an intention written down and never
+ * implemented, with the comment standing in for the check
+ * (docs/reusable/silent-success.md).
+ *
+ * So the case lives here, on the owner's arm, because that is where the bug
+ * lived. The visitor's twin is in tests/public-network-trace.test.tsx.
+ */
+describe("an owner who has not searched this article yet", () => {
+  it("is told so once, and not also that nothing matched", async () => {
+    await mount([]);
+
+    expect(container.textContent).toContain("Nothing searched for yet");
+    expect(container.textContent, "a second empty state").not.toContain("Nothing matched");
+    /* The control: with a run on the panel the list is drawing again, so the
+       guard above is scoped to the empty case rather than switching the whole
+       results area off for good. */
+    await mount(RUNS);
+    expect(container.textContent, "the list itself").toContain(RUNS[0]!.criterion);
   });
 });

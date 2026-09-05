@@ -191,6 +191,29 @@ export type StoreEntry =
  */
 export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   /**
+   * **Written on 2026-09-05, after the witness ran**, so it is here for the
+   * ordinary reason the header gives: re-running witness 2 is what upgrades it.
+   *
+   * It is not resting on the import graph alone, though. The ad-hoc witness was
+   * pointed at it —
+   * `npx tsx scripts/store-migration-witness.ts --files tests/tree-redundant-rung.test.ts` —
+   * and reported "ran, touched nothing" under full instrumentation. `evidence`
+   * still says `static-only` because that is what the field means: the stored
+   * `touched` map does not name this file, and the guard holds the two apart so
+   * the field cannot become decorative.
+   */
+  "tests/tree-redundant-rung.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Pure-function tests of `buildTree` and `checkTree`: a model proposal in, a tree out, with " +
+      "block fixtures written in the file. It imports src/hierarchy.js, which is how the import " +
+      "graph reaches a condemned module — that file also holds stage 4's CLI and its checkpoint " +
+      "plumbing — but nothing here selects a store, reads a path or writes a byte, and the " +
+      "instrumented run confirms it executes no condemned function.",
+  },
+  /**
    * **Arrived from `dev` on 2026-09-04 and the hole check caught it**, which is
    * why that check walks the import graph live instead of reading a stored
    * answer. It reaches a condemned module through `src/jobs.js`; it never runs
@@ -2385,6 +2408,18 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
 
   /* ---- no row needed, and why -------------------------------------------- */
+
+  "tests/billing-tiers.test.ts": {
+    "b1111111-0000-4000-8000-000000000001": {
+      kind: "no-row-needed",
+      why:
+        "the owner id handed to `standingFor` and `tiersToOffer`, both pure — this file builds " +
+        "billing rows and tier rows as plain objects and asserts what they are offered. Nothing " +
+        "here opens a database, so the id is never on the writing side of the auth.users key. " +
+        "If this file ever gains a Postgres lane, the same owner starts being written under and " +
+        "this verdict has to become `seeded`.",
+    },
+  },
 
   "tests/export-route.test.ts": {
     "0e5c0001-0000-4000-8000-0000000000b9": {

@@ -66,6 +66,7 @@ import type {
   Idea,
   Quote,
   QuoteDrops,
+  SearchHit,
   TimelineEvent,
   Tree,
   Tweet,
@@ -179,6 +180,22 @@ export interface PublicArticle extends PublicArtefactSet {
    * docs/plans/260904c-more-modes-on-a-shared-link.md.
    */
   comments: PublicComment[];
+  /**
+   * **The owner's saved meaning-searches, read-only** — a required array, for
+   * the reason `comments` above is.
+   *
+   * Greg, 2026-09-04, asked what a visitor should be able to do with search:
+   *
+   * > Only owner can create new searches. Everyone else can see the ones they
+   * > have already created.
+   *
+   * So this is the whole of the visitor's search mode. The *words* matcher —
+   * `?find=`, free, and computed in the browser over blocks the visitor already
+   * holds — is deliberately not offered in v1 either; see
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4 for why the
+   * simpler thing was to leave it out rather than to split the composer in two.
+   */
+  searches: PublicSearchRun[];
   /**
    * The article's own images and which of them we hold — the same `Assets` the
    * owner gets, and for the same reason `tree` and `arc` are not forked: it
@@ -465,6 +482,63 @@ export interface PublicComment {
    * address is a footnote to nowhere.
    */
   citations?: Citation[];
+}
+
+/**
+ * **One of the owner's saved searches, as a visitor gets it.**
+ *
+ * A search run is two things at once, and only one of them is the article:
+ * `hits` are passages of the piece the visitor is already reading, and
+ * `criterion` is **the reader's own writing** — what they typed, in their own
+ * words. That second half is disclosure rather than prose, the same kind of
+ * thing `PublicComment.body` is, and it is named here so nobody has to
+ * rediscover it while deciding what a future field is.
+ *
+ * ## What is not here, and which kind of reason each one is
+ *
+ * **Operational** — `model`, `error`, `attemptId`, `attemptStartedAt`,
+ * `status`. How our machine got on. The public read takes finished runs only,
+ * in SQL, so `status` would be a constant on the wire as well as an internal
+ * fact.
+ *
+ * **Ours** — `articleId` and `ownerId`.
+ *
+ * **Answered rather than handed over** — `sourceHash`. A fingerprint of the
+ * blocks the run was answered against (src/source-hash.ts), and it crosses as
+ * the derived `stale` below instead: a visitor's question is *is this still
+ * about the article I am reading*, and the hash is our way of working that out,
+ * not theirs. Every other artefact already publishes freshness this way.
+ */
+export interface PublicSearchRun {
+  /** Stable identity, so `?runs=` and the marks in the prose agree. */
+  id: string;
+  /** What the reader typed, in their own words. */
+  criterion: string;
+  createdAt: string;
+  /** The passages, rebuilt hit by hit — src/public/dto.ts § publicSearchHits. */
+  hits: SearchHit[];
+  /**
+   * The palette slot the owner pinned this search to, if they pinned one.
+   *
+   * A number the server has no opinion about — the slot-to-hue step happens in
+   * the browser (src/web/hit-colours.ts § the seam) — so it says nothing about
+   * a person beyond *this one is the blue one*, and a visitor ticking two
+   * searches needs it for the same reason the owner does.
+   */
+  colour?: number;
+  /**
+   * **The article has moved since this search was answered — or we cannot
+   * tell.** Derived by `isStale` (src/search-stale.ts) against the fingerprint
+   * of the blocks in this same payload, so the answer is about the article the
+   * visitor is actually being served.
+   *
+   * Required rather than optional, and computed on the server rather than in
+   * the browser, because the client half of this comparison is
+   * `SavedSearch.stale` on the owner's side and there must not be two
+   * definitions of *current* — that is the whole reason src/source-hash.ts
+   * exists as a module.
+   */
+  stale: boolean;
 }
 
 /**

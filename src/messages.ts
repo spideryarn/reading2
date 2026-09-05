@@ -2170,9 +2170,24 @@ export function authConfirmationSent(email: string): string {
  */
 export const VIEW_ONLY = "View only";
 
-/** What that label means, in the one sentence the bar has room for. */
+/**
+ * What that label means, in the one sentence the bar has room for.
+ *
+ * **It said *"Somebody shared this article with you"* until 2026-09-04**, and
+ * that sentence assumed a person had sent this reader a link. Since
+ * `GET /api/public/library` and the shelf at `/read/public`, a visitor may well
+ * have arrived from a list nobody pointed them at — so the old opening was
+ * false for exactly the readers the shelf was built to bring, and it told them
+ * they had a relationship with somebody they do not have.
+ *
+ * *Shared publicly* rather than *listed on the public shelf*: naming a page the
+ * visitor has not seen is an invitation with no context, and the second
+ * sentence — untouched, because it was always the part doing the work — already
+ * tells them what they have got. GPT Sol found this, and the neighbouring
+ * worktree that owns the visitor's copy agreed the wording.
+ */
 export const SHARED_WITH_YOU =
-  "Somebody shared this article with you. The whole piece is here to read, at every zoom level.";
+  "This article was shared publicly. The whole piece is here to read, at every zoom level.";
 
 /**
  * The ask, and it is to join rather than to unlock this page.
@@ -2412,6 +2427,288 @@ export const NOT_FOUND_TO_SHELF = "Go to your shelf";
  */
 export const NOT_FOUND_TO_HOME = "Go to the home page";
 
+/* ── The shelf of public articles ──────────────────────────────────────────── */
+
+/**
+ * **`/read/public` — the other shelf**, and everything on it is written here.
+ *
+ * The owner's shelf and this one are two different lists and must not sound like
+ * one narrowed: that one is *your articles*, this one is *what anybody has
+ * shared*, and nobody's private reading is in it.
+ * docs/project/public-shelf.md, and src/web/PublicLibraryPage.tsx is the page.
+ *
+ * **Every sentence here says the limit of the list out loud**, which is the one
+ * rule this section has that the neighbouring ones do not. A list that answers
+ * *what is there* is read as complete unless it says otherwise, and this one is
+ * not: past a cap the tail is cut (`PUBLIC_SHELF_TRUNCATED`), and the query
+ * silently drops a shared article that is archived or whose revision has no
+ * readable blocks (src/store/public-library.ts § `publicLibraryQuery`).
+ *
+ * **So no sentence here claims the list is complete**, in either direction, and
+ * it took two passes to get there. The first draft of the lede ended *"an
+ * article that is not listed here is one nobody has shared"* — absence implying
+ * unshared, false three ways. The second opened *"Every article somebody using
+ * Spideryarn has made public"* — the same claim from the other end, and GPT Sol
+ * caught that the fix had left it standing. What survives says only what the
+ * page holds and what it does not hold, both of which the `where` clause can
+ * only ever confirm. docs/reusable/silent-success.md.
+ */
+export const PUBLIC_SHELF_HEADING = "Shared articles";
+
+/**
+ * **The line under the heading, and its last clause is the load-bearing one.**
+ *
+ * *"nobody's private reading is on this page"* is there to stop the obvious
+ * wrong reading — that a page called *Shared articles* might be a window onto
+ * somebody's shelf. It is the reader-facing half of the decision in
+ * docs/project/library.md § The Shared badge: this shelf is not the owner's
+ * shelf filtered, and it is not a selection made by us either.
+ *
+ * **It is a claim about the page, not about the world**, and that distinction
+ * cost two rewrites rather than one, which is why it is written out here.
+ *
+ * The first draft ended *"an article that is not listed here is one nobody has
+ * shared"* — absence implying unshared. False: a shared article that has been
+ * archived, or whose current revision has no tree or no blocks, or that falls
+ * past the row cap, is shared and absent
+ * (src/store/public-library.ts § `publicLibraryQuery`).
+ *
+ * The second opened *"Every article somebody using Spideryarn has made
+ * public"*, and **that is the identical claim read from the other end** — it
+ * asserts the list is the whole set, which the same four exclusions falsify. It
+ * survived the first fix because the fix was aimed at the sentence rather than
+ * at the claim; GPT Sol's review of this stage caught it, 2026-09-04.
+ *
+ * So it opens with a bare plural. *"Articles people … have chosen to make
+ * public"* says what is here and quantifies nothing, and the `where` clause has
+ * no way to make it false.
+ *
+ * **"without an account" rather than "for free"**, because the fact worth
+ * stating is that there is nothing to press before reading, and *free* is a
+ * claim about price on a page that has nothing to do with the plans.
+ */
+export const PUBLIC_SHELF_LEDE =
+  "Articles people using Spideryarn have chosen to make public. You can open any of them without " +
+  "an account, and nobody's private reading is on this page.";
+
+/**
+ * **Nobody has shared anything**, which is an answer about the world rather than
+ * a missing page — so the route answers 200 with an empty list and this is what
+ * is drawn over it (src/store/public-library.ts § `scrubbed`).
+ *
+ * The second sentence exists so that an empty page is distinguishable from a
+ * broken one: it says what would have to happen for something to appear, which
+ * is the difference between *there is nothing* and *nothing loaded*.
+ *
+ * **"on this shelf" and not "shared yet"**, for the reason the lede's own note
+ * gives at length: an empty list is a fact about the query's answer, and
+ * *"nothing has been shared yet"* would be a claim about the world that the
+ * readability bar and the archived filter can both falsify.
+ *
+ * The second sentence had the same fault in miniature and lost it the same way.
+ * *"An article appears here when its owner turns sharing on for it"* promises
+ * an implication the query does not honour; *"it fills up as people share"*
+ * says which way the page tends without promising anything about one article.
+ */
+export const PUBLIC_SHELF_EMPTY =
+  "There is nothing on this shelf yet. It fills up as people share the articles they are reading.";
+
+/**
+ * **The cap, said out loud** — `truncated` on the wire
+ * (src/public-library-types.ts), which exists for exactly this sentence.
+ *
+ * **No number in it**, deliberately. The cap is `PUBLIC_LIBRARY_LIMIT` in
+ * src/store/public-library.ts and is a ceiling rather than a page size, so it can
+ * be raised in one edit — and a sentence naming 200 would then be a false one
+ * that nothing would report. Saying *which* end is kept is the useful half
+ * anyway: the list is ordered by when each article was shared, newest first.
+ *
+ * Nothing can reach it today. It is drawn rather than deferred because a cap
+ * reported by nobody is a list that quietly stops being the list.
+ */
+export const PUBLIC_SHELF_TRUNCATED =
+  "There are more shared articles than this page shows. The list is capped, and what it shows " +
+  "is the most recently shared.";
+
+/**
+ * Said only once the wait is worth mentioning — `useSlow` owns the threshold,
+ * and on a warm fetch this never appears. The shelf's own line for the same
+ * moment is *"Reading the shelf…"*; this one names a different list, because a
+ * stranger has no shelf and would not know which was meant.
+ */
+export const PUBLIC_SHELF_SLOW = "Reading the shared articles…";
+
+/**
+ * The read failed — a 500 from the listing, or the request never arrived.
+ *
+ * A plain sentence rather than a `ReaderFacingFailure`, like `NOT_SHARED` and
+ * `NOT_FOUND` above: those carry a code because they are raised by the server
+ * and quoted back to us in a bug report, and this one is the client's own
+ * account of a fetch it watched fail. It says nothing about why, because the
+ * client cannot tell a database fault from a lost connection, and guessing is
+ * how a page ends up telling a reader on a train that our server is down.
+ */
+export const PUBLIC_SHELF_FAILED = "We couldn't read the list of shared articles just now.";
+
+/** The button beside it. Retrying is honest here — nothing was written. */
+export const PUBLIC_SHELF_RETRY = "Try again";
+
+/**
+ * `12,975 words`, on a card.
+ *
+ * **Words rather than minutes**, and that is the wire's decision rather than
+ * this file's: `PublicLibraryEntry` carries `words` and no reading time, because
+ * a card is not worth a second projection to keep in step with the reader's own
+ * (src/store/public-library.ts § `PUBLIC_LIBRARY_CARD`). The owner's card says
+ * both; this one says the fact the server actually sent.
+ *
+ * `toLocaleString`, so a long piece is not a wall of digits.
+ */
+export function publicShelfWords(words: number): string {
+  return `${words.toLocaleString()} words`;
+}
+
+/**
+ * `Shared 3 days ago` — **the field the list is ordered by, on the card that the
+ * order put there.**
+ *
+ * The owner's shelf follows the same rule for the same reason (ShelfEntry.tsx §
+ * `ShelfCard`): a card sorted by something it does not show is a list in an
+ * order the reader cannot check. Here the order is `public_at` descending, so
+ * this is the line that answers *why is this one at the top*.
+ *
+ * `when` is already-formatted — `timeAgo` in src/web/relative-time.ts, which
+ * hands back a date rather than a count past about a month. So this reads
+ * *"Shared 3 days ago"* or *"Shared 12 Aug 2026"*, and both are sentences.
+ */
+export function publicShelfShared(when: string): string {
+  return `Shared ${when}`;
+}
+
+/* ── The showcase, on the pages a stranger reads first ─────────────────────── */
+
+/**
+ * **The block on `/` and `/features` that sends a stranger to a real article** —
+ * src/web/PublicShowcase.tsx, and stage 4c of
+ * docs/plans/260904b-pricing-page-and-public-showcase.md.
+ *
+ * These three sentences are in this file rather than inline on the two pages,
+ * which is not what the marketing pages usually do (their copy carries a comment
+ * naming its source, docs/project/positioning.md § Whose words). The reason is
+ * that **two pages draw the same block**: a sentence written twice is two
+ * sentences that will differ by the second edit, and the drift both callers exist
+ * to avoid is exactly the drift `SHARING_ON` and its three dependants were pulled
+ * together to avoid. The provenance rule still applies and these are `[tissue]` —
+ * an agent's connecting words, approved as a class by Greg on 2026-09-04 for this
+ * plan, and the next dictation pass may replace them.
+ *
+ * **Every one of them has to be true when the block shows no articles at all**,
+ * which is the constraint that shaped them. The listing is fetched after the
+ * page draws and may fail, be empty, or be slow, and the heading and the sentence
+ * are already on screen by then. So neither says *here are three articles*, and
+ * neither claims anything about how many there are — the same rule the shelf's
+ * own copy follows above, for the same reason: say what the page holds, never
+ * how much of the world it holds.
+ *
+ * **All three lost a first draft to that rule**, which is why it is spelled out
+ * rather than assumed. GPT Sol's review of this stage, 2026-09-05:
+ *
+ * - The heading was *"See it on a real article."* — an invitation the block
+ *   cannot honour in exactly the states it is drawn in anyway, because a failed
+ *   read and an empty shelf both leave it standing over no article at all. A bare
+ *   plural naming what the shelf is made of is true in every state.
+ * - The link was *"All the shared articles →"*, and swapping *all* for *every*
+ *   is not a fix: both assert the shelf is the whole set, which the archived
+ *   filter, the readability bar and the row cap each falsify.
+ * - The lede opened by restating what sharing is, which was true but was also
+ *   the shelf's own first sentence written a second time.
+ */
+export const PUBLIC_SHOWCASE_HEADING = "Articles people have made public.";
+
+/**
+ * The sentence under it.
+ *
+ * **A fact about what a public article is, not about what is on the shelf right
+ * now.** It would be much better copy to say *"here are three people's
+ * articles"*, and it would be false for as long as the fetch is in the air and
+ * for ever if it fails.
+ *
+ * *"one"* is a category rather than a pointer into the list above it — *"one of
+ * these"* would be the pointer, and it is the version that stops being true the
+ * moment the list is empty.
+ *
+ * *"with no account"* rather than *"free"*, following `PUBLIC_SHELF_LEDE`: the
+ * fact worth stating is that there is nothing to press before reading, and *free*
+ * is a claim about price on a block that has nothing to do with the plans.
+ *
+ * It deliberately does **not** list what a public article carries — the outline,
+ * the glossary, the ideas, the quotes. Both pages already say that a few lines
+ * above (LandingPage.tsx's bento, FeaturesPage.tsx § the library), and a second
+ * copy here is a second inventory to keep in step with what a visitor actually
+ * gets, which is a list that has already grown once.
+ */
+export const PUBLIC_SHOWCASE_LEDE =
+  "Anybody can open one and read it, with no account and nothing to sign up for first.";
+
+/**
+ * The way to `/read/public` from the block — **and the only sentence that is
+ * drawn before the network is asked and survives it failing.**
+ *
+ * One constant rather than a line on each page, for the reason at the head of
+ * this section: the two callers must not come to call the same shelf two things.
+ * The arrow matches the two links already on those pages
+ * (*"Everything it does, with pictures →"*, *"Pricing, and what a month's
+ * allowance means →"*), so a third link in the same family does not read as a
+ * different kind of thing.
+ *
+ * **"Browse", because every quantifier is a claim this shelf cannot keep.** The
+ * first draft was *"All the shared articles →"*, and *all* and *every* are the
+ * same assertion: that what is behind the link is the whole set. It is not — the
+ * query drops an article that is archived, or whose revision has no readable
+ * blocks, or that falls past the row cap
+ * (src/store/public-library.ts § `publicLibraryQuery`) — so this is the claim
+ * `PUBLIC_SHELF_LEDE` above took two rewrites to stop making, arriving in a link
+ * label where nobody was looking for it. GPT Sol, 2026-09-05. A verb and a bare
+ * plural name the action and the page, which is all a link owes.
+ */
+export const PUBLIC_SHELF_BROWSE_LINK = "Browse shared articles →";
+
+/* ── If something here is yours ────────────────────────────────────────────── */
+
+/**
+ * **The link a person follows when a piece published here is theirs**, drawn on
+ * the two surfaces a stranger meets a republished article on: the foot of
+ * `/read/public`, and the visitor's own details page for one article
+ * (src/web/PublicLibraryPage.tsx, src/web/PublicPages.tsx). It goes to
+ * `TAKEDOWN_HREF` — a section on `/privacy` rather than a page of its own,
+ * argued in src/web/router.ts and again beside the section itself.
+ *
+ * **Written to somebody who does not have an account**, which is what makes it
+ * different from every other sentence in this file. "Yours" here means *you
+ * wrote it or you hold the rights to it* — not the owner's sense of "your
+ * articles", which is a reader's shelf. On the shelf page there is nothing else
+ * for the word to attach to; on the article page the sentence beside it settles
+ * it.
+ *
+ * **One sentence doing both jobs**, deliberately: it is the link text *and* the
+ * whole of the offer, so there is no lead-in prose to keep in step with it and
+ * no second wording to drift. Quiet rather than loud — a report link with a
+ * warning colour on every card would read as a warning about each article, and
+ * the piece it is next to is almost always shared perfectly legitimately.
+ */
+export const TAKEDOWN_LINK = "If something here is yours, ask us to take it down";
+
+/**
+ * The heading of the section at the other end of it, on `/privacy`.
+ *
+ * Here rather than inline in the page because two things need to agree on it —
+ * the page draws it, and tests/takedown-privacy-section.test.tsx checks that
+ * the anchor the link points at is the section that carries it. The rest of that
+ * page's prose is JSX, and stays JSX: it is a policy read top to bottom, not a
+ * set of strings other surfaces reuse (src/web/PrivacyPage.tsx § Prose in JSX).
+ */
+export const TAKEDOWN_HEADING = "If something here is yours";
+
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
 /** The switch, off. */
@@ -2555,6 +2852,34 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  * sentence still named only the article and its tree — true, and true by
  * omission of the four things an owner would most want to have been told.
  *
+ * **And the last clause was a live falsehood for a day.** It ended *"It never
+ * carries the comments, conversations, searches or notes of whoever added
+ * it."* Comments started crossing on 2026-09-04 and searches a few hours later
+ * (docs/plans/260904c-more-modes-on-a-shared-link.md), so this page told the
+ * visitor that the comments in the drawer beside it had not been shared. Found
+ * by GPT Sol reviewing the other half of the same day's work, and handed over
+ * by the session that got the review.
+ *
+ * The lesson is the one this file keeps relearning and is worth stating on the
+ * constant it bit: **a sentence that enumerates what does *not* cross is a
+ * promise with no test behind it**, and it goes stale in the one direction that
+ * matters. `tests/shared-inventory.test.ts` holds the owner's list to the
+ * projection; there is nothing equivalent for prose, so the clause left here is
+ * the shortest one that is still worth saying — conversations, which are
+ * deferred by decision rather than by accident (chat-tools.md).
+ *
+ * **And the positive half is prose here for one reason only: its audience has
+ * no list.** *"the marks, notes and searches of whoever added it"* is three
+ * items enumerated beside a derived inventory of the same facts, which is
+ * exactly the shape that killed `NOT_SHARED_NOTE` the same evening — so the
+ * difference has to be said rather than assumed. The owner has
+ * [shared-inventory.ts](web/shared-inventory.ts), swept from the modes, and
+ * gets no sentence. A visitor has nothing to read but this. **It is not a
+ * summary to be kept in step with that list**, and whoever next adds something
+ * to a shared link should ask whether this sentence has become false rather
+ * than whether it has become incomplete. GPT Sol, 2026-09-04, unprompted, on
+ * this very rewrite.
+ *
  * ## It used to be drawn on the owner's card as well, and both problems with
  * ## that had one cause: it was written for two audiences and fitted neither
  *
@@ -2593,8 +2918,9 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  */
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, every zoom level, and the reading " +
-  "aids written for it — the summaries, the glossary, the ideas, the quotes. It never carries the " +
-  "comments, conversations, searches or notes of whoever added it.";
+  "aids written for it — the summaries, the glossary, the ideas, the quotes. It also carries the " +
+  "marks, notes and searches of whoever added it. Their conversations with the model are not " +
+  "part of it.";
 
 /**
  * **The honest limit, and we are the only ones saying it.**
@@ -2605,17 +2931,20 @@ export const SHARED_LINK_CARRIES =
  * plainly is going further than the precedent, deliberately, and it is recorded
  * as a decision rather than left to look like a default.
  *
- * **Deliberately unchanged when the listing landed** (2026-09-04). Being listed
- * and then delisted is the fact this sentence already covers: unsharing makes
- * the next request — for the article or for the list it appeared in — refuse,
- * and cannot reach a page a browser already has. Naming the list here would add
- * a second, weaker way of saying the same thing on the card that can least
- * afford two.
+ * **It now names the list, after an argument it lost** (2026-09-04). The first
+ * version of this stage left the sentence alone, reasoning that delisting was
+ * already covered by "the next request is refused". GPT Sol showed that it is
+ * not, on two counts. A request for the *list* is not refused — it answers 200
+ * with the article simply absent (src/store/public-library.ts), so the words
+ * did not describe what happens. And the omission was the wrong way round for
+ * the owner: publishing had just been widened to *found by a stranger*, and
+ * this is the sentence that says how far turning it off reaches, so the
+ * reassuring half was the half missing.
  * docs/research/260828a-public-access-how-others-do-it.md.
  */
 export const SHARING_CANNOT_UNRING =
-  "Turning this off refuses the next request. It cannot take back a page somebody's browser already " +
-  "has, or anything they copied out of it.";
+  "Turning this off takes it off the public list and refuses the next request for it. It cannot " +
+  "take back a page somebody's browser already has, or anything they copied out of it.";
 
 /** The confirmation, which no other product asks for. */
 export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
@@ -2848,12 +3177,48 @@ export const SHARING_INVENTORY_UNKNOWN =
  * with the page rather than about how much of it anybody gets through.
  */
 export const SHARED_HEADING = "Anyone who opens it gets these";
+/**
+ * **And none of it can spend your money** — the sentence that came back on
+ * 2026-09-04, having been dropped on 2026-09-02.
+ *
+ * The note above `NOT_SHARED_HEADING` used to carry *"nothing they do costs a
+ * model call"* and it went with the rest of that paragraph, recorded at the
+ * time as *"worth a line back if an owner ever asks whether a link can spend
+ * their money."* Diagram and Search moved into this column two days later, and
+ * both are things that cost the owner real money to make — so an owner reading
+ * *Search* here would reasonably wonder whether a stranger can ask one.
+ *
+ * **It is the one prose claim on this card with a test behind it.**
+ * `tests/public-network-trace.test.tsx` pins a signed-out reader at zero
+ * requests outside `/api/public/` and zero requests that are not `GET`, through
+ * every mode. So this is not a promise about intent, it is a statement of what
+ * the suite refuses to let change — which is exactly what the deleted note was
+ * not.
+ *
+ * **It reads doubly true now that the article is listed rather than only
+ * linked** (`SHARING_ON`, above): the reader who finds this piece was never
+ * sent anything by anybody, and they still cannot spend a penny of the owner's.
+ */
+export const SHARED_NOTE =
+  "Reading any of this is free: nothing a visitor does can spend a model call, and nothing they " +
+  "do adds to it.";
 export const SHARED_IF_BUILT_HEADING = "Not built yet — and these would go out too";
 export const SHARED_IF_BUILT_NOTE =
   "Building one later, while the article is still shared, publishes it. Nothing asks you again.";
 export const NOT_SHARED_HEADING = "These stay with you";
-export const NOT_SHARED_NOTE =
-  "A shared link carries the piece and what the model wrote about it, never your own work on it.";
+/* **`NOT_SHARED_NOTE` was deleted on 2026-09-04**, and the deletion is the fix
+   rather than a tidy-up. It said *"A shared link carries the piece and what the
+   model wrote about it, never your own work on it"* — a hand-written summary of
+   a **derived** list, sitting under the third column of a card whose first
+   column, that same day, began listing *Your comments and notes*. So the card
+   said both things at once.
+
+   GPT Sol found it and recommended deletion over rewording, and the reason
+   generalises: the two notes that remain are about *this column* (`SHARED_IF_BUILT_NOTE`
+   says what happens if you build one later) and cannot be contradicted by the
+   sweep, while a note summarising the whole card can, and did. The heading
+   above already says what the column is. `SHARED_HEADING`'s column has no note
+   for the same reason and never needed one. */
 
 /* There is deliberately **no per-row "nobody has built one" sentence**, and
    there was for one draft. It replaced the row's own description, so the
@@ -3053,9 +3418,19 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   ideas: "The propositions the model says the piece assumes or argues for.",
   quotes: "The lines the model picked out, in the article's own words.",
   timeline: "When the piece says things happened, in the order it says they happened.",
-  diagram: "The pictures of the argument — the tree, the neighbours, the projection.",
+  /* **Not "the tree, the neighbours, the projection"**, which this said until
+     2026-09-04 and which named one picture that was cut on 2026-08-30 and two
+     that are behind the experimental switch. What a reader without that switch
+     gets is the Sketch and only the Sketch (docs/project/diagram.md). */
+  diagram: "The drawing of the argument, and the caption written under it.",
   chat: "Your conversations with the article, and where in it each one is anchored.",
-  search: "What you have searched this piece for, and what came back.",
+  /* Both halves, because the second is the one an owner would not predict from
+     the label: the questions are **in their own words**, which is the one field
+     of a saved run that is disclosure rather than article prose
+     (src/public-types.ts § PublicSearchRun). Whether a visitor can ask a *new*
+     one is not said on the row — it is said once, for the whole column, in
+     `SHARED_NOTE` below. */
+  search: "The questions you have put to this piece, in your words, and the passages they found.",
   remember: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
 };
@@ -3339,10 +3714,12 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
  * 2026-09-04, when the buying moved to `/pricing`; both then said *"the pricing
  * page"*, and for `pay-lapsed` that was **false** — GPT Sol, reviewing stage 1
  * of docs/plans/260904b-pricing-page-and-public-showcase.md. `hasLapsed`
- * (src/store/pg-billing.ts) includes `unpaid` and `incomplete`, which
- * `canCheckout` refuses, and `/pricing` draws no plan button at all to an
- * account that may not check out — so an `unpaid` or `incomplete` account, sent
- * there by that sentence, arrived at a page with prices and nothing to press.
+ * (src/store/pg-billing.ts) includes `unpaid` and `incomplete`, for which
+ * `summary.purchase` answers `{ kind: "none" }` (src/billing/summary.ts), so
+ * `/pricing` draws such an account no plan button at all — and an `unpaid` or
+ * `incomplete` account, sent there by that sentence, arrived at a page with
+ * prices and nothing to press. (The field was `canCheckout` until 2026-09-04;
+ * the fact it decides is the same one.)
  *
  * `QuotaNotice` (src/web/QuotaNotice.tsx) draws the link, and it picks the
  * destination from the same code that picked the sentence, so the prose and the

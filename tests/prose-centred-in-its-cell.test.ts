@@ -60,8 +60,10 @@ describe("the reading column is centred in its cell", () => {
 
   it("the gutter follows the paragraph measure, so the marks stay beside the text", () => {
     const r = rule(".blk-gutter");
-    // Half the room the centring divides, added to the offset it always had.
-    expect(r).toContain("0.35rem");
+    /* Half the room the centring divides, added to the offset it always had —
+       `--blk-gutter-x` since 2026-09-04, when the gutter became a 2 x 2 pad and
+       every one of its numbers moved into § tokens. Same quantity, one home. */
+    expect(r).toContain("var(--blk-gutter-x)");
     expect(r).toContain("var(--reading-measure)");
     expect(r).toContain("var(--text-pad-l)");
     expect(r).toContain("var(--text-pad-r)");
@@ -115,7 +117,7 @@ describe("the reading column is centred in its cell", () => {
        something ~90px different from the same offset in the prose. Both stay
        put, and the note's prose stays with them. */
     expect(rule("td.text.note .prose")).toContain("margin-inline: 0");
-    expect(rule("td.text.note .blk-gutter")).toContain("left: 0.35rem");
+    expect(rule("td.text.note .blk-gutter")).toContain("left: var(--blk-gutter-x)");
   });
 
   it("the masthead follows the prose wherever the two share a box", () => {

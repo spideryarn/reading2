@@ -51,9 +51,15 @@ round seven and round twelve without converging. After two rounds, settle it you
 *"Sol still objects to X; overruled because Y"* in the plan doc — an overruled P0 or P1 goes to
 Fable or Greg first, not straight past.
 
-The cap counts P2/P3 churn. A **P0 or P1 newly established on round two** still gets one narrowly
-scoped check after its fix, because the alternative is shipping code the cap stopped anyone
-reviewing. That check is on the fix; it does not reopen discovery.
+After round two, **discovery closes** — but any established P0 or P1 whose final fix was not in the
+round-two snapshot still gets a narrowly scoped check *of that fix*, and if it comes back still
+open, settle or overrule it through Fable or Greg before landing. This does not reopen general
+discovery.
+
+Say "whose fix was not in the snapshot" rather than "newly found": the sequence that gets missed is
+a round-one P1, an inadequate first fix, round two reporting it still open, and a *second* fix after
+round two that nothing checks — and the overrule clause never fires, because you believe you fixed
+it rather than overrode it.
 
 Write the prompt the way [review-prompt-template.md](review-prompt-template.md) says — a durable
 revision or an explicit untracked-file list rather than a `/tmp` path, your suspicions last, a
@@ -95,6 +101,22 @@ evidence. Send one to run the thing, read the logs, or reproduce it.
 **When a subagent fails, re-dispatch it.** An empty, stale or wrong report means running it again, or
 handing it to a different model — not doing its work yourself. Several failures in a row is the
 environment being broken; stop and ask rather than taking the whole job back.
+
+**A reviewing subagent is read-only by convention, not by construction.** Measured 2026-09-04: an
+`Explore`-type subagent has no `Edit` or `Write`, and its prompt forbids creating files — but its
+`Bash` runs as the user with the repo writable, no seccomp, and MCP tools reaching Supabase and
+Vercel. So the only thing between it and `git commit` or `apply_migration` is a sentence it chooses
+to obey, and on the same day another one wrote a file anyway and said so. Write "do not change any
+file" into every reviewing brief, and do not lean on the agent type as though it were a boundary.
+GPT Sol is the exception, and the reason to prefer it for review: its sandbox refuses the write
+whatever the model intends.
+
+**Send a spike to Sol as well as to a Claude subagent.** A `--sandbox workspace-write` run in a
+worktree of its own is already supported and, over hundreds of runs, has never been used — every one
+was a review. It is the right shape for *after* a review, when a fix wants proving: the deliverable
+is a diff **plus a red→green transcript**, read as evidence, never applied unread. Keep it separate
+from the review itself, which stays read-only for the reasons in
+[codex-cli-as-subagent.md](codex-cli-as-subagent.md).
 
 ## What the work turns up
 
