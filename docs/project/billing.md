@@ -580,6 +580,8 @@ step on an article you already have is free. A failed ingest is free. Archiving 
 give the slot back — and archiving is the only removal the interface offers
 ([library.md](library.md#archive-and-undo-is-the-confirmation)).
 
+**And a public article costs half of one** — see below.
+
 It is an **abuse boundary against model spend**, not an invoice. Nothing is derived from it and it
 reconciles against nothing; the subscription is a fixed charge. (Cost attribution lives in
 `ai_calls` — [database.md](database.md) — and the two ledgers are deliberately separate.)
@@ -602,6 +604,120 @@ account. A plain "count, then decide" cannot: twenty requests all read zero and 
 
 **Nothing that opens its own transaction, and nothing that touches the network, may be called
 between the lock and the commit.** That is the rule a later change is most likely to break.
+
+### A public article counts half
+
+Greg, 2026-09-04:
+
+> please also change how we price Public-readable articles - they are half-price, i.e. they only
+> count as a half-article against the user's article-quota (e.g. free users can make 6 Public
+> articles, $10 users can make twice as many if Public, etc etc). … The intention is to incentivise
+> people to make articles Public, because then more people benefit from them.
+
+**Live recomputation, not a credit.** Usage is derived from `articles.visibility` every time it is
+asked, so sharing lowers it and unsharing puts it straight back. The two alternatives fail in ways
+that matter: a credit granted once makes share-then-unshare free slots for ever unless clawed back,
+which is the ledger growing a second kind of row; and charging half at add time misses the article
+you decide to share three weeks later, which is most of them.
+
+**The arithmetic is in half-units, and that is not a stylistic preference.** A private ingest costs
+**2**, a currently-public one **1**, and a tier's budget is its article allowance doubled. No
+fraction goes near money, and `usageOf`'s `Number.isInteger` assertion — which exists to stop a
+silent *"this account has used nothing"* — keeps working untouched.
+[`src/billing/half-units.ts`](../../src/billing/half-units.ts) holds the two units, as two branded
+types so that one cannot be passed where the other belongs.
+
+**In flight costs full price**, because nobody yet knows whether the article will be shared. It fails
+safe: the cheaper guess would let a burst through a budget that does not fit it.
+
+Four things to know before touching any of it.
+
+- **Every tier, delta, proration and clamp stays in *articles*.** `quota_limit_delta` is a signed
+  count of whole ingests, so a Researcher's 150 with a stored −117 means 33. Doubling the tier
+  *before* `limitForPeriod` yields `300 − 117 = 183` half-units where the answer is `(150 − 117) × 2
+  = 66` — ninety-one articles for somebody entitled to thirty-three. `budgetFor` is therefore applied
+  only at the admission and usage seam, and **no stored delta was migrated**. GPT Sol found it in the
+  design review and rated it the one that would have cost real money.
+- **The wall admits a half-unit of overdraft, knowingly.** `used < budget` never let anybody exceed
+  the limit *only because a reservation cost exactly one*; at two, five-of-six admits an ingest that
+  settles at seven. The money-safe `used + 2 <= budget` would make Greg's own sentence — six public
+  articles on a free account — false, so the overdraft is taken. It is one half-unit, once: at seven
+  everything is refused, and sharing the new article returns them to six, which is still refused.
+  Both halves are pinned by `tests/billing-half-units.test.ts`.
+- **The discount starts from the day it shipped.** A charged row is resolved to its article through
+  `ingest_events.article_id`, added 2026-09-05; every row charged before that has nothing to resolve
+  and there is no way to backfill one, because jobs are hard-deleted and a slug is not identity. The
+  usage query is a `left join` with `coalesce(visibility, 'private')`, so **an unresolvable row is
+  charged full price** — the direction that cannot be gamed. Said out loud rather than discovered:
+  *an article you shared last week does not become cheaper; the discount applies to what you add from
+  now on.* Articles added before billing launched have no ledger row at all and already cost nothing.
+- **It is a statement about ingests, not about articles.** Cardinality is N charged rows : 1 article
+  — a re-added URL adopts the shelf's article and charges again — so sharing that article halves
+  *both* rows. Defensible, since they did pay for two ingests, and the copy must not promise
+  otherwise.
+- **The period is filtered twice, once per counted column**, and only the full-price copy had a
+  behavioural test until 2026-09-05. Reversing the paid bounds in the *public* copy alone keeps the
+  generated SQL's parameter count and values identical, so the shape test stays green — and with no
+  paid public row anywhere in the suite, 44 tests passed while every paid public success vanished
+  from usage, which is sequential public ingests without bound. Watched doing exactly that before the
+  case was written; `tests/billing-half-units.test.ts` § *a paid period counts public rows by its own
+  bounds* is what now fails on it. GPT Sol, 2026-09-05.
+
+**The lock order is `billing_accounts` before `articles`, everywhere.** Usage is now a function of a
+column a different request can change at any moment, so every visibility change creates the owner's
+billing anchor if absent, locks that row, and only then locks the article
+([`src/store/pg-visibility.ts`](../../src/store/pg-visibility.ts)). Without it an unshare can commit
+between an admission's usage read and its reservation. It does **not** let two ingests consume one
+slot; a consistent order is also what stops the two deadlocking, so it is applied everywhere or
+nowhere, and `read committed` is then sufficient.
+
+**Deleting a public article would silently raise its owner's usage** — `on delete set null` turns
+each of its charged rows back into full price. There is no article-deletion path in the app today, so
+this is a policy written at the column rather than a defect: if one is ever built it takes the same
+billing lock and warns the same way unsharing does.
+
+**Where a reader meets it.** The unshare side of the sharing card says what taking it down costs
+(`UNSHARING_COSTS_ALLOWANCE`) — a statement of consequence, with no tick-box and no second
+confirmation, because a cost attached to taking something down is a cost attached to acting on a
+complaint. **It is conditional, and that is not politeness**: an article added before billing has no
+ledger row and one charged before `article_id` existed resolves to nothing, so for both of those
+owners the unconditional version was a cost that does not exist — invented, on the press a takedown
+asks somebody to make. **Money never appears inside the sharing confirmation**, where the rights
+tick-box lives.
+
+And all three quota refusals carry a *conditional* offer — *sharing “this one” would make room* —
+computed by grouping the charged rows by article inside the entitlement window and taking the largest
+groups first, so it is silent for the reader who has already shared everything and for the reader
+whose rows all predate the discount. Copy cannot rescue a false offer; conditionality has to (Fable,
+2026-09-04).
+
+**The offer names the articles rather than counting them**, since 2026-09-05, and the reason is worth
+keeping. *Sharing one of your articles would make room* is arithmetically right and points at a
+library in which a grandfathered article — no ledger row, indistinguishable on screen — sits beside
+the three that are actually counted. Share that one and usage does not move, and sharing is
+irreversible in the way that matters: it republishes somebody else's article to strangers. Nothing on
+any surface tells the two apart, so the reader cannot make that choice for themselves. Past three
+articles the sentence goes back to a count, with *counted against this allowance* rather than *of
+your articles*. GPT Sol, 2026-09-05.
+
+`/profile` says the same thing and asks the same query (`sharingWouldMakeRoom`), only when the wall
+has refused. It offered sharing unconditionally until the same day, which was false for every account
+whose rows predate the column — that is every row charged before 2026-09-05.
+
+**No surface ever divides a half-unit.** There is no rounding rule that is correct: `ceil(5/2)` says
+*"3 of 3 used"* while the wall still admits one, and `floor` says *"2 of 3"* while two and a half are
+gone. So the marketed limit stays in articles, the enforcement budget is a separately named field,
+and any surface that shows usage is handed integer counts it adds up itself — `/profile` and
+`/pricing` through `describePlan`, and `/admin/users`, which shows the enforcement pair in half-slots
+and names the unit rather than printing a fraction.
+
+**And a ratio is only printed while it is one.** *N of the allowance* needs both that nothing is
+public *and* that there are no more ingests than the allowance sells: unshare six public articles on
+a free account and `used` stays at six with nothing shared, which printed *"6 of 3 articles used"* on
+`/profile`, *"6 / 3"* on `/admin/users`, and *"you have added all 3 articles a free account can add"*
+in the refusal — the invalid ratio this whole design exists to avoid, arrived at from the other
+direction. The refusals now say the *allowance* is spent rather than counting what was added, and
+neither page claims a count *fits* an allowance it is over. GPT Sol, 2026-09-05.
 
 ### The allowance prorates, and the column holds a delta
 

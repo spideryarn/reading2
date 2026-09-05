@@ -4169,6 +4169,49 @@ export const ingestEvents = spideryarn.table(
     /** Set when the job failed, was cancelled, or never became a job at all. */
     releasedAt: timestamp("released_at", { withTimezone: true }),
     /**
+     * **The article this charge produced** — written in the same statement that
+     * sets `succeeded_at`, and null on every other kind of row.
+     *
+     * ## Why it had to exist
+     *
+     * A currently-public article costs **half** what a private one does
+     * (docs/project/billing.md § *A public article counts half*), and usage is
+     * recomputed live from `articles.visibility` rather than credited once — so
+     * the usage query has to get from a charged row to the article it produced.
+     * Before this column there was no route. `slug` is diagnostic and worse than
+     * mutable: it is the pre-allocation stem for a URL add and **null** for an
+     * upload. The only other path, `ingest_events → jobs.ingest_event_id →
+     * jobs.slug → articles.slug`, fails at both hops — jobs are hard-deleted by
+     * the reader and by the retention sweep, and a slug is not identity.
+     *
+     * `ai_calls.article_id` is the precedent: a real foreign key with
+     * `on delete set null`. The *text-not-a-key* reasoning recorded there is
+     * about `job_id`, which points at something disposable; an article is not.
+     *
+     * ## Nullable for ever, so the type is the only guard
+     *
+     * Every row charged before 2026-09-05 has no way to be backfilled, so a
+     * `NOT NULL` constraint is impossible. `usageSql` therefore reads
+     * `coalesce(visibility, 'private')` over a **left** join: a row that cannot
+     * be resolved is charged **full price**, which is the direction that cannot
+     * be gamed. The guard against a future caller quietly charging a public
+     * article full price for ever is in the type: `settleReservation` takes a
+     * discriminated outcome that *carries* the article id, so a successful
+     * settlement cannot be expressed without one.
+     *
+     * ## Deleting an article silently raises its owner's usage
+     *
+     * `on delete set null` turns each of that article's charged rows back into
+     * full price. **There is no article-deletion path in the app today** —
+     * archiving is the only removal the interface offers — so this is a policy
+     * written down rather than a defect: if one is ever built it must take the
+     * owner's `billing_accounts` lock first (see the lock order in
+     * src/store/pg-billing.ts) and say what it will cost, exactly as unsharing
+     * does. The alternative — `on delete restrict` — would make the ledger able
+     * to veto a deletion, which is worse.
+     */
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
+    /**
      * What the article was called at the time — **diagnostic only**. A slug is
      * mutable, so it could never be this row's identity; it is here so that a
      * support conversation about "which article was that" has an answer.

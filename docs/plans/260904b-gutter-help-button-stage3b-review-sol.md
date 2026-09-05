@@ -1,0 +1,19 @@
+No. Blocker 2 remains, with a new destructive failure mode.
+
+1. **Blocker — a failed thread GET is treated as deletion.** `useChat.loaded` explicitly means “the request finished,” not “it succeeded”; `loadFailed` carries that distinction ([useChat.ts](/home/greg/code/spideryarn2/.claude/worktrees/gutter-help-button/src/web/useChat.ts:110)). `ChatDialog` ignores `loadFailed` ([ChatDialog.tsx](/home/greg/code/spideryarn2/.claude/worktrees/gutter-help-button/src/web/ChatDialog.tsx:139)), so a transient GET failure produces `loaded && !thread`, then `gone`, then `onDropped` ([ChatDialog.tsx](/home/greg/code/spideryarn2/.claude/worktrees/gutter-help-button/src/web/ChatDialog.tsx:231)). App’s overlay depends on that summary, so it immediately unmounts. An outage has now erased the shortcut to a real conversation; another “?” can spend again.
+
+2. **Blocker — `mintedHere` does not survive the exact close/reopen race from the first review.** Press “?”, close before `begin`, then reopen from the optimistic summary. The new `ChatDialog` has an empty ref. If its GET beats the original POST’s database write, it declares the thread gone immediately—there is no 30-second grace—and drops the summary. The original operation deliberately continues after unmount ([useChat.ts](/home/greg/code/spideryarn2/.claude/worktrees/gutter-help-button/src/web/useChat.ts:357)), so the wanted answer may subsequently land without its shortcut. This also affects ordinary and comment-originated floating chats, not just “?”.
+
+The `gone → onDropped` effect does not loop in App: dropping the summary makes `overlay` null and unmounts the dialog ([App.tsx](/home/greg/code/spideryarn2/.claude/worktrees/gutter-help-button/src/web/App.tsx:1974)). That also means “That conversation no longer exists” merely flashes or disappears; it is not a stable recovery state.
+
+Per fix:
+
+- **Summary fold: yes**, for the stale-arrival race and substantially for the stated reason. The current hook has no other array replacement; `add`, `drop`, and `touch` are the only writers. `touch` works for a locally present row; touching an unseen server-only row is a no-op, but there is currently no caller. The tombstone ref is cleared on success, body error, and rejection. Minor caveat: “fetch issued first, therefore fetched data is older” is not generally guaranteed across concurrent HTTP requests, though it does not invalidate this concrete optimistic-add fix. The separate pre-summary-load duplicate remains deliberately accepted, not fixed.
+
+- **Missing-thread fix: no.** Writing the ref before `onThread` is render-safe, and the reset key is reasonable. But the provenance lives in the panel rather than across the operation’s lifetime, and absence is conflated with load failure. Thirty seconds does not solve that: after remount the grace is zero, while a current-mount timeout can still discard a merely slow operation.
+
+- **Deleting `helpArming`: yes**, for the structural reason given. Same-batch calls collapse to one final draft; calls separated by a commit are protected by `sentHelpFor` and the optimistic summary. A dialog already mounted on another target does not create another send path.
+
+There is test/documentation drift: [help-sends-once.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/gutter-help-button/tests/help-sends-once.test.tsx:377) still implements and tests the deleted fake App latch, and [ChatDialog.tsx](/home/greg/code/spideryarn2/.claude/worktrees/gutter-help-button/src/web/ChatDialog.tsx:354) still says that latch exists.
+
+Focused tests passed 85/85; direct typechecking passed all 1,285 files. I would not commit until the load-failure and close/reopen cases are fixed and watched red first.

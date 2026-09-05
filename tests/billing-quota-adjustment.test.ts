@@ -44,6 +44,7 @@ import {
   limitForPeriod,
   nextQuotaAdjustment,
 } from "../src/billing/quota-adjustment.js";
+import { articles } from "../src/billing/half-units.js";
 import type { QuotaAdjustment, QuotaRules } from "../src/billing/quota-adjustment.js";
 import { syncSubscriptionFromStripe } from "../src/billing/sync.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -896,8 +897,8 @@ const PURE_PERIOD = {
 
 const RULES: QuotaRules = {
   allowanceFor: (priceId) =>
-    priceId === "price_reader" ? 20 : priceId === "price_researcher" ? 150 : null,
-  maxAllowance: 150,
+    priceId === "price_reader" ? articles(20) : priceId === "price_researcher" ? articles(150) : null,
+  maxAllowance: articles(150),
 };
 
 /** The row as it stands before a change: Reader, this subscription, this period. */
@@ -941,7 +942,7 @@ describe("how much of the period is left", () => {
 
 describe("what counts as a plan change at all", () => {
   it("clears when there is no subscription left to meter", () => {
-    expect(change({ stored: storedReader({ delta: 13, periodStart: new Date(0) }), incoming: null })).toEqual(
+    expect(change({ stored: storedReader({ delta: articles(13), periodStart: new Date(0) }), incoming: null })).toEqual(
       NO_ADJUSTMENT,
     );
   });
@@ -950,7 +951,7 @@ describe("what counts as a plan change at all", () => {
   it("clears when the incoming period starts later", () => {
     expect(
       change({
-        stored: storedReader({ delta: 13, periodStart: new Date(0) }),
+        stored: storedReader({ delta: articles(13), periodStart: new Date(0) }),
         incoming: { ...PURE_PERIOD, periodStart: new Date(1000), periodEnd: new Date(2000) },
         now: new Date(1500),
       }),
@@ -967,7 +968,7 @@ describe("what counts as a plan change at all", () => {
     expect(
       change({
         stored: {
-          ...storedReader({ delta: 13, periodStart: new Date(5000) }),
+          ...storedReader({ delta: articles(13), periodStart: new Date(5000) }),
           currentPeriodStart: new Date(5000),
         },
       }),
@@ -1029,7 +1030,7 @@ describe("what counts as a plan change at all", () => {
     expect(adjustment).toEqual(NO_ADJUSTMENT);
     /* And what the wall then allows is the whole 150, read the way admission
        reads it — not the ~75 a half-period proration would have given. */
-    expect(limitForPeriod(150, started, adjustment, RULES.maxAllowance)).toBe(150);
+    expect(limitForPeriod(articles(150), started, adjustment, RULES.maxAllowance)).toBe(150);
   });
 
   /** And a row that has never been synced has no subscription to match against. */
@@ -1043,7 +1044,7 @@ describe("what counts as a plan change at all", () => {
   it("carries an existing adjustment through unchanged when nothing changed", () => {
     expect(
       change({
-        stored: storedResearcher({ delta: -117, periodStart: new Date(0) }),
+        stored: storedResearcher({ delta: articles(-117), periodStart: new Date(0) }),
         now: new Date(900),
       }),
     ).toEqual({ delta: -117, periodStart: new Date(0) });
@@ -1107,12 +1108,12 @@ describe("what a mid-period change is worth", () => {
   it("cannot be talked above the largest tier, or below nothing", () => {
     /* An absurd stored delta plus a full-value upgrade: capped at 150, so 0. */
     expect(
-      change({ stored: storedReader({ delta: 9000, periodStart: new Date(0) }), now: new Date(0) }),
+      change({ stored: storedReader({ delta: articles(9000), periodStart: new Date(0) }), now: new Date(0) }),
     ).toEqual({ delta: 0, periodStart: new Date(0) });
     /* And the floor: a stored −9000 downgraded lands at 0, so −20 against Reader. */
     expect(
       change({
-        stored: storedResearcher({ delta: -9000, periodStart: new Date(0) }),
+        stored: storedResearcher({ delta: articles(-9000), periodStart: new Date(0) }),
         incoming: { ...PURE_PERIOD, priceId: "price_reader" },
         now: new Date(0),
       }),
@@ -1176,7 +1177,7 @@ describe("what a mid-period change is worth", () => {
         now: at(t),
       });
       const tier = price === "price_reader" ? 20 : 150;
-      limits.push(limitForPeriod(tier, new Date(0), next, 150));
+      limits.push(limitForPeriod(articles(tier), new Date(0), next, articles(150)));
       stored = { ...storedReader(next), priceId: price };
     }
     /* Up to 85, back to 20, up to 84, back to 19, up to 83 — the drift is
@@ -1186,10 +1187,10 @@ describe("what a mid-period change is worth", () => {
 });
 
 describe("the limit the row carries", () => {
-  const upgraded: QuotaAdjustment = { delta: -117, periodStart: new Date(0) };
+  const upgraded: QuotaAdjustment = { delta: articles(-117), periodStart: new Date(0) };
 
   it("is the tier plus the adjustment, when the adjustment belongs to this period", () => {
-    expect(limitForPeriod(150, new Date(0), upgraded, 150)).toBe(33);
+    expect(limitForPeriod(articles(150), new Date(0), upgraded, articles(150))).toBe(33);
   });
 
   /**
@@ -1198,8 +1199,8 @@ describe("the limit the row carries", () => {
    * it left. An absolute 33 would have sat at 33 through every future raise.
    */
   it("follows the tier when the tier is raised under it", () => {
-    expect(limitForPeriod(200, new Date(0), upgraded, 200)).toBe(83);
-    expect(limitForPeriod(50, new Date(0), { delta: 13, periodStart: new Date(0) }, 150)).toBe(63);
+    expect(limitForPeriod(articles(200), new Date(0), upgraded, articles(200))).toBe(83);
+    expect(limitForPeriod(articles(50), new Date(0), { delta: articles(13), periodStart: new Date(0) }, articles(150))).toBe(63);
   });
 
   /**
@@ -1208,16 +1209,16 @@ describe("the limit the row carries", () => {
    * none of them may meter somebody on last month's number.
    */
   it("is the tier's, when the adjustment belongs to another period", () => {
-    expect(limitForPeriod(150, new Date(9999), upgraded, 150)).toBe(150);
+    expect(limitForPeriod(articles(150), new Date(9999), upgraded, articles(150))).toBe(150);
   });
 
   it("is the tier's when there is no adjustment at all", () => {
-    expect(limitForPeriod(150, new Date(0), NO_ADJUSTMENT, 150)).toBe(150);
+    expect(limitForPeriod(articles(150), new Date(0), NO_ADJUSTMENT, articles(150))).toBe(150);
   });
 
   it("cannot exceed the largest allowance any tier sells, or fall below nothing", () => {
-    expect(limitForPeriod(20, new Date(0), { delta: 9000, periodStart: new Date(0) }, 150)).toBe(150);
-    expect(limitForPeriod(20, new Date(0), { delta: -9000, periodStart: new Date(0) }, 150)).toBe(0);
+    expect(limitForPeriod(articles(20), new Date(0), { delta: articles(9000), periodStart: new Date(0) }, articles(150))).toBe(150);
+    expect(limitForPeriod(articles(20), new Date(0), { delta: articles(-9000), periodStart: new Date(0) }, articles(150))).toBe(0);
   });
 });
 

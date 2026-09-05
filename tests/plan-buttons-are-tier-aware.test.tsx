@@ -84,6 +84,8 @@ const ON_READER: BillingSummary = {
     tierName: "Spideryarn Reader",
     limit: 20,
     used: 20,
+    sharedHalfPrice: 0,
+    atLimit: false,
     periodEnd: "2026-10-03T11:37:00.000Z",
     endsAt: null,
   },
@@ -114,6 +116,8 @@ const ON_RESEARCHER: BillingSummary = {
     tierName: "Spideryarn Researcher",
     limit: 150,
     used: 150,
+    sharedHalfPrice: 0,
+    atLimit: false,
     periodEnd: "2026-10-03T11:37:00.000Z",
     endsAt: null,
   },
@@ -123,7 +127,7 @@ const ON_RESEARCHER: BillingSummary = {
 
 /** Nobody has ever paid: both tiers, through the Checkout door. */
 const UNSUBSCRIBED: BillingSummary = {
-  plan: { kind: "free", limit: 3, used: 3 },
+  plan: { kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, atLimit: true },
   manageable: false,
   purchase: { kind: "checkout", tiers: [READER, RESEARCHER] },
 };
@@ -239,6 +243,8 @@ describe("a summary from a server this bundle does not match", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 20,
+      sharedHalfPrice: 0,
+      atLimit: false,
       periodEnd: "2026-10-03T11:37:00.000Z",
       endsAt: null,
     },
