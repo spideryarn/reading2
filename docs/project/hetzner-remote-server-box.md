@@ -11,6 +11,8 @@ thing here, make it `gjd-remote --help`, which is the reference and stays curren
 > — Greg, 2026-08-31
 
 This page is the map. Everything below is a signpost; the detail lives in the doc or the file named.
+[../reusable/gjd-remote.md](../reusable/gjd-remote.md) is the short version, for an agent standing in
+another repo who only needs the commands and the two or three things that bite.
 
 ## The shape, in one paragraph
 

@@ -78,6 +78,7 @@ import type {
   SearchRun,
   ShelfState,
   ArcFound,
+  DebateFound,
   IdeasFound,
   IllustratedFound,
   SketchFound,
@@ -259,6 +260,32 @@ export interface ArticleReader {
    * this app after a selection. `timeline` made the same call.
    */
   loadQuiz(slug: string): Promise<QuizFound>;
+
+  /**
+   * What the rest of the web says about this piece, plus whether the artefact
+   * still describes the article.
+   *
+   * Staleness is answered as `loadIdeas` answers it — at read time, against the
+   * blocks, the tree and the **cited** metadata head, because pass B sends
+   * `articleWithIds`. Not against the publication date: no date appears in
+   * either prompt, so hashing one would spend up to $0.27 every time a publisher
+   * re-dated a post.
+   *
+   * **`searchedAt` is on the artefact and is deliberately not a third staleness
+   * fact.** Debate is time-sensitive research and a shared link outlives it, so
+   * the panel says *"Searched on …"* — but age is displayed provenance, not
+   * invalidity. A visitor opening a year-old article must be able to see how old
+   * the search is without the artefact declaring itself unusable.
+   *
+   * **A 404 is the ordinary case**, like the quiz and the sketch and unlike the
+   * timeline: `debate` is off `DEFAULT_INGEST_STEPS`, so most articles have
+   * never had one, and the panel's job on a 404 is to offer the button. An
+   * artefact with two EMPTY groups, on the other hand, is a perfectly good
+   * answer and the commonest one — most pieces have no critical reception at
+   * all — so it is a 200 with a sentence, never a 404. `SHAPE.debate`
+   * (src/store/artifacts.ts) makes the same call at the store boundary.
+   */
+  loadDebate(slug: string): Promise<DebateFound>;
 
   /**
    * The arc, plus whether it still describes the article.

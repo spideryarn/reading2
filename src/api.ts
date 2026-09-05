@@ -49,6 +49,11 @@ import {
   readQuiz,
 } from "./quiz.js";
 import {
+  isStale as debateIsStale,
+  PROMPT_VERSION as DEBATE_PROMPT_VERSION,
+  readDebate,
+} from "./debate.js";
+import {
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   readSketchFile,
@@ -76,6 +81,7 @@ import type {
   Article,
   ArticleMetadata,
   Block,
+  DebateFound,
   GlossaryFound,
   IdeasFound,
   QuotesFound,
@@ -694,6 +700,58 @@ export async function loadQuiz(slug: string): Promise<QuizFound> {
     quiz,
     stale: !blocksFile || !tree || quizIsStale(quiz, blocksFile.blocks, tree, quizMeta ?? null),
     outdated: quiz.version !== QUIZ_PROMPT_VERSION,
+  };
+}
+
+/**
+ * What the rest of the web says about this piece, plus whether the article has
+ * moved underneath it — the filesystem half.
+ * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+ *
+ * Shaped exactly on `loadQuiz` above, including the "unknown counts as stale"
+ * rule and the **cited** head, and differing in two places worth naming.
+ *
+ * **A 404 is the ordinary case**, like the quiz: `debate` is off
+ * `DEFAULT_INGEST_STEPS`, so most articles have never had one and the panel's
+ * job on a 404 is to offer the button. But an artefact with two **empty groups**
+ * is not a 404 — it is the commonest correct answer, because most pieces have no
+ * critical reception at all, and sending the reader to a POST would pay up to
+ * $0.27 for the same honest answer on every open.
+ *
+ * **And `searchedAt` is not consulted here.** How old the search is crosses to
+ * the panel as provenance; it is not a third staleness fact, and a year-old
+ * shared link must not have its artefact declared invalid by the clock.
+ */
+export async function loadDebate(slug: string): Promise<DebateFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const debate = await readDebate(dir);
+  if (!debate) {
+    throw Object.assign(
+      new Error(
+        `No debate for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["debate"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  /* The **cited** head — pass B sends `articleWithIds`, which prints a `URL:`
+     line, and that URL is also what pass A asks the web about. Absent metadata
+     is a legitimate input rather than no input at all, which is what lets this
+     comparison mean the same thing on both sides. */
+  const debateMeta = await readJson<Meta>(path.join(dir, "meta.json"));
+  // Unknown counts as stale, the same way round as the quiz above.
+  return {
+    debate,
+    stale:
+      !blocksFile || !tree || debateIsStale(debate, blocksFile.blocks, tree, debateMeta ?? null),
+    outdated: debate.version !== DEBATE_PROMPT_VERSION,
   };
 }
 

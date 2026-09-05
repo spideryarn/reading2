@@ -73,6 +73,11 @@ import {
   inputFingerprint as quizFingerprint,
   PROMPT_VERSION as QUIZ_PROMPT_VERSION,
 } from "./quiz.js";
+import {
+  generateDebate,
+  inputFingerprint as debateFingerprint,
+  PROMPT_VERSION as DEBATE_PROMPT_VERSION,
+} from "./debate.js";
 import { stageFailure } from "./job-failure.js";
 import {
   generateIllustrated,
@@ -94,7 +99,13 @@ import { MAX_PAGES } from "./uploads.js";
 import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
-import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
+import {
+  ARTICLE_RENDERER,
+  type ArticleStage,
+  CAPABLE_MODEL,
+  modelFor,
+  STAGE_EFFORT,
+} from "./models.js";
 import { STEP_ORDER } from "./step-order.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
@@ -405,6 +416,15 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      image call per plate. A positional cascade that swept this in would spend
      that on somebody who pressed a button one band along. */
   "illustrated",
+  /* All of `illustrated`'s reasons, and it is the only step here whose inputs
+     are not in this repository at all: it reads `blocks.json`, `tree.json` and
+     the metadata, but what it *returns* comes off the open web, so re-fetching
+     the article is no reason whatever to buy the search again. Up to ~$0.27 a
+     run, typically $0.13–0.20 (Stage 0b), and its `stamp` below compares a
+     stored `sourceHash` against what the store holds, so when the article
+     really has moved it re-runs without being forced. And it replaces rather
+     than appends. */
+  "debate",
 ]);
 
 export interface StepContext {
@@ -3355,6 +3375,105 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         detail:
           `${stored} plate(s) painted` + (missing > 0 ? `, ${missing} failed` : "") +
           ` — ${run.illustrated.style}`,
+      };
+    },
+  },
+  /* Stage 5n — the debate. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, and in
+     FORCE_ONLY_WHEN_NAMED, for the reasons every mode step after `arc` has plus
+     one none of them has: **what this step returns is not in the article**. It
+     reads the blocks, the tree and the metadata, and it comes back with pages
+     off the open web, so re-fetching the article is no reason at all to buy the
+     search again.
+
+     **It is not an `ArticleStage`** — no row in `STAGE_EFFORT` or
+     `ARTICLE_RENDERER`, and `sharesArticleCache` therefore answers false for it,
+     which is both the safe answer and the true one: it is on chat/completions
+     and shares no Anthropic cached prefix with anything.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
+  debate: {
+    name: "debate",
+    label: "Asking the web",
+    outputs: (ctx) => [path.join(ctx.dir, "debate.json")],
+    produces: ["debate"],
+    /**
+     * `articleWithIdsFingerprint`, the one `ideas`, `sketch` and `quiz` use —
+     * the blocks, the tree and a metadata head that carries `URL:`.
+     *
+     * The URL is doing more here than printing at the top of a prompt: pass A
+     * asks the *web* about that address, and it is what every returned citation
+     * is compared against to keep the article out of its own debate. An article
+     * that moved is a different search.
+     *
+     * **Not the dated fingerprint**, unlike `timeline`: no publication date
+     * appears in either prompt, so hashing one would spend up to $0.27 every
+     * time a publisher re-dated a post. And **no `profileHash`**, like
+     * `timeline` and `quiz`: who is reading does not change what the web said.
+     */
+    stamp: async (ctx, store) => {
+      /* `tryReadArticle`, where `run` below takes `readArticle` — the same
+         asymmetry every stamped stage here has, and for the same reason. */
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        /* **`article.meta`, `null` and all — never a stub**, for the reason
+           `quiz` and `timeline` state above: `generateDebate` builds a stub for
+           the PROMPT and hands the fingerprint the real value, and hashing the
+           stub here would make every article without metadata report stale for
+           ever with nothing red. */
+        inputHash: debateFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: DEBATE_PROMPT_VERSION,
+        /* `modelFor("debate")` rather than `CAPABLE_MODEL`, and it is the only
+           row here that differs: this step is on the chat wire, where
+           `SPIDERYARN_DEBATE_MODEL` can override the model — and a stamp that
+           named the default while the override wrote the artefact would report
+           every run stale. src/models.ts § `resolveModel`. */
+        model: modelFor("debate"),
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateDebate({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+      const { direct, claims } = run.debate;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "debate",
+          model: run.model,
+          ms: run.elapsedMs,
+          /* **The alarm, and the only place a runaway shows up outside the
+             `ai_calls` ledger.** No request parameter caps spend here: Stage 0b
+             watched a cap of four results cost thirty-six searches. A run
+             logging 36 is a prompt that has drifted toward thoroughness. */
+          webSearches: run.webSearches,
+          /* Per group, never summed, or this line cannot say which of the two
+             searches lost rows. Counts and hostnames only — never a URL, never
+             an extract, never a quotation. docs/project/logging.md. */
+          directReturned: direct.counts.returnedSources,
+          directReported: direct.counts.reportedRows,
+          directKept: direct.counts.keptRows,
+          directOverCap: direct.counts.omittedOverCap,
+          /* `directnessUnverified` is the one to watch and it is *expected* to
+             be large: it is the rule that a page in group one must name this
+             article, and most pages a search returns do not. A run where it is
+             zero and `directKept` is high on an obscure article is the rule
+             failing open, not the web being kind. */
+          directLost: direct.counts.lost,
+          claimsReturned: claims.counts.returnedSources,
+          claimsReported: claims.counts.reportedRows,
+          claimsKept: claims.counts.keptRows,
+          claimsOverCap: claims.counts.omittedOverCap,
+          claimsLost: claims.counts.lost,
+        },
+        `debate ${ctx.slug}: ${direct.counts.keptRows} direct, ${claims.counts.keptRows} on its claims`,
+      );
+      return {
+        parts: { debate: run.debate },
+        detail:
+          `${direct.counts.keptRows} about this piece, ` +
+          `${claims.counts.keptRows} about what it claims`,
       };
     },
   },

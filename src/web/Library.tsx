@@ -888,13 +888,13 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
  * Tailwind, so the sizing lives here in the same way `Note` does in
  * Metadata.tsx rather than as a sixth `.tip-*` rule in the stylesheet.
  *
- * `foreground/85` and NOT `ink-soft`: `--ink-soft` is declared in styles.css
- * but is not bridged into Tailwind's theme (tailwind.css), so
- * `tw:text-ink-soft` compiles to nothing at all and the text silently inherits.
- * `ink-faint` below IS bridged, which is why the second line can use it.
+ * `ink-soft` — the same colour `TipNote` in Tooltip.tsx uses, and for the same
+ * reason. Both said `foreground/85` until 2026-09-05, because `--ink-soft` was
+ * missing from the `@theme inline` bridge and `tw:text-ink-soft` compiled to
+ * nothing at all; two people diagnosed that independently and each wrote a
+ * comment about the workaround rather than three lines of fix
+ * (docs/plans/260905f-…).
  */
 function Tip({ children }: { children: ReactNode }) {
-  return (
-    <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-foreground/85">{children}</span>
-  );
+  return <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-ink-soft">{children}</span>;
 }

@@ -64,12 +64,18 @@ export function SmallScreenHint({ bandCovers }: { bandCovers: boolean }) {
        user mid-sentence about a layout constraint they are not meeting.
 
        **Plain classes rather than Tailwind utilities**, unlike `SharedNotice`
-       two lines below it in the same flow, and that is not inconsistency for
-       its own sake: the names that box reaches for — `tw:bg-surface-raised`,
-       `tw:border-rule` — are not in the `@theme inline` bridge in
-       tailwind.css and compile to nothing at all. The reading view's colours
-       live in styles.css as CSS variables, so this is styled where they are,
-       beside `.install-hint`, which it is a sibling of in every other way. */
+       two lines below it in the same flow. `.small-screen-hint` is a small
+       system — a shell, a paragraph, a close button, and a rule that hides it
+       under a covering band — and systems live in styles.css while utilities
+       own one-off adjustments inside a component
+       (docs/project/design-css-overview.md § Which mechanism owns what). So it
+       is styled beside `.install-hint`, which it is a sibling of in every
+       other way.
+
+       This comment used to give a different reason: that `tw:bg-surface-raised`
+       and `tw:border-rule` were missing from the `@theme inline` bridge and
+       compiled to nothing at all. They were, and they are not now (260905f) —
+       which is why the reason had to change rather than the code. */
     <div className="small-screen-hint" role="note">
       {/* Every clause is one of Greg's, in order: designed for a bigger screen;
           one or the other, not both; you switch between them; Plain is the way

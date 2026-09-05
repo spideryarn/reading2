@@ -42,6 +42,7 @@ import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import {
+  adminOnly,
   type ArticleView,
   LIBRARY_HREF,
   navigate,
@@ -62,6 +63,7 @@ import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
+import type { SelectionAnchor } from "./selection.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
 import { horizontalInset, safeAreaInsets } from "./safe-area.js";
@@ -135,7 +137,7 @@ import {
   buildOutline,
   buildSummaryTree,
   columnHint,
-  columnPill,
+  columnLabel,
 } from "./tree.js";
 import {
   atParam,
@@ -485,6 +487,34 @@ function SignedIn({
   route: Exclude<Route, { kind: "callback" }>;
   user: User;
 }) {
+  /* **The administrator's pages, refused before the branch chain rather than
+     inside it — and this is a courtesy, not a gate.**
+
+     `adminOnly` (router.ts) is one exhaustive map of route kinds, and it is
+     consulted here once, above everything, for the same reason the server's own
+     check sits above its route table (src/routes.ts): a check inside a branch
+     has to be *remembered* by whoever adds the next page. `/design` is the
+     proof — it moved onto the `/admin` index on 2026-09-05 and stayed open to
+     everybody, because the `if` was in the `admin` arm.
+
+     **Nothing is hidden by it.** These components are in the bundle every
+     signed-in reader downloads, and the SPA rewrite answers 200 at these
+     addresses whoever asks; `/design` reads no data at all, so there is nothing
+     behind it to refuse either. The only refusal that counts is the server's on
+     `/api/admin/`, which would turn down a hand-written `fetch` from any of
+     these pages just the same. src/admin.ts § the two halves.
+
+     **The shelf, and deliberately not the 404 page** that arrived on 2026-09-03
+     for every address nobody minted (NotFoundPage.tsx). Same reason
+     docs/project/admin.md gives for the server answering 403 rather than 404:
+     these pages exist, visibly, in everybody's bundle, so pretending the address
+     means nothing buys nothing and costs a true sentence.
+
+     `key` for the same reason the shelf below carries one — this is the same
+     component, reached a different way. */
+  if (adminOnly(route) && !isAdmin(user.id))
+    return <Library key={user.id} readerId={user.id} />;
+
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
@@ -599,22 +629,11 @@ function SignedIn({
         <ProfilePage />
       </>
     );
-  /* **The admin pages, and the check here is not the gate.**
-
-     A reader who is not the administrator gets the shelf — **and since
-     2026-09-03 that is no longer the same thing as `/nonsense`**, which now has
-     a page of its own (NotFoundPage.tsx). This one deliberately did not follow
-     it. The reason is the one docs/project/admin.md already gives for the
-     server answering 403 rather than 404: these pages exist, visibly, in the
-     bundle every signed-in reader downloads, so pretending the address means
-     nothing buys nothing and costs a true sentence.
-
-     Nothing is being hidden by it: these components are in the bundle every
-     signed-in reader downloads, so the only refusal that counts is the server's
-     on `/api/admin/`, and it would refuse a hand-written `fetch` from this page
-     just the same. src/admin.ts § the two halves. */
+  /* The administrator's pages. Whether this reader may see them was settled at
+     the top of this function, by `adminOnly` — there is no second check here,
+     deliberately, so that nobody reading this branch comes away thinking it is
+     holding a door shut. */
   if (route.kind === "admin") {
-    if (!isAdmin(user.id)) return <Library key={user.id} readerId={user.id} />;
     return (
       <>
         <HomeLogo />
@@ -2706,8 +2725,10 @@ function Reader({
   );
 
   const selectProse = useCallback(
-    (anchor: { blockId: BlockId; quote: string; start: number } | null) => {
-      if (!anchor) return;
+    /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
+       a drag it refused from no drag at all, and TableView stops on the first
+       without calling in here. src/web/selection.ts § SelectionRead. */
+    (anchor: SelectionAnchor) => {
       /* **The one control a visitor meets by accident**, since selecting prose
          is something people do while reading rather than a button they chose to
          press. So it is silent: they keep their selection and the page does not
@@ -2792,6 +2813,16 @@ function Reader({
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
       }`}
+      /* **Which column ← / → are pointed at** — styles.css § the aimed column,
+         keyboard.md. It is here rather than on the table for two reasons, and
+         the first is the one that forced it: the fisheye panels are `position:
+         fixed` elements *beside* the table, they are opaque, and in Hierarchy
+         they cover every gist column — so the surface that has to carry the tint
+         is not inside the table at all. `.reader` is the nearest thing that
+         holds both. The second is that `TableView` is `memo`ised over ~2,200
+         cells and no longer takes `navDepth` as a prop, so moving the pointer
+         re-renders nothing below this element. */
+      data-aim={navDepth}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never
@@ -2882,7 +2913,14 @@ function Reader({
             columns that are not there — a control that looks live, does
             nothing, and gives the reader no way to tell which. Nothing takes
             their place: the mode's name is on the Dock, and saying it twice is
-            what this bar was full of. */}
+            what this bar was full of.
+
+            **They wear the column's full name now** — `Parts`, `Sections`,
+            `Paragraphs` rather than `L1`, `L2`, `Para`. The numbers were
+            defensible while the table's own header row said the words above
+            each column; that row lost its height on 2026-09-05
+            (TableView.tsx § the head), so this is the only place a column is
+            named at all. tree.ts § `columnLabel`. */}
         {!inMode && (
           <>
             {offerableGistDepths.map((d) => (
@@ -2893,7 +2931,7 @@ function Reader({
                 onPressedChange={() => toggle(d)}
                 title={columnHint(d, geometry.leafDepth)}
               >
-                {columnPill(d, geometry.leafDepth)}
+                {columnLabel(d, geometry.leafDepth)}
               </Toggle>
             ))}
             {/* The paragraph outline, beside the prose rather than instead of
@@ -2906,7 +2944,7 @@ function Reader({
                 onPressedChange={() => toggle(geometry.leafDepth)}
                 title={columnHint(geometry.leafDepth, geometry.leafDepth)}
               >
-                {columnPill(geometry.leafDepth, geometry.leafDepth)}
+                {columnLabel(geometry.leafDepth, geometry.leafDepth)}
               </Toggle>
             )}
           </>
@@ -2956,14 +2994,11 @@ function Reader({
         columns={fit.columns}
         layout={fit}
         showText={proseOn}
-        /* **The only thing left that says what ← / → are aiming at.** The bar
-           used to carry an `↑↓ Sections` readout beside it, on the argument
-           that the arrows are useless if you cannot tell what they point at
-           before you press one. That went on 2026-09-05 with the rest of the
-           bar; the lit column header is what remains, and it goes too in stage
-           3 of docs/plans/260905d-declutter-the-reading-view-top-bars.md, which
-           owes the aim a quieter indicator of its own. */
-        navDepth={navDepth}
+        /* **`navDepth` is not passed here any more**, and that is a small win
+           rather than an omission. It used to light a `<th>`, so every pointer
+           move re-rendered a memoised table of ~2,200 cells to change one
+           underline. The aim is now `data-aim` on `.reader` above and a rule in
+           styles.css § the aimed column, so it costs one attribute write. */
         onJump={jumpTo}
         notes={notes}
         noteReturn={noteReturn}
@@ -3205,6 +3240,14 @@ function Reader({
            test is that a signed-out browser leaves `/api/public/` never.
            ProseHoverCard.tsx § lookUpLinks. */
         lookUpLinks={owner !== null}
+        /* And the same answer to a different question. A visitor has no shelf
+           to add to, so the button is not drawn and `useJobs` is not called —
+           which matters as much as the button does, since a mounted subscriber
+           sets the job engine's polling cadence. Derived from `owner !== null`
+           beside the line above rather than from it: the two mean different
+           things (ProseHoverCard.tsx § canAddToShelf) and today's shared
+           condition is a coincidence worth keeping visible. */
+        canAddToShelf={owner !== null}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}

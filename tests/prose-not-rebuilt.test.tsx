@@ -125,7 +125,6 @@ function propsFor(loaded: LoadedArticle, over: Record<string, unknown> = {}) {
     columns: fit.columns,
     layout: fit,
     showText: true,
-    navDepth: geometry.leafDepth,
     comments: [],
     openComment: null,
     chats: [],

@@ -169,9 +169,17 @@ describe("readSummary", () => {
 });
 
 /* --------------------------------------------------- what is not here --
-   The three tests to write the day this repo can render a component, from a
-   GPT Sol review of the hook (2026-08-27). Each names a real way it could
-   break that nothing here would catch:
+   The three tests to write, from a GPT Sol review of the hook (2026-08-27).
+   Each names a real way it could break that nothing here would catch.
+
+   **This used to say "the day this repo can render a component", and that day
+   has been and gone.** It was true when it was written; it is not now, and a
+   note that says something is impossible outlives the reason it was true. There
+   are 124 `tests/*.test.tsx` files as of 2026-09-05, mounting components with
+   `createRoot` under `IS_REACT_ACT_ENVIRONMENT` —
+   tests/add-to-shelf-from-the-card.test.tsx mounts the card this hook feeds,
+   with `../src/web/lib/api.js` posed, which is most of the harness these three
+   would need. So they are unwritten rather than unwritable.
 
    1. **A → B while A is in flight.** Resolve A's Wikipedia fetch *after* the
       reader has moved to B, and assert B never shows A's summary. This is what

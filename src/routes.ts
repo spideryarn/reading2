@@ -31,6 +31,7 @@
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
+ *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
  *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
@@ -130,6 +131,7 @@ import {
   loadIllustrated,
   loadSketch,
   loadQuiz,
+  loadDebate,
   loadTimeline,
   loadTweets,
 } from "./store/index.js";
@@ -6567,6 +6569,13 @@ export async function serveAuthenticatedApi(
      in front of it. It stores nothing — see `markOneAnswer`. */
   const quiz = /^\/api\/quiz\/([\w.%-]+)$/.exec(path);
   const quizMark = /^\/api\/quiz\/([\w.%-]+)\/mark$/.exec(path);
+  /* What the rest of the web says about this piece —
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. GET
+     only, and no DELETE, for the reason `ideas`, `quotes` and `timeline` have
+     none: the step replaces rather than appends, so asking the web again is
+     POST /api/jobs { slug, steps: ["debate"] }. That is also the only way to
+     start one — this route never spends. */
+  const debate = /^\/api\/debate\/([\w.%-]+)$/.exec(path);
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      four reads around it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
@@ -7088,6 +7097,19 @@ export async function serveAuthenticatedApi(
          fields where `IdeasResponse` has three.
          docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1. */
       send(res, 200, await loadQuiz(slugPart(quiz, 1)));
+      return;
+    }
+    if (debate && req.method === "GET") {
+      /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
+         is reading does not change what the web said, so there is no third
+         staleness fact and offering one would be a banner about a thing that
+         cannot have happened. `DebateResponse` in src/types.ts has two fields.
+
+         **And nothing here about how old the search is.** `searchedAt` travels
+         on the artefact and the panel prints it; it is provenance rather than
+         staleness, and a year-old shared link must not have its artefact
+         declared invalid by the clock. */
+      send(res, 200, await loadDebate(slugPart(debate, 1)));
       return;
     }
     if (quizMark && req.method === "POST") {
