@@ -1,0 +1,215 @@
+{
+  "slug": "copernicus-ball-lightning-title",
+  "sample": 1,
+  "prompt": "5837a306a4da",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T08:54:23.165Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Hist. Geo Space Sci., 12, 43–56, 2021\nhttps://doi.org/10.5194/hgss-12-43-2021\n© Author(s) 2021. This work is distributed under\nthe Creative Commons Attribution 4.0 License.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "A brief history of ball lightning observations by scientists and trained professionals",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Alexander G. Keul¹,☆",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "¹Environmental Psychology, Salzburg University, Salzburg, Austria\n☆retired",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Correspondence: Alexander G. Keul (alexander.keul@sbg.ac.at)",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Received: 12 August 2020 – Revised: 17 December 2020 – Accepted: 15 January 2021 – Published: 1 March 2021",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Abstract. With thousands of eyewitness reports, but few instrumental records and no consensus about a theory, ball lightning remains an unsolved problem in atmospheric physics. As chances to monitor this transient phenomenon are low, it seems promising to evaluate observation reports by scientists and trained professionals. The following work compiles 20 published case histories and adds 15 from the author’s work and 6 from a Russian database. Forty-one cases from eight countries, 1868–2020, are presented in abstract form with a synthesis. The collection of cases does not claim to be complete. Six influential or notable ball lightning cases are added. It is concluded that well-documented cases from trained observers can promote fieldwork and stimulate and evaluate ball lightning theories. Scientists who have not reported their experience are invited to share it with the author.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "1 Historical outline",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "“Guarda! Guarda!” (“See! See!”) – calls from the Corsa dei Servi (central street, now Corso Vittorio Emanuele II) in the centre of Milan alarmed Lorenzo Butti, marine painter of the Empress of Austria. It was 18:00 LT (local time) in June 1841, with a heavy thunderstorm outside. Butti looked out of the window where people were running in the rain under a reddish-yellow ball of fire. It travelled at window height of the second floor, rose higher, and then exploded at a church tower cross with a dull crash. The artist wrote his experience to physicist Arago. Arago’s report was rediscovered by senior school official Walther Brand for his monograph “Der Kugelblitz” (1923, 2010), the only one in German to date.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Since Sur le tonnerre of French astronomer and physicist François Arago (1837), the term ball lightning (Kugelblitz, foudre globulaire) stands for a still unexplained group of metastable luminous phenomena in atmospheric electricity. Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without. Because of its unpredictable occurrence, most of the collected material remains anecdotal.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Ball lightning monographies and reviews were accomplished, e.g. by Brand (1923, 2010), Singer (1971), Stakhanov (1979), Barry (1980), Smirnov (1993), Stenhoff (1999), Rakov and Uman (2003), Bychkov et al. (2010), Shmatov and Stephan (2019), and Boerner (2019). Ball lightning cases also have a psychological side, when it comes to eyewitness quality, (non-)reporting, and public and media event labelling. Here, everyday life theories or mindsets are more influential than science. However, research about lay theories (Furnham, 1988; Zedelius et al., 2017) has its focus on the social sciences and not physics, so the borderland of ball lightning, folklore, and public opinions has not been further explored.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "In chapter 20 of their lightning handbook, Rakov and Uman (2003) summed up the status quo on ball lightning. The authors were puzzled by 2400 references in Stenhoff’s book (1999), whereas their handbook on all lightning aspects comprises over 6000. This was also remarked by Thottapillil (2005, p. 31) in his COST Action proposal P18 on the physics of lightning together with 30 European researchers and the consensus that “the reality of ball lightning is not in doubt.” Rakov and Uman (2003, p. 656, p. 658) characterized ball lightning as “a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings.” They counted almost 5000 observation reports. “There may be more than one type of ball lightning and more than one mechanism by which ball lightning is generated”, they continue, also “There have been many theories devised to explain ball lightning. None is completely satisfactory” and “many luminous phenomena created in the laboratory are claimed by their creators to be ball lightning”. For the same reason, Turner called ball lightning research a “fragmented science” (2001).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "mentation such as photographs, videotapes, or other scientific recordings.” They counted almost 5000 observation reports. “There may be more than one type of ball lightning and more than one mechanism by which ball lightning is generated”, they continue, also “There have been many theories devised to explain ball lightning. None is completely satisfactory” and “many luminous phenomena created in the laboratory are claimed by their creators to be ball lightning”. For the same reason, Turner called ball lightning research a “fragmented science” (2001).",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading1",
+      "text": "2 Methodology",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Chances to monitor the transient phenomenon directly are minimal: Tompkins et al. (1975) searched about 12 000 photographic records of the US Prairie Meteorite Network that observed the night sky daily for over 10 years and found two probable ball lightning events. Other photographic or video records (e.g. 1935 Berlin; 1976 Transvaal, South Africa; 1978 Montafon, Austria; 1985 Lake Undugun, Russia; or 2003 Zwönitz, Germany) were also random products. Therefore, Singer (1971, chap. 5.B.2) and Stenhoff (1999, chap. 10.4) paid special attention to ball lightning reports coming from scientists or trained professionals. However, large databanks like Rayle’s (1966; N = 112 reports) and McNally’s (1966; N = 513 reports) from the US did not ask for observer’s professions and degrees. Published ball lightning reports of scientists are scattered, and even more remain unpublished.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "To explain the purpose and methodology of the following study, the author noticed that the present journal already carried two historical ball lightning case records (Vaquero, 2017; Dominguez-Castro, 2018). So it seemed to be the right place for an updated case review encompassing published (e.g. Singer, 1971; Stenhoff, 1999) as well as unpublished reports. An international attempt to collect scientists’ reports was beyond the scope of this review, so it does not claim to be complete but can and will be expanded by forthcoming reports in the future. Finally, the review compiles 20 published case histories, adds 15 from the author’s work and six from a Russian database. Forty-one cases from eight countries, 1868–2020, are presented in abstract form with a synopsis of case details. Also, six influential or notable ball lightning cases are mentioned. It is expected that accounts by trained observers in addition to systematically investigated material-evidence cases can develop this heterogeneous interdisciplinary field.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "The author, meteorologist and psychologist, collected, evaluated, and published European ball lightning cases for 45 years (Keul, 1980, 1981, 1992, 1993, 1994, 2004; Keul and Stummer, 2002; Kugelblitz, 2021). For most of this period of time, ball lightning case work was limited to single case investigations and statistical synopses, lacking an interdisciplinary perspective with forensic experts, materials science, lightning protection experts, etc. The upswing of modern lightning location networks (like BLIDS, German lightning information service, or ALDIS, Austrian lightning detection and information system) opened up new options, so recently, a first correlation of 34 central European ball lightning events, 1994–2016, with lightning location data was done together with ALDIS (Keul and Diendorfer, 2018). Nineteen detected strokes, correlated in time with ball lightning, were positive (4–370 kA peak current) and 15 were negative (−3 to −37 kA). Twenty-eight were cloud–ground strokes and 6 were cloud–cloud strokes; 28 occurred in the summer months and 6 in winter. Seventeen events had close-distance lightning strokes – ball lightning under 1 km (mean 0.42 km), and 17 were distant events (1–10 km, mean 5.7 km). The unexpectedly high number of positive strokes and the equal frequency of close and distant events were discussed at the 34th International Conference on Lightning Protection.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading1",
+      "text": "3 Scientists as ball lightning observers",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading2",
+      "text": "3.1 Natural scientists, technical, and medical professionals",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "We start our series of cases with a chronology of eyewitness reports by natural scientists, and technical and medical experts. Several alleged observations (e.g. of Niels Bohr and Victor Weisskopf), often quoted in science or popular journals, were incorrect or lacked data: Tuck (1971) only wrote that he heard from Weisskopf that Bohr had once seen ball lightning. Martin Ryle was quoted without details by Davies (1987). Pyotr Leonidovich Kapitsa developed a ball lightning theory but reported no alleged sighting.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Geologist and mineralogist Wilhelm von Haidinger, member of the Imperial Academy of Sciences at Vienna, observed ball lightning from his home at Vienna’s 3rd district Landstrasse on 20 October 1868, in a heavy thunderstorm between 17:15 and 17:30 LT: “The electric fireball was one of the very first discharges of the thunderstorm . . . It stood maybe 2–3 s in front of the right pane of the window . . . It is indeed simple to describe the ball, of a vivid yellow light, especially on the right . . . while on the left . . . clearly red, with longer rays than the ball, firing from it to the right and towards the earth, of red, yellow colour, up to the most dazzling white. Also, left there were shorter rays inclined obliquely towards the earth. . . . Several discharges followed and after [them] hail and rain.” Haidinger (see his sketch in Fig. 1) determined the object’s angular diameter as 0.83°. After his observation at Ungargasse 3, 3rd district, to the southwest, Haidinger heard about other occurrences in Vienna. Four of them sound like ordinary lightning but two described ball lightning: P. Joseph Dobner, Haidinger’s friend, took shelter from the thunderstorm in a friend’s home at Magdalenenstr. 32, 6th district. He saw a glaring blue sphere outside the window to the southeast. No more details are given. Another",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "figure",
+      "text": "Figure 1. Colour drawing of Haidinger’s object as seen in the window frame; supplement to his 1868 case report to the Imperial Academy of Sciences, Vienna. Reproduction of image detail: Axel Wittmann.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "observation came from Mrs Wassmann from the backhouse of Westbahnstr. 28, 7th district, who saw a full-moon-sized ball to the southwest, coloured red-yellow, that emitted rays like a firewheel three times in 1 min lifetime. It was motionless like the two others. So we get a 1868 multiple object event with sightings from three inner Vienna districts, Landstrasse, Mariahilf, and Neubau, in a triangle 3.4–1.3–3 km apart, with two similar objects (colour, size, rays) and a different one. Haidinger described the “electric meteors” in a report to his academy (Haidinger, 1868; Brand, 1923, 2010, p. 34).",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Othniel Charles Marsh, professor of palaeontology at Yale University, USA, and president of the US National Academy of Sciences, was on board a large yacht in the harbour of Southampton, Hampshire, UK, on 23 July 1878. He later wrote a report to Nature (1895). During a violent thunderstorm, his attention was drawn to a light coming down from the foremast: “This light was a ball of fire, a delicate rose pink in colour, pear-shaped in form, with the large end below, and appeared to be 4 or 5 in. (10–13 cm) in diameter and 6 to 8 in. (15–20 cm) in length.” “The object struck the deck with an explosion that knocked down the mate, [and it] apparently got down a windsail ventilator into the galley where it flung a large tin pan from the hands of a cook and upset things but caused no major damage. Witnesses of the crew were shocked, but all remained uninjured.” “A strong ozone-like odour was observed immediately after the explosion” (Marsh, 1895, p. 152).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Ernesto Cabellero Bellido, professor of physics and director of the power station at Pontevedra, Galicia, Spain, gave the following report: on 2 January 1890, at 09:15 LT, a fireball the size of an orange appeared in the power station, oscillated between the switchboard and the dynamo and fragmented at the floor with a noise like a cannon shot. The net was interrupted for a few seconds, and copper cables on the switchboard were fused; otherwise, there was no damage (Anonymous, 1890). This incident was widely publicized in 12 scientific journals (Stenhoff, 1999).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Stanley Singer (1971, pp. 29–33) lists several accounts of natural scientists in his book, starting with Belgian astronomer M. E. Bijl, who saw in 1905 a red glowing ball with halo near his observatory. Abbott Lawrence Rotch, US meteorologist, founder of the Blue Hill Observatory south of Boston, and pioneer of kite soundings, saw and described ball lightning after lightning hit the Eiffel Tower in Paris in 1903. The bright ball, size 1 m, fell from the top to third platform, about 100 m in 2 s, where it disappeared. The tower guard knew other similar events (Singer, 1971). The time of 2 s for 100 m was faster than the free fall which would have taken about 5 s.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Walther Gerlach, physics professor at the University of Tübingen, wrote a report to Naturwissenschaften on 20 May 1927: “On 9 May 1927, 08:00 [LT] I observed ball lightning [at Tübingen] . . . I happened to stand at the window . . . In the northeast, linear lightning went down with strong ramifications. From it (apparently out of a sharp kink) came a bright luminous yellowish-white ball in a considerable height and flew to the southwest. The time between lightning and the ball’s flyover of our institute was roughly 1 s. It could be observed for another second in the same appearance on its straight trajectory, soundless. Two seconds later, a not very strong thunder started, and 1.5 s after its start, there was an extraordinarily violent detonation, like an explosion bang.” Gerlach did his calculations: with a speed of sound of 330 m s−1 and observed times of the lightning’s thunder and the explosion, he got a ball lightning trajectory of 1300 + 1150 = 2450 m. In 2 s flight time, “ball lightning had a mean speed of about 1200 m s−1”. “I learnt at noon that the ball hit a small, barn-like house on the edge of Tübingen which is 1100 m distant . . . the top of an electrical mast was smashed nearby.” Gerlach also mentioned bluish “spraying” of electrical wires and blown fuses in “a whole row of houses” (Gerlach, 1927). His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “soundless”, without an acoustic effect (sonic boom). This is one of the rare occasions where ball lightning met a gifted experimental physicist. Gerlach is renowned for his 1922 experiment about spin quantization in a magnetic field.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "James Durward, a British military meteorologist, 1936–1940 director of the Iraq Meteorological Service (Anonymous, 1956), encountered ball lightning on his flight to Iraq in summer 1938. When the BOAC flying boat was in the Toulouse area in nimbostratus, a ball came in through the plane’s cockpit window; burnt eyebrows, some hair, safety belt, and a dispatch case of the pilot; and then passed the dis-",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "A brief history of ball lightning observations by scientists and trained professionals",
+  "recall": 0.977,
+  "quality": [
+    "Pages 1, 2: 2 run(s) are missing from the transcription, the longest 17 words — “hist geo space sci 12 43 56 2021 https doi org 10 5194 hgss 12 43 2021”.",
+    "Page 3: 2 run(s) are missing from the transcription, the longest 17 words — “dishttps doi org 10 5194 hgss 12 43 2021 hist geo space sci 12 43 56 2021”."
+  ],
+  "usage": {
+    "input": 35076,
+    "output": 10579
+  }
+}

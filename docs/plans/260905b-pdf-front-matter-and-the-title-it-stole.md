@@ -519,3 +519,164 @@ downloads.
   a `Meta` field and an additive column. Stage 5, not done.
 - **`meta.byline` is written and nothing has been checked downstream.** Referee mode's
   `authorKeys` should now have something to work with on a PDF; nobody has watched it do so.
+
+---
+
+## GPT Sol's review of the built code, 2026-09-05 — four P0s, all reproduced
+
+The second review, weighted higher than the first, and it earned that: every P0 was a hole the
+plan-stage review could not have found, because the code did not exist yet.
+
+**P0-1 — an abort was ignored whenever the pass *succeeded*.** `frontMatterOrNothing` checked
+`signal.aborted` only inside its `catch`, and `readFrontMatter` never checked after the await. A
+reader that noticed the abort and answered anyway — a cached answer, a request already in flight, a
+stub — had its answer applied and the article published with `aborted === true`. **The one path that
+got through was the one where nothing went wrong.** Fixed with `signal?.throwIfAborted()` after the
+await, and the test for it was watched fail with that line commented out.
+
+**P0-2 — valid ids are provenance, not a boundary.** Sol built an answer of entirely *valid* ids that
+chose a false title, named a printed instruction as the byline, and set aside the real authors plus
+two authored paragraphs — every record under `MAX_PUBLISHER_WORDS`, no rule broken, nothing in the
+notes. JSON escaping stops syntactic breakout; it does not make language inert, and
+[security.md](../project/security.md) says a prompt is not a boundary in its own words.
+
+Answered with an **aggregate** cap — `MAX_SET_ASIDE_FRACTION`, half the words of the window — because
+a per-record rule cannot bound a whole-page deletion. Breaching it discards `publisherIds` whole,
+keeps the title and byline, and writes a note. It does not make the pass trustworthy; it bounds what
+an untrustworthy answer can do, which is the honest goal.
+
+**P0-3 — a malformed answer could act destructively in part.** `parseAnswer` read every missing field
+as `[]` and never checked the root was an object, so `null`, `[]`, `42` and `{}` all became "three
+empty lists", and `{"publisherIds": […]}` alone hid records while silently falling back for the
+title — a malformed answer performing exactly the partial action the malformed rule exists to
+prevent. All three lists are required now, and the root must be an object. The schema asks for all
+three; this parser's whole job is the provider that ignored the schema.
+
+**P0-4 — the eval treated an incomplete sample bank as the whole corpus.** `score` stopped at the
+first missing sample and `report` took its denominator from whatever produced verdicts, so a checkout
+with half the banks would have printed a confident table about five documents while claiming ten.
+
+The P1s: **P1-7** the window anchored on `records[0].page` rather than physical page 1, so a blank
+page 1 slid it silently to pages 2–4. **P1-8** the stage's `usage` claimed to be everything the run
+cost and omitted the new call — now `frontMatterUsage` beside it, separately, because one figure
+across two models on two jobs has no nameable unit. **P1-2** byline correctness was entirely unscored
+(Sol replaced Kuhn's gold with `Elsevier Ltd.` and got an identical verdict). **P1-1** the injection
+fixture's `mustKeep` did not include the real printed title, so an answer that deleted the title and
+took the metadata one scored perfect. **P1-3** and **P1-4**, the two golds doing jobs they could not
+do — see the corpus README, which now records both.
+
+**P2-1 is a correction rather than a fix.** This plan and two code comments said hiding must precede
+`mendSeamHyphens`, and the wiring test did not prove it: that function only acts across a page
+boundary, and Sol reproduced identical output with the operations reversed. What *is* demonstrated is
+the `renderHtml` join. The comments now say which is which, and say plainly that the mend ordering is
+kept for consistency and is untested.
+
+## What the corrected instrument then found, and it was not flattering
+
+Two faults in the tidy pass that the *first* version of the eval could not see, because the golds it
+was scoring against were unreachable:
+
+- **It joined a bilingual title to its own translation** — `unal-biotec`, all three samples.
+- **It hid an author's own line** — `Short title: Evolution of large streams`, on two of three NASA
+  samples. Exactly what `mustKeep` exists for.
+
+Both are prompt faults and both were fixed there: a title printed in two languages is one title, and
+anything the *author* supplied about their own manuscript is not the publisher's furniture. **The
+test is who wrote it, not whether a reader wants it.**
+
+## The measurement, 2026-09-05
+
+Ten documents, three samples each, four arms. Transcriptions **$0.21**; the tidy arm's thirty calls
+**$0.33** a sweep. Every arm reads the same records.
+
+```
+arm           docs-right    samples-right   exact  stolen   furniture-gone   must-keep-kept    byline
+incumbent       6/10  60%    22/30  73%    70%     23%      0/5   0%    99/99 100%    none offered
+ladder          6/10  60%    22/30  73%    70%     23%      0/5   0%    99/99 100%    none offered
+tidy            7/10  70%    23/30  77%    73%      0%      4/5  80%    98/99  99%   9/28  32%
+overdelete      6/10  60%    22/30  73%    70%     23%      5/5 100%     0/99   0%    none offered
+
+ATTACK ARM — hiding every front record must lose something in EVERY document. Detected in 10/10.
+incumbent → ladder: 0 wrong→right, 0 right→wrong
+ladder → tidy:      1 wrong→right, 0 right→wrong
+```
+
+**The tidy pass earns its place, modestly.** One document better, one sample better, four of the five
+rendered publisher strings removed against none — and the number that matters most is `stolen`: the
+ladder takes one of a fixture's known false titles on **23%** of samples and the tidy pass on
+**none**. No regressions.
+
+**The rung-2 furniture rule changes nothing on this corpus.** Zero transitions in either direction.
+It is not shown to help, and the corpus cannot see the case it would *break* either — no fixture's
+gold title appears in its own full-document furniture set. It is kept as a free guard against the
+reported failure, and the regression Sol predicted is pinned in
+`tests/pdf-title.test.ts` § *"loses the title to a generic heading"* rather than left to be
+rediscovered.
+
+**Two things about the removal column, before anyone quotes it.** Only **5** of 30 sample-arm pairs
+have any `mustNotRender` string actually rendered, because the transcription already types nearly all
+publisher furniture as `publisher` or `cover`. The first version of the report gave the incumbent
+`72% furniture-dropped` — credit for work it never did. And retention is scored against what the
+transcription put in reach: five `mustKeep` golds are absent under *every* arm, all bylines, all
+because the printed page fuses affiliation markers into the authors' names (`Salim Rukhsara,∗`). They
+are named as a corpus problem and scored out, because a gold already lost cannot be lost again.
+
+**Byline accuracy is 32%, and the cause is known.** `assemble` copies a record verbatim by design, so
+the byline arrives carrying superscripts and affiliation runs — `Salim Rukhsara,∗ , Anil K.Tiwaria
+aDepartment of Electrical Engineering, IIT Jodhpur…`. The same root cause costs the *title* points
+on three fixtures: `Eventually Lattice-Linear Algorithms1234` is four footnote markers,
+`…Enterococcus faecalis I` is an affiliation marker.
+
+**That names the next piece of work and it is deliberately not done here**, because the obvious rule
+is dangerous: "strip trailing digits" eats *Apollo 11* and *Catch-22*; "strip a trailing one-letter
+token" eats *War and Peace II*. It wants its own fixtures and its own decision about whether a
+byline should be cleaned before it reaches `meta.byline` at all — a product question, and Greg's.
+
+### Overruled or deferred, with reasons
+
+- **The checkpoint** — still no, for the reason already recorded. Sol agreed on the second pass.
+- **The metadata disclosure row** — Sol calls it blocking while the pass is on, because `publisher`
+  records still count in the scorer's baseline and so `recall` does not move when the pass acts. It
+  needs a `Meta` field and an additive column, and it is the first thing to build. Recorded, not
+  built.
+- **Marker trimming on the title and the byline** — the highest-value follow-up this eval produced.
+
+## And the prompt change, measured at last — the cheapest change and the biggest effect
+
+Sol's P1-6 was right that this was unmeasured, and the answer turned out to matter more than
+anything else here. The old rule 5 and rule 6 were put back in the tree for one `transcribe` run —
+`promptFingerprint()` is derived from `SYSTEM`, so that buys a **separate bank of records** under its
+own filename and nothing collides — and the two banks were then scored against the same arms. The
+harness gained `--bank=<fingerprint>` so this need never again be done by editing `src`:
+
+```
+npx tsx evals/pdf/titles.mts score --arms=incumbent --bank=5837a306a4da   # rule 5/6 as they were
+npx tsx evals/pdf/titles.mts score --arms=incumbent --bank=ee94ff70ea4a   # rule 5/6 with `publisher`
+```
+
+Same ten documents, same three samples, same ladder, **only the transcription prompt different**:
+
+| | old rules 5 & 6 | with `publisher` |
+|---|---|---|
+| samples with the right title | 20/30 — 67% | **22/30 — 73%** |
+| exact match | 63% | **70%** |
+| publisher strings **still rendered** on the page | **21** | **5** |
+| documents fully right | 6/10 | 6/10 |
+
+**Sixteen of the twenty-one publisher strings leave the reading view for nothing** — no extra call, no
+latency, no money, just a label the model was already able to apply. That is by far the best return
+of the three changes, and it is the one that cost least.
+
+It moves the *title* too, and by a route worth understanding: the ladder was never changed between
+these two columns. Rung 2 takes the first `heading1` on page 1, and once the masthead is typed
+`publisher` it is not a `heading1` any more, so the rung stops seeing it. The prompt change fixes the
+reported bug at its source, and the furniture rule and the tidy pass are both working on what is
+left.
+
+**Which reframes the removal column in the table above.** The tidy pass is measured over the five
+strings the prompt change did *not* already take off the page. Its 4-of-5 is real and it is a
+remainder, not the whole job.
+
+**What this comparison is not.** One sweep of each, three samples a document, ten documents — enough
+to see an effect this size and not enough to put an interval on it. And both banks were read by the
+same model on the same afternoon.

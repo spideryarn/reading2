@@ -550,8 +550,20 @@ export interface Bank {
 export async function score(
   fixtures: Fixture[],
   armNames: string[],
+  /**
+   * Which bank of records to score, by prompt fingerprint. Defaults to the one
+   * the tree's current prompt would produce.
+   *
+   * **This is how the transcription prompt gets measured at all.** A prompt
+   * change makes a different bank — deliberately, since `promptFingerprint` is
+   * derived from `SYSTEM` — so on 2026-09-05 the old wording was put back in the
+   * tree for one `transcribe` run and the two banks were then scored against
+   * each other. Without a selector that comparison can only be made by editing
+   * src, which is a thing nobody does twice. Sol's P1-6.
+   */
+  bankPrompt?: string,
 ): Promise<{ verdicts: Verdict[]; partial: string[]; bank: Bank }> {
-  const prompt = promptFingerprint();
+  const prompt = bankPrompt ?? promptFingerprint();
   const verdicts: Verdict[] = [];
   const partial: string[] = [];
   const counts: Bank["counts"] = [];
@@ -902,7 +914,7 @@ async function main(): Promise<void> {
       );
       process.exit(1);
     }
-    const { verdicts, partial, bank } = await score(fixtures, arms);
+    const { verdicts, partial, bank } = await score(fixtures, arms, flag("bank"));
     if (!verdicts.length) {
       console.error("No samples on disk. Run `transcribe` first.");
       process.exit(1);
@@ -918,7 +930,8 @@ async function main(): Promise<void> {
   console.error(
     "Usage:\n" +
       "  npx tsx evals/pdf/titles.mts transcribe [--samples=3] [--only=slug,slug]\n" +
-      "  npx tsx evals/pdf/titles.mts score [--arms=incumbent,ladder,tidy,overdelete] [--spend] [--out=file.json]",
+      "  npx tsx evals/pdf/titles.mts score [--arms=incumbent,ladder,tidy,overdelete] [--spend]\n" +
+      "        [--bank=<prompt fingerprint>] [--out=file.json]",
   );
   process.exit(1);
 }

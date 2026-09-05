@@ -42,9 +42,14 @@ Three things about it are worth copying elsewhere:
   ambiguous line.
 - **It scores in two directions.** *Right title, fewer publisher lines shown* is maximised by an arm
   that hides the whole first page — and `src/pdf-score.ts` would not notice, because recall counts
-  every record whether it renders or not. So `mustKeep` sits beside `furniture`, and there is an
-  **`overdelete` arm that the report must fail**. It says so out loud rather than printing a bad
-  number and hoping somebody looks.
+  every record whether it renders or not. So `mustKeep` sits beside `mustNotRender`, and there is an
+  **`overdelete` arm that the report must fail, in every document**. It says so out loud rather than
+  printing a bad number and hoping somebody looks.
+- **A gold only counts where the transcription put it in reach.** Retention is scored against what
+  each sample renders with *nothing* set aside, and anything already missing from that baseline is
+  named as a corpus problem rather than blamed on an arm — because a gold that is already lost cannot
+  be lost again, which would mask the next arm's damage. The first version of this report gave the
+  incumbent 72% for removing furniture it had never touched.
 - **Three pages is enough to reach `FURNITURE_PAGES` and not enough to be the document.** Of the
   eight real multi-page fixtures only two reproduce their own document's furniture from the cut, so
   every fixture keeps `pass0-full.json` — the whole document's `metaTitle` and furniture, measured

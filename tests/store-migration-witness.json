@@ -838,6 +838,7 @@
     "tests/pdf-sideways.test.ts",
     "tests/pdf-source-parsed-once.test.ts",
     "tests/pdf-title.test.ts",
+    "tests/pdf-titles-eval.test.ts",
     "tests/pdf-without-canvas.test.ts",
     "tests/pdf.test.ts",
     "tests/perf-probe.test.ts",

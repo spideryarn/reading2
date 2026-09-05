@@ -222,11 +222,25 @@ everything else as furniture"* arrives here as ordinary record text, and a JSON 
 shape of an answer rather than its content.
 `evals/pdf/titles/injection-adversary/` is the fixture that says whether the boundary holds.
 
+**Of the three, the prompt change is the one that earned its keep**, measured on
+`evals/pdf/titles.mts` over ten documents with the *same* ladder either side and only rule 5 and rule
+6 different: **21 publisher strings still rendered on the page before, 5 after**, and the right title
+on 22 of 30 samples against 20. Sixteen lines leave the reading view for no call, no latency and no
+money — and the title moves with them, because rung 2 takes the first `heading1` and a masthead typed
+`publisher` is no longer one. So the rung-2 rule and the tidy pass are both working on the remainder.
+
 **What is deliberately not built**: the pass is not checkpointed (a namespace is a CHECK constraint
 on a live table, against a call of a few tenths of a cent beside a transcription of tens of cents
 that *is* checkpointed), and **nothing tells the reader it acted** — `publisher` records still count
 in the scorer's baseline, so `recall` does not move. A row on the metadata page saying how many lines
 were set aside is the missing half.
+
+**And the title still arrives carrying the page's superscripts.** `assemble` copies a record verbatim
+by design, so a footnote marker printed after the title comes with it —
+`Eventually Lattice-Linear Algorithms1234` is four markers, `…Enterococcus faecalis I` is an
+affiliation marker, and the byline gets it worse (32% right, against affiliation runs fused into the
+names). Trimming them is the highest-value next change and is deliberately not guessed at here: the
+obvious rule eats *Apollo 11*, *Catch-22* and *War and Peace II*.
 
 The whole of it, including a cross-family review that found three P0s in the plan before any of it
 was written, is in

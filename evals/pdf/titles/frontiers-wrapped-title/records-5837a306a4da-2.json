@@ -1,0 +1,257 @@
+{
+  "slug": "frontiers-wrapped-title",
+  "sample": 2,
+  "prompt": "5837a306a4da",
+  "model": "openai/gpt-5.6-luna",
+  "at": "2026-09-05T09:05:13.169Z",
+  "transcript": [
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Development and preliminary validation of Cancer-related Psychological Flexibility Questionnaire",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Mei-jun Ou1, Xiang-hua Xu2, Hong Chen1, Fu-rong Chen3 and Shuai Shen4*",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "1 Head and Neck Surgery Department, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China, 2 Health Service Center, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China, 3 School of Nursing, University of South China, Hengyang, China, 4 Department of General Surgery, Changsha Hospital of Hunan Normal University/The Fourth Hospital of Changsha, Changsha, China",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "The Cancer-related Psychological Flexibility Questionnaire (CPFQ) was developed and validated for assessing cancer patients’ psychological flexibility, including attitudes and behavior toward cancer. In a systematic process, the CPFQ identified four factors through principal component analysis and confirmatory factor analysis: Cancer Acceptance, Cancer Avoidance, Activity Engagement, and Valued Action. The results of this study reveal that the CPFQ has a clear factor structure and good psychometric properties. The specific nature of cancer and the need for a specific measure of cancer patient psychological flexibility make this questionnaire valuable for research on psychological flexibility in cancer patients.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "KEYWORDS\npsychological flexibility, cancer, questionnaire, cancer acceptance, cancer avoidance, activity engagement, valued action",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "heading1",
+      "text": "Introduction",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Cancer is a leading cause of death and a worldwide public health issue. According to the GLOBOCAN 2020 estimates of cancer incidence and mortality worldwide in 185 countries, ~19.3 million new cancer cases and 10.0 million deaths occurred in 2020. Moreover, an estimated 28.4 million cases are expected in 2040 (Sung et al., 2021). Cancer is a chronic and life-threatening illness, and most cancer patients must undergo comprehensive anticancer treatment, including surgery, radiotherapy, and chemotherapy. Existing evidence showed that cancer patients often endure treatment-related toxicities and permanent functional impairment, which lead to multiple symptoms (Neufeld et al., 2017; Cuthbert et al., 2020; Gravier et al., 2020; Lage et al., 2020; Raphael et al., 2020). Cuthbert et al. reported that 60% and 80% of patients with a cancer diagnosis suffered from anxiety and low well-being, respectively (Cuthbert et al., 2020). Almost half of cancer survivors (43.6%) experienced a fear of relapse, and 32.1% had a severe/pathological fear of relapse in Singapore (Mahendran et al., 2021). A negative emotional state could significantly reduce the quality of life of cancer patients (Liu et al., 2021; Phoosuwan and Lundberg, 2022).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "Many cancer patients adopt negative coping styles such as avoidance and pessimism when confronted with treatment-related toxicities, impaired functions, and distorted body image",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 1,
+      "type": "paragraph",
+      "text": "OPEN ACCESS\nEDITED BY\nTing Shuai,\nPeking University Hospital of Stomatology,\nChina\nREVIEWED BY\nKa Yan Ho,\nHong Kong Polytechnic University,\nHong Kong SAR,\nChina\nAna Mafla,\nCooperative University of Colombia, Colombia\n*CORRESPONDENCE\nShuai Shen\nshaxe115@sina.com\nSPECIALTY SECTION\nThis article was submitted to\nPsycho-Oncology,\na section of the journal\nFrontiers in Psychology\nRECEIVED 24 September 2022\nACCEPTED 13 February 2023\nPUBLISHED 02 March 2023\nCITATION\nOu M-j, Xu X-h, Chen H, Chen F-r and\nShen S (2023) Development and preliminary\nvalidation of Cancer-related Psychological\nFlexibility Questionnaire.\nFront. Psychol. 14:1052726.\ndoi: 10.3389/fpsyg.2023.1052726\nCOPYRIGHT\n© 2023 Ou, Xu, Chen, Chen and Shen. This is\nan open-access article distributed under the\nterms of the Creative Commons Attribution\nLicense (CC BY). The use, distribution or\nreproduction in other forums is permitted,\nprovided the original author(s) and the copyright\nowner(s) are credited and that the original\npublication in this journal is cited, in accordance\nwith accepted academic practice.\nNo use, distribution or reproduction is\npermitted which does not comply with these\nterms.\nTYPE Original Research\nPUBLISHED 02 March 2023\nDOI 10.3389/fpsyg.2023.1052726",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "(Zhang et al., 2020). They might struggle to eliminate or fight cancer-related discomfort symptoms, including pain, fatigue, nausea, vomiting, dyspnea, and edema. Some live in this self-conceptualization and think they are useless and cumbersome. They experience a diminished sense of self-worth and show avoidance and withdrawal tendencies, such as avoiding discussing disease-related issues and reducing daily activities and social interactions. Coping styles of cancer survivors plays a predictive role in psychological symptoms, psychological well-being, and quality of life. The patients with an avoidance coping style showed higher cancer distress, anxiety, depression, and lower quality of life (Cheng et al., 2019). The better we understand the mechanism that underlies cancer patients’ avoidance coping style, the better we can reduce their psychological symptoms and improve their quality of life.",
+      "continues": true,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Psychological flexibility (PF), a new concept in clinical psychology, is defined as the ability to stay in contact with the present moment and pursue behavioral goals based on personal values and situational contexts, despite the presence of distress (Kashdan et al., 2020; Cherry et al., 2021). Psychological flexibility is a core construct of the Hexaflex model of acceptance and commitment therapy (ACT), one of the third wave of cognitive behavioral therapy (Hulbert-Williams et al., 2015). Acceptance and commitment therapy is based on Hexaflex model which is composed of six core components: acceptance, cognitive defusion, self as context, being present, values, and committed action. Acceptance and commitment therapy aims to improve the coping style and diminish the impact of adverse stressor events by deconstructing the individual experience in the context of personal values, enabling acceptance of both positive and negative responses (Hulbert-Williams et al., 2015), producing adaptive behavior change by enhancing PF (Hayes et al., 2019; Hofmann and Hayes, 2019). Many studies found that PF is associated with adaptive personality traits, including higher conscientiousness, openness to experiences, and lower negative emotionality, which may be the primary therapeutic mechanism of ACT (Hayes et al., 2006; Bryan et al., 2015). Previous studies indicated that a higher PF predicted lower anxiety, depression, and aversive emotional states in patients with breast cancer (Berrocal Montiel et al., 2016). A higher PF also resulted in a higher meaning in life in patients with thyroid cancer (Lv et al., 2021). In patients with prostate cancer, PF significantly predicted psychological distress and quality of life and moderated the relationship between the fear of recurrence and psychological distress (Sevier-Guy et al., 2021). Lucas et al. reported that PF was important for mental health and had a direct, positive effect on life satisfaction among community residents (Lucas and Moore, 2020). In conclusion, PF is a common protective factor across different contexts and populations. Therefore, quantitative assessment of PF for cancer patients can predict their psychological status and quality of life and evaluate the effect of ACT.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Psychological flexibility currently has a wide range of measurement tools. The most popular general measure of PF was AAQ-II, a version of the Acceptance and Action Questionnaire (AAQ; Cherry et al., 2021). AAQ-II has been widely used to measure PF in different contexts and populations, such as cancer patients (Lv et al., 2021) and community residents (Pyszkowska and Ronnlund, 2021). However, AAQ-II measures experiential avoidance (EA), which is an unwillingness to face unwanted experiences and acting to avoid them, and fails to capture core elements of PF (Kashdan et al. 2020). Experiential avoidance measured by AAQ-II is only a component of PF and cannot fully represent PF. In addition, there are many specific assessment tools for PF adapted from AAQ, such as the Acceptance and Action Diabetes Questionnaire (Gregg et al., 2007), the Chronic Pain Acceptance Questionnaire (CPAQ; Fish et al., 2010), and the Psychological Flexibility in Epilepsy Questionnaire (PFEQ; Burket et al., 2021), which are used to measure the PF of patients with diabetes mellitus, chronic pain, and epilepsy, respectively. However, there is no specialized assessment tool for PF in cancer patients.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Cancer is a chronic disease with long-term complex treatment and high physical and psychological burdens. Cancer is a life-threatening disease with high incidence, destruction of integrity, and high recurrence risk. Cancer patients are at risk for several comorbid psychological problems, such as anxiety, depression, and fear (Cuthbert et al., 2020; Lage et al., 2020; Raphael et al., 2020). Moreover, patients with cancer tend to confuse negative emotions and thoughts with objective facts, and immerse themselves in negative automatic thoughts, which aggravate negative emotions and form a vicious circle. Therefore, the PF of cancer patients may differ from that of patients with other non-cancer diseases owing to the characteristics of the tumor. The measure of PF in cancer patients is helpful in understanding their psychological process and coping style so that psychological interventions can be implemented to enhance PF, decrease psychosocial distress, and pursue a more meaningful and healthy life. In addition, it might reduce the specificity and sensitivity if general psychological flexibility assessment tools were used to measure PF of cancer patients. Hence, developing a self-reporting tool that specifically addresses PF in relation to cancer for both research and clinical purposes is necessary.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "The present study aimed to (1) develop a tool to measure PF in cancer patients and identify its latent structure [Study 1], and (2) confirm the structure, and explore the validity of the questionnaire by using the Meaning in Life Questionnaire, the Templer’s Death Anxiety Scale, and the Acceptance and Action Questionnaire II [Study 2].",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading1",
+      "text": "Study 1: Questionnaire construction and development",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading2",
+      "text": "Materials and methods",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "heading3",
+      "text": "Participants",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 2,
+      "type": "paragraph",
+      "text": "Participants were recruited using a convenience sampling method from a tertiary cancer hospital in Hunan Province, China. Patients were included if they: (a) were aged over 18years old, (b) had a diagnosis of cancer and awareness of it; (c) had normal cognitive function and were able to read and write; (d) could complete the survey; and (e) were willing to participate and provide informed consent. A total of 250 questionnaires were distributed. Finally, 231 patients completed the survey, with a valid response rate of 92.4%. Of all the patients, 115 were men, aged 19–89years, with an average age of 56.4±11.3years. Most of them were married (90%) (n =208), 4.3% (n =10) were single, and 5.6% (n =13) were divorced or widowed. As for educational background, 27.7% (n =64) completed primary school or below, 42.8% (n =99) junior high school, 14.3% (n =33) senior high school, and 15.2% (n =35) college and above. Regarding cancer stages, 4.3% (n =10) of the patients had stage I, 24.2% (n =56) stage II, 39.0% (n =99) stage III, 15.6% (n =36) stage IV, and 16.9% (n =39) were unreported.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading1",
+      "text": "Item generation of the pilot Cancer-related Psychological Flexibility Questionnaire",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "There were four steps to generate the items of the pilot Cancer-related Psychological Flexibility Questionnaire. The four steps are item generation, scoring methodology, expert consultation, and pilot test, described as follows:",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "Item generation",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "The generation of items was based mainly on the following principles. (1) It came from the analysis of the Hexaflex theoretical framework and a large number of literature reviews. According to the model, PF included two processes, which consist of six core components: mindfulness and acceptance processes (acceptance, cognitive defusion, and self as context) and commitment and behavior change processes (being present, values, and committed action). (2) It followed items of other measurement tools of psychological flexibility, such as the CPAQ (Fish et al., 2010) and the Multidimensional Psychological Flexibility Inventory (MPFI; Rolffs et al., 2018). (3) Semi-structured interviews with open-ended questions were conducted with a representative sample of cancer patients to understand their feelings and responses after a cancer diagnosis. The interview outline revised by experts was as follows: ① Please describe your experience or feeling about cancer; ② What influences or changes have tumors brought to your life, including daily life, work, social interaction, family relations, etc.?; ③ What do you do in the face of cancer?; ④What are your main concerns?; and ⑤ What are your plans for the future?. An experienced interviewer conducted one-to-one interviews in an independent and quiet room. The entire interview process was recorded. The interviewer transcribed and analyzed the interview results on the day of the interview and stopped the interview after sufficient information was gathered. Finally, 18 cancer patients were interviewed. Four themes were extracted: negative emotions (distress, shame, frustration, anxiety, and self-blame), avoidance coping (avoid disease, social isolation, workplace alienation, and meaningless life), positive coping (accept reality, cooperate with treatment, and cherish life), and future plan (adjust lifestyle, assume roles, and go with the flow).",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "If an item reflected one of the six core components mentioned above, it was included in the potential items pool. Following these guidelines, 32 potential items were created to reflect the construct of PF. After study group discussion, some similar items were deleted or merged, and 14 items were retained.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "Scoring methodology",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "A 5-point Likert-type scale that ranged from “never true” to “always true” was used. Most items were reverse scored, with “never true” score as 5 points and “always true” scored as 1 point. A few items were positively scored. The total score was the sum of all items, with higher points representing better cancer-related PF.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "Expert consultation",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "After creating the potential items pool, expert consultation was conducted by sending an email to assess the accuracy and importance of the items and proposing modification suggestions. We selected 15 psychology experts from the ACT field; however, 12 experts ended up being involved in the consultation. There were five men and seven women, with ages ranging from 30 to 55years (with an average of 43.1±8.6years). They had been involved in psychology for at least 5years, and most are currently active in the ACT field. Regarding academic qualifications, one was an undergraduate, and the rest had a master’s or doctorate degree. Each expert evaluated the items independently.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "In the first round of consultation, the experts recommended we add some items about self as context and being present, and split some items with double meanings, so that the number of items increased to 23 after this consultation. We then conducted the second round of expert consultation. After this consultation, we adjusted the items appropriately, modified the ambiguous items, adjusted the order of the items, and selected the most representative items. For example, “Even if I feel ill, I can still live a normal life” changed to “Even if I feel ill, I still try to live like before I got sick,” and “I experience a lot of pain when I think about or feel certain things because of my tumor” changed to “I feel pain for suffering from a tumor.” Meanwhile, according to experts’ suggestions, we put together items that expressed the same concept. Finally, the initial questionnaire with 23 items was generated after two rounds of consultations.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "Pilot test",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "The pilot test took a sample of 15 inpatients from a tertiary cancer hospital, which was used to clarify ambiguous items, and delete items that were hard to understand or with multiple meanings. No incomprehension or ambiguity were discovered. As a result, a pilot questionnaire with 23 items was left.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "Procedure",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Two master’s students from the research team distributed the survey face-to-face between November and December 2021. Before the survey, participants were informed about the purpose of this study, the requirements for participation, potential risks/benefits, and their right to terminate participation at any time. The researchers started the survey once informed consent was obtained. The survey was conducted anonymously, and participants participated in the survey free of charge.",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "heading2",
+      "text": "Data analysis",
+      "continues": false,
+      "uncertain": false
+    },
+    {
+      "page": 3,
+      "type": "paragraph",
+      "text": "Data analysis was performed using the IBM SPSS software version 26.0 (IBM, Armonk, NY, United States). First, item-total correlations were used to test whether all items were consistent with the questionnaire. Inconsistent items were deleted based on the results. Second, the cases were divided into a high score group (the first 27%) and a low score group (the last 27%) according to the total score of the CPFQ, and then the scores of all items in the two groups were compared. Items with no significant differences indicating a lack of identification were deleted. Third, Kaiser-Meyer-Olkin and Bartlett’s test of sphericity was used to test whether the data were appropriate for factor analysis. Fourth, principal component analysis (PCA) was used to explore the latent structure of the CPFQ. The criteria for dimensions and item selection were as follows (Wu, 2010): (1) eigenvalues >1; (2) factors containing three or more items; (3) items load strongly (>0.40) onto factors; and (4) items do not cross-load onto two or more factors.",
+      "continues": false,
+      "uncertain": false
+    }
+  ],
+  "shippedTitle": "Introduction",
+  "recall": 0.986,
+  "quality": [
+    "Pages 1, 2, 3: 1 run(s) are missing from the transcription, the longest 8 words — “ou et al 10 3389 fpsyg 2023 1052726”.",
+    "Pages 1, 2, 3: 2 number(s) or address(es) in the output are on none of these pages — 56.4±11.3years, 43.1±8.6years."
+  ],
+  "usage": {
+    "input": 14650,
+    "output": 9852
+  }
+}
