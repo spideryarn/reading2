@@ -16,13 +16,13 @@ Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 |---|---|---|
 | 1 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the entry point.** The `@layer` statement, the Tailwind imports, the token bridge, the source-scanning rule |
 | 2 | `tailwindcss/theme.css` + `utilities.css` | Tailwind v4, prefixed `tw`, in layers `theme` and `utilities`. **Preflight is deliberately not imported** |
-| 3 | [`src/web/styles.css`](../../src/web/styles.css) | **nothing but `@import`s.** Imported by *file 1* so everything below it lands in `@layer app`, and it is the authoritative statement of the order the hand-written CSS loads in |
+| 3 | [`src/web/styles.css`](../../src/web/styles.css) | **nothing but `@import`s.** Imported by *file 1* so everything below it lands in `@layer app`, and it is the authoritative statement of the order the hand-written CSS loads in. A **new sheet takes two edits**: the `@import`, at the position you want it in the cascade, and the same name at the same position in `MANIFEST` in [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts), which is the independent witness to that order |
 | 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) last. Read `styles.css` for the rest of the order rather than guessing it from the file names |
 | 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the four font stacks, imported in turn by *file 3* |
 | 5 | [`styles/colourscales.css`](../../styles/colourscales.css) | the three palettes that are **not** the brand — categorical, sequential, diverging — imported by *file 4*. See [colour-scales.md](colour-scales.md) |
 
 `wc -l src/web/styles.css src/web/styles/*.css` on 2026-09-06: 65 lines of `@import` over 37 files,
-15,812 lines in all.
+15,951 lines in all.
 
 The nesting is the load-bearing part. Importing `styles.css` from `main.tsx` alongside
 `tailwind.css` **does not work** — it lands unlayered, outranks every utility, and Tailwind
@@ -616,14 +616,17 @@ will eventually have to decide whether they are a system or an accident:
 - **Motion.** Settled, mostly. One global guard in `@layer base` at the foot of
   [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; narrower
   blocks under [`src/web/styles/`](../../src/web/styles/) remain, for the things that are *wrong*
-  when reduced rather than merely fast (a tooltip's transform, the context panel's scroll-behaviour). Written globally
+  when reduced rather than merely fast (a tooltip's transform, the context panel's scroll-behaviour).
+  How many: `grep -rc "prefers-reduced-motion" src/web/styles/*.css` — **18 across 13 files** on
+  2026-09-06. `tailwind.css` said "four" until that day, and had been wrong by more than four times
+  for long enough that nobody could say when it drifted. Written globally
   before most of the motion it guards exists — which is the lesson from the previous app, where
   the guard covered two class names while fifteen keyframe animations ran regardless. Individual
   durations are still per-rule.
 - **What "done" looks like.** Whether this project wants a design system, or whether this much
   well-commented CSS *is* the answer at this size, is genuinely undecided — and the number is the
   sharp end of the question. Count it with `wc -l src/web/styles.css src/web/styles/*.css`; on
-  2026-09-06 that was 15,812 lines over 38 files. This line said "~1200" until 2026-09-03, and it
+  2026-09-06 that was 15,951 lines over 38 files. This line said "~1200" until 2026-09-03, and it
   was right when it was written: there was one file and it was 1,211 lines on 2026-08-25.
 
 ## Under this doc

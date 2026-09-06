@@ -567,17 +567,27 @@ describe("annotateHtml — the colours of the searches that found the words", ()
        of `@import`s since 2026-09-06, and these rules live in one of the files
        it names. tests/helpers/stylesheets.ts. */
     const css = readerCss();
+    /* **Through the rule opener, and this is the load-bearing part.** The
+       pattern stopped at `]` until 2026-09-06, so it matched a selector that
+       could never draw anything: GPT Sol appended `.never` to all eight and
+       every test in this file stayed green. `\s*\{` is what makes a match mean
+       "a rule that fires on `data-hues="N"`" rather than "those characters
+       appear somewhere". */
     const counts = [
-      ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]/g),
+      ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]\s*\{/g),
     ].map((m) => Number(m[1]));
-    /* The vacuity guard: with no rules matched, `Math.max()` of nothing is
-       `-Infinity` and the message would be about the number rather than about
-       the scan having stopped seeing anything. */
+    /* **Every rung, not the highest one.** The check was `Math.max(...) ===
+       BAR_HUES`, which is satisfied by a stylesheet holding nothing but rule 8 —
+       Sol deleted rules 1 through 7 and all fifty tests here passed, while a
+       paragraph with two or three hits painted no bar at all. The gradient's
+       stops are written out per count, so a missing count is a missing rule, and
+       a missing rule paints nothing rather than degrading. Sorted unique values
+       against the whole range says that. */
     expect(
-      counts.length,
-      'no `td.text.has-hit[data-hues="N"]` rule in the reader stylesheets',
-    ).toBeGreaterThan(0);
-    expect(Math.max(...counts)).toBe(BAR_HUES);
+      [...new Set(counts)].sort((a, b) => a - b),
+      'the `td.text.has-hit[data-hues="N"]` rules no longer cover 1..BAR_HUES — a count with ' +
+        "no rule behind it paints NO bar, so the whole mark vanishes rather than losing a stripe",
+    ).toEqual(Array.from({ length: BAR_HUES }, (_, i) => i + 1));
   });
 
   it("paints a hue only a reader could have chosen", () => {
