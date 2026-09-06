@@ -306,6 +306,29 @@ a typeset paper:
 `SCAN_WORDS_PER_PAGE` is 20 (`src/pdf.ts:352`) and is exported from the one file that owns the
 judgement, so there is no second threshold to keep in step.
 
+### Stage C is much smaller than it looked, and one check is why
+
+`assets` is a **`jsonb` column typed as `Assets`** — `src/db/schema.ts:943`,
+`jsonb("assets").$type<Assets>()`. So adding `pdfFigures?: PdfFigureEntry[]` to the `Assets`
+interface needs **no migration at all**, and none of the "13 places" the article-images plan had to
+plumb a new artefact through. That settles Sol's D4-2 in favour of his own smaller option: an
+additive field on the existing artefact rather than a new artefact or a discriminated `AssetSource`
+that would rewrite every manifest in production.
+
+The marker still has to be registered. `RESERVED_ATTRS` in [`src/reserved.ts`](../../src/reserved.ts)
+is the only file allowed to name a `data-spya-*` attribute, and `tests/reserved.test.ts` enforces it
+by scanning `src/` for the literal prefix — so `data-spya-pdf-figure` goes there or the gate goes
+red. Two notes for whoever writes it:
+
+- It must **not** join `FORBID_ATTR` in `src/sanitize-policy.ts`. Our own marks are forbidden there
+  precisely so a publisher cannot forge them, but this one has to survive the sanitiser to reach the
+  reading view at all.
+- Which is safe here for a reason worth stating rather than assuming: a forged marker resolves to
+  nothing. The ref is minted from the raw PDF's sha256, so an HTML article — which has no raw PDF —
+  has no `pdfFigures` entries for a forged ref to match, and the model's transcription reaches the
+  html through `escapeHtml` and cannot spell an attribute in the first place. `scrubReserved` on
+  ingress is still the discipline; it is belt to that braces.
+
 ## What Sol settled, 2026-09-06
 
 Full review in [260906a-figures-plan-review-sol.md](260906a-figures-plan-review-sol.md). The P0s

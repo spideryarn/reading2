@@ -180,10 +180,22 @@ describe("classifyRaster: validation", () => {
     expect(classifyRaster(candidate)).toEqual({ status: "refused", reason: "too-many-pixels" });
   });
 
-  it("stays exact on dimensions big enough to lose precision multiplied together", () => {
-    /* 2^40 × 2^40 is 2^80, which a double cannot hold, so a naive
-       `width * height <= cap` would compare a rounded number and could pass.
-       Each side is checked against the cap first, and that is why. */
+  it("refuses dimensions far too large to multiply exactly", () => {
+    /* **This does not prove what its first comment claimed, and the honest
+       version is worth more than the flattering one.** GPT Sol, reviewing stage
+       A: a bare `width * height > cap` would refuse 2^40 × 2^40 too, so this
+       case would pass with the per-dimension guard deleted. And the arithmetic
+       goes further than that — any product near the 12-million cap is exactly
+       representable in a double, and a product big enough to round is already
+       so far above the cap that it cannot round *down* to reach it. There is no
+       input that slips through the naive comparison.
+
+       So the per-dimension guard is not load-bearing for correctness. It is
+       kept because it makes the safety local: `classifyRaster` refuses before
+       multiplying, so a later reader does not have to reconstruct the
+       floating-point argument to convince themselves the multiply is sound.
+       What this test actually pins is that an absurd raster is refused for
+       being too big, and it is named for that. */
     const huge = 2 ** 40;
     const candidate: RasterCandidate = {
       page: 1,
@@ -263,6 +275,11 @@ describe("encodeFigurePng", () => {
     const png = await encodeFigurePng(verdict.raster);
     const chunks = chunksOf(png);
     expect(chunks.map((c) => c.type)).toEqual(["IHDR", "IDAT", "IEND"]);
+    /* PNG requires `IEND` to carry no payload, and nothing else here would
+       notice one that did: the CRC of a non-empty `IEND` is as valid as the CRC
+       of an empty one, so a writer that put bytes in it would pass every other
+       assertion in this file. GPT Sol, reviewing stage A. */
+    expect(chunks.at(-1)!.data.length).toBe(0);
 
     const ihdr = new DataView(chunks[0]!.data.buffer, chunks[0]!.data.byteOffset, chunks[0]!.data.byteLength);
     expect(ihdr.getUint32(0)).toBe(3);
@@ -396,11 +413,17 @@ describe("pairPageFigures", () => {
   });
 
   it("does not let one page's raster reach another page's caption", () => {
+    /* **The picture is on the SECOND marker's page, deliberately.** GPT Sol
+       found the first version of this test asserting almost nothing: its raster
+       sat on page 3 and the page-3 marker came first, so an implementation that
+       simply handed the first raster to the first marker — the obvious wrong
+       one — satisfied it exactly. Putting the picture behind the later caption
+       is what makes this a claim about grouping rather than about order. */
     const result = pairPageFigures({
       markers: [marker({ ref: "r1", page: 3 }), marker({ ref: "r2", page: 4 })],
-      candidates: [rgb(4, 4, [1, 2, 3], { page: 3, key: "three" })],
+      candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "four" })],
     });
-    expect(verdicts(result)).toEqual(["paired:three", "refused:no-raster"]);
+    expect(verdicts(result)).toEqual(["refused:no-raster", "paired:four"]);
   });
 
   it("gives every marker exactly one entry, in the order they were given", () => {
@@ -452,6 +475,24 @@ describe("pdfFigureRef", () => {
   it("is the same string every time for the same figure", () => {
     expect(pdfFigureRef(base)).toBe(pdfFigureRef({ ...base }));
     expect(pdfFigureRef(base)).toMatch(/^pdffig1-[0-9a-f]{32}$/);
+  });
+
+  it("mints this exact string, which every other test here would let change", () => {
+    /* **A golden vector, because a ref is a stored identifier.** GPT Sol,
+       reviewing stage A: every other assertion in this block pins determinism,
+       shape, or sensitivity to one field, and all of them would still pass if
+       the separator, the field order, the caption-hashing scheme or the outer
+       algorithm changed. The refs sitting in a stored manifest would then stop
+       matching the refs sitting in the stored html — and nothing would say so,
+       because `PDF_FIGURE_REF_VERSION` would still be `pdffig1`. That is the
+       exact failure the version tag exists to make visible, happening under the
+       version that promised it had not.
+
+       So the literal is the contract. When this goes red the answer is almost
+       never to update the number: it is to bump the version tag, because every
+       ref already stored under the old scheme has just stopped meaning what it
+       says. */
+    expect(pdfFigureRef(base)).toBe("pdffig1-36aeeb468c2fc161037b25d138d539f2");
   });
 
   it("changes when the PDF does", () => {

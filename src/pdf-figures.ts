@@ -205,11 +205,22 @@ export type RasterVerdict =
  * the byte count is arithmetic on three numbers, so a raster claiming to be
  * 40,000 × 40,000 is refused without anything touching a buffer. Sol I-6.
  *
- * The overflow-safe step is checking each side against the cap *before*
- * multiplying: `width * height` for two safe integers can be 2^80, which a
- * double rounds, and a rounded comparison is one that can pass. Once both sides
- * are inside the cap the product is under 1.5e14 and exact, and so is the byte
- * count that follows.
+ * Each side is checked against the cap *before* they are multiplied — but the
+ * reason is not the one this comment first gave, and the correction is worth
+ * keeping. It claimed a naive `width * height > cap` could be fooled, because
+ * two safe integers can multiply to 2^80 and a double rounds that. GPT Sol
+ * worked the arithmetic through and it does not hold: **any product near the
+ * 12-million cap is exactly representable, and any product large enough to
+ * round is already so far above the cap that it cannot round down to reach
+ * it.** There is no input that gets past the naive comparison, and Sol checked
+ * 100,009 dimension pairs against `BigInt` to say so.
+ *
+ * The per-dimension check stays anyway, for a smaller and honest reason: it
+ * makes the safety **local**. Nothing here multiplies two numbers it has not
+ * already bounded, so the next person to read this does not have to
+ * reconstruct a floating-point argument to satisfy themselves that the line
+ * below is sound. Once both sides are inside the cap the product is under
+ * 1.5e14 and exact, and so is the byte count that follows.
  */
 export function classifyRaster(candidate: RasterCandidate): RasterVerdict {
   const kind = rasterKind(candidate.kind);
