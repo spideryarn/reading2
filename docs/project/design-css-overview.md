@@ -32,7 +32,10 @@ Three mechanisms can style the same element, and picking wrongly is how the casc
 started. The rule of thumb:
 
 - **`styles.css`** owns anything structural, anything that reads as a *system* — the table
-  geometry, the spine, the tooltip card, the reading typography. Semantic class names
+  geometry, the spine, the tooltip card, the reading typography — each scoped to a class it
+  owns. A bare `thead th` is not table geometry, it is every table in the app
+  ([postmortem](../postmortems/260906g-an-unscoped-element-selector-in-styles-css-reached-every-table-in-the-app.md)).
+  Semantic class names
   (`.spine`, `.gist`, `.prose`) are the interface; [web-client.md § Never delete a semantic class
   name](web-client.md#never-delete-a-semantic-class-name) says why they must not be replaced by
   utility soup even where they carry no rules.
