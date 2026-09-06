@@ -63,7 +63,7 @@ import { armActivationForRefereeView } from "./activation.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
-import { rehostImages } from "./rehost.js";
+import { beginArticleLoad, rehostImages, type ArticleLoad } from "./rehost.js";
 import { TableView } from "./TableView.js";
 import type { SelectionAnchor } from "./selection.js";
 import type { TermSelection } from "./annotate.js";
@@ -868,16 +868,46 @@ function useArticleAccess(slug: string, readerId: string | null): ArticleAccess 
     /* Both can change under us — the slug via back/forward or a pasted link,
        the reader by signing in or out in another tab. Guard the response so a
        slow first fetch cannot overwrite a fast second one. */
+    /* **Ownership is claimed here, synchronously, before any await** — and
+       handed back by this effect's own cleanup. It used to be claimed inside
+       `rehostImages`, which runs only after the article payload has come back,
+       so *whose turn it was* was decided by which request finished last: a slow
+       article A returning after the reader had moved to B would revoke **B's**
+       object URLs and abort B's fetches, blanking the article on screen. That
+       is not rare — `<StrictMode>` double-invokes every effect in development.
+       rehost.ts § `ArticleLoad`, GPT Sol 2026-09-06. */
+    const load = beginArticleLoad();
     let live = true;
     setAnswer(null);
-    void resolveAccess(slug, readerId !== null)
-      .then((access) => live && setAnswer({ slug, readerId, access }))
+    void resolveAccess(slug, readerId !== null, load)
+      .then(({ access, withImages }) => {
+        if (!live) return;
+        setAnswer({ slug, readerId, access });
+        /* **The second draw**, and the same `live` guard for the same reason:
+           this one lands a second or so after the first, which is comfortably
+           long enough for the reader to have clicked something else. Without the
+           guard it would put the article they just left back on the screen.
+
+           An ordinary state transition rather than an `img.src = …` written into
+           the live DOM — `TableView` re-renders a block's html whenever its
+           annotations change, and would erase an imperative write while leaving
+           the object URL behind it unrevoked. GPT Sol, 2026-09-06. */
+        void withImages.then(
+          (drawn) => live && drawn && setAnswer({ slug, readerId, access: drawn }),
+        );
+      })
       .catch(
         (e: Error) =>
           live && setAnswer({ slug, readerId, access: { kind: "error", message: e.message } }),
       );
     return () => {
       live = false;
+      /* **And the resources, which `live` does not touch.** Leaving the reader
+         for the shelf, an article that turns out not to be shared, a payload
+         that hangs, an unmount while the second draw is still coming: none of
+         those reaches another `rehostImages`, so before this line each one left
+         a load fetching and its blobs allocated for the rest of the session. */
+      load.release();
     };
   }, [slug, readerId]);
 
@@ -915,9 +945,15 @@ function useArticleAccess(slug: string, readerId: string | null): ArticleAccess 
  * exactly the same route. The one thing worse than an unsanitised article is an
  * unsanitised article on the one page we invite strangers to.
  */
-async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAccess> {
+async function resolveAccess(
+  slug: string,
+  signedIn: boolean,
+  load: ArticleLoad,
+): Promise<ResolvedAccess> {
   const found = await findArticle(slug, signedIn);
-  if (found.kind === "not-shared" || found.kind === "reauth-required") return found;
+  if (found.kind === "not-shared" || found.kind === "reauth-required") {
+    return { access: found, withImages: NO_SECOND_ANSWER };
+  }
   /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
      of why it is here at all.** `stripOwnApiUrls` (src/sanitize-policy.ts)
      removes any `src` resolving to our own API, deliberately — an article may
@@ -933,30 +969,91 @@ async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAc
      token on `/api/asset/…` for an owner, a bare `publicFetch` on
      `/api/public/asset/…` for a visitor — which is the `footing` argument and
      nothing else. Both end in a `blob:`, and rehost.ts § Why every picture
-     arrives as a `blob:` says what changed on 2026-09-06 and why. */
-  const article = await rehostImages(
-    sanitizeArticle(found.article),
+     arrives as a `blob:` says what changed on 2026-09-06 and why.
+
+     **Two answers back, not one**, since stage E switched the article's own
+     images on: the first has the PDF figures in it and every image we hold a
+     copy of blanked, and the second — a moment later — has the copies. The
+     prose must not wait for a hundred pictures, and the publisher's URL must
+     not be in the markup while we fetch ours, because by the time we swapped it
+     the reader would already have been counted. rehost.ts § The images are
+     blanked before the prose draws. */
+  const clean = sanitizeArticle(found.article);
+  const rehosted = await rehostImages(
+    clean,
     slug,
     found.kind === "owned" ? "owned" : "public",
+    load,
   );
-  return found.kind === "owned"
-    ? { kind: "owned", article }
-    : {
-        kind: "public",
-        article,
-        artefacts: artefactsOf(found.article),
-        available: artefactsIn(found.article),
-        /* Derived here, once, on the raw payload — `visitorComments` supplies
-           the `status` a `PublicComment` deliberately does not carry, and says
-           why. src/web/public-artefacts.ts. */
-        comments: visitorComments(found.article),
-        /* Derived here too, once, and for the same reason — `visitorSearches`
-           supplies the `status` a `PublicSearchRun` deliberately does not
-           carry. src/web/public-artefacts.ts. */
-        searches: visitorSearches(found.article),
-        sessionUnconfirmed: found.sessionUnconfirmed,
-      };
+
+  /**
+   * The whole answer for one article, given which of the two draws we are on.
+   *
+   * **A closure over `found` rather than a second literal**, because everything
+   * in the public arm below is derived from the *raw* payload and is identical
+   * on both draws — copying it would be four derivations that have to agree, one
+   * of which (`visitorComments`) is the kind of thing that gets edited on one
+   * copy only.
+   */
+  const accessWith = (article: Article): ArticleAccess =>
+    found.kind === "owned"
+      ? { kind: "owned", article }
+      : {
+          kind: "public",
+          article,
+          artefacts: artefactsOf(found.article),
+          available: artefactsIn(found.article),
+          /* Derived here, once, on the raw payload — `visitorComments` supplies
+             the `status` a `PublicComment` deliberately does not carry, and says
+             why. src/web/public-artefacts.ts. */
+          comments: visitorComments(found.article),
+          /* Derived here too, once, and for the same reason — `visitorSearches`
+             supplies the `status` a `PublicSearchRun` deliberately does not
+             carry. src/web/public-artefacts.ts. */
+          searches: visitorSearches(found.article),
+          sessionUnconfirmed: found.sessionUnconfirmed,
+        };
+
+  return {
+    access: accessWith(rehosted.article),
+    /* **`catch`, and it falls back to `clean` rather than to `null`.** The
+       second draw is decoration on an article the reader already has, so a
+       rejection must not turn a successful load into an error page. But `null`
+       would leave the *first* draw standing — and that draw deliberately has
+       every stored image's `src` removed, so an unexpected throw would leave
+       blank boxes for ever rather than losing only the pictures. `clean` is the
+       sanitised article with the publishers' own URLs still in it, which is
+       exactly what a reader saw before any of this existed. GPT Sol,
+       2026-09-06. */
+    withImages: rehosted.images
+      /* `null` is *no second draw was ever coming*, which `rehostImages` only
+         says when it blanked nothing — so there is nothing to put right and the
+         first draw stands. Mapping it to `clean` here would drop a PDF's
+         figures back out of an article that had just been given them. */
+      .then((article) => (article ? accessWith(article) : null))
+      .catch(() => accessWith(clean)),
+  };
 }
+
+/**
+ * The article as it is now, and the article as it will be when its own images
+ * arrive.
+ *
+ * See `rehostImages` (rehost.ts § The article twice) for why there are two of
+ * them at all. What this type adds is that the second one is a whole
+ * `ArticleAccess` rather than an `Article`: the public arm carries four things
+ * derived beside the article, and handing the caller a bare article would make
+ * the hook responsible for rebuilding a union it has no business knowing the
+ * shape of.
+ */
+interface ResolvedAccess {
+  access: ArticleAccess;
+  /** `null` when there was never a second draw coming, which is most articles. */
+  withImages: Promise<ArticleAccess | null>;
+}
+
+/** Nothing of ours to draw on this one, so there is no second draw. */
+const NO_SECOND_ANSWER: Promise<ArticleAccess | null> = Promise.resolve(null);
 
 /** The two-step itself: the owned route, then the public one. Raw payloads. */
 async function findArticle(

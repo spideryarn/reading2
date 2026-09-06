@@ -24,9 +24,11 @@
  *    be a claim about a picture nobody has looked for.
  */
 
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Assets, PdfFigureEntry } from "../src/assets.js";
+import type { AssetEntry, Assets, PdfFigureEntry } from "../src/assets.js";
 import type { Article, Block, BlockId } from "../src/types.js";
 
 /* The two transports, and they are the only things in this module that touch
@@ -41,7 +43,9 @@ vi.mock("../src/web/public-api.js", () => ({
   publicFetch: (...args: unknown[]) => publicFetch(...args),
 }));
 
-const { rehostImages, rehostBlockHtml } = await import("../src/web/rehost.js");
+const { rehostImages, rehostBlockHtml, beginArticleLoad, IMAGE_WAIT_MS } = await import(
+  "../src/web/rehost.js"
+);
 const { pdfFigureNotesIn, hasOriginalPdf, FIGURE_NOT_RECOVERED } = await import(
   "../src/web/PdfFigureNote.js"
 );
@@ -116,6 +120,25 @@ function okPng(): { ok: true; status: 200; blob: () => Promise<Blob> } {
 }
 
 /**
+ * **The article the reader is shown immediately** — the PDF figures in it, every
+ * image we hold a copy of blanked, and nothing waited on beyond the figures.
+ *
+ * The two helpers are named after the two draws rather than being one with a
+ * flag, because *which draw a fact is true on* is the whole of stage E's design
+ * and a boolean argument would let a test assert it on the wrong one without
+ * saying so.
+ */
+async function firstDraw(article: Article, slug: string, footing: "owned" | "public") {
+  return (await rehostImages(article, slug, footing, beginArticleLoad())).article;
+}
+
+/** **What the reader ends up looking at**, once the images have arrived or not. */
+async function finalDraw(article: Article, slug: string, footing: "owned" | "public") {
+  const rehosted = await rehostImages(article, slug, footing, beginArticleLoad());
+  return (await rehosted.images) ?? rehosted.article;
+}
+
+/**
  * **The object-URL ledger, watched rather than inferred.**
  *
  * Both halves of GPT Sol's D-2 are invisible to an assertion about html: a blob
@@ -146,7 +169,7 @@ describe("rehostBlockHtml", () => {
 
   it("puts an image in the figure the marker is on", () => {
     const html = figureBlock("spya-aaaaaa", REF_ONE, "Figure 1. A graph.").html;
-    const out = rehostBlockHtml(html, (ref) => (ref === REF_ONE ? src : null));
+    const out = rehostBlockHtml(html, { figure: (ref) => (ref === REF_ONE ? src : null), image: () => null });
     const div = document.createElement("div");
     div.innerHTML = out;
     const img = div.querySelector("img");
@@ -174,16 +197,16 @@ describe("rehostBlockHtml", () => {
    */
   it("does not change the rendered text by one character", () => {
     const html = figureBlock("spya-aaaaaa", REF_ONE, "Figure 1. A graph.").html;
-    const out = rehostBlockHtml(html, () => src);
+    const out = rehostBlockHtml(html, { figure: () => src, image: () => null });
     expect(renderedText(out)).toBe(renderedText(html));
     expect(renderedText(out)).toBe("Figure 1. A graph.");
   });
 
   it("returns the very same string when there is nothing to do", () => {
     const html = "<p>Just prose.</p>";
-    expect(rehostBlockHtml(html, () => src)).toBe(html);
+    expect(rehostBlockHtml(html, { figure: () => src, image: () => null })).toBe(html);
     const figure = figureBlock("spya-aaaaaa", REF_ONE, "Figure 1.").html;
-    expect(rehostBlockHtml(figure, () => null)).toBe(figure);
+    expect(rehostBlockHtml(figure, { figure: () => null, image: () => null })).toBe(figure);
   });
 
   /**
@@ -194,14 +217,14 @@ describe("rehostBlockHtml", () => {
    */
   it("does not add a second image to a figure that has one", () => {
     const html = `<figure data-spya-pdf-figure="${REF_ONE}"><img src="https://elsewhere/x.png"><figcaption>Figure 1.</figcaption></figure>`;
-    expect(rehostBlockHtml(html, () => src)).toBe(html);
+    expect(rehostBlockHtml(html, { figure: () => src, image: () => null })).toBe(html);
   });
 });
 
 describe("rehostImages", () => {
   it("leaves an article with no figures exactly as it was", async () => {
     const article = articleWith([paragraph("spya-bbbbbb")]);
-    expect(await rehostImages(article, "a-piece", "owned")).toBe(article);
+    expect(await firstDraw(article, "a-piece", "owned")).toBe(article);
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -220,7 +243,7 @@ describe("rehostImages", () => {
       [figureBlock("spya-cccccc", REF_ONE, "Figure 1.")],
       [stored(REF_ONE, sha)],
     );
-    const out = await rehostImages(article, "a-piece", "public");
+    const out = await firstDraw(article, "a-piece", "public");
     expect(apiFetch).not.toHaveBeenCalled();
     expect(publicFetch).toHaveBeenCalledWith(
       `/api/public/asset/a-piece/${sha}.png`,
@@ -242,7 +265,7 @@ describe("rehostImages", () => {
       [figureBlock("spya-dddddd", REF_ONE, "Figure 1.")],
       [stored(REF_ONE, sha)],
     );
-    const out = await rehostImages(article, "a-piece", "owned");
+    const out = await firstDraw(article, "a-piece", "owned");
     expect(apiFetch).toHaveBeenCalledWith(`/api/asset/a-piece/${sha}.png`, {
       signal: expect.any(AbortSignal),
     });
@@ -269,7 +292,7 @@ describe("rehostImages", () => {
       [figureBlock("spya-rrrrrr", REF_ONE, "Figure 1.")],
       [stored(REF_ONE, "9".repeat(64))],
     );
-    const out = await rehostImages(article, "a-piece", "public");
+    const out = await firstDraw(article, "a-piece", "public");
     expect(publicFetch).toHaveBeenCalledTimes(1);
     expect(out.blocks[0]?.html).not.toContain("<img");
     /* The very same block object, which is the strongest form of "left exactly
@@ -284,7 +307,7 @@ describe("rehostImages", () => {
       [figureBlock("spya-ssssss", REF_ONE, "Figure 1.")],
       [stored(REF_ONE, "8".repeat(64))],
     );
-    const out = await rehostImages(article, "a-piece", "public");
+    const out = await firstDraw(article, "a-piece", "public");
     expect(out.blocks[0]?.html).not.toContain("<img");
     expect(created).not.toHaveBeenCalled();
   });
@@ -301,14 +324,14 @@ describe("rehostImages", () => {
       [figureBlock("spya-eeeeee", REF_TWO, "Figure 2.")],
       [stored(REF_ONE, "c".repeat(64))],
     );
-    const out = await rehostImages(article, "a-piece", "public");
+    const out = await firstDraw(article, "a-piece", "public");
     expect(out.blocks[0]?.html).not.toContain("<img");
     expect(out.blocks[0]?.html).toBe(article.blocks[0]?.html);
   });
 
   it("draws nothing for a figure the manifest records as failed", async () => {
     const article = articleWith([figureBlock("spya-ffffff", REF_TWO, "Figure 2.")], [failed(REF_TWO)]);
-    const out = await rehostImages(article, "a-piece", "public");
+    const out = await firstDraw(article, "a-piece", "public");
     expect(out.blocks[0]?.html).not.toContain("<img");
     expect(apiFetch).not.toHaveBeenCalled();
   });
@@ -332,7 +355,7 @@ describe("rehostImages", () => {
       ],
       [stored(REF_ONE, one), stored(REF_TWO, two)],
     );
-    const out = await rehostImages(article, "a-piece", "owned");
+    const out = await firstDraw(article, "a-piece", "owned");
     expect(out.blocks[0]?.html).not.toContain("<img");
     expect(out.blocks[1]?.html).toMatch(/src="blob:/);
   });
@@ -344,22 +367,409 @@ describe("rehostImages", () => {
       [paragraph("spya-iiiiii"), figureBlock("spya-jjjjjj", REF_ONE, "Figure 1.")],
       [stored(REF_ONE, "f".repeat(64))],
     );
-    const out = await rehostImages(article, "a-piece", "public");
+    const out = await firstDraw(article, "a-piece", "public");
     expect(out.blocks[0]).toBe(article.blocks[0]);
     expect(out.blocks[1]).not.toBe(article.blocks[1]);
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * The article's own images — stage E
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A real corpus URL, with the query string that makes the encoding trap
+ * live.** Five of the corpus's thirteen images carry an imgix signature like
+ * this one, and it is the `&` between the two parameters that the stored html
+ * spells `&amp;` and the DOM hands back bare.
+ */
+const IMG_URL = "https://noemamag.imgix.net/fig.png?w=1200&s=3a2bee";
+
+/** The same URL as it actually sits in `blocks.json`. */
+const IMG_URL_STORED = "https://noemamag.imgix.net/fig.png?w=1200&amp;s=3a2bee";
+
+/** A URL nothing in these manifests names. */
+const OTHER_URL = "https://content.wolfram.com/uploads/plot.png";
+
+function imageBlock(id: string, html: string, text = "Some prose."): Block {
+  return { id: id as BlockId, tag: "p", kind: "text", text, html } as Block;
+}
+
+function storedImage(url: string, sha256: string): AssetEntry {
+  return { url, status: "stored", sha256, ext: "png", contentType: "image/png", bytes: 4242 };
+}
+
+function failedImage(url: string): AssetEntry {
+  return {
+    url,
+    status: "failed",
+    reason: "unsupported-format",
+    at: "2026-09-06T00:00:00.000Z",
+  };
+}
+
+/** The twin of `articleWith` for the other half of the manifest. */
+function articleWithImages(blocks: Block[], entries: AssetEntry[]): Article {
+  return {
+    meta: { slug: "a-piece", title: "A piece" },
+    blocks,
+    tree: { version: "hierarchy/4", nodes: [], roots: [] },
+    assets: {
+      version: "assets/2",
+      sourceHash: "x",
+      fetchedAt: "2026-09-06T00:00:00.000Z",
+      entries,
+    } satisfies Assets,
+  } as unknown as Article;
+}
+
+describe("the article's own images", () => {
+  const SHA = "7".repeat(64);
+
+  /**
+   * **The failure that looks exactly like success.** A browser handed a
+   * rewritten `src` and an untouched `srcset` prefers the `srcset` — so the
+   * page hot-links the publisher on every read while looking completely fixed,
+   * and nothing anywhere throws. 260829b § trap 1, and src/assets.ts § 2.
+   *
+   * Asserted as the **absence of the publisher**, on that trap's own
+   * instruction, rather than the presence of ours: a `src` we rewrote proves
+   * nothing about the four other places a URL can hide.
+   */
+  it("drops the srcset and the sizes with the src it replaces", async () => {
+    apiFetch.mockResolvedValue(okPng());
+    const article = articleWithImages(
+      [
+        imageBlock(
+          "spya-img001",
+          `<p><img src="${IMG_URL_STORED}" srcset="${IMG_URL_STORED} 1200w, https://noemamag.imgix.net/fig-600.png 600w" sizes="(max-width: 600px) 100vw, 600px" alt="A graph">Some prose.</p>`,
+        ),
+      ],
+      [storedImage(IMG_URL, SHA)],
+    );
+    const html = (await finalDraw(article, "a-piece", "owned")).blocks[0]?.html ?? "";
+    expect(html).toMatch(/src="blob:/);
+    expect(html).not.toContain("srcset");
+    expect(html).not.toContain("sizes");
+    expect(html, "the publisher must not survive anywhere in this block").not.toMatch(
+      /\bnoemamag\b/,
+    );
+  });
+
+  /**
+   * **And it is gone on the *first* draw too**, which is the half that has to be
+   * true for the feature to mean anything: the reader sees the prose before the
+   * pictures arrive, so a publisher URL left in the markup for that first draw
+   * is a request the browser has already made. 260829b § Two readers, two paths:
+   * *"Do not render the publisher URL while a stored asset is resolving."*
+   */
+  it("takes the publisher's URL away before the prose is drawn", async () => {
+    /* A fetch that never answers — the whole point is that the first draw does
+       not wait for it. */
+    apiFetch.mockImplementation(() => new Promise(() => {}));
+    const article = articleWithImages(
+      [
+        imageBlock(
+          "spya-img011",
+          `<p><img src="${IMG_URL_STORED}" srcset="${IMG_URL_STORED} 1200w" width="1200" height="800" alt="A graph">Some prose.</p>`,
+        ),
+      ],
+      [storedImage(IMG_URL, SHA)],
+    );
+    const html = (await firstDraw(article, "a-piece", "owned")).blocks[0]?.html ?? "";
+    expect(html, "the prose must not wait for a picture that never comes").toContain("Some prose.");
+    expect(html).not.toMatch(/\bnoemamag\b/);
+    expect(html).not.toContain("srcset");
+    /* No `src` at all rather than an empty one, which would fetch the reading
+       view itself — and the publisher's own dimensions kept, so the browser can
+       still reserve the box. */
+    expect(html).not.toMatch(/\bsrc=/);
+    expect(html).toContain('width="1200"');
+    expect(html).toContain('height="800"');
+  });
+
+  /**
+   * **The other half of the same trap**, and the one that makes a whole feature
+   * silently do nothing: `blocks.json` stores `&amp;` and `getAttribute("src")`
+   * returns `&`. Look the stored string up in a manifest keyed on the decoded
+   * one and every entry misses. src/assets.ts § 1.
+   */
+  it("finds an entry whose URL is written with an entity in the stored html", async () => {
+    apiFetch.mockResolvedValue(okPng());
+    const article = articleWithImages(
+      [imageBlock("spya-img002", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`)],
+      [storedImage(IMG_URL, SHA)],
+    );
+    const out = await finalDraw(article, "a-piece", "owned");
+    expect(apiFetch).toHaveBeenCalledWith(`/api/asset/a-piece/${SHA}.png`, {
+      signal: expect.any(AbortSignal),
+    });
+    expect(out.blocks[0]?.html).toMatch(/src="blob:/);
+  });
+
+  /**
+   * **`failed` means hot-link exactly as before**, and it must not become a
+   * blank. That is the difference between an article's own image and a PDF
+   * figure: a web image has a publisher's URL to fall back to, and blanking one
+   * we cannot replace would take a working picture off the page.
+   *
+   * Checked on **both** draws, because the first is where the blanking happens
+   * and a `failed` entry reaching that branch would be invisible in the second.
+   */
+  it("leaves a failed entry hot-linked, untouched", async () => {
+    const article = articleWithImages(
+      [imageBlock("spya-img003", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`)],
+      [failedImage(IMG_URL)],
+    );
+    expect((await firstDraw(article, "a-piece", "owned")).blocks[0]).toBe(article.blocks[0]);
+    expect((await finalDraw(article, "a-piece", "owned")).blocks[0]).toBe(article.blocks[0]);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  /** And a URL with no entry at all — the step never looked — the same. */
+  it("leaves an image the manifest never mentions hot-linked, untouched", async () => {
+    const article = articleWithImages(
+      [imageBlock("spya-img004", `<p><img src="${OTHER_URL}" alt="">Some prose.</p>`)],
+      [storedImage(IMG_URL, SHA)],
+    );
+    expect((await firstDraw(article, "a-piece", "owned")).blocks[0]).toBe(article.blocks[0]);
+    expect((await finalDraw(article, "a-piece", "owned")).blocks[0]).toBe(article.blocks[0]);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **A `<picture>`'s `<source>` beats the `<img>` outright**, so rewriting the
+   * `src` and leaving the siblings is the same silent hot-link one element
+   * further out. The corpus has no `<picture>` at all (260829b § What the corpus
+   * cannot tell us), which is exactly why this fixture is synthetic.
+   */
+  it("removes the sibling <source> of a picture it rewrites", async () => {
+    apiFetch.mockResolvedValue(okPng());
+    const article = articleWithImages(
+      [
+        imageBlock(
+          "spya-img005",
+          `<p><picture><source srcset="https://noemamag.imgix.net/fig.avif" type="image/avif"><source srcset="https://noemamag.imgix.net/fig.webp" type="image/webp"><img src="${IMG_URL_STORED}" alt=""></picture>Some prose.</p>`,
+        ),
+      ],
+      [storedImage(IMG_URL, SHA)],
+    );
+    /* **Both draws.** Removing `<source>` only where our copy is inserted would
+       leave the first paint — the one the reader actually gets first — quietly
+       hot-linking, and an assertion on the final draw alone cannot see it. */
+    const blank = (await firstDraw(article, "a-piece", "owned")).blocks[0]?.html ?? "";
+    expect(blank).not.toContain("<source");
+    expect(blank).not.toMatch(/\bnoemamag\b/);
+
+    const html = (await finalDraw(article, "a-piece", "owned")).blocks[0]?.html ?? "";
+    expect(html).not.toContain("<source");
+    expect(html).toMatch(/src="blob:/);
+    expect(html).not.toMatch(/\bnoemamag\b/);
+  });
+
+  /**
+   * The property the whole reading view rests on, pinned for this half too, and
+   * **on both draws** — the first one removes a `<source>` and an attribute, the
+   * second adds one back, and either could shift an offset if it ever grew a
+   * text node.
+   */
+  it("does not change the rendered text by one character", async () => {
+    apiFetch.mockResolvedValue(okPng());
+    const before = `<p><picture><source srcset="https://noemamag.imgix.net/fig.webp"><img src="${IMG_URL_STORED}" alt="A graph"></picture>Some prose.</p>`;
+    const article = articleWithImages(
+      [imageBlock("spya-img006", before)],
+      [storedImage(IMG_URL, SHA)],
+    );
+    for (const drawn of [
+      await firstDraw(article, "a-piece", "owned"),
+      await finalDraw(article, "a-piece", "owned"),
+    ]) {
+      expect(renderedText(drawn.blocks[0]?.html ?? "")).toBe(renderedText(before));
+      expect(renderedText(drawn.blocks[0]?.html ?? "")).toBe("Some prose.");
+    }
+  });
+
+  /**
+   * **The publisher comes back when our own copy will not load**, and it comes
+   * back because the second draw is rebuilt from the original html rather than
+   * from the blanked one — so *leave it alone* is the whole implementation.
+   *
+   * 260829b § trap 8 is the correction that a *pipeline* failure and a
+   * *delivery* failure are not the same thing. This is the delivery one, and it
+   * is the case that decides whether a stage-E bug costs a reader privacy or
+   * costs them the picture.
+   */
+  it("puts the publisher's URL back when our own copy will not load", async () => {
+    apiFetch.mockResolvedValue({ ok: false, status: 500 });
+    const article = articleWithImages(
+      [imageBlock("spya-img007", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`)],
+      [storedImage(IMG_URL, SHA)],
+    );
+    /* Blank while we try… */
+    expect((await firstDraw(article, "a-piece", "owned")).blocks[0]?.html).not.toMatch(/\bsrc=/);
+    /* …and the publisher's own URL once we have failed. The very same block
+       object, which is the strongest form of "exactly as it was". */
+    const out = await finalDraw(article, "a-piece", "owned");
+    expect(out.blocks[0]).toBe(article.blocks[0]);
+    expect(out.blocks[0]?.html).toContain(IMG_URL_STORED);
+    expect(created, "a failed fetch must mint nothing").not.toHaveBeenCalled();
+  });
+
+  /** A visitor's copies come off the public route, with no token. */
+  it("fetches a visitor's image off the public route", async () => {
+    publicFetch.mockResolvedValue(okPng());
+    const article = articleWithImages(
+      [imageBlock("spya-img008", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`)],
+      [storedImage(IMG_URL, SHA)],
+    );
+    const out = await finalDraw(article, "a-piece", "public");
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(publicFetch).toHaveBeenCalledWith(
+      `/api/public/asset/a-piece/${SHA}.png`,
+      expect.any(AbortSignal),
+    );
+    expect(out.blocks[0]?.html).toMatch(/src="blob:/);
+  });
+
+  /** One picture used twice in one article is one object and one request. */
+  it("asks for one object once however many times the article uses it", async () => {
+    apiFetch.mockResolvedValue(okPng());
+    const article = articleWithImages(
+      [
+        imageBlock("spya-img009", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`),
+        imageBlock("spya-img010", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`),
+      ],
+      [storedImage(IMG_URL, SHA)],
+    );
+    const out = await finalDraw(article, "a-piece", "owned");
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(out.blocks[0]?.html).toMatch(/src="blob:/);
+    expect(out.blocks[1]?.html).toMatch(/src="blob:/);
+  });
+
+  /**
+   * **The regression this stage was most at risk of, asserted directly.**
+   *
+   * `rehostImages` is awaited before the article renders. With eight PDF figures
+   * that was fine; with the 102 images and 7.04 MB of the worst article in the
+   * corpus (measured 2026-09-06) it would have turned *the prose appears* into
+   * *the prose appears once every image has downloaded*.
+   *
+   * So the first draw must resolve while the fetches are still outstanding, and
+   * this is what says so: not one of the three responses ever arrives, and the
+   * article still comes back with its prose in it.
+   *
+   * **Fake timers, and never advanced, which is the whole of why this cannot
+   * pass for the wrong reason.** Written first without them, and putting the
+   * `await` back turned it from a 20 ms pass into a 15 second pass — because
+   * `IMAGE_WAIT_MS` rescued it, which is exactly the bound that must not be what
+   * gets the reader their prose. With the clock frozen, the bound can never
+   * fire, so an implementation that awaits the images hangs here instead.
+   */
+  it("draws the prose without waiting for a single image", async () => {
+    vi.useFakeTimers();
+    try {
+      let started = 0;
+      apiFetch.mockImplementation(() => {
+        started += 1;
+        return new Promise(() => {});
+      });
+      const article = articleWithImages(
+        [
+          imageBlock("spya-img012", `<p><img src="${IMG_URL_STORED}" alt="">One.</p>`, "One."),
+          imageBlock("spya-img013", `<p><img src="${OTHER_URL}2" alt="">Two.</p>`, "Two."),
+          imageBlock("spya-img014", `<p><img src="${OTHER_URL}3" alt="">Three.</p>`, "Three."),
+        ],
+        [
+          storedImage(IMG_URL, SHA),
+          storedImage(`${OTHER_URL}2`, "2".repeat(64)),
+          storedImage(`${OTHER_URL}3`, "3".repeat(64)),
+        ],
+      );
+      const drawn = await firstDraw(article, "a-piece", "owned");
+      expect(started, "all three go out together, not one after another").toBe(3);
+      expect(drawn.blocks.map((b) => renderedText(b.html))).toEqual(["One.", "Two.", "Three."]);
+      for (const block of drawn.blocks) expect(block.html).not.toMatch(/\bsrc=/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * **`IMAGE_WAIT_MS` is not a first-paint budget** — the prose has already been
+   * drawn by the time it starts to matter. It is the point at which we stop
+   * believing a fetch of ours will land, and it exists because there is a single
+   * second draw: without it one hung connection would leave *every* image on the
+   * article blank for the rest of the read.
+   *
+   * Fake timers rather than a real wait, obviously; the assertion is that the
+   * second draw arrives at all and that the picture that did not is back at the
+   * publisher's.
+   */
+  it("gives up on a hung fetch, keeps the one that landed, and mints nothing late", async () => {
+    vi.useFakeTimers();
+    try {
+      const quickSha = "4".repeat(64);
+      let arrive = (): void => {};
+      const held = new Promise<void>((resolve) => {
+        arrive = resolve;
+      });
+      const signals: (AbortSignal | undefined)[] = [];
+      apiFetch.mockImplementation(async (path: string, init?: { signal?: AbortSignal }) => {
+        signals.push(init?.signal);
+        if (path.includes(quickSha)) return okPng();
+        await held;
+        return okPng();
+      });
+
+      const article = articleWithImages(
+        [
+          imageBlock("spya-img015", `<p><img src="${IMG_URL_STORED}" alt="">Hung.</p>`, "Hung."),
+          imageBlock("spya-img016", `<p><img src="${OTHER_URL}" alt="">Quick.</p>`, "Quick."),
+        ],
+        [storedImage(IMG_URL, SHA), storedImage(OTHER_URL, quickSha)],
+      );
+      const rehosted = await rehostImages(article, "a-piece", "owned", beginArticleLoad());
+      expect(rehosted.article.blocks[0]?.html).not.toMatch(/\bsrc=/);
+
+      await vi.advanceTimersByTimeAsync(IMAGE_WAIT_MS);
+      const out = await rehosted.images;
+
+      /* The one that hung is back at the publisher's; the one that landed is
+         ours. **One slow picture must not cost the others** — the deadline is a
+         bound on the wait, not a reason to throw away what arrived. */
+      expect(out?.blocks[0]?.html).toContain(IMG_URL_STORED);
+      expect(out?.blocks[1]?.html).toMatch(/src="blob:/);
+
+      /* **The abort itself, asserted.** Without it the outstanding request goes
+         on downloading a picture whose publisher URL is already back on the
+         page — and deleting `stop.abort()` left this test green until this
+         line. */
+      expect(signals.some((s) => s?.aborted)).toBe(true);
+
+      /* And the late arrival mints nothing, which an abort alone does not
+         guarantee: a response already in hand is not cancelled with its
+         request. */
+      const mintedByNow = created.mock.calls.length;
+      arrive();
+      await Promise.resolve();
+      expect(created.mock.calls.length).toBe(mintedByNow);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 /**
  * **What happens to the blobs**, which nothing in this file used to observe at
- * all — not their creation and not their release. GPT Sol, D-2, 2026-09-06.
+ * all — not their creation and not their release. GPT Sol, D-2, 2026-09-06, and
+ * then again the same day when stage E showed the mechanism itself was wrong.
  *
- * Both leaks below leave the article on screen perfectly correct, so no
- * assertion about html can see either one. What they cost is memory, growing
- * across a session of reading rather than within one article, which is the
- * shape of bug that gets found by a reader whose laptop fan comes on.
+ * Every failure below leaves the article on screen looking correct, or looking
+ * broken for a reason nobody would attribute to this file. What they cost is
+ * memory, or somebody else's pictures.
  */
-describe("the object URLs a load mints", () => {
+describe("what a load owns", () => {
   const sha = "1".repeat(64);
 
   /** The blob URL sitting in a block's html, so a test can watch it die. */
@@ -368,43 +778,88 @@ describe("the object URLs a load mints", () => {
   }
 
   /**
-   * **The leak was on the commonest path of all.** `releasePrevious` used to sit
-   * *after* the "this article has no figures" guard, so the one navigation
-   * everybody makes — from a PDF with figures to an ordinary web article — took
-   * the branch that returned early and freed nothing. An old PDF with no
-   * manifest and a PDF whose figures all failed are the same path.
+   * **Releasing a load hands its blobs back**, whatever the article was.
+   *
+   * The mechanism this replaced swept at the *start of the next* `rehostImages`,
+   * so leaving a PDF for anything that never reached one — the shelf, an
+   * unshared article, a payload that hung — freed nothing at all for the rest of
+   * the session. That is four common navigations, and none of them is a code
+   * path anybody would think to look at.
    */
-  it("lets the previous article's blobs go even when the next article has none", async () => {
+  it("revokes what it minted when it is released, with no next load involved", async () => {
     apiFetch.mockResolvedValue(okPng());
+    const load = beginArticleLoad();
     const withFigures = articleWith(
       [figureBlock("spya-tttttt", REF_ONE, "Figure 1.")],
       [stored(REF_ONE, sha)],
     );
-    const first = await rehostImages(withFigures, "a-piece", "owned");
+    const first = (await rehostImages(withFigures, "a-piece", "owned", load)).article;
     const url = blobUrlIn(first.blocks[0]?.html);
-    expect(url, "the first load has to have minted one, or this proves nothing").toBeDefined();
+    expect(url, "the load has to have minted one, or this proves nothing").toBeDefined();
 
     revoked.mockClear();
-    await rehostImages(articleWith([paragraph("spya-uuuuuu")]), "an-ordinary-article", "owned");
+    load.release();
     expect(revoked).toHaveBeenCalledWith(url);
+
+    /* Idempotent: an effect's cleanup and a later abort must not double-revoke. */
+    revoked.mockClear();
+    load.release();
+    expect(revoked).not.toHaveBeenCalled();
   });
 
   /**
-   * **A load nobody is waiting for any more must stop, and must not mint.**
+   * **The bug stage E was one navigation away from shipping.** GPT Sol,
+   * 2026-09-06.
    *
-   * A reader clicking through three articles in four seconds starts three loads.
-   * Without an `AbortController` the first two go on downloading; worse, they go
-   * on calling `createObjectURL` *after* the sweep that would have revoked them
-   * has already run, so those blobs are unreachable and permanent.
+   * Ownership used to be claimed *inside* `rehostImages`, which runs only after
+   * the article payload has been awaited — so whose turn it was got decided by
+   * which request happened to finish last. A slow article A returning after the
+   * reader had already moved to B would sweep B's object URLs and abort B's
+   * fetches. A's own `live` flag stops A being *rendered*; it does nothing for
+   * the article that is on the screen, whose pictures simply go.
+   *
+   * This is the ordering no test in the file could reach before, because every
+   * one of them called `rehostImages` in completion order.
+   */
+  it("a stale load does not revoke the blobs of the load that overtook it", async () => {
+    /* Two loads claimed in the order the reader started them, which is the whole
+       point: the claim is synchronous and the payload is not. */
+    const stale = beginArticleLoad();
+    const current = beginArticleLoad();
+
+    apiFetch.mockResolvedValue(okPng());
+    const bs = articleWith(
+      [figureBlock("spya-bbbb01", REF_ONE, "Figure 1.")],
+      [stored(REF_ONE, sha)],
+    );
+    const drawn = (await rehostImages(bs, "the-one-on-screen", "owned", current)).article;
+    const live = blobUrlIn(drawn.blocks[0]?.html);
+    expect(live).toBeDefined();
+
+    /* A's payload finally arrives, long after the reader left it. */
+    revoked.mockClear();
+    await rehostImages(
+      articleWith([figureBlock("spya-bbbb02", REF_TWO, "Figure 2.")], [stored(REF_TWO, sha)]),
+      "the-one-they-left",
+      "owned",
+      stale,
+    );
+    expect(revoked, "the article on screen must keep its pictures").not.toHaveBeenCalledWith(live);
+    expect(current.signal.aborted, "and its fetches must not be cancelled").toBe(false);
+  });
+
+  /**
+   * **A released load must stop, and must not mint.**
    *
    * Two assertions, because the abort alone is not enough: a response whose
    * bytes had already arrived is not cancelled by aborting its request, so the
-   * signal has to be re-read after `blob()` too.
+   * signal has to be re-read after `blob()` too — and `mint` refuses as well, so
+   * that the leak does not rest on a caller remembering to ask.
    */
-  it("aborts a superseded load, and mints nothing once it has been", async () => {
-    let release = (): void => {};
+  it("aborts a released load, and mints nothing once it has been", async () => {
+    let arrive = (): void => {};
     const held = new Promise<void>((resolve) => {
-      release = resolve;
+      arrive = resolve;
     });
     const signals: (AbortSignal | undefined)[] = [];
     apiFetch.mockImplementation(async (_path: string, init?: { signal?: AbortSignal }) => {
@@ -413,22 +868,90 @@ describe("the object URLs a load mints", () => {
       return okPng();
     });
 
-    const stale = rehostImages(
+    const load = beginArticleLoad();
+    const pending = rehostImages(
       articleWith([figureBlock("spya-vvvvvv", REF_ONE, "Figure 1.")], [stored(REF_ONE, sha)]),
       "a-piece",
       "owned",
+      load,
     );
-    expect(signals, "the fetch has to have gone out before the second load").toHaveLength(1);
+    expect(signals, "the fetch has to have gone out before we release").toHaveLength(1);
 
-    /* The reader moves on. An article with no figures, deliberately: that is the
-       path that used to return without touching anything. */
-    await rehostImages(articleWith([paragraph("spya-wwwwww")]), "somewhere-else", "owned");
+    load.release(); // the reader leaves — for the shelf, say, not another article
     expect(signals[0]?.aborted).toBe(true);
 
     /* And now the bytes turn up anyway, which is the case an abort cannot
        prevent — the response was already in hand. */
-    release();
-    await stale;
+    arrive();
+    await pending;
+    expect(created).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **Released before its payload even arrived**, which is the ordinary shape of
+   * a reader who clicks twice. Not one request may go out — for a picture of
+   * ours or, far worse, for the publisher's.
+   */
+  it("fetches nothing at all for a load released before the article came back", async () => {
+    const load = beginArticleLoad();
+    load.release();
+    const out = await rehostImages(
+      articleWithImages(
+        [imageBlock("spya-bbbb03", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`)],
+        [storedImage(IMG_URL, "5".repeat(64))],
+      ),
+      "a-piece",
+      "owned",
+      load,
+    );
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(out.article, "and the article comes back untouched").toBe(
+      out.article,
+    );
+    expect(await out.images).toBeNull();
+  });
+
+  /**
+   * **The awaited half is where an already-fired abort hides.** A mixed article
+   * awaits its figures first, so a load released during that await reaches the
+   * image half with a signal that has *already* aborted — and
+   * `addEventListener` does not replay an abort that has already happened. Miss
+   * the up-front check and every image fetch goes out for an article nobody is
+   * looking at. GPT Sol, 2026-09-06.
+   */
+  it("starts no image fetch when the load was released while the figures were coming", async () => {
+    const load = beginArticleLoad();
+    const asked: string[] = [];
+    apiFetch.mockImplementation(async (path: string) => {
+      asked.push(path);
+      /* Released *during* the figure fetch, which is the whole fixture. */
+      if (asked.length === 1) load.release();
+      return okPng();
+    });
+
+    const figureSha = "6".repeat(64);
+    const imageSha = "7".repeat(64);
+    const article = {
+      meta: { slug: "a-piece", title: "A piece" },
+      blocks: [
+        figureBlock("spya-bbbb04", REF_ONE, "Figure 1."),
+        imageBlock("spya-bbbb05", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`),
+      ],
+      tree: { version: "hierarchy/4", nodes: [], roots: [] },
+      assets: {
+        version: "assets/2",
+        sourceHash: "x",
+        fetchedAt: "2026-09-06T00:00:00.000Z",
+        entries: [storedImage(IMG_URL, imageSha)],
+        pdfFigures: [stored(REF_ONE, figureSha)],
+      },
+    } as unknown as Article;
+
+    const out = await rehostImages(article, "a-piece", "owned", load);
+    await out.images;
+    expect(asked, "only the figure was ever asked for").toEqual([
+      `/api/asset/a-piece/${figureSha}.png`,
+    ]);
     expect(created).not.toHaveBeenCalled();
   });
 });
@@ -461,7 +984,7 @@ describe("a rehosted figure and the enlarge button", () => {
     before.innerHTML = addZoomHandles(bare);
     expect(before.querySelector(`.${ZOOM_BTN_CLASS}`)).toBeNull();
 
-    const withImage = rehostBlockHtml(bare, () => ({ src: "blob:x", width: 800, height: 600 }));
+    const withImage = rehostBlockHtml(bare, { figure: () => ({ src: "blob:x", width: 800, height: 600 }), image: () => null });
     const after = document.createElement("div");
     after.innerHTML = addZoomHandles(withImage);
     expect(after.querySelector(`.${ZOOM_BTN_CLASS}`)).not.toBeNull();
@@ -589,5 +1112,64 @@ describe("what the reader is told about a figure", () => {
     expect(FIGURE_NOT_RECOVERED).not.toMatch(/\[/);
     expect(FIGURE_NOT_RECOVERED).not.toMatch(/vector|bitmap|decode|megapixel/i);
     expect(FIGURE_NOT_RECOVERED.length).toBeLessThan(90);
+  });
+});
+
+/**
+ * **The wiring in `useArticleAccess`, checked by reading the source** — the
+ * second-best thing, and worth having because the best thing does not exist
+ * here yet.
+ *
+ * `rehostImages` hands back two articles and it is the *hook* that draws the
+ * second. Delete that one `setAnswer` and every test above this line stays
+ * green while **every stored image on every article is blank for ever**: the
+ * first draw took the publisher's `src` away and nothing ever puts ours in.
+ * That is the exact shape of failure this repo keeps naming
+ * (docs/reusable/silent-success.md), and it is invisible to a test of the
+ * module in isolation.
+ *
+ * A mounted-`App` test driving fetch → state → render would catch it properly
+ * and is owed — it needs a React testing library the project has not chosen
+ * (tests/sanitize-client.test.ts § the ingress is wired up says the same thing
+ * about the same function, and this scan is copied from it). Until then: a
+ * source read, which catches the deletion and the rename and admits it catches
+ * nothing else. GPT Sol, 2026-09-06.
+ */
+describe("the second draw is wired to the hook", () => {
+  const APP = readFileSync("src/web/App.tsx", "utf8");
+
+  it("sets the answer a second time when the images arrive", () => {
+    const effect = APP.slice(
+      APP.indexOf("function useArticleAccess"),
+      APP.indexOf("async function resolveAccess"),
+    );
+    expect(effect, "the scan itself must not silently find nothing").toContain("resolveAccess(");
+    /* **The promise has to be consumed and its value has to reach state**, and
+       the two are asserted as one pattern rather than two `toContain`s: written
+       apart, `withImages` present anywhere and `setAnswer` present anywhere both
+       stayed true when the whole `.then` was replaced by `void withImages;`, and
+       this test passed while every image on every article went blank. It pins
+       the shape as written, deliberately — a different shape is welcome and has
+       to come back here and say so. */
+    expect(effect).toMatch(/withImages\s*\.then\([\s\S]{0,400}setAnswer\(/);
+  });
+
+  /**
+   * **And the load is claimed synchronously, before the payload is awaited.**
+   * Claiming it inside `rehostImages` is what let a slow article revoke the
+   * blobs of the one that overtook it — rehost.ts § `ArticleLoad`. A source read
+   * for the same reason as above: the ordering is between a React effect and a
+   * network round trip, and nothing here can mount one.
+   */
+  it("claims and releases the load in the effect, not inside rehostImages", () => {
+    const effect = APP.slice(
+      APP.indexOf("function useArticleAccess"),
+      APP.indexOf("async function resolveAccess"),
+    );
+    expect(effect).toContain("beginArticleLoad()");
+    /* The claim comes before the call it is for. */
+    expect(effect.indexOf("beginArticleLoad()")).toBeLessThan(effect.indexOf("resolveAccess("));
+    /* And the cleanup hands it back — `live = false` alone frees nothing. */
+    expect(effect).toMatch(/return \(\) => \{[\s\S]{0,600}load\.release\(\)/);
   });
 });
