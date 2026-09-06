@@ -166,12 +166,23 @@ export type { AutoRunTarget };
  *  - **`fixed`** — the press arms one named target, always. The five rows that
  *    were the whole of this table before.
  *  - **`delegated`** — the press arms something, but *which* thing depends on
- *    state this table cannot see, so the row carries the arming call itself.
+ *    state this table cannot see, so the row carries a function that **names
+ *    the target**, and `armActivationForMode` below does the arming.
  *    **Not a name, and not a string.** `{ kind: "delegated"; owner: "…" }` was
  *    the round-one draft and GPT Sol refused it: nothing consumes a string, so a
  *    fifteenth mode could write one, typecheck, and have no arming path anywhere
  *    in the app — documentation wearing a type's clothes. A function is the
  *    difference between a row that claims to arm something and one that does.
+ *
+ *    **It answers rather than acts**, and that is the second round's change:
+ *    the row used to be handed `(slug, ctx)` and call `armActivation` itself,
+ *    which let a delegated row arm *any* number of targets, for *any* slug,
+ *    while the bar's own `MODE_TARGET[mode]` said one thing. A sweep that
+ *    watches what a press posts cannot see a token nothing has mounted to
+ *    claim — GPT Sol, F12, 2026-09-06. Returning `AutoRunTarget | null` keeps
+ *    everything the function bought (it is consumed, so a row that names a
+ *    target the app cannot run is a compile error) and makes the *quantity*
+ *    structural: one arm per press, or none, decided in one place below.
  *  - **`none`** — nothing to arm, with the reason written out. The reasons were
  *    prose in this docblock until the type asked for them by name.
  *
@@ -186,7 +197,7 @@ export type { AutoRunTarget };
  */
 export type ModeActivation =
   | { kind: "fixed"; target: AutoRunTarget }
-  | { kind: "delegated"; arm: (slug: string, ctx: PressContext) => void; why: string }
+  | { kind: "delegated"; target: (ctx: PressContext) => AutoRunTarget | null; why: string }
   | { kind: "none"; reason: string };
 
 /**
@@ -197,7 +208,7 @@ export type ModeActivation =
  * query string: the bar has already run `diagramInSearch` (params.ts), so an
  * unrecognised `?diagram=` arrives here as `sketch`, exactly as `diagramParam`
  * would open it. This module knows nothing about URLs and must not start to —
- * `armActivationForDiagram` below says what reading the raw value cost.
+ * `activationForDiagram` below says what reading the raw value cost.
  */
 export interface PressContext {
   /** Which picture a Diagram press is about to land on. */
@@ -214,10 +225,10 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   /* The one delegated row, and the reason the variant carries a function at
      all: the picture a Diagram press lands on is whatever `?diagram=` says, so
      a fixed row would be a lie about half the presses — and an expensive one,
-     which `armActivationForDiagram` below spells out step by step. */
+     which `activationForDiagram` below spells out step by step. */
   diagram: {
     kind: "delegated",
-    arm: (slug, ctx) => armActivationForDiagram(slug, ctx.diagram),
+    target: (ctx) => activationForDiagram(ctx.diagram),
     why: "the picture a press lands on is whatever `?diagram=` says, not a fixed target",
   },
 
@@ -357,9 +368,14 @@ export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext
     case "fixed":
       armActivation(slug, decision.target);
       return;
-    case "delegated":
-      decision.arm(slug, ctx);
+    case "delegated": {
+      /* **The sole arm for a delegated row, and it is here rather than in the
+         row**, so that "one press, at most one token" is a property of this
+         function instead of a promise each row makes separately. */
+      const target = decision.target(ctx);
+      if (target !== null) armActivation(slug, target);
       return;
+    }
     case "none":
       return;
     default: {
@@ -370,9 +386,13 @@ export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext
 }
 
 /**
- * **A press on the bar's Diagram button arms the picture it is about to land
- * on**, which is whatever `?diagram=` currently says — `sketch` by default, and
- * two of the five pictures cost anything at all.
+ * **Which picture a press on the bar's Diagram button is about to land on**,
+ * as an `AutoRunTarget` — or `null` for the three that have no artefact behind
+ * them. Whatever `?diagram=` currently says, `sketch` by default.
+ *
+ * It **answers**; `armActivationForMode` above does the arming. See
+ * `ModeActivation` § `delegated` for why that split, and for what it was
+ * before 2026-09-06.
  *
  * This is what `MODE_TARGET`'s **delegated** Diagram row calls, rather than a
  * `fixed` target beside the other five, and the reason is a bug a fixed row
@@ -391,12 +411,36 @@ export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext
  * *different* mount asks — so the fix has to be at the mint: arm the target that
  * is going to mount, and it is claimed on the next commit like every other.
  *
- * **The three geometries arm nothing** and want nothing armed: Force, Drift and
- * Trail are drawn from the tree that is already there, cost nothing and are
- * instant. Only `sketch` and `illustrated` are model calls, and both are named
- * in `AutoRunTarget`, so this narrowing is the same one `DiagramPanel`'s chips
- * make — a sixth picture that spends money cannot be armed here until it is a
- * target there.
+ * ## The three geometries arm nothing, which is **not** the same as costing
+ * nothing
+ *
+ * That sentence used to end *"cost nothing and are instant"*, and it was false.
+ * GPT Sol found it, F11, 2026-09-06, along with the reason nothing caught it:
+ * the money sweep in tests/every-mode-draws-its-surface.test.tsx was written from
+ * this paragraph, and recorded only `POST /api/jobs`.
+ *
+ * What is true is that Force, Drift and Trail have **no artefact to generate**,
+ * so there is no job to post and nothing here to arm — the tree they are drawn
+ * from is already on the page. But the pictures themselves buy an embedding:
+ * `useSimilar` POSTs `/api/similar` for **Force**, and `useProjection` POSTs
+ * `/api/projection` for **Drift** and **Trail** (DiagramPanel.tsx § `similar`
+ * and § `projection`; src/similar.ts meters it to the ledger).
+ *
+ * Those two fetches are gated on the picture being on screen and on the reader
+ * owning the article — **and on nothing else, a press included**. So arming
+ * them here would buy nothing anyway: the hook has already asked by the time a
+ * token could be claimed. It also means a reader reaches them *without*
+ * pressing, by a pasted or bookmarked `?mode=diagram&diagram=force` or by Back
+ * onto one. That is known and deliberate — useSimilar.ts § `enabled` is the
+ * whole gate weighs it, and `NEEDS_AN_EXPLICIT_PRESS` in last-view.ts is what
+ * stops a *restore* from making the request — but it is the one paid request in
+ * the reading view that this module does not stand in front of, and the reason
+ * this paragraph now says so out loud.
+ *
+ * Only `sketch` and `illustrated` are runs this module can start, and both are
+ * named in `AutoRunTarget`, so this narrowing is the same one `DiagramPanel`'s
+ * chips make — a sixth picture with an artefact behind it cannot be armed here
+ * until it is a target there.
  *
  * @param kind which picture the reader will be looking at after the press —
  *   **already degraded** by `diagramInSearch` (params.ts), so an unrecognised
@@ -406,8 +450,8 @@ export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext
  *   the Sketch, so the press would do nothing at all. The bar does the reading,
  *   so this module needs to know nothing about URLs.
  */
-export function armActivationForDiagram(slug: string, kind: string): void {
-  if (kind === "sketch" || kind === "illustrated") armActivation(slug, kind);
+export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
+  return kind === "sketch" || kind === "illustrated" ? kind : null;
 }
 
 /**

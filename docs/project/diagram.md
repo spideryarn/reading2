@@ -195,14 +195,19 @@ $0.20 and two minutes. Greg's rule
 
 **The picture it arms is the one `?diagram=` names**, not a fixed `sketch`, and
 that is not a nicety —
-[`activation.ts`](../../src/web/activation.ts) § `armActivationForDiagram` has the
+[`activation.ts`](../../src/web/activation.ts) § `activationForDiagram` has the
 five-step sequence a fixed target would have paid for, in which a press that
 opens Illustrated leaves a sketch token nobody claims and a later **Back** step
 spends it. `tests/modes-that-start-themselves.test.tsx` § *spends nothing on a
 Back step after opening a picture it did not arm* is the only thing in the suite
 that notices.
 
-The three geometries arm nothing, because they cost nothing. Illustrated is
+The three geometries arm nothing, because there is **no artefact behind them** to
+generate — which is not the same as costing nothing. Force buys an embedding
+through `POST /api/similar`, and Drift and Trail through `POST /api/projection`,
+on mount rather than on a press
+([`activation.ts`](../../src/web/activation.ts) § `activationForDiagram` says
+what follows from that). Illustrated is
 armed by a bar press only if it is the picture the reader is already on; with no
 Sketch drawn, that press is retired unspent by `useIllustrated`'s own gate rather
 than enqueuing a job the server would refuse.

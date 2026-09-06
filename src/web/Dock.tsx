@@ -1498,9 +1498,10 @@ function DockModes({
    *
    * Read here rather than baked into a **fixed** `MODE_TARGET` row, because the
    * answer is not fixed, and arming a fixed one leaves a token that a later Back
-   * step can spend: activation.ts § `armActivationForDiagram` has the sequence.
-   * Since 2026-09-06 Diagram *does* have a row — a `delegated` one, whose arming
-   * function consumes exactly this value, which is why it is still a prop.
+   * step can spend: activation.ts § `activationForDiagram` has the sequence.
+   * Since 2026-09-06 Diagram *does* have a row — a `delegated` one, whose
+   * target function consumes exactly this value, which is why it is still a
+   * prop.
    *
    * **Already degraded** — `diagramInSearch` in params.ts, which applies the
    * same rule `diagramParam` does, so an unrecognised `?diagram=` arrives here

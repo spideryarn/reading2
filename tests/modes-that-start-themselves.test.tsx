@@ -651,7 +651,7 @@ describe("arriving without pressing", () => {
   it("spends nothing on a Back step after opening a picture it did not arm", async () => {
     /**
      * **The sequence a fixed `diagram: "sketch"` row would have paid for**, and
-     * it is the reason `armActivationForDiagram` is a function. GPT Sol found it
+     * it is the reason `activationForDiagram` is a function. GPT Sol found it
      * in the plan for this change, 2026-09-06:
      *
      *  1. the reader is on Illustrated, so `?diagram=illustrated`;

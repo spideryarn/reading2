@@ -918,7 +918,7 @@ export const diagramParam = createParser<DiagramKind>({
  *
  * One caller: the bottom bar, which arms the picture a press on Diagram is about
  * to open ([`Dock.tsx`](./Dock.tsx), `src/web/activation.ts` §
- * `armActivationForDiagram`). It cannot use the hook — it is not inside the
+ * `activationForDiagram`). It cannot use the hook — it is not inside the
  * mode, and the value it needs is the one that *will* apply after the press.
  *
  * **It exists because reading the raw parameter is wrong in a way that is easy

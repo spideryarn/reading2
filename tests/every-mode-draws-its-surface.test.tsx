@@ -67,6 +67,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
+import type { AutoRunTarget } from "../src/web/auto-run-targets.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type {
   Article,
@@ -501,6 +502,71 @@ let sketchDrawn = false;
 /** Every `POST /api/jobs` body, in order. */
 const posts: { slug: string; steps: string[] }[] = [];
 
+/**
+ * **Every request that is not a `GET`, in order** — `METHOD /path`, verbatim.
+ *
+ * The recorder watched `POST /api/jobs` and threw the rest away, and that was
+ * the hole: the job queue is not the only way this app spends money. GPT Sol,
+ * F11, 2026-09-06 — adding `?diagram=force` to Diagram's row below stayed green
+ * while the press bought an embedding through `POST /api/similar`, because
+ * nothing was looking. So the recorder now takes **the class**: a mutation is
+ * anything that is not a `GET`, and every scenario has to account for all of
+ * them. A new paid endpoint a mode press can reach is a red test on the day it
+ * is wired, whether or not anybody thought to name it here.
+ */
+const mutations: string[] = [];
+
+/**
+ * **The mutations a press may make that buy nothing**, each with the reason,
+ * because an allowlist without one grows by accident.
+ *
+ * Deliberately short. Anything not on it must be named by the press that causes
+ * it — `Press.spends` below.
+ */
+const FREE_MUTATIONS: readonly { what: RegExp; why: string }[] = [
+  {
+    what: /^POST \/api\/library\/[^/]+\/open$/,
+    why: "the shelf's own bookkeeping — which article was last opened. No model call.",
+  },
+];
+
+/**
+ * **What this scenario bought outside the job queue**, sorted and deduplicated.
+ *
+ * A set rather than a list, because `<StrictMode>` invokes every effect twice
+ * and the question here is *which* endpoints a press reached, not how many
+ * times a double-invoked effect asked for the same one. `POST /api/jobs` is
+ * left out because it is asserted in full, with its steps, through `posts`.
+ */
+function paidPosts(): string[] {
+  return [...new Set(mutations)]
+    .filter((m) => m !== "POST /api/jobs")
+    .filter((m) => !FREE_MUTATIONS.some((free) => free.what.test(m)))
+    .sort();
+}
+
+/**
+ * **Every `AutoRunTarget`, written out here rather than derived.**
+ *
+ * A `Record<AutoRunTarget, true>` so a twelfth target is a compile error in
+ * this file — the same reason `SPENDS` is total over `Mode`. Not derived from
+ * `MODE_TARGET`, which is the table this file exists to check.
+ */
+const EVERY_TARGET: Record<AutoRunTarget, true> = {
+  glossary: true,
+  ideas: true,
+  quotes: true,
+  timeline: true,
+  debate: true,
+  sketch: true,
+  illustrated: true,
+  tweets: true,
+  quiz: true,
+  claims: true,
+  candidates: true,
+};
+const TARGETS = Object.keys(EVERY_TARGET) as AutoRunTarget[];
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -531,12 +597,33 @@ function artefact(url: string): Response | null {
 }
 
 function reply(url: string, method: string, body: string | null): Response {
+  /* First, before any route decides anything: a mutation this function forgot
+     to record is a mutation the sweep cannot see. See `mutations`. */
+  if (method !== "GET") mutations.push(`${method} ${url}`);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince: "2026-01-01T00:00:00.000Z" });
   if (url === "/api/jobs" && method === "POST") {
     posts.push(JSON.parse(body ?? "{}") as { slug: string; steps: string[] });
     return new Response(null, { status: 204 });
   }
+  /* **The two paid Diagram POSTs, answered with an empty but real body.**
+     Everything else that mutates gets a 204 below, and for these two that is a
+     crash rather than a stub: `useProjection` reads `points` off the parsed
+     answer and `DiagramPanel` asks it for `.length` on the next render. An
+     empty answer is the honest one for phase A anyway — the artefacts are all
+     missing here, and what these two scenarios are about is that the request
+     was **made at all**, not what came back. */
+  if (url.startsWith("/api/similar/") && method === "POST")
+    return json({ model: "test-embed", blocks: 0, eligible: 0, omitted: 0, pairs: [] });
+  if (url.startsWith("/api/projection/") && method === "POST")
+    return json({
+      model: "test-embed",
+      blocks: 0,
+      skipped: { nonProse: 0, tooShort: 0, capped: 0 },
+      variance: [0, 0],
+      k: 0,
+      points: [],
+    });
   if (method === "POST" || method === "PATCH" || method === "DELETE")
     return new Response(null, { status: 204 });
   if (url === "/api/jobs") return json({ jobs: [] });
@@ -557,7 +644,7 @@ function reply(url: string, method: string, body: string | null): Response {
    timeout on whichever test happens to run first. */
 const { App } = await import("../src/web/App.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
-const { resetActivations } = await import("../src/web/activation.js");
+const { resetActivations, pendingActivation } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
 let host: HTMLDivElement;
@@ -568,6 +655,7 @@ enableHistorySync();
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   posts.length = 0;
+  mutations.length = 0;
   fixtures = "missing";
   sketchDrawn = false;
   resetActivations();
@@ -645,6 +733,9 @@ async function press(mode: Mode): Promise<void> {
   await settle();
 }
 
+/** Hidden either way, and screen-reader copies. Used on the element and inside it. */
+const UNREADABLE = '[aria-hidden="true"], [hidden], [class*="sr-only"]';
+
 /**
  * **What a reader can actually read.** `aria-hidden` and `hidden` subtrees and
  * screen-reader copies come out first — `OutlinePanel` alone draws five
@@ -652,17 +743,61 @@ async function press(mode: Mode): Promise<void> {
  * Outline's rows on the page whether or not the visible list rendered at all.
  */
 function readable(el: Element): string {
+  /* **The element itself and everything above it, first.** Stripping hidden
+     *descendants* says nothing about a band that is hidden as a whole: GPT Sol
+     put `hidden` on the real Quotes `<aside>`, so not one reader could see any
+     of it, and phase B stayed green (F14, 2026-09-06). `closest` matches the
+     element as well as its ancestors, which is both halves of the fix. */
+  if (el.closest(UNREADABLE)) return "";
   const copy = el.cloneNode(true) as HTMLElement;
-  for (const unread of copy.querySelectorAll(
-    '[aria-hidden="true"], [hidden], [class*="sr-only"]',
-  ))
-    unread.remove();
+  for (const unread of copy.querySelectorAll(UNREADABLE)) unread.remove();
   return copy.textContent ?? "";
+}
+
+/**
+ * **The targets still holding a press nobody spent.**
+ *
+ * Phase A watches what a press *posts*, and a token is not a post: GPT Sol
+ * changed Plain's row to arm `ideas` and the sweep stayed green, because no
+ * Ideas panel was mounted to claim it (F12, 2026-09-06). An unclaimed token is
+ * not harmless — a later Ideas mount can consume it and buy a run nobody
+ * pressed for — so every scenario ends by asking whether the map is empty.
+ */
+function stillPending(): AutoRunTarget[] {
+  return TARGETS.filter((target) => pendingActivation(SLUG, target) !== null);
 }
 
 /* ============================================================== phase A ====
 
    Artefacts missing. What each mode's press spends. */
+
+/**
+ * **One press the sweep makes, and everything it is allowed to spend.**
+ *
+ * Both lists are exhaustive: what is not here must not happen. `spends` is the
+ * half that did not exist until GPT Sol's F11, and the half Force, Drift and
+ * Trail need — they post no job at all and still buy a model call.
+ */
+interface Press {
+  /** The address the reader is at when the button is pressed. */
+  search: string;
+  /** The `steps` of the one `POST /api/jobs` the press must make, or `[]`. */
+  steps: readonly string[];
+  /**
+   * **Every paid request the press makes directly**, as `METHOD /path` —
+   * everything the job queue is not, minus `FREE_MUTATIONS`. `[]` for a press
+   * that buys nothing outside the queue, which is most of them.
+   */
+  spends: readonly string[];
+}
+
+/**
+ * **A non-empty tuple**, and it is the type doing the work rather than a
+ * comment: `presses: []` ran zero presses and passed, and `steps: []` on a
+ * `posts` row asserted nothing (GPT Sol, F13, 2026-09-06). A positive claim
+ * with no witness is not a weaker test, it is no test.
+ */
+type AtLeastOne<T> = readonly [T, ...T[]];
 
 /**
  * **What pressing this mode's bar button must POST**, written from the product
@@ -674,13 +809,13 @@ function readable(el: Element): string {
  */
 type Spend =
   /** One press, one job. The steps it must ask the queue for. */
-  | { kind: "posts"; steps: readonly string[] }
+  | { kind: "posts"; steps: AtLeastOne<string> }
   /**
    * The press arms something, but *which* thing depends on what the address bar
-   * says — so the row lists the presses, one per target, and every one of them
+   * says — so the row lists the presses, one per picture, and every one of them
    * is exercised.
    */
-  | { kind: "delegated"; presses: readonly { search: string; steps: readonly string[] }[] }
+  | { kind: "delegated"; presses: AtLeastOne<Press> }
   /** Nothing to arm, with the reason written out rather than left as a blank. */
   | { kind: "none"; why: string };
 
@@ -700,16 +835,30 @@ const SPENDS: Record<Mode, Spend> = {
   timeline: { kind: "posts", steps: ["timeline"] },
   /* The dearest press in the app — two calls out to the open web. */
   debate: { kind: "posts", steps: ["debate"] },
-  /* **The one mode where the button and the target are not the same word.**
+  /* **The one mode where the button and the target are not the same word**,
+     and the one row where "what it costs" and "what it arms" are two questions.
+
      Diagram opens on whichever picture `?diagram=` names, so a press on the bar
-     has to arm the picture that is about to mount — both of them are here
-     because a row that armed only the default would be a lie about half the
-     presses, and an expensive one. */
+     has to arm the picture that is about to mount — a row that armed only the
+     default would be a lie about four fifths of the presses, and an expensive
+     one. **All five are here**, because two of the three that arm nothing turn
+     out to spend anyway: the picture's own hook buys an embedding on mount,
+     with no token in front of it (src/web/activation.ts § `activationForDiagram`
+     has what that means and why it is deliberate). `SPENDS` covered Sketch and
+     Illustrated alone until GPT Sol's F11, 2026-09-06, and the prose it was
+     written from said the geometries "cost nothing".
+
+     Sketch is `search: ""` rather than `?diagram=sketch` on purpose: the
+     default is what a reader who has never touched a chip gets. */
   diagram: {
     kind: "delegated",
     presses: [
-      { search: "", steps: ["sketch"] },
-      { search: "?diagram=illustrated", steps: ["illustrated"] },
+      { search: "", steps: ["sketch"], spends: [] },
+      { search: "?diagram=illustrated", steps: ["illustrated"], spends: [] },
+      /* No artefact, so no job — and one embedding each, all the same. */
+      { search: "?diagram=force", steps: [], spends: [`POST /api/similar/${SLUG}`] },
+      { search: "?diagram=drift", steps: [], spends: [`POST /api/projection/${SLUG}`] },
+      { search: "?diagram=trail", steps: [], spends: [`POST /api/projection/${SLUG}`] },
     ],
   },
   /* Nothing exists to fill until the reader has typed a question. */
@@ -728,10 +877,14 @@ const SPENDS: Record<Mode, Spend> = {
   },
 };
 
-/** Every press a row asks for, as `(search, expected steps)` pairs. */
-function pressesFor(spend: Spend): { search: string; steps: readonly string[] }[] {
+/**
+ * Every press a row asks for. A row that is not `delegated` is one press at the
+ * bare address, and **must buy nothing outside the job queue** — that default
+ * is what makes a new paid endpoint reachable from an existing mode a red test.
+ */
+function pressesFor(spend: Spend): Press[] {
   if (spend.kind === "delegated") return [...spend.presses];
-  return [{ search: "", steps: spend.kind === "posts" ? spend.steps : [] }];
+  return [{ search: "", steps: spend.kind === "posts" ? spend.steps : [], spends: [] }];
 }
 
 const PHASE_MS = 30_000;
@@ -742,7 +895,9 @@ describe("phase A — what a press on each mode's real bar button spends", () =>
     it(
       `${mode}: ${spend.kind === "none" ? `spends nothing — ${spend.why}` : "arms what it says it arms"}`,
       async () => {
+        let ran = 0;
         for (const want of pressesFor(spend)) {
+          ran += 1;
           /* A fresh root per press: `root.render` reconciles rather than
              remounts, so a second address would inherit the first's mode. */
           await act(async () => root.unmount());
@@ -751,6 +906,7 @@ describe("phase A — what a press on each mode's real bar button spends", () =>
           document.body.append(host);
           root = createRoot(host);
           posts.length = 0;
+          mutations.length = 0;
           resetActivations();
           jobEngine.reset();
           /* Illustrated is painted from the Sketch, so its press can only arm
@@ -768,9 +924,24 @@ describe("phase A — what a press on each mode's real bar button spends", () =>
           expect(modeInUrl(), `${mode}: the button did not change mode`).toBe(mode);
           expect(
             posts.map((p) => p.steps),
-            `${mode}${want.search}: what the press bought`,
+            `${mode}${want.search}: what the press asked the queue for`,
           ).toEqual(want.steps.length === 0 ? [] : [[...want.steps]]);
+          /* The other half of the money, and the half nothing watched until
+             2026-09-06: a paid request the press made for itself. */
+          expect(
+            paidPosts(),
+            `${mode}${want.search}: what the press bought outside the job queue`,
+          ).toEqual([...want.spends].sort());
+          /* And what it left **armed**. A token nobody claimed is money not yet
+             spent rather than money not spent — see `stillPending`. */
+          expect(
+            stillPending(),
+            `${mode}${want.search}: presses left armed and unclaimed after the page settled`,
+          ).toEqual([]);
         }
+        /* **Outside the loop**, because a table can promise a press and then
+           list none, and a loop over nothing passes. See `AtLeastOne`. */
+        expect(ran, `${mode}: the row named no press to make`).toBeGreaterThan(0);
       },
       PHASE_MS,
     );
@@ -852,6 +1023,11 @@ describe("phase B — what each mode's real controller drew", () => {
       async () => {
         fixtures = "populated";
         await open(`?mode=${mode}`);
+
+        /* `toContain("")` is true of every string, the empty one included, so
+           an empty `says` would assert nothing at all — GPT Sol, F13. The type
+           cannot catch a string that is only spaces; this can. */
+        expect(row.says.trim(), `${mode}: the row named nothing to look for`).not.toBe("");
 
         const band = host.querySelector(row.where);
         expect(band, `${mode}: no ${row.where} on the page`).not.toBeNull();
