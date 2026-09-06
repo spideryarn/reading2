@@ -6,11 +6,17 @@ filesystem store are gone.** What is left is two stages, and neither is ordinary
 - **H is optional and currently declined** — tightening contracts the filesystem store had been
   weakening. It is the only stage of the nine with no failure behind it; every other one had a bug,
   an outage or a flag that lied. Greg has said he was "not sure about H and I".
-- **I is blocked on Greg, and on nobody else** — it cannot start until `SPIDERYARN_STORE` is removed
-  from Vercel Preview and Production, because deleting the tombstone while a deployment still asks
-  for `files` would silently ignore what the operator asked. **The signal is an absence**: while the
-  variable is set, `npm run deploy` prints a *"still to remove"* line; when it stops appearing, the
-  gate is open. Nobody has to remember, and no agent on this box needs a Vercel credential.
+- **I is unblocked as of 2026-09-06 16:35.** Greg ran `vercel env rm SPIDERYARN_STORE production`
+  and `… preview`; both returned *Removed Environment Variable*. It had been blocked on that and on
+  nothing else, because deleting the tombstone while a deployment still asks for `files` would
+  silently ignore what the operator asked.
+
+  **The sensor will keep firing until the next production deploy, and that is not a fault.** A
+  deployment's environment is baked at build time, so `/api/health` on the deployment built at
+  09:49 today still reports `retired: [SPIDERYARN_STORE]` — it is reporting what *it* was built
+  with, accurately. The confirmation stage I actually needs is the first production deploy after
+  the removal coming back with no `retired` field at all. Read it that way round rather than
+  concluding the removal did not take.
 
 **Do not re-derive a stage count from this file.** An earlier version of this header said "seven of
 thirteen stages are done, and stage B is started" and was two days and five stages out of date —
@@ -30,7 +36,7 @@ three later stages consume it**:
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
   → B ✅ → B2 ✅ → B3 ✅ → C ✅ → D ✅ → D′ ✅ → E ✅ → F ✅ (hinge) → G ✅
-  → H (optional, declined) → I (blocked on Greg's Vercel change)
+  → H (optional, declined) → I (unblocked 2026-09-06, not yet built)
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
