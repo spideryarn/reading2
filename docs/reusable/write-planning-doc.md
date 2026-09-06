@@ -52,8 +52,9 @@ $ npx tsx scripts/plan-name.ts "Remote Claude box"
 docs/plans/260831a-remote-claude-box.md
 ```
 
-The same convention and the same script apply to `docs/research/` and `docs/postmortems/` — pass
-`--dir` for those.
+The same convention and the same script apply to `docs/research/`, `docs/postmortems/` and
+`docs/tutorials/` — pass `--dir` for those. Tutorials are HTML, and the script knows it
+([write-tutorial.md](write-tutorial.md)).
 
 Update the planning doc regularly to keep the actions up-to-date. When you change it, make minimal,
 focused changes, based on new user input.

@@ -223,7 +223,7 @@ const ARC: Arc = {
  * this, and getting it wrong is invisible (src/assets.ts).
  */
 const ASSETS: Assets = {
-  version: "assets/1",
+  version: "assets/2",
   sourceHash: "abc123",
   fetchedAt: "2026-08-29T00:00:00.000Z",
   entries: [

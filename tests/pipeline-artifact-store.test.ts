@@ -69,7 +69,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { CAPABLE_MODEL, modelFor } from "../src/models.js";
-import { ASSETS_VERSION } from "../src/collect-assets.js";
+import { ASSETS_VERSION, assetsInputHash } from "../src/collect-assets.js";
 import {
   inputFingerprint as arcFingerprint,
   PROMPT_VERSION as ARC_VERSION,
@@ -162,6 +162,8 @@ const STAMPED_HTML = STAGE_THREE.html;
    them, and to the claim. */
 
 const SOURCE_HASH = hashBlocks(BLOCKS);
+/** What `assets` stamps: the image URLs and the figure refs in the blocks. */
+const ASSETS_SOURCE_HASH = assetsInputHash(BLOCKS);
 
 /**
  * Hoisted out of `writeWholeArticle` so `IDEAS_SOURCE_HASH` below can hash the
@@ -331,7 +333,12 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
      compared, which is the quieter half of the same drift. */
   store.plant(SLUG, "assets", "assets", {
     version: ASSETS_VERSION,
-    sourceHash: SOURCE_HASH,
+    /* **Not `SOURCE_HASH`, since 2026-09-06.** The step stopped stamping
+       `hashBlocks` when it gained PDF figures: that hash covers `id`, `text`,
+       `role` and `treatment` and not `block.html`, so it could not see a figure
+       marker arrive. `assetsInputHash` hashes the step's own inputs — the image
+       URLs and the figure refs in the blocks. src/collect-assets.ts. */
+    sourceHash: ASSETS_SOURCE_HASH,
     fetchedAt: new Date().toISOString(),
     entries: [],
   });

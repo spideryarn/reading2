@@ -1,7 +1,7 @@
 {
-  "name": "reading2",
+  "name": "spideryarn",
   "version": "1.0.0",
-  "description": "HTML content extraction experiments",
+  "description": "AI-assisted reading that augments rather than replaces reading.",
   "private": true,
   "scripts": {
     "test": "vitest run",
@@ -69,8 +69,8 @@
     "typecheck:committed": "tsx scripts/typecheck-committed.ts"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Greg Detre",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

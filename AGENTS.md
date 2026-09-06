@@ -27,7 +27,8 @@ listed here; the names under each are files in `docs/project/`.
 - **[vision.md](docs/project/vision.md)** — the intent, the principles, the anti-goals, and the two
   exceptions Greg has made to "prefer boring".
   <br>↳ `open-questions.md` · `positioning.md` (the website, the name, who it speaks to first) ·
-  `original-version/` (the larger app this is an offshoot of)
+  `original-version/` (the larger app this is an offshoot of) · and the four folders that hold the
+  project's memory: `plans.md` · `research.md` · `postmortems.md` · `tutorials.md`
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
@@ -76,7 +77,8 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
   `browser-control.md` (which browser automation on which machine — start here) ·
   `browser-testing.md` (what to check) · `browser-testing-playwright.md` (the same, on the box) ·
-  `claude-in-chrome.md` (the laptop extension: nothing connected?) · `performance.md` ·
+  [claude-in-chrome.md](docs/reusable/claude-in-chrome.md) (the laptop extension: nothing
+  connected?) · `performance.md` ·
   `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.
@@ -100,14 +102,18 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 
 - **`docs/plans/`** — one file per piece of work, written before it lands and kept afterwards, so
   the reasoning and the evidence survive. A plan names the simpler option it passed over, and why.
+  [plans.md](docs/project/plans.md)
 - **`docs/postmortems/`** — one file per bug worth understanding: the real root cause and the name
   of its class, the commit that introduced it, the fix that's right for the long term, and what
-  would have caught the class.
+  would have caught the class. [postmortems.md](docs/project/postmortems.md)
 - **`docs/tutorials/`** — self-contained HTML explainers of how one area works, written for somebody
   who has never read the code — [reusable/write-tutorial.md](docs/reusable/write-tutorial.md) is how
-  to write one.
+  to write one. [tutorials.md](docs/project/tutorials.md)
 - **`docs/research/`** — the working behind a decision: the options weighed, the sources, the dead
   ends. A plan says what we're doing; a research doc says what else we could have done and why not.
+  [research.md](docs/project/research.md)
+- **`docs/user-feedback/`** — one note per reader report: their words, what we did, and which of the
+  three endings it got — [feedback-reports.md](docs/project/feedback-reports.md).
 - **[`docs/reusable/`](docs/reusable/README.md)** — notes that aren't about this project and are
   meant to be carried elsewhere, several copied in from Greg's
   [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions) library of "how to
@@ -118,11 +124,12 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   is a whole-tree sweep for the rework worth doing, run every week or so — suggest it when nobody has
   run one lately.
 
-None of those first three is indexed here — there are a lot of files and they keep arriving. List
+The individual files are not indexed here — there are a lot of them and they keep arriving. List
 the directory and read the file names; they say what each one is about, and the first paragraph of
-the file says the rest. They are named `yyMMdd<letter>-kebab-description.md`, so they sort by the day
-the work started; a plan and its reviews share one letter. Get the name from
-`npx tsx scripts/plan-name.ts` — [write-planning-doc.md](docs/reusable/write-planning-doc.md).
+the file says the rest. They are named `yyMMdd<letter>-kebab-description.md` (`.html` for a
+tutorial), so they sort by the day the work started; a plan and its reviews share one letter. Get
+the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other three) —
+[write-planning-doc.md](docs/reusable/write-planning-doc.md).
 
 ## The one contract that matters
 
@@ -138,6 +145,8 @@ The format, the reasoning, and the one way to get range checks silently wrong ar
 A doc under `docs/project/` is two things: **intent** — Greg's directions, the goals, the
 constraints, the decisions and why they were made, mostly in his own words — and **signposts** to
 the other docs and to the code. Not descriptions of code, which the code already provides.
+A portable counterpart to these conventions, including its audience guidance, is
+[documentation-policy.md](docs/reusable/documentation-policy.md).
 
 - **Less is more.** Where Greg gave instructions, follow them rather than embroidering. Say each
   thing once, briefly, and leave the next agent room to use its judgment.

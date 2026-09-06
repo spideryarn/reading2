@@ -272,4 +272,29 @@ describe("and the deliberate omissions stay out", () => {
       expect(writeCache).not.toHaveBeenCalled();
     },
   );
+
+  /**
+   * **And the asset route, which is the one place the header above went stale.**
+   *
+   * That paragraph says the intersection drops `assets` "because none of them
+   * has a route". Since 2026-09-06 it has one —
+   * `GET /api/asset/:slug/:hash.:ext`, src/routes.ts § `sendArticleAsset` — and
+   * the derivation still misses it, because the binding is `asset` and the kind
+   * is `assets`. That near-miss is exactly the shape this file was rewritten to
+   * stop being trusted, so the absence is asserted rather than left to a
+   * spelling.
+   *
+   * It is right that it is out. The offline store keeps 200 **JSON** responses;
+   * this route answers a PNG, and `rehost.ts` turns it into a `blob:` URL that
+   * would be meaningless on a later page load anyway. `/api/illustrated/`'s own
+   * line in `CACHEABLE` records the same division for plates.
+   */
+  it("does not keep an article asset — the offline store is JSON", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(jsonOk()));
+
+    await apiFetch(`/api/asset/gibbon/${"a".repeat(64)}.png`);
+
+    await settle();
+    expect(writeCache).not.toHaveBeenCalled();
+  });
 });

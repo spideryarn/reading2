@@ -79,6 +79,59 @@ Read [`extraction/fixtures/README.md`](extraction/fixtures/README.md) for what e
 is meant to break, why the HTML is committed rather than fetched on the day, and why the fifteenth
 had to be added before the corpus could judge its own arm.
 
+### `extraction/score.mts` — the scorecard, and the check it is not allowed to skip
+
+```
+npx tsx evals/extraction/score.mts            # free: no model, no network
+npx tsx evals/extraction/score.mts --record   # and store what it found, per arm
+```
+
+Added 2026-09-05 for
+[260904e § B](../docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md#b--the-corpus-the-golds-and-a-scorer-that-has-been-seen-to-fail),
+and rebuilt the same day after a GPT Sol review found the card could be fooled by an arm returning
+0.55% of an article — and rebuilt **again** the same afternoon, after his review of that repair
+built an arm out of the page's own comment thread that returned **0.542% of the post** and
+passed every metric, both gates and every assertion. Provenance proves text came from somewhere
+on the page; it cannot tell the article from the thread underneath it. So a manifest now
+declares its `articleRegion` and the length measures count that. Seven pieces, and the last one
+is the point:
+
+| file | what it is |
+|---|---|
+| [`extraction/manifest.mts`](extraction/manifest.mts) | the assertion manifest — `mustContain`, `mustNotContain`, structure floors, exact byline, `maxBlockChars`, and **`articleRegion`**: the selectors whose subtree is the piece itself, which `minArticleChars` is a floor on. One JSON per fixture, beside the HTML. **Binary per fixture, never averaged** |
+| [`extraction/scorecard.mts`](extraction/scorecard.mts) | recall and exclusion reported **separately and never as an F1**, plus `bodyPurity` where a gold exists and `articleRecall` where a region and stamps do; two hard gates scored by **source-element identity** where the arm carries stamps; and `polarityPair`, which refuses the card unless it moves both ways |
+| [`extraction/corruptions.mts`](extraction/corruptions.mts) | thirteen named, reversible damage templates, each tied to a class the trawl actually observed. **Scorer conformance, never extraction quality** |
+| [`extraction/conformance-page.mts`](extraction/conformance-page.mts) | the page the corruptions are run against, built to give every metric something to hold |
+| [`extraction/arms.mts`](extraction/arms.mts) | the shipped extraction plus twelve degenerate arms — 260830at's `drop-every-short-block`, the rule that once scored 246/246; GPT Sol's `needle-collage`, which returns the manifest's own required strings and nothing else; and his `region-padded-collage`, which deletes the article and refills the space with genuine stamped elements from off it |
+| [`extraction/visible-text.mts`](extraction/visible-text.mts) | the page's visible text by a small scanner: what a manifest needle is looked for in. Not JSDOM (44 s, timed out) and not a regex chain (27 adversarial cases wrong, one of them a thrown `RangeError`) |
+| [`extraction/wcxb.mts`](extraction/wcxb.mts) | the blind holdout: a seeded selection from a CC-BY dataset nobody here has read. **Its gold is plain text, so it scores text selection only** |
+
+**Every number here is guilty until its polarity pair has passed**, and the pair is
+[`tests/extraction-scorer.test.ts`](../tests/extraction-scorer.test.ts) rather than a convention:
+one mutation restores a thousand characters of known article body and must move the card **up**,
+another glues the page's own navigation into the article and must move it **down**. A recovery-only
+card — `droppedChars`, "characters gained", recall alone — passes the first and fails the second,
+which is the mistake this repo has now made three times. Both halves were watched failing before the
+code was kept; the file says which, and when.
+
+The run prints three things and the middle one is not what it looks like: the scorecard, then
+**scorer conformance** (can the card see damage that is definitely wrong?), then the polarity pair
+per fixture. Where a fixture cannot move the card both ways it prints `POLARITY NOT ESTABLISHED`
+with the reason rather than passing quietly — a 250-word article has no thousand-character run to
+remove; a page with no `<nav>`, `<header>` or `<footer>` has no furniture to admit.
+
+**What the run does NOT print is a verdict on the article**, and it used to. `labelFor` turned the
+card into `acceptable` / `damaged` / `improved` and `--record` wrote that word into the fixture's
+manifest — computed from the same card it was meant to audit, and reporting `acceptable` for an arm
+that returned three copied strings out of a 33,000-character page. It reports four things it actually
+knows instead: assertions held, gates passed, which metrics fell against the shipped arm, and how many
+characters of article came back.
+
+[`tests/extraction-manifests.test.ts`](../tests/extraction-manifests.test.ts) is the cheap one and
+it earns its place: a `mustNotContain` needle that is not on the page is satisfied by an arm that
+deletes the article, so every needle has to be findable in the fixture's own bytes. It caught five
+on the day it was written.
+
 ## `prompt-caching.ts` — is the article actually being cached?
 
 ```

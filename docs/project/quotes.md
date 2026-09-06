@@ -10,6 +10,11 @@ there. (The one exception is a row whose block a re-extraction took away.) See
 Verification can prove the words are in the piece. It cannot prove who wrote them, and the promise
 this mode makes is the one it can keep.
 
+**Every reader sees it.** It was behind the
+[experimental-features switch](experimental-features.md) from 2026-09-03 until 2026-09-06, when Greg
+took it out — *"Quotes mode is valuable enough that we should promote it to always show it"*. The
+limit above is unchanged; it is now something a reader meets rather than a reason to hide the mode.
+
 Built 2026-08-31. Greg asked for it that day:
 
 > Create a "Quotes" mode that extracts the most central, helpful, interesting quotes. By default,

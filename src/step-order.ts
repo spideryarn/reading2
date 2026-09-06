@@ -47,9 +47,10 @@ export const STEP_ORDER = [
   "blocks",
   "hierarchy",
   /* After `hierarchy` because it reads stage 4's `blocks.json` — the copy the reader
-     will actually render, and the one `inputHashFor` already hashes, so
-     freshness comes free from the machinery that is here rather than from a
-     second one invented for this step. Before `arc` because everything up to
+     will actually render, and the one its own freshness stamp is computed from
+     (`assetsInputHash`, src/collect-assets.ts), so freshness comes from the
+     machinery that is here rather than from a second one invented for this
+     step. Before `arc` because everything up to
      `arc` is what makes the article readable, and an article whose figures are
      still being fetched from the publisher is not finished being ingested.
      docs/plans/260829b-hosting-the-articles-images.md#the-step. */

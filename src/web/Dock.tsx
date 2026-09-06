@@ -91,11 +91,18 @@
  * ## And a second rule, which is *whether* a button is drawn at all
  *
  * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
- * Five of the fourteen — Quotes, Timeline, Referee, Remember and Debate — are
- * behind the experimental-features switch, so the bar draws the rows that are
- * not experimental **plus whichever mode the reader is in**. Every row carries
- * a required `experimental: boolean`, so mode fifteen cannot be added without
- * somebody deciding which side of that line it is on.
+ * Some of these rows are behind the experimental-features switch, so the bar
+ * draws the rows that are not experimental **plus whichever mode the reader is
+ * in**. Every row carries a required `experimental: boolean`, so mode fifteen
+ * cannot be added without somebody deciding which side of that line it is on.
+ *
+ * **Which modes are on which side is not written down here**, and moving one
+ * is the flag below and nothing else in this file. The membership and the
+ * reason for each is docs/project/experimental-features.md; the independent
+ * copy that stops a flag moving unnoticed is
+ * tests/dock-experimental-modes.test.tsx § BEHIND_THE_SWITCH. This paragraph
+ * named the four and gave a count until 2026-09-06, when promoting Quotes
+ * meant editing five comments that were arithmetic rather than reasoning.
  *
  * **Diagram came back out on 2026-09-04**, and the gate went one level down
  * rather than away: the mode is in the default bar, and four of its five
@@ -564,10 +571,16 @@ const MODES_UI = [
      the mode that is *closest* to them — every row is a sentence out of the
      piece rather than something a model wrote about it. Greg set this order by
      hand, so a new mode goes where it belongs in his reasoning rather than on
-     the end. docs/project/quotes.md. */
+     the end. docs/project/quotes.md.
+
+     **Not experimental since 2026-09-06**, on Greg's call that the mode is
+     valuable enough to show everybody — so pressing it starts a paid run
+     (activation.ts § MODE_TARGET) for a reader who asked for nothing, as
+     Glossary and Ideas already did. Why, in
+     docs/project/experimental-features.md. */
   {
     mode: "quotes",
-    experimental: true,
+    experimental: false,
     icon: Quote,
     blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
   },
@@ -889,11 +902,10 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * for as long as the marker was up. GPT Sol, reviewing stage 2.
  *
  * **The modes go in by name, not by count.** It was `MODES_UI.length` until
- * 2026-09-03, when five modes went behind the experimental switch (four since
- * 2026-09-04, Diagram having come back out): the bar
- * retains whichever experimental mode the reader is in, so `?mode=quotes`
- * becoming `?mode=remember` leaves the count unmoved and changes the row's
- * width, because those two words are not the same width. A signature that
+ * 2026-09-03, when the first modes went behind the experimental switch: the bar
+ * retains whichever experimental mode the reader is in, so moving between two
+ * of them leaves the count unmoved and changes the row's
+ * width, because two mode names are not the same width. A signature that
  * counted would not re-run the fit, leaving the bar overflowing after a move to
  * a wider label or its labels dropped with room to spare after a narrower one.
  * GPT Sol, finding 4.

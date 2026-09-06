@@ -198,7 +198,7 @@ one compares four, and the fourth still closes a gap the others have.
 
 **The tree, as well as the blocks.** `StepStamp` in
 [`src/store/artifacts.ts`](../../src/store/artifacts.ts) has said since it was written that the late
-stages read both, and that `inputHashFor` hashing only the blocks would bite. It bites hardest here:
+stages read both, and that a stamp hashing only the blocks would bite. It bites hardest here:
 the prompt shows the model the **skeleton before the article**, precisely so it judges what the
 argument rests on rather than what the piece says most often. Re-cut the sections and that judgment
 was made against a different question, while every block is byte-identical.

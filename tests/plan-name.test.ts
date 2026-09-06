@@ -66,6 +66,14 @@ describe("nextPlanFilename", () => {
     expect(nextPlanFilename(existing, "260831", "two")).toBe("260831b-two.md");
   });
 
+  it("takes the extension from the directory, so a tutorial is .html", () => {
+    // The convention is the prefix, not the file type. `docs/tutorials/` holds
+    // self-contained HTML, and a `.md` name there would be quietly wrong.
+    expect(nextPlanFilename([], "260906", "How import works", ".html")).toBe(
+      "260906a-how-import-works.html",
+    );
+  });
+
   it("rolls past z instead of reusing a letter", () => {
     const existing = Array.from({ length: 26 }, (_, i) => `260831${letterAt(i)}-x.md`);
     expect(nextPlanFilename(existing, "260831", "the 27th")).toBe("260831aa-the-27th.md");
