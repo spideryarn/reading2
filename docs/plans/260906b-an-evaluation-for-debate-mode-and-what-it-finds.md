@@ -264,9 +264,20 @@ falls through to the title, and *"Claude's Constitution"* is 21 characters again
 `MIN_TITLE_EVIDENCE_CHARS = 20`. So a 2026 commentary is kept as a response to a document it has never
 discussed, with every counter clean.
 
+**Measured 2026-09-06, and it is not a hypothesis any more.** All **six** direct rows the model
+reported answer the 2026 document. Two are established from their own quoted words — Zvi's names
+*"the official version of what we previously were calling its 'soul document'"*, and Matt Glassman's
+says *"It's completely different in approach to the previous Claude constitution."* **A row that
+explicitly distinguishes the two documents was reported as a response to the older one.** The rules
+cut six to one, so one false positive reached the kept set — and it survived by the accident of where
+a search engine cut its extract, not because any rule noticed.
+
 Whether that is *fixable* is a real question — an article and its successor sharing a title is
-genuinely ambiguous, and demanding a URL match would empty group one much further. It is not this
-plan's job to answer it. It is this plan's job to stop it being **unknown**.
+genuinely ambiguous, and demanding a URL match would empty group one much further. This plan's job
+was to stop it being unknown, and that is done. **What has changed is its priority**: it now gates
+Stage F, because fetching the full page would take this article's group one from one wrong row to
+six. Raising recall on a rule whose precision is broken makes the product worse, and the two findings
+have to be answered together.
 
 **Pinned by production's own fingerprint** (F41): each entry pins
 `inputFingerprint(blocks, tree, meta)` — blocks, tree and the cited head — because pass A searches for
@@ -320,26 +331,61 @@ is training on the test set.
   judge exists to find). The report prints the anchor confusion matrix, not a fraction. It is a
   sanity gate and not evidence about the judge's population error.
 
-## The write failure, folded in here rather than left open
+## The write failure — settled, 2026-09-06, and it was neither of my guesses
 
 Job `spya-ttcxz7` generated `1 about this piece, 5 about what it claims` and errored on the write,
-losing $0.1948. **The "another worktree claimed it" story is probably wrong:** the step's `detail`
-string exists only in this branch's `src/pipeline.ts`, so the claiming process had recent code; the
-step finished the same second as its last `ai_calls` row, so both passes completed; and the first
-attempt was an OOM-killed process, which does not unwind — so the requeue came from a **lapsed
-lease**, not from `pauseForDeadline`, whose docblock is the one promising *"the job goes back to
-queued on its own row with its draft intact"*.
+losing $0.1948. I guessed twice and was wrong twice, so both are recorded.
 
-**Refined hypothesis: a lease-lapse requeue can leave a job unable to write its artefact.** If true
-that costs a reader a whole purchase, it is not debate-specific, and it gets a postmortem. Repro:
-enqueue, kill the driver mid-step, let the lease lapse, watch the second attempt.
+**Guess one, at the debrief: another worktree's dev server claimed it.** Wrong — the step's `detail`
+string exists only in this branch's `src/pipeline.ts`, so the claiming process had recent code.
+
+**Guess two, in round one of this plan: a lease-lapse requeue leaves a job unable to write.** Also
+wrong, and refuted rather than merely doubted. `settleExpired` in
+[`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) deliberately omits `draft_revision_id` from its
+requeue `UPDATE`, so the lapse keeps the draft, exactly as `pauseForDeadline` does — true since
+2026-09-04, before the incident. A reproduction that assembled the exact state an OOM kill leaves —
+claim, open draft, `beginStep`, stop, `settleExpired`, then a genuine second `advanceJob` — came back
+with an identical draft revision id and a step that ran, published and finished `done`.
+
+**What actually happened.** The job's row carries the *generic* fallback message (`[jb-step-again]`,
+empty `failure_kind`), which is the signature of an unclassified exception from `runStep`'s catch-all
+— not `StaleAttemptError` (which answers `busy` and writes no `job.error`) and not `DraftGoneError`
+(which has its own sentence). `debate` was the job's only step, so finishing it publishes inside
+`commit`, and that is where `PublishRefused` throws with an undeclared `FailureKind` and lands in the
+same fallback. It is the bug already written up in
+[260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md),
+whose query independently names **this job's own slug** as one of two local articles with the tree
+shape the tightened rule refuses. Verified: the fix commits `724a27c6` and `6e9b9f3e` landed at
+22:41 and 22:48 UTC on 2026-09-05 — **about fifty minutes after this job failed at 21:52:59 UTC**.
+
+So two unrelated things happened that evening: an OOM kill cost one paid attempt, and the requeue
+machinery then worked correctly; and the successful second attempt was refused at publish by a rule
+that had landed hours earlier and been broken for hours more. **No new postmortem — this corroborates
+that one.** Nothing here is specific to `debate`, to the lease, or to the draft.
+
+**Worth carrying out of it:** an artefact-producing step whose publish is refused loses the whole
+purchase and reports a sentence that says nothing about why. That is a general property of the queue
+and not this plan's to fix, but it is the reason a $0.19 loss took three guesses to explain, and the
+capture journal above is what would have made it one.
 
 ## Stages
 
 Each ends with the suite green and the tree safe to commit. **Nothing lands in production before
 Stage E.**
 
-### Stage A — the journal, the runner, and the two-curl verdict
+### Stage A — the journal, the runner, and the two-curl verdict — **done, 2026-09-06**
+
+Landed as `0963f85d`. Three articles journalled for **$0.6384** over six calls, all
+`scope_kind: 'eval'`; the verdict is `recovered 6 of 6` and is written up in
+[the spike results](260905f-debate-mode-stage-0-spike-results.md) §§ 6–7. Both instruments were
+watched failing under a deliberate mutation before their green was believed — the free seam check
+(17 assertions) and the verification probe's dry run (25).
+
+**One gap found in the doing, not yet closed:** an eval run's `ai_calls` rows carry an empty
+`article_slug`, because the runner calls `generateDebate` outside a job and nothing attaches the
+article. The run's own `run.json` records the generation ids, so nothing is unattributable — but the
+ledger alone cannot say which article an eval call was for, and a later cost report over
+`scope_kind: 'eval'` would need the run directories beside it.
 
 - The two-event capture journal above.
 - `evals/debate/` with a runner calling `generateDebate` directly — **never the queue**, so no
@@ -350,10 +396,21 @@ Stage E.**
   figure `not measured`.
 - One fresh pass A on Cargo Cult with the journal on, then the fetch → extract → `findQuote` path
   over each reported URL.
-- The write-failure repro.
+- ~~The write-failure repro.~~ **Done, 2026-09-06** — see § above. Refuted and explained without
+  spending anything, on a free step.
 
-**Done:** *"recovered X of Y"*, written into the spike-results doc, and one journal on disk Layer 1
-can replay. ~$0.15.
+**How many observed failures before the verdict counts — declared before spending.** The experiment
+answers *"recovered X of Y"*, and a Y of one or two is not a verdict about anything. **The floor is
+four observed failures**: quotations the model reported that miss in the provider extract. Cargo
+Cult's earlier run produced exactly two, so if one fresh run does not reach four, the answer is to
+run another corpus article rather than to call it on what came back. Those journals are wanted for
+Stage C regardless, so the extra runs are brought forward rather than added.
+
+Declared here rather than settled afterwards, for the reason the summaries eval gives about
+`MAX_ANCHOR_INVERSIONS`: a threshold argued after the numbers arrive is not a threshold.
+
+**Done:** *"recovered X of Y"* over Y ≥ 4, written into the spike-results doc, and journals on disk
+Layer 1 can replay. ~$0.15 per article.
 
 ### Stage B — the free instrument, and one shipped bug
 
@@ -361,7 +418,13 @@ can replay. ~$0.15.
   kept-per-returned, gold-URL hits. No IO, **unit-tested in `tests/debate-eval-score.test.ts`**.
 - Layer 1 replay from raw annotations.
 - Layer 0's six packets as tests, each watched red first.
-- **The `namesArticle` typography fix**, red test first.
+- ~~**The `namesArticle` typography fix**, red test first.~~ **Done, 2026-09-06**, brought forward
+  into Stage A's commit because it is a shipped bug and the file was already open. Both branches now
+  ask `findQuote(..., "spaced")` through one `appearsIn` helper. Watched red on the real failure
+  first. One thing checked rather than assumed while writing it, and the comment says so: this is a
+  strictly **wider** match than the `includes` it replaced and nothing narrows — a short title still
+  matches inside a longer word in both modes, which is why `MIN_TITLE_EVIDENCE_CHARS` and the byline
+  branch exist and why neither moved.
 - The corpus manifest, pinned by `inputFingerprint`.
 
 **Done:** free repeatable numbers over Stage A's journal, and one real bug closed. No money.
@@ -407,7 +470,28 @@ sweep that does no judging cannot produce.
   `evals/results/debate/` and the section in `evals/README.md`; update the parent plan and the spike
   results. ~$2.
 
-### Stage F — full-page verification fallback, **only if Stage A recovered something**
+### Stage F — full-page verification fallback — **Stage A said yes, and it must not land alone**
+
+**Answered 2026-09-06: `recovered 6 of 6`.** Every quotation the model reported that was missing from
+the provider extract, and whose page could be fetched, was found in the full page. The model was not
+paraphrasing; the slice was too small. Numbers and the three ways a naïve instrument would have got
+this wrong are in
+[the spike results](260905f-debate-mode-stage-0-spike-results.md) § 6.
+
+Two things that came with the verdict and change the stage:
+
+- **The haystack is decided: whole-body visible text, not Readability.** 6 of 6 against 2 of 6, with
+  four found in whole-body text *only* because Readability discards the sections they live in. The
+  precision risk that buys — a quotation matching a *"you may also like"* blurb — is to be
+  **measured**, since nothing so far exercised it.
+- **PDFs are a recurring case for group one, not an edge one.** On an academic subject the genuine
+  responses are papers, and one of Cargo Cult's two lost rows is Gelman's. `text: null` means Stage F
+  as specified still loses it. `src/pdf-read.ts` exists; wiring it in is a real question.
+
+**And the constraint that outranks the stage.** § "The decoy" below: on the constitution article
+full-page fetching would take group one from **one** false positive to **six**, because it raises
+recall on a rule whose precision is already broken there. **Stage F does not land before the decoy is
+measured and answered** — a fallback that finds more of the wrong thing is worse than no fallback.
 
 **Verification order matters**: the provider extract first, and only a quotation that misses there
 invokes the fallback. **A fetch or extraction failure never removes a row already verified from the
