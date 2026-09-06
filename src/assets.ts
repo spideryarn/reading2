@@ -44,7 +44,20 @@
  * `image/jpeg`. This is the same lesson `sniffKind` already encodes for
  * documents (src/fetch.ts), for the same reason: a name that does not describe
  * its contents is the one thing content addressing must never store.
+ *
+ * ## 4. A PDF's own figures live here too, in their own collection
+ *
+ * An article made from a PDF has no `<img>` anywhere — stage 2 writes a
+ * caption-only `<figure>` and a marker (src/pdf-figures.ts, src/pdf-read.ts).
+ * The bytes behind those markers are recovered by the same step, and recorded
+ * **beside** `entries` rather than inside it: `AssetEntry.url` promises the
+ * exact string `getAttribute("src")` returns, and a pseudo-URL there would make
+ * that promise false for every reader of the map. An additive
+ * `pdfFigures?: PdfFigureEntry[]` is also the smaller change — `assets` is a
+ * `jsonb` column typed as this interface (src/db/schema.ts), so it needs no
+ * migration at all. GPT Sol, D4-2.
  */
+import { RESERVED_ATTRS } from "./reserved.js";
 
 /** The formats we host. Everything else stays hot-linked — see `sniffImage`. */
 export type AssetExt = "png" | "jpeg" | "gif";
@@ -114,12 +127,102 @@ export interface Assets {
    * leave every existing manifest reporting itself current on `sourceHash`
    * alone, and no article would ever re-run the step. GPT Sol, 2026-08-29.
    */
-  version: "assets/1";
-  /** The blocks hash this was built from — the ordinary freshness stamp. */
+  version: "assets/2";
+  /**
+   * **What this step's own inputs hashed to** — `assetsInputHash`
+   * (src/collect-assets.ts): the image URLs in the blocks and the PDF figure
+   * markers in the blocks, and nothing else.
+   *
+   * It was `hashBlocks(blocks)` until 2026-09-06, and that was a live instance
+   * of a family this codebase has already been bitten by and named
+   * (src/pipeline.ts § `articleInputHash`): `hashBlocks` canonicalises a
+   * block's `id`, `text`, `role` and `treatment` and **not** its `html`
+   * (src/source-hash.ts), so adding a figure marker to a captioned figure
+   * changed nothing it hashed. A carried-forward empty manifest would have gone
+   * on reporting itself current and the step would never have run. GPT Sol,
+   * D1-4.
+   */
   sourceHash: string;
   fetchedAt: string;
   entries: AssetEntry[];
+  /**
+   * The figures a PDF came with — **absent unless this article came from one
+   * and its blocks carry at least one marker.**
+   *
+   * Absent is the third state here exactly as it is for `entries` above: an
+   * article ingested before this existed, an article that is not a PDF, and a
+   * PDF whose transcription found no figures all look alike to a reader of this
+   * field, and all three mean *there is nothing to draw*. What must never
+   * happen is a marker that is present in the blocks and missing from this
+   * list: every one gets an entry, stored or failed, and
+   * `pairPageFigures` (src/pdf-figures.ts) asserts that on the way through.
+   * GPT Sol, D4-3.
+   */
+  pdfFigures?: PdfFigureEntry[];
 }
+
+/**
+ * Why a figure marker ended up with no picture.
+ *
+ * The first five are `PdfFigureFailure` in src/pdf-figures.ts, which decides
+ * them on bytes; the last three are this step's, and cannot be decided there
+ * because that module never encodes, stores or watches a clock.
+ * `pdfFigureFailure` in src/collect-pdf-figures.ts maps one union onto the
+ * other with no default arm, so a new reason over there is a typecheck failure
+ * here rather than a figure filed under whatever the fallback happened to be —
+ * the shape `FAILURE_FOR` in src/collect-assets.ts already uses.
+ *
+ * **Spelled out rather than imported.** src/pdf-figures.ts reaches for
+ * `node:crypto` and `node:zlib`, and this module is on the browser's side of
+ * the fence (tests/client-imports.test.ts): a type-only import would be erased
+ * at runtime and would still be an edge in the graph a bundler reads.
+ */
+export type PdfFigureFailure =
+  /** No image operation on the page, or nothing left after the blank overlays. */
+  | "no-raster"
+  /** The page held more than one caption, more than one picture, or both. */
+  | "ambiguous"
+  | "unsupported-kind"
+  | "grayscale-1bpp"
+  | "bad-dimensions"
+  | "too-many-pixels"
+  | "byte-count-mismatch"
+  /** The raster was fine and turning it into a PNG was not. */
+  | "encode-failed"
+  /** The PNG was made and the bucket would not take it. `AssetFailure.storage`. */
+  | "storage"
+  /** The step's wall clock ran out. Nothing is known about this figure at all. */
+  | "out-of-time";
+
+/**
+ * One `<figure>` from a PDF, and what became of the picture behind it.
+ *
+ * Keyed by `ref`, which is the whole `data-spya-pdf-figure` value: the opaque
+ * ref, the page and the ordinal (src/reserved.ts). The reading view matches it
+ * exactly and therefore **fails closed** — a manifest carried into a revision
+ * whose PDF has changed has no ref that matches, because the ref folds in the
+ * raw PDF's sha256. GPT Sol, D1-5.
+ *
+ * Nothing in here is an object key, a bucket path or a sentence of ours: the
+ * public DTO passes `Assets` through wholesale (src/public/dto.ts), so what a
+ * stranger can read is the page number, an opaque string, a content hash and a
+ * bounded reason. GPT Sol, I-9.
+ */
+export type PdfFigureEntry =
+  | {
+      ref: string;
+      /** 1-based, the way a reader counts pages. Diagnostics, not addressing. */
+      page: number;
+      status: "stored";
+      sha256: string;
+      /** Always `png` today — src/pdf-figures.ts re-encodes rather than passing through. */
+      ext: AssetExt;
+      contentType: string;
+      bytes: number;
+      width: number;
+      height: number;
+    }
+  | { ref: string; page: number; status: "failed"; reason: PdfFigureFailure; at: string };
 
 /* ------------------------------------------------------------------ *
  * Finding the images
@@ -199,6 +302,108 @@ export function imageSourcesIn(root: ParsedRoot): string[] {
     if (!isRehostableUrl(url) || seen.has(url)) continue;
     seen.add(url);
     found.push(url);
+  }
+  return found;
+}
+
+/* ------------------------------------------------------------------ *
+ * Finding the PDF figures
+ * ------------------------------------------------------------------ */
+
+/** Every `<figure>` stage 2 marked as having come from a PDF page. */
+export const PDF_FIGURE_SELECTOR = `[${RESERVED_ATTRS.pdfFigure}]`;
+
+/**
+ * Where one figure sits in the PDF it came from, and the string that says so.
+ *
+ * `page` and `ordinal` are both 1-based. They travel in the attribute rather
+ * than being recovered from the ref because **a digest cannot be inverted**:
+ * the assets step pairs markers to images one page at a time and has no other
+ * way to learn which page a caption was on, and the ordinal is one of the ref's
+ * own inputs. src/reserved.ts § `pdfFigure` has the rest of the argument.
+ */
+export interface PdfFigureMarker {
+  /**
+   * **The whole attribute value, not the digest inside it** — because this is
+   * the string the manifest is keyed by and the reading view looks up, and one
+   * lookup key is safer than three fields that have to agree.
+   *
+   * So `pdfFigureMarkerValue` takes `figureRef` and this gives back `ref`: the
+   * asymmetry is deliberate and is the only thing to know about the pair.
+   */
+  ref: string;
+  page: number;
+  ordinal: number;
+}
+
+/**
+ * The attribute value for one marker: `<figureRef>.<page>.<ordinal>`.
+ *
+ * `figureRef` is `pdfFigureRef`'s output (src/pdf-figures.ts) — the opaque
+ * half, which is what makes a lookup fail closed once the PDF underneath has
+ * changed. The result is what `PdfFigureMarker.ref` will be.
+ *
+ * `.` as the separator because a ref is `[a-z0-9]+-[0-9a-f]{32}` and the two
+ * numbers are decimal, so none of the three parts can contain one — the same
+ * reasoning `pdfFigureRef` gives for its own join, and for the same reason:
+ * without a separator, page 1 figure 23 and page 12 figure 3 would spell the
+ * same marker.
+ */
+export function pdfFigureMarkerValue(input: {
+  figureRef: string;
+  page: number;
+  ordinal: number;
+}): string {
+  return `${input.figureRef}.${input.page}.${input.ordinal}`;
+}
+
+/**
+ * A marker value read back, or `null` for anything that is not one.
+ *
+ * **Deliberately strict**, and the version tag is deliberately *not* pinned: a
+ * `PDF_FIGURE_REF_VERSION` bump must go on parsing here so the entry it no
+ * longer matches is a miss rather than a crash. What is pinned is the shape —
+ * a tag, thirty-two hex digits, and two positive integers with no leading zeros
+ * — because everything downstream indexes by this string and a value it cannot
+ * explain is a value it should not carry.
+ *
+ * `null` is *not one of ours*, which is what a forged attribute on a web
+ * article looks like, and what a value truncated by some future editor looks
+ * like too. Both mean the same thing to every caller: there is no figure here.
+ */
+const MARKER = /^([a-z][a-z0-9]*-[0-9a-f]{32})\.([1-9][0-9]*)\.([1-9][0-9]*)$/;
+
+export function parsePdfFigureMarker(value: string): PdfFigureMarker | null {
+  const match = MARKER.exec(value.trim());
+  if (!match) return null;
+  return { ref: value.trim(), page: Number(match[2]), ordinal: Number(match[3]) };
+}
+
+/**
+ * Every PDF figure marker in `root`, in document order, each once.
+ *
+ * The twin of `imageSourcesIn` above and structural for the same reason: the
+ * pipeline hands it a jsdom node and the reading view hands it a browser one,
+ * and the *selection and the attribute read* — the part that has to agree —
+ * happens exactly once, here.
+ *
+ * **`ref` is the whole attribute value**, so a marker is one string to look up
+ * and not three fields to keep in step. Deduped because two `<figure>`s
+ * carrying one ref would be a bug in the renderer, and `pairPageFigures`
+ * (src/pdf-figures.ts) throws on it rather than attaching one picture to two
+ * captions; dropping the repeat here means the throw is reached only by a real
+ * collision and not by a block counted twice.
+ */
+export function pdfFigureMarkersIn(root: ParsedRoot): PdfFigureMarker[] {
+  const found: PdfFigureMarker[] = [];
+  const seen = new Set<string>();
+  for (const element of root.querySelectorAll(PDF_FIGURE_SELECTOR)) {
+    const raw = element.getAttribute(RESERVED_ATTRS.pdfFigure);
+    if (raw === null) continue;
+    const marker = parsePdfFigureMarker(raw);
+    if (!marker || seen.has(marker.ref)) continue;
+    seen.add(marker.ref);
+    found.push(marker);
   }
   return found;
 }

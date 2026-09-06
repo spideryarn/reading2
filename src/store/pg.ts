@@ -32,7 +32,7 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
-import { ASSETS_VERSION } from "../collect-assets.js";
+import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
@@ -2477,12 +2477,20 @@ const rawPgArticleReader: ArticleReader = {
            divergence `glossary` above lives with. What must not happen is this
            step falling through to `default: true`, which would have the two
            stores disagree about the same article. */
+        /* **`assetsInputHash`, not `blocksHash`, since 2026-09-06** — and this
+           arm is exactly why the divergence above is worth minding. The step
+           stopped stamping `hashBlocks` when it gained PDF figures, because
+           `hashBlocks` does not cover `block.html` and so could not see a
+           figure marker arrive (src/collect-assets.ts § `assetsInputHash`).
+           Left comparing the blocks hash, this page would have answered *not
+           current* for every article in the library for ever, since the two
+           hashes are of different things and can never be equal. */
         case "assets": {
           const assets = revision.assets as Assets | null;
-          if (!assets || !blocksHash) return false;
+          if (!assets || !blocks.length) return false;
           return sameStamp(
             { inputHash: assets.sourceHash, promptVersion: assets.version },
-            { inputHash: blocksHash, promptVersion: ASSETS_VERSION },
+            { inputHash: assetsInputHash(blocks), promptVersion: ASSETS_VERSION },
           );
         }
         case "tweets": {

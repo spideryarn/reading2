@@ -29,6 +29,7 @@ import type { Assets } from "../src/assets.js";
 import {
   ASSETS_BUDGET_MS,
   ASSETS_VERSION,
+  assetsInputHash,
   collectAssets,
   describeStorageFailure,
   GATE,
@@ -36,6 +37,7 @@ import {
   MAX_ARTICLE_BYTES,
   MAX_IMAGE_BYTES,
   MAX_IMAGES,
+  pdfFigureMarkersIn,
 } from "../src/collect-assets.js";
 import {
   type AssetFetch,
@@ -1291,7 +1293,7 @@ describe("the manifest itself", () => {
       blobs: fakeBlobs(),
       now: () => new Date("2026-08-29T10:00:00.000Z"),
     });
-    expect(run.assets.sourceHash).toBe(hashBlocks(blocks));
+    expect(run.assets.sourceHash).toBe(assetsInputHash(blocks));
     expect(run.assets.fetchedAt).toBe("2026-08-29T10:00:00.000Z");
     /* **A string, and `stampOf` is why.** It reads `version` only
        `if (typeof a.version === "string")`, so a number here would be dropped
@@ -1311,6 +1313,102 @@ describe("the manifest itself", () => {
     /* An `Assets` exists. The third state — no manifest at all — is the caller's
        `undefined`, and `assetIndex` gives both the same empty map on purpose. */
     expect(run.assets.version).toBe(ASSETS_VERSION);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * What the step's freshness is judged on
+ * ------------------------------------------------------------------ */
+
+/** A PDF figure block, as `renderHtml` writes one. */
+function figure(page: number, ordinal = 1): Block {
+  const marker = `pdffig1-${"0123456789abcdef".repeat(2)}.${page}.${ordinal}`;
+  return block(`<figure data-spya-pdf-figure="${marker}"><figcaption>Fig ${page}</figcaption></figure>`);
+}
+
+describe("assetsInputHash", () => {
+  /**
+   * **The bug this function exists for, reproduced against the thing it
+   * replaced.**
+   *
+   * `hashBlocks` canonicalises `id`, `text`, `role` and `treatment` and not
+   * `block.html` (src/source-hash.ts), so adding a figure marker to a captioned
+   * figure changed nothing the old stamp hashed. A carried-forward empty
+   * manifest would have gone on reporting itself current and the step would
+   * never have run against a PDF's figures — the family src/pipeline.ts records
+   * three other stages falling into. GPT Sol, D1-4.
+   *
+   * Both halves are asserted, because only the pair is evidence: without the
+   * first line this test would pass against a hash of the whole block list, and
+   * without the second it would pass against a hash of a constant.
+   */
+  it("notices a figure marker arriving, which hashBlocks does not", () => {
+    const before = [block("<figure><figcaption>Fig 3</figcaption></figure>")];
+    const after = [figure(3)];
+    /* Same id, same text: the two are indistinguishable to the old stamp. */
+    after[0]!.id = before[0]!.id;
+    expect(hashBlocks(after)).toBe(hashBlocks(before));
+    expect(assetsInputHash(after)).not.toBe(assetsInputHash(before));
+  });
+
+  it("notices an image URL changing", () => {
+    expect(assetsInputHash([img("https://cdn.test/a.png")])).not.toBe(
+      assetsInputHash([img("https://cdn.test/b.png")]),
+    );
+  });
+
+  it("reads a URL the way the browser will, not the way the file spells it", () => {
+    /* `blocks.json` holds `&amp;`; `getAttribute` returns `&`. A fingerprint
+       built from the other spelling would be a second way of reading the same
+       fact, which is the whole trap src/assets.ts § 1 is about. */
+    const stored = img("https://cdn.test/a.png?x=1&amp;y=2");
+    const decoded = img("https://cdn.test/a.png?x=1&y=2");
+    decoded.id = stored.id;
+    expect(assetsInputHash([stored])).toBe(assetsInputHash([decoded]));
+  });
+
+  it("ignores prose that neither half of the step reads", () => {
+    /* The rule `articleFingerprint` states: hash the step's inputs, not the
+       article. Re-wording a paragraph must not re-fetch every image. */
+    const one = img("https://cdn.test/a.png");
+    const two = { ...one, text: "completely different words" };
+    expect(assetsInputHash([one])).toBe(assetsInputHash([two]));
+  });
+
+  it("cannot be fooled by an image URL that spells a marker", () => {
+    /* The framing prefix and the JSON, doing their job: two lists of strings
+       concatenated without one would let an article with a URL in one position
+       hash the same as an article with a marker in the other. */
+    const marker = `pdffig1-${"0123456789abcdef".repeat(2)}.3.1`;
+    expect(assetsInputHash([img(`https://cdn.test/${marker}`)])).not.toBe(
+      assetsInputHash([figure(3)]),
+    );
+  });
+});
+
+describe("pdfFigureMarkersIn over blocks", () => {
+  it("finds every marker in the article, once each, in order", () => {
+    const blocks = [figure(3), block("<p>prose</p>"), figure(7), figure(7, 2)];
+    expect(pdfFigureMarkersIn(blocks).map((m) => [m.page, m.ordinal])).toEqual([
+      [3, 1],
+      [7, 1],
+      [7, 2],
+    ]);
+  });
+
+  it("costs nothing on an article that has none", () => {
+    expect(pdfFigureMarkersIn([block("<p>Just words.</p>"), img("https://cdn.test/a.png")])).toEqual(
+      [],
+    );
+  });
+
+  it("still sees a marker an upper-case serialiser wrote", () => {
+    /* The pre-filter is a shortcut past the parse, not a rule — being wrong
+       about it silently drops every figure in the block, which is the failure
+       `imageUrlsIn`'s own comment names. */
+    const marker = `pdffig1-${"0123456789abcdef".repeat(2)}.3.1`;
+    const blocks = [block(`<FIGURE DATA-SPYA-PDF-FIGURE="${marker}"><figcaption>x</figcaption></FIGURE>`)];
+    expect(pdfFigureMarkersIn(blocks)).toHaveLength(1);
   });
 });
 

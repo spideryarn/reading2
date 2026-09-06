@@ -64,6 +64,39 @@ export const RESERVED_ATTRS = {
    */
   callout: "data-spya-callout",
   /**
+   * src/pdf-read.ts — **which figure of which PDF page this `<figure>` is**,
+   * written by `renderHtml` on a figure record and read twice afterwards: by
+   * the `assets` step, which reopens the PDF and tries to recover the bitmap,
+   * and by the reading view, which turns a recovered one into an `<img>`.
+   *
+   * Three things make it unlike everything above it.
+   *
+   * **It is meant to reach the reader.** The note stamps cross into the browser
+   * too (src/web/notes-view.ts), but this one must also survive the *sanitiser*
+   * — so unlike our other marks it is deliberately **not** in `FORBID_ATTR`
+   * (src/sanitize-policy.ts). That is safe for a reason worth stating rather
+   * than assuming: a forged marker resolves to nothing, because the ref is
+   * minted from the raw PDF's sha256 and an HTML article has no raw PDF, so its
+   * manifest has no entry a forgery could match. `scrubReserved` on ingress
+   * (src/extract.ts) is still the discipline; it is belt to that braces.
+   *
+   * **We write it into a document we wrote ourselves.** A PDF's HTML is built
+   * by `renderHtml` out of `escapeHtml`'d model output, so there is nothing
+   * arriving that could have carried a copy — the scrub that matters is the one
+   * on the *web* path, where a stranger's page could ship one.
+   *
+   * **The value is a locator, not only an id.** `<ref>.<page>.<ordinal>`: the
+   * opaque ref from `pdfFigureRef` (src/pdf-figures.ts), then the 1-based page
+   * and the figure's 1-based ordinal on it. The page has to be there because
+   * the assets step pairs markers to images *per page* and cannot invert a
+   * digest to find out which one; the ordinal because it is one of the ref's
+   * own inputs and a marker that could not say which figure it is would be a
+   * marker nothing could re-mint. `parsePdfFigureMarker` (src/assets.ts) is the
+   * only reader of the format. Forging the two numbers buys nothing: the whole
+   * string is the manifest key, so a changed locator is a lookup that misses.
+   */
+  pdfFigure: "data-spya-pdf-figure",
+  /**
    * src/blocks.ts — what the *article* called this element, recorded before the
    * sanitiser can delete the id and take every link to it. Unlike the others
    * this one carries a value the page supplied, lives only inside stage 3, and

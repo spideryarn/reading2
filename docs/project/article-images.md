@@ -73,9 +73,17 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
 
 ## Freshness
 
-`assets` is one of the stages fingerprinted on a content hash, and its hash input is **the blocks
-alone** — honestly so: it fetches the images the blocks name, and has no prompt and no head.
+`assets` is one of the stages fingerprinted on a content hash, and its hash input is **the image
+URLs and the PDF figure refs in the blocks, and nothing else** — `assetsInputHash` in
+[`src/collect-assets.ts`](../../src/collect-assets.ts).
 [architecture.md § Conventions](architecture.md#conventions).
+
+It was `hashBlocks` until 2026-09-06, which reads like the same claim and is not: that hash covers a
+block's `id`, `text`, `role` and `treatment` and **not** its `html`, so it could not see a PDF figure
+marker arrive and a carried-forward empty manifest would have gone on reporting itself current for
+ever. Stamping what the step actually consumes is the rule `articleFingerprint` states and three
+other stages had already broken —
+[260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
 
 ## See also
 
