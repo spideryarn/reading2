@@ -1,6 +1,12 @@
 /**
- * The ledger's two stores — [ai-calls-fs.ts](../src/store/ai-calls-fs.ts) and
- * [ai-calls-pg.ts](../src/store/ai-calls-pg.ts).
+ * The ledger — [ai-calls-pg.ts](../src/store/ai-calls-pg.ts) — and the pure
+ * arithmetic over its rows, `totalRows` in
+ * [ai-calls.ts](../src/store/ai-calls.ts).
+ *
+ * A second, filesystem ledger stood beside it until 2026-09-05 and this file
+ * drove both. Its half is gone with the module; what it was the only home for
+ * is recorded in
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
  *
  * **What this file is really for is the round trip**, and one assertion inside
  * it. `credits_used_nanos` is an `int8`, and `node-pg` hands `int8` back as a
@@ -10,14 +16,11 @@
  * is wrong in a way that looks like a very expensive month. So the check is that
  * what comes back is a `number`, not merely that it is truthy.
  *
- * The Postgres half skips loudly when there is no database, like every other
- * `*-pg` test here.
+ * A database this suite cannot use is a failure, not a skip — see
+ * tests/helpers/pg-ready.ts.
  */
 
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -227,430 +230,6 @@ describe("totalRows", () => {
   });
 });
 
-/* ------------------------------------------------------ the JSONL store -- */
-
-describe("the filesystem ledger", () => {
-  let store: typeof import("../src/store/ai-calls-fs.js").fsCostStore;
-
-  beforeAll(async () => {
-    /* **Its own file, set before the module is imported.** The ledger path is
-       resolved once at load. Sharing the real one made a failed assertion leave
-       fixture lines behind that the *next* run counted as unreadable — a test
-       that poisons the next test is worse than one that fails. */
-    process.env.SPIDERYARN_LEDGER = path.join(
-      await mkdtemp(path.join(tmpdir(), "spya-ledger-")),
-      "ai-calls.jsonl",
-    );
-    store = (await import("../src/store/ai-calls-fs.js")).fsCostStore;
-  });
-
-  afterAll(async () => {
-    await rm(path.dirname(process.env.SPIDERYARN_LEDGER as string), {
-      recursive: true,
-      force: true,
-    });
-    delete process.env.SPIDERYARN_LEDGER;
-  });
-
-  it("writes a row and reads back exactly what it wrote", async () => {
-    const written = row({ id: "00000000-0000-4000-8000-00000000a0f1" });
-    await store.record(written);
-    const { rows } = await store.read();
-    const found = rows.find((r) => r.id === written.id);
-    expect(found).toEqual(written);
-  });
-
-  it("counts a call once however many times its line was appended", async () => {
-    /* **The lost-acknowledgement retry, on the store that has no unique key.**
-       The browser reporting a live turn retries whatever it did not see
-       acknowledged, and a request that succeeded whose `200` was lost is the
-       ordinary case rather than the pathological one. Postgres absorbs it: the
-       row id is derived from the event, so the repeat lands on
-       `on conflict do nothing`. This ledger is a file — it appends both copies,
-       and `read` returned both, so `totalRows()` counted the money twice.
-
-       **Double-counting is the direction that looks exactly like the thing being
-       measured**, which is what makes it worth fixing here rather than shrugging
-       at "the filesystem store is only for development": every number this store
-       produces is one somebody reads while deciding a price. GPT Sol, 2026-09-03.
-
-       The file is still append-only and is never rewritten — the collapse
-       happens on the way out, which is what keeps the evidence of both writes on
-       disk while making the two stores agree about what the ledger *says*. */
-    const written = row({ id: "00000000-0000-4000-8000-00000000a0f8", creditsUsedNanos: 7_000 });
-    await store.record(written);
-    await store.record(written);
-    const { rows, unreadable } = await store.read();
-    const mine = rows.filter((r) => r.id === written.id);
-    expect(mine).toHaveLength(1);
-    /* A duplicate is history, not damage: it must not inflate the count that
-       says how much of the ledger could not be read. */
-    expect(unreadable).toBe(0);
-    expect(totalRows(mine).credits).toBe(7_000);
-  });
-
-  it("filters a range half-open, so two months cannot both claim one call", async () => {
-    const july = row({
-      id: "00000000-0000-4000-8000-00000000a0f2",
-      startedAt: "2026-07-31T23:59:59.000Z",
-    });
-    const august = row({
-      id: "00000000-0000-4000-8000-00000000a0f3",
-      startedAt: "2026-08-01T00:00:00.000Z",
-    });
-    await store.record(july);
-    await store.record(august);
-    const ids = async (since: string, until: string) =>
-      (await store.read(since, until)).rows.map((r) => r.id);
-    expect(await ids("2026-07-01T00:00:00.000Z", "2026-08-01T00:00:00.000Z")).toContain(july.id);
-    expect(await ids("2026-07-01T00:00:00.000Z", "2026-08-01T00:00:00.000Z")).not.toContain(
-      august.id,
-    );
-    expect(await ids("2026-08-01T00:00:00.000Z", "2026-09-01T00:00:00.000Z")).toContain(august.id);
-  });
-
-  it("counts a line it cannot read rather than letting it shrink the total", async () => {
-    /* A truncated tail is what a killed process leaves. Skipping it silently
-       makes the ledger quietly short; refusing to read the file at all makes one
-       bad byte lose a month. */
-    const before = (await store.read()).unreadable;
-    await writeFile(store.describe(), "{not json\n", { flag: "a" });
-    expect((await store.read()).unreadable).toBe(before + 1);
-  });
-
-  it("refuses a line that parses but is not a row", async () => {
-    /* **`{}` is valid JSON.** Counting only unparseable lines let it through as
-       a row, where it passed the date filter with an `undefined` `startedAt` and
-       poisoned the next total with `NaN`. Skipping and counting is only safe
-       with a shape check behind it. GPT Sol. */
-    const before = (await store.read()).unreadable;
-    await writeFile(store.describe(), `{}\n{"id":"x","runId":"y"}\n`, { flag: "a" });
-    const after = await store.read();
-    expect(after.unreadable).toBe(before + 2);
-    expect(after.rows.some((r) => r.id === "x")).toBe(false);
-  });
-
-  it("reads a line written before the provenance columns existed", async () => {
-    /* **The regression this pins.** The shape check was tightened to require
-       `provider_account` and `cost_source`, and every line written before those
-       columns became `unreadable` — GPT Sol ran the reader over the existing
-       ledger and counted 373 rows of real spend deleted from every total by the
-       check meant to protect it.
-
-       The backfill is not a guess. It is the one migration 0023 applies to the
-       Postgres rows: those lines all came from a gateway that only talks to
-       OpenRouter, and `provider` means "OpenRouter answered at all" — hence the
-       null test rather than a non-zero one, since a BYOK zero is an answer. */
-    const { costSource, providerAccount, computedCostNanos, priceVersion, ...old } = row({
-      id: "00000000-0000-4000-8000-00000000f101",
-      jobId: "job-pre-0023",
-      creditsUsedNanos: 4_200,
-    });
-    const { costSource: _c, providerAccount: _p, computedCostNanos: _m, priceVersion: _v, ...free } =
-      row({
-        id: "00000000-0000-4000-8000-00000000f102",
-        jobId: "job-pre-0023",
-        creditsUsedNanos: null,
-      });
-    const before = (await store.read()).unreadable;
-    await writeFile(
-      store.describe(),
-      `${JSON.stringify(old)}\n${JSON.stringify(free)}\n`,
-      { flag: "a" },
-    );
-    const after = await store.read();
-    expect(after.unreadable).toBe(before);
-    const priced = after.rows.find((r) => r.id === "00000000-0000-4000-8000-00000000f101");
-    expect(priced?.providerAccount).toBe("openrouter");
-    expect(priced?.costSource).toBe("provider");
-    /* A line that reported nothing is `none` — not `provider` with a zero, which
-       would be the total claiming a call was free. */
-    expect(
-      after.rows.find((r) => r.id === "00000000-0000-4000-8000-00000000f102")?.costSource,
-    ).toBe("none");
-    /* And the money is in the total rather than silently missing from it. */
-    expect(totalRows(after.rows.filter((r) => r.jobId === "job-pre-0023")).credits).toBe(4_200);
-  });
-
-  it("refuses a row whose cost_source disagrees with its two numbers", async () => {
-    /* **The check the database does with `ai_calls_one_cost_source`, done by
-       reading.** This store has no database. `totalRows` adds `computed` in one
-       branch and `credits` in another, so a line carrying both is counted twice
-       and a line claiming `provider` with nothing in it is counted as money that
-       arrived. Nothing else stands between a hand-edited JSONL line and a wrong
-       total. */
-    const ok = JSON.stringify(
-      row({
-        id: "00000000-0000-4000-8000-00000000f001",
-        /* Its own job id: these lines land in the shared fixture ledger, and the
-           by-job test below counts rows. */
-        jobId: "job-cost-source",
-        costSource: "computed",
-        creditsUsedNanos: null,
-        computedCostNanos: 7_000,
-        priceVersion: "claude-sonnet-5@1970-01-01",
-      }),
-    );
-    const both = JSON.stringify(
-      row({
-        id: "00000000-0000-4000-8000-00000000f002",
-        /* Its own job id: these lines land in the shared fixture ledger, and the
-           by-job test below counts rows. */
-        jobId: "job-cost-source",
-        costSource: "computed",
-        creditsUsedNanos: 5,
-        computedCostNanos: 7_000,
-        priceVersion: "claude-sonnet-5@1970-01-01",
-      }),
-    );
-    const noVersion = JSON.stringify(
-      row({
-        id: "00000000-0000-4000-8000-00000000f003",
-        /* Its own job id: these lines land in the shared fixture ledger, and the
-           by-job test below counts rows. */
-        jobId: "job-cost-source",
-        costSource: "computed",
-        creditsUsedNanos: null,
-        computedCostNanos: 7_000,
-        priceVersion: null,
-      }),
-    );
-    const before = (await store.read()).unreadable;
-    await writeFile(store.describe(), `${ok}\n${both}\n${noVersion}\n`, { flag: "a" });
-    const after = await store.read();
-    expect(after.unreadable).toBe(before + 2);
-    /* And the honest one still gets through, so this is not simply rejecting
-       everything. */
-    expect(after.rows.some((r) => r.id === "00000000-0000-4000-8000-00000000f001")).toBe(true);
-  });
-
-  it("reads a live-conversation row rather than counting it as damage", async () => {
-    /* **The bug this went red on, and it was found by a database dry run rather
-       than by reading the code.** `looksLikeRow` enumerated the provider
-       accounts — `openrouter || anthropic` — so the day live conversation
-       started writing `openai` rows, every one of them would have been counted
-       `unreadable` and dropped from every total. The most expensive feature in
-       the app, invisible to `npm run cost`, through the very shape check that
-       exists to stop a total being quietly short.
-
-       Two hand-written copies of one union did it: this list and the SQL CHECK
-       `ai_calls_provider_account_known`, neither of which the compiler can see
-       when `ProviderAccount` in src/ai-spend.ts widens. The SQL half was caught
-       first, by applying the migration inside a rolled-back transaction and
-       inserting a realtime row; this half was found by looking for the other
-       copies. docs/reusable/silent-success.md.
-
-       A whole realtime row rather than just the account, so the modality
-       columns and the null duration are on the same line the reader has to
-       accept. */
-    const live = JSON.stringify(
-      row({
-        id: "00000000-0000-4000-8000-00000000f301",
-        jobId: "job-live-readable",
-        wire: "realtime",
-        job: "live_conversation",
-        providerAccount: "openai",
-        requestedModel: "gpt-realtime-2.1",
-        costSource: "computed",
-        creditsUsedNanos: null,
-        computedCostNanos: 12_345_678,
-        priceVersion: "gpt-realtime-2.1@1970-01-01",
-        isByok: null,
-        durationMs: null,
-        /* Its own uuid, not the one `tests/realtime-usage.test.ts` uses for its
-           own session fixture — tests/fixture-ids.test.ts insists on that, and
-           caught these two sharing one. */
-        realtimeSessionId: "00000000-0000-4000-8000-0000000005e9",
-        providerEventId: "resp_readable",
-        eventKind: "response",
-        providerStatus: "completed",
-        reportedInputTokens: 1000,
-        outputTokens: 200,
-        cacheReadTokens: 300,
-        cacheWriteTokens: null,
-        cacheWrite5mTokens: null,
-        cacheWrite1hTokens: null,
-        reasoningTokens: null,
-        serviceTier: null,
-        inputTextTokens: 400,
-        inputAudioTokens: 600,
-        inputImageTokens: 0,
-        cachedTextTokens: 250,
-        cachedAudioTokens: 50,
-        outputTextTokens: 40,
-        outputAudioTokens: 160,
-      }),
-    );
-    const before = (await store.read()).unreadable;
-    await writeFile(store.describe(), `${live}\n`, { flag: "a" });
-    const after = await store.read();
-    expect(after.unreadable).toBe(before);
-
-    const mine = after.rows.find((r) => r.jobId === "job-live-readable");
-    expect(mine?.providerAccount).toBe("openai");
-    expect(mine?.outputAudioTokens).toBe(160);
-    expect(mine?.durationMs).toBeNull();
-    /* And it is money the total can see, in the `computed` pocket where our own
-       arithmetic belongs — not `credits`, which `--reconcile` compares against
-       OpenRouter's running total and could never match. */
-    expect(totalRows([mine as AiCallRow])).toEqual({
-      credits: 0,
-      upstream: 0,
-      computed: 12_345_678,
-      unpriced: 0,
-    });
-  });
-
-  it("reads a line written before the BYOK rename, and drops the double count", async () => {
-    /* **The surface the plan had missed, and GPT Sol named.** This ledger is
-       append-only and is never rewritten, so every line ever written still
-       carries `upstreamInferenceNanos`. Renaming the TypeScript property
-       without a read-time translation would make the whole historical file
-       `unreadable` — the same accident the pre-0023 backfill above exists
-       because of, at a larger scale.
-
-       And the translation is conditional, which is the part that matters. On a
-       BYOK line the old value is the real money and carries over. On any other
-       line it was OpenRouter's `upstream_inference_cost`, equal to `cost` —
-       the duplicate that made the obvious sum twice the truth — so it becomes
-       null, exactly as the migration does to the Postgres rows. */
-    const legacy = (over: Partial<AiCallRow>, upstream: number): string => {
-      const r = row({ jobId: "job-byok-rename", ...over }) as unknown as Record<string, unknown>;
-      delete r.byokUpstreamNanos;
-      r.upstreamInferenceNanos = upstream;
-      return JSON.stringify(r);
-    };
-    const ordinary = legacy(
-      { id: "00000000-0000-4000-8000-00000000f201", creditsUsedNanos: 4_000, isByok: false },
-      /* Equal to the credits, which is what OpenRouter actually reported. */
-      4_000,
-    );
-    const byok = legacy(
-      { id: "00000000-0000-4000-8000-00000000f202", creditsUsedNanos: 0, isByok: true },
-      9_000_000,
-    );
-    const before = (await store.read()).unreadable;
-    await writeFile(store.describe(), `${ordinary}\n${byok}\n`, { flag: "a" });
-    const after = await store.read();
-    /* Readable, not damage. This is the assertion that would have gone red on
-       the whole ledger. */
-    expect(after.unreadable).toBe(before);
-
-    const mine = after.rows.filter((r) => r.jobId === "job-byok-rename");
-    expect(mine).toHaveLength(2);
-    const one = mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f201");
-    const two = mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f202");
-    expect(one?.byokUpstreamNanos).toBe(null);
-    expect(two?.byokUpstreamNanos).toBe(9_000_000);
-    /* The stale name is gone from the row, so nothing downstream can read it by
-       accident and no round trip writes it back out. */
-    expect(one).not.toHaveProperty("upstreamInferenceNanos");
-
-    /* And the obvious sum now matches `totalRows` over lines that used to
-       double it: 4,000 + 0 credits, 9,000,000 upstream. Written the naive way
-       on the *old* shape it would have been 13,004,000. */
-    const sum = mine.reduce(
-      (n, r) =>
-        n + (r.creditsUsedNanos ?? 0) + (r.byokUpstreamNanos ?? 0) + (r.computedCostNanos ?? 0),
-      0,
-    );
-    const t = totalRows(mine);
-    expect(sum).toBe(t.credits + t.upstream + t.computed);
-    expect(sum).toBe(9_004_000);
-  });
-
-  it("translates the legacy upstream field on exactly the migration's predicate", async () => {
-    /* **The translation and the migration have to agree, and they did not.**
-       `translateByokUpstream` kept the old value whenever `isByok === true`;
-       drizzle/20260902141103 requires all three of `cost_source = 'provider'`,
-       `is_byok IS TRUE` and `provider_account = 'openrouter'`. The gap is a real
-       historical shape, because those fields were captured independently by the
-       gateway: a call that OpenRouter answered under somebody else's key and for
-       which no `cost` figure arrived is BYOK, has no credits, and backfills to
-       `cost_source: 'none'`.
-
-       Under the old rule that line kept its upstream value, `agrees()` then
-       refused it — an upstream figure on a non-`provider` row — and the reader
-       counted a row of real history as **unreadable**. The migration would have
-       nulled the value and kept the row. Two stores, two answers, and the one
-       that loses data is the one running on this laptop. GPT Sol, 2026-09-03.
-
-       Two lines: the shape the missing conditions let through, and the one
-       shape that legitimately keeps its value. */
-    const legacy = (over: Partial<AiCallRow>, upstream: number): string => {
-      const r = row({ jobId: "job-byok-predicate", ...over }) as unknown as Record<string, unknown>;
-      delete r.byokUpstreamNanos;
-      /* Pre-0023 as well as pre-rename, which is the shape these lines really
-         have: the provenance columns arrive in `backfillPre0023` and
-         `cost_source` is derived from the credits figure, so the translation
-         below has to run *after* it and read what it decided. */
-      delete r.costSource;
-      delete r.providerAccount;
-      r.upstreamInferenceNanos = upstream;
-      return JSON.stringify(r);
-    };
-    /* BYOK, but no credits figure arrived — so it backfills to `none`, and the
-       migration nulls its upstream value. */
-    const noCredits = legacy(
-      { id: "00000000-0000-4000-8000-00000000f301", creditsUsedNanos: null, isByok: true },
-      9_000_000,
-    );
-    /* BYOK with credits, on OpenRouter: the one shape that keeps its value. */
-    const keeps = legacy(
-      { id: "00000000-0000-4000-8000-00000000f302", creditsUsedNanos: 0, isByok: true },
-      7_000_000,
-    );
-    const before = (await store.read()).unreadable;
-    await writeFile(store.describe(), `${noCredits}\n${keeps}\n`, { flag: "a" });
-    const after = await store.read();
-    /* **History, not damage.** This is the assertion that was red. */
-    expect(after.unreadable).toBe(before);
-    const mine = after.rows.filter((r) => r.jobId === "job-byok-predicate");
-    expect(mine).toHaveLength(2);
-    const dropped = mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f301");
-    expect(dropped?.costSource).toBe("none");
-    expect(dropped?.byokUpstreamNanos).toBeNull();
-    expect(mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f302")?.byokUpstreamNanos).toBe(
-      7_000_000,
-    );
-  });
-
-  it("does not interleave two writes racing each other", async () => {
-    /* Append-only is not the same as atomic — Node says plainly that its
-       promise-based fs calls are not synchronised, and nothing established that
-       one `appendFile` is one `write(2)`. A half-written line would show up here
-       as an unreadable count going up. GPT Sol asked for the serialisation; this
-       is what would notice its removal on a bad day. */
-    const before = await store.read();
-    const many = Array.from({ length: 24 }, (_, i) =>
-      row({ id: `00000000-0000-4000-8000-0000000000${String(i).padStart(2, "b")}` }),
-    );
-    await Promise.all(many.map((r) => store.record(r)));
-    const after = await store.read();
-    expect(after.unreadable).toBe(before.unreadable);
-    expect(after.rows.length).toBe(before.rows.length + many.length);
-  });
-
-  it("finds one job's calls across every advance that ran it", async () => {
-    const a = row({ id: "00000000-0000-4000-8000-00000000a0f4", jobId: "job-parted" });
-    const b = row({
-      id: "00000000-0000-4000-8000-00000000a0f5",
-      jobId: "job-parted",
-      stepName: "arc",
-    });
-    await store.record(a);
-    await store.record(b);
-    const found = await store.forJob("job-parted");
-    expect(found.rows.map((r) => r.stepName).sort()).toEqual(["arc", "hierarchy"]);
-    /* Carried through rather than dropped: a damaged line belonging to this job
-       would otherwise make a short job total look confident. The lines the three
-       tests above appended are still in this file, which is what makes this
-       assertion mean something — one unparseable, two that parse but are not
-       rows, and two whose `cost_source` disagrees with their own numbers. */
-    expect(found.unreadable).toBe(5);
-  });
-});
-
 /* ------------------------------------------------------ the Postgres store -- */
 
 /* Both, and in that order. The table has existed since 0000 with a different
@@ -671,7 +250,7 @@ describe("the filesystem ledger", () => {
    A probe that names only the columns a suite *asserts on* is therefore too
    narrow: what it has to cover is every column the code under test will touch.
    See tests/helpers/pg-ready.ts. */
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-ai-calls.test.ts",
   tables: ["spideryarn.ai_calls"],
   columns: [
@@ -681,9 +260,7 @@ const { reachable } = await pgReady({
   max: 4,
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("the Postgres ledger", () => {
+describe("the Postgres ledger", () => {
   const RUN = "00000000-0000-4000-8000-00000000c001";
   /**
    * A second run id for the money tests, so the sum below counts its own four
@@ -703,12 +280,20 @@ when("the Postgres ledger", () => {
    * become unnecessary is cheaper than one that turns out not to have been.
    */
   const MONEY = "00000000-0000-4000-8000-00000000c002";
+  /**
+   * A third, for the two cases at the foot of this block.
+   *
+   * Its own id for the same reason `MONEY` has one: those two count their own
+   * fixtures, and a row from a round-trip test above landing in the window or
+   * on the job id would make them pass for the wrong reason.
+   */
+  const RANGE = "00000000-0000-4000-8000-00000000c003";
 
   afterAll(async () => {
     const { getDb, closeDb } = await import("../src/db/client.js");
     const { aiCalls } = await import("../src/db/schema.js");
     const { inArray } = await import("drizzle-orm");
-    await getDb().delete(aiCalls).where(inArray(aiCalls.runId, [RUN, MONEY]));
+    await getDb().delete(aiCalls).where(inArray(aiCalls.runId, [RUN, MONEY, RANGE]));
     await closeDb();
   });
 
@@ -859,5 +444,97 @@ when("the Postgres ledger", () => {
     await pgCostStore.record(written);
     const { rows } = await pgCostStore.read();
     expect(rows.filter((r) => r.id === written.id)).toHaveLength(1);
+  });
+
+  /* --------------------------------------------------------------------------
+     **The two below were the filesystem ledger's, and are here because nothing
+     else had them.**
+
+     Stage G deleted `ai-calls-fs.ts` and the `describe("the filesystem ledger")`
+     that drove it, on the rule that a case dies with the module it is about.
+     Most of that block was about JSONL — a truncated tail, a line written before
+     a column existed, an append mutex — and none of it survives a table. These
+     two were not: they are `CostStore` contract behaviour that the Postgres
+     adapter implements too (src/store/ai-calls-pg.ts § `read`, § `forJob`), and
+     a sweep for a second home found none. Dropping them would have left the
+     range predicate behind `npm run cost` and the read behind every job's spend
+     reconciliation with no test at all, and a green compiler cannot see that.
+     -------------------------------------------------------------------------- */
+
+  it("filters a range half-open, so two months cannot both claim one call", async () => {
+    /* **The boundary, and it is money.** `scripts/ai-cost.ts` asks for
+       `[since, until)` per month (`:467`, `:1240`) and `tests/ai-cost-cli.test.ts`
+       pins the two instants it computes — but nothing checked that the store
+       honours them, so an inclusive upper bound would have put the midnight call
+       in both months' reports and looked right from either end. */
+    const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
+    const { currentOwnerId } = await import("../src/owner.js");
+    const owner = currentOwnerId();
+    const july = row({
+      id: "00000000-0000-4000-8000-00000000a104",
+      runId: RANGE,
+      ownerId: owner,
+      articleSlug: null,
+      startedAt: "2026-07-31T23:59:59.000Z",
+    });
+    const august = row({
+      id: "00000000-0000-4000-8000-00000000a105",
+      runId: RANGE,
+      ownerId: owner,
+      articleSlug: null,
+      /* Exactly on the bound. The whole case is this one instant. */
+      startedAt: "2026-08-01T00:00:00.000Z",
+    });
+    await pgCostStore.record(july);
+    await pgCostStore.record(august);
+    const ids = async (since: string, until: string) =>
+      (await pgCostStore.read(since, until)).rows
+        .filter((r) => r.runId === RANGE)
+        .map((r) => r.id);
+    const inJuly = await ids("2026-07-01T00:00:00.000Z", "2026-08-01T00:00:00.000Z");
+    expect(inJuly).toContain(july.id);
+    expect(inJuly).not.toContain(august.id);
+    const inAugust = await ids("2026-08-01T00:00:00.000Z", "2026-09-01T00:00:00.000Z");
+    expect(inAugust).toContain(august.id);
+    expect(inAugust).not.toContain(july.id);
+  });
+
+  it("finds one job's calls across every advance that ran it", async () => {
+    /* `src/jobs.ts` (`:1212`) and both eval harnesses read a job's spend this
+       way rather than by a time window, because a job is what the money is
+       attributed to. Two rows, two steps, one job id — a `forJob` that had
+       quietly become "the latest advance" would come back with one. */
+    const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
+    const { currentOwnerId } = await import("../src/owner.js");
+    const owner = currentOwnerId();
+    const JOB = "job-parted-pg";
+    const first = row({
+      id: "00000000-0000-4000-8000-00000000a106",
+      runId: RANGE,
+      ownerId: owner,
+      articleSlug: null,
+      jobId: JOB,
+    });
+    const second = row({
+      id: "00000000-0000-4000-8000-00000000a107",
+      runId: RANGE,
+      ownerId: owner,
+      articleSlug: null,
+      jobId: JOB,
+      stepName: "arc",
+      startedAt: "2026-08-15T10:05:00.000Z",
+    });
+    await pgCostStore.record(first);
+    await pgCostStore.record(second);
+    const found = await pgCostStore.forJob(JOB);
+    expect(found.rows.map((r) => r.stepName).sort()).toEqual(["arc", "hierarchy"]);
+    /* **Zero, and it is not the same zero the filesystem reported.** There, a
+       damaged line belonging to this job was counted so a short total could not
+       look confident. A row here either parsed on the way in or was never
+       written, so nothing is unknowable — and `src/jobs.ts` reconciles against
+       what the steps said they bought precisely because this number cannot
+       report a row that was never inserted. tests/cost-eval.test.ts § the
+       ledger-short findings is where that gap is covered. */
+    expect(found.unreadable).toBe(0);
   });
 });

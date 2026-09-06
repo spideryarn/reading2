@@ -209,7 +209,13 @@ describe("declaredTables", () => {
        did the same. `billing_accounts` and `ingest_events` arrived 2026-09-02
        (drizzle/20260902172813_billing_quota.sql,
        docs/plans/260902i-stripe-payments-and-subscription-tiers.md) and did it
-       a third time, which is three for three. */
+       a third time, which is three for three. `link_previews` and
+       `rate_limit_events` arrived 2026-09-05
+       (drizzle/20260905172612_link_previews_and_rate_limit_events.sql,
+       docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
+       § Stage 2) and made it four. `link_summaries` arrived the same day
+       (drizzle/20260905190941_link_summaries_and_excerpt.sql, § Stage 3) and
+       made it five. */
     expect(declared.map((d) => d.table)).toEqual([
       "ai_calls",
       "article_revisions",
@@ -227,7 +233,10 @@ describe("declaredTables", () => {
       "glossary_lookups",
       "ingest_events",
       "jobs",
+      "link_previews",
+      "link_summaries",
       "queue_state",
+      "rate_limit_events",
       "raw_sources",
       "reader_profiles",
       "realtime_sessions",
@@ -263,7 +272,7 @@ const url = process.env.DATABASE_URL;
 /* Was on a **two-second** connect timeout, which is the drift the helper
    exists to stop. `keepPool` because the DDL half drops a real column through
    this pool and rolls it back. */
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/db-schema-drift.test.ts",
   tables: ["spideryarn.jobs"],
   keepPool: true,
@@ -273,9 +282,7 @@ afterAll(async () => {
   await pool?.end();
 });
 
-const when = reachable ? describe : describe.skip;
-
-when("against a real database", () => {
+describe("against a real database", () => {
   /**
    * Run `body` in a transaction and always roll back.
    *
@@ -308,7 +315,11 @@ when("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(26);
+      /* Twenty-nine since `link_summaries` arrived, 2026-09-05. A number here is
+         a second copy of the list above and it is deliberate: it is what makes a
+         table that reaches the *schema* and not the *database* say so, which is
+         the whole of the drift guard. */
+      expect(report.declaredTables).toBe(29);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

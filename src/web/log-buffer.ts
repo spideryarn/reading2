@@ -175,7 +175,12 @@ export interface UploadLogEntry {
  * deliberately — a free-text source is a free-text field.
  */
 export type ClientErrorSource =
-  /** `AppBoundary.componentDidCatch` — React tore a subtree down. */
+  /**
+   * A React error boundary's `componentDidCatch` — a subtree was torn down.
+   * There are two: [`AppBoundary.tsx`](AppBoundary.tsx) and the one inside
+   * [`LazyPage.tsx`](LazyPage.tsx) that catches a route chunk failing to
+   * arrive. Which of them is a Sentry tag, not a variant here.
+   */
   | "boundary"
   /** `Tweets.tsx`, which catches its own failure and so reaches neither of the others. */
   | "tweets"
@@ -385,8 +390,21 @@ export function recordLog(input: LogInput): void {
  * rather than a coercion — `String(thrown)` is exactly how an article ends up in
  * a diagnostic, and `clean` would only turn it back into `"Error"` one step
  * later anyway.
+ *
+ * **It is also the one way a boundary turns a caught value into a log name**,
+ * which is why it is exported. React declares `componentDidCatch(error: Error,
+ * …)` and the runtime does not enforce a word of it — the handler is handed the
+ * thrown value unchanged, exactly as `window.onerror` is. So a boundary that
+ * reads `.name` itself throws a *second* time, out of the handler, and there may
+ * be nothing above it to catch that: the reader gets an empty page instead of
+ * the fallback the boundary exists to draw. Two of the three boundaries had
+ * hand-rolled a guard of their own and the third had none, because this one was
+ * private and nothing outside this file could point at it. No call site should
+ * read `.name` off a caught value again. Sol, 2026-09-06, F15;
+ * tests/every-boundary-contains-a-throw-that-is-not-an-error.test.tsx and
+ * tests/no-boundary-reads-the-caught-value.test.ts.
  */
-function nameOfThrown(thrown: unknown): string {
+export function nameOfThrown(thrown: unknown): string {
   try {
     if (typeof thrown === "object" && thrown !== null) {
       /* `safeDiagnosticName` and not the raw string: `name` is writable, so

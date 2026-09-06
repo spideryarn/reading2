@@ -91,10 +91,10 @@
  * ## And a second rule, which is *whether* a button is drawn at all
  *
  * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
- * Four of the thirteen — Quotes, Timeline, Referee and Remember — are behind the
- * experimental-features switch, so the bar draws the rows that are not
- * experimental **plus whichever mode the reader is in**. Every row carries a
- * required `experimental: boolean`, so mode fourteen cannot be added without
+ * Five of the fourteen — Quotes, Timeline, Referee, Remember and Debate — are
+ * behind the experimental-features switch, so the bar draws the rows that are
+ * not experimental **plus whichever mode the reader is in**. Every row carries
+ * a required `experimental: boolean`, so mode fifteen cannot be added without
  * somebody deciding which side of that line it is on.
  *
  * **Diagram came back out on 2026-09-04**, and the gate went one level down
@@ -117,17 +117,23 @@
    segment's arrow keys on 2026-08-31 — the ref array was the roving tabindex's
    focus-follow, and the aliased type was that handler's parameter. The only
    keyboard listener left in this file is the drawer's Escape, which is on
-   `window` and takes the DOM's own type. See `DockModes`. */
-import { useEffect, useId, type ReactNode } from "react";
+   `window` and takes the DOM's own type. See `DockModes`.
+
+   `useRef` came back on 2026-09-06, for the drawer's focus rather than the
+   bar's — see § the drawer takes focus, and gives it back. The aliased type
+   has not. */
+import { useEffect, useRef, useId, type ReactNode } from "react";
 import {
   AlignLeft,
   BookA,
+  Brain,
   ClipboardCheck,
   Lightbulb,
   ChevronUp,
   Clock,
   FlaskConical,
   Focus,
+  Globe,
   LoaderCircle,
   Network,
   Info,
@@ -137,7 +143,6 @@ import {
   MessageSquareText,
   MessagesSquare,
   Search,
-  Speech,
   TriangleAlert,
   X,
   Quote,
@@ -148,7 +153,11 @@ import {
    record. See `ModeUi` below. */
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
-import { armActivationForMode } from "./activation.js";
+import {
+  armActivationForDiagram,
+  armActivationForMode,
+  armActivationForTweets,
+} from "./activation.js";
 import { useDockFit } from "./dock-fit.js";
 /* Type only: the bar is *handed* the switch, it does not subscribe to the store
    — see the `experimental` prop. A type import cannot become a subscription. */
@@ -166,7 +175,8 @@ import {
 /* The one rule both this bar and Diagram's picture chips draw by — see
    `visibleModes` below. experimental-visibility.ts. */
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
-import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
+import type { DiagramKind } from "./diagram.js";
+import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -182,7 +192,7 @@ import { InstallHint } from "./InstallHint.js";
  * reader to draw it for, whether we have an answer yet, and each of the three
  * ways the answer can be wrong. `since` is the only field of
  * `ExperimentalSetting` left out, and it is left out because *when* you turned
- * it on is a sentence and the bar is seventeen icons — `/profile` says it
+ * it on is a sentence and the bar is eighteen icons — `/profile` says it
  * (SettingsSection.tsx).
  *
  * **Derived from the store's interface rather than restated.** Nine documented
@@ -448,7 +458,7 @@ interface ModeUi {
    * **Required on every row, and not an optional flag on five.**
    * `ModesMissingFromDock` proves each mode has a row; only a required field
    * proves each row *made the decision*, and docs/project/new-mode.md says the
-   * author must make it. An optional flag would quietly enrol mode fourteen
+   * author must make it. An optional flag would quietly enrol mode fifteen
    * among the polished ones. (GPT Sol, finding 8.)
    */
   experimental: boolean;
@@ -486,6 +496,14 @@ const MODES_UI = [
      widths where every other button loses one (styles.css § the bar's fit ladder) —
      so on a phone the bar is eight icons and one word, and the word is the exit.
      Cheap to change to a size bump if it does not read.
+
+     **And since 2026-09-05 it is the only way out**, the `×` in the controls
+     bar having gone with the rest of that bar. It inherits the contract the `×`
+     was written to keep (GPT Sol, 2026-08-31): closing a band goes to `plain`
+     *by name*, never to `DEFAULT_MODE`. They are the same mode today and they
+     are different questions — *where a reader lands with no instructions* and
+     *what closing a panel means* have no reason to agree — so this row says
+     `"plain"` as a literal, and moving the default cannot silently redirect it.
 
      It is also **not the fix for the problem Greg hit**, and that is worth
      saying here so nobody thinks it was: on a phone the bar this button sits in
@@ -613,9 +631,15 @@ const MODES_UI = [
      **Not experimental since 2026-09-04**, and the flag moved rather than
      went: one of its five pictures is good enough for everybody and four are
      not, so the switch now hides the four (`KIND_UI` in DiagramPanel.tsx).
-     Opening the mode still buys nothing — the picture it lands on is a Sketch
-     nobody has drawn, which is an invitation with the price on it, and only a
-     press on that button spends anything (activation.ts § MODE_TARGET).
+
+     **Pressing this button draws the Sketch, since 2026-09-06.** It used to buy
+     nothing — the mode landed on an invitation with the price on it and waited
+     for a second press — and Greg asked for the second press to go
+     (docs/plans/260906b-opening-a-mode-starts-it-generating.md). So this is now
+     the most expensive button in the bar that is in front of *every* reader:
+     ~$0.20 and about two minutes. Only the Sketch; Illustrated is still its own
+     chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the
+     empty state still says the price for anyone who arrives without pressing.
 
      The blurb names the picture a default reader will actually meet. It used to
      list the three geometries, which are now the hidden ones. */
@@ -630,6 +654,34 @@ const MODES_UI = [
     experimental: false,
     icon: MessagesSquare,
     blurb: "Ask about this article — answers point back at the paragraphs they came from",
+  },
+  /* **After Chat and before Remember**, which is a placement in the ordering
+     this list has followed since Greg set it by hand rather than an array
+     index: it runs from the article restated, through the ways into it, to the
+     conversation about it, and Remember is last because its content comes from
+     the READER. Debate's content comes from neither the article nor the reader
+     — it is the only mode in this bar whose content is **not in the article at
+     all** — so it goes at the far end of the outward run and one step short of
+     the reader's own. Greg has not set this one by hand; move it if it is
+     wrong.
+
+     **`Globe`, and it is the same word this app already draws for "this came
+     from the open web"** — the glossary's web lookup, chat's search, the
+     reviewer brief (GlossaryPanel.tsx, ChatPanel.tsx, CandidatesPanel.tsx). No
+     other button in this bar is a globe, so it is unmistakable beside Chat's
+     two bubbles, which `MessageSquareQuote` would not have been. The glyph's
+     other sense in this app — *shared publicly* — appears only on surfaces that
+     are about sharing, and the bar is not one. docs/project/icons.md.
+
+     The blurb names the empty case, because it is the commonest one: most
+     pieces have no critical reception at all, and a mode that is empty four
+     times in five reads as broken unless the button said so first.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
+  {
+    mode: "debate",
+    experimental: true,
+    icon: Globe,
+    blurb: "What the rest of the web says about this piece — often nobody has written anything, and it says so",
   },
   /* Last, and one step further out than Chat, which is the end of the ordering
      this list has followed since Greg set it by hand: it runs from the article
@@ -650,7 +702,11 @@ const MODES_UI = [
   {
     mode: "remember",
     experimental: true,
-    icon: Speech,
+    /* `Brain`, not `Speech`, from 2026-09-05. `Speech` was the mode's method — the
+       reader talks — and Greg asked for its subject instead: what they kept.
+       SPIDERYARN-READING2-25. It is the only brain in the bar, and Lucide has
+       exactly one, so there is no second thing it could be confused with. */
+    icon: Brain,
     blurb: "Say what you took from this and find out where it holds up — not saved notes or flashcards",
   },
 ] satisfies readonly ModeUi[];
@@ -682,7 +738,7 @@ export type ModesMissingFromDock<
 > = T;
 
 /**
- * **Which of the thirteen the bar actually draws.** Two rules, and the second
+ * **Which of the fourteen the bar actually draws.** Two rules, and the second
  * is the one that is easy to lose.
  *
  * 1. Every row that is not experimental.
@@ -969,6 +1025,43 @@ export function Dock({
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [open, onPanel]);
 
+  /**
+   * ## The drawer takes focus, and gives it back
+   *
+   * Until 2026-09-06 it did neither: opening left focus on the dock tab, so a
+   * keyboard reader pressed Enter and then Tab straight *past* the thing they
+   * had just opened, and closing dropped focus on `<body>` — reproduced in
+   * Chrome, docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md
+   * § Stage 2. One effect for both halves, because they are one fact: the
+   * opener is recorded when focus moves in and used when the drawer goes.
+   *
+   * **The close button is the target**, not the drawer itself: it is a real
+   * control, first in the drawer's own tab order, and the reader's way out.
+   *
+   * **And there is deliberately no trap.** `.dock` sits above the scrim and
+   * stays operable with the drawer open, so Tab is meant to leave — which is
+   * why `aria-modal` is not on the dialog below. tests/the-dock-drawer-is-not-a-modal.test.tsx
+   * holds the whole contract; docs/project/comments.md states it.
+   *
+   * The cleanup covers all four close paths — Escape, the scrim, the ×, and the
+   * same tab pressed again — because every one of them is `open` going false.
+   * `isConnected` is the guard for the fifth case, unmounting, where the bar
+   * the opener lived in may be on its way out.
+   */
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement;
+    openerRef.current = opener instanceof HTMLElement ? opener : null;
+    closeRef.current?.focus();
+    return () => {
+      const back = openerRef.current;
+      openerRef.current = null;
+      if (back?.isConnected) back.focus();
+    };
+  }, [open]);
+
   return (
     <>
       {/* The dim. A button rather than a div so closing by clicking away is
@@ -987,7 +1080,15 @@ export function Dock({
         <div
           className="dock-drawer"
           role="dialog"
-          aria-modal="true"
+          /* **No `aria-modal`, and it is not an omission.** It said `true`
+             until 2026-09-06, which was a false statement about this drawer:
+             the attribute tells assistive technology that everything outside
+             the dialog does not exist, while `.dock` sits above the scrim at
+             z-index 96 and stays visible, clickable and Tab-reachable. The
+             rest of the reader, including the prose, is behind the dim.
+             Reproduced in Chrome and written up
+             in docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md
+             § Stage 2; the contract is docs/project/comments.md. */
           aria-label={own ? TITLES[panel].own : TITLES[panel].visitor}
         >
           <div className="dock-drawer-head">
@@ -1003,6 +1104,9 @@ export function Dock({
             <button
               type="button"
               className="dock-close"
+              /* Where focus lands when the drawer opens — § the drawer takes
+                 focus, and gives it back. */
+              ref={closeRef}
               onClick={() => drawer.onPanel(null)}
               title="Close (Esc)"
               aria-label="Close"
@@ -1057,7 +1161,20 @@ export function Dock({
             See DockModes below. Off the reading view there is no band to switch,
             so the same five degrade to links back to it. */}
         {mode !== undefined && onMode ? (
-          <DockModes slug={slug} modes={visible} mode={mode} onMode={onMode} marked={marked} />
+          <DockModes
+            slug={slug}
+            /* **`diagramInSearch`, not the raw parameter.** A link from August
+               saying `?diagram=tree` names a picture that was cut, and
+               `diagramParam` opens the Sketch for it — so arming the raw word
+               would arm nothing and the press would do nothing, which is the
+               behaviour this change exists to remove. params.ts owns the
+               degrade rule and both readers take it from there. */
+            diagram={diagramInSearch(search)}
+            modes={visible}
+            mode={mode}
+            onMode={onMode}
+            marked={marked}
+          />
         ) : (
           visible.map((m) => (
             <DockLink
@@ -1067,7 +1184,7 @@ export function Dock({
               icon={m.icon}
               label={MODE_LABEL[m.mode]}
               /* `dock-mode` says *this is one of the modes* on a page where
-                 they are thirteen loose links rather than one segment, so
+                 they are fourteen loose links rather than one segment, so
                  § the bar's fit ladder can take their labels at rung 1 the way
                  it takes the segment's. Without it rung 1 does nothing on the
                  metadata and tweets pages, and the bar there skips straight
@@ -1136,15 +1253,37 @@ export function Dock({
 
         {/* Labelled `Thread` until 2026-08-26, and `Tweets` now — after its own
             page and its own route, which is the same rule that renamed `About`
-            to `Metadata`. The thread is written on demand and costs a model
-            call, but that is a button on the page rather than a reason to hide
-            the page. */}
+            to `Metadata`.
+
+            **Pressing this writes the thread, since 2026-09-06** — one model
+            call over the whole article, tens of seconds — where before it took
+            you to a page with a button on it. Greg's rule about opening a mode
+            (activation.ts), applied to the one surface in this bar that is not
+            a mode.
+
+            `onNavigate` rather than `onClick`, and that distinction is the
+            whole of the care here: a ⌘-click opens the thread in a *new* tab
+            and leaves this one where it is, so an `onClick` would mint a token
+            in a tab that is not going to the thread. Link.tsx § `onNavigate`.
+
+            The page keeps its button. It is what a reader presses after a
+            failure, and after this session has spent its one automatic try. */}
         <DockLink
           href={readHref(slug, search, "tweets")}
           current={view === "tweets"}
           icon={ListOrdered}
           label="Tweets"
           title="The article as a numbered thread of short posts"
+          /* **Only for the owner, and only from the reading view's own bar.**
+             `isVisitor` is the same capability seam every band uses: a visitor
+             cannot write anything, so arming would mint a token nothing can
+             ever spend. And `current` keeps a press on the page you are already
+             on from arming a second time — that navigation does not happen. */
+          onNavigate={
+            isVisitor || view === "tweets"
+              ? undefined
+              : () => armActivationForTweets(slug)
+          }
         />
 
         {/* A link, not a drawer trigger — the details are a page now. Last in
@@ -1293,10 +1432,10 @@ export function withMode(search: string, mode: Mode): string {
  *
  * **What replaces it: a tab stop per button.** Tab reaches every mode, Enter,
  * Space or a click selects, and no arrow key is captured anywhere in the bar.
- * The cost is that the segment is thirteen tab stops rather than one, so tabbing
+ * The cost is that the segment is fourteen tab stops rather than one, so tabbing
  * past the bar takes longer — accepted, because the alternative is worse in a
- * way a mouse cannot see: a roving tabindex with no arrows leaves twelve of the
- * thirteen modes unreachable by keyboard altogether.
+ * way a mouse cannot see: a roving tabindex with no arrows leaves thirteen of
+ * the fourteen modes unreachable by keyboard altogether.
  *
  * `role="radio"` and `aria-checked` stay. *Exactly one of these is on* is still
  * true, it is what the hairline frame says to a sighted reader (styles.css
@@ -1337,6 +1476,7 @@ const MARKED = "tw:opacity-55";
 
 function DockModes({
   slug,
+  diagram,
   modes,
   mode,
   onMode,
@@ -1344,6 +1484,21 @@ function DockModes({
 }: {
   /** The article a press is about, for the activation token. */
   slug: string;
+  /**
+   * **Which picture a press on Diagram would land on** — `?diagram=`, or
+   * `sketch` where the address bar is silent, which is `diagramParam`'s default.
+   *
+   * Read here rather than a `MODE_TARGET` row because the answer is not fixed,
+   * and arming a fixed one leaves a token that a later Back step can spend:
+   * activation.ts § `armActivationForDiagram` has the sequence.
+   *
+   * **Already degraded** — `diagramInSearch` in params.ts, which applies the
+   * same rule `diagramParam` does, so an unrecognised `?diagram=` arrives here
+   * as `sketch` rather than as itself. Reading the raw parameter instead made a
+   * press on an old `?diagram=tree` link arm nothing while the mode opened the
+   * Sketch, which is precisely the extra button-click this change removes.
+   */
+  diagram: DiagramKind;
   /**
    * The rows to draw, already filtered — `visibleModes` above, which is where
    * the two rules live. Handed in rather than read from `MODES_UI` here so that
@@ -1381,10 +1536,10 @@ function DockModes({
    * A settle delay was drafted to race that; taking the arrows off removes it
    * instead, which is the smaller thing to have to be right about.
    *
-   * **The cost, which is real:** the segment goes from one tab stop to thirteen,
+   * **The cost, which is real:** the segment goes from one tab stop to fourteen,
    * so tabbing past the bar takes more presses. That is the price of every mode
    * staying reachable without arrows, and it is the right way round — a roving
-   * tabindex with no arrows would leave twelve of the thirteen unreachable by
+   * tabindex with no arrows would leave thirteen of the fourteen unreachable by
    * keyboard, which is worse than what was fixed and invisible to a mouse.
    *
    * `role="radio"` and `aria-checked` stay: *exactly one of these is on* is
@@ -1431,18 +1586,24 @@ function DockModes({
               aria-label={MODE_LABEL[m.mode]}
               /* Every button, not a roving one. See the note above the
                  radiogroup: with no arrow keys to move within the group, a
-                 single tab stop would leave twelve of the thirteen modes
+                 single tab stop would leave thirteen of the fourteen modes
                  unreachable by keyboard. */
               tabIndex={0}
               onClick={(e) => {
                 /* **The one place in the app that knows a mode was pressed**,
                    which is why the token is minted here and not in `onMode` —
                    `setMode` is a query-state setter, and Back and Forward move
-                   it too. Four of the thirteen modes open on an artefact
+                   it too. Five of the fourteen modes open on an artefact
                    nobody has paid for yet, and this is what tells that panel
                    the difference between a press and a pasted link.
                    src/web/activation.ts. */
-                armActivationForMode(slug, m.mode);
+                /* **The picture, not the mode**, for Diagram — see `diagram`
+                   on the props above, which is where the reasoning is. */
+                if (m.mode === "diagram") {
+                  armActivationForDiagram(slug, diagram);
+                } else {
+                  armActivationForMode(slug, m.mode);
+                }
                 onMode(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
                 // Space (detail 0) leave focus where the reader put it. See the
@@ -1481,6 +1642,7 @@ function DockLink({
   title,
   className = "",
   keepLabel,
+  onNavigate,
 }: {
   href: string;
   current: boolean;
@@ -1494,17 +1656,24 @@ function DockLink({
    * Keep this label on every rung of § the bar's fit ladder — `keepLabel` in
    * `MODES_UI`, which is Plain, the way out.
    *
-   * It only reaches here off the reading view, where the modes are thirteen
+   * It only reaches here off the reading view, where the modes are fourteen
    * loose links rather than a segment. Passing it was missed until GPT Sol
    * found it: the word survived every narrow window on the reading view and
    * vanished on the metadata page, which is the page you are *most* likely to
    * be looking for the way back from.
    */
   keepLabel?: true | undefined;
+  /**
+   * **This link is about to replace the page, in this tab.** A pass-through to
+   * `Link.onNavigate`, which is where the whole note about why it is not
+   * `onClick` lives; one caller, the Tweets link below.
+   */
+  onNavigate?: (() => void) | undefined;
 }) {
   return (
     <Link
       href={href}
+      onNavigate={onNavigate}
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
       title={title}
@@ -1521,7 +1690,7 @@ function DockLink({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § the bar's fit ladder
-          can drop all seventeen of the bar's labels with one rule rather than with
+          can drop all eighteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
@@ -1573,7 +1742,7 @@ function DockTab({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § the bar's fit ladder
-          can drop all seventeen of the bar's labels with one rule rather than with
+          can drop all eighteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
@@ -1664,7 +1833,7 @@ function DockExperimentalSwitch({
       <button
         type="button"
         /* `dock-experimental` styles nothing. It is how a test and a browser
-           pass find this one button among seventeen that are all `dock-btn` —
+           pass find this one button among eighteen that are all `dock-btn` —
            the alternative is matching on the label, which is copy and is allowed
            to change. `dock-mode` next door is the same idea doing real work for
            the fit ladder.
@@ -1774,7 +1943,7 @@ const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
   stale: (on) => `${experimentalOffline(on)} Press to check again.`,
   waiting: () => "Loading…",
   /* `null` for the date — *when* you turned it on is the one thing `/profile`
-     can say and a button in a row of seventeen icons cannot. */
+     can say and a button in a row of eighteen icons cannot. */
   ready: (on) => (on ? experimentalIsOn(null) : EXPERIMENTAL_IS_OFF),
 };
 

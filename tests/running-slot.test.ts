@@ -225,7 +225,7 @@ describe("waiting out a contended job insert", () => {
 
 /* ------------------------------------------- and now against a database -- */
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/running-slot.test.ts",
   columns: [{ table: "spideryarn.jobs", column: "reserves_name" }],
   keepPool: true,
@@ -242,7 +242,7 @@ const { reachable, pool } = await pgReady({
  * watched happening, 2026-09-02, which is exactly the shape that docstring
  * describes and the reason it says "taken by everybody".
  */
-const runLock = reachable ? await takeRunLock("tests/running-slot.test.ts") : undefined;
+const runLock = await takeRunLock("tests/running-slot.test.ts");
 
 /**
  * This file's own person, fresh per run and swept by the stem afterwards — the
@@ -255,7 +255,7 @@ const OWNER = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
 /** A second, for the one case about a slug being global rather than an owner's. */
 const OWNER_B = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
 
-if (reachable && pool) {
+if (pool) {
   await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [`${OWNER_STEM}%`]);
   await pool.query(`delete from auth.users where id::text like $1`, [`${OWNER_STEM}%`]);
   for (const who of [OWNER, OWNER_B]) {
@@ -274,13 +274,11 @@ afterAll(async () => {
 
 const STEPS: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "pending" }];
 
-const dbIt = it.skipIf(!reachable);
-
 describe("the wait itself, against a real database", () => {
   const made: string[] = [];
   afterEach(async () => {
     const ids = made.splice(0);
-    if (reachable && ids.length > 0) await getDb().delete(jobs).where(inArray(jobs.id, ids));
+    if (ids.length > 0) await getDb().delete(jobs).where(inArray(jobs.id, ids));
   });
 
   /** One row in whatever state, remembered so `afterEach` takes it away again. */
@@ -321,7 +319,7 @@ describe("the wait itself, against a real database", () => {
    * "which of the two does the waiting" is exactly the thing that changed, and
    * a test naming only one of them would have been green over the other.
    */
-  dbIt.each(["queued", "running"] as const)(
+  it.each(["queued", "running"] as const)(
     "does not insert while a %s job holds the article, and does the moment it settles",
     async (status) => {
       const slug = `test-running-slot-${randomUUID().slice(0, 8)}`;
@@ -357,7 +355,7 @@ describe("the wait itself, against a real database", () => {
    * half, a helper that always slept out its whole budget and then threw would
    * pass every case above, and every suite that takes it would time out.
    */
-  dbIt("goes straight in when the article's line is empty", async () => {
+  it("goes straight in when the article's line is empty", async () => {
     const slug = `test-running-slot-${randomUUID().slice(0, 8)}`;
     const id = await insertWhenSlotFree(slug, () => put(slug, "queued"), {
       attempts: 3,
@@ -372,7 +370,7 @@ describe("the wait itself, against a real database", () => {
    * direction — waiting on any row at all — is a helper that never returns for
    * any fixture slug that has ever been used.
    */
-  dbIt("ignores a job on the slug that is already over", async () => {
+  it("ignores a job on the slug that is already over", async () => {
     const slug = `test-running-slot-${randomUUID().slice(0, 8)}`;
     const over = await put(slug, "queued");
     await getDb().update(jobs).set({ status: "error" }).where(eq(jobs.id, over));
@@ -392,7 +390,7 @@ describe("the wait itself, against a real database", () => {
    * somebody else's job is inside. The helper takes no owner at all, which is
    * what makes this true by construction rather than by remembering.
    */
-  dbIt("waits on a job it does not own, because the article rule is global", async () => {
+  it("waits on a job it does not own, because the article rule is global", async () => {
     const slug = `test-running-slot-${randomUUID().slice(0, 8)}`;
     const holder = await put(slug, "running", OWNER_B);
 

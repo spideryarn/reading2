@@ -25,6 +25,18 @@ Measured 2026-08-26, `openai/gpt-5.6-luna` through OpenRouter:
 The pages not scored in the first two are trailing bibliographies, and the run says so out loud
 every time.
 
+## And ten more, for a different question
+
+[`titles/`](titles/README.md) is a second corpus in this directory, and it is not more of the same:
+these three fixtures ask *did we read the pages correctly*, and those ten ask *whose title did the
+article end up with*. Ten first-three-page cuts, gathered 2026-09-05 after a journal's name reached a
+reader's shelf as the name of the paper. Runner: [`titles.mts`](titles.mts).
+
+The one thing worth knowing before you write another PDF fixture: **`FURNITURE_PAGES = 3` is about
+the document you supply**, so a cut shorter than three pages has no furniture set at all, and a
+three-page cut of a long paper usually still does not reproduce the whole document's. That is why
+every fixture there keeps a `pass0-full.json` measured before it was cut.
+
 ## The three
 
 | | Document | The slot it fills |

@@ -147,7 +147,7 @@ export function SourceLink({
         onClick={open}
         className={
           className ??
-          "tw:cursor-pointer tw:underline tw:bg-transparent tw:border-0 tw:p-0 tw:font-inherit tw:text-inherit"
+          "tw:cursor-pointer tw:underline tw:bg-transparent tw:border-0 tw:p-0 tw:text-inherit"
         }
         {...(title === undefined ? {} : { title })}
       >

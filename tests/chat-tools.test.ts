@@ -50,6 +50,7 @@ import {
   type ConverseEvent,
   type PartialToolCall,
 } from "../src/converse.js";
+import { sameTarget } from "../src/urls.js";
 import type { Block, Meta } from "../src/types.js";
 
 const block = (id: string, text: string, over: Partial<Block> = {}): Block =>
@@ -63,6 +64,44 @@ const block = (id: string, text: string, over: Partial<Block> = {}): Block =>
     gistable: true,
     ...over,
   }) as Block;
+
+/**
+ * **`sameTarget` — the one request identity, asked here because chat is one of
+ * its two callers.** `articleLinks` and `read_web_page` both use it below; the
+ * Debate stage is the third caller and the cases live where the function does.
+ *
+ * The percent-encoding rule is the subtle one, and it was wrong until
+ * 2026-09-05 (GPT Sol's F30): `requestTarget` decoded the **whole** pathname,
+ * so `/a%2Fb` and `/a/b` compared equal. They are different HTTP request
+ * targets — one asks for a single segment whose name contains a slash — and in
+ * chat that is this tool telling the model a page is "already open" when it is
+ * a different page.
+ */
+describe("sameTarget — what counts as the same request", () => {
+  it("folds an encoded unreserved character into its own spelling", () => {
+    /* RFC 3986: `%78` and `x` are the same character and always have been. */
+    expect(sameTarget("https://x.test/essays/%78", "https://x.test/essays/x")).toBe(true);
+    expect(sameTarget("https://x.test/~greg", "https://x.test/%7Egreg")).toBe(true);
+  });
+
+  it("does NOT fold an encoded delimiter into a real one", () => {
+    expect(sameTarget("https://x.test/a%2Fb", "https://x.test/a/b")).toBe(false);
+    expect(sameTarget("https://x.test/a%3Fb", "https://x.test/a?b")).toBe(false);
+    /* Two spellings of the encoded form are still one target. */
+    expect(sameTarget("https://x.test/a%2Fb", "https://x.test/a%2fb")).toBe(true);
+  });
+
+  it("still ignores the fragment and nothing else", () => {
+    expect(sameTarget("https://x.test/a#one", "https://x.test/a")).toBe(true);
+    expect(sameTarget("https://x.test/a?page=2", "https://x.test/a")).toBe(false);
+    expect(sameTarget("http://x.test/a", "https://x.test/a")).toBe(false);
+  });
+
+  it("survives a stray percent rather than throwing", () => {
+    expect(sameTarget("https://x.test/100%", "https://x.test/100%")).toBe(true);
+    expect(sameTarget("https://x.test/100%", "https://x.test/100")).toBe(false);
+  });
+});
 
 describe("accumulateToolCalls — a call arrives in pieces", () => {
   /* These frames are copied from a live OpenRouter response, 2026-08-26, not

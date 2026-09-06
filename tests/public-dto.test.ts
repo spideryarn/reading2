@@ -154,6 +154,12 @@ const NODE_FIELDS = {
   summary: "A longer restatement.",
   sourceHeading: "The example",
   gist: "The one worked example, and what it costs the argument.",
+  /* **It crosses**, and the note above about leaving a note is why this line
+     says so. The question is drawn in Summary mode, and Summary mode is a
+     public surface as much as a signed-in one — a visitor reading a shared
+     article would otherwise get the panel without the half that sends them
+     into the prose. SPIDERYARN-READING2-1V, src/types.ts § `TreeNode.question`. */
+  question: "Why does the worked example cost the argument anything at all?",
   /**
    * **Apparatus rather than argument**, and the one field here that is not
    * merely provenance.
@@ -403,6 +409,11 @@ describe("the public article payload", () => {
         "tree.nodes.n1.id",
         "tree.nodes.n1.navLabel",
         "tree.nodes.n1.parent",
+        /* **It crosses, decided here on purpose.** Summary mode is a public
+           surface as much as a signed-in one, and a visitor following a shared
+           link would otherwise get the panel without the half that sends them
+           into the prose. SPIDERYARN-READING2-1V. */
+        "tree.nodes.n1.question",
         "tree.nodes.n1.range",
         "tree.nodes.n1.summary",
         "tree.nodes.n1.sourceHeading",

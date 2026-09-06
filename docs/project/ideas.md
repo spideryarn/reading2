@@ -79,8 +79,13 @@ Code: [`src/ideas.ts`](../../src/ideas.ts) (stage 5f — the prompt, the call, t
 [`src/web/IdeasPanel.tsx`](../../src/web/IdeasPanel.tsx),
 [`src/web/useIdeas.ts`](../../src/web/useIdeas.ts),
 [`src/web/BlockNav.tsx`](../../src/web/BlockNav.tsx) (the ‹ › stepper, shared with the glossary),
-`resolveIdea` in [`src/web/search-hits.ts`](../../src/web/search-hits.ts), `IdeasBand` in
-[`src/web/App.tsx`](../../src/web/App.tsx), and `§ ideas mode` at the end of
+`resolveIdea` in [`src/web/search-hits.ts`](../../src/web/search-hits.ts),
+[`src/web/modes/ideas/IdeasMode.tsx`](../../src/web/modes/ideas/IdeasMode.tsx) — `IdeasBand`,
+`VisitorIdeasBand` and `useIdeasMode`, which lived in `App.tsx` until 2026-09-05 and moved out so a
+[`FeatureBoundary`](../../src/web/FeatureBoundary.tsx) could enclose the controller's own
+computation, this being the first mode a failure is contained in
+([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it))
+— and `§ ideas mode` at the end of
 [`src/web/styles.css`](../../src/web/styles.css). Tests:
 [`tests/ideas.test.ts`](../../tests/ideas.test.ts) (the stage) and
 [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts) (the client, in jsdom).

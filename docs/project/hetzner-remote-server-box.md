@@ -11,6 +11,8 @@ thing here, make it `gjd-remote --help`, which is the reference and stays curren
 > — Greg, 2026-08-31
 
 This page is the map. Everything below is a signpost; the detail lives in the doc or the file named.
+[../reusable/gjd-remote.md](../reusable/gjd-remote.md) is the short version, for an agent standing in
+another repo who only needs the commands and the two or three things that bite.
 
 ## The shape, in one paragraph
 
@@ -43,6 +45,13 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   actually succeeded, which is not the same question as whether it exited 0. Split out for the same
   reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
   See [Building a box](#building-a-box).
+- [`scripts/gjd-remote-host.ts`](../../scripts/gjd-remote-host.ts) — **which address to ssh to, and
+  which of the three sources said so**: `GJD_REMOTE_HOST`, then this machine's own
+  `/etc/gjd-remote-host`, then Terraform state. The file is what lets the box drive itself without
+  being told; the rule the tests hold is that only `ENOENT` means "no file", because a broad catch
+  turns a bad line in `/etc` into an error message about Terraform.
+  [`tests/gjd-remote-host.test.ts`](../../tests/gjd-remote-host.test.ts), and
+  [Running `gjd-remote` from the box](#running-gjd-remote-from-the-box).
 - [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — what `push-env` is allowed to send.
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
@@ -56,9 +65,10 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`scripts/gjd-remote-mcp.ts`](../../scripts/gjd-remote-mcp.ts) — which MCP servers the box should
   be holding, and whether it is. Split out to be testable without a network:
   [`tests/gjd-remote-mcp.test.ts`](../../tests/gjd-remote-mcp.test.ts).
-- [`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) — reading the box's session list.
-  Split out so it can be tested without a network:
-  [`tests/gjd-remote-tmux.test.ts`](../../tests/gjd-remote-tmux.test.ts).
+- [`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts) — reading the box's session list,
+  and **`resolveSession`, which is how a typed name becomes a session every command may act on** —
+  see [Sessions nobody made on purpose](#sessions-nobody-made-on-purpose). Split out so it can be
+  tested without a network: [`tests/gjd-remote-tmux.test.ts`](../../tests/gjd-remote-tmux.test.ts).
 - [`scripts/gjd-remote-resume-all.ts`](../../scripts/gjd-remote-resume-all.ts) — `resume-all`: one
   new iTerm tab per session, each attached to its own. The AppleScript, and which of it may be
   retried. Split out so the scripts and the guards can be asserted without a terminal:
@@ -101,6 +111,10 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 
 **Doing things on it**
 
+- [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts) — **run one long command on the box in tmux**,
+  with a log, and let the session end when it does. Not part of `gjd-remote`: it talks to local tmux
+  and nothing else. This is what to use instead of hand-rolling a `tmux new-session`, and why is
+  [Sessions nobody made on purpose](#sessions-nobody-made-on-purpose).
 - [browser-control.md](browser-control.md) — **read this before any browser work.** Which mechanism
   goes with which machine, and the answer is not a preference: Claude in Chrome cannot follow you to
   a headless box, so it is Playwright there.
@@ -399,10 +413,30 @@ not come out of Terraform state, and no private key at all — `~/.ssh` held `au
 nothing else. Every command died at `Permission denied (publickey)`, so the tool that manages the
 sessions was the one tool a session could not use.
 
-Provisioning now gives the box a keypair that reaches **only itself**, and sets `GJD_REMOTE_HOST`
-in `/etc/profile.d/`. So from any session on the box, `gjd-remote ls` and the rest just work.
+Provisioning now gives the box a keypair that reaches **only itself**, and writes
+**`/etc/gjd-remote-host`** — one line, `127.0.0.1` — which
+[`scripts/gjd-remote-host.ts`](../../scripts/gjd-remote-host.ts) reads when `GJD_REMOTE_HOST` is
+unset, ahead of Terraform. So from any shell on the box, login or not,
+`npx tsx scripts/gjd-remote.ts ls` and the rest just work. There is no `gjd-remote` on the box's
+PATH, so the `npx tsx` form is the only one that runs.
 
-It grants nothing. Anyone who can read `~/.ssh/id_ed25519_loopback` already has a shell here, which
+**It was an export in `/etc/profile.d/` until 2026-09-05, and that was wrong for every agent.**
+`/etc/profile.d/` is read by login shells only; an agent's tool shell is not one, so the variable
+was unset, the address fell through to a `tofu` the box has not got, and the tool died reporting a
+**Terraform** problem. That reads as "gjd-remote cannot run here", and it was believed twice — once
+in an agent's memory, once in `feedback-reports.md`. The export is deleted, so there is one answer
+to the question rather than two that disagree by shell.
+
+The comment beside that export said a login shell was enough, "tmux sessions get one (`exec bash -l`
+at the end of every job script)". They do not: that line runs **after** `claude` exits, so Claude
+and every tool shell under it come from a stock-PATH non-login bash. It is the same class this file
+already learned from `claude` on PATH a few lines down — **verifying the convenient path instead of
+the path the work takes** — which is why provisioning now checks the file's contract and probes the
+loopback **with the address read out of that file**, rather than with a second copy of `127.0.0.1`
+that could quietly stop matching it.
+[The plan](../plans/260905d-gjd-remote-resolves-the-box-address-without-an-env-var.md).
+
+Neither the key nor the file grants anything. Anyone who can read `~/.ssh/id_ed25519_loopback` already has a shell here, which
 is all the key can get them; the box still has no key to GitHub, to the laptop, or anywhere else.
 To undo it, delete the key, its line in `authorized_keys`, and the `gjd-remote-loopback` block in
 `~/.ssh/config`.
@@ -410,8 +444,11 @@ To undo it, delete the key, its line in `authorized_keys`, and the `gjd-remote-l
 Three separate things have to be true at once — the key, the `authorized_keys` line, and a `Host`
 block, because ssh will not **offer** a non-default key name on its own and `gjd-remote` passes no
 `-i`. Each can be present while the connection still fails, so `provision.sh` checks the connection
-rather than the files, and checks `GJD_REMOTE_HOST` separately: the ssh can be perfect and
-`gjd-remote ls` still die on the address. Both are in `doctor`'s report by way of the verify block.
+rather than the files, and checks the address file separately: the ssh can be perfect and
+`gjd-remote ls` still die on the address. Both are in `doctor`'s report by way of the verify block,
+and `doctor` prints which of the three sources answered — `gjd-remote → 127.0.0.1 (from
+/etc/gjd-remote-host)` — because the address is the first thing to doubt when a command talks to the
+wrong machine.
 
 The `~/.ssh/config` block is **appended behind a marker, never written whole**. `/home` is the
 persistent volume, so a config Greg adds by hand outlives the server that provisioning rebuilds, and
@@ -447,8 +484,16 @@ has looked. Everything getting on with itself sorts below both.
 | `working` | Claude is busy |
 | `waits 3h39m` | [`--wait`](#starting-it-later---wait) is still counting down; Claude has not started |
 | `no claude` | the box looked at the pane and found no Claude — it exited, or never got that far |
-| `shell` | a `new-shell` session, which never had one — see the limitation below |
+| `shell busy` | no Claude in it, and something is running — a job, or a shell part way through one |
+| `shell idle` | no Claude in it, and nothing running: a `new-shell` waiting for you, or a husk |
 | `unknown` | something could not be determined, and a line under the table says which row and why |
+
+**`shell idle` means "at rest right now", never "finished".** It is one snapshot of the process
+table, so a shell nobody has typed into yet looks exactly like one whose work is over — which is why
+nothing sweeps them and there is no `--idle-shells` flag. It is there so you can see which shells
+are doing something, and `kill` the ones that are not. Before 2026-09-05 both read `shell`, and
+eight sessions accumulated on the box that nobody could tell apart
+([§ Sessions nobody made on purpose](#sessions-nobody-made-on-purpose)).
 
 **Two sources, and neither is trusted alone.**
 
@@ -518,6 +563,40 @@ says `shell`. There is no `CLAUDE_SESSION_ID` in that session, so there is no uu
 way to tell that Claude from anyone else's. The row is dim and sorts last, so the cost is small, and
 the alternative is a state that means "there might be a Claude in here somewhere". Start it with
 `new-claude` and it is tracked properly.
+
+## Sessions nobody made on purpose
+
+**`ls` lists every tmux session on the box, not only the ones this tool made.** Agents run long
+commands in tmux because a backgrounded `npm test` here is killed under load and reported as a
+success ([testing.md](testing.md#run-the-suite-in-tmux-because-a-killed-run-and-a-passing-run-look-the-same)),
+so hand-made sessions are normal and expected — they are the rows that read `shell`.
+
+On 2026-09-05 eight of them were sitting there under names nobody recognised, and **two of them
+could not be killed at all**:
+
+> But there are a few that are weird, e.g. `stageDbase`, `gateA`. If I try and resume them, it says
+> that the session doesn't exist. If I try and kill them, it doesn't work.
+>
+> — Greg, 2026-09-05
+
+`kill` and `resume` were testing the typed name against `SLUG`, the lower-case grammar for names
+this tool is willing to **mint**, and using it as the rule for names it is willing to **act on**. So
+every hand-made name with a capital in it was listed by the tool and untouchable by it, and `kill`
+answered with its usage string — which reads like "you forgot the argument". Three rules came out
+of it, and they are held by tests:
+
+- **A name that `ls` prints is a name every command must accept.** Existence in the live list is the
+  guard, not a grammar — [`resolveSession`](../../scripts/gjd-remote-tmux.ts).
+- **Commands address `Session.id`** (tmux's `$N`), never the name. Between reading the list and
+  sending the kill, a session can end and another take its name.
+- **Every name is `shq`'d before it reaches a shell, and escaped before it reaches a terminal.** A
+  tmux name can hold quotes and control characters; `SLUG` was the only thing standing in for both.
+
+The way they stop arriving is [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts): it names the
+session after the worktree, writes a log, and runs the command as the pane's own process so the
+session ends with it. The husks existed because the old recipe hard-coded `-s gate` — the second
+agent in a minute got `duplicate session` and improvised — and because a bare `bash -l` session,
+which is what you get if you make one and then `send-keys` into it, never exits.
 
 ## Which tabs are on the box
 

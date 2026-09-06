@@ -116,12 +116,12 @@
  *   commit.
  * - **budget exhaustion hands back**: delete the `STEP_BUDGET_MS` comparison in
  *   `transitionAfter`, so every non-final step keeps.
- * - **`runInJob` is in effect**: call `walkClaim` directly rather than through
- *   `runInJob` — which is the state production actually shipped in, and nothing
- *   caught it (docs/plans/260830k-v1-stages01-review-sol.md critical 1).
+ * - ~~**`runInJob` is in effect**~~ — the sixth of the seven. Its case and its
+ *   mechanism both went on 2026-09-05; see where the case stood, below.
  *
  * **Mutation.** Seven, then, one per case listed above, all seven watched red on
- * 2026-08-30 against the coordinator in `src/jobs.ts`.
+ * 2026-08-30 against the coordinator in `src/jobs.ts` — **six of them still
+ * have a case to be red in**; the seventh's mechanism is gone.
  *
  * **Blind to.** Every one of those seven was watched on the filesystem queue and
  * against `src/jobs.ts` alone, so not one of them reaches a line of SQL: a
@@ -132,21 +132,6 @@
  */
 import { vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import.
- *
- * `src/jobs.ts` picks its store **once, at module load** — `const store:
- * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
- * hoisted above every statement in a module, so a plain assignment here would
- * leave the whole file on the filesystem queue with nothing saying so.
- * `claimSession` branches on the same constant.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
-
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
@@ -154,7 +139,6 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, jobs as jobsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
-import { currentJobId } from "../src/job-scope.js";
 import {
   advanceJobWith,
   claimSession,
@@ -167,53 +151,24 @@ import { STEPS, type PipelineStep, type StepContext, type StepProduct } from "..
 import type { ArtifactParts, ArtifactReads } from "../src/store/artifacts.js";
 import { readsPgArtifacts } from "../src/store/artifacts-pg.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { StoreSession } from "../src/store/session.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
-/**
- * **The flag stays set for the whole file**, and that is a deliberate departure
- * from the other converted suites, which put it back straight after their
- * imports because vitest reuses a worker across files.
- *
- * Two cases below are about a dev-server restart and reach it with
- * `vi.resetModules()` — which gives `src/store/live.ts` a **fresh module load**,
- * and a fresh load re-reads `process.env.SPIDERYARN_STORE`. Restored here, the
- * reloaded copy would pick the filesystem queue, look for the job in
- * `data/_jobs/`, find nothing, and report that Stop reached nobody — a failure
- * that says nothing about Stop. So it is restored in `afterAll` instead, which
- * is late enough for the reload and early enough for the next file.
- */
-const restoreStore = () => {
-  if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-  else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-};
+/* A `restoreStore` closure stood here until 2026-09-05, put back in `afterAll`
+   rather than after the imports because two cases below reload `src/store/live.ts`
+   with `vi.resetModules()` and a fresh load re-read the flag. There is one store,
+   so a reload picks the same one and there is nothing to restore. */
 
 loadEnvLocal();
 
 const OWNER = DEV_OWNER_ID;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/jobs-walk.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
-});
-
-/* At the top level, not inside the gated describe below: a `describe.skip` skips
-   its hooks too, so a run with no database would leave the flag set behind it. */
-afterAll(restoreStore);
-
-describe("the store this walk is actually running on", () => {
-  it("is the Postgres one", () => {
-    /* **Not gated on `reachable`**, deliberately. A flag that failed to take
-       would run every case below against the filesystem queue, which answers
-       all of them happily — and none of the SQL predicates this file exists to
-       constrain would ever be consulted. A control that vanishes when the
-       database is missing vanishes exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
 });
 
 /**
@@ -409,7 +364,6 @@ function fakeStep(
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: STEPS[name].produces,
     async run(ctx: StepContext): Promise<StepProduct> {
       ran.names.push(name);
@@ -553,9 +507,7 @@ async function fixture(
 
 /* --------------------------------------------------------------- the cases -- */
 
-const when = reachable ? describe : describe.skip;
-
-when("one claim walks the whole job", () => {
+describe("one claim walks the whole job", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -578,18 +530,10 @@ when("one claim walks the whole job", () => {
    * delete-by-slug would hide a case that left one behind.
    */
   afterAll(async () => {
-    try {
-      if (!reachable) return;
-      if (MADE.length) await getDb().delete(jobsTable).where(inArray(jobsTable.id, MADE));
-      for (const article of SEEDED) await article.remove();
-      for (const close of RELOADED) await close().catch(() => undefined);
-      await closeDb();
-    } finally {
-      /* Belt and braces with the top-level `afterAll(restoreStore)` above: this
-         one runs first and puts the flag back before anything else in the
-         worker, and that one runs even when this whole describe is skipped. */
-      restoreStore();
-    }
+    if (MADE.length) await getDb().delete(jobsTable).where(inArray(jobsTable.id, MADE));
+    for (const article of SEEDED) await article.remove();
+    for (const close of RELOADED) await close().catch(() => undefined);
+    await closeDb();
   }, 60_000);
 
   it("runs every step in one call, on one claim and one attempt", async () => {
@@ -867,32 +811,24 @@ when("one claim walks the whole job", () => {
     expect(ran.names, "and it picked up at the step that had not run").toEqual(["fetch", "hierarchy"]);
   });
 
-  it("puts the job id in scope for the steps it runs", async () => {
-    /**
-     * **`runInJob` existed and nothing called it.** The bundle carried an
-     * `AsyncLocalStorage` and a `currentJobId()` with no way to fill it, so on a
-     * deployed instance `dataRoot()` was asked for a directory with no job in
-     * scope and threw before the first step started — every import on production
-     * failing in 16ms. GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md critical 1.
-     *
-     * Asserted from **inside** a step and after an `await`, because that is the
-     * property: an `AsyncLocalStorage` that survives the awaits between the
-     * claim and the stage's own writes.
-     */
-    const seen: { before: string | null; inside?: string | null } = { before: currentJobId() };
-    const { job, parts } = await fixture("test-walk-scope", ["fetch"], {
-      fetch: async () => {
-        await Promise.resolve();
-        seen.inside = currentJobId();
-      },
-    });
-
-    await advanceAsOwner(job.id, parts);
-
-    expect(seen.before, "nothing outside a claim is in a job scope").toBeNull();
-    expect(seen.inside, "and the step ran inside this job's").toBe(job.id);
-    expect(currentJobId(), "and the scope closed again afterwards").toBeNull();
-  });
+  /*
+   * **`puts the job id in scope for the steps it runs` stood here until
+   * 2026-09-05, and the scope it asserted no longer exists.**
+   *
+   * `runInJob` (src/job-scope.ts) wrapped the whole claimed body so that
+   * `dataRoot()` could pick `/tmp/spideryarn/<owner>/<job>/` on a deployed
+   * instance — a job-scoped scratch directory, so that a failed job's warm
+   * `/tmp` could not be served as the next job's article. It had exactly one
+   * reader, and that reader was the filesystem store. Both went in stage G of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+   * and `src/job-scope.ts` with them.
+   *
+   * The accident is worth keeping even though the mechanism is not, because it
+   * is this repo's dominant shape: `runInJob` existed for a day with **nothing
+   * calling it**, so every deployed import failed at step one in 16ms, and this
+   * case was what stopped that happening twice. GPT Sol,
+   * docs/plans/260830k-v1-stages01-review-sol.md critical 1.
+   */
   /**
    * **Two jobs on one article: the second waits, and the first's work survives
    * it.**

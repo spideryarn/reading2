@@ -153,6 +153,55 @@ export function helpThreadFor(
 }
 
 /**
+ * **The conversation the gutter's chat chip should open rather than replace.**
+ *
+ * The chip carries a count, and until 2026-09-05 a press on it minted a fresh
+ * draft — so the reader who clicked a blue mark saying *"(3 already)"* got an
+ * empty composer. `App.chatAboutBlock` asks this first and falls back to the
+ * draft only when it comes back empty.
+ *
+ * ## The order is not "newest wins", and that is the whole of it
+ *
+ * **A whole-block conversation beats a selection, however much newer the
+ * selection is.** The reader pressed a control beside a *paragraph*, so the
+ * paragraph's own conversation is the one they are pointing at; letting a
+ * three-word highlight from a minute ago displace it would answer a question
+ * they did not ask. GPT Sol's finding 4 on the plan, against Fable's flat
+ * "newest", and Sol has the better of it.
+ *
+ * **But a selection is still opened when there is no whole-block chat**, and
+ * that is where this parts company with `helpThreadFor` above, which admits
+ * whole-block anchors only. The two buttons make different promises: the "?"
+ * *spends*, so it must be sure the conversation it reopens answers the question
+ * being asked, while the chip is free and its count already includes every
+ * anchored conversation on the block. Showing one of the things it is counting
+ * is the truthful thing for it to do.
+ *
+ * `kind === "chat"` is filtered **positively**, so the rule that the reading
+ * view only ever draws chats is stated here rather than borrowed from the
+ * route's correctness.
+ *
+ * **Newest by `updatedAt`** within each tier, the same comparison
+ * `helpThreadFor` makes and for the same reason: it is the one whose context is
+ * closest to where the reader is now.
+ */
+export function threadFor(
+  summaries: ThreadSummary[],
+  blockId: string,
+): ThreadSummary | undefined {
+  let block: ThreadSummary | undefined;
+  let selection: ThreadSummary | undefined;
+  for (const s of summaries) {
+    if (s.kind !== "chat") continue;
+    if (!s.anchor || s.anchor.blockId !== blockId) continue;
+    if ("quote" in s.anchor) {
+      if (!selection || s.updatedAt > selection.updatedAt) selection = s;
+    } else if (!block || s.updatedAt > block.updatedAt) block = s;
+  }
+  return block ?? selection;
+}
+
+/**
  * **The list that arrives from the server, with what happened while it was in
  * the air folded back in.**
  *

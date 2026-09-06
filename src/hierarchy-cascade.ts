@@ -369,6 +369,37 @@ export interface CapReached {
 export interface CascadeState {
   root: CascadeNode;
   capReached: CapReached[];
+  /**
+   * Targets whose expansion call the model refused on every draw. Required for
+   * the same reason `capReached` is: a type that offers nowhere to put one
+   * invites `status: "terminal"` and a shrug. Arrived 2026-09-05, when a refused
+   * call stopped taking its whole wave down with it. `RefusedTarget`.
+   */
+  refused: RefusedTarget[];
+}
+
+/**
+ * **A target whose expansion call the model refused on every draw its budget
+ * allowed**, and which therefore stayed exactly as the wave before it left it.
+ *
+ * The second way a node the governor would have split ends up `terminal`, and it
+ * needs a record for the reason `capReached` does: silent, it is
+ * indistinguishable from a node that legitimately stopped, and it costs the
+ * reader a level. `RefusedCall` in src/hierarchy-deepen.ts is where one is made.
+ *
+ * `reason` and `draws` and nothing else: the *shape* of what the model actually
+ * said carries its own `why`, which is article-adjacent text, and lives on the
+ * node's `CandidateRecord` in the deepening records file instead.
+ */
+export interface RefusedTarget {
+  /** Its position in the cascade's own proposal — "root > child 2 > child 4". */
+  where: string;
+  range: readonly [string, string];
+  structuralBlocks: number;
+  /** The `ExpansionRefused` reason of the last draw. */
+  reason: string;
+  /** Draws made, counting the first. */
+  draws: number;
 }
 
 /**
@@ -1179,6 +1210,49 @@ export interface ProposedChild {
 }
 
 /**
+ * **A child that survived, and the proposal it came from** — one object, made in
+ * one place, so the two cannot be paired wrongly.
+ *
+ * ## The shape this replaced, and why it had to go
+ *
+ * `normaliseExpansion` used to hand back bare `ModelNode`s, and the wave carried
+ * the model's own children beside them in a second array. The two are **different
+ * lengths** — a start that marks no split point is dropped, and nothing said
+ * which — so *"what did the model say about this child?"* was a question with no
+ * answer. Stage 6 is the recursion, and the recursion is governed by exactly
+ * that question, so it could not have been built on top of it; stage 5 records
+ * verdicts it could not attribute. The obvious mend was a `childIndex` on the
+ * node and a lookup every caller must remember to do, which is a parallel array
+ * with an extra step — and *"a parallel array is a thing that can be one element
+ * short"* is the rule this file already lives by
+ * (`runExpansionWave`'s `ancestorsOf`).
+ *
+ * So the pairing is made where the drop is decided and is impossible to lose.
+ * The proposal here is the **same object** the caller passed in, not a copy: a
+ * field this file has never heard of — today `verdict` and `why`, tomorrow
+ * whatever the prompt learns to ask for — arrives on the other side untouched.
+ *
+ * The node is still exactly what `buildTree` takes, so a caller that wants the
+ * tree writes `children.map((c) => c.node)` and is done.
+ * docs/plans/260904d-deepen-fat-sections.md § stage 5.
+ */
+export interface DerivedChild<C extends ProposedChild = ProposedChild> {
+  /** As `buildTree` takes it: title, gist, `sourceHeading`, and a derived range. */
+  node: ModelNode;
+  /**
+   * The proposal this node was built from — the caller's own object, by
+   * identity.
+   *
+   * **Its `start` is not the node's range start**, and that is the point of
+   * keeping it: the first child is pinned to its parent's own first block, and a
+   * child whose start named a block one past its authored heading is snapped back
+   * onto it. What the model claimed and what it got are both here, which is what
+   * lets `recordBoundaryFaults` measure the difference at all.
+   */
+  proposed: C;
+}
+
+/**
  * **Turn one parent's answer into children with real ranges, immediately.**
  *
  * ## Why immediately
@@ -1297,13 +1371,28 @@ export interface ProposedChild {
  * Fewer repairs here is a property of the response format and of what is
  * refused, not a quieter run.
  *
+ * ## What comes back is a pair, and that is deliberate
+ *
+ * A kept child is handed back **beside the proposal it was built from**, not as
+ * a bare `ModelNode`. The two are made together, in one `map`, so they cannot
+ * come apart; and a caller that needs to know what the model *said* about a
+ * child — its verdict, its `why` — reads it off `proposed` rather than trying to
+ * line two arrays of different lengths up by position. There is nothing to line
+ * up: this function drops a start that marks no split point, and it does not say
+ * which. See `DerivedChild`.
+ *
+ * `C` is whatever shape the caller's proposal has. A scoped answer's child
+ * carries a verdict (`ExpansionAnswerChild` in src/hierarchy-expand.ts); a
+ * test's carries nothing but the four fields. Either way the object handed back
+ * is the very object that went in, so nothing can be lost in the pairing.
+ *
  * @returns the children that were kept, in the model's own order, each with a
- * derived range. Dropped children are absent and are named in
- * `report.droppedChildren`.
+ * derived range and its own proposal. Dropped children are absent and are named
+ * in `report.droppedChildren`.
  */
-export function normaliseExpansion(opts: {
+export function normaliseExpansion<C extends ProposedChild>(opts: {
   /** The model's proposal, in its own order. */
-  children: readonly ProposedChild[];
+  children: readonly C[];
   /** The parent's already-fixed range. Not the answer's to redefine. */
   parent: readonly [string, string];
   blocks: readonly Block[];
@@ -1312,14 +1401,14 @@ export function normaliseExpansion(opts: {
   /** Filled in with what was derived past, and what was dropped. */
   report: BuildReport;
   index?: BlockIndex;
-}): ModelNode[] {
+}): DerivedChild<C>[] {
   const { children, blocks, where, report } = opts;
   const index = opts.index ?? indexBlocks(blocks);
   const [p0, p1] = positions({ range: opts.parent }, index, `The parent at ${where}`);
 
   /* Planned into a report of its own and merged into the caller's only once the
      answer has survived every refusal below — see § "The caller's `report`". */
-  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 
   if (children.length === 0) {
     throw new ExpansionRefused(
@@ -1410,7 +1499,7 @@ export function normaliseExpansion(opts: {
   recordBoundaryFaults(kept, claimed, p0, where, planned);
   planned.repairs.push(...snapStartsToHeadings(children, kept, blocks, where));
 
-  const built: ModelNode[] = kept.map((child, k) => {
+  const built: DerivedChild<C>[] = kept.map((child, k) => {
     const next = kept[k + 1];
     const end = next === undefined ? p1 : next.start - 1;
     const proposed = children[child.childIndex]!;
@@ -1418,7 +1507,11 @@ export function normaliseExpansion(opts: {
        backwards floored at the previous kept start; `end` is either `p1` or one
        before a start that was in range. Both index `blocks` because the parent's
        own range came out of `index`. */
-    return {
+    /* **The pair is made here or it is not made at all.** `child.childIndex` is
+       the only thing that knows which proposal survived as which node, it is
+       local to this function, and it was thrown away at this line until
+       2026-09-05. See `DerivedChild`. */
+    const node: ModelNode = {
       title: proposed.title,
       range: [blocks[child.start]!.id, blocks[end]!.id] as [string, string],
       /* **Presence, not truthiness.** This said `proposed.gist ? … : …`, and a
@@ -1450,6 +1543,7 @@ export function normaliseExpansion(opts: {
         ? { sourceHeading: proposed.sourceHeading }
         : {}),
     };
+    return { node, proposed };
   });
 
   /* The answer stood up, so what it cost the run goes on the run's books.
@@ -1463,6 +1557,11 @@ export function normaliseExpansion(opts: {
   report.repairs.push(...planned.repairs);
   report.droppedChildren.push(...planned.droppedChildren);
   report.droppedHeadings.push(...planned.droppedHeadings);
+  /* An expansion writes depth-2 and deeper nodes, where `questionFor` keeps
+     none — so this is normally empty. It is carried anyway, because a count
+     that is only summed on some paths is a count that means one thing here
+     and another there. */
+  report.droppedQuestions.push(...planned.droppedQuestions);
   return built;
 }
 
@@ -1597,6 +1696,14 @@ export function proposalFromTree(tree: Tree): ModelNode {
          round trip is lossy in exactly the case that says something has gone
          strange upstream. */
       ...(node.gist !== undefined ? { gist: node.gist } : {}),
+      /* **And the question, for exactly the reason above.** Left out of the
+         first draft of SPIDERYARN-READING2-1V, and GPT Sol reproduced what that
+         cost: four questions before `deepenTree`, zero after it. Deepening any
+         one section rebuilds the whole tree through this function, so a field
+         missing here is not degraded on the deepened branch — it is gone from
+         the article. The rule this paragraph states is the rule; a new field on
+         `TreeNode` belongs on this list the day it is added. */
+      ...(node.question !== undefined ? { question: node.question } : {}),
       ...(node.sourceHeading !== undefined ? { sourceHeading: node.sourceHeading } : {}),
       ...(children.length > 0 ? { children } : {}),
     };
@@ -1636,8 +1743,17 @@ export function assertCascadeComplete(
 ): void {
   const index = indexBlocks(blocks);
   const faults: string[] = [];
-  /** Where each `capReached` record says the governor was overruled. */
-  const recorded = new Map(state.capReached.map((c) => [c.where, c]));
+  /**
+   * **Where something says why a node the governor would have split is
+   * terminal.** Two kinds of record answer that question and they are different
+   * facts — the depth cap is deterministic and ours, a refusal is the model's —
+   * but this guard asks only whether *an* explanation exists, so they share one
+   * index here and stay separate everywhere else.
+   */
+  const recorded = new Map<string, unknown>([
+    ...state.capReached.map((c) => [c.where, c] as const),
+    ...state.refused.map((r) => [r.where, r] as const),
+  ]);
   const claimedTerminal = new Set<string>();
 
   /* Positions and block ids only, and the ids through `nameValue`. This message
@@ -1666,7 +1782,7 @@ export function assertCascadeComplete(
           faults.push(
             `${name(where, node)} is marked terminal but holds ` +
               `${structuralBlocksIn(node, blocks, index)} structural block(s) or an unresolved ` +
-              `heading, and no capReached record explains it`,
+              `heading, and neither a capReached nor a refusal record explains it`,
           );
         }
         break;
@@ -1692,7 +1808,9 @@ export function assertCascadeComplete(
      class of fault as the missing record above and just as invisible. */
   for (const where of recorded.keys()) {
     if (!claimedTerminal.has(where)) {
-      faults.push(`a capReached record names ${where}, which is not a terminal node in this tree`);
+      faults.push(
+        `a capReached or refusal record names ${where}, which is not a terminal node in this tree`,
+      );
     }
   }
 

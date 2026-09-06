@@ -52,7 +52,7 @@
  *
  * docs/project/referee-mode.md § 4.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Globe, LoaderCircle, SendHorizontal, Square } from "lucide-react";
 import type { Block, BlockId, ChatMessage, ChatThread, Citation } from "../types.js";
 import {
@@ -76,6 +76,7 @@ import {
   withoutShortlist,
 } from "../referee-candidates.js";
 import { CitedMarkdown } from "./Cited.js";
+import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { BlockRef } from "./BlockRef.js";
 import { hostOf } from "../urls.js";
@@ -83,13 +84,23 @@ import { useChat } from "./useChat.js";
 import { useRenderCount } from "./perf.js";
 
 /**
- * The band: the thread, the fetch that belongs to it, and the opening turn
- * behind its button.
+ * The band: the thread, the fetch that belongs to it, and the opening turn.
  *
- * **There is no automatic turn any more**, and this docstring said there was
- * until 2026-09-02. The opening ask used to fire from a `useEffect` on mount;
- * it now fires from `StartBrief`'s press and from nothing else — see
- * `startBrief` below.
+ * **The opening turn is automatic on a press, and never on a mount.** Those are
+ * two different sentences and this file has held all three positions:
+ *
+ *  - until 2026-09-02 it fired from a `useEffect` on **mount**, which meant a
+ *    pasted link, a Back step or a re-render bought a run over the paper and
+ *    sent search terms to a search engine;
+ *  - then it fired only from `StartBrief`'s button;
+ *  - since 2026-09-06 it fires from either — the button, or the **press on the
+ *    Candidates chip** that opened this sub-mode, through the activation token
+ *    (src/web/activation.ts).
+ *
+ * The 2026-09-02 rule is intact and is the load-bearing one: a *mount* still
+ * spends nothing, and `tests/referee-candidates-press.test.tsx` mounts this band
+ * with nothing armed and asserts exactly that. What changed is that a press on
+ * the chip counts as asking, which a mount never did.
  *
  * A component of its own for `ConversationBand`'s reason — `useChat` fetches on
  * mount, and a reader who never opens this sub-mode should not pay for it.
@@ -116,7 +127,7 @@ export function CandidatesBand({
   onJump(id: BlockId): void;
 }) {
   useRenderCount("CandidatesBand");
-  const { threads, loaded, loadFailed, send, stop, error } = useChat(slug);
+  const { threads, loaded, loadFailed, reload, send, stop, error } = useChat(slug);
 
   const thread = useMemo(() => firstCandidatesThread(threads), [threads]);
 
@@ -129,33 +140,126 @@ export function CandidatesBand({
    * on its own, and it is the query the conversation then refines — so if the
    * names layer disappoints, this still stands.
    *
-   * **What changed on 2026-09-02 is when it runs.** It used to fire from a
-   * `useEffect` the moment this sub-mode first mounted, which made Candidates
-   * the one chip in the radiogroup that spends money on being looked at — the
-   * other three are inert to a press. A first-time referee clicking along the
-   * row to find out what the four words mean paid for a run and, worse, sent
-   * search terms drawn from an unpublished manuscript to a search engine. That
-   * is **a different third party at a different time** from the model provider
-   * the band's notice is about, and the notice cannot cover it: the notice is in
-   * the past tense, and this had not happened yet.
-   * docs/plans/260902f-make-referee-mode-understandable.md § Stage 3.
+   * **What changed on 2026-09-02 is when it runs, and 2026-09-06 did not undo
+   * it.** It used to fire from a `useEffect` the moment this sub-mode first
+   * mounted, which made Candidates the one chip in the radiogroup that spends
+   * money on being *looked at* — the other three are inert to a press. A
+   * first-time referee clicking along the row to find out what the four words
+   * mean paid for a run and, worse, sent search terms drawn from an unpublished
+   * manuscript to a search engine. That is **a different third party at a
+   * different time** from the model provider the band's notice is about, and the
+   * notice cannot cover it: the notice is in the past tense, and this had not
+   * happened yet. docs/plans/260902f-make-referee-mode-understandable.md § Stage 3.
    *
-   * So `startBrief` is what the button below calls, and nothing else calls it.
-   * `loaded` still guards it for `ConversationBand`'s reason — without it "no
-   * Candidates thread" and "the fetch has not come back" are the same state, and
-   * a press in that window would mint a second thread beside the stored one —
-   * but it now also guards the *button*, which is not drawn until the fetch has
-   * answered. Everything after the first press is exactly as it was: the thread
-   * is stored, and coming back to the sub-mode finds it and asks nothing.
+   * On 2026-09-06 it started running on a **press of the chip** as well as on a
+   * press of the button — Greg's rule that opening a mode is the reader asking
+   * for it (src/web/activation.ts). Read the paragraph above before deciding
+   * that is the same mistake again, because it is not: what made the mount
+   * version wrong was that a pasted link, a Back step and a re-render all reach
+   * a mount, and none of them is anybody asking for anything. A press on the
+   * chip is a person, and `armActivationForRefereeView` is minted from that
+   * `onClick` and from nowhere else.
+   *
+   * **What the press now costs is unchanged and is still worth stating**: a
+   * first turn may reach a search engine with terms drawn from the manuscript.
+   * The chip's own `ControlTip` (`REFEREE_VIEW_TIP.candidates`) says so, and
+   * that card is what the referee reads on the way to pressing it. If that
+   * sentence is ever weakened, this behaviour has to go back to a button.
+   *
+   * `startBrief` is what the button below calls, what the automatic run calls,
+   * and nothing else. `loaded` still guards it for `ConversationBand`'s reason —
+   * without it "no Candidates thread" and "the fetch has not come back" are the
+   * same state, and a press in that window would mint a second thread beside the
+   * stored one — and it also guards the *button*, which is not drawn until the
+   * fetch has answered. Everything after the first press is exactly as it was:
+   * the thread is stored, and coming back to the sub-mode finds it and asks
+   * nothing.
    */
+  /**
+   * **One opening brief, however many callers ask for it in the same tick.**
+   *
+   * A ref rather than state, and read-and-set in one synchronous run, because
+   * the thing it has to survive is two callers inside one tick: since
+   * 2026-09-06 the automatic run and the still-visible *Build the reviewer
+   * brief* button can both reach `startBrief`, and the `thread` guard below is a
+   * **render-time** value — it does not become truthy until `useChat`'s
+   * optimistic insert has rendered. Two sends before that mint two thread ids
+   * and make two requests. Unlike `useClaims`, nothing here has a `running`
+   * flag, and unlike a job step there is no queue to deduplicate against.
+   *
+   * GPT Sol, 2026-09-06: *"payment correctness should not depend on that
+   * scheduling detail."*
+   *
+   * **It normally never needs releasing**, and that is worth knowing before
+   * reading the effect below: `send` writes both rows into `base` at
+   * registration and *nothing withdraws them*, a refused send included
+   * (useChat.ts § the optimistic insert), so `thread` is truthy from the next
+   * render onwards and `startBrief`'s own guard takes over. The effect exists
+   * for the one path where the send never registered at all, which would
+   * otherwise leave the button drawn and dead for the rest of the visit.
+   */
+  const asking = useRef(false);
+
   const startBrief = () => {
     if (!loaded || thread) return;
+    /* The synchronous half of the guard above. See `asking`. */
+    if (asking.current) return;
+    asking.current = true;
     /* `null` for the thread id mints one; `false` for the profile because this
        answer is for an editor deciding who to invite, and how the reader likes
        their own reading explained has no bearing on it. No `at`: the brief is
        about the whole paper. */
-    send(null, CANDIDATES_OPENING, null, false, undefined, undefined, "candidates");
+    send(null, CANDIDATES_OPENING, null, { useProfile: false, kind: "candidates" });
   };
+
+  /**
+   * **Let go of the latch when there is still nothing to show for it.**
+   *
+   * See `asking`: in the ordinary case this never fires with the latch held,
+   * because a registered send leaves a thread behind whether or not it
+   * succeeded. It fires when a send never registered.
+   *
+   * **A new paper is covered without naming `slug`**: `useChat` is keyed on it,
+   * so a different article takes `loaded` false and then true with no thread,
+   * which is this effect's own condition. Naming it as well would be a
+   * dependency that cannot change without one of these two changing first.
+   */
+  useEffect(() => {
+    if (thread) return;
+    if (!loaded) return;
+    asking.current = false;
+  }, [thread, loaded]);
+
+  /**
+   * **The editor pressed Candidates and this paper has no thread — build the
+   * brief.** The press is minted by the chip in `RefereeViews` (App.tsx) and by
+   * nothing else; see `startBrief` above for why that is not the mount-fired
+   * version this file used to have.
+   *
+   * The four states, out of what `useChat` reports:
+   *
+   *  - `!loaded` → **loading**, and the press waits;
+   *  - `loadFailed` → **error**, which is not an answer, so the press is kept
+   *    and `reload` asks again. This panel needs that way out: with the fetch
+   *    failed it draws no start button at all, so the chip is the only control
+   *    left. useAutoRun.ts § A failed read is not an answer;
+   *  - a thread → **ready**, and the press retires having spent nothing, which
+   *    is the ordinary case on a second visit;
+   *  - otherwise **none**, and the brief is asked for.
+   *
+   * `startBrief`'s own `!loaded || thread` guard is left in place rather than
+   * relied upon: this hook has already answered both questions by the time it
+   * calls, and two guards that agree are cheaper than working out which one is
+   * load-bearing later.
+   */
+  const status: ArtefactStatus = !loaded
+    ? "loading"
+    : loadFailed
+      ? "error"
+      : thread
+        ? "ready"
+        : "none";
+  useAutoRun(slug, "candidates", status, async () => startBrief(), async () => reload());
 
   return (
     <CandidatesPanel
@@ -167,7 +271,7 @@ export function CandidatesBand({
       error={error}
       onAsk={(question) => {
         if (!thread) return;
-        send(thread.id, question, null, false, undefined, undefined, "candidates");
+        send(thread.id, question, null, { useProfile: false, kind: "candidates" });
       }}
       onStop={(messageId) => thread && stop(thread.id, messageId)}
       onStart={startBrief}

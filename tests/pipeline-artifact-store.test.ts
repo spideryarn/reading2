@@ -1,6 +1,6 @@
 /**
- * The artefact store seam: the declaration agrees with the paths, the paths
- * round-trip the real artefacts, and a half-written file stops reporting itself
+ * The artefact store seam: what a step declares it produces, what a real
+ * artefact of each kind has to look like, and when a step may report itself
  * finished.
  *
  * See docs/plans/260826e-postgres-storage-implementation.md § Step 11, half B.
@@ -11,25 +11,64 @@
  * A `writeFile` killed halfway leaves a file that exists and will not parse, so
  * the step reported itself done, the pipeline skipped it, and the stage after
  * it read half a JSON document — docs/reusable/silent-success.md, exactly. The
- * truncation block below is that bug, written as a test before it was fixed.
+ * first block below is that bug, written as a test before it was fixed.
  *
  * **It was red for the steps with no freshness check and green for the three
- * that had one**, and that difference is the whole argument for `has()`
- * parsing. `threadIsCurrent` read `tweets.json` itself and answered false when
- * it would not parse, so `tweets` was never exposed; `arc`, `hierarchy`, `extract`
- * and `blocks` had no such function, and were.
+ * that had one**, and that difference is the whole argument for `has()` asking
+ * `whyUnusable` rather than asking whether something is there. `threadIsCurrent`
+ * read `tweets.json` itself and answered false when it would not parse, so
+ * `tweets` was never exposed; `arc`, `hierarchy`, `extract` and `blocks` had no
+ * such function, and were.
  *
  * Written in the past tense since D0, because the accident of protection has
  * gone and the protection has not: `threadIsCurrent` was replaced by a stamp,
  * and `stepIsDone` asks `has()` *before* it computes one. So every step is now
- * covered by the same parsing check rather than a couple of them being covered
- * by a function that happened to parse on its way to asking something else.
+ * covered by the same check rather than a couple of them being covered by a
+ * function that happened to parse on its way to asking something else.
+ *
+ * ## What this file stopped being about on 2026-09-05
+ *
+ * It was **the filesystem adapter's own surface** — `PATHS`, `pathFor`,
+ * `fsLocations`, and a `has()` that parsed bytes — and it read its fixtures out
+ * of a `mkdtemp` directory through `createFsArtifactStore`. That store was
+ * deleted when Postgres became the only one
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G),
+ * and these claims went with it. They are written out because a deleted
+ * assertion is invisible to every check we have — **nothing else in the
+ * repository holds any of them**, and the last two are the ones to weigh:
+ *
+ * - **`produces` agrees with `outputs`, step for step, in order** — including
+ *   the meta-test that swapped two of `PATHS.extract`'s destinations and watched
+ *   the comparison notice. `PipelineStep.outputs` was deleted in the same stage,
+ *   so there is no second list left to disagree with the first. *Vacuous now.*
+ * - **`PATHS` has a path for every kind any step declares, and no orphans**, and
+ *   **the two `blocks.json` are kept apart while the two HTMLs are one file**,
+ *   and **each kind lands where the real article's file actually is.** The
+ *   successor table is `LAYOUT` in tests/helpers/fixture-artefacts.ts, which
+ *   describes the committed corpus rather than the pipeline, and **no test
+ *   asserts any of the three of it.** A wrong row there makes a step's artefacts
+ *   unreadable, which nine suites notice by name — but only for the seventeen
+ *   rows the corpus populates. *A real gap, cheap to close.*
+ * - **A corrupt artefact never reaches a log line**, proved through the
+ *   filesystem decoder's own `JSON.parse` — and **a store answers `null` for
+ *   text it could not parse.** Nothing decodes text into an artefact any more:
+ *   a JSONB column cannot be half-written and a `Map` holds a value, so both
+ *   claims are about a thing that no longer exists. The general guard survives
+ *   below — `parseJsonFrom` names the breakage without quoting it.
+ * - **The per-kind size ceiling** (`DECODERS`, 4 to 32 MiB). Postgres has none
+ *   and `whyUnusable` is shape only; the one remaining bound is `MAX_BYTES` in
+ *   tests/helpers/fixture-artefacts.ts, which guards the fixture reader.
+ * - **Two cases about the ids in the HTML** — see the block called *blocks is
+ *   only done if the HTML really carries its ids*, which explains at length why
+ *   they were the aliasing rather than the rule, and why porting them would have
+ *   turned two red-able cases into two that assert the opposite of the truth.
+ *
+ * Everything else is here, on `memoryArtefacts()` — a store that keeps
+ * `extractedHtml` and `stampedHtml` apart the way Postgres does.
  */
-import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CAPABLE_MODEL } from "../src/models.js";
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { CAPABLE_MODEL, modelFor } from "../src/models.js";
 import { ASSETS_VERSION } from "../src/collect-assets.js";
 import {
   inputFingerprint as arcFingerprint,
@@ -57,6 +96,10 @@ import {
   inputFingerprint as quizFingerprint,
   PROMPT_VERSION as QUIZ_VERSION,
 } from "../src/quiz.js";
+import {
+  inputFingerprint as debateFingerprint,
+  PROMPT_VERSION as DEBATE_VERSION,
+} from "../src/debate.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
@@ -69,39 +112,14 @@ import {
 } from "../src/source-hash.js";
 import { parseJsonFrom } from "../src/parse-json.js";
 import { articleText, articleWithIds } from "../src/article-prompt.js";
-import {
-  type ArtifactLocations,
-  createFsArtifactStore,
-  fsLocations,
-  PATHS,
-  pathFor,
-} from "../src/store/artifacts-fs.js";
 import { metaRawSha256, sameStamp } from "../src/store/artifacts.js";
 import type { ArtifactKind, ArtifactMap, ArtifactReads } from "../src/store/artifacts.js";
 import type { StepContext } from "../src/pipeline.js";
 import type { Block, Meta, StepName, Tree } from "../src/types.js";
-
-const ROOT = path.resolve(import.meta.dirname, "..");
+import { memoryArtefacts, type MemoryArtifactStore } from "./helpers/memory-artefacts.js";
+import { fixturePath, requireFixture } from "./helpers/require-fixture.js";
 
 const SLUG = "test-artifact-store";
-
-/**
- * Fixtures go in a temp directory, never in `data/`.
- *
- * `createFsArtifactStore` takes a locator precisely so this is possible, and it
- * is not tidiness: `listArticles` enumerates `data/`, so an article written
- * there mid-run joins the shelf, and tests/library.test.ts starts failing on
- * the order of a list that has a stranger in it. Found the hard way — these
- * fixtures were under `data/test-…` first, and three unrelated test files went
- * red only when the whole suite ran together.
- */
-async function tempArticle(name: string): Promise<ArtifactLocations> {
-  const root = await mkdtemp(path.join(tmpdir(), `spya-artifacts-${name}-`));
-  const at = { dir: path.join(root, "data", SLUG), htmlFile: path.join(root, "output", `${SLUG}.html`) };
-  await mkdir(at.dir, { recursive: true });
-  await mkdir(path.dirname(at.htmlFile), { recursive: true });
-  return at;
-}
 
 /**
  * **The article this whole file is built on, and stage 3 really run over it.**
@@ -137,9 +155,11 @@ const BODY = BLOCKS[1]!;
 /** The article HTML **after stage 3 has stamped the ids into it**. */
 const STAMPED_HTML = STAGE_THREE.html;
 
-/** What stage 2 leaves behind: the same prose, none of the ids. */
-const UNSTAMPED_HTML =
-  "<article><h1>A title</h1><p>One paragraph of something to hash.</p></article>";
+/* **`UNSTAMPED_HTML` stood here until 2026-09-05** — the same prose with none
+   of the ids, which is what a re-extraction leaves. Its two readers were the
+   two cases the filesystem's aliasing was holding up; see the block called
+   *blocks is only done if the HTML really carries its ids* for what happened to
+   them, and to the claim. */
 
 const SOURCE_HASH = hashBlocks(BLOCKS);
 
@@ -195,6 +215,10 @@ const SKETCH_SOURCE_HASH = sketchFingerprint(BLOCKS, TREE, META);
    because the day the two stop agreeing is the day a shared constant would hide
    it. */
 const QUIZ_SOURCE_HASH = quizFingerprint(BLOCKS, TREE, META);
+/* `debate` uses the same `articleWithIdsFingerprint` again — pass B sends
+   `articleWithIds` — so this is the same number a fourth time, and computed
+   through its own module for the same reason. */
+const DEBATE_SOURCE_HASH = debateFingerprint(BLOCKS, TREE, META);
 const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
 /* **The one that is not `articleFingerprint` underneath.** `timeline` stamps
    `datedArticleFingerprint` — the blocks, the tree and a head that carries
@@ -211,13 +235,18 @@ const TIMELINE_SOURCE_HASH = timelineFingerprint(BLOCKS, TREE, META);
  */
 const PROSE_SOURCE_HASH = articleFingerprint(BLOCKS, TREE, META);
 
-/** A context pointing at a temp article. Nothing here runs, so most of it is
-    the type asking rather than anything being used. */
-function ctxAt(at: ArtifactLocations): StepContext {
+/**
+ * A context naming one article. Nothing here runs, so most of it is the type
+ * asking rather than anything being used.
+ *
+ * **It carried `dir` and `htmlFile` until 2026-09-05**, and that pair was the
+ * only reason this file ever had to know where an article's files were: a step
+ * is told what it may read by the `ArtifactStore` it is handed, not by a path on
+ * its context (src/pipeline.ts § `StepContext`).
+ */
+function ctxOf(slug: string = SLUG): StepContext {
   return {
-    slug: SLUG,
-    dir: at.dir,
-    htmlFile: at.htmlFile,
+    slug,
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -225,8 +254,16 @@ function ctxAt(at: ArtifactLocations): StepContext {
 }
 
 /**
- * A complete, current article on disk: every step's outputs, stamped so that
- * the three steps with a freshness check pass it.
+ * A complete, current article in a store: every step's products, stamped so
+ * that the steps with a freshness check pass it.
+ *
+ * **`plant`, not `write`**, and the distinction is worth a line. `write` runs
+ * `assertStampAgrees`, which is a real check with a test of its own below; this
+ * is a *fixture writer*, and it has to be able to put an artefact of the wrong
+ * shape in so that the cases about unusable artefacts have something to be
+ * about. It is the same hatch the old version of this file had by writing
+ * bytes to a file behind the store's back — tests/helpers/memory-artefacts.ts
+ * § `plant` and `forget`.
  *
  * **The prompt versions are imported, not written out.** They used to be
  * literals here, with the intact-first assertion as the safety net — and that
@@ -236,7 +273,7 @@ function ctxAt(at: ArtifactLocations): StepContext {
  * drift: `tweets.ts` now exports its version the way `glossary.ts` already
  * did.
  */
-async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
+function writeWholeArticle(store: MemoryArtifactStore): void {
   /* `PROSE_SOURCE_HASH`, not `SOURCE_HASH`: the artefacts built from this
      are `tweets` and `glossary`, whose prompts read the tree and the
      metadata head as well as the blocks. `SOURCE_HASH` — the blocks alone — is
@@ -249,7 +286,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     sourceHash: PROSE_SOURCE_HASH,
   };
 
-  await writeJson(pathFor(at, "fetch", "raw"), {
+  store.plant(SLUG, "fetch", "raw", {
     kind: "html",
     file: "raw.html",
     requestedUrl: "https://example.test/a",
@@ -260,12 +297,25 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     sha256: "0".repeat(64),
     fetchedAt: "2026-08-26T00:00:00.000Z",
   });
-  await writeFile(pathFor(at, "extract", "extractedHtml"), STAMPED_HTML, "utf-8");
-  await writeJson(pathFor(at, "extract", "meta"), META);
-  await writeJson(pathFor(at, "blocks", "blocks"), { blocks: BLOCKS });
-  await writeJson(pathFor(at, "hierarchy", "blocks"), { blocks: BLOCKS });
-  await writeJson(pathFor(at, "hierarchy", "tree"), TREE);
-  await writeJson(pathFor(at, "hierarchy", "labels"), {
+  /* **Two documents, not one.** On the filesystem store these two names were
+     one `output/<slug>.html`, so this fixture wrote it once and both steps read
+     it back; here, as in Postgres, they are separate values and a fixture that
+     planted only one would leave `blocks` missing half its products.
+
+     `SOURCE_HTML` for stage 2 rather than a second copy of the stamped page,
+     because the fixture is stronger for the two being genuinely different
+     strings: stage 3 parses and re-serialises, so `STAMPED_HTML` is what the
+     splitter makes of `SOURCE_HTML` and never byte-identical to it. A guard
+     that confused the two columns is then visible here rather than invisible.
+     `blocksMatchTheirHtml` re-derives from stage 2's copy, so what it computes
+     is exactly `STAGE_THREE`. */
+  store.plant(SLUG, "extract", "extractedHtml", SOURCE_HTML);
+  store.plant(SLUG, "blocks", "stampedHtml", STAMPED_HTML);
+  store.plant(SLUG, "extract", "meta", META);
+  store.plant(SLUG, "blocks", "blocks", { blocks: BLOCKS });
+  store.plant(SLUG, "hierarchy", "blocks", { blocks: BLOCKS });
+  store.plant(SLUG, "hierarchy", "tree", TREE);
+  store.plant(SLUG, "hierarchy", "labels", {
     version: "labels/1",
     generator: CAPABLE_MODEL,
     slug: SLUG,
@@ -279,13 +329,13 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
      step makes no model call, so its `stamp` names only `inputHash` and
      `promptVersion`. Adding a `generator` here would be recorded and never
      compared, which is the quieter half of the same drift. */
-  await writeJson(pathFor(at, "assets", "assets"), {
+  store.plant(SLUG, "assets", "assets", {
     version: ASSETS_VERSION,
     sourceHash: SOURCE_HASH,
     fetchedAt: new Date().toISOString(),
     entries: [],
   });
-  await writeJson(pathFor(at, "arc", "arc"), {
+  store.plant(SLUG, "arc", "arc", {
     version: ARC_VERSION,
     generator: CAPABLE_MODEL,
     slug: SLUG,
@@ -294,7 +344,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     sourceHash: ARC_SOURCE_HASH,
     entries: [{ range: [HEAD.id, BODY.id], text: "It begins." }],
   });
-  await writeJson(pathFor(at, "tweets", "tweets"), {
+  store.plant(SLUG, "tweets", "tweets", {
     ...stamped,
     version: TWEETS_VERSION,
     limit: 280,
@@ -302,7 +352,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
-  await writeJson(pathFor(at, "glossary", "glossary"), {
+  store.plant(SLUG, "glossary", "glossary", {
     ...stamped,
     version: GLOSSARY_VERSION,
     entries: [],
@@ -317,7 +367,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
      carries a `profileHash`, which is the other half of the same stamp — `null`
      meaning "written deliberately without a profile", which is what a context
      with no profile expects to find. */
-  await writeJson(pathFor(at, "ideas", "ideas"), {
+  store.plant(SLUG, "ideas", "ideas", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
     sourceHash: IDEAS_SOURCE_HASH,
@@ -334,7 +384,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
      implies, and needs no new machinery to say so. `quotes` must be non-empty,
      because `ARTEFACT_SHAPE` in src/store/artifacts.ts refuses a list with
      none. */
-  await writeJson(pathFor(at, "quotes", "quotes"), {
+  store.plant(SLUG, "quotes", "quotes", {
     ...stamped,
     version: QUOTES_VERSION,
     profileHash: null,
@@ -365,7 +415,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
      articles have no chronology, so an empty timeline is the expected answer for
      them and `SHAPE.timeline` in src/store/artifacts.ts accepts it — this
      fixture is what holds that decision to being true on both sides. */
-  await writeJson(pathFor(at, "timeline", "timeline"), {
+  store.plant(SLUG, "timeline", "timeline", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
     sourceHash: TIMELINE_SOURCE_HASH,
@@ -386,7 +436,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
      `batchId` is here because it is a field on the artefact from the start —
      the mark route binds to it — and not because anything in this file reads
      it. */
-  await writeJson(pathFor(at, "quiz", "quiz"), {
+  store.plant(SLUG, "quiz", "quiz", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
     sourceHash: QUIZ_SOURCE_HASH,
@@ -414,7 +464,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
-  await writeJson(pathFor(at, "sketch", "sketch"), SKETCH);
+  store.plant(SLUG, "sketch", "sketch", SKETCH);
   /* **The one artefact here whose fingerprint is not the article's**, and the
      fixture has to say so or it says nothing. `illustrated` hashes the *Sketch*
      — src/illustrated.ts § `inputFingerprint` — so `SKETCH` above is written
@@ -428,7 +478,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
      the same rule `quotes`, `quiz` and `sketch` meet above. The plate carries
      no `image`: a plate whose call failed is still a plate, and the store must
      accept the artefact a partly-failed run writes. */
-  await writeJson(pathFor(at, "illustrated", "illustrated"), {
+  store.plant(SLUG, "illustrated", "illustrated", {
     generator: CAPABLE_MODEL,
     illustrator: "openai/gpt-image-2",
     slug: SLUG,
@@ -448,7 +498,55 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
+  /* `ideas`' two reasons again — its own fingerprint function, and no
+     `profileHash` because this stage was never written for one — plus three
+     things of its own worth stating, because all three are decisions rather
+     than the shape of a fixture.
+
+     **Both groups are EMPTY**, like `timeline`'s events and unlike `quotes`,
+     `quiz`, `sketch` and `illustrated`. Most pieces have no critical reception
+     at all, so an artefact that honestly says so is the commonest correct
+     answer — `SHAPE.debate` in src/store/artifacts.ts accepts it, and this
+     fixture is what holds that decision to being true on both sides.
+
+     **`generator` is `modelFor("debate")`, not `CAPABLE_MODEL`.** Every other
+     artefact here stamps the constant; this is the one stage on the chat wire,
+     where `SPIDERYARN_DEBATE_MODEL` can override the model, and its `stamp`
+     resolves the same way. A `CAPABLE_MODEL` here would report the step
+     not-done on any machine with that variable set.
+
+     **`searchedAt` and no `generatedAt`** — the two would be one instant
+     written twice, so this artefact carries the one that means something to a
+     reader. */
+  store.plant(SLUG, "debate", "debate", {
+    generator: modelFor("debate"),
+    slug: SLUG,
+    sourceHash: DEBATE_SOURCE_HASH,
+    version: DEBATE_VERSION,
+    searchedAt: new Date().toISOString(),
+    direct: { rows: [], counts: EMPTY_DEBATE_COUNTS },
+    claims: { rows: [], counts: EMPTY_DEBATE_COUNTS },
+    elapsedMs: 1,
+  });
 }
+
+/** One group's counts for a pass that ran, found pages, and kept no row from them. */
+const EMPTY_DEBATE_COUNTS = {
+  returnedSources: 0,
+  reportedRows: 0,
+  keptRows: 0,
+  omittedOverCap: 0,
+  lost: {
+    uncited: 0,
+    selfSource: 0,
+    unverifiedSource: 0,
+    directnessUnverified: 0,
+    claimNotInBlock: 0,
+    unknownBlockId: 0,
+    malformed: 0,
+  },
+  webSearches: 3,
+};
 
 /**
  * The Sketch this fixture writes — a `const` rather than an object literal at
@@ -468,32 +566,38 @@ const SKETCH = {
   elapsedMs: 1,
 } as unknown as Sketch;
 
-async function writeJson(file: string, value: unknown): Promise<void> {
-  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-}
+/**
+ * An artefact of the right kind that is not a usable one, for each kind a case
+ * below needs to break.
+ *
+ * **The successor to `halve`**, which chopped a file in two the way a killed
+ * process does. That was the filesystem's own way of producing an unusable
+ * artefact and it went with the filesystem store; the *state* it produced is
+ * the one that matters and both remaining stores can be in it. In Postgres a
+ * JSONB column cannot be half-written, so `unusable` there means a value of
+ * entirely the wrong shape — src/store/artifacts.ts § `ArtifactOutcome`, which
+ * says the two states differ in what can corrupt them rather than in the rule.
+ *
+ * Each value below is refused by `SHAPE` for that kind, so `whyUnusable` names
+ * a field and `has` answers false.
+ */
+const BROKEN: Partial<Record<ArtifactKind, unknown>> = {
+  meta: { slug: 42 },
+  blocks: { blocks: "not a list" },
+  tree: { nodes: [] },
+  labels: { labels: [] },
+  arc: { entries: {} },
+  tweets: { tweets: {} },
+  glossary: { entries: {} },
+};
 
-/** Chop a file in half, the way a killed process does. */
-async function halve(file: string): Promise<void> {
-  const { size } = await stat(file);
-  await truncate(file, Math.floor(size / 2));
-}
+describe("an artefact that cannot be used must not report its step finished", () => {
+  const store = memoryArtefacts();
 
-describe("a half-written artefact must not report its step finished", () => {
-  let at: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
-
-  beforeAll(async () => {
-    at = await tempArticle("truncation");
-    store = createFsArtifactStore(() => at);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(at.dir), { recursive: true, force: true });
-  });
-
-  /* One case per step that writes JSON. `fetch` and the two HTML kinds are not
-     here: truncated HTML is still valid text, nothing about the bytes says
-     otherwise, and claiming to catch it would be worse than saying we cannot.
-     Atomic writes are what protect those. */
+  /* One case per step whose product is a JSON document. `fetch` and the two
+     HTML kinds are not here, and that is the same exclusion this block opened
+     with when the corruption was truncation: an HTML artefact is text, any text
+     is a usable one, and there is no shape to be wrong. */
   const cases: { step: StepName; kind: ArtifactKind }[] = [
     { step: "extract", kind: "meta" },
     { step: "blocks", kind: "blocks" },
@@ -505,171 +609,71 @@ describe("a half-written artefact must not report its step finished", () => {
   ];
 
   for (const { step, kind } of cases) {
-    it(`${step}: a truncated ${kind}`, async () => {
+    it(`${step}: an unusable ${kind}`, async () => {
       // Intact first. If this fails, the fixture is wrong — most likely a
       // prompt version moved — and the real assertion below would then pass
-      // for a reason that has nothing to do with truncation.
-      await writeWholeArticle(at);
-      expect(await stepIsDone(STEPS[step], ctxAt(at), store)).toBe(true);
+      // for a reason that has nothing to do with the broken artefact.
+      writeWholeArticle(store);
+      expect(await stepIsDone(STEPS[step], ctxOf(), store)).toBe(true);
 
-      await halve(pathFor(at, step, kind));
-      expect(await stepIsDone(STEPS[step], ctxAt(at), store)).toBe(false);
+      store.plant(SLUG, step, kind, BROKEN[kind]);
+      expect(await stepIsDone(STEPS[step], ctxOf(), store)).toBe(false);
     });
   }
 });
 
 /**
- * Every way `produces` and `outputs` can disagree, as a list of sentences.
- *
- * A function rather than assertions inline, so the test below can run it
- * against a deliberately broken `PATHS` and watch it come back non-empty.
- *
- * **Ordered, and both sides checked for duplicates.** Comparing sets lets two
- * kinds inside one step swap destinations; checking uniqueness on the declared
- * side only lets `outputs` grow a duplicate unseen.
+ * **`PATHS`, `pathFor`, `fsLocations` and `PipelineStep.outputs` stood here
+ * until 2026-09-05**, in a block called *what a step says it produces, and
+ * where that lands*. Its four cases are named in this file's header, with what
+ * each asserted and where — for two of them, nowhere — the claim lives now.
  */
-function pathDisagreements(): string[] {
-  const where = fsLocations("nothing-here");
-  const ctx = ctxAt(where);
-  const problems: string[] = [];
-  for (const name of STEP_ORDER) {
-    const step = STEPS[name];
-    const declared = step.produces.map((kind) => pathFor(where, name, kind));
-    const listed = step.outputs(ctx);
-    if (declared.join("\u0000") !== listed.join("\u0000")) {
-      problems.push(`${name}: produces gives [${declared}], outputs gives [${listed}]`);
-    }
-    if (new Set(declared).size !== declared.length) problems.push(`${name}: produces repeats a path`);
-    if (new Set(listed).size !== listed.length) problems.push(`${name}: outputs repeats a path`);
-  }
-  return problems;
-}
 
-describe("what a step says it produces, and where that lands", () => {
-  /**
-   * The move that matters: the new declaration checked against the old one
-   * before anything depends on it.
-   *
-   * `outputs(ctx)` is what the pipeline has used since it was written and what
-   * `assertProduced` still enforces after every run. `produces` is the same
-   * fact said a different way. Rendering one through `PATHS` and comparing it
-   * to the other is what stops the two being subtly different lists that agree
-   * on the day they were written.
-   */
-  it("agrees with `outputs`, step for step, in order", () => {
-    expect(pathDisagreements()).toEqual([]);
-  });
-
-  /**
-   * **The check proved red before it is trusted green.**
-   *
-   * The first version of this compared *sets*, and a set cannot see two kinds
-   * inside one step swapping destinations — `extract` writing the HTML to
-   * `meta.json` and the meta to `<slug>.html` agrees with `outputs` perfectly
-   * as a set, and is the drift the test exists to catch. So the test does the
-   * swap itself and asserts it is noticed. A comparison nobody has watched fail
-   * is a comparison nobody knows the shape of.
-   */
-  it("notices when two kinds inside one step swap destinations", () => {
-    const extractedHtml = PATHS.extract.extractedHtml;
-    const meta = PATHS.extract.meta;
-    if (!extractedHtml || !meta) throw new Error("extract lost one of its two paths");
-    try {
-      PATHS.extract.extractedHtml = meta;
-      PATHS.extract.meta = extractedHtml;
-      expect(pathDisagreements()).not.toEqual([]);
-    } finally {
-      PATHS.extract.extractedHtml = extractedHtml;
-      PATHS.extract.meta = meta;
-    }
-    // And back to agreeing, so a broken restore cannot pass quietly.
-    expect(pathDisagreements()).toEqual([]);
-  });
-
-  it("has a path for every kind any step declares, and no orphans", () => {
-    for (const name of STEP_ORDER) {
-      const declared = new Set<string>(STEPS[name].produces);
-      const known = new Set(Object.keys(PATHS[name]));
-      expect([...known].sort(), `${name}: PATHS vs produces`).toEqual([...declared].sort());
-    }
-  });
-
-  /* Two kinds share one path and one kind has two paths — the reason `PATHS`
-     is keyed by `(step, kind)` rather than by kind alone. Asserted rather than
-     only commented, because a tidy-up that "simplifies" the key would silently
-     lose one of the two blocks.json files, and four stages read the one it
-     would lose. */
-  it("keeps the two blocks.json files apart", () => {
-    const where = fsLocations("x");
-    expect(pathFor(where, "blocks", "blocks")).not.toBe(pathFor(where, "hierarchy", "blocks"));
-    expect(pathFor(where, "extract", "extractedHtml")).toBe(
-      pathFor(where, "blocks", "stampedHtml"),
-    );
-  });
-});
-
-describe("the file store round-trips every kind", () => {
+describe("a real artefact of every kind goes into a store and comes back", () => {
   const scratch = `${SLUG}-roundtrip`;
-  let where: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
-
-  beforeAll(async () => {
-    where = await tempArticle("roundtrip");
-    store = createFsArtifactStore(() => where);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(where.dir), { recursive: true, force: true });
-  });
+  const store = memoryArtefacts();
 
   /**
-   * Against the artefacts in `data/`, not invented ones.
+   * Against real artefacts, not invented ones.
    *
    * An invented fixture round-trips whatever shape the test author had in mind,
-   * which is the shape the decoder was written for. The real files are the only
-   * ones that can catch a decoder that is right about an imagined artefact and
-   * wrong about the one on disk.
+   * which is the shape `SHAPE` was written for. Real artefacts are the only
+   * ones that can catch a rule that is right about an imagined artefact and
+   * wrong about the one a stage actually writes.
+   *
+   * **Out of the committed corpus since 2026-09-05, not out of `data/`.** These
+   * paths were `data/writes/…` under the repository root — a directory that is
+   * gitignored, so every article in it is whatever the person running the suite
+   * happens to have read. docs/postmortems/260902c-a-test-whose-evidence-was-one-laptop.md
+   * is that failure, and tests/fixtures/data-root/ is the answer to it.
    */
-  const REAL: { step: StepName; kind: ArtifactKind; from: string; file: string }[] = [
-    { step: "fetch", kind: "raw", from: "writes", file: "data/writes/raw.json" },
-    { step: "extract", kind: "meta", from: "writes", file: "data/writes/meta.json" },
-    {
-      step: "extract",
-      kind: "extractedHtml",
-      from: "writes",
-      file: "output/writes.html",
-    },
-    { step: "blocks", kind: "blocks", from: "writes", file: "output/writes.blocks.json" },
-    { step: "blocks", kind: "stampedHtml", from: "writes", file: "output/writes.html" },
-    { step: "hierarchy", kind: "blocks", from: "writes", file: "data/writes/blocks.json" },
-    { step: "hierarchy", kind: "tree", from: "writes", file: "data/writes/tree.json" },
+  const REAL: { step: StepName; kind: ArtifactKind; from: string; part: string }[] = [
+    { step: "fetch", kind: "raw", from: "writes", part: "raw.json" },
+    { step: "extract", kind: "meta", from: "writes", part: "meta.json" },
+    { step: "extract", kind: "extractedHtml", from: "writes", part: "output.html" },
+    { step: "blocks", kind: "blocks", from: "writes", part: "output.blocks.json" },
+    { step: "blocks", kind: "stampedHtml", from: "writes", part: "output.html" },
+    { step: "hierarchy", kind: "blocks", from: "writes", part: "blocks.json" },
+    { step: "hierarchy", kind: "tree", from: "writes", part: "tree.json" },
     {
       step: "hierarchy",
       kind: "labels",
       from: "noema-mythology-of-conscious-ai",
-      file: "data/noema-mythology-of-conscious-ai/labels.json",
+      part: "labels.json",
     },
-    { step: "arc", kind: "arc", from: "writes", file: "data/writes/arc.json" },
-    { step: "tweets", kind: "tweets", from: "writes", file: "data/writes/tweets.json" },
-    { step: "glossary", kind: "glossary", from: "writes", file: "data/writes/glossary.json" },
+    { step: "arc", kind: "arc", from: "writes", part: "arc.json" },
+    { step: "tweets", kind: "tweets", from: "writes", part: "tweets.json" },
+    { step: "glossary", kind: "glossary", from: "writes", part: "glossary.json" },
   ];
 
-  /**
-   * The table's `from` used to be decorative, and that made the round trip
-   * weaker than it reads: writing and reading through the *same* mapping
-   * round-trips perfectly even when the mapping is wrong. Pinning `pathFor`
-   * against the literal path in the table is the independent half.
-   */
-  it("puts each kind where the table says the real file is", () => {
-    for (const { step, kind, from, file } of REAL) {
-      expect(pathFor(fsLocations(from), step, kind), `${step}/${kind}`).toBe(
-        path.join(ROOT, file),
-      );
-    }
-  });
+  /* Loudly, at registration, rather than as eleven confusing failures inside
+     the cases — tests/helpers/require-fixture.ts says why this throws where
+     `pgReady` skips. */
+  for (const { from, part } of REAL) requireFixture(from, [part]);
 
-  for (const { step, kind, file } of REAL) {
+  for (const { step, kind, from, part } of REAL) {
     it(`${step}/${kind}`, async () => {
-      const raw = await readFile(path.join(ROOT, file), "utf-8");
+      const raw = await readFile(fixturePath(from, part), "utf-8");
       const isText = kind === "extractedHtml" || kind === "stampedHtml";
       const value: unknown = isText ? raw : JSON.parse(raw);
 
@@ -693,7 +697,7 @@ describe("the file store round-trips every kind", () => {
   }
 
   it("refuses a stamp that contradicts the artefact it is writing", async () => {
-    const arc: unknown = JSON.parse(await readFile(path.join(ROOT, "data/writes/arc.json"), "utf-8"));
+    const arc: unknown = JSON.parse(await readFile(fixturePath("writes", "arc.json"), "utf-8"));
     await expect(
       store.write(scratch, "arc", { arc: arc as never }, { promptVersion: "arc/999" }),
     ).rejects.toThrow(/disagrees with the arc itself/);
@@ -701,7 +705,7 @@ describe("the file store round-trips every kind", () => {
 
   it("reads a stamp back off the artefact, and only for steps that carry one", async () => {
     const tweets: unknown = JSON.parse(
-      await readFile(path.join(ROOT, "data/writes/tweets.json"), "utf-8"),
+      await readFile(fixturePath("writes", "tweets.json"), "utf-8"),
     );
     const t = tweets as { sourceHash: string; version: string; generator: string };
     await store.write(scratch, "tweets", { tweets: tweets as never }, {});
@@ -716,16 +720,19 @@ describe("the file store round-trips every kind", () => {
     expect(await store.stampFor(scratch, "blocks")).toBeNull();
   });
 
-  it("answers null for everything unhappy, and not-done with it", async () => {
-    expect(await store.read(scratch, "glossary", "glossary")).not.toBeNull();
-    await writeFile(pathFor(where, "glossary", "glossary"), "{ not json", "utf-8");
-    expect(await store.read(scratch, "glossary", "glossary")).toBeNull();
-    expect(await store.has(scratch, "glossary", ["glossary"])).toBe(false);
-
-    // Valid JSON of the wrong shape entirely, which a bare parse would accept.
-    await writeFile(pathFor(where, "glossary", "glossary"), `{"nope":1}`, "utf-8");
-    expect(await store.read(scratch, "glossary", "glossary")).toBeNull();
-  });
+  /**
+   * **A case called *answers null for everything unhappy, and not-done with it*
+   * stood here until 2026-09-05**, and it had two arms.
+   *
+   * The first wrote `{ not json` over the glossary file: a store that could not
+   * parse what it held answered `null` rather than throwing. That arm has no
+   * subject any more — a JSONB column cannot be half-written and a `Map` holds
+   * a value rather than bytes — so no store parses text and none can fail to.
+   *
+   * The second wrote `{"nope":1}`: **valid JSON of entirely the wrong shape**,
+   * which a bare parse would accept. That arm is the shared `SHAPE` rule, it is
+   * very much alive, and the last block in this file is six cases of it.
+   */
 });
 
 describe("the raw artefact is a manifest, and the type has to say so", () => {
@@ -733,22 +740,20 @@ describe("the raw artefact is a manifest, and the type has to say so", () => {
    * **The cast that was there until 2026-08-27, and why nothing caught it.**
    *
    * `ArtifactMap.raw` was declared `string`. The artefact is a `RawManifest`
-   * object — the filesystem decoder has always checked it with
-   * `json("file", isString)` — so `read(slug, "fetch", "raw")` handed back an
-   * object cast to `string`, whose `.length` is `undefined` and whose
-   * `.slice()` throws. Nothing had noticed because `read` has no production
-   * caller yet: the stages all open paths.
+   * object — `SHAPE.raw` checks its `file` with `isString` — so
+   * `read(slug, "fetch", "raw")` handed back an object cast to `string`, whose
+   * `.length` is `undefined` and whose `.slice()` throws. Nothing had noticed
+   * because `read` had no production caller yet: the stages all opened paths.
    *
    * This is a **compile-time** test as much as a runtime one. `manifest.file`
    * does not typecheck against `string`, so the declaration cannot quietly go
    * back to what it was without this file going red — which is the only kind of
    * guard that works on a type nobody calls.
    */
-  const at = fsLocations("raw-shape");
+  const store = memoryArtefacts();
 
-  beforeAll(async () => {
-    await mkdir(at.dir, { recursive: true });
-    await writeJson(pathFor(at, "fetch", "raw"), {
+  it("comes back with its fields, not as a string", async () => {
+    store.plant("raw-shape", "fetch", "raw", {
       kind: "html",
       file: "raw.html",
       requestedUrl: "https://example.test/a",
@@ -759,14 +764,7 @@ describe("the raw artefact is a manifest, and the type has to say so", () => {
       sha256: "0".repeat(64),
       fetchedAt: "2026-08-26T00:00:00.000Z",
     });
-  });
-
-  afterAll(async () => {
-    await rm(at.dir, { recursive: true, force: true });
-  });
-
-  it("comes back with its fields, not as a string", async () => {
-    const manifest = await createFsArtifactStore().read("raw-shape", "fetch", "raw");
+    const manifest = await store.read("raw-shape", "fetch", "raw");
     expect(manifest).not.toBeNull();
     // Each of these is a type error if `raw` goes back to `string`.
     expect(manifest?.file).toBe("raw.html");
@@ -866,8 +864,7 @@ describe("metaRawSha256", () => {
  */
 describe("glossary currency, through the stamp rather than a function", () => {
   const slug = `${SLUG}-stamp`;
-  let where: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
+  const store = memoryArtefacts();
 
   const glossaryOf = (over: Record<string, unknown>) => ({
     version: GLOSSARY_VERSION,
@@ -881,29 +878,24 @@ describe("glossary currency, through the stamp rather than a function", () => {
     ...over,
   });
 
-  beforeAll(async () => {
-    where = await tempArticle("stamp");
-    store = createFsArtifactStore(() => where);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(where.dir), { recursive: true, force: true });
-  });
-
   /* The tree and the metadata beside the blocks, because the stamp reads all
      three: this prompt is built from `partsOf(tree)` and carries the metadata
-     head. Written on every call rather than once in `beforeAll`, so a case can
-     move any of the three. src/source-hash.ts § `articleFingerprint`. */
-  async function ask(
+     head. Planted on every call rather than once up front, so a case can move
+     any of the three. src/source-hash.ts § `articleFingerprint`. */
+  function ask(
     glossary: Record<string, unknown>,
     blocks: Block[] | null,
     over: { tree?: Tree; meta?: unknown } = {},
   ): Promise<boolean> {
-    await writeJson(pathFor(where, "glossary", "glossary"), glossary);
-    await writeJson(pathFor(where, "hierarchy", "tree"), over.tree ?? TREE);
-    await writeJson(pathFor(where, "extract", "meta"), over.meta ?? META);
-    if (blocks) await writeJson(pathFor(where, "hierarchy", "blocks"), { blocks });
-    else await rm(pathFor(where, "hierarchy", "blocks"), { force: true });
-    return stepIsDone(STEPS.glossary, { ...ctxAt(where), slug }, store);
+    store.plant(slug, "glossary", "glossary", glossary);
+    store.plant(slug, "hierarchy", "tree", over.tree ?? TREE);
+    store.plant(slug, "extract", "meta", over.meta ?? META);
+    /* `forget` is what `rm` on the file was — tests/helpers/memory-artefacts.ts
+       § the escape hatches. The *absent* case is what the last-but-one test
+       below is about, and there is no other way to reach it. */
+    if (blocks) store.plant(slug, "hierarchy", "blocks", { blocks });
+    else store.forget(slug, "hierarchy", "blocks");
+    return stepIsDone(STEPS.glossary, ctxOf(slug), store);
   }
 
   it("says done when the blocks, the prompt and the model all still match", async () => {
@@ -947,61 +939,48 @@ describe("glossary currency, through the stamp rather than a function", () => {
   });
 });
 
-describe("a corrupt artefact does not put the article in a log line", () => {
-  /* src/store/artifacts-fs.ts § json. The decoder used a bare `JSON.parse`, and
-     `read`'s catch logs the thrown message. V8 puts the first characters of the
-     offending input into a SyntaxError — `Unexpected token 'S', "SECRET art"...
-     is not valid JSON` — so a half-written artefact put article prose into a
-     debug log, which docs/project/logging.md forbids outright.
+describe("text that will not parse does not put the article in a log line", () => {
+  /* The bug, and it was the filesystem store's. Its decoder used a bare
+     `JSON.parse`, and `read`'s catch logged the thrown message. V8 puts the
+     first characters of the offending input into a SyntaxError — `Unexpected
+     token 'S', "SECRET art"... is not valid JSON` — so a half-written artefact
+     put article prose into a debug log, which docs/project/logging.md forbids
+     outright.
 
      The same shape as the seven OpenRouter sites and the six Anthropic ones,
      arriving by a route nobody had looked down: not a provider talking, but our
-     own file coming back malformed. Found by review, 2026-08-26. */
-  let where: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
+     own file coming back malformed. Found by review, 2026-08-26.
 
-  beforeAll(async () => {
-    where = await tempArticle("leak");
-    store = createFsArtifactStore(() => where);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(where.dir), { recursive: true, force: true });
-  });
+     **The store-shaped half of this block went with that store on 2026-09-05.**
+     It planted article prose in place of a `blocks.json`, proved that V8 really
+     does quote such input, and then asserted the store's own read surfaced
+     nothing. Nothing decodes text into an artefact any more — Postgres hands
+     back a decoded JSONB value — so there is no longer a store that could leak
+     one. What is left is the general guard, below: `parseJsonFrom` is still the
+     shared way this codebase turns text into JSON, and it still must not quote
+     what it could not read. */
 
   /** A sentence that would be unmistakable if it ever reached a message. */
   const PROSE = "Consciousness is not a spreadsheet and never was";
 
-  it("reads null and says nothing about what the file contained", async () => {
-    const file = pathFor(where, "hierarchy", "blocks");
-    await mkdir(path.dirname(file), { recursive: true });
-    /* A file holding article prose rather than JSON — an artefact clobbered by
-       a write that went to the wrong path, or one whose first bytes are the
-       article itself. **Which corruption you pick matters**, and picking the
-       wrong one is how this test would have passed while proving nothing: V8
-       only quotes the input when the text does not begin as JSON. A string
-       truncated mid-value gives "Unterminated string in JSON at position 70",
-       which names no content at all — so a test built on that corruption is
-       green whether or not the bug exists. */
-    await writeFile(file, PROSE, "utf-8");
-
+  it("describes the breakage without quoting it", () => {
+    /* **The hazard proved real before the guard is trusted**, which is the half
+       this case inherited from the one that stood beside it. V8 only quotes the
+       input when the text does not begin as JSON: a string truncated mid-value
+       gives "Unterminated string in JSON at position 70", which names no content
+       at all, so a test built on *that* corruption is green whether or not the
+       bug exists. This prose is the corruption that does leak, and if V8 ever
+       stops leaking it the assertion below should fail loudly rather than pass
+       for nothing. */
     let raw = "";
     try {
       JSON.parse(PROSE);
     } catch (err) {
       raw = (err as Error).message;
     }
-    /* First, prove the hazard is real rather than theoretical: V8 really does
-       quote the input. If this ever stops being true, the assertion below is
-       no longer testing anything, and it should fail loudly rather than pass
-       vacuously. */
-    expect(raw).toContain("Consciousn");
+    expect(raw, "a bare JSON.parse no longer quotes its input").toContain("Consciousn");
 
-    // And now the thing itself: reading through the store surfaces nothing.
-    expect(await store.read(SLUG, "hierarchy", "blocks")).toBeNull();
-  });
-
-  it("describes the breakage without quoting it", () => {
-    // parseJsonFrom is what the decoder uses now. Its message says how the text
+    // parseJsonFrom is the shared parse. Its message says how the text
     // failed — empty, cut off, breaks at position N — and never what it said.
     let message = "";
     try {
@@ -1023,33 +1002,24 @@ describe("a corrupt artefact does not put the article in a log line", () => {
  * § What the review of the *built* seam found.
  */
 describe("a step that started and did not finish must not report itself done", () => {
-  let at: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
-
-  beforeAll(async () => {
-    at = await tempArticle("interrupted");
-    store = createFsArtifactStore(() => at);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(at.dir), { recursive: true, force: true });
-  });
+  const store = memoryArtefacts();
 
   /**
-   * **The one the review asked for first.** Per-file atomic renames are not
-   * atomicity across a step: leave a complete generation A on disk, let a rerun
-   * replace exactly one of the step's outputs with a perfectly valid generation
-   * B and then die, and every path exists and parses. Under a presence check
-   * the step reports done with A and B mixed, and the stage after it consumes
-   * a tree built from blocks nobody has.
+   * **The one the review asked for first.** A per-artefact atomic write is not
+   * atomicity across a step: leave a complete generation A in the store, let a
+   * rerun replace exactly one of the step's products with a perfectly valid
+   * generation B and then die, and every artefact is there and usable. Under a
+   * presence check the step reports done with A and B mixed, and the stage
+   * after it consumes a tree built from blocks nobody has.
    */
   it("catches a generation half-replaced by a run that died", async () => {
-    await writeWholeArticle(at);
-    expect(await stepIsDone(STEPS.hierarchy, ctxAt(at), store)).toBe(true);
+    writeWholeArticle(store);
+    expect(await stepIsDone(STEPS.hierarchy, ctxOf(), store)).toBe(true);
 
     const attempt = await store.beginStep(SLUG, "hierarchy");
     // Generation B's tree, valid in every way, landing beside generation A's
     // labels and blocks.
-    await writeJson(pathFor(at, "hierarchy", "tree"), {
+    store.plant(SLUG, "hierarchy", "tree", {
       version: "toc/2",
       generator: CAPABLE_MODEL,
       slug: SLUG,
@@ -1065,7 +1035,7 @@ describe("a step that started and did not finish must not report itself done", (
         },
       },
     });
-    expect(await stepIsDone(STEPS.hierarchy, ctxAt(at), store)).toBe(false);
+    expect(await stepIsDone(STEPS.hierarchy, ctxOf(), store)).toBe(false);
 
     /* And the marker is the *only* thing holding it back — clearing it says
        done again, over exactly the mixed generation above.
@@ -1077,7 +1047,7 @@ describe("a step that started and did not finish must not report itself done", (
        read the first version of this test as claiming more than that, which it
        did. */
     await store.finishStep(SLUG, "hierarchy", attempt);
-    expect(await stepIsDone(STEPS.hierarchy, ctxAt(at), store)).toBe(true);
+    expect(await stepIsDone(STEPS.hierarchy, ctxOf(), store)).toBe(true);
   });
 
   /**
@@ -1089,7 +1059,7 @@ describe("a step that started and did not finish must not report itself done", (
    * generations with nothing left to say so. The token is what stops step four.
    */
   it("will not let one runner's success clear another runner's attempt", async () => {
-    await writeWholeArticle(at);
+    writeWholeArticle(store);
 
     const first = await store.beginStep(SLUG, "hierarchy");
     const second = await store.beginStep(SLUG, "hierarchy"); // overwrites the marker
@@ -1104,13 +1074,13 @@ describe("a step that started and did not finish must not report itself done", (
   });
 
   it("says so for every step, artefacts or no artefacts", async () => {
-    await writeWholeArticle(at);
+    writeWholeArticle(store);
     for (const name of STEP_ORDER) {
-      expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} before`).toBe(true);
+      expect(await stepIsDone(STEPS[name], ctxOf(), store), `${name} before`).toBe(true);
       const attempt = await store.beginStep(SLUG, name);
-      expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} during`).toBe(false);
+      expect(await stepIsDone(STEPS[name], ctxOf(), store), `${name} during`).toBe(false);
       await store.finishStep(SLUG, name, attempt);
-      expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} after`).toBe(true);
+      expect(await stepIsDone(STEPS[name], ctxOf(), store), `${name} after`).toBe(true);
     }
   });
 
@@ -1122,58 +1092,80 @@ describe("a step that started and did not finish must not report itself done", (
 });
 
 /**
- * `extractedHtml` and `stampedHtml` are one path on disk, so the filesystem
- * cannot tell them apart — which means a re-extraction leaves stage 2's
- * unstamped HTML sitting beside stage 3's blocks.json, and every path exists
- * and parses. The binding, not the path, is what catches it: the ids in
- * blocks.json have to actually be in the HTML.
+ * A stage 3 whose document no longer carries the ids its blocks name is not
+ * finished, however complete the article looks. The **binding**, not presence,
+ * is what catches it.
+ *
+ * ## Two of this block's three cases were about the filesystem, and went with it
+ *
+ * They were *not done once a re-extraction has wiped the ids out of the HTML*
+ * and *not done when the HTML carries only some of the ids*, and both worked by
+ * replacing `extract/extractedHtml`. On disk that was the same
+ * `output/<slug>.html` `blocks/stampedHtml` resolved to, so writing an id-free
+ * document there wiped stage 3's stamped page too, and the missing ids gave it
+ * away.
+ *
+ * With the two kept apart — two columns in Postgres, two values here — that
+ * state is not stale at all, and **both cases go green in the wrong direction**
+ * rather than staying red: `blocksMatchTheirHtml` re-derives with the stored
+ * blocks as the baseline, and `splitIntoBlocks` **matches an id-free document
+ * against that baseline and carries the old ids over** (measured 2026-09-05:
+ * `["spya-aaaaaa","spya-bbbbbb"]` again, and a byte-identical document). That is
+ * the carry-forward contract working, not a guard failing —
+ * docs/project/block-ids.md — and the block below says so from the other side,
+ * in *still done when a re-extraction produced the same article*.
+ *
+ * So the honest form of the question is asked of the document stage 3 actually
+ * wrote, which is what the first case is now.
  */
 describe("blocks is only done if the HTML really carries its ids", () => {
-  let at: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
+  const store = memoryArtefacts();
 
-  beforeAll(async () => {
-    at = await tempArticle("stamping");
-    store = createFsArtifactStore(() => at);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(at.dir), { recursive: true, force: true });
-  });
+  /**
+   * **And `extract` is untouched, which is why this case is here and not only
+   * in the block below.** That block's stub answers `null` for `extract/meta`,
+   * so it cannot be asked whether stage 2 is still done — and "one step went
+   * stale" is a different and much better answer than "the article did".
+   */
+  it("not done once stage 3's document has lost an id its blocks name", async () => {
+    writeWholeArticle(store);
+    expect(await stepIsDone(STEPS.blocks, ctxOf(), store)).toBe(true);
 
-  it("not done once a re-extraction has wiped the ids out of the HTML", async () => {
-    await writeWholeArticle(at);
-    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(true);
-
-    await writeFile(pathFor(at, "extract", "extractedHtml"), UNSTAMPED_HTML, "utf-8");
-    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(false);
-    // `extract` itself is done — it wrote the HTML it was asked for. Only the
-    // step whose output the re-extraction invalidated is not.
-    expect(await stepIsDone(STEPS.extract, ctxAt(at), store)).toBe(true);
+    store.plant(
+      SLUG,
+      "blocks",
+      "stampedHtml",
+      STAMPED_HTML.replace(/ id="spya-[a-z0-9]{6}"/g, ""),
+    );
+    expect(await stepIsDone(STEPS.blocks, ctxOf(), store)).toBe(false);
+    // `extract` itself is done — it produced the document it was asked for.
+    // Only the step whose own output went bad is not.
+    expect(await stepIsDone(STEPS.extract, ctxOf(), store)).toBe(true);
   });
 
   /**
    * **`every` over nothing is true**, and that is not an answer about the HTML.
-   * A `blocks.json` listing no ids passed the binding check vacuously, so a
+   * A blocks artefact listing no ids passed the binding check vacuously, so a
    * stage 3 that produced nothing — a first ingest of a paywall or an error
    * page, where the runtime guard has no baseline to refuse against — reported
    * itself done having retained zero ids, and the stages after it read an
    * article with no blocks in it. GPT Sol, 2026-08-28.
+   *
+   * **An empty list is a perfectly usable artefact** — `SHAPE.blocks` is
+   * `isArray`, deliberately, since the pipeline has to be able to store one —
+   * so `has` says true here and the answer below really does come from the
+   * binding check rather than from the shape check standing in for it.
    */
-  it("not done when blocks.json lists no ids at all", async () => {
-    await writeWholeArticle(at);
-    await writeJson(pathFor(at, "blocks", "blocks"), { blocks: [] });
-    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(false);
+  it("not done when the blocks artefact lists no ids at all", async () => {
+    writeWholeArticle(store);
+    store.plant(SLUG, "blocks", "blocks", { blocks: [] });
+    expect(
+      await store.has(SLUG, "blocks", ["blocks"]),
+      "an empty blocks list must still be a usable artefact, or this proves nothing",
+    ).toBe(true);
+    expect(await stepIsDone(STEPS.blocks, ctxOf(), store)).toBe(false);
   });
 
-  it("not done when the HTML carries only some of the ids", async () => {
-    await writeWholeArticle(at);
-    await writeFile(
-      pathFor(at, "extract", "extractedHtml"),
-      `<article><h1 id="${HEAD.id}">A title</h1><p>One paragraph of something to hash.</p></article>`,
-      "utf-8",
-    );
-    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(false);
-  });
 });
 
 /**
@@ -1199,16 +1191,7 @@ describe("blocks is only done if the HTML really carries its ids", () => {
  * everything on any change at all.
  */
 describe("every stamped step covers everything its prompt reads", () => {
-  let at: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
-
-  beforeAll(async () => {
-    at = await tempArticle("fingerprints");
-    store = createFsArtifactStore(() => at);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(at.dir), { recursive: true, force: true });
-  });
+  const store = memoryArtefacts();
 
   /** Every step whose prompt reads the article's prose, its shape and its head. */
   const PROSE_STEPS: StepName[] = ["arc", "tweets", "glossary", "ideas", "sketch"];
@@ -1223,17 +1206,17 @@ describe("every stamped step covers everything its prompt reads", () => {
    */
   const ALL_STALE = Object.fromEntries(PROSE_STEPS.map((s) => [s, false]));
 
-  async function statesAfter(change: () => Promise<void>): Promise<Record<string, boolean>> {
-    await writeWholeArticle(at);
+  async function statesAfter(change: () => void): Promise<Record<string, boolean>> {
+    writeWholeArticle(store);
     // Intact first: a fixture that was already not-done would make every
     // assertion below pass for a reason that has nothing to do with the change.
     for (const step of [...PROSE_STEPS, "assets" as StepName]) {
-      expect(await stepIsDone(STEPS[step], ctxAt(at), store), `${step} before`).toBe(true);
+      expect(await stepIsDone(STEPS[step], ctxOf(), store), `${step} before`).toBe(true);
     }
     await change();
     const after: Record<string, boolean> = {};
     for (const step of [...PROSE_STEPS, "assets" as StepName]) {
-      after[step] = await stepIsDone(STEPS[step], ctxAt(at), store);
+      after[step] = await stepIsDone(STEPS[step], ctxOf(), store);
     }
     return after;
   }
@@ -1244,8 +1227,8 @@ describe("every stamped step covers everything its prompt reads", () => {
    * built out of them.
    */
   it("not done once the tree has been re-cut underneath them", async () => {
-    const after = await statesAfter(async () => {
-      await writeJson(pathFor(at, "hierarchy", "tree"), {
+    const after = await statesAfter(() => {
+      store.plant(SLUG, "hierarchy", "tree", {
         ...TREE,
         nodes: {
           n0000: { ...(TREE as Tree).nodes.n0000, gist: "A different gist entirely." },
@@ -1264,8 +1247,8 @@ describe("every stamped step covers everything its prompt reads", () => {
    * (src/shelf.ts); an earlier version of this comment said otherwise.
    */
   it("not done once the metadata has changed underneath them", async () => {
-    const after = await statesAfter(async () => {
-      await writeJson(pathFor(at, "extract", "meta"), { ...META, title: "Renamed since" });
+    const after = await statesAfter(() => {
+      store.plant(SLUG, "extract", "meta", { ...META, title: "Renamed since" });
     });
     expect(after).toEqual({ ...ALL_STALE, assets: true });
   });
@@ -1289,8 +1272,10 @@ describe("every stamped step covers everything its prompt reads", () => {
    * src/sketch.ts.
    */
   it("treats an article with no metadata as its own input, not as unknowable", async () => {
-    await writeWholeArticle(at);
-    await rm(pathFor(at, "extract", "meta"), { force: true });
+    writeWholeArticle(store);
+    /* `forget`, which is what `rm` on `meta.json` was — an article the store
+       holds no metadata for at all. */
+    store.forget(SLUG, "extract", "meta");
     /* **Per head, not one value for all of them.** `ideas` and `sketch`
        synthesise `TITLE: <tree.slug>` rather than omitting the head, so "no
        metadata" is a different input for them than for the ones that simply
@@ -1307,12 +1292,12 @@ describe("every stamped step covers everything its prompt reads", () => {
       ["ideas", "ideas", noMetaWithIds],
       ["sketch", "sketch", noMetaWithIds],
     ] as [StepName, ArtifactKind, string][]) {
-      const file = pathFor(at, step, kind);
-      const held = parseJsonFrom<Record<string, unknown>>(await readFile(file, "utf8"), file);
-      await writeJson(file, { ...held, sourceHash: hash });
+      const held = (await store.read(SLUG, step, kind)) as Record<string, unknown> | null;
+      expect(held, `${step}/${kind} is not in the fixture`).not.toBeNull();
+      store.plant(SLUG, step, kind, { ...held, sourceHash: hash });
     }
     const after: Record<string, boolean> = {};
-    for (const step of PROSE_STEPS) after[step] = await stepIsDone(STEPS[step], ctxAt(at), store);
+    for (const step of PROSE_STEPS) after[step] = await stepIsDone(STEPS[step], ctxOf(), store);
     expect(after).toEqual(Object.fromEntries(PROSE_STEPS.map((s) => [s, true])));
   });
 });
@@ -1395,14 +1380,14 @@ describe("a fingerprint per prompt head, not one for both", () => {
  * only property of a store it depends on is whether `read(…, "extract",
  * "extractedHtml")` and `read(…, "blocks", "stampedHtml")` can differ. A stub
  * says exactly that and needs no database, so this runs in the ordinary suite
- * beside the filesystem cases it has to agree with.
+ * beside the block above, which asks the same thing of `memoryArtefacts()`.
  *
  * ## What was wrong before
  *
  * `htmlCarriesItsIds` read stage 3's **own** `stampedHtml` and compared it
- * against stage 3's **own** `blocks` — a comparison stage 3 cannot lose. On
- * disk that happened to work, because both names resolve to `at.htmlFile`
- * (`PATHS` in src/store/artifacts-fs.ts), so an `extract` that re-ran without
+ * against stage 3's **own** `blocks` — a comparison stage 3 cannot lose. On the
+ * filesystem store that happened to work, because both names resolved to one
+ * `output/<slug>.html`, so an `extract` that re-ran without
  * ids was visible through the alias. Split into two columns the alias goes and
  * the check returns `true` always: a vacuous guard over
  * docs/project/block-ids.md, arriving exactly when it is needed.
@@ -1445,7 +1430,7 @@ describe("blocks is only done if it was built from the HTML the store holds now"
   }
 
   const ask = (held: Parameters<typeof twoColumnStore>[0]): Promise<boolean> =>
-    stepIsDone(STEPS.blocks, ctxAt(fsLocations(SLUG)), twoColumnStore(held));
+    stepIsDone(STEPS.blocks, ctxOf(), twoColumnStore(held));
 
   const TWO_PARAGRAPHS = "<article><p>Alpha, the first.</p><p>Beta, the second.</p></article>";
 
@@ -1454,14 +1439,21 @@ describe("blocks is only done if it was built from the HTML the store holds now"
   });
 
   /**
-   * **The filesystem shape, and the property it rests on.** There the two names
-   * are one path, so the guard re-derives candidates from stage 3's *own*
-   * output rather than from stage 2's. That is only sound if the splitter is
-   * idempotent — if `split(split(x).html)` gives the same sequence as
+   * **The splitter is idempotent**, which is the property, and it outlives the
+   * store that made it load-bearing.
+   *
+   * On the filesystem the two names were one path, so the guard re-derived its
+   * candidates from stage 3's *own* output rather than from stage 2's, and that
+   * was only sound if `split(split(x).html)` gives the same sequence as
    * `split(x)`. Checked here on a fixture and measured across ten real articles
    * in `output/` (330 to 669 blocks, twice over each): identical every time.
+   *
+   * The store is gone and the state is still reachable — a page ingested with
+   * Spideryarn ids already in it hands stage 2's column a document stage 3 has
+   * effectively already stamped — and `writeWholeArticle` above leans on the
+   * same property. So the case stays, under the name of the thing it proves.
    */
-  it("done for a healthy filesystem pair, where both names are one document", async () => {
+  it("done when stage 2's document already carries the ids, which the splitter reuses", async () => {
     const run = stage3(TWO_PARAGRAPHS);
     expect(
       await ask({ ...run, extractedHtml: run.stampedHtml }),
@@ -1654,24 +1646,24 @@ describe("blocks is only done if it was built from the HTML the store holds now"
 });
 
 /**
- * The decoders are shallow on purpose, and shallow is not the same as absent.
+ * The shape checks are shallow on purpose, and shallow is not the same as
+ * absent.
  *
  * `{"nodes":[]}` was a perfectly good tree until 2026-08-26 and `{"labels":[]}`
  * a perfectly good labels file, because the check was `typeof v === "object"`
  * and an array passes that. Neither writer has ever produced either shape, so
  * the one thing the check existed to say no to was the one thing it said yes to.
+ *
+ * **`SHAPE` is the shared table both remaining stores apply** — it lives in
+ * src/store/artifacts.ts rather than in either adapter for exactly this reason,
+ * so a case here is a case about Postgres as much as about the fake it runs
+ * against (tests/helpers/memory-artefacts.ts § *what it does keep*). It is also
+ * where the second half of a case this file lost on 2026-09-05 ended up: the
+ * round-trip block above used to write `{"nope":1}` over a glossary file and
+ * assert the store answered `null`, which is this rule with one fixture.
  */
 describe("valid JSON of the wrong shape is not an artefact", () => {
-  let at: ArtifactLocations;
-  let store: ReturnType<typeof createFsArtifactStore>;
-
-  beforeAll(async () => {
-    at = await tempArticle("shapes");
-    store = createFsArtifactStore(() => at);
-  });
-  afterAll(async () => {
-    await rm(path.dirname(at.dir), { recursive: true, force: true });
-  });
+  const store = memoryArtefacts();
 
   const wrong: { step: StepName; kind: ArtifactKind; body: unknown }[] = [
     { step: "hierarchy", kind: "tree", body: { nodes: [] } },
@@ -1684,12 +1676,16 @@ describe("valid JSON of the wrong shape is not an artefact", () => {
 
   for (const { step, kind, body } of wrong) {
     it(`${step}/${kind}: ${JSON.stringify(body)}`, async () => {
-      await writeWholeArticle(at);
+      writeWholeArticle(store);
       // Readable to start with, so a failure below is about the shape rather
       // than about the fixture.
       expect(await store.read(SLUG, step, kind)).not.toBeNull();
 
-      await writeJson(pathFor(at, step, kind), body);
+      /* `plant`, not `write` — `write` refuses a bad shape and that is the
+         point of `write`. This is the only way to produce *there is an
+         artefact and it cannot be used*, and it is what writing the bytes
+         behind the store's back used to do. */
+      store.plant(SLUG, step, kind, body);
       expect(await store.read(SLUG, step, kind)).toBeNull();
       expect(await store.has(SLUG, step, [kind])).toBe(false);
     });

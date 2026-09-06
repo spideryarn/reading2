@@ -7,7 +7,7 @@ throughout.
 ## What happened
 
 Claims stores one run per article. It got a filesystem store —
-[`src/referee-claims-store.ts`](../../src/referee-claims-store.ts), writing
+`src/referee-claims-store.ts`, writing
 `data/<slug>/referee-claims.json` — and no Postgres one. Under `SPIDERYARN_STORE=postgres` every
 method refused through `notMigrated` with a 501.
 

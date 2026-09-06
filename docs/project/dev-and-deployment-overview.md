@@ -76,6 +76,11 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
   against the box: the server is disposable and the volume is not, `push-env` builds from an
   allowlist rather than copying your `.env.local`, and every pause you will notice is an ssh
   handshake.
+- **[changelog.md](changelog.md)** — how a deploy becomes a line on the public `/changelog`: why a
+  version *is* a deploy and why Vercel's list rather than git is the only place that knows which shas
+  those were, the append-only NDJSON the process writes, and the four stages — a fan-out of small
+  agents reading diffs, a big model checking every claim against them, and a copy pass that is
+  forbidden to learn anything new.
 - **[worktrees.md](worktrees.md)** — how to stop thirteen agents sharing one checkout, and the
   operational half of it: starting one and what it costs, why the local Supabase stays shared for now
   (measured, and it is not the RAM that blocks it), and both runbooks — the trunk flip to `dev`, run

@@ -87,17 +87,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Copied
- * from tests/candidates-route.test.ts, which explains the shape.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
-
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { LIVE_MODEL } from "../src/live.js";
@@ -110,7 +99,7 @@ loadEnvLocal();
 /** A throwaway slug, so the conversations written below belong to nobody. */
 const SLUG = "test-chat-live-ticket";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/chat-live-ticket-route.test.ts",
   tables: [
     "spideryarn.chat_threads",
@@ -121,28 +110,12 @@ const { reachable } = await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
+const { chatStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this suite working — the filesystem
-       chat store hands back its messages in array order, so `tailId` is right
-       there however the ordering is done. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 let article: ScratchArticle | undefined;
 
 beforeAll(async () => {
-  if (!reachable) return;
   /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
      Postgres reader filters every article by owner. An article seeded as
      anybody else is invisible and every route below answers 404, which looks
@@ -239,7 +212,7 @@ const ticket = (threadId: string, body: unknown = {}) =>
 const speak = (threadId: string, body: Record<string, unknown>) =>
   post(`/api/chat/${SLUG}/${threadId}/spoken`, body);
 
-when("the ticket", () => {
+describe("the ticket", () => {
   it("hands back a key, and never the prompt", async () => {
     /* A client that is handed the instructions is a client that can be talked
        into sending different ones. The created session already holds all of it.
@@ -300,7 +273,7 @@ when("the ticket", () => {
   });
 });
 
-when("the tool a live session may ask us to run", () => {
+describe("the tool a live session may ask us to run", () => {
   /* **The one route where the browser names the tool.** In typed chat the name
      comes off the model's own output on this server; here the model is talking
      to the browser, so the call arrives second-hand. That is one step further
@@ -339,7 +312,7 @@ when("the tool a live session may ask us to run", () => {
   });
 });
 
-when("what the session is created with", () => {
+describe("what the session is created with", () => {
   it("maps the reader's placement onto the field OpenAI takes", async () => {
     /* `near_field` / `far_field` runs before the voice-activity detector, so it
        decides how often a room is treated as somebody talking — which is the

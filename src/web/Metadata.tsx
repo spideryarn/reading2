@@ -168,6 +168,7 @@ import {
   ListTree,
   MessageCircle,
   MessageCircleQuestionMark,
+  MessagesSquare,
   Paintbrush,
   PenLine,
   RefreshCw,
@@ -192,6 +193,7 @@ import type {
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
+import { forgetSummaries } from "./link-facts.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
@@ -267,6 +269,15 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* A paintbrush beside the sketch's pen: the same argument, painted rather
      than drawn. docs/project/diagram.md § Illustrated. */
   illustrated: Paintbrush,
+  /* Two speech marks facing each other: the one stage whose artefact is other
+     people's words rather than a reading of these ones.
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+
+     **The only line of `src/web/` this stage touches**, and it is here because
+     `STAGE_ICONS` is a `Record<StepName, …>` — the typecheck asks for it the
+     moment the step exists, which is exactly what that record is for. The mode
+     itself, its button and its panel are a later stage. */
+  debate: MessagesSquare,
 };
 
 /**
@@ -419,6 +430,13 @@ export function Metadata({
         const stored = body.purpose ?? "";
         setPurposeSaved(stored);
         setPurposeDraft(stored);
+        /* **The link cards' summaries were written from this sentence.** They
+           are cached per tab in front of a server that would have noticed
+           (src/web/link-facts.ts § `forgetSummaries`), so without this the
+           reader edits their purpose, goes back to the article, hovers a link
+           they hovered before, and reads the answer written for the sentence
+           they just replaced. */
+        forgetSummaries();
       })
       .catch((e: Error) => setPurposeError(e.message));
   }

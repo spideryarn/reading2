@@ -12,8 +12,9 @@
  * ## Why it is `pg-revisions.ts` and not `revisions.ts`
  *
  * The plan said `src/store/revisions.ts`. Every unprefixed file in this
- * directory is either store-agnostic (`contracts.ts`) or the filesystem
- * (`fs.ts`, `artifacts-fs.ts`), and every Postgres adapter is `pg-*` —
+ * directory was either store-agnostic (`contracts.ts`) or the filesystem
+ * (`fs.ts`, `artifacts-fs.ts`, both deleted 2026-09-05), and every Postgres
+ * adapter is `pg-*` —
  * `pg-chat`, `pg-comments`, `pg-lookups`, `pg-searches`, `pg-shelf`. A bare
  * `revisions.ts` would read as the seam rather than as one adapter, and there
  * is no filesystem notion of a draft revision for a seam to sit above:
@@ -305,6 +306,19 @@ export const REVISION_CARRY_POLICY: Record<
      — so a re-ingest that moves the article leaves the picture carried, drawn,
      and honestly labelled until somebody redraws the Sketch. */
   illustrated: "carry",
+  /* Carries like the eight above, and here the argument for carrying is the
+     strongest in the table: **this artefact is not about the article, it is
+     about the web**, so a re-extraction is no reason at all to lose it. Every
+     other carried artefact is a paid reading of a text that has just changed;
+     this one is a record of what other people wrote, and that does not stop
+     being true when Readability re-cuts a paragraph.
+
+     What a re-extraction does cost is the group-two rows' anchors — a
+     `claimQuote` located in a block id that has moved — and `sourceHash` on the
+     artefact is what tells the panel so at read time. Carrying is not a claim
+     that it is current, and the honest degradation is a list still worth
+     reading with some of its jumps gone, at up to $0.27 a run to buy back. */
+  debate: "carry",
 };
 
 const MINTED = new Set(
@@ -1347,24 +1361,144 @@ export async function recordStepRun(
  * It collects rather than returning early, because a draft with three things
  * wrong should say three things. `PublishRefused` takes the list.
  */
+/**
+ * **Is the whole input to `checkTree` the one this draft was handed, untouched?**
+ *
+ * `checkTree` is a deterministic function of the **pair** `(blocks, tree)`, so
+ * an exemption that compared only the tree would be a laundering path, and GPT
+ * Sol found it before it shipped: copy a valid revision, leave the tree alone,
+ * change one block's `kind` from `heading` to `text`, and you have caused a
+ * fresh `checkTree` failure that a tree-only comparison would wave through —
+ * `hashBlocks` fingerprints `id`, `text`, `role` and `treatment` and **not**
+ * `kind`, so the hierarchy hash check does not catch it either
+ * (`checkTree` reads `b.kind` at src/tree-invariants.ts:167 and :300).
+ *
+ * So both halves are compared, and both are compared **in the database**: two
+ * booleans' worth of work, and neither the trees nor the block rows cross the
+ * wire.
+ *
+ * - **The tree**, with `is not distinct from` over `jsonb`. That is *normalised
+ *   semantic* equality, not byte equality — key order and whitespace cannot make
+ *   an untouched tree look edited, which a `JSON.stringify` comparison would get
+ *   wrong. Both null reads as unchanged; a draft with no tree is refused a line
+ *   earlier anyway.
+ * - **The blocks**, as a symmetric `EXCEPT ALL` over `CARRIED_BLOCK_COLUMNS` —
+ *   the same exhaustive inventory `beginDraftIn` copies with, so a new block
+ *   column joins this comparison by existing rather than by being remembered.
+ *   `EXCEPT ALL` rather than `EXCEPT` keeps multiplicity, so the set operator
+ *   cannot dedupe a difference away.
+ *
+ * Returns **false** when there is no base — the article's first publication —
+ * which is the fail-closed answer: nothing was carried, so everything is new,
+ * so everything is checked.
+ *
+ * **This is state-based, and deliberately says nothing about who wrote what.**
+ * A `hierarchy` run that rebuilds a byte-identical tree over identical blocks
+ * counts as unchanged, because by this definition it *is* unchanged. Proving
+ * "built here" rather than "differs from the base" would need a provenance
+ * marker maintained by the tree-writing seam, and the case is hypothetical: the
+ * producer splices the bad shape away (`collapseRestatedRungs`), so a rebuild
+ * cannot reproduce an invalid tree. GPT Sol raised it; recorded rather than
+ * built.
+ */
+async function publicationInputUnchanged(
+  tx: Tx,
+  revisionId: string,
+  basedOnRevisionId: string | null,
+): Promise<boolean> {
+  if (!basedOnRevisionId) return false;
+
+  const blockColumns = sql.join(
+    CARRIED_BLOCK_COLUMNS.map((name) => sql.identifier(name)),
+    sql`, `,
+  );
+  const rows = await tx.execute<{ same: boolean }>(sql`
+    select
+      (d.${sql.identifier("tree")} is not distinct from b.${sql.identifier("tree")})
+      and not exists (
+        (select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${revisionId}::uuid
+         except all
+         select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${basedOnRevisionId}::uuid)
+        union all
+        (select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${basedOnRevisionId}::uuid
+         except all
+         select ${blockColumns} from ${revisionBlocks}
+          where ${revisionBlocks.revisionId} = ${revisionId}::uuid)
+      ) as same
+    from ${articleRevisions} d, ${articleRevisions} b
+    where d.${sql.identifier("id")} = ${revisionId}::uuid
+      and b.${sql.identifier("id")} = ${basedOnRevisionId}::uuid
+  `);
+  return rows.rows[0]?.same === true;
+}
+
 async function reasonsNotToPublish(
   tx: Tx,
   revisionId: string,
   blocks: Block[],
   tree: Tree | null,
-): Promise<string[]> {
+  /**
+   * True when this draft's blocks *and* tree are exactly the ones the article is
+   * already serving — see the branch that reads it below.
+   */
+  inputIsCarriedForward: boolean,
+): Promise<PublicationVerdict> {
   const reasons: string[] = [];
+  const carriedTreeProblems: string[] = [];
 
   if (!blocks.length) reasons.push("it has no blocks");
   if (!tree) reasons.push("it has no tree");
   // Nothing below can say anything useful without both.
-  if (!blocks.length || !tree) return reasons;
+  if (!blocks.length || !tree) return { reasons, carriedTreeProblems };
 
+  /**
+   * **A publication is judged on the tree it changes, not the tree it carries.**
+   *
+   * `beginDraftIn` copies the base revision's tree into every draft verbatim, so
+   * a glossary or quotes or debate step — none of which looks at the tree —
+   * arrives here holding the tree the article is *already serving*. Refusing that
+   * publication protects nobody: the tree in question is in front of readers
+   * either way, and the only thing the refusal removes is the glossary.
+   *
+   * On 2026-09-05 that cost eleven hours of availability. `c8e2cc7e` added a new
+   * `checkTree` rule that morning and fixed the producer in the same commit
+   * (`collapseRestatedRungs`, src/hierarchy.ts), but nothing migrated the trees
+   * already stored — so roughly one article in twenty could no longer publish
+   * *anything*, for ever, and each attempt completed and paid for its model call
+   * before being refused at this line. Four times on `nagel-bat`, one of them
+   * $0.2454, each reported to the reader as "trying again is worth a go".
+   * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
+   *
+   * **This is deliberately narrow, and the narrowness is the point.** Only
+   * `checkTree`'s problems are exempted, and only when the tree is unchanged.
+   * A publication that builds or alters a tree is judged in full — which is
+   * where this gate was always aimed, and what stops the exemption becoming a
+   * way to launder a broken tree in by starting from a broken one
+   * (tests/store-publish-guards.test.ts § "still refuses a bad tree that this
+   * draft actually changed"). Re-running `hierarchy` still repairs the article,
+   * because `buildTree` splices the shape away.
+   *
+   * It also fixes the class rather than the instance: the next invariant anybody
+   * tightens over stored trees will report rather than wedge.
+   */
   const { problems } = checkTree(blocks, tree);
-  // Capped, because a tree whose root range is wrong reports once per block and
-  // the message would otherwise be a megabyte of prose in a log line.
-  for (const problem of problems.slice(0, 10)) reasons.push(problem);
-  if (problems.length > 10) reasons.push(`… and ${problems.length - 10} more tree problems`);
+  if (problems.length && inputIsCarriedForward) {
+    /* Not silence: they come back as `carriedTreeProblems` and are logged by
+       `logPublication`, **after** the caller's commit. Logging here would
+       announce a publication that a later rollback — a lost fence, a failed job
+       settlement — never made, in exactly the way the note above
+       `logPublication` was written about. GPT Sol, this file's second review. */
+    carriedTreeProblems.push(...problems.slice(0, 10));
+    if (problems.length > 10) carriedTreeProblems.push(`… and ${problems.length - 10} more tree problems`);
+  } else {
+    // Capped, because a tree whose root range is wrong reports once per block and
+    // the message would otherwise be a megabyte of prose in a log line.
+    for (const problem of problems.slice(0, 10)) reasons.push(problem);
+    if (problems.length > 10) reasons.push(`… and ${problems.length - 10} more tree problems`);
+  }
 
   const runs = await tx
     .select()
@@ -1405,7 +1539,7 @@ async function reasonsNotToPublish(
     );
   }
 
-  return reasons;
+  return { reasons, carriedTreeProblems };
 }
 
 /**
@@ -1448,6 +1582,19 @@ export interface PublishRevisionResult {
   readonly revisionId: string;
   readonly previousRevisionId: string | null;
   readonly scalars: ReturnType<typeof deriveLibraryScalars>;
+  /**
+   * `checkTree` problems this publication was **not** refused for, because it
+   * carried the blocks and tree forward unchanged — see the branch in
+   * `reasonsNotToPublish`. Empty on almost every publication. `logPublication`
+   * says them out loud after the commit; nothing else reads them.
+   */
+  readonly carriedTreeProblems: readonly string[];
+}
+
+/** What `reasonsNotToPublish` decided: what refuses, and what merely worries. */
+interface PublicationVerdict {
+  readonly reasons: string[];
+  readonly carriedTreeProblems: string[];
 }
 
 /**
@@ -1610,7 +1757,12 @@ export async function publishRevisionIn(
 
   const blocks = await storedBlocks(tx, revisionId);
   const tree = draft.tree as Tree | null;
-  const reasons = await reasonsNotToPublish(tx, revisionId, blocks, tree);
+  /* Safe to ask against `basedOnRevisionId`: the branch above has just proved,
+     under the article lock, that it is `article.currentRevisionId`. So "what this
+     draft was copied from" and "what readers are being served" are the same row,
+     and no second lock or read is needed to say so. */
+  const carried = await publicationInputUnchanged(tx, revisionId, draft.basedOnRevisionId);
+  const { reasons, carriedTreeProblems } = await reasonsNotToPublish(tx, revisionId, blocks, tree, carried);
 
   if (reasons.length) throw new PublishRefused(slug, reasons);
 
@@ -1631,7 +1783,7 @@ export async function publishRevisionIn(
     .set({ currentRevisionId: revisionId })
     .where(eq(articles.id, article.id));
 
-  return { revisionId, previousRevisionId: article.currentRevisionId, scalars };
+  return { revisionId, previousRevisionId: article.currentRevisionId, scalars, carriedTreeProblems };
 }
 
 /**
@@ -1655,6 +1807,20 @@ export function logPublication(
     },
     "revision published",
   );
+  /* After the commit, and only here. The article is now serving a tree that
+     `checkTree` rejects — carried forward, not caused by this publication, and
+     already in front of readers before it. Re-running `hierarchy` repairs it.
+     docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md. */
+  if (published.carriedTreeProblems.length) {
+    logger.warn(
+      {
+        slug: opts.slug,
+        revisionId: published.revisionId,
+        problems: published.carriedTreeProblems,
+      },
+      "published over a carried-forward tree that checkTree rejects — re-run hierarchy to repair it",
+    );
+  }
 }
 
 /* ----------------------------------------------------------- failRevision -- */

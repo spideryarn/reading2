@@ -21,6 +21,40 @@ next change gets compared against.
 Read [`pdf/README.md`](pdf/README.md) for what each fixture is for and the three ways choosing them
 nearly went quietly wrong.
 
+## `pdf/titles.mts` — whose title does a PDF get, and what does the fix eat?
+
+```
+npx tsx evals/pdf/titles.mts transcribe --samples=3     # buys the records, once
+npx tsx evals/pdf/titles.mts score                      # four arms over those records
+```
+
+Written after a 142-page Elsevier paper reached a reader's shelf called *"Progress in Biophysics and
+Molecular Biology"* — the journal, not the paper
+([260905b](../docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md)). Ten fixtures under
+[`pdf/titles/`](pdf/titles/README.md), each the **first three pages** of a real document (one is
+synthetic), each with a gold title, the strings a naive extractor is likely to steal instead, and
+short verbatim snippets that must survive.
+
+Three things about it are worth copying elsewhere:
+
+- **The transcription is bought once and the arms run over it.** Paying per arm would compare arms
+  that read different records, and the fault being measured is model variance on a genuinely
+  ambiguous line.
+- **It scores in two directions.** *Right title, fewer publisher lines shown* is maximised by an arm
+  that hides the whole first page — and `src/pdf-score.ts` would not notice, because recall counts
+  every record whether it renders or not. So `mustKeep` sits beside `mustNotRender`, and there is an
+  **`overdelete` arm that the report must fail, in every document**. It says so out loud rather than
+  printing a bad number and hoping somebody looks.
+- **A gold only counts where the transcription put it in reach.** Retention is scored against what
+  each sample renders with *nothing* set aside, and anything already missing from that baseline is
+  named as a corpus problem rather than blamed on an arm — because a gold that is already lost cannot
+  be lost again, which would mask the next arm's damage. The first version of this report gave the
+  incumbent 72% for removing furniture it had never touched.
+- **Three pages is enough to reach `FURNITURE_PAGES` and not enough to be the document.** Of the
+  eight real multi-page fixtures only two reproduce their own document's furniture from the cut, so
+  every fixture keeps `pass0-full.json` — the whole document's `metaTitle` and furniture, measured
+  before it was cut — and the arms reason with that while the model sees three pages.
+
 ## `extraction/` — what Mozilla Readability does to fifteen hard pages
 
 ```
@@ -462,6 +496,150 @@ judge the rule as it stands, never re-tuned.
 a `waves` arm's parallel calls, double-counts concurrent seconds on top of it; a results file
 written before that date has no `elapsedMs` and should not have one reconstructed for it.
 
+## `summaries/` — is a Socratic summary line better than the gist we ship?
+
+```
+npm run db:export -- --out output/summaries-corpus     # the corpus, once — read the Target: line
+npx tsx evals/summaries/run.ts plan                    # free: what a run would buy, and from where
+npx tsx evals/summaries/run.ts generate --stub         # free: no model, no network, every seam
+npx tsx evals/summaries/run.ts generate                # 7 arms x 7 documents = 49 calls
+npx tsx evals/summaries/run.ts judge --run <dir> --repeats 3
+npx tsx evals/summaries/run.ts report --run <dir>
+```
+
+**A run lands under `output/summaries-runs/`, which is gitignored**, because a judging prompt carries
+thousands of words of a reader's article. What gets copied into `evals/results/summaries/` by hand is
+`results.md`, which has arm names, counts and ranks in it and no article prose.
+
+Stage C of
+[260905f](../docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md), and
+the one thing to carry away before anything else: **it is a screen that rejects bad variants, not a
+verdict that ships one.** Both advisers reached that from opposite directions — Fable from what the
+reader is doing in the Summary panel, GPT Sol from what a model judge cannot settle — and the final
+instrument is Greg reading three or four variants *rendered*. This exists so what he reads is the
+best of seven rather than the first of one.
+
+The seven arms are the incumbent, the incumbent again (the generation noise floor), a
+GISTS-block-only arm, and Fable's four question variants
+([`summaries/variants.md`](summaries/variants.md), which is the **source** of the prompt text rather
+than a description of it — `variants-file.ts` parses the fenced blocks and the arms send them
+verbatim). Adding a fifth variant is a `## V5` section in that file plus one entry in `ARMS`.
+
+### Every arm is a `bakeoff`, the control included
+
+Production asks for structure, titles, gists and questions in **one** long-context response. This
+runs the variants over a **fixed existing tree** and asks only for wording, which is why it costs a
+few dollars instead of $8–20 and two hours. By `hierarchy-structure/arms.ts`'s own discipline that
+makes every arm here a `bakeoff` and none of them `isolated` — the control arm is production's
+*rules* under a different request, not production's call — and what it cannot catch is an
+interaction between the new wording and the structure the model proposes in the same breath. It also
+touches nothing in `EXPAND_SYSTEM`, which has no question field at all, so no result from it covers
+the deepening cascade. Every results file repeats all of that.
+
+`isolatedAgainst` is the one thing the template did not have: an arm names the *other arm* it
+differs from in a single block, so `v1` is one block away from `gists-only` and `v2`–`v4` are one
+block away from `v1`, even though all five are two blocks away from production.
+
+### The calibration gate, which is the reason it is worth building
+
+Three things have to hold before a ranking is read at all, and the first was missing until GPT Sol
+found it: **the ranking must be a permutation of the lineup**. Without that check, a judgement naming
+the five anchors and none of the seven real lines passed — no inversions to find, no anchors
+unranked, a green gate over an ordering of nothing. The judge is also shown **windows sampled across
+each section** rather than its first 1,800 characters: the calibration node is 30,187 characters
+long, and the material anchors 3 and 5 quote is nowhere in its opening, so head-only truncation let
+the judge reject the two anchors that matter for being unsupported by the *excerpt*.
+
+Blinding cannot blind this intervention — **a question visibly identifies itself**, so a judge primed
+to value "a door" prefers the arms that look like doors however the labels are shuffled (GPT Sol's
+P1-3 on the plan). So five known-bad lines go into one lineup: a fabricated count, a neutral lookup
+question, an answer-leaking question, a title-only line, and the gist with a question mark on it.
+**All five must rank below every real line, or the run reports no ranking at all** — not a ranking
+with a warning on it. `MAX_ANCHOR_INVERSIONS` is 0, declared before the run rather than argued after
+one, and the gate has been watched doing both things (`--stub-judge good` / `--stub-judge bad`).
+
+Anchors 3 and 5 are the two that matter, because they are the most *informative* lines on the page.
+A judge measuring information rather than the door-or-wall criterion rates them highly, which is
+exactly the failure being detected. Anchor 1's fabricated count is a real trap, not a synthetic one:
+its node has six children while its gist and its prose both say four.
+
+`anchors.ts` asserts all four facts about that node — id, title, depth, child count, and that anchor
+5 really is its gist — and refuses to run if the tree has been re-carved. Without that, a re-ingest
+would leave the gate passing over nothing.
+
+### Two resolutions, and three things a leader has to survive
+
+The **incumbent run twice** measures how much the model wobbles; **the same frozen output judged
+again under a fresh seeded shuffle** (`--repeats`) measures how much the judge does. The shuffle is
+seeded (mulberry32 over an FNV-1a of the run id, slug and repeat) precisely so a repeat differs in
+labels alone.
+
+**The threshold is judge instability alone, in mean-rank units**, and taking the larger of the two
+was wrong twice over — GPT Sol's P0-4 on the code. The generation floor was
+`|mean(incumbent) − mean(incumbent-repeat)|`, and those two recipes are *exchangeable*, so opposite
+movements cancel and that number trends to **zero as the corpus grows** however far apart the runs
+landed on any row; it is a **paired** per-lineup figure now. And the two quantities were on different
+sampling scales, so `max()` of them was arithmetic between statistics that share the word "ranks"
+and nothing else. The paired generation floor is printed beside the judge's *per-lineup churn*,
+which is the only thing on its scale.
+
+A leader is named only when **all three** hold: it beats the threshold, it led in **every repeat's
+own table** (an ordering that does not reproduce under a fresh shuffle is not an ordering), and the
+run was a clean bill — otherwise an arm that answered only its easy sections leads by having
+answered less. When any fails, the report prints the table and says which, rather than reaching for
+a winner.
+
+### The arm sees the whole tree and writes for part of it
+
+The outline in the prompt goes down to depth 2 even when only the root and depth-1 rows are asked
+for, with the rest marked *"context only"*. Both GISTS blocks say *"write a parent's gist from its
+children"*, and a depth-1 node's children are at depth 2 — showing only the requested rows told the
+model to do something the prompt had made impossible, and it would have worked from the raw prose
+instead, quietly and differently from production, which has the whole tree in front of it because it
+just wrote it.
+
+### The axes are reported, and the ordering is a request
+
+Seven axes per candidate — fidelity, distinctiveness, triage, orientation, simplicity, leakage,
+factuality of the shape hint — asked before any preference, and **aggregated into the report**.
+Collecting them and printing only the ranking, which is what the first version did, meant the
+harness could not support one of the independent claims it exists to make.
+
+"Before" is an instruction in the prompt and in the schema, **not something a text model can be
+forced into**: one response carries both, so preference can still colour the earlier fields. Two
+calls would fix it and are not built. Until then, an axis that agrees with the ranking is weak
+evidence and one that *disagrees* is the interesting one. The anchors appear in the axes table
+(where their scores are the diagnostic — anchor 1 should score 1 on fidelity) and not in the ranking
+table (where they are a gate, not a competitor).
+
+### What is deliberately not scored
+
+`shapeFacts` counts yes/no openers, bracketed hints, counted hints and meta-narration phrases, and
+**none of them is a defect**. V3 relaxes production's "not yes/no" rule on purpose — that relaxation
+*is* its axis, and it is the arm that can falsify the plan's central bet — so a scorer docking a
+point for yes/no would decide against it before the judge read a word. `tests/summaries-eval.test.ts`
+pins that.
+
+`v4` is the only arm that would need a change to `src/hierarchy.ts` if it won: Greg's literal reading
+order puts the hint after the question mark, and `questionFor` appends a second one, so the stored
+value becomes *"…consciousness? (4 arguments)?"*. The harness applies V4's rule to V4's lines only,
+the report names the arm, and the test asserts **production's own `questionFor` doing the mangling**
+— so the cost of that variant is a red test rather than a sentence.
+
+### The corpus is real articles, pinned by two hashes
+
+`summaries/corpus.ts` is a committed manifest of ten documents out of local Postgres — 19 to 2,046
+blocks (72 to 357 among the seven a default run scores), one to 252 headings, two of them carrying
+the current generic questions. `npm run db:export`
+is byte-deterministic (checked by exporting twice and comparing twelve hashes), so **both**
+`blocks.json` and `tree.json` are pinned: the tree is an *input* to this eval, not an output, so a
+re-carve is a different measurement wearing the same slug. Drift is reported in the run file and in
+every results file, never thrown and never swallowed.
+
+The plan measured the root-gist inversion on the fixture cut and flagged the caveat. It holds on real
+articles: the root gist is the longest median row in nine of the ten, the exception being
+`openai-huggingface` where root and depth-1 tie at 27 words.
+
 ## `cost/` — what does one article actually cost us?
 
 ```
@@ -523,6 +701,152 @@ the reader sends no breakpoint, so it reads nothing —
 [260903c](../docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md).
 Nothing was red, every artefact was correct and the whole suite passed. It was found by measuring
 money and by nothing else.
+
+## `deepen/` — is the deepening verdict worth obeying, and what does it cost?
+
+```
+npm run eval:deepen -- --book output/2701-h.html --article output/noema-mythology-of-conscious-ai.html
+npm run eval:deepen -- --book … --article … --dry-run           # the same shape, no model call
+npm run eval:deepen -- --book … --article … --repeats 3 --spend # the paid draw, ~$41
+```
+
+**No numbers yet — the harness is built and the paid draw is Greg's to run.** It exists to answer
+the five questions
+[260904d § What the live run must answer](../docs/plans/260904d-deepen-fat-sections.md#stage-5-questions)
+wrote down *before* the money moved, so that a paid run cannot quietly succeed at nothing: is the
+verdict stable across repeats, does the model always say yes, how often does a mechanical bound
+overrule it, what does it cost against the incumbent's $1.00 a book, and does the hierarchy step
+still fit its budget under load.
+
+**Preflight is the default posture**: with no flag it runs every gate, proves the seam for free and
+prints the bill, and buys nothing. `--spend` is the only way to spend.
+
+Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
+`{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
+the flag off and then on, which must come out byte-identical; and three jobs at once at
+`DEFAULT_JOB_CONCURRENCY` for the wall clocks, with a start rendezvous so that "at once" is true of
+the measured *step* and not merely of the three promises.
+
+**A pre-spend review refused the first version of it**, and the thirteen findings are worth
+reading before touching any of this — GPT Sol, 2026-09-05. Two of them decide whether the run is
+worth making at all:
+
+- **The structure-rebought guard was applied to phase A, where buying the structure call is the
+  whole point.** Moby-Dick's measured structure call is 453,832 input tokens
+  ([the artefact](results/hierarchy-waves-2026-09-04/2701-h.tree.json) § `usage`) against a computed
+  floor of 256,900, so a **successful** $40.90 run would have spent the money and then reported
+  `structure-rebought` fatally. `checkRepeatBoughtItsWave` now takes `structure: "bought" |
+  "resumed"`, and a test pins the real token count so the guard can never again fire on the phase
+  that is supposed to buy.
+- **$40.90 was never a bound, and it still is not one.** A re-asking pass that hands its claim back
+  at its own 740 s deadline is requeued, and the driver re-claimed it immediately — with the slug
+  still named in the re-ask lever, so the next claim ignored the checkpoint rows just written and
+  bought the wave again; `REQUEUE_BUDGET = 2` permits three windows. The run **stops** a re-asking
+  pass on its first requeue, reports it fatally (`requeueVerdict`), goes no further, and **retains**
+  that article and job rather than cleaning them up — deleting the article cascades to the
+  checkpoint rows, which is the paid work the refusal exists to keep. The estimate prints $40.90 as
+  the **nominal estimate** and $85.30 as the **three-window requeue exposure**, and says plainly
+  that neither is a bound: nothing here enforces a spend cap, an ordinary pass can re-buy work whose
+  best-effort checkpoint write failed, and a redraw buys a second answer.
+
+The rest were the same disease in five more places: **an answer computed over evidence that is
+absent, partial or failed, printed as though it were a result.** Every one of Q1–Q5 now has an
+explicit answerability gate, and "not measured" is visibly different from "measured zero" —
+[silent-success.md](../docs/reusable/silent-success.md).
+
+Four things in it are worth copying:
+
+- **The repeat has to buy something, and this is the one that would look fine.** The scoped calls
+  are content-addressed, so a second wave over one article reads its own rows back, makes no call,
+  and reports verdicts identical to the first **by construction** — a perfect stability figure worth
+  nothing. `SPIDERYARN_DEEPEN_REASK` names the slugs to re-buy, the run refuses to start unless it
+  names the book and neither article, and afterwards `checkRepeatBoughtItsWave` asks the ledger
+  whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
+- **The load phase is started together before it is measured, and concurrency is measured over the
+  STEPS' windows, never the jobs'.** The arithmetic demanding three overlapping `hierarchy` windows
+  was right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
+  measured step at once, while the two load articles start at `fetch` and get there only after
+  stages 1-3. The two load jobs are driven first and are **held at the entry** to their measured
+  step; a **readiness wait** ends when both are there, with the gate still shut and nothing of the
+  book driven or bought; then the book is driven, reaches the same entry through the same hook, and
+  **all three are released together** (`startRendezvous`). Two earlier versions of this were wrong in
+  instructive ways. Merely *announcing* an arrival held nobody, so load1 could announce, run its
+  whole step and finish before load2 announced. Holding only the loads and releasing them before
+  driving the book moved the same hole one party over: with the third queue slot taken, both released
+  loads could finish before the book reached `hierarchy` — and the outcome still said "all". The book
+  therefore *does* wait inside its own claim, and it costs nothing, because by then everybody else is
+  waiting for it; the two load steps are the ones that really hold, bounded, and what it cost them is
+  reported. **A phase that cannot line up buys nothing trying to.** A readiness wait that does not end
+  `"all"` stops the run rather than driving the book at all; and if the *gate* gives up with all three
+  already driven, every step it releases is released "abandoned" and throws before it runs. Those jobs
+  end `error` by this eval's doing and each carries a finding saying so. **And the three share one
+  fate**: once any of them has failed its measured step, fallen back to wave 1, or handed its claim
+  back, the other two stop before their next claim **and cancel the calls their running step has not
+  yet made**. Stopping before the next claim was not enough on its own, because one claim runs the
+  whole `hierarchy` step — structure call, expansion wave *and* a whole pass of labels, which
+  `generateHierarchy` starts even after the wave failed. So the fate carries an `AbortSignal` that
+  `announcing` combines into the measured step's own `ctx.signal`; label batches are queued with that
+  signal, and `tests/labels-batching.test.ts` already pins the property that matters — *"the callback
+  must never run either, or the 'stop paying' half of fail-fast buys nothing"*. The remaining bound is
+  the single request already in flight, which may still be billed. A measured job also stops on its
+  first requeue rather than being re-driven, because a re-drive takes the gate's latched verdict, runs
+  outside it, and lets the queue overwrite the first attempt's clock. In one line: **it no longer
+  starts paid measured work when the rendezvous already knows question 5 is impossible.**
+  **What a successful gate guarantees is a shared start, not a shared window.** Another job **cannot**
+  serialise the three afterwards — by then all three hold claims, which is all three of the cap's
+  slots — so `peakConcurrency` reaching 3 is *arranged* and confirms the wiring rather than measuring
+  anything. The load measurement is **`fullConcurrencyMs`**, the longest interval with all three
+  genuinely in flight, held to a floor **declared in preflight before anything is bought**. It is
+  bounded by the shortest of the three, and the load articles' `hierarchy` is far shorter than a
+  book's 658-778 s — so below the floor, question 5 reports latency after a synchronised start rather
+  than sustained three-job load, and says so. All three phase-D promises
+  stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
+  phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
+  agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the
+  hierarchy steps' own windows, three of them have to have finished `done` with a wave's stats
+  behind them, and the runtime `jobConcurrency()` is asserted before anything is enqueued.
+- **Repeats are paired on parent-plus-range, never on `where`.** `where` is an ordinal path derived
+  from the answer's own fan-out, so two repeats that split a parent in different places both emit
+  `root > child 1` and a boundary that moved reads as a verdict that held — wrong in the direction
+  that makes the signal look *better* than it is. A record with no range is refused outright rather
+  than paired approximately. Verdict flips, changed fan-out and moved boundaries at equal fan-out
+  are three separate rows that must not be added together — and only **one** of the three pairs is
+  disjoint. A changed fan-out is counted alone; a moved boundary and a surviving child's verdict flip
+  overlap deliberately, because one parent can do both and making them disjoint would discard valid
+  same-range verdict evidence. The overlap is counted and printed.
+- **The dry run found a real bug on its first pass, and the check written for it was wrong twice
+  over.** `enqueue` ends with `pump()`, which drives the job with the *production* registry; the
+  silencer of the day was `withoutTheInProcessPump`, one global variable, so two overlapping
+  `enqueue`s raced on it and one job went to the real network with no eval overlay. **That silencer
+  is gone** — `enqueue` takes `pump: false` on the request now (`src/jobs.ts` § `pump`, 2026-09-05),
+  so the hazard is per-request and there is no global left to race on; the queueing here is
+  sequential because it reads better, not because anything depends on it. What the episode left
+  behind is the check, and it is kept because it outlived its bug: it reads the fixture step's own
+  `detail` — `"1382 KB (fixture book)"` — because the first version matched the DNS error text, and
+  the queue replaces a failed step's message with a reader-facing sentence, so that version was
+  watched printing "none" over a run where **every fetch had gone to the network**.
+
+`report.ts` is the arithmetic and has no IO; `harness.ts` owns the ingress, the levers and the free
+seam probe; `run.ts` only drives and prints. Everything the cost eval already proved — the eval
+spend overlay, the fixture stage-1 step, the local-database gate — is imported from `cost/harness.ts`
+rather than copied. The book and the article are named on the command line
+and hashed at run time, because `output/` is gitignored and a checked-in manifest pointing at a file
+nobody else has would break the cost eval for everybody.
+
+**What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
+a model call, so every dry-run job stops at its last free step and fails — and because a failed job's
+draft revision is rolled back, every job *after* the first on the same slug fails at once too. It
+proves the driving — the fixture ingress, the force, the serial repeats, the start rendezvous, the
+concurrent load phase, the cleanup — and says so rather than printing a table of zeroes.
+
+**Run it before you run anything that spends**, and read the last line as well as the first. On
+2026-09-05 it died at its very first `enqueue` — `dev` had merged in a rule refusing `blocks`
+without `hierarchy`, which is exactly what the free step list asked for — created nothing, and
+printed its entire closing report on the way down: an empty driving table, `Findings: none`, a
+written `run.json`. Three things came out of that and are the reason to trust it now: the step lists
+are checked against the queue's own rule before anything is enqueued, the summaries can say *there
+was nothing here*, and a run that died says so at the top rather than in its last line.
+[260905b](../docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md).
 
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 

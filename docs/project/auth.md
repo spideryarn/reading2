@@ -268,10 +268,11 @@ it.
 - **A slug you do not own is 404, not 403.** "There is no such article" is all a stranger should learn
   about it; a 403 confirms it exists. It falls out of the design rather than being a second decision —
   the row simply does not match the `where`.
-- **The filesystem store refuses to boot in production**, because it has no owner column and nowhere
-  to put one — one directory per slug under `data/`, one profile file, no second reader. On Vercel it
-  would have failed anyway for want of a writable disk, but as an ENOENT on the first read, which
-  reads as a missing article rather than as a store that should never have been selected.
+- **The filesystem store used to refuse to boot in production**, because it had no owner column and
+  nowhere to put one — one directory per slug under `data/`, one profile file, no second reader. On
+  Vercel it would have failed anyway for want of a writable disk, but as an ENOENT on the first read,
+  which reads as a missing article rather than as a store that should never have been selected. That
+  store is gone as of 2026-09-05 — see the tombstone bullet below.
 
 ### The two things the first version of this walked straight past
 
@@ -340,17 +341,24 @@ and which two are courtesies.
   ingesting the same URL is a question the beta gate has to answer rather than a bug to fix in the
   store — see [ingest-queue.md](ingest-queue.md) for the two functions that decide whether two
   addresses are one article.
-- **The ingest queue is not in Postgres.** `data/_jobs/` is on disk. It carries an owner now and is
-  filtered by it, but `jobs.owner_id` in the schema is still unused and the queue does not work on
-  Vercel at all — there is no writable disk.
-- **`SPIDERYARN_STORE=files` has no isolation at all**, and unset still means `files` for a CLI
-  script, a test, or anything that does not go through `npm run dev` — which itself now defaults to
-  `postgres`, since 2026-09-02. So reaching `files` on a laptop today needs it said explicitly,
-  in `.env.local` or the shell. The production boot refusal in
-  [`src/store/index.ts`](../../src/store/index.ts) is the whole of the mitigation on that path, so
-  two signed-in readers who both land on `files` share the complete library, profile, comments,
-  chat and searches. Authentication does not make that configuration multi-user-safe, and nothing
-  short of moving the filesystem store to per-owner directories would.
+- **The ingest queue is the `jobs` table**, via [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts),
+  filtered by `owner_id` on every read and mutation, same as everything else.
+
+  **This bullet said the opposite until 2026-09-05** — *"the ingest queue is not in Postgres…
+  `jobs.owner_id` in the schema is still unused"* — and it was a security doc denying the isolation
+  that was actually there. It went stale when the queue moved, not when the filesystem store was
+  deleted: there were two queues after that, and `SPIDERYARN_STORE` unset meant `files`, so a
+  laptop got the on-disk one while Vercel — which has no writable disk — got the table. The
+  sentence described the laptop and read as though it described the product. The bullet directly
+  below it was corrected on the same day the flag went and this one was not, which is the ordinary
+  way a list rots: one line at a time, from the bottom.
+- ~~**`SPIDERYARN_STORE=files` has no isolation at all**~~ — **the configuration this warned about
+  cannot be reached since 2026-09-05**, when the flag and the filesystem store went
+  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
+  What it said was true and is the reason we are here: that store had no owner column, so two
+  signed-in readers on it shared the complete library, profile, comments, chat and searches, and
+  authentication did not make it multi-user-safe. A boot refusal in `src/store/index.ts` was the
+  whole of the mitigation. There is one store and it has `owner_id`.
 - **Child rows are trusted to match their article.** Comments, chat threads, searches and lookups are
   filtered by `articleId` alone — the owner column on them is written, never read — so the isolation
   rests on the invariant that a child's owner equals its article's owner. Nothing in the database

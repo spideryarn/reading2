@@ -41,28 +41,48 @@ describe("readSelection", () => {
     const prose = mount("<p>Consciousness is not a computation.</p>");
     const text = prose.querySelector("p")!.firstChild!;
     expect(readSelection(select(text, 17, 35))).toEqual({
-      blockId: "spya-k3m9qt",
-      quote: "not a computation.",
-      start: 17,
+      kind: "anchor",
+      anchor: { blockId: "spya-k3m9qt", quote: "not a computation.", start: 17 },
     });
   });
 
-  it("ignores a collapsed selection, so clicking a mark never makes a new one", () => {
+  /* **`"none"` and `"too-short"` are not interchangeable**, and asserting the
+     wrong one of them is how the caller's bug got in: TableView carries on with
+     the rest of its mouseup handler after `"none"` — that is how clicking a
+     mark opens its comment — and must stop dead after `"too-short"`. See
+     tests/short-selection-in-a-mark.test.tsx. */
+  it("reads a collapsed selection as nothing, so clicking a mark never makes one", () => {
     const prose = mount("<p>Consciousness is not a computation.</p>");
-    expect(readSelection(select(prose.querySelector("p")!.firstChild!, 5, 5))).toBeNull();
+    expect(readSelection(select(prose.querySelector("p")!.firstChild!, 5, 5))).toEqual({
+      kind: "none",
+    });
   });
 
-  it("ignores a stray drag shorter than the minimum", () => {
+  it("refuses a stray drag shorter than the minimum, and says which refusal it is", () => {
     const prose = mount("<p>Consciousness is not a computation.</p>");
     const text = prose.querySelector("p")!.firstChild!;
     expect(MIN_SELECTION_CHARS).toBeGreaterThan(1);
-    expect(readSelection(select(text, 0, MIN_SELECTION_CHARS - 1))).toBeNull();
+    expect(readSelection(select(text, 0, MIN_SELECTION_CHARS - 1))).toEqual({
+      kind: "too-short",
+    });
   });
 
-  it("ignores a selection outside the verbatim column", () => {
+  /* Two words was the old floor and is now nowhere near it. `AI`, `EU`, `GDP`,
+     `Ryle` — docs/project/comments.md § Explain: a short selection is almost
+     always asking who or what that is. */
+  it("accepts the two-character selection the old floor refused", () => {
+    const prose = mount("<p>AI is not a computation.</p>");
+    const text = prose.querySelector("p")!.firstChild!;
+    expect(readSelection(select(text, 0, 2))).toEqual({
+      kind: "anchor",
+      anchor: { blockId: "spya-k3m9qt", quote: "AI", start: 0 },
+    });
+  });
+
+  it("reads a selection outside the verbatim column as nothing", () => {
     mount("<p>Consciousness is not a computation.</p>");
     const gist = document.querySelector(".sticky")!.firstChild!;
-    expect(readSelection(select(gist, 0, 6))).toBeNull();
+    expect(readSelection(select(gist, 0, 6))).toEqual({ kind: "none" });
   });
 
   it("trims surrounding whitespace out of the quote and off the offset", () => {
@@ -70,9 +90,8 @@ describe("readSelection", () => {
     const text = prose.querySelector("p")!.firstChild!;
     // A drag that overshoots into the space either side — the normal case.
     expect(readSelection(select(text, 13, 35))).toEqual({
-      blockId: "spya-k3m9qt",
-      quote: "is not a computation.",
-      start: 14,
+      kind: "anchor",
+      anchor: { blockId: "spya-k3m9qt", quote: "is not a computation.", start: 14 },
     });
   });
 
@@ -81,9 +100,8 @@ describe("readSelection", () => {
     const tail = prose.querySelector("em")!.nextSibling!;
     // "this now" begins at 4; the selection starts after "this " → offset 9.
     expect(readSelection(select(tail, 1, 10))).toEqual({
-      blockId: "spya-k3m9qt",
-      quote: "right now",
-      start: 9,
+      kind: "anchor",
+      anchor: { blockId: "spya-k3m9qt", quote: "right now", start: 9 },
     });
   });
 
@@ -104,9 +122,8 @@ describe("readSelection", () => {
     selection.addRange(range);
 
     expect(readSelection(selection)).toEqual({
-      blockId: "spya-aaaaaa",
-      quote: "block here.",
-      start: 6,
+      kind: "anchor",
+      anchor: { blockId: "spya-aaaaaa", quote: "block here.", start: 6 },
     });
   });
 });

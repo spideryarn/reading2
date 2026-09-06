@@ -27,7 +27,7 @@ a hand-kept list falling behind a growing set.
 ## The client
 
 **The vocabulary is `MODES` in [`src/modes.ts`](../../src/modes.ts), and the compiler asks for the
-rest.** A fourteenth word there is red until it has a row in each of these totals:
+rest.** A fifteenth word there is red until it has a row in each of these totals:
 
 | Table | Where |
 |---|---|
@@ -49,8 +49,21 @@ Then the residue, which is why this page exists:
 - **A read hook** shaped like [`useIdeas.ts`](../../src/web/useIdeas.ts) — ordering from
   [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts), the job from
   [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
-- **The band's chrome**: the header markup is `.band-head`, and the scroller under it is documented
-  in the same place — [`styles.css`](../../src/web/styles.css) § mode band. *Nothing.*
+- **Opening it for the first time starts it.** A mode the reader opens with nothing in it generates
+  it, rather than offering a button and waiting — so a new artefact-backed mode wants a name in
+  [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), a row in `MODE_TARGET`
+  ([`activation.ts`](../../src/web/activation.ts)), and `useAutoRun` in its hook, called with the
+  **unforced** verb. The traps, and the one mode deliberately left out, are
+  [260906b](../plans/260906b-opening-a-mode-starts-it-generating.md).
+  *[`tests/modes-that-start-themselves.test.tsx`](../../tests/modes-that-start-themselves.test.tsx)
+  for the modes already in it; nothing for a new one.*
+- **The band's chrome**: the scroller is documented in
+  [`styles.css`](../../src/web/styles.css) § mode band. A `.band-head` title row is **optional, and
+  the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because
+  the Dock at the foot of the page is already saying it (Greg: *"I think we can rely on the bottom
+  bar to tell us what mode we're in"*). Add the row only if you have something else for it — a
+  count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
+  [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5. *Nothing.*
 - **`CACHEABLE`** in [`lib/api.ts`](../../src/web/lib/api.ts), if the mode has a GET.
   *[`tests/cacheable-covers-artefact-routes.test.ts`](../../tests/cacheable-covers-artefact-routes.test.ts)*,
   which derives the list rather than repeating it.
@@ -67,17 +80,18 @@ It starts at `ArtifactKind` and `ArtifactMap` in
 [`src/store/artifacts.ts`](../../src/store/artifacts.ts) and `StepName` in
 [`src/types.ts`](../../src/types.ts). **The compiler then asks for a row in each of these**, every
 one of them a total record, so the new kind or step stays red until it has one: `SHAPE` and
-`STAMP_SOURCE` (`artifacts.ts`), `DECODERS`
-([`artifacts-fs.ts`](../../src/store/artifacts-fs.ts)), `STEP_BUDGET_MS`
+`STAMP_SOURCE` (`artifacts.ts`), `STEP_BUDGET_MS`
 ([`src/jobs.ts`](../../src/jobs.ts)), `STEPS` ([`src/pipeline.ts`](../../src/pipeline.ts)) and — via
 `StepsMissingFromOrder` — `STEP_ORDER`, which moved to
 [`src/step-order.ts`](../../src/step-order.ts) on 2026-09-04 so the browser could read the order
 without naming a server module, and which `pipeline.ts` re-exports; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
 `STAGE_EFFORT` and `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts));
 `REVISION_CARRY_POLICY` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); and `ArticleReader`
-([`contracts.ts`](../../src/store/contracts.ts)) with both adapters,
-[`fs.ts`](../../src/store/fs.ts) and [`pg.ts`](../../src/store/pg.ts), *annotated* rather than
-`Pick`-cast.
+([`contracts.ts`](../../src/store/contracts.ts)) with its adapter,
+[`pg.ts`](../../src/store/pg.ts), *annotated* rather than
+`Pick`-cast. (`DECODERS`, the filesystem adapter's per-kind decode table, was on this list too until
+`artifacts-fs.ts` was deleted 2026-09-05; there is no Postgres equivalent, because the columns need
+no decoding.)
 
 Then the residue nothing refuses at compile time:
 
@@ -117,15 +131,16 @@ Then the residue nothing refuses at compile time:
       article in the fixture a query filtering on nothing returns the same rows as one filtering
       correctly, so the predicate is untestable —
       *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
-- **Pressing the mode's button with nothing in it runs the job**; arriving does not —
+- **Pressing the control that opens it — a mode button, a sub-mode chip, the Tweets link — runs the
+  job when there is nothing there**; arriving does not —
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
   is why. *Nothing.*
 - **`PROMPT_VERSION`, bumped, whenever you change what the prompt asks for** — the
   stamp says which prompt wrote the artefact, and an unchanged one makes every
   stored artefact claim it was written by the prompt that ships. Where the stage
-  also has an `outdated` comparison ([`src/api.ts`](../../src/api.ts),
-  [`pg.ts`](../../src/store/pg.ts)) the bump surfaces in the panel. `hierarchy`'s
+  also has an `outdated` comparison ([`pg.ts`](../../src/store/pg.ts)) the bump
+  surfaces in the panel. `hierarchy`'s
   is a stamp and nothing more; `labels`' has no comparison either but is inside
   `batchFingerprint`, so it invalidates checkpoint reuse. Check the version is
   *one* constant before you bump it: `sketch` had two literal

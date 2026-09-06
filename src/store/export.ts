@@ -634,6 +634,12 @@ export async function exportArticle(
                the instruction that produced it, and nothing reports an error.
                GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 6. */
             stance: row.stance,
+            /* Beside `stance` and for the identical reason its comment gives:
+               this projection is built from named fields, so a new column is
+               easy not to add and its absence is silent. `false` becomes an
+               absent key via `compact`, which is what the filesystem store
+               writes for a question nobody pressed "?" for. */
+            help: row.help ? true : null,
             editedAt: row.editedAt?.toISOString() ?? null,
           }) as ChatMessage,
         ),
@@ -727,11 +733,12 @@ export async function exportArticle(
   }
 
   /* referee-claims.json — the paper's own claims and where it takes each one
-     up. `src/referee-claims-store.ts` writes this file, and the shape on disk is
-     `{ run }` rather than a bare run, so a rollback lands somewhere
-     `loadClaimsRun` can read it back: that function reads `parsed.run`, and a
-     file holding the run at the top level would come back as `null` — an export
-     that wrote the bytes and lost the answer.
+     up. The shape on disk is `{ run }` rather than a bare run, because that is
+     what the filesystem claims store wrote and what a restore would have to
+     read back. That store (`src/referee-claims-store.ts`, with its
+     `loadClaimsRun` reading `parsed.run`) was deleted on 2026-09-05 and this
+     wrapper outlived it: the bytes are a rollback format now, and changing the
+     envelope would silently invalidate every export already written.
 
      **One row and no id**, unlike every other table here: a referee asks the
      paper what it claims exactly once, so there is nothing to order and nothing

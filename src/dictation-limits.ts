@@ -95,3 +95,28 @@ export function formatOf(mimeType: string): AudioFormat | null {
   if (base === "audio/mpeg") return "mp3";
   return null;
 }
+
+/**
+ * **What a reader is told when their recording is too long — once, for both
+ * ends.**
+ *
+ * The cap is checked twice: in the browser before a megabyte goes over the wire
+ * ([`web/dictation-upload.ts`](./web/dictation-upload.ts)) and on the server
+ * over the base64 that arrived ([`routes.ts`](./routes.ts)). Until 2026-09-05
+ * each wrote its own sentence, and they were different sentences under one
+ * code — so `[mic-too-long]` named two branches, which is the one thing
+ * [copy.md](../docs/project/copy.md) says a code must never do. Found by
+ * `tests/dictation-codes.test.ts`, which exists because a feedback report that
+ * quoted four characters could not be resolved to a branch.
+ *
+ * The number is here rather than in either sentence for the same reason the
+ * constants above are: *"the number in an error message is the one thing in it
+ * somebody acts on"*, and two ends computing it separately is how they come to
+ * disagree. Raw audio, not base64 — base64 is a third larger than the file it
+ * encodes, and quoting the encoded figure overstates what a reader may record
+ * by exactly that third.
+ */
+export function tooLongMessage(): string {
+  const mb = Math.round((MAX_AUDIO_BYTES / 1024 / 1024) * 10) / 10;
+  return `That recording is too long — the limit is about ${mb} MB of audio. Try a shorter passage. [mic-too-long]`;
+}

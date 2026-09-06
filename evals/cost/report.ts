@@ -283,6 +283,13 @@ export interface Finding {
  *
  * Supplied by the runner from `AdvanceParts.onStepSpend`, which is an observer
  * on the queue and cannot change what it watches.
+ *
+ * **Still the sharp instrument, and still the only per-step one.** Since
+ * 2026-09-04 a `LedgerRead` also carries `lateCalls` — the process-wide count of
+ * calls that finished after their collector had reported and so left no row
+ * (src/store/contracts.ts) — which is enough to stop a bill being *quoted* as a
+ * total, and nowhere near enough to say which step lost what. This is what says
+ * that.
  */
 export interface StepObservation {
   step: string;
@@ -487,8 +494,12 @@ function checkMustPay(
  *
  * Three different ways of being short, reported as one finding per step so the
  * message can say which of them happened.
+ *
+ * **Exported because the deepening eval needs the same reconciliation** and a
+ * second copy of it would be a second opinion about what "the ledger is short"
+ * means. evals/deepen/run.ts maps these onto its own finding type.
  */
-function checkLedgerComplete(
+export function checkLedgerComplete(
   rows: readonly AiCallRow[],
   observed: readonly StepObservation[],
 ): Finding[] {
@@ -512,14 +523,21 @@ function checkLedgerComplete(
   return findings;
 }
 
-export function checkCold(rows: readonly AiCallRow[], expect: ColdExpectation): Finding[] {
-  const wantScope = expect.scopeKind ?? "eval";
+/**
+ * **Did every row land in the eval's own bucket?**
+ *
+ * Fatal, because the attribution overlay covers calls made inside `step.run`
+ * and anything bought elsewhere inside `runStep`'s collector is still
+ * `job_step` — evals/cost/feasibility.md § the one residual risk. The dry
+ * pass's control arm is what this looks like when it fires.
+ *
+ * **Exported because it is the only check that can see eval money being billed
+ * to Product**, and the deepening eval needs exactly it: that one drives jobs
+ * with no `fetch` step at all, so its fixture check cannot stand in for this.
+ * ⟨GPT Sol reviewing the stage-5b harness, DPN-01.⟩
+ */
+export function checkScope(rows: readonly AiCallRow[], wantScope: ScopeKind): Finding[] {
   const findings: Finding[] = [];
-
-  /* First, and fatal: the attribution overlay covers calls made inside
-     `step.run`, and anything bought elsewhere inside `runStep`'s collector is
-     still `job_step`. evals/cost/feasibility.md § the one residual risk. The
-     dry pass's control arm is what this looks like when it fires. */
   for (const scope of distinct(rows.map((r) => r.scopeKind))) {
     if (scope === wantScope) continue;
     const leaked = rows.filter((r) => r.scopeKind === scope);
@@ -533,6 +551,15 @@ export function checkCold(rows: readonly AiCallRow[], expect: ColdExpectation): 
         "Eval spend is landing in the Product bucket of npm run cost.",
     });
   }
+  return findings;
+}
+
+export function checkCold(rows: readonly AiCallRow[], expect: ColdExpectation): Finding[] {
+  const wantScope = expect.scopeKind ?? "eval";
+  const findings: Finding[] = [];
+
+  /* First, and fatal. */
+  findings.push(...checkScope(rows, wantScope));
 
   const steps = aggregateByStep(rows);
   const allowed = new Set([...expect.mustPay, ...(expect.mayPay ?? [])]);

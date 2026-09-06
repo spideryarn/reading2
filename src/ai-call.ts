@@ -190,11 +190,31 @@ export function classifyEnd(
   signals: { signal: AbortSignal | undefined; deadline: AbortSignal; stalled: AbortSignal },
 ): StreamOutcome {
   const { signal, deadline, stalled } = signals;
-  /* **Our own clocks, then the reader, then what the provider said.** The first
-     two are the order every caller already had, and they have to come first
-     because a deadline or a stall aborts the reader's signal too — so all three
-     arrive as one aborted signal and only `readerAborted` tells them apart.
-     Mutating this order turns three tests in tests/openrouter-stream.test.ts red.
+  /* **The terminator beats everything, then our own clocks, then the reader,
+     then what the provider said.**
+
+     `[DONE]` is set only when `data: [DONE]` literally arrives
+     (src/openrouter-stream.ts), so `terminated` is not "something the provider
+     said" — it is proof that **the complete SSE response was received**. Nothing
+     that happens afterwards can make it less complete, and a signal that fired
+     in the gap between the terminator arriving and this function being called is
+     exactly that: afterwards. The three checks below used to run first, and a
+     deadline landing in that gap threw away a whole answer the reader had
+     already watched appear, with *"the AI service did not finish within…"*.
+     Reproduced end to end in tests/converse-stream-end.test.ts § "a terminator
+     that had already arrived when our own clock fired"; found by GPT Sol,
+     finding F5, 2026-09-05.
+
+     **This does not weaken the mid-stream cases**, which are the ones the order
+     below exists for. A deadline or a stall that fires while the stream is
+     running aborts the reader, `sseChunks` cancels, and the loop ends *without*
+     `[DONE]` — so `terminated` is false and the three checks run exactly as they
+     did. The gate only lets through a stream that genuinely finished.
+
+     **Our own clocks before the reader**, because a deadline or a stall aborts
+     the reader's signal too — all three arrive as one aborted signal and only
+     `readerAborted` tells them apart. Mutating that order turns three tests in
+     tests/openrouter-stream.test.ts red.
 
      **The reader beats a `finish_reason` that has already arrived**, and that
      is a real edge worth knowing: a provider that said `error` and *then* lost
@@ -205,9 +225,11 @@ export function classifyEnd(
      differs from an `error` arriving as `chunk.error` *data*, which every caller
      throws on inside the loop and which therefore never reaches here.
      GPT Sol's review of Stage C, 2026-09-01. */
-  if (deadline.aborted) return { kind: "timed-out" };
-  if (stalled.aborted) return { kind: "went-quiet" };
-  if (readerAborted(signal, deadline, stalled)) return { kind: "abandoned" };
+  if (!end.terminated) {
+    if (deadline.aborted) return { kind: "timed-out" };
+    if (stalled.aborted) return { kind: "went-quiet" };
+    if (readerAborted(signal, deadline, stalled)) return { kind: "abandoned" };
+  }
   switch (end.finishReason) {
     case "length":
       return { kind: "truncated" };
@@ -443,6 +465,44 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **The second look at a PDF's front matter** (src/pdf-frontmatter.ts).
+
+     `require_parameters` is the half that is load-bearing: the whole answer is
+     a JSON schema of three id lists, and an upstream that quietly ignored
+     `response_format` writes prose instead — which `parseAnswer` throws away,
+     so the article silently keeps whatever title the ladder would have given
+     it. That is a paid call with no effect and nothing saying so.
+
+     `order` is pinned for consistency with the rest of the chat wire rather
+     than for caching: this call sends three pages of records and no
+     `cache_control`, so there is no prefix here to keep landing on. */
+  "pdf-frontmatter": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
+  /* **Debate — what the rest of the web says about this piece** (src/debate.ts).
+     `referee-candidates`' policy, and its `require_parameters` argument holds
+     here with the volume turned up.
+
+     This is the only *pipeline step* that sends `openrouter:web_search`, and a
+     fallback that silently dropped it leaves a model answering from memory —
+     which is not an empty panel but a **full** one, of plausible pages with no
+     annotation behind any of them. Every rule in `readGroup` then drops every
+     row as `uncited`, so a reader sees "the search returned nothing it could
+     verify" and nothing anywhere says the tool was never offered. That is the
+     failure `referee-candidates` already wrote down; here it costs up to $0.27
+     rather than a turn of a conversation.
+
+     `order` is pinned for consistency with the rest of this wire rather than
+     for caching: neither pass sends `cache_control`, so there is no prefix here
+     to keep landing on. The two passes are one request each, minutes apart from
+     the next article's. */
+  debate: {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* The same policy as `explain` and for the same two reasons. The upstream is
      pinned so that a reader working through a batch of questions keeps hitting
      the cached article rather than paying for it once per answer; and
@@ -453,6 +513,31 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
+  },
+  /* **The Luna summary of where a hyperlink goes** (src/link-summary.ts) — the
+     app's only quick-tier job, and the only chat row here with **no `order`**.
+
+     `dictation`'s argument, one row down, applies exactly: the Anthropic pin
+     exists so repeat calls land on a cached prefix, and pointed at an OpenAI
+     model it is not merely useless but wrong *quietly* — OpenRouter finds no
+     Anthropic upstream, falls through to the real one, and answers. There is no
+     cached prefix here either: every summary is a different destination, a
+     different paragraph and a different reader.
+
+     **`require_parameters` is kept, and it is the half that matters.** The
+     request sends `max_completion_tokens` — the spelling this model advertises,
+     rather than the deprecated `max_tokens` every other chat caller here sends —
+     and `reasoning: { effort: "low" }`. An upstream that quietly dropped either
+     would answer at full reasoning with no ceiling: a summary that costs several
+     times what it should and arrives late, with nothing at all looking wrong.
+     That is `pdf`'s reason with money instead of a schema. Its teeth are real —
+     see `env-proposal` below, where an unsupported `temperature` became a 404 —
+     so anything added to this body needs checking against Luna's upstreams
+     first. */
+  "link-summary": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
   },
   dictation: {
     path: "/v1/chat/completions",
@@ -664,8 +749,15 @@ export class ProviderRefused extends Error {
  *
  * Still a parsed number and never a string: nothing a provider wrote leaves
  * this function — see `ProviderRefused`.
+ *
+ * **Exported since 2026-09-05** for the deepening wave
+ * (src/hierarchy-deepen.ts), which meets its 429s on the Anthropic SDK's road
+ * rather than this one and so has an `APIError` with a `Headers` on it instead
+ * of a `ProviderRefused`. The header is the same header; a second parser for it
+ * would be a second opinion about what "a minute" means, and the two would
+ * disagree the day one of them learned about the HTTP-date form.
  */
-function retryAfterMs(headers: Headers): number | null {
+export function retryAfterMs(headers: Headers): number | null {
   const header = headers.get("retry-after");
   if (!header) return null;
   const seconds = Number(header);
@@ -1120,17 +1212,34 @@ export async function* openRouterStream(
    */
   let ranToEnd = false;
   try {
+    /* **Reset, so a reused `end` cannot carry a stale verdict into a new
+       attempt.** `converse` runs up to four requests in a turn; it builds a
+       fresh object for each, so nothing depends on this today — which is exactly
+       when to write it, because the next caller to loop will not know it had to.
+
+       **Before `send`, not after the body arrives**, and the difference is the
+       whole point of an out-parameter: this says "here is how *this attempt*
+       ended", so it has to be cleared when the attempt starts rather than when
+       it starts going well. Placed after the response was validated, a retry
+       that aborted, was refused, or came back with no body left the previous
+       stream's verdict standing — so the caller classified a call that never
+       reached a byte using the last one's terminator. GPT Sol, finding F8.
+
+       **`terminated` was missing from the list entirely until 2026-09-05**,
+       which made the sentence above false in the one way that matters most: a
+       reused object whose first stream ended on `[DONE]` and whose second ended
+       at EOF with nothing to say why classified as `finished`, and — since F5 —
+       the stale `true` would also suppress the clock checks. A promise in a
+       comment that the code does not keep is worse than no promise, because the
+       next caller reads the comment. GPT Sol, finding F7. */
+    options.end.terminated = false;
+    options.end.finishReason = null;
+    options.end.answered = false;
     const response = await send(prepared, options.signal);
     meter.generationId = generationIdOf(response);
     if (!response.ok || !response.body) await refuse(response);
     /* Non-null: `refuse` throws, but TypeScript cannot see through the `await`. */
     const stream = response.body as ReadableStream<Uint8Array>;
-    /* **Reset, so a reused `end` cannot carry a stale verdict into a new
-       stream.** `converse` runs up to four requests in a turn; it builds a fresh
-       object for each, so nothing depends on this today — which is exactly when
-       to write it, because the next caller to loop will not know it had to. */
-    options.end.finishReason = null;
-    options.end.answered = false;
     for await (const chunk of sseChunks(
       stream,
       options.signal,

@@ -170,8 +170,16 @@ async function ensurePdfWorker(): Promise<void> {
      no test can redden, caught by a test it could only get in the way of. */
 }
 
-/** pdf.js, imported the first time something actually needs it. */
-function loadPdfjs(): Promise<Pdfjs> {
+/**
+ * pdf.js, imported the first time something actually needs it.
+ *
+ * **Exported as the one way in.** Everything above this line — the geometry-only
+ * `DOMMatrix`, the worker imported by a literal name — exists because of two
+ * production outages, and a second `import("pdfjs-dist/…")` anywhere in the repo
+ * would reproduce both. src/pdf-figure-read.ts is the other caller. Sol I-7,
+ * 2026-09-06.
+ */
+export function loadPdfjs(): Promise<Pdfjs> {
   /* The *promise* is cached rather than the module, so two concurrent callers
      share one import rather than racing to start a second one. Both pieces of
      setup live inside the cached promise, so they happen once, in order, and
@@ -308,6 +316,22 @@ export type RecordType =
   | "footnote"
   | "reference"
   | "cover"
+  /**
+   * **The publisher's furniture on the article's own pages**, as distinct from
+   * `cover`, which is a whole page belonging to a publisher or a library.
+   *
+   * A journal masthead, "Contents lists available at …", a journal-homepage or
+   * DOI strip, a received/revised/accepted date block, an ISSN and copyright
+   * line, an "Available online" date, a "Downloaded from …" watermark, an arXiv
+   * margin stamp. All of it sits *on* page 1 among the title and the abstract,
+   * and none of it is a cover page.
+   *
+   * Added 2026-09-05 rather than widening `cover`, on GPT Sol's review: a DOI
+   * strip is not a cover, and a type that means "things we do not show" is a
+   * second, worse spelling of `RENDERED`.
+   * docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md
+   */
+  | "publisher"
   | "tabledata";
 
 /**
@@ -332,8 +356,16 @@ export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
 /** How many pages must share a line before it is furniture rather than prose. */
 const FURNITURE_PAGES = 3;
 
-/** Below this, a page has no usable text layer. A stray character is not a text layer. */
-const SCAN_WORDS_PER_PAGE = 20;
+/**
+ * Below this, a page has no usable text layer. A stray character is not a text
+ * layer.
+ *
+ * **Exported since 2026-09-06** because src/pdf-figure-read.ts asks the same
+ * question of a single page — *is this a photograph of a page, whose image is
+ * the page rather than a figure on it?* — and a second constant meaning the same
+ * thing is a second constant to keep in step.
+ */
+export const SCAN_WORDS_PER_PAGE = 20;
 
 /**
  * Fold a line to what two pages of running header have in common.

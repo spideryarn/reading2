@@ -44,7 +44,7 @@ import { act, createElement, StrictMode, useState, type ReactElement } from "rea
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mode } from "../src/modes.js";
-import type { Job } from "../src/types.js";
+import type { BlockId, Job } from "../src/types.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -155,6 +155,10 @@ const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
+const { useDebate } = await import("../src/web/useDebate.js");
+const { useSketch } = await import("../src/web/useSketch.js");
+const { useIllustrated } = await import("../src/web/useIllustrated.js");
+const { diagramInSearch } = await import("../src/web/params.js");
 const { resetActivations } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
@@ -220,6 +224,74 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
 }
 
 /**
+ * **Debate, and it is the one where being wrong costs the most.**
+ *
+ * Here for `TimelineBand`'s reason and one of its own. Every other mode in this
+ * file spends one model call; Debate spends **two, and both of them go out to
+ * the open web** — up to ~$0.27 a run, rising with the length of the article,
+ * and it is the newest thing in `MODE_TARGET` (src/web/activation.ts). So the
+ * sentence at the top of this file — *arriving at a mode does not run it* — is
+ * worth more here than anywhere, and the only thing holding it is one call to
+ * `useAutoRun` in useDebate.ts.
+ *
+ * Remove that call, or drop `debate` from `MODE_TARGET`, and every other test
+ * in this file stays green.
+ */
+function DebateBand({ slug }: { slug: string }): ReactElement {
+  const view = useDebate(slug);
+  return createElement(
+    "div",
+    { "data-band": "debate" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+/**
+ * **Diagram's two pictures, which are the only place in this file where the mode
+ * and the target are not the same word.**
+ *
+ * Every other band here is opened by a bar button that arms *its own* name.
+ * Diagram's button arms whichever picture `?diagram=` says it is about to land
+ * on — `sketch` by default, `illustrated` if the reader last chose that — and
+ * the reason it is not a fixed row in `MODE_TARGET` is the sequence in
+ * § "spends nothing on a Back step after opening a picture it did not arm"
+ * below. Change `armActivationForDiagram` to a constant and that test is the
+ * only thing in the suite that notices.
+ */
+function SketchBand({ slug }: { slug: string }): ReactElement {
+  const view = useSketch(slug, EMPTY_BLOCK_ORDER);
+  return createElement(
+    "div",
+    { "data-band": "sketch" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+function IllustratedBand({ slug }: { slug: string }): ReactElement {
+  const view = useIllustrated(slug, []);
+  return createElement(
+    "div",
+    { "data-band": "illustrated" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+/** The sketch hook keys its read on the block ids; this file has no article. */
+const EMPTY_BLOCK_ORDER: BlockId[] = [];
+
+/**
+ * **Which picture the bar thinks it is about to open.** `Dock` reads
+ * `location.search` itself, so this is how a test says `?diagram=illustrated`
+ * without a router.
+ */
+function setDiagram(kind: string | null): void {
+  const url = new URL(window.location.href);
+  if (kind === null) url.searchParams.delete("diagram");
+  else url.searchParams.set("diagram", kind);
+  window.history.replaceState(null, "", url);
+}
+
+/**
  * What `Reader` hands the glossary band: a read that has already come back
  * empty. Posed rather than run — the fetch is `useGlossaryRead`'s, one level up,
  * and this file is about what the band does with the answer.
@@ -250,6 +322,14 @@ const SETTLED_EMPTY_READ = {
  */
 let arrive: (next: Mode) => void = () => {};
 
+/**
+ * **Which picture is on screen**, through the app's own degrade rule rather than
+ * a raw read — a link naming a picture that was cut opens the Sketch, and a
+ * harness that read the parameter literally would mount no band at all and turn
+ * that case into a vacuous pass.
+ */
+const diagramKind = (): string => diagramInSearch(window.location.search);
+
 function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
   const [mode, setMode] = useState<Mode>(start);
   arrive = setMode;
@@ -260,6 +340,15 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
     mode === "quotes" ? createElement(QuotesBand, { slug }) : null,
     mode === "timeline" ? createElement(TimelineBand, { slug }) : null,
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
+    mode === "debate" ? createElement(DebateBand, { slug }) : null,
+    /* **The band Diagram opens is whichever picture the address bar names**, and
+       that is the whole point of these two arms — the real `DiagramBand` does
+       exactly this with `?diagram=`, and a test that always mounted the Sketch
+       could not tell a fixed target from an honest one. */
+    mode === "diagram" && diagramKind() === "sketch" ? createElement(SketchBand, { slug }) : null,
+    mode === "diagram" && diagramKind() === "illustrated"
+      ? createElement(IllustratedBand, { slug })
+      : null,
     /* **The switch on**, because three of the five modes this file presses —
        Quotes, Timeline and Remember — went behind it on 2026-09-03, and a bar
        with the default answer draws no Quotes button for `press("Quotes")` to
@@ -321,8 +410,9 @@ function pressTheButton(): Promise<void> {
 
 function bandSays(): string | null {
   return (
-    host.querySelector('[data-band="ideas"], [data-band="quotes"], [data-band="timeline"]')
-      ?.textContent ?? null
+    host.querySelector(
+      '[data-band="ideas"], [data-band="quotes"], [data-band="timeline"], [data-band="debate"], [data-band="sketch"], [data-band="illustrated"]',
+    )?.textContent ?? null
   );
 }
 
@@ -343,6 +433,7 @@ beforeEach(() => {
   held = [];
   resetActivations();
   jobEngine.reset();
+  setDiagram(null);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -473,6 +564,49 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["timeline"] }]);
   });
 
+  /* The fourth positive control, and the dearest. See DebateBand above. */
+  it("runs the debate, which is two web searches and nothing else here presses", async () => {
+    await open("plain");
+    await press("Debate");
+    await settle();
+
+    expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["debate"] }]);
+  });
+
+  it("draws the sketch, which is the picture Diagram opens on", async () => {
+    /* **The dearest button in the bar that is in front of every reader** —
+       ~$0.20 and about two minutes — and the newest thing arming anything
+       (2026-09-06). Until that day opening Diagram bought nothing and the empty
+       state's Draw button was the only way in; the argument for the change is
+       Greg's rule that opening a mode is the reader asking for it.
+
+       Remove `armActivationForDiagram` from Dock.tsx, or make it arm nothing,
+       and this is the only test in the file that goes red. */
+    await open("plain");
+    await press("Diagram");
+    await settle();
+
+    expect(artefactGets("sketch").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["sketch"] }]);
+  });
+
+  it("draws the sketch for a link naming a picture that was cut", async () => {
+    /* **A link from August saying `?diagram=tree`.** `diagramParam` degrades an
+       unrecognised value to the default rather than throwing, which is the rule
+       every parser in params.ts follows — so the mode opens the **Sketch**, and
+       the bar has to arm the Sketch with it. Reading the raw query value instead
+       armed nothing at all: the mode opened on the empty state and the press did
+       nothing, which is exactly the extra button-click this change removes.
+       GPT Sol, reviewing the built code, 2026-09-06. */
+    setDiagram("tree");
+    await open("plain");
+    await press("Diagram");
+    await settle();
+
+    expect(posts).toEqual([{ slug: "constitution", steps: ["sketch"] }]);
+  });
+
   it("runs it when the mode pressed is the one already open", async () => {
     /* A reader who arrived by link, saw the empty state, and pressed the button
        in the bar rather than the one in the band. Without a fresh nonce per
@@ -507,6 +641,55 @@ describe("arriving without pressing", () => {
     await settle();
 
     expect(artefactGets("ideas").length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
+  });
+
+  it("spends nothing on a Back step after opening a picture it did not arm", async () => {
+    /**
+     * **The sequence a fixed `diagram: "sketch"` row would have paid for**, and
+     * it is the reason `armActivationForDiagram` is a function. GPT Sol found it
+     * in the plan for this change, 2026-09-06:
+     *
+     *  1. the reader is on Illustrated, so `?diagram=illustrated`;
+     *  2. they press Diagram in the bar. A fixed row mints a **sketch** token,
+     *     but `IllustratedBand` is what mounts, so nobody claims it;
+     *  3. nothing expires an unclaimed token — `claimActivation` retires one only
+     *     when a *different* mount asks;
+     *  4. a Back step lands on `?diagram=sketch`, the sketch band mounts, finds
+     *     the token unowned, claims it, and spends $0.20 on a navigation that
+     *     was not a press.
+     *
+     * The `illustrated` POST in step 2 is the reader's own press and is meant to
+     * be there. What must not appear is a **second** POST, for `sketch`, out of
+     * step 4.
+     */
+    setDiagram("illustrated");
+    await open("plain");
+    await press("Diagram");
+    await settle();
+    /* **The press itself buys nothing here, and that is not the point of the
+       test** — it is `useIllustrated`'s own gate: with no Sketch drawn there is
+       nothing to paint, so the token is claimed and *retired* rather than spent
+       (useIllustrated.ts § the automatic run waits for the Sketch). What matters
+       is that the token was minted for the band that actually mounted, so
+       nothing is left lying in the map. */
+    expect(artefactGets("illustrated").length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
+
+    /* Leave the mode, then walk back into it on the other picture — both of them
+       through `arrive`, which is the setter Back and Forward move and the one
+       thing that must never manufacture a press. */
+    await act(async () => arrive("plain"));
+    await settle();
+    setDiagram("sketch");
+    await act(async () => arrive("diagram"));
+    await settle();
+
+    /* The sketch band really mounted and really asked — so the silence below is
+       a settled panel that chose not to spend, not an empty one. */
+    expect(artefactGets("sketch").length).toBeGreaterThan(0);
+    /* **The assertion.** With a fixed `diagram: "sketch"` row this is one POST:
+       the token minted in step 2 was never claimed, and this mount claims it. */
     expect(posts).toEqual([]);
   });
 

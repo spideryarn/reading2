@@ -77,10 +77,17 @@ import {
   explainAbort,
   providerFailedMidAnswer,
   readerAborted,
-  searchCount,
   stoppedByReader,
+  type SearchUsagePath,
+  whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
-import { type ChatJob, ProviderRefused, openRouterStream } from "./ai-call.js";
+import {
+  type ChatJob,
+  ProviderRefused,
+  type StreamOutcome,
+  classifyEnd,
+  openRouterStream,
+} from "./ai-call.js";
 import {
   ENDED_UNFINISHED,
   KEPT_ASKING_FOR_TOOLS,
@@ -455,9 +462,18 @@ worth reaching for.
   would be worth more than a fact from the web. That connection is something
   nobody else can offer them. Never invent one: if the search finds nothing,
   they have not read about it.
-- DO NOT reach for a tool to do something the article in front of you already
-  answers. It is all here. A tool call the reader waits ten seconds for, to
-  learn what paragraph four says, is worse than no tool at all.
+- ASKING WHETHER A CLAIM HOLDS UP IS A QUESTION ABOUT THE WORLD, not a question
+  about the article. "What is the evidence for this?", "is that true?", "has
+  anyone replicated it?", "who says so?" — reach for the web BY DEFAULT. The
+  article can tell you that the claim was made; it cannot tell you whether the
+  claim survived. Use the article to aim the search: the author, the date, the
+  subject and the other names around the passage are what turn a common phrase
+  into a findable one.
+- DO NOT reach for a tool to look up what a paragraph plainly says. A tool call
+  the reader waits ten seconds for, to learn what paragraph four says, is worse
+  than no tool at all. That is the whole of this rule — a question the article
+  merely touches on is not one it answers, and "the piece asserts it" is not
+  evidence for it.
 - Say where something came from — the article, the web, or their own library —
   and name the other article by its title when you use one.
 
@@ -839,6 +855,55 @@ function stanceLine(
   return `Stance for this turn: ${(stance ?? "balanced").toUpperCase()}.`;
 }
 
+/**
+ * **The reader pressed "?" instead of typing, so they could not say what they
+ * were missing.** Report 1S, 2026-09-05:
+ *
+ * > When I click the question-mark-comment in vertical gutter, it should explain
+ * > in easy-to-understand language, starting with brief summary, and drawing on
+ * > pedagogical techniques, e.g. worked example, analogy, etc
+ *
+ * **In the final user message, below the `cache_control` breakpoint**, for the
+ * reason the stance line above it gives and one more besides. `help` is a fact
+ * about a *turn*, not about a conversation: the "?" sends one question and every
+ * follow-up after it is an ordinary one, so putting this in the system prompt
+ * would answer the whole thread pedagogically *and* mint another cached prefix
+ * per article for the privilege. tests/help-prompt.test.ts pins the byte
+ * identity — GPT Sol's phrasing, `cachedText(help) === cachedText(ordinary)`.
+ *
+ * ## Where the wording comes from
+ *
+ * Not written from scratch. src/explain.ts already holds a pedagogical prompt
+ * built for this reader, and four of its principles are kept: what the reader
+ * has to *bring* to a passage is usually the real question; do not describe the
+ * page they are looking at; keep the author's distinctive words and use ordinary
+ * ones for everything else; do not summarise the article. Greg's 1S adds the
+ * plain opening and the one analogy. docs/project/vision.md constrains both: the
+ * answer sends the reader back into the passage rather than standing in for it.
+ *
+ * ## What it deliberately does NOT say
+ *
+ * **Anything about where the answer comes from.** Report 1X — a comment asking
+ * for evidence that did not search the web — landed while this was being built,
+ * and `SYSTEM` was strengthened in the same commit. Every line below pulls
+ * towards answering from the article alone, which is the opposite pull; a
+ * reader who presses "?" on a claim they doubt wants both. So the encouragement
+ * to search stays where it already is, in `SYSTEM`, owned once. A second,
+ * weaker copy of it here would fire only on help turns and would drift from the
+ * first, and the drift would be invisible. tests/help-prompt.test.ts asserts the
+ * absence.
+ */
+function helpSection(help: boolean): string {
+  if (!help) return "";
+  return `The reader pressed the "?" beside this passage rather than typing a question, so they could not follow it and could not say why. Answer accordingly:
+
+- Open with one or two plain sentences on what this passage is doing. Not a summary of the article — they are reading it.
+- Then supply what they were missing: the term of art, the named person, the study, or the earlier move this passage is answering.
+- Use one analogy or one small worked example where it would do more than another restatement, and leave it out where it would not.
+- Keep the author's distinctive words and use ordinary ones for everything else.
+- Send them back into the paragraph better equipped to read it. Do not stand in for it.`;
+}
+
 export interface ConverseRequest {
   meta: Meta;
   blocks: Block[];
@@ -901,6 +966,32 @@ export interface ConverseRequest {
    * Absent means `balanced`, which is the default the picker starts on.
    */
   stance?: RememberStance | undefined;
+  /**
+   * The passage this whole conversation is about, when it was started from one.
+   *
+   * **The caller passes the THREAD's anchor, not the request body's** — the rule
+   * `kind`, `stance` and `help` already follow, and here it is the only possible
+   * source anyway: a thread is anchored once, on the turn that creates it, so
+   * every later turn's body has nothing to offer.
+   *
+   * Handed straight to `buildConverseMessages`, whose `anchor` option carries
+   * the reasoning for why it is re-sent every turn rather than left in the
+   * reader's first message. That docblock said "sent on every turn" from the day
+   * it was written and this field did not exist, so nothing sent it: found by a
+   * GPT Sol review of docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md,
+   * finding 2.
+   */
+  anchor?: ChatAnchor | null;
+  /**
+   * **The reader pressed "?" rather than typing this question.**
+   *
+   * Per turn, and the caller reads it off the **stored user row** rather than
+   * off the request body — `streamChat` in src/routes.ts, the same rule `kind`
+   * and `stance` already follow. That is what makes a retry or an edit of a
+   * help question still an explanation: `withRetry` hands back the question it
+   * is re-asking, and the flag is on it. See `helpSection`.
+   */
+  help?: boolean;
 }
 
 export type ConverseEvent =
@@ -1060,11 +1151,21 @@ export function buildConverseMessages(opts: {
    * — which is the expected use — costs nothing above the breakpoint.
    */
   stance?: RememberStance | undefined;
+  /**
+   * The reader pressed "?" rather than typing — see `helpSection`. **In the
+   * final user message**, below the breakpoint, so a help turn and an ordinary
+   * one share one cached article prefix.
+   */
+  help?: boolean;
 }): OpenRouterMessage[] {
   const kind = opts.kind ?? "chat";
   const position = readerPositionLine(opts.at);
   const who = profileSection(opts.profile ?? null);
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
+  /* After the anchor and before the stance: the reader is told *which* passage
+     first, then how to explain it. Both are below the breakpoint, so the order
+     is about how the model reads it rather than about what it costs. */
+  const teach = helpSection(opts.help ?? false);
   const how = stanceLine(kind, opts.stance);
   return [
     { role: "system", content: systemFor(kind) },
@@ -1090,7 +1191,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, about, how, opts.question]
+      content: [position, who, about, teach, how, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
@@ -1258,6 +1359,8 @@ export async function* converse({
   useTools = true,
   kind = "chat",
   stance,
+  anchor = null,
+  help = false,
   /* **`kind` above is what this reads**, and the order of these two lines is
      therefore load-bearing: a destructuring default may use a binding declared
      earlier in the same pattern, and `model` is below `kind` for exactly that.
@@ -1308,6 +1411,16 @@ export async function* converse({
        same value as an absent key — the same rule the `anchor` spread follows
        in `withTurn`. */
     ...(stance ? { stance } : {}),
+    /* Unconditional, and `null` rather than absent when there is none: the
+       option's type admits null and `anchorSection` returns "" for it, so an
+       unanchored conversation builds the byte-identical message it always did. */
+    anchor,
+    /* Unconditional, unlike `stance` above: it is a plain boolean rather than an
+       optional value, so `false` is a real answer and not an absent key. It adds
+       nothing to the message when false — `helpSection` returns "" and the join
+       filters it out — so an ordinary turn is byte-identical to one built before
+       this existed. */
+    help,
   });
 
   /* Logged rather than thrown: a short article simply cannot be cached, and the
@@ -1349,6 +1462,22 @@ export async function* converse({
   let text = "";
   const citations = new Map<string, Citation>();
   let searches = 0;
+  /**
+   * **Which usage field the search count was read out of** — the operator's
+   * half of `searches`, and the reason it is here at all.
+   *
+   * This line used to log a bare `0`, and a bare `0` is a number a reader
+   * believes and an operator cannot check: "the model chose not to search" and
+   * "OpenRouter renamed the field again, so every count is now permanently
+   * zero" print identically. src/explain.ts has carried `searchesFrom` for
+   * exactly that reason since 2026-08-25 and chat — which is where report 1X
+   * arrived, *"hoping that it would automatically know to … search the web"* —
+   * had no such thing. `neither` on a run of turns is the alarm.
+   *
+   * Held across rounds like `usage`, and written only when a round actually
+   * reported accounting, so a tool round that carries no usage cannot reset it.
+   */
+  let searchesFrom: SearchUsagePath = "no-usage";
   let used = model;
   let usage: Usage | undefined;
   /* Token counts summed across rounds, for the same reason `searches` is. Kept
@@ -1375,9 +1504,14 @@ export async function* converse({
   const toolContext: ToolContext = { slug, meta, blocks, signal: toolSignal };
 
   /* The last round's, read by the guards after the loop. Declared out here so
-     those guards can stay where they are and keep meaning what they meant. */
+     those guards can stay where they are and keep meaning what they meant.
+
+     **`finishReason` used to sit here too, scraped out of the chunks by a line
+     in the loop below.** It was one of seven identical copies of that line;
+     `openRouterStream` writes the last non-null `choice.finish_reason` onto
+     `end` for every caller now, so `end.finishReason` is the same value from the
+     same source — docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md. */
   let stall = new AbortController();
-  let finishReason: string | null = null;
   let end: StreamEnd = { terminated: false };
   let rounds = 0;
 
@@ -1402,21 +1536,48 @@ export async function* converse({
    * the loop, and the point is what they were at the moment of the failure.
    */
   /**
-   * One record per round, so that a turn is legible after it fails.
+   * What one round of the turn did. **The only place a fact about a round
+   * lives, and the only thing the turn's own verdicts are computed from.**
    *
-   * `finishReason`, `roundText` and `calls` are all **reset at the top of every
-   * round**, which means that at the moment anything throws, every round but the
-   * last is unrecoverable. That is not a small gap: a middle round that hit
-   * `max_tokens` reports `finish_reason: "length"` and is then overwritten, so
-   * the turn ends on some other reason and *"the budget was not the problem"*
-   * looks proven when it has only been checked for the final request.
+   * `end`, `roundText` and `calls` are all rebuilt at the top of every round, so
+   * every one of them holds the *last* round's value by the time the loop is
+   * over. Reading one of those after the loop and calling it the turn's answer
+   * is a mistake this file has now made three times — the token counts
+   * (`2e5d6d69`, a three-round turn billed as a third of its real cost), the
+   * failure log (`f1a7d7e6`, "the budget was not the problem" proven for one
+   * request out of four), and `truncated` (`31830f73`, an answer cut off
+   * mid-sentence on round two delivered as whole). Each was fixed in place; none
+   * named the shape. docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md.
+   *
+   * **So the turn's fields are functions of this array and nothing else.** That
+   * is the whole point of the type: `roundLog.at(-1)` and `roundLog.some(…)`
+   * are things you have to write out and can see yourself writing, where a
+   * leftover `let` gives you "the last round" by default and looks like "the
+   * turn". `ended` is `null` only for a round whose stream never reached the
+   * classifier — a round that threw — which is an honest answer rather than a
+   * gap.
    *
    * An array on the existing lines rather than a line per round, deliberately:
    * logging.md's rule is that a caller which emits a line per item deletes the
    * end of its own request's logs on Vercel. This is bounded by
    * `MAX_TOOL_ROUNDS + 1` either way, but one line stays one line.
    */
-  const roundLog: { finishReason: string | null; chars: number; calls: number }[] = [];
+  type RoundRecord = {
+    /** What the provider said, raw. `plainReason` before it reaches a log line. */
+    finishReason: string | null;
+    /** How `classifyEnd` read this round's stream, or `null` if it never ended. */
+    ended: StreamOutcome["kind"] | null;
+    /** This round's characters, for the log. */
+    chars: number;
+    /**
+     * Whether this round wrote **prose**, which is not the same question as
+     * `chars > 0`: a round can be all whitespace. `truncated` turns on it —
+     * see where that is computed.
+     */
+    prose: boolean;
+    calls: number;
+  };
+  const roundLog: RoundRecord[] = [];
 
   /**
    * A finish reason fit to log, which is not quite the same as the one we got.
@@ -1524,7 +1685,6 @@ export async function* converse({
     const composite = AbortSignal.any(
       signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],
     );
-    finishReason = null;
     end = { terminated: false };
     /** This round's tool calls, being assembled from fragments. See `ToolCallDelta`. */
     const calls = new Map<number, PartialToolCall>();
@@ -1533,9 +1693,11 @@ export async function* converse({
     let roundSearches = 0;
     /* Pushed now and filled in by `noteRound` below, so that a round which dies
        mid-stream still leaves a record rather than a gap. */
-    const record: { finishReason: string | null; chars: number; calls: number } = {
+    const record: RoundRecord = {
       finishReason: null,
+      ended: null,
       chars: 0,
+      prose: false,
       calls: 0,
     };
     roundLog.push(record);
@@ -1547,10 +1709,17 @@ export async function* converse({
        neat miniature of the bug this whole array exists for: a record that
        looks present and says nothing. Found by a GPT Sol review, 2026-08-27. */
     const noteRound = () => {
-      record.finishReason = finishReason;
+      /* **Read off `end` here, not from a copy taken earlier.** This is called
+         from the `catch` as well as the `finally`, and the whole point of it is
+         to record what the round had reached at the moment it went wrong. */
+      record.finishReason = end.finishReason ?? null;
       record.chars = roundText.length;
+      record.prose = roundText.trim() !== "";
       record.calls = calls.size;
     };
+    /* `ended` is not set here, because it cannot be: this runs before the
+       classifier does, and on the one path where a round throws there is no
+       verdict to record. It is filled in beside the `switch` below. */
 
     /* **Say out loud that the tools are gone.**
 
@@ -1655,7 +1824,10 @@ export async function* converse({
         // else would notice it.
         if (chunk.error) throw providerFailedMidAnswer();
         const choice = chunk.choices?.[0];
-        if (choice?.finish_reason) finishReason = choice.finish_reason;
+        /* No `finish_reason` scrape here any more: `openRouterStream` writes it
+           onto `end` for every caller, and `classifyEnd` after the loop is what
+           reads it. This line was one of seven identical copies —
+           docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md. */
         /* The rules are in `collectCitations`, beside the wire shape they are
            about. `citations` is hoisted above the round loop with `text` and the
            rest, so a page cited in round one is not cited again in round two.
@@ -1682,8 +1854,13 @@ export async function* converse({
            meant a round two that ran no searches overwrote round one's with
            zero, and the stored answer then said the model had not searched
            while showing its citations. Found by a GPT-5.6 review, 2026-08-26. */
-        const counted = searchCount(chunk.usage);
-        if (counted !== null) roundSearches = counted;
+        const counted = whereSearchCountCameFrom(chunk.usage);
+        if (counted.searches !== null) roundSearches = counted.searches;
+        /* Guarded on `chunk.usage`, not on `counted.searches` — the trap
+           src/explain.ts fell into, where `neither` was assigned only on the
+           branch that could never produce it and the alarm could not fire.
+           docs/reusable/silent-success.md. */
+        if (chunk.usage) searchesFrom = counted.from;
         // Held for the totals after the loop: the usage chunk is normally the
         // last one of all and carries no choices, so it would otherwise be seen
         // and dropped.
@@ -1694,19 +1871,13 @@ export async function* converse({
          and it does not throw — see `stoppedByReader`. */
       noteRound();
       if (stoppedByReader(err, signal, deadline, stall.signal)) {
-        stopped = true;
+        /* The caller gave up. **Nothing is said or decided here**: this falls
+           through to the `switch (outcome.kind)` below, which reaches
+           `abandoned` from the same signals — so the throwing path and the
+           clean-end path cannot come to say different things about one event.
+           They used to be two branches and only one of them logged, which is
+           what unified them in explain.ts and search.ts too. */
         clearTimeout(stallTimer);
-        line.info(
-          {
-            ...turnSoFar(),
-            model: used,
-            ms: since(started),
-            chars: text.length,
-          },
-          answered
-            ? `reader stopped the answer from ${used}`
-            : `reader stopped before ${model} replied to round ${rounds}`,
-        );
       } else if (err instanceof ProviderRefused) {
         /* The status, not the body. OpenRouter's error text is the one place a
            provider might echo part of what we sent, and what we sent is the
@@ -1764,82 +1935,169 @@ export async function* converse({
        2026-08-26. */
     usage = undefined;
 
-    /* Anything from here is the *end of a round*, not the end of the turn. The
-       three guards below were written for a function that made one request and
-       they still say what they said; what changed is that they now run once per
-       round, which is what you want — a stall in round one is a stall. */
+    /* Anything from here is the *end of a round*, not the end of the turn — a
+       stall in round one is a stall, and a round that ran out of room is one
+       whether or not the turn goes round again.
 
-    /* **The stream can also stop by simply ending.**
+       **How did this stream end?** One question with one true answer, asked of
+       the shared classifier rather than re-derived here. Three chained
+       `!stopped && …` guards used to stand in this spot: the signal-only reader
+       test, our own two clocks, and the conjunction
+       `!end.terminated && finishReason === null` — which a non-null finish
+       reason could only ever make *less* likely to fire, so no value of
+       `finish_reason` had ever failed a stream here.
+       docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md,
+       docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md.
 
-       Every version of this before now assumed an abort *throws*, and set
-       `stopped` only in the two catches. It does throw under Node's own fetch:
-       the pending `read()` rejects with the abort reason. But `onAbort` in
-       `sseChunks` also calls `reader.cancel()`, and cancelling a reader makes a
-       pending read resolve `{ done: true }` — so an implementation where the
-       cancel wins the race exits the loop **cleanly**, `stopped` stays false, and
-       the guard immediately below files the reader's own stop as "The answer
-       stopped arriving before it was finished."
+       **Precedence is unchanged in fact as well as in intent.** Those guards
+       asked the reader first and our clocks second; `classifyEnd` asks the
+       clocks first and the reader second. The two orders agree on every input,
+       because `readerAborted` returns false the moment either clock has fired —
+       so the input that would tell them apart cannot occur.
 
-       There is no error to identify here, so this is the signal-only test: the
-       caller's signal aborted, neither of our clocks did, and however the loop
-       happened to end, the reader is why. Found by writing the test that goes
-       through `converse` rather than constructing the row by hand — which is the
-       whole reason that test exists. */
-    if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+       **Once per round, and the turn's verdict is a fold over the rounds'.**
+       `end` is rebuilt at the top of every round, so this answers "how did
+       *this* stream end". What a `length` on round two means to the turn is
+       chat's own question, and it is answered by the two variables above. */
+    const outcome: StreamOutcome = classifyEnd(end, { signal, deadline, stalled: stall.signal });
+    /* **On the record before anything acts on it**, so that a turn's verdicts
+       have one source and it is the array. Every `case` below is about *this*
+       round; anything the *turn* needs is computed from `roundLog` after the
+       loop. docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md. */
+    record.ended = outcome.kind;
 
-    /* **And our own clocks can end it cleanly too**, for the same reason and with
-       a worse consequence. When the stall timer fires, `sseChunks` cancels the
-       reader; if that cancel wins the race against the pending read's rejection,
-       the loop exits with no error at all — and the check immediately below then
-       files a 45-second silence as "the answer stopped arriving before it was
-       finished". Both sentences end in "try again", so the reader never notices;
-       what is lost is the log line, which says `ended without finishing` instead
-       of `stalled: true`, and that is the line somebody reads when chat starts
-       failing and they want to know whether to blame the network or the provider.
+    switch (outcome.kind) {
+      case "abandoned":
+        /* **The reader left**, however this round's loop happened to end.
 
-       explain.ts has had this guard since it became a stream (62a5d85) and this
-       file did not, which is worth being exact about: it was not missed. The plan
-       behind that commit wrote it down —
-       *"`src/converse.ts` has the same shape, guarded only for the reader's
-       signal"* (docs/plans/260826l-explain-deeper-answers.md § 2) — and then nothing
-       tracked it, for four months. A known gap with nowhere to live is a gap that
-       stays open, which is the argument for
-       docs/plans/260826m-simplification-audit.md § 3.4: one transport both callers share,
-       rather than two copies of an invariant and a note in a plan. Full account:
-       docs/postmortems/260826e-converse-stall-misfiled-as-incomplete.md. */
-    if (!stopped && (deadline.aborted || stall.signal.aborted)) {
-      line.error(
-        {
-          ...turnSoFar(),
-          model: used,
-          ms: since(started),
-          timedOut: deadline.aborted,
-          stalled: stall.signal.aborted,
-        },
-        `stream from ${used} was cut off`,
-      );
-      throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
-    }
+           An abort does not always throw. It does under Node's own fetch — the
+           pending `read()` rejects with the abort reason — but `onAbort` in
+           `sseChunks` also calls `reader.cancel()`, and cancelling a reader
+           makes a pending read resolve `{ done: true }`, so an implementation
+           where the cancel wins the race exits the loop **cleanly**. That path
+           used to set a flag and say nothing while the throwing path logged from
+           the `catch`: one event, two paths, one of them mute. Both arrive here
+           now, so they cannot come to say different things about it — the same
+           unification explain.ts and search.ts made.
 
-    /* **The stream stopped; did it finish?**
+           A stop is not a failure, so it is `info`, it does not throw, and the
+           guards below step aside for it. tests/converse-stop.test.ts is the
+           whole file about that promise. */
+        stopped = true;
+        line.info(
+          {
+            ...turnSoFar(),
+            model: used,
+            ms: since(started),
+            chars: text.length,
+          },
+          answered
+            ? `reader stopped the answer from ${used}`
+            : `reader stopped before ${model} replied to round ${rounds}`,
+        );
+        break;
 
-       `[DONE]` is the only clean end an SSE response has, and without this check
-       an ordinary EOF looked exactly like one: a connection cut two paragraphs in
-       was committed as a complete answer, `status: "done"`, with no error
-       anywhere. The reader gets half an explanation that never says it is half.
-       Found by a GPT-5.6 review, 2026-08-26.
+      case "timed-out":
+      case "went-quiet":
+        /* **Our own clocks, which can end the stream cleanly too** — the same
+           race as above, with a worse consequence. When the stall timer fires,
+           `sseChunks` cancels the reader; if that cancel wins, the loop exits
+           with no error at all, and a 45-second silence was then filed as "the
+           answer stopped arriving before it was finished". Both sentences end in
+           "try again", so the reader never notices; what is lost is the log
+           line, which said `ended without finishing` instead of `stalled: true`
+           — the line somebody reads when chat starts failing and they want to
+           know whether to blame the network or the provider.
+           docs/postmortems/260826e-converse-stall-misfiled-as-incomplete.md. */
+        line.error(
+          {
+            ...turnSoFar(),
+            model: used,
+            ms: since(started),
+            timedOut: deadline.aborted,
+            stalled: stall.signal.aborted,
+          },
+          `stream from ${used} was cut off`,
+        );
+        throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
 
-       `finish_reason` is accepted as a second witness because it is the model
-       saying it stopped on purpose — a provider that omits the terminator but
-       reports a reason has still told us the answer is whole. Requiring both
-       would turn a working provider into a permanent failure; requiring neither
-       is what produced the bug. */
-    if (!stopped && !end.terminated && finishReason === null) {
-      line.error(
-        { ...turnSoFar(), model: used, ms: since(started) },
-        `stream from ${used} ended without finishing`,
-      );
-      throw new Error(ENDED_UNFINISHED.message);
+      case "provider-failed":
+        /* **The same failure as the `chunk.error` throw in the loop above,
+           arriving in a field instead of as data** — so the same sentence,
+           deliberately. This is the one behaviour this migration changed: the
+           field form reached the old conjunction, where a non-null reason could
+           only make it less likely to fire, so a provider that said it had
+           errored had its half-answer yielded as a `done`. Nothing is lost by
+           throwing — src/routes.ts stores whatever text arrived and marks the
+           row `error`, so the reader keeps the half-answer *and* is told it is
+           not a whole one. */
+        line.error(
+          {
+            ...turnSoFar(),
+            model: used,
+            ms: since(started),
+            finishReason: plainReason(end.finishReason ?? null),
+          },
+          `the provider gave up mid-answer from ${used}`,
+        );
+        throw providerFailedMidAnswer();
+
+      case "unterminated":
+        /* **The stream stopped and nothing says why.** `[DONE]` is the only
+           clean end an SSE response has, and without this an ordinary EOF looked
+           exactly like one: a connection cut two paragraphs in was committed as
+           a complete answer, `status: "done"`, with no error anywhere. The one
+           case the guard this replaces could actually catch. Found by a GPT-5.6
+           review, 2026-08-26. */
+        line.error(
+          { ...turnSoFar(), model: used, ms: since(started) },
+          `stream from ${used} ended without finishing`,
+        );
+        throw new Error(ENDED_UNFINISHED.message);
+
+      case "truncated":
+        /* **Kept and flagged, never thrown away.** Chat is the caller that
+           differs here, and the reason is the reader: they have watched these
+           words arrive, so refusing the answer takes back paragraphs they have
+           already read to tell them to try again. quiz-mark refuses the same
+           ending because a `done` there ticks a question off.
+
+           **Nothing to set here.** `record.ended` above already says this round
+           ran out of room, and `record.prose` says whether it wrote anything;
+           the turn's flag is computed from those after the loop, where you can
+           see it being computed. This case used to set two turn-scoped flags,
+           which is a smaller version of the mistake the fold exists to fix. */
+        break;
+
+      case "filtered":
+        /* Stored as an ordinary answer. **A product decision, not an agent's**:
+           a `ConverseEvent` has nowhere to say "the provider stopped itself",
+           and what a reader is shown when that happens is Greg's call. Written
+           as a case with a comment rather than left as an absence, so the next
+           reader finds a decision instead of an omission. */
+        break;
+
+      case "wants-tools":
+        /* The main path of this loop, not an ending: the round below gathers
+           what the model asked for and either runs it or says why it cannot. */
+        break;
+
+      case "unknown-finish-reason":
+        /* Accepted as a clean stop, on the deny-list reasoning quiz-mark spells
+           out: a gateway spelling `stop` as `end_turn` would otherwise fail
+           every turn it serves, throwing away complete answers people have
+           already read. The reason reaches the log line at the end. */
+        break;
+
+      case "finished":
+        break;
+
+      default: {
+        /* The point of the union. A tenth way for a stream to end becomes a
+           compile error here rather than a branch somebody forgot. */
+        const never: never = outcome;
+        throw new Error(`unhandled stream outcome: ${JSON.stringify(never)}`);
+      }
     }
 
 
@@ -1867,15 +2125,17 @@ export async function* converse({
        "finished without saying anything at all" — which is the wrong sentence
        for the third time. Found by a GPT Sol review, 2026-08-26.
 
-       **`!stopped` for the same reason every guard above it has one.** A reader
-       who presses stop mid-stream lands in the catch above, which sets the flag
-       and falls through here rather than throwing — and the fragments they
-       interrupted are, by definition, unassembled. So a stop that happened to
-       land while a tool call was arriving was filed as "the request arrived
-       garbled": a failure, a red row, and an apology, for a button they had just
-       pressed. Exactly the bug `saidNothing`'s own stop branch exists to
-       prevent, in the guard next door. Found by a GPT Sol review, 2026-08-27. */
-    if (!stopped && finishReason === "tool_calls" && wanted.length === 0) {
+       **It reads the round's outcome rather than a `finish_reason` string**,
+       which also retires the `!stopped` it used to carry. A reader who presses
+       stop mid-stream interrupts the fragments by definition, so a stop that
+       landed while a tool call was arriving used to be filed as "the request
+       arrived garbled": a failure, a red row, and an apology, for a button they
+       had just pressed. Nothing about that changes — such a round classifies as
+       `abandoned`, not `wants-tools`, so this guard steps aside for exactly the
+       reason it always did, with the union saying so instead of a flag.
+       tests/converse-stop.test.ts § "does not call a stop a garbled tool call"
+       pins it. Found by a GPT Sol review, 2026-08-27. */
+    if (outcome.kind === "wants-tools" && wanted.length === 0) {
       line.error(
         { ...turnSoFar(), model: used, ms: since(started), fragments: calls.size },
         `${used} asked for tools but no call could be reassembled`,
@@ -2049,6 +2309,19 @@ export async function* converse({
       break;
     }
   }
+  /**
+   * **Everything below this line is about the turn, so everything below this
+   * line reads `roundLog`** — never `end`, `roundText` or `calls`, each of which
+   * holds whatever the last round left in it and reads like the turn's answer.
+   * That confusion has cost this file three bugs;
+   * docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md has
+   * them and why the array is the fix.
+   */
+  const lastRound = roundLog.at(-1);
+  /* The **last round's** reason, said out loud rather than arrived at by
+     leftover assignment — it is what `saidNothing` and the log lines below
+     report on, and it is deliberately not the turn's. */
+  const finishReason = lastRound?.finishReason ?? null;
   const answer = text.trim();
   /* Nothing arrived. Which is two completely different events wearing one
      condition, and the branch is what keeps them apart.
@@ -2073,10 +2346,33 @@ export async function* converse({
     throw new Error(saidNothing(finishReason).message);
   }
 
-  /* `length` means `max_tokens` cut the answer off. A round that ended in
-     `tool_calls` is not this: that one is the model deliberately yielding, and
-     it never reaches here without going round again. */
-  const truncated = !stopped && finishReason === "length" && text.trim() !== "";
+  /* **`max_tokens` cut the answer off.** A round that ended in `tool_calls` is
+     not this: that one is the model deliberately yielding, and it never reaches
+     here without going round again.
+
+     **A fold over the rounds, written out as one.** `truncated` is a *failure*
+     in the panel with a retry offered — "This answer ran out of room and stopped
+     mid-sentence" (src/web/ChatPanel.tsx, src/types.ts § `truncated`) — and
+     until 2026-09-05 it read only the last round's reason. A round cut off at
+     `max_tokens` mid-sentence has its partial tool calls reassembled anyway
+     (`wanted` needs only an id and a name), so the turn went round again and the
+     next round overwrote the reason: the reader was shown a sentence that stops
+     halfway and the flag said it had not.
+
+     Two disjuncts rather than one. The first is the old reading unchanged, so
+     this is **strictly additive** — it can turn a `false` into a `true` and
+     never the other way. The second catches the round that went round again, and
+     is guarded on **that round's own prose**, because a round cut off inside its
+     tool arguments having written nothing left nothing mid-sentence in the
+     stored answer and the panel would be apologising for a whole one. Both are
+     under `!stopped`, because a reader's stop must not also be reported as our
+     failure. GPT Sol's finding F2;
+     docs/postmortems/260905i-the-round-variable-read-as-the-turns-answer.md. */
+  const truncated =
+    !stopped &&
+    answer !== "" &&
+    (lastRound?.ended === "truncated" ||
+      roundLog.some((r) => r.ended === "truncated" && r.prose));
 
   const known = idsOf(blocks);
   const unknownIds = unknownCitedIds(answer, known);
@@ -2110,6 +2406,11 @@ export async function* converse({
         ms: since(started),
         tooShortToCache,
         searches,
+        /* Says *why* `searches` is what it is. `neither` means usage arrived
+           carrying neither spelling of the field, which is what a third rename
+           by OpenRouter looks like from here and is indistinguishable, in the
+           number alone, from a model that was sure. */
+        searchesFrom,
         citations: citations.size,
         /* **The number that says the feature is still the feature.**
            `unknownIds` was meant to expose prompt drift and does not expose the

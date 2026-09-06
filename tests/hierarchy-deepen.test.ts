@@ -62,6 +62,7 @@ import {
   DEEPEN_NAMESPACE,
   canonicalExpansionRequest,
   expansionBodyHash,
+  freeAnswer,
   frozenSeed,
   readExpansion,
   runExpansionWave,
@@ -260,7 +261,11 @@ async function runWave(opts: {
   return runExpansionWave({
     slug: SLUG,
     checkpoints: opts.checkpoints,
-    execute: opts.execute,
+    /* The fakes here answer with a string, because none of these tests is about
+       what a call cost; `freeAnswer` is the adapter and every one of them
+       therefore reports `NO_EXPANSION_USAGE`. The tokens have a file of their
+       own — tests/hierarchy-deepen-tokens.test.ts. */
+    execute: async (request) => freeAnswer(await opts.execute(request)),
     batches: opts.batches,
     ancestorsOf,
     blocks: opts.blocks ?? BLOCKS,
@@ -755,27 +760,49 @@ describe("runExpansionWave", () => {
     const checkpoints = memoryCheckpoints(ARTICLE);
     const batches = plan([TARGETS[0]!], ONE_PER_CALL);
     let draw = 0;
-    await expect(
-      runWave({
-        checkpoints,
-        batches,
-        execute: async () => {
-          draw++;
-          return "{ this was never JSON";
-        },
-      }),
-    ).rejects.toThrow(/expansion/i);
+    const refused = await runWave({
+      checkpoints,
+      batches,
+      execute: async () => {
+        draw++;
+        return "{ this was never JSON";
+      },
+    });
     expect(draw).toBe(MAX_EXPANSION_REDRAWS + 1);
     expect(checkpoints.calls.writes, "a refused answer was checkpointed").toBe(0);
     expect(checkpoints.entries.size).toBe(0);
+    /* **And it no longer takes the wave down with it.** Until 2026-09-05 this
+       rejected, and one target the model would not split cost every peer that
+       had already been paid for — thirteen calls and $2.73 on the first paid
+       run. The refusal is now the *target's* failure: recorded, left as wave 1
+       made it, wave published without it. `RefusedCall`. */
+    expect(refused.refused).toHaveLength(1);
+    expect(refused.refused[0]?.reason).toBe("malformed-answer");
+    expect(refused.refused[0]?.draws).toBe(MAX_EXPANSION_REDRAWS + 1);
   });
 
-  it("carries the refusal's own class out, so the retry policy still sees it", async () => {
+  /**
+   * **The refusal's own class and reason still reach the caller**, now under
+   * `cause`.
+   *
+   * The wave wraps what killed it in an `ExpansionWaveFailed` since 2026-09-05,
+   * because everything the wave's *paid peers* had already bought used to leave
+   * with the throw — their rows, their verdicts, the tokens and the gate — and
+   * stage 5b is a run whose failure has to be readable. ⟨GPT Sol's second review
+   * of stage 5a, finding 5.⟩ What must not be lost in that is the reason: a
+   * `malformed-answer` and an account with no credit are different facts and one
+   * of them is a bug in this repo.
+   */
+  it("carries the refusal's own reason out on the refused call", async () => {
     const checkpoints = memoryCheckpoints(ARTICLE);
     const batches = plan([TARGETS[0]!], ONE_PER_CALL);
-    await expect(
-      runWave({ checkpoints, batches, execute: async () => "{ never JSON" }),
-    ).rejects.toMatchObject({ name: "ExpansionRefused", reason: "malformed-answer" });
+    const wave = await runWave({ checkpoints, batches, execute: async () => "{ never JSON" });
+    expect(wave.refused[0]).toMatchObject({ reason: "malformed-answer" });
+    /* **A malformed answer is not the same fact as a considered refusal**, and
+       the shape is what tells them apart — the datum the old path destroyed.
+       Nothing could be read out of this one, so it says so rather than
+       reporting an empty answer. */
+    expect(wave.refused[0]?.shape.sections, "unreadable and empty must not look alike").toBeNull();
   });
 
   it("does not redraw an executor that threw", async () => {
@@ -859,12 +886,54 @@ describe("readExpansion", () => {
       expect(read.children).toHaveLength(2);
       /* The first child is pinned to its parent's start and the last ends at
          its parent's end: the children tile the parent by construction. */
-      expect(read.children[0]!.range[0]).toBe(TARGETS[i]!.node.range[0]);
-      expect(read.children[1]!.range[1]).toBe(TARGETS[i]!.node.range[1]);
-      /* The verdicts survive the read, on the proposals rather than on the kept
-         children — see `ExpandedTarget.proposed`. */
-      expect(read.proposed.map((c) => c.verdict)).toEqual(["finished", "needs-deeper"]);
+      expect(read.children[0]!.node.range[0]).toBe(TARGETS[i]!.node.range[0]);
+      expect(read.children[1]!.node.range[1]).toBe(TARGETS[i]!.node.range[1]);
+      /* **The verdict arrives on the child it was said about**, which it did
+         not until 2026-09-05: the answer's children and the kept ones were two
+         arrays of different lengths, and stage 6's recursion is governed by
+         exactly this pairing. `ExpandedTarget.children`. */
+      expect(read.children.map((c) => c.proposed.verdict)).toEqual([
+        "finished",
+        "needs-deeper",
+      ]);
     }
+  });
+
+  /**
+   * **The case the pairing exists for**: a proposal that loses a child on the
+   * way through.
+   *
+   * Four starts, the third of which marks no split point and is dropped, and the
+   * verdicts alternate — so a wave reading verdicts off the *answer* by position
+   * would give child 3's verdict to child 4 and be wrong about which section of
+   * the article wants another level. Two arrays cannot express the right answer
+   * here; one array of pairs cannot express the wrong one.
+   */
+  it("keeps each surviving child's own verdict when one of them is dropped", () => {
+    const batches = plan([target(FIRST)], ONE_PER_CALL);
+    const verdicts = ["needs-deeper", "finished", "needs-deeper", "finished"] as const;
+    const raw = JSON.stringify({
+      sections: [
+        {
+          section: 1,
+          children: [0, 5, 5, 15].map((at, k) => ({
+            start: blockId(at),
+            title: `Part ${k + 1}`,
+            gist: `Part ${k + 1} makes its own claim.`,
+            verdict: verdicts[k],
+          })),
+        },
+      ],
+    });
+    const reading = readExpansion({ raw, targets: batches[0]!.targets, blocks: BLOCKS });
+    expect(reading.report.droppedChildren).toEqual(["root > child 1 > child 3"]);
+    const read = reading.targets[0]!;
+    expect(read.children.map((c) => c.node.title)).toEqual(["Part 1", "Part 2", "Part 4"]);
+    expect(read.children.map((c) => c.proposed.verdict)).toEqual([
+      "needs-deeper",
+      "finished",
+      "finished",
+    ]);
   });
 
   it("refuses an answer that covers three targets when two were asked about", () => {

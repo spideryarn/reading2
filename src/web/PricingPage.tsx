@@ -643,8 +643,8 @@ function PlansForAReader() {
           <p className="tw:mt-4 tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight">
             <TriangleAlert size={12} /> Couldn't read your plan — {billing.error}{" "}
             {/* **Not `className="linky"`, which styles nothing here.** That class
-                is scoped in styles.css to `.controls`, `.cmt-dialog` and
-                `.chat-dialog` ancestors, and this page is in none of them, so the
+                is scoped in styles.css to `.cmt-dialog`, `.chat-dialog` and
+                `.annotate-dialog` ancestors, and this page is in none of them, so the
                 button arrived as bare text with nothing to mark it pressable —
                 which is worse here than anywhere, because this sentence is the
                 only way back from a failed billing read. Copied from

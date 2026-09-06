@@ -1,5 +1,19 @@
 /**
- * **The two stores must answer identically about Referee mode.**
+ * **What the Postgres store answers about Referee mode.**
+ *
+ * **Was a parity suite until 2026-09-05**, when the filesystem store was
+ * deleted and one of its two arms went with it
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * The fixture, the scripts and the steps are unchanged; what went is every
+ * `expect(fromPg).toEqual(fromFiles)`. What is left is everything that was ever
+ * a claim about Postgres on its own — which is most of the value, because this
+ * file was written after a one-sided store shipped and the assertions that
+ * would have caught it are literals rather than comparisons. Two of them have
+ * no second home anywhere: the `clampConfidence` trap (a valence of −80 beside
+ * a confidence of 55, below) and the only guard on `CLAIMS_ORPHAN_GRACE_MS`
+ * outside `tests/store-pg-referee-claims.test.ts`.
+ *
+ * The reason it was written, which is why the file still opens with it:
  *
  * `tests/store-parity.test.ts` says of itself that it is *"the test the whole
  * migration rests on"*, and it contains the string `referee` zero times. Criteria
@@ -16,51 +30,40 @@
  *
  * A **new file** rather than an edit to `store-parity.test.ts`, which carries
  * another session's in-flight work and takes the corpus lock. Nothing here takes
- * that lock: the fixture is two paragraphs written into both stores directly.
+ * that lock: the fixture is two paragraphs written into the store directly.
  *
- * ## It compares the API-shaped result, not SQL rows
+ * ## It asserts the API-shaped result, not SQL rows
  *
  * The discipline is `store-parity.test.ts`'s and the reason is its: a row-level
- * comparison passes happily while the thing the client receives has changed
- * shape, and the client is the only thing that matters. So every comparison
- * below goes through `wire()` — `JSON.parse(JSON.stringify(…))`, exactly what
+ * assertion passes happily while the thing the client receives has changed
+ * shape, and the client is the only thing that matters. So the reads below go
+ * through `wire()` — `JSON.parse(JSON.stringify(…))`, exactly what
  * `src/routes.ts` sends — and never through a `select`. The one place this file
  * does touch SQL is the fixture, and a fixture is not an assertion.
  *
- * What serialising buys and does not buy is written out at length in
- * `store-parity.test.ts` § *What serialising does and does not buy*, and none of
- * it changes here. The short version: `toEqual` separates `{error: null}` from
- * `{}` on its own, which is the near-miss these two stores are most prone to —
- * Postgres hands back `null` where the file simply had no key, and both adapters
- * spread conditionally to avoid it.
+ * ## The script walks, and asserts at the steps that can break
  *
- * ## The comparison is step by step, not end to end
+ * These are **writes**, so a single end-state check would miss anything that
+ * goes wrong and is then overwritten — a retry that keeps the failed attempt's
+ * results is invisible by the time the next answer lands. The walk was compared
+ * step by step against a second store; with one store it asserts at each step
+ * whose comment names what that step can break, which is what the comparison
+ * was really holding down.
  *
- * `store-reader-state-parity.test.ts` § the header has the argument and it is
- * the same one: these are **writes**, so a single end-state comparison would
- * miss anything that goes wrong and is then overwritten. A retry that keeps the
- * failed attempt's results is invisible by the time the next answer lands.
+ * ## Two behaviours this store has that the other one did not
  *
- * ## What the two stores genuinely disagree about
+ * Both were "what the two stores genuinely disagree about" until the other one
+ * went, and both still have a test of their own here:
  *
- * Two things, both real, both asserted **positively** in their own tests rather
- * than normalised away — the rule `store-parity.test.ts` keeps:
- *
- * 1. **A slug that is not an article at all.** The filesystem answers `[]` and
- *    `null`; Postgres throws a tagged 404 from `ownedSlug`, because a slug is
- *    globally unique and the row it would otherwise find belongs to a stranger.
- * 2. **A young abandoned claims run.** The filesystem store sweeps it the
- *    instant anybody looks; Postgres leaves it alone for `CLAIMS_ORPHAN_GRACE_MS`,
- *    because on Vercel the process that is streaming the answer is a different
- *    process from the one being asked. `RefereeClaimsStore.sweep` in
- *    src/store/contracts.ts holds that decision.
- *
- * Difference 2 is why the claims script is driven from a clock in the past
- * (`staleStart`) rather than from the fixed one the criteria script uses. That
- * is **not** an exclusion: both stores are handed the same timestamp, both
- * consider the run abandoned, and every field of the swept run is then compared
- * as usual. The *young* case is asserted in its own test, so the past clock
- * cannot quietly hide a divergence nobody looked at.
+ * 1. **A slug that is not an article at all** throws a tagged 404 from
+ *    `ownedSlug`, because a slug is globally unique and the row it would
+ *    otherwise find belongs to a stranger.
+ * 2. **A young abandoned claims run** is left alone for
+ *    `CLAIMS_ORPHAN_GRACE_MS`, because on Vercel the process that is streaming
+ *    the answer is a different process from the one being asked.
+ *    `RefereeClaimsStore.sweep` in src/store/contracts.ts holds that decision,
+ *    and `staleStart` below is how a run old enough to sweep is produced
+ *    without reaching behind the store's back.
  *
  * ## Skips loudly when there is no database
  *
@@ -70,9 +73,6 @@
  * docs/project/testing.md § When a skip is not acceptable.
  */
 
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -81,12 +81,12 @@ import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import type { ClaimsRun } from "../src/referee-claims.js";
-import { CLAIMS_SWEPT } from "../src/referee-claims-store.js";
+import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
 import type { DivergingResult, SingleResult } from "../src/referee-criteria.js";
 import type { Comment } from "../src/types.js";
 import { CRITERION_SWEPT } from "../src/referee-criteria-store.js";
+import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { CommentStore, RefereeClaimsStore, RefereeCriteriaStore } from "../src/store/contracts.js";
-import { fsCommentStore, fsRefereeClaimsStore, fsRefereeCriteriaStore } from "../src/store/fs.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
   pgRefereeClaimsStore,
@@ -97,7 +97,6 @@ import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-const ROOT = path.resolve(import.meta.dirname, "..");
 const SLUG = "test-referee-parity";
 const ARTICLE_ID = "00000000-0000-4000-8000-00000000af10";
 const REVISION_ID = "00000000-0000-4000-8000-00000000af11";
@@ -105,13 +104,11 @@ const REVISION_ID = "00000000-0000-4000-8000-00000000af11";
 /** A slug no article has, in either store — see difference 1 in the header. */
 const ABSENT = "test-referee-parity-no-such-article";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-parity-referee.test.ts",
   tables: ["spideryarn.referee_criteria", "spideryarn.referee_claims"],
   max: 2,
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * Replace every minted id with `#n`, numbered by first appearance —
@@ -194,24 +191,7 @@ function staleStart(): number {
 }
 
 /**
- * Compare two runs of the same script, step by step.
- *
- * Step by step rather than as one array, so the failure names the step that
- * diverged instead of printing two long snapshots and leaving the reader to
- * diff them.
- */
-function compare(fromFiles: unknown[], fromPg: unknown[], what: string): void {
-  expect(fromPg, `${what}: the two stores produced different numbers of steps`).toHaveLength(
-    fromFiles.length,
-  );
-  for (const [i, step] of fromFiles.entries()) {
-    const label = (step as { label: string }).label;
-    expect(wire(fromPg[i]), `${what} parity diverged at: ${label}`).toEqual(wire(step));
-  }
-}
-
-/**
- * The two paragraphs both stores are made to agree about.
+ * The two paragraphs the fixture is made of.
  *
  * Ids from the real alphabet — `abcdefghjkmnpqrstuvwxyz023456789`, no `i`, `l`,
  * `o` or `1`. An invalid one is not rejected; the store quietly mints its own,
@@ -240,20 +220,13 @@ const BLOCKS = [
 
 const [FIRST_BLOCK, SECOND_BLOCK] = BLOCKS;
 
-when("the filesystem and Postgres stores agree about Referee mode", { timeout: 30_000 }, () => {
+describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
   /**
-   * **A real article on BOTH sides**, which is the whole point of the fixture.
-   *
-   * `store-reader-state-parity.test.ts` records what happens without it: an
-   * article that exists in Postgres and not on disk is two different situations
-   * being compared, and `sourceHash` is the first field to notice — the
-   * filesystem's `currentSourceHash` falls through to `example/` for a slug with
-   * no directory, and Postgres has no fixture fallback. Neither store was wrong.
-   * The fixture was.
-   *
-   * The alternative was excluding `sourceHash` from the comparison, which
-   * removes the divergence by removing the check. It is the field the whole
-   * staleness banner rests on, so it is made testable instead.
+   * **A real article with real blocks**, which is the whole point of the
+   * fixture: `sourceHash` is the field the whole staleness banner rests on, and
+   * a store handed an article with no published revision has nothing to hash.
+   * The alternative was excluding `sourceHash`, which removes the problem by
+   * removing the check.
    */
   beforeEach(async () => {
     const db = getDb();
@@ -291,66 +264,31 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
       .update(articles)
       .set({ currentRevisionId: REVISION_ID })
       .where(eq(articles.id, ARTICLE_ID));
-
-    const dir = path.join(ROOT, "data", SLUG);
-    await rm(dir, { recursive: true, force: true });
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: BLOCKS }), "utf8");
-    /* `tree.json` too: `hashDir` in src/searches.ts requires it before it will
-       hash a directory, for the same reason `articleDir` does — a half-finished
-       ingest must not be fingerprinted while the reader is shown the fixture. */
-    await writeFile(
-      path.join(dir, "tree.json"),
-      JSON.stringify({ rootId: FIRST_BLOCK.id, nodes: {} }),
-      "utf8",
-    );
   });
 
   afterAll(async () => {
     await getDb().delete(articles).where(eq(articles.slug, SLUG));
     await closeDb();
-    await rm(path.join(ROOT, "data", SLUG), { recursive: true, force: true });
   });
-
-  /**
-   * Throw away what the filesystem script wrote, and leave the article alone.
-   *
-   * Only the two state files, not the directory: `blocks.json` and `tree.json`
-   * are the fixture, and deleting them would leave the Postgres half comparing
-   * against an article the filesystem no longer has.
-   */
-  async function forgetFiles(): Promise<void> {
-    const dir = path.join(ROOT, "data", SLUG);
-    await rm(path.join(dir, "referee-criteria.json"), { force: true });
-    await rm(path.join(dir, "referee-claims.json"), { force: true });
-    // The comments too, since a placement is a comment — see the placement
-    // script below. Without this the Postgres half would compare against an
-    // article the filesystem still has a comment on.
-    await rm(path.join(dir, "comments.json"), { force: true });
-  }
 
   /* ------------------------------------------------------------ the fixture -- */
 
-  it("puts the same two paragraphs in both stores", async () => {
-    /* **The alarm on everything below.** Every parity assertion in this file
-       would also pass if both stores answered "I have never heard of this
-       article" — `[]` equals `[]` and `null` equals `null`. This is the one
-       test that says the fixture is really there, on both sides, and that the
-       two stores compute the *same* fingerprint of it.
+  it("has two paragraphs in it, and the two stores fingerprint them the same way", async () => {
+    /* **The alarm on everything below.** Every assertion in this file about an
+       empty list would also pass if the store answered "I have never heard of
+       this article" — `[]` equals `[]` and `null` equals `null`. This is the
+       test that says the fixture is really there.
 
-       Equal to each other AND a real hash: `currentSourceHash` answers
-       `undefined` for an article it cannot read, and two `undefined`s are equal. */
-    const fromFiles = await fsRefereeCriteriaStore.sourceHash(SLUG);
-    const fromPg = await pgRefereeCriteriaStore.sourceHash(SLUG);
-    expect(fromFiles).toMatch(/^[0-9a-f]{8,}$/);
-    expect(fromPg).toBe(fromFiles);
-    // And the claims store computes it the same way — since 2026-09-02 by
-    // literally the same function, `sourceHashFor` in src/store/pg.ts. It was
-    // a third private copy of the query when this line was written, which is
-    // exactly how a fingerprint drifts; the assertion is still worth keeping,
-    // because "they share a function today" is not what this is checking.
-    expect(await fsRefereeClaimsStore.sourceHash(SLUG)).toBe(fromFiles);
-    expect(await pgRefereeClaimsStore.sourceHash(SLUG)).toBe(fromFiles);
+       A real hash, not just a matching one: `sourceHash` answers `undefined`
+       for an article it cannot read, and two `undefined`s are equal. */
+    const fromCriteria = await pgRefereeCriteriaStore.sourceHash(SLUG);
+    expect(fromCriteria).toMatch(/^[0-9a-f]{8,}$/);
+    /* And the claims store computes it the same way — since 2026-09-02 by
+       literally the same function, `sourceHashFor` in src/store/pg.ts. It was
+       a third private copy of the query when this line was written, which is
+       exactly how a fingerprint drifts; the assertion is still worth keeping,
+       because "they share a function today" is not what this is checking. */
+    expect(await pgRefereeClaimsStore.sourceHash(SLUG)).toBe(fromCriteria);
   });
 
   /* ------------------------------------------------------------- criteria -- */
@@ -489,19 +427,75 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
   }
 
   it("walks a criterion through begin, finish, fail, retry, recolour, sweep and delete", async () => {
-    const fromFiles = await criteriaScript(fsRefereeCriteriaStore);
-    await forgetFiles();
-    const fromPg = await criteriaScript(pgRefereeCriteriaStore);
-    compare(fromFiles, fromPg, "criteria");
+    /* **Was a step-by-step comparison against the filesystem store.** With one
+       store the walk is the same and the assertions are the script's own
+       comments made explicit — each one at the step whose comment names what it
+       can break. A walk that only checks it does not throw is not a test.
+       `steps` is indexed by the order `take` pushed them. */
+    const steps = (await criteriaScript(pgRefereeCriteriaStore)) as {
+      label: string;
+      returned: unknown;
+      criteria: SavedCriterion[];
+    }[];
+    const at = (i: number) => steps[i]?.criteria ?? [];
+    const byId = (i: number, id: string) => at(i).find((c) => c.id === id);
+
+    expect(at(0), "something was already there before the script began").toEqual([]);
+
+    // The second `begin` must not disturb the first.
+    expect(byId(3, "spya-crta22")?.status, "the second begin disturbed the first").toBe("done");
+
+    /* The retry: the same row reset, not a second one minted, with the failed
+       attempt's `error` cleared rather than left underneath — and the **new**
+       poles adopted, because a reset adopts the new config. */
+    const retried = byId(5, "spya-crtb22");
+    expect(at(5), "the retry minted a row instead of resetting one").toHaveLength(2);
+    expect(retried?.status).toBe("pending");
+    expect("error" in (retried ?? {}), "the retry left the failed attempt's error").toBe(false);
+    expect(retried?.config).toMatchObject({
+      poles: { favour: "the evidence is overwhelming" },
+      scale: "br",
+    });
+
+    /* **The negative valence**, and the step that matters most: −100 is the
+       `against` pole and 0 is a real answer meaning neither, so a store that
+       clamped or routed the number through a confidence field would show the
+       referee the opposite of what the model said. */
+    const answered = byId(6, "spya-crtb22")?.results[0];
+    expect(answered?.kind).toBe("diverging");
+    if (answered?.kind === "diverging") {
+      expect(answered.valence, "the retry's answer lost the sign").toBe(-80);
+      expect(answered.confidence, "the valence travelled through confidence").toBe(90);
+    }
+
+    // A colour is a property of the question, not of the attempt; and `null`
+    // must leave the key ABSENT, because slot 0 is a real colour.
+    expect(byId(7, "spya-crta22")?.colour).toBe(3);
+    expect("colour" in (byId(8, "spya-crta22") ?? {}), "auto left a colour behind").toBe(false);
+    // An id nothing has: a no-op, not a throw, and it changes nothing.
+    expect(at(9), "recolouring an unknown id changed the list").toHaveLength(2);
+
+    /* The sweep turns the abandoned row into something a referee can act on,
+       and leaves the one it was told to keep alone. */
+    expect(byId(11, "spya-crtc22")?.status, "the abandoned row was not swept").toBe("error");
+    expect(byId(11, "spya-crta22")?.status, "the swept run took a kept row with it").toBe("done");
+
+    // Delete, then delete again: the second is a no-op that still answers.
+    expect(at(12).map((c) => c.id)).not.toContain("spya-crta22");
+    expect(at(13)).toEqual(at(12));
   });
 
-  it("keeps a negative valence signed, in both stores, byte for byte", async () => {
-    /* The script above already compares this inside a whole-row snapshot. This
-       test exists because that failure would read as "criteria parity diverged
-       at: finish the retry with a negative valence" and leave the reader to find
-       the sign in two long objects. Here the number is the assertion, and each
-       store is checked against the literal rather than only against the other —
-       two stores that both clamped to 0 would agree perfectly. */
+  it("keeps a negative valence signed, byte for byte", async () => {
+    /* The walk above already reaches this inside a whole-row snapshot. This test
+       exists because that failure would read as "the retry's answer lost the
+       sign" among ten other assertions; here the number is the whole test.
+
+       **Confidence 55 beside valence −80 is the trap, and this is the only
+       place in the tree that holds it.** `clampConfidence` turns −80 into 0
+       silently, so a valence routed through anything confidence-shaped arrives
+       as "counts neither way" — the opposite of what the model said, with
+       nothing red. Both numbers are asserted, because either one alone passes
+       against the bug. */
     const script = async (store: RefereeCriteriaStore) => {
       const now = clock();
       const begun = await store.begin(
@@ -525,62 +519,36 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
       return row;
     };
 
-    const fromFiles = await script(fsRefereeCriteriaStore);
-    await forgetFiles();
-    const fromPg = await script(pgRefereeCriteriaStore);
+    const row = await script(pgRefereeCriteriaStore);
 
-    for (const [name, row] of [
-      ["files", fromFiles],
-      ["postgres", fromPg],
-    ] as const) {
-      const results = row?.results ?? [];
-      expect(results, `${name} stored no result at all`).toHaveLength(1);
-      const first = results[0] as DivergingResult;
-      expect(first.kind, `${name} lost the diverging kind`).toBe("diverging");
-      expect(first.valence, `${name} did not keep the valence signed`).toBe(-80);
-      // The confidence is the field a valence must never travel through:
-      // `clampConfidence` turns −80 into 0, silently.
-      expect(first.confidence, `${name} moved the valence into confidence`).toBe(55);
-    }
-    expect(wire(fromPg)).toEqual(wire(fromFiles));
+    const results = row?.results ?? [];
+    expect(results, "the store kept no result at all").toHaveLength(1);
+    const first = results[0] as DivergingResult;
+    expect(first.kind, "the diverging kind went").toBe("diverging");
+    expect(first.valence, "the valence is not signed").toBe(-80);
+    expect(first.confidence, "the valence moved into confidence").toBe(55);
+    // And it survives the wire, which is what the panel actually receives.
+    expect(wire(row)).toMatchObject({ results: [{ valence: -80, confidence: 55 }] });
   });
 
   /* ---------------------------------------------- the referee's own placement -- */
 
   /**
-   * A placement's whole life, driven through whichever pair of stores it is
-   * handed: made with the comment, changed, changed again across zero, cleared,
-   * and made a second time.
+   * A placement's whole life: made with the comment, changed, changed again
+   * across zero, cleared, and made a second time.
    *
-   * **The comment stores are in this file rather than in
-   * `store-comments.test.ts`**, which is a Postgres-only suite by its own
-   * header, because a placement is Referee mode and this is the file that
-   * compares Referee mode across the two stores. `patchMark` landed on
-   * 2026-09-01 with an implementation on each side, and the way this repo has
-   * twice shipped a one-sided store is by nobody writing the comparison.
+   * **The comment store is exercised in this file rather than in
+   * `store-comments.test.ts`** because a placement is Referee mode, and this is
+   * the file that watches Referee mode. `patchMark` landed on 2026-09-01 with
+   * an implementation on each side of a store seam, and the way this repo has
+   * twice shipped a one-sided store is by nobody writing the check.
    *
-   * ## Timestamps are dropped by name, and asserted separately
-   *
-   * `CommentStore` has **no clock seam** — `create` and `patchMark` take a slug,
-   * an id and a value, and each store reads its own clock — where
-   * `RefereeCriteriaStore.begin` takes a `now`. So `createdAt` and `updatedAt`
-   * cannot agree between two runs and are removed by name, exactly as `attempt`
-   * is above and for the same reason: letting `JSON.stringify` drop one side
-   * would compare "absent" against a real timestamp and pass by accident. What
-   * they must do is checked positively below, against each store, rather than
-   * normalised into agreement.
+   * `createdAt` and `updatedAt` used to be dropped by name from a comparison
+   * against a second store, because `CommentStore` has no clock seam. There is
+   * nothing to compare against now, and what they must do was always checked
+   * positively — in the test below, unchanged.
    */
-  function wireComment(value: unknown): unknown {
-    return normalise(
-      JSON.parse(
-        JSON.stringify(value, (key, v) =>
-          key === "createdAt" || key === "updatedAt" ? undefined : v,
-        ),
-      ),
-    );
-  }
-
-  /** The id both stores mint the placement's criterion under, so the two agree. */
+  /** The id the placement's criterion is minted under, named so it is stable. */
   const PLACED_ON = "spya-crtm22";
   const PLACED_COMMENT = "spya-cmtm22";
   const PLACED_QUOTE = "not pre-registered";
@@ -656,48 +624,34 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
   }
 
   it("walks a placement through create, two edits, a clear and a re-place", async () => {
-    const fromFiles = await placementScript(fsRefereeCriteriaStore, fsCommentStore);
-    await forgetFiles();
-    const fromPg = await placementScript(pgRefereeCriteriaStore, pgCommentStore);
+    /* **Against the literal**, which is what this test was really holding: two
+       stores that both clamped a negative to `0` would have agreed perfectly,
+       so the step-by-step comparison against the filesystem store said nothing
+       about the sign and these assertions said everything. The comparison went
+       on 2026-09-05; the assertions are unchanged. The step numbers are the
+       script's. */
+    const steps = await placementScript(pgRefereeCriteriaStore, pgCommentStore);
+    const at = (i: number) => (steps[i] as { comments: Comment[] }).comments[0];
 
-    expect(fromPg, "placement: the two stores produced different numbers of steps").toHaveLength(
-      fromFiles.length,
+    expect(at(1)?.valence, "the placement was not stored").toBe(-80);
+    expect(at(2)?.valence, "the placement did not change").toBe(50);
+    expect(at(3)?.valence, "the edited placement lost its sign").toBe(-70);
+    expect("valence" in (at(4) ?? {}), "a number was left behind after a clear").toBe(false);
+    expect("criterionId" in (at(4) ?? {}), "a criterion was left behind").toBe(false);
+    // Clearing a placement is not deleting a comment.
+    expect(at(4)?.body, "the reader's words went").toBe(
+      "no pre-registration is mentioned anywhere",
     );
-    for (const [i, step] of fromFiles.entries()) {
-      const label = (step as { label: string }).label;
-      expect(wireComment(fromPg[i]), `placement parity diverged at: ${label}`).toEqual(
-        wireComment(step),
-      );
-    }
+    expect(at(4)?.quote, "the passage went").toBe(PLACED_QUOTE);
+    expect(at(5)?.criterionId, "the passage was not re-placed").toBe(PLACED_ON);
+    expect("valence" in (at(5) ?? {}), "a number nobody chose was invented").toBe(false);
 
-    /* Each store against the literal as well as against the other — two stores
-       that both clamped a negative to `0` would agree perfectly, and the
-       comparison above would say nothing. The step numbers are the script's. */
-    for (const [name, steps] of [
-      ["files", fromFiles],
-      ["postgres", fromPg],
-    ] as const) {
-      const at = (i: number) => (steps[i] as { comments: Comment[] }).comments[0];
-      expect(at(1)?.valence, `${name} did not store the placement`).toBe(-80);
-      expect(at(2)?.valence, `${name} did not change the placement`).toBe(50);
-      expect(at(3)?.valence, `${name} did not keep the edited placement signed`).toBe(-70);
-      expect("valence" in (at(4) ?? {}), `${name} left a number behind after a clear`).toBe(false);
-      expect("criterionId" in (at(4) ?? {}), `${name} left a criterion behind`).toBe(false);
-      // Clearing a placement is not deleting a comment.
-      expect(at(4)?.body, `${name} lost the reader's words`).toBe(
-        "no pre-registration is mentioned anywhere",
-      );
-      expect(at(4)?.quote, `${name} lost the passage`).toBe(PLACED_QUOTE);
-      expect(at(5)?.criterionId, `${name} did not re-place the passage`).toBe(PLACED_ON);
-      expect("valence" in (at(5) ?? {}), `${name} invented a number nobody chose`).toBe(false);
-
-      /* The two fields `wireComment` drops, checked here instead: `createdAt` is
-         `create`'s alone and a patch may not move it, and `updatedAt` has to be
-         stamped or "when did this change" is unanswerable in both stores. */
-      expect(at(3)?.createdAt, `${name} moved createdAt on a patch`).toBe(at(1)?.createdAt);
-      expect(at(3)?.updatedAt, `${name} did not stamp updatedAt`).toBeTruthy();
-      expect(at(1)?.updatedAt, `${name} stamped updatedAt on a create`).toBeUndefined();
-    }
+    /* The two fields `wireComment` dropped, checked here as they always were:
+       `createdAt` is `create`'s alone and a patch may not move it, and
+       `updatedAt` has to be stamped or "when did this change" is unanswerable. */
+    expect(at(3)?.createdAt, "createdAt moved on a patch").toBe(at(1)?.createdAt);
+    expect(at(3)?.updatedAt, "updatedAt was not stamped").toBeTruthy();
+    expect(at(1)?.updatedAt, "updatedAt was stamped on a create").toBeUndefined();
   });
 
   /* --------------------------------------------------------------- claims -- */
@@ -780,60 +734,68 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
   }
 
   it("walks a claims run through begin, finish, replace, sweep and fail", async () => {
-    // One number, both scripts — see `staleStart`.
-    const startedAt = staleStart();
-    const fromFiles = await claimsScript(fsRefereeClaimsStore, startedAt);
-    await forgetFiles();
-    const fromPg = await claimsScript(pgRefereeClaimsStore, startedAt);
-    compare(fromFiles, fromPg, "claims");
+    /* **Was a step-by-step comparison against the filesystem store.** Every one
+       of these steps has its own case in tests/store-pg-referee-claims.test.ts,
+       asserted against literals — `replaces the run rather than adding one`,
+       `clears a failed run's error when the next one starts`, `leaves a run
+       this process is running alone`, `sweeps an abandoned run once it is past
+       the window`, `leaves an absent field absent rather than null`. What is
+       kept here is the walk itself in one order, with the two zeros the script's
+       own comment names: `claimsOmitted: 0` and `start: 0` must survive as
+       zeros, because a `?? null` or a falsy check turns a truthful "none were
+       cut off" into "we did not record it", and the two render as different
+       sentences. */
+    const steps = (await claimsScript(pgRefereeClaimsStore, staleStart())) as {
+      label: string;
+      run: ClaimsRun | null;
+    }[];
+
+    expect(steps[0]?.run, "a run was already there").toBeNull();
+    expect(steps[2]?.run?.status, "the finished run is not done").toBe("done");
+    expect(steps[2]?.run?.claimsOmitted, "a truthful zero became an absence").toBe(0);
+    expect(steps[2]?.run?.claims?.[0]?.start, "a truthful zero became an absence").toBe(0);
+    // Starting a run replaces the last answer before the new one exists.
+    expect(steps[4]?.run?.status, "the second begin did not replace the answer").toBe("pending");
+    expect(steps[4]?.run?.claims ?? [], "yesterday's claims survived today's spinner").toEqual(
+      [],
+    );
+    // Running here: left alone whatever its age. Abandoned: swept.
+    expect(steps[5]?.run?.status, "a run this process is running was swept").toBe("pending");
+    expect(steps[6]?.run?.status, "an abandoned run was not swept").toBe("error");
+    // A second sweep must not re-sweep what is already an error.
+    expect(steps[7]?.run, "the second sweep changed a swept run").toEqual(steps[6]?.run);
+    expect(steps[8]?.run?.error, "an outright failure lost its reason").toBe(
+      "the provider fell over",
+    );
   });
 
-  it("writes the same sentence over a swept run", async () => {
-    /* The one string a referee actually reads out of a sweep. Both stores import
-       it from src/referee-claims-store.ts rather than spelling it out, and this
-       is what says they still do. */
-    const now = clockFrom(staleStart());
-    await fsRefereeClaimsStore.begin(SLUG, now);
-    const fromFiles = await fsRefereeClaimsStore.sweep(SLUG, false);
-    await forgetFiles();
-
-    await pgRefereeClaimsStore.begin(SLUG, now);
-    const fromPg = await pgRefereeClaimsStore.sweep(SLUG, false);
-
-    expect(fromFiles?.error).toBe(CLAIMS_SWEPT);
-    expect(fromPg?.error).toBe(CLAIMS_SWEPT);
+  it("writes the shared sentence over a swept run", async () => {
+    /* The one string a referee actually reads out of a sweep. It moved into
+       src/store/pg-referee-claims.ts on 2026-09-05 when the filesystem claims
+       store that used to hold it was deleted; the import here is what says the
+       sweep still writes the shared constant rather than a copy. */
+    await pgRefereeClaimsStore.begin(SLUG, clockFrom(staleStart()));
+    expect((await pgRefereeClaimsStore.sweep(SLUG, false))?.error).toBe(CLAIMS_SWEPT);
   });
 
-  it("writes the same sentence over a swept criterion", async () => {
-    const begin = (store: RefereeCriteriaStore) =>
-      store.begin(SLUG, "Abandoned", { kind: "single" }, "spya-crte22");
-    const sweep = (store: RefereeCriteriaStore) =>
-      store.sweepPending(SLUG, { keep: new Set<string>(), graceMs: -1000 });
-
-    await begin(fsRefereeCriteriaStore);
-    const fromFiles = await sweep(fsRefereeCriteriaStore);
-    await forgetFiles();
-
-    await begin(pgRefereeCriteriaStore);
-    const fromPg = await sweep(pgRefereeCriteriaStore);
-
-    expect(fromFiles[0]?.error).toBe(CRITERION_SWEPT);
-    expect(fromPg[0]?.error).toBe(CRITERION_SWEPT);
+  it("writes the shared sentence over a swept criterion", async () => {
+    await pgRefereeCriteriaStore.begin(SLUG, "Abandoned", { kind: "single" }, "spya-crte22");
+    const swept = await pgRefereeCriteriaStore.sweepPending(SLUG, {
+      keep: new Set<string>(),
+      graceMs: -1000,
+    });
+    expect(swept[0]?.error).toBe(CRITERION_SWEPT);
   });
 
-  /* ------------------------------------ what they are meant to disagree about -- */
+  /* ------------------------------------------ the two behaviours of its own -- */
 
-  it("differs about a young abandoned claims run, on purpose", async () => {
-    /* Difference 2, asserted positively rather than normalised away — the rule
-       `store-parity.test.ts` keeps about the three differences it lives with.
-       Without this test the past clock the claims script runs on would be
-       indistinguishable from an exclusion, and the day the grace window is
-       dropped from the Postgres store nothing would notice. */
-    await fsRefereeClaimsStore.begin(SLUG);
-    const swept = await fsRefereeClaimsStore.sweep(SLUG, false);
-    expect(swept?.status, "the filesystem store sweeps the moment anybody looks").toBe("error");
-    await forgetFiles();
-
+  it("leaves a young abandoned claims run alone, which is what the window is for", async () => {
+    /* **The only guard on `CLAIMS_ORPHAN_GRACE_MS` outside
+       tests/store-pg-referee-claims.test.ts.** It was `differs about a young
+       abandoned claims run, on purpose` while there were two stores — the
+       filesystem one swept the moment anybody looked — and without it the past
+       clock the claims script runs on is indistinguishable from an exclusion:
+       the day the grace window is dropped, the walk above still passes. */
     await pgRefereeClaimsStore.begin(SLUG);
     const spared = await pgRefereeClaimsStore.sweep(SLUG, false);
     expect(
@@ -843,28 +805,23 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
     ).toBe("pending");
   });
 
-  it("differs about a slug that is not an article, on purpose", async () => {
-    /* Difference 1. It reaches the reader: `GET /api/referee/claims/:slug` goes
-       straight to the store, so an unknown slug is a 200 with `run: null` on
-       files and a 404 under Postgres. Postgres is the one that is right — the
-       slug is globally unique, so a lookup without `ownedSlug` finds a real
-       article belonging to a stranger, and 404 rather than 403 because a 403
-       confirms it exists. */
-    expect(await fsRefereeCriteriaStore.load(ABSENT)).toEqual([]);
-    expect(await fsRefereeClaimsStore.load(ABSENT)).toBeNull();
-
+  it("404s a slug that is not an article, rather than answering about it", async () => {
+    /* It reaches the reader: `GET /api/referee/claims/:slug` goes straight to
+       the store. The slug is globally unique, so a lookup without `ownedSlug`
+       finds a real article belonging to a stranger — and 404 rather than 403,
+       because a 403 confirms it exists. The filesystem store answered `[]` and
+       `null` here, which is the shape this refusal replaced. */
     await expect(pgRefereeCriteriaStore.load(ABSENT)).rejects.toThrow(/not found|no article/i);
     await expect(pgRefereeClaimsStore.load(ABSENT)).rejects.toThrow(/not found|no article/i);
   });
 
-  it("agrees that an article with no run has no run", async () => {
+  it("says an article with no run has no run", async () => {
     /* The ordinary state, and not a missing resource: the panel has a sentence
-       for it and needs the answer to be `null` rather than a throw. */
-    const fromFiles: ClaimsRun | null = await fsRefereeClaimsStore.load(SLUG);
-    const fromPg: ClaimsRun | null = await pgRefereeClaimsStore.load(SLUG);
-    expect(fromFiles).toBeNull();
-    expect(fromPg).toBeNull();
-    expect(await fsRefereeCriteriaStore.load(SLUG)).toEqual([]);
+       for it and needs the answer to be `null` rather than a throw. Read
+       against `SLUG`, which IS an article — so this and the case above are the
+       two halves of one distinction rather than the same emptiness twice. */
+    const run: ClaimsRun | null = await pgRefereeClaimsStore.load(SLUG);
+    expect(run).toBeNull();
     expect(await pgRefereeCriteriaStore.load(SLUG)).toEqual([]);
   });
 });

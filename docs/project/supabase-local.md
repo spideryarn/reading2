@@ -320,19 +320,14 @@ administrator — which is what everything above tells you to do — that is thi
 is wrong; re-run `npm run db:seed-dev` and it is on again in a second, with a new "since" date. Worth
 knowing before you go looking for a bug in the switch, which is what the date moving looks like.
 
-**It exits non-zero when `SPIDERYARN_STORE` is not `postgres`, and that is deliberate.** This script
-is a CLI script, `tsx scripts/db-seed-dev.ts`, and the variable defaults to `files` for those
-([`src/store/live.ts`](../../src/store/live.ts)) — unlike `npm run dev`, which since 2026-09-02
-defaults to `postgres` on its own. So the check is really asking whether *this process's* copy of
-the variable agrees with what the dev server will use: if `.env.local` has no `SPIDERYARN_STORE`
-line, this script sees "unset" (→ `files`) while a plain `npm run dev` will still read Postgres —
-but anyone who has set `SPIDERYARN_STORE=files` explicitly, or starts the server some other way,
-gets the old failure: every row this wrote is invisible in the browser, the seed works and the shelf
-looks empty. A green `npm run setup` over that is the exact failure this command exists to prevent,
-so it stops instead. **The seed itself has already committed by then**, so fixing the variable and
-re-running costs a second. Set `SPIDERYARN_STORE=postgres` in `.env.local` **on the laptop**; it is
-on `push-env`'s allowlist since 2026-09-02, so the box inherits it, and a line typed on the box would
-be destroyed by the next push.
+**It used to exit non-zero when `SPIDERYARN_STORE` was not `postgres`, and that check is gone with
+the flag** (2026-09-05,
+[260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F). The
+state it was for cannot arise now: this is a CLI script, the variable used to default to `files` for
+one of those, and a dev server reading `files` served articles off `data/` — so the seed worked, the
+shelf looked empty, and `npm run setup` reported completion over it. There is one store, so whatever
+starts the dev server reads what this wrote. **Do not put `SPIDERYARN_STORE` in `.env.local`**: it is
+off `push-env`'s allowlist, and `src/store/live.ts` throws on any value but `postgres`.
 
 And the end-to-end check, which needs no human:
 

@@ -74,22 +74,6 @@
  * publication — the job publishes at the end of each walk and nothing below
  * looks at the revision it left.
  */
-import { vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import — it used to be a `delete`,
- * on the argument that unset is the state a fresh clone is in.
- *
- * `src/store/live.ts` reads the environment once, the first time anything
- * imports it, and imports are hoisted above every statement in a module. A
- * plain assignment here would leave `claimSession` handing back the filesystem
- * session with nothing saying so.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
 
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -101,7 +85,6 @@ import { mintId } from "../src/ids.js";
 import { advanceJobWith, claimSession } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepContext } from "../src/pipeline.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 import type { StoreSession } from "../src/store/session.js";
@@ -109,19 +92,12 @@ import type { Job, JobStep, StepName } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Put the flag back straight after the imports: vitest reuses a worker across
-   files and does not reset `process.env` between them. */
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
-
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/article-cache-call-site.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** What each step was told, in the order the walk told them. */
 const seen: { step: StepName; cacheArticle: boolean | undefined }[] = [];
@@ -145,7 +121,6 @@ function recordingStep(name: StepName): PipelineStep {
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: [name],
     run: async (ctx: StepContext) => {
       seen.push({ step: name, cacheArticle: ctx.cacheArticle });
@@ -242,19 +217,7 @@ async function walk(steps: StepName[]): Promise<void> {
   });
 }
 
-describe("the store this walk is actually running on", () => {
-  it("is the Postgres one", () => {
-    /* The control on the control, and **not** gated on `reachable`: a flag that
-       failed to take would run this against the filesystem session, which is a
-       different `claimSession` branch and therefore a different test — and one
-       that would pass, since `cacheArticle` is computed the same way on both
-       sides. A control that vanishes when the database is missing vanishes
-       exactly when it matters. */
-    expect(STORE).toBe("postgres");
-  });
-});
-
-when("the cacheArticle flag, as the job walk actually sets it", () => {
+describe("the cacheArticle flag, as the job walk actually sets it", () => {
   beforeAll(async () => {
     /* Owned by `DEV_OWNER_ID` explicitly, because that is who the walk runs as:
        the Postgres reader filters every article by owner, so a fixture seeded as

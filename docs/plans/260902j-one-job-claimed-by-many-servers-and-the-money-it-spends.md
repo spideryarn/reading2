@@ -226,7 +226,7 @@ is what it always meant to say.
 
 ### Stage 1 — the failing test ✅
 
-[`tests/two-servers-one-queue.test.ts`](../../tests/two-servers-one-queue.test.ts). `vi.resetModules()`
+`tests/two-servers-one-queue.test.ts`. `vi.resetModules()`
 plus a fresh `import` is exactly what a Vite restart does to these modules — a second, independent
 copy of the store's state over the same `data/_jobs/`. Enqueue and claim through the first copy; claim
 through the second.
@@ -238,7 +238,7 @@ lapsed lease must still be takeable — were green from the start and must stay 
 ### Stage 2 — the fence ✅
 
 [`src/process-state.ts`](../../src/process-state.ts), `QueueState` in
-[`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts), and `aborts` in
+`src/store/jobs-fs.ts`, and `aborts` in
 [`src/jobs.ts`](../../src/jobs.ts).
 
 **Both halves were watched red against the real code and then against a mutation, on 2026-09-02.**
@@ -282,7 +282,7 @@ and answered.
 
   | where | what it is | if it is duplicated |
   |---|---|---|
-  | [`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) `writing` | the ledger's append mutex | two `appendFile` chains interleaving inside one line — **corrupting the ledger this bug was diagnosed from** |
+  | `src/store/ai-calls-fs.ts` (deleted 2026-09-05) `writing` | the ledger's append mutex | two `appendFile` chains interleaving inside one line — **corrupting the ledger this bug was diagnosed from** |
   | [`src/routes.ts`](../../src/routes.ts) `streaming` | an abort registry and stale-writer barrier | Stop cannot find the old stream; edit and retry cannot await it |
   | `src/routes.ts` `turnOrder` | calls itself a lock | multi-write chat operations interleave |
   | `src/routes.ts` `answering`, `searching`, `refereeing`, `pullingClaims` | liveness registries | the new copy calls work the old copy is still doing abandoned, and pays for it again |

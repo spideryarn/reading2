@@ -23,9 +23,9 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Article, BlockId, Comment, NodeId, TreeNode } from "../types.js";
+import type { Article, Block, BlockId, Comment, NodeId, TreeNode } from "../types.js";
 import { useRenderCount } from "./perf.js";
-import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
+import { columnLabel, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
 import {
   annotateHtml,
@@ -36,7 +36,7 @@ import {
   type Mark,
   type TermSelection,
 } from "./annotate.js";
-import { readSelection } from "./selection.js";
+import { readSelection, type SelectionAnchor } from "./selection.js";
 import { internalTarget } from "./internal-links.js";
 import {
   markReturnPath,
@@ -54,6 +54,7 @@ import { useColumnContext } from "./useColumnContext.js";
 import { BlockRange } from "./BlockRef.js";
 import { BlockGutter } from "./BlockGutter.js";
 import { commentsByBlock } from "./comment-nav.js";
+import { costOn, NO_CLOCK, noteCost } from "./annotation-cost.js";
 import { SWIPE_ATTR } from "./swipe.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
 import { Lightbox } from "./Lightbox.js";
@@ -75,6 +76,208 @@ import {
  */
 const ANNOUNCE_GAP_MS = 60;
 
+/**
+ * The empty list handed to every block that has no marks of a given kind.
+ *
+ * **A shared constant rather than a `[]` literal, and it is load-bearing.**
+ * `proseHtml` decides a block can reuse last render's html by comparing its
+ * three mark arrays **by identity**, and a fresh `[]` per block per render is a
+ * different array every time — so a literal would miss on the ~455 unmarked
+ * blocks of a 551-block article, which are exactly the blocks the reuse exists
+ * for. Never mutated — and `readonly` rather than `Mark[]` so it cannot be:
+ * everything here spreads it into a new array.
+ */
+const NO_MARKS: readonly Mark[] = [];
+
+/**
+ * What one block's prose was built from, beside the `{ __html }` built from it.
+ *
+ * The inputs are kept so the next render can ask "is any of this different?"
+ * before parsing anything — see `proseHtml`, which is where the fields are
+ * compared and where each one earns its place.
+ */
+interface ProseEntry {
+  /**
+   * The block's own html. **Stable identity is not immutable content**: a
+   * re-extraction can change a block's html under the same id, so the content
+   * is part of the key and the id alone never is (block-ids.md).
+   */
+  html: string;
+  /** `marksByBlock`'s array for this block — comments and anchored chats. */
+  cmts: readonly Mark[];
+  /** `termMarksByBlock`'s array for this block — every glossary occurrence. */
+  terms: readonly Mark[];
+  /** The `hitMarks` prop's array for this block — the search's marks. */
+  hits: readonly Mark[];
+  /**
+   * `openTerm`, but **only when this block carries that term** — otherwise
+   * null.
+   *
+   * The pressed term is global, so keying on it directly would invalidate every
+   * block in the article on every press and buy nothing. What actually changes
+   * a block's html is whether the term the reader just pressed, or the one they
+   * pressed before, is in *this* block. The other three selections need no such
+   * field: `open` is already folded into the arrays above, per block.
+   */
+  openTerm: string | null;
+  /** What React is handed, and the object identity it compares. */
+  out: { __html: string };
+}
+
+/**
+ * The term the reader has pressed, **but only in the blocks it is actually
+ * in** — null everywhere else.
+ *
+ * `openTerm` is one id for the whole article, so it is the wrong key for a
+ * per-block cache: it changes on every press and would invalidate every block.
+ * What changes a block's html is whether the newly or previously pressed term
+ * has an occurrence in *this* block. See `ProseEntry.openTerm`.
+ */
+function pressedIn(terms: readonly Mark[], openTerm: string | null | undefined): string | null {
+  if (!openTerm) return null;
+  return terms.some((m) => m.id === openTerm) ? openTerm : null;
+}
+
+/**
+ * Whether this block is drawn from exactly what last render's entry was drawn
+ * from — the equality contract `proseHtml` reuses on, in one place.
+ *
+ * **Identity for the arrays, value for the html.** `===` is cheap and exact;
+ * comparing their contents would be a second pass over every mark in the
+ * article to save a pass over one block.
+ *
+ * **What identity survives, and what it does not.** The three producers hand a
+ * block back its own array across the two gestures this exists for: a
+ * **selection change** — a different comment, chat, term or search result
+ * pressed, where only the blocks losing and gaining the ring get new arrays —
+ * and a **streamed delta**, where the comment objects and the array are all
+ * replaced but no anchor moves. They preserve nothing across a genuine change
+ * to a source: one moved anchor rebuilds every resolved array, a new `terms`
+ * rebuilds every term array, and a new `Found[]` rebuilds every base hit array.
+ * So writing one comment re-annotates every block that carries a comment or a
+ * chat, not only the block that gained it — the html usually comes back
+ * identical and React is handed the object it already has, but the parse is
+ * paid. That is the intended shape: the gestures that repeat are the ones made
+ * cheap.
+ *
+ * The html is compared by value because a re-extraction produces an equal
+ * string in a new `Block`, and rebuilding 551 unchanged paragraphs on a
+ * refetch would give back what this exists to save. `ProseEntry` says what
+ * each field is for.
+ */
+function sameInputs(
+  had: ProseEntry,
+  block: Block,
+  cmts: readonly Mark[],
+  terms: readonly Mark[],
+  hits: readonly Mark[],
+  openTerm: string | null,
+): boolean {
+  return (
+    had.html === block.html &&
+    had.cmts === cmts &&
+    had.terms === terms &&
+    had.hits === hits &&
+    had.openTerm === openTerm
+  );
+}
+
+/**
+ * Every comment's and every chat's **anchor**, as one string.
+ *
+ * The key `marksByBlock` reuses its resolution on, and the whole point is what
+ * it leaves out: the body, the answer, the status, the object and the array.
+ * Those change on every streamed token; where the words sit does not.
+ *
+ * The quote's length goes in ahead of the quote so no arrangement of separators
+ * inside a quote can spell another record, and each entry says whether it is a
+ * comment or a chat, so a comment and a conversation sharing one anchor cannot
+ * trade places unnoticed.
+ */
+function anchorKey(comments: readonly Comment[], chats: readonly AnchoredThread[]): string {
+  const parts: string[] = [];
+  for (const c of comments) {
+    parts.push(`c\n${c.id}\n${c.blockId}\n${c.start}\n${c.quote.length}\n${c.quote}`);
+  }
+  for (const t of chats) {
+    const a = t.anchor;
+    parts.push(`t\n${t.id}\n${a.blockId}\n${a.start}\n${a.quote.length}\n${a.quote}`);
+  }
+  return parts.join("\n");
+}
+
+/**
+ * Where each comment and chat's words actually are, grouped by block.
+ *
+ * The expensive half of `marksByBlock`: a `renderedText` parse and a search per
+ * anchor. Resolution can fail — the paragraph was edited and the quote is gone
+ * — and then that comment simply draws no mark. It is still in the list and
+ * still openable; what it must never do is underline whatever text now happens
+ * to sit at that offset. See annotate.ts § Why the offsets are DOM offsets.
+ *
+ * Nothing here knows which comment is open: `applyOpen` puts that on top.
+ */
+function resolveAnchors(
+  comments: readonly Comment[],
+  chats: readonly AnchoredThread[],
+  byId: ReadonlyMap<BlockId, Block>,
+): ReadonlyMap<BlockId, readonly Mark[]> {
+  const byBlock = new Map<BlockId, Mark[]>();
+  const push = (blockId: BlockId, mark: Mark) => {
+    const list = byBlock.get(blockId) ?? [];
+    list.push(mark);
+    byBlock.set(blockId, list);
+  };
+  for (const c of comments) {
+    const block = byId.get(c.blockId);
+    if (!block) continue;
+    const found = resolveMark(renderedText(block.html), c);
+    if (!found) continue;
+    push(c.blockId, { id: c.id, ...found });
+  }
+  for (const t of chats) {
+    const block = byId.get(t.anchor.blockId);
+    if (!block) continue;
+    const found = resolveMark(renderedText(block.html), t.anchor);
+    if (!found) continue;
+    push(t.anchor.blockId, { id: t.id, ...found, kind: "chat" });
+  }
+  return byBlock;
+}
+
+/**
+ * The same marks with the open comment's and open chat's flagged — **and every
+ * other block's array handed back unchanged, by identity.**
+ *
+ * That last clause is the entire reason this is a second pass rather than an
+ * `open:` written in the loop above. `proseHtml` compares these arrays by
+ * identity to decide whether a block's html can be reused, so a pass that
+ * rebuilt them all would make every selection change cost an article's worth of
+ * `annotateHtml`. Only the block losing the ring and the block gaining it get a
+ * new array; a block that was never involved gets the array it already had.
+ *
+ * `open` is omitted rather than set to `false` on the marks that are not
+ * pressed, because annotate.ts only ever reads it for truth — and because a
+ * `false` here would be a second spelling of the same mark.
+ */
+function applyOpen(
+  base: ReadonlyMap<BlockId, readonly Mark[]>,
+  openComment: string | null,
+  openChat: string | null,
+): ReadonlyMap<BlockId, readonly Mark[]> {
+  if (openComment === null && openChat === null) return base;
+  const isOpen = (m: Mark) => (m.kind === "chat" ? m.id === openChat : m.id === openComment);
+  const out = new Map(base);
+  for (const [blockId, marks] of base) {
+    if (!marks.some(isOpen)) continue;
+    out.set(
+      blockId,
+      marks.map((m): Mark => (isOpen(m) ? { ...m, open: true } : m)),
+    );
+  }
+  return out;
+}
+
 interface Props {
   article: Article;
   /** Built once in App, because the reading-position code needs it too. */
@@ -84,28 +287,20 @@ interface Props {
   /** Explicit pixel widths, one per rendered column. See layout.ts. */
   layout: Layout;
   showText: boolean;
-  /**
-   * The depth ↑ / ↓ are currently aimed at, so the column can say so. Chosen by
-   * where the pointer is — see keynav.ts, and the `data-nav-depth` tags below.
-   */
-  navDepth: number;
-  /**
-   * What the L0 column renders: one sentence per part on where the argument
-   * stands there. Null when `arc.json` hasn't been generated, and then L0 falls
-   * back to the root node exactly as it used to. See tree.js § the arc.
-   */
-  arcCells: Map<number, ArcCell> | null;
-  /**
-   * An arc is being written right now, and there is none to draw yet.
-   *
-   * Since 2026-08-29 the arc is not built by every ingest — the article opens as
-   * soon as the tree is ready — so the L0 column can be the root gist *while a
-   * real arc is on its way*, which is a different thing from the root gist being
-   * all there will ever be. Without this the wait is invisible: the fallback is
-   * good enough that nothing looks like it is loading. Greg asked for a loading
-   * state here specifically (2026-08-29).
-   */
-  arcPending: boolean;
+  /* **No `navDepth` here since 2026-09-05.** The depth ← / → are aimed at used
+     to come in as a prop so the header row could light the matching `<th>`.
+     That row has no height now, and the aim is drawn by tinting the column —
+     which has to reach the fisheye panels, which are `position: fixed` outside
+     this table. So it is one `data-aim` attribute on `.reader` (App.tsx) and a
+     rule in styles.css § the aimed column, and this component stops re-rendering
+     on every twitch of the pointer. The cells still carry `data-nav-depth`,
+     which is what that rule matches and what keynav.ts resolves an aim with. */
+  /* **No `arcCells` here since 2026-09-05.** The L0 column drew the arc — one
+     sentence per part, with a `3 / 7` step marker and a loading tint while the
+     stage was still running — and Greg took the column out: "let's get rid of
+     the 'Arg' button and functionality altogether". The arc itself is alive and
+     well; App.tsx hands it to `OutlinePanel` instead
+     (docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5). */
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
   /**
@@ -129,7 +324,7 @@ interface Props {
   /** The comment whose dialog is open, so its mark can say so. */
   openComment: string | null;
   /** A usable selection was made in the verbatim column. */
-  onSelect(anchor: ReturnType<typeof readSelection>): void;
+  onSelect(anchor: SelectionAnchor): void;
   /** An existing mark was clicked. */
   onOpenComment(id: string): void;
   /**
@@ -203,7 +398,7 @@ interface Props {
    * Optional for the same reason `term` is: nothing else on this page had to
    * learn that search exists.
    */
-  hitMarks?: Map<BlockId, Mark[]> | undefined;
+  hitMarks?: ReadonlyMap<BlockId, readonly Mark[]> | undefined;
   hitStrength?: Map<BlockId, number> | undefined;
   /** The palette slots of every search that matched in each block — `blockHues`. */
   hitHues?: Map<BlockId, number[]> | undefined;
@@ -272,9 +467,6 @@ function TableViewInner({
   columns,
   layout,
   showText,
-  navDepth,
-  arcCells,
-  arcPending,
   onJump,
   notes,
   noteReturn,
@@ -347,45 +539,25 @@ function TableViewInner({
    */
   const swipeable = panels ? { [SWIPE_ATTR]: "" } : {};
 
-  // The items of each gist column, in document order, with the row each one
-  // starts on. The arc column's items carry the sentence and a step marker
-  // instead of a title. `text` is the empty string when the arc has no
-  // sentence for a part — never undefined, which would let the renderer fall
-  // back to the part's gist and quietly turn the column into a copy of L1.
+  /* The items of each gist column, in document order, with the row each one
+     starts on. Every column is now built the same way; until 2026-09-05 depth 0
+     was a special case that read the arc's cells instead, carrying a sentence
+     and a `3 / 7` marker where the others carry a title. `ContextItem` carried
+     a `text` and a `step` for it, and lost both the same day — context.ts. */
   const colKey = columns.join(",");
   const levels = useMemo(() => {
     const m = new Map<number, { items: ContextItem[]; starts: number[] }>();
     // `filter(Boolean)` before `Number`: an empty column set splits to [""],
-    // and Number("") is 0, which would conjure an arc level out of nothing.
+    // and Number("") is 0, which would conjure a level out of nothing.
     for (const d of colKey.split(",").filter(Boolean).map(Number)) {
       if (d === geometry.leafDepth) continue; // leaves have no gist to list
-      if (d === 0 && arcCells) {
-        const entries = [...arcCells.entries()].sort((a, b) => a[0] - b[0]);
-        m.set(0, {
-          items: entries.map(([, a]) => ({
-            node: a.node,
-            blockId: a.node.range[0],
-            /* The apparatus takes no `text`, so the list falls through to its
-               title. `""` on a part is deliberate — it stops the renderer
-               falling back to the part's gist and turning the arc column into a
-               copy of L1 — but on a supplement there is no gist to fall back to
-               and "Notes" is the content. */
-            ...(a.supplement ? { supplement: true } : { text: a.text ?? "" }),
-            ...(a.index !== undefined && a.total !== undefined
-              ? { step: { index: a.index, total: a.total } }
-              : {}),
-          })),
-          starts: entries.map(([row]) => row),
-        });
-        continue;
-      }
       m.set(
         d,
         itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
       );
     }
     return m;
-  }, [colKey, geometry, arcCells, blocks]);
+  }, [colKey, geometry, blocks]);
   const depths = useMemo(() => [...levels.keys()], [levels]);
   // The ancestor path of the hovered row — used to light up the chain across
   // every level at once, which is the whole point of seeing them side by side.
@@ -400,9 +572,9 @@ function TableViewInner({
     // A panel entry wins over a row, because pointing at one means leaving the
     // table: `tbody`'s mouseleave clears hoveredRow on the way. The chain is
     // the entry's ancestors, so pointing at a section still lights the part it
-    // belongs to and the arc above that — one entry per coarser column, which
-    // is what a row hover gives. Its own sections are not lit: a part holds
-    // many, and lighting all of them would be a different gesture.
+    // belongs to and whatever is coarser than that — one entry per coarser
+    // column, which is what a row hover gives. Its own sections are not lit:
+    // a part holds many, and lighting all of them would be a different gesture.
     if (hoveredNode) {
       const chain = new Set<NodeId>();
       for (let id: NodeId | null = hoveredNode; id; id = article.tree.nodes[id]?.parent ?? null) {
@@ -417,7 +589,6 @@ function TableViewInner({
   const crumbFor = (item: ContextItem): string | null => {
     const parent = item.node.parent === null ? undefined : article.tree.nodes[item.node.parent];
     if (parent && parent.depth >= 1) return parent.title;
-    if (item.step) return "The argument";
     const level = levels.get(item.node.depth);
     // By node, not by identity: a group heading's item is built fresh in
     // levelList and is never the same object as the one in `levels`.
@@ -426,18 +597,18 @@ function TableViewInner({
   };
 
   /**
-   * Comments, resolved against the prose they were made on and grouped by block.
-   *
-   * Resolution can fail — the paragraph was edited and the quote is gone — and
-   * then the comment simply draws no mark. It is still in the list and still
-   * openable; what it must never do is underline whatever text now happens to
-   * sit at that offset. See annotate.ts § Why the offsets are DOM offsets.
+   * The article's blocks by id, for `resolveAnchors` above — which is where
+   * comments and chats are resolved against the prose they were made on, and
+   * what happens when a quote is gone.
    */
   /* Indexed once. The loop below used to do `blocks.find` per comment, which is
      O(comments x blocks) plus a DOM parse each time — and folding every anchored
      conversation into the same pass would have multiplied a cost that was
      already the expensive half of this memo. */
-  const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
+  const byId: ReadonlyMap<BlockId, Block> = useMemo(
+    () => new Map(blocks.map((b) => [b.id, b])),
+    [blocks],
+  );
 
   /**
    * Every comment grouped onto its block, for the gutter's marker.
@@ -486,32 +657,82 @@ function TableViewInner({
     }, ANNOUNCE_GAP_MS);
   }, []);
 
+  /**
+   * Last render's anchor resolution, and the two things it depended on.
+   *
+   * A cache keyed on value equality, which is what makes writing to it during
+   * render safe — the same argument `proseCache` below makes. What is stored is
+   * a pure function of `anchorKey(comments, chats)` and the block map, so a
+   * double-invoked or abandoned render can only ever hand back something a
+   * fresh computation would have produced.
+   */
+  const marksCache = useRef<{
+    /** The semantic anchors, as a string — see `anchorKey`. */
+    key: string;
+    /** The block map those anchors were resolved against. */
+    blocks: ReadonlyMap<BlockId, Block>;
+    /** The resolution, with nothing marked open. */
+    base: ReadonlyMap<BlockId, readonly Mark[]>;
+    /** Which comment and chat were open when `out` was built. */
+    open: string;
+    /** `base` with `open` applied — what the memo actually returned. */
+    out: ReadonlyMap<BlockId, readonly Mark[]>;
+  } | null>(null);
+
+  /**
+   * Where every comment and every anchored chat sits in the prose, as marks.
+   *
+   * ## Resolution is keyed on the anchors, not on the comments
+   *
+   * `useComments.ts` § the `delta` branch calls
+   * `put({ ...rest, id, status: "pending", answer: text })` on **every streamed
+   * token**, so the comment object and the whole `comments` array are replaced
+   * while `blockId`, `quote` and `start` are untouched. A memo keyed on either
+   * identity therefore re-resolves the article's anchors dozens of times per
+   * answer. So the key is `anchorKey` — the semantic anchor inputs — plus the
+   * block map, which stands in for the block content: `byId` is rebuilt only
+   * when `article.blocks` is, and nothing on the client mutates a blocks array
+   * in place (search-hits.ts § `pages` has the long version of that argument).
+   *
+   * ## And `open` is applied afterwards, per block
+   *
+   * **The value of this is not the handful of parses it saves.** Five comments
+   * on a 551-block article cost five `renderedText` calls; the measurement in
+   * docs/plans/260905i-… says so plainly. It is that the **per-block arrays
+   * survive a selection change by identity**, which is the precondition for
+   * `proseHtml` below reusing anything at all. Before this, opening one dialog
+   * gave every block in the article a new marks array, so every marked block
+   * re-annotated — 96 `annotateHtml` calls to move one ring. A future reader
+   * looking at the parse count alone will conclude this is elaborate machinery
+   * for nothing; the win is one memo further down.
+   *
+   * So: the resolution is reused when the anchors have not moved, the
+   * open-applied map is reused when the selection has not moved either, and
+   * only the blocks holding the previously or newly open id get a new array.
+   *
+   * Chats and comments share one map rather than living in two, because they
+   * are resolved the same way against the same prose and change on the same
+   * clock — a reader asking a question. The glossary's marks are a second map
+   * precisely because they change on a different one.
+   */
   const marksByBlock = useMemo(() => {
-    const byBlock = new Map<BlockId, Mark[]>();
-    const push = (blockId: BlockId, mark: Mark) => {
-      const list = byBlock.get(blockId) ?? [];
-      list.push(mark);
-      byBlock.set(blockId, list);
-    };
-    for (const c of comments) {
-      const block = byId.get(c.blockId);
-      if (!block) continue;
-      const found = resolveMark(renderedText(block.html), c);
-      if (!found) continue;
-      push(c.blockId, { id: c.id, ...found, open: c.id === openComment });
-    }
-    /* Chats and comments share one map rather than living in two, because they
-       are resolved the same way against the same prose and change on the same
-       clock — a reader asking a question. The glossary's marks are a second map
-       precisely because they change on a different one. */
-    for (const t of chats) {
-      const block = byId.get(t.anchor.blockId);
-      if (!block) continue;
-      const found = resolveMark(renderedText(block.html), t.anchor);
-      if (!found) continue;
-      push(t.anchor.blockId, { id: t.id, ...found, kind: "chat", open: t.id === openChat });
-    }
-    return byBlock;
+    /* Off by default; see src/web/annotation-cost.ts, including why this ms
+       *contains* the `renderedText` and `resolveMark` ms and must not be added
+       to them. Timed whenever the probe is on at all: this is one of the two
+       numbers the decision rule is applied to, and it is charged on the reuse
+       path too — a memo body that ran and decided to do nothing is still this
+       memo's time. */
+    const timing = costOn();
+    const t0 = timing ? performance.now() : NO_CLOCK;
+    const key = anchorKey(comments, chats);
+    const had = marksCache.current;
+    const kept = had !== null && had.key === key && had.blocks === byId;
+    const base = kept ? had.base : resolveAnchors(comments, chats, byId);
+    const open = `${openComment ?? ""}\n${openChat ?? ""}`;
+    const out = kept && had.open === open ? had.out : applyOpen(base, openComment, openChat);
+    marksCache.current = { key, blocks: byId, base, open, out };
+    if (timing) noteCost("marksByBlock", t0);
+    return out;
   }, [comments, chats, byId, openComment, openChat]);
 
   /**
@@ -531,16 +752,16 @@ function TableViewInner({
   const termMarksByBlock = useMemo(() => termMarks(blocks, terms ?? []), [blocks, terms]);
 
   /**
-   * Last render's `{ __html }` objects, so an unchanged block can be handed
-   * back the one React has already seen — see `proseHtml` below for why that
-   * is the whole point.
+   * Last render's `{ __html }` objects **and what each was built from**, so an
+   * unchanged block can be handed back the one React has already seen without
+   * being computed again — see `proseHtml` below for why each half matters.
    *
    * A cache keyed on value equality, which is what makes writing to it during
-   * render safe: every reuse is an object whose `__html` is `===` the string
-   * we just computed, so a double-invoked or abandoned render can only ever
-   * hand back something identical. Nothing reads it for correctness.
+   * render safe: an entry is a pure function of the inputs stored beside it, so
+   * a double-invoked or abandoned render can only ever hand back something a
+   * fresh computation would have produced. Nothing reads it for correctness.
    */
-  const proseCache = useRef<Map<BlockId, { __html: string }>>(new Map());
+  const proseCache = useRef<Map<BlockId, ProseEntry>>(new Map());
 
   /**
    * The verbatim column's HTML, annotated once per change rather than once per
@@ -596,26 +817,72 @@ function TableViewInner({
    *   re-runs for all 551 blocks, but only the blocks whose html actually
    *   changed get new objects — so a streaming answer rewrites the paragraphs
    *   it touches instead of the article.
+   *
+   * ## Why the entry keeps the inputs as well — the 2026-09-06 half
+   *
+   * Not rewriting the DOM is not the same as not *computing* the html, and the
+   * measurement in docs/plans/260905i-… is about the second. A glossary press
+   * on a 551-block article ran `addZoomHandles` **551 times** — including on
+   * the ~455 blocks with no mark at all, whose html cannot have changed — and
+   * `annotateHtml` **96 times**, to alter one block. ~40% and ~55% of a memo
+   * that costs ~30ms against an 8ms budget.
+   *
+   * So each entry keeps the inputs it was built from, and a block whose inputs
+   * are all unchanged is skipped entirely: neither call happens and the entry
+   * is passed straight through. The equality contract is `ProseEntry` above,
+   * and four parts of it are easy to get subtly wrong:
+   *
+   * - **The key is the source arrays, by identity**, not the composite `marks`
+   *   array built below — that one is freshly allocated every pass and can
+   *   never equal itself. `NO_MARKS` is what makes the unmarked majority
+   *   compare equal at all.
+   * - **`openTerm` is stored per block, not globally.** It is one id for the
+   *   whole article, so keying on it directly would invalidate every block on
+   *   every press.
+   * - **`hitMarks` had to be split first.** `hitMarks()` in search-hits.ts used
+   *   to bake `open` into fresh arrays for every block whenever the pressed
+   *   result changed, so this key would have missed everywhere; § `unpressed`
+   *   there is the other half of this change.
+   * - **A block is always rebuilt from all its kinds at once**, which is what
+   *   keeps a comment and a term over the same words in one shared `<mark>`.
+   *
+   * The map is rebuilt fresh every run, exactly as it was before, so a block
+   * that leaves the article evicts itself and nothing here is unbounded.
    */
   const proseHtml = useMemo(() => {
+    /* Off by default; see src/web/annotation-cost.ts, including why this ms
+       *contains* the `annotateHtml` and `addZoomHandles` ms and must not be
+       added to them. Timed whenever the probe is on at all: this is the other
+       number the decision rule is applied to. */
+    const timing = costOn();
+    const t0 = timing ? performance.now() : NO_CLOCK;
     const was = proseCache.current;
-    const byBlock = new Map<BlockId, { __html: string }>();
+    const byBlock = new Map<BlockId, ProseEntry>();
     for (const block of blocks) {
       /* Both kinds in one call. `annotateHtml` cuts each text node at every
          mark boundary in one pass, so a comment and a term over the same words
          produce one <mark> carrying both classes — two nested ones would read
          as a rendering bug. Concatenating here is what gives it the chance. */
-      const found = termMarksByBlock.get(block.id) ?? [];
+      const found = termMarksByBlock.get(block.id) ?? NO_MARKS;
+      const cmts = marksByBlock.get(block.id) ?? NO_MARKS;
+      const hits = hitMarks?.get(block.id) ?? NO_MARKS;
+      const pressed = pressedIn(found, openTerm);
+      const had = was.get(block.id);
+      if (had && sameInputs(had, block, cmts, found, hits, pressed)) {
+        /* Nothing this block is drawn from has changed, so neither has its
+           html. The entry — and with it the `{ __html }` object React compares
+           — is passed through untouched. */
+        byBlock.set(block.id, had);
+        continue;
+      }
       const marks = [
-        ...(marksByBlock.get(block.id) ?? []),
+        ...cmts,
         /* The pressed term's `open`, applied here rather than carried through
            the scan — see the `openTerm` prop. A plain `.map` over marks that
            have already been found, so a press costs no regex and no reparse of
            anything except the blocks it actually appears in. */
-        ...(openTerm
-          ? found.map((m) => (m.id === openTerm ? { ...m, open: true } : m))
-          : found),
-        ...(hitMarks?.get(block.id) ?? []),
+        ...(pressed ? found.map((m) => (m.id === pressed ? { ...m, open: true } : m)) : found),
+        ...hits,
       ];
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
@@ -633,14 +900,21 @@ function TableViewInner({
          claiming the old shape, 2026-09-03. */
       const withHandles = addZoomHandles(marked);
       /* **Every block, and the same object when the html has not changed.**
-         Both halves of that are load-bearing; see the docstring above. */
-      const had = was.get(block.id);
-      byBlock.set(
-        block.id,
-        had && had.__html === withHandles ? had : { __html: withHandles },
-      );
+         Both halves of that are load-bearing; see the docstring above. The
+         inputs changed and the output still can be identical — a comment
+         resolving to the same span in a re-extracted paragraph, say — and then
+         React must still be handed the object it already has. */
+      byBlock.set(block.id, {
+        html: block.html,
+        cmts,
+        terms: found,
+        hits,
+        openTerm: pressed,
+        out: had && had.out.__html === withHandles ? had.out : { __html: withHandles },
+      });
     }
     proseCache.current = byBlock;
+    if (timing) noteCost("proseHtml", t0);
     return byBlock;
   }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
 
@@ -702,24 +976,30 @@ function TableViewInner({
   return (
     <>
     <table
-      /* `only-prose` — the article is the only column there is, so the table
-         head is a label for the whole screen. It reads `Text verbatim` above
-         a column of the author's paragraphs, which says nothing that looking
-         at them does not, and it costs 40px of a 390px landscape viewport
-         where a third of the height is already bars. So the stylesheet drops
-         it (§ a narrow window).
+      /* `only-prose` — the article is the only column there is. It used to hide
+         the table head as well, which was worth 40px of a 390px landscape
+         viewport where a third of the height is already bars; the head has had
+         no height in any mode since 2026-09-05 (styles.css § the head with no
+         row), so that rule went and this class is now only what centres the
+         masthead over a centred column (styles.css § plain, centred).
 
          The condition is `no gist columns AND the prose is on`, not
          `one column`: a single *gist* column still has to say which level it
          is, and in outline mode that is the only place saying so. Reached
-         three ways — a phone in reading mode, and either width of mode band,
-         where the head has been equally redundant beside a chat panel on a
-         laptop all along.
+         three ways — a phone in reading mode, and either width of mode band.
 
-         `stickyOffset()` needs no telling: it measures `thead th` rather than
-         reading `--head-h`, and a `display: none` head measures zero. That is
-         the second time this week that "measure it, don't agree a number with
-         another file" has paid for itself — scroll.ts says why. */
+         **The head could not have gone on being `display: none` here**, which
+         is worth stating because it looks like the obvious tidy-up: that takes
+         the element out of the box tree, and `useColumnContext.ts` measures
+         `thead th[data-col]` for every fisheye panel's rectangle. A hidden head
+         means panels with no geometry, over gist cells that deliberately draw
+         nothing while panels are on. Zero height costs none of that.
+
+         **`only-prose` also switches the aim tint off**, which is the other
+         thing it now does: with no gist columns the prose is the only rung
+         there is, the pointer rests on it permanently, and the tint would be a
+         standing orange cast over the whole article rather than a choice
+         between columns. styles.css § the aimed column. */
       className={`zoom ${showText ? "reading" : "outline"}${overflowing ? " overflowing" : ""}${
         columns.length === 0 && showText ? " only-prose" : ""
       }`}
@@ -733,53 +1013,51 @@ function TableViewInner({
           <col key={i} style={{ width: w }} />
         ))}
       </colgroup>
+      {/* **A head with no height, and every one of its jobs intact.** Greg
+          asked for the row of `PARTS L1` / `SECTIONS L2` labels back as
+          vertical space, 2026-09-05, and the words moved into the controls
+          bar's pills (App.tsx § the controls bar). What could not move is
+          everything else this row does:
+
+           - `data-col` is where `useColumnContext.ts` gets each column's
+             `left`, `width` and `bottom` from. Delete the head and every
+             fisheye panel returns `null`, over gist cells that draw nothing
+             while panels are on — Hierarchy's Parts and Sections columns
+             become empty boxes.
+           - `scope="col"` is what makes a screen reader say "Sections" before
+             reading a cell. The pills are outside the table and can never do
+             this: they are buttons, not headers.
+           - The head's sticky `top` is the y a panel starts at, and at zero
+             height that is the bar's own bottom edge — so the panels now sit
+             directly under the bar rather than a head's height below it.
+
+          So the label wears the shared `.sr-only` clip-rect utility rather than
+          removed, and the cell keeps its position in the table's layout. The
+          `L{d}` depth tag went with the visible row: a number that said where a
+          column sits in the tree rather than what is in it, and nothing to read
+          out loud. styles.css § the head with no row. */}
       <thead>
         <tr>
           {columns.map((d) => (
             <th
               key={d}
+              scope="col"
               data-nav-depth={d}
               data-col={d}
               className={[
                 d === pinLeft ? "pin-left" : "",
                 d === pinRight ? "pin-right" : "",
-                /* One column lights, and it is the one the aim names. The arc
-                   and Parts share a stride — the arc's cells are the parts'
-                   cells, tree.ts § the arc — but they are separate rungs on the
-                   ← / → ladder, so lighting both would leave the reader unable
-                   to see which of the two another → would leave. */
-                d === navDepth ? "nav-aim" : "",
               ].filter(Boolean).join(" ")}
             >
-              {columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells)}
-              <span className="depth-tag">L{d}</span>
+              <span className="sr-only">{columnLabel(d, geometry.leafDepth)}</span>
             </th>
           ))}
           {showText && (
             /* The prose column is the finest granularity there is, so the
                arrows mean the same thing over it as over the leaf column: one
                paragraph at a time. Leaves are 1:1 with blocks (src/hierarchy.ts). */
-            <th
-              data-nav-depth={geometry.leafDepth}
-              className={`text pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
-            >
-              {/* **Two spans, and neither is decoration.** The prose below is
-                  centred in its cell (styles.css § text), so a heading left at
-                  the cell's edge names a column whose text starts 180px to its
-                  right — the masthead had the same defect and was fixed the same
-                  way. `.th-measure` is the box that does the moving: it carries
-                  the article's font *purely so that `65ch` means there what it
-                  means in the prose*, and `.th-name` puts the head's own type
-                  back. They have to be two elements because one element cannot
-                  both resolve a `ch` in the reading face and be set in the
-                  chrome's. The other headers are untouched — they sit over
-                  columns that are not centred and are right as they are.
-                  styles.css § the header over the article's column. */}
-              <span className="th-measure">
-                <span className="th-name">
-                  Text<span className="depth-tag">verbatim</span>
-                </span>
-              </span>
+            <th scope="col" data-nav-depth={geometry.leafDepth} className="text pin-right">
+              <span className="sr-only">Text verbatim</span>
             </th>
           )}
         </tr>
@@ -894,8 +1172,17 @@ function TableViewInner({
           // comment's words silently reopened that comment instead of asking a
           // new question — and asking about a narrower part of something you
           // already asked about is a completely ordinary thing to want.
-          const anchor = readSelection(window.getSelection());
-          if (anchor) return onSelect(anchor);
+          //
+          // **And a drag we refuse is still a drag.** `readSelection` used to
+          // answer `null` both for "no selection" and for "shorter than the
+          // floor", so a skid inside a commented phrase fell all the way
+          // through to the mark logic at the bottom of this handler and opened
+          // that comment — the exact opposite of the rule above, over words the
+          // reader never clicked. The two are separate variants now, and
+          // `too-short` stops here: nothing opens, and the reader drags again.
+          const read = readSelection(window.getSelection());
+          if (read.kind === "anchor") return onSelect(read.anchor);
+          if (read.kind === "too-short") return;
           /* A link inside a commented passage is a link. `annotateHtml` puts
              the <mark> *inside* the <a>, so without this a click on one would
              open the comment on mouseup and then jump on click — two answers to
@@ -950,54 +1237,6 @@ function TableViewInner({
             className={hoveredRow === row ? "row-active" : undefined}
           >
             {columns.map((depth) => {
-              /* The arc column. It is tagged with its own depth, not with the
-                 parts' — Greg wants ← to run all the way out to the argument
-                 (2026-08-26), so L0 is a rung of its own. It still *steps* by
-                 part, because its cells are the parts' cells; that borrowing
-                 happens once, in navPlan (keynav.ts). */
-              if (depth === 0 && arcCells) {
-                const arc = arcCells.get(row);
-                if (!arc) return null; // covered by a rowSpan above
-                return (
-                  <td
-                    key={depth}
-                    rowSpan={arc.rowSpan}
-                    data-nav-depth={depth}
-                    {...swipeable}
-                    className={[
-                      "gist arc depth-0",
-                      activeChain.has(arc.node.id) ? "active" : "",
-                      depth === pinLeft ? "pin-left" : "",
-                      depth === pinRight ? "pin-right" : "",
-                    ].filter(Boolean).join(" ")}
-                    onClick={() => onJump(arc.node.range[0])}
-                  >
-                    {/* Under a panel the cell is a boundary and a click target;
-                        its content is the panel's current entry. */}
-                    {!panels && (
-                      <div className="sticky">
-                        {/* A supplement sits outside the numbering — "3 / 7",
-                            not "3 / 9" — and its title is its content, so it
-                            gets the title where a part gets its marker. Never a
-                            hole: the arc has no sentence for the apparatus and
-                            never will. src/supplement.ts. */}
-                        {arc.supplement ? (
-                          <div className="arc-step arc-supplement">{arc.node.title}</div>
-                        ) : (
-                          <div className="arc-step">
-                            {arc.index} <span className="of">/ {arc.total}</span>
-                          </div>
-                        )}
-                        {/* No fallback if the sentence is missing: an empty cell
-                            is a failure the reader can see, and borrowing the
-                            part's own gist here would quietly turn this column
-                            back into a copy of the next one. */}
-                        <p className="gist-text">{arc.text}</p>
-                      </div>
-                    )}
-                  </td>
-                );
-              }
               const cell = geometry.cellAt.get(`${depth}:${row}`);
               if (!cell) return null; // covered by a rowSpan above
               const { node } = cell;
@@ -1017,11 +1256,6 @@ function TableViewInner({
                     // nothing to do with inheritance — so `--tint` set on the
                     // <col> resolves on an element that nothing reads it from.
                     `depth-${depth}`,
-                    /* The root gist standing in for an arc that is coming. Only
-                       at depth 0, and only while there is genuinely no arc —
-                       `arcCells` being null is what makes this cell the L0 one
-                       rather than an ordinary gist. */
-                    depth === 0 && !arcCells && arcPending ? "arc-pending" : "",
                     active ? "active" : "",
                     cell.continuation ? "continuation" : "",
                     depth === geometry.leafDepth ? "leaf" : "",
@@ -1078,46 +1312,22 @@ function TableViewInner({
                    `kind-callout` is still emitted for revisions extracted in the
                    few hours that kind existed, and the stylesheet answers to
                    both. */
-                /* `gutter-pad` says this row's gutter is the full three-slot
-                   column rather than a single 24px slot, and the stylesheet
-                   floors the row's height to match so nothing can hang below it
-                   and take a click meant for the next row. § the gutter in
-                   styles.css has the reasoning.
+                /* **No class here says how tall this row's gutter is, and that
+                   is the 2026-09-05 change.** `gutter-pad` used to, flooring
+                   every owner's row at three slots so nothing could hang below
+                   it into the next paragraph. The gutter now measures the room
+                   the row already has and draws only what fits — styles.css §
+                   the gutter — so *that* floor, the class and
+                   `tests/gutter-pad-floor.test.tsx` have all gone, and a
+                   one-line paragraph is 39.1px again rather than 87.1px. The
+                   one-slot floor on `td.text` stays, because the collapsed
+                   gutter still draws one 24px control.
 
-                   **The condition is the reader's capability, not what is on
-                   the row.** `onChatAbout` is what BlockGutter renders the chat
-                   button from, and `onHelp` the "?" beneath it, so a reader who
-                   has them is a reader whose gutter is the whole column —
-                   floored on every row, so their paragraphs do not jump when
-                   they mark one. A visitor has neither, so their gutter stays
-                   one slot tall and the article keeps its old rhythm.
-
-                   **Both callbacks are asked about, and an earlier draft asked
-                   about one.** It read `onChatAbout || comments` on the
-                   reasoning that App gates both callbacks on `owner`, so the
-                   chat button and the "?" can only ever agree. That is true of
-                   today's single caller and **false at this component's
-                   boundary**, which is where a condition has to hold: an
-                   `onHelp`-only caller drew a permalink in the first slot and a
-                   "?" below it with no floor — the exact overhang class that
-                   work existed to remove, reintroduced through the props. GPT
-                   Sol's stage 2 review, 2026-09-04;
-                   `tests/gutter-pad-floor.test.tsx` is the invariant written
-                   down, watched red first.
-
-                   **`comments` left this condition on 2026-09-05, and it is not
-                   a relaxation of that rule.** The rule is still *anything that
-                   can be drawn below the first slot floors the row*; what moved
-                   is the bookmark, which is now `grid-area: 1 / 1` and so draws
-                   nothing below the first slot. A comment therefore costs the
-                   row no height at all, where it used to cost 24px. **If the
-                   bookmark is ever moved down the column, this condition has to
-                   get `comments` back** — the coupling is asserted from both
-                   ends, in `tests/gutter-pad-floor.test.tsx` and in
-                   `tests/gutter-target-size.test.ts`.
-
-                   It was `has-marks`, meaning "this block has a comment", until
-                   2026-09-04; the name went with the meaning. */
+                   The invariant they existed for is narrowed, not dropped:
+                   nothing **closed** may be drawn below what its own row has
+                   room for, the open "…" panel being a deliberate exception. It
+                   is enforced a row at a time by a container query instead of a
+                   class at a time from here. */
                 /* `note` on every block of the notes region and `note-open` on
                    its first, which is the one that carries the rule across the
                    column and the heading. Both come off the note index rather
@@ -1128,7 +1338,7 @@ function TableViewInner({
                   block.context ? ` ctx-${block.context.type}` : ""
                 } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }${onChatAbout || onHelp ? " gutter-pad" : ""}${
+                }${
                   notes?.noteOf.has(block.id) ? " note" : ""
                 }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,
@@ -1227,7 +1437,7 @@ function TableViewInner({
                      is unreachable — it is here so that a block that somehow
                      escaped the memo still renders its own prose rather than
                      an empty paragraph. */
-                  dangerouslySetInnerHTML={proseHtml.get(block.id) ?? { __html: block.html }}
+                  dangerouslySetInnerHTML={proseHtml.get(block.id)?.out ?? { __html: block.html }}
                 />
               </td>
             )}
@@ -1236,8 +1446,14 @@ function TableViewInner({
       </tbody>
     </table>
     {/* One panel per gist column, laid over it, following the focus line —
-        see useColumnContext.ts. */}
-    {panels && (
+        see useColumnContext.ts. `depths` and not `panels` alone: `columns` can
+        be the leaf column on its own (`?cols=3`, or Para with every gist pill
+        off), which passes `panels` and yields no levels at all — and then the
+        hook measures every row on every scroll to decide which entry of nothing
+        to highlight. Same waste `panels` was given its `columns.length` guard
+        for in 2026-08-27; that guard simply cannot see the leaf column, because
+        `levels` is what drops it. */}
+    {panels && depths.length > 0 && (
       <ColumnPanels
         sections={sections}
         depths={depths}
@@ -1336,7 +1552,6 @@ function ColumnPanels({
         <ContextPanel
           key={d}
           depth={d}
-          navDepth={d}
           entries={entries}
           rect={live.rects.get(d) ?? null}
           viewportH={live.viewportH}

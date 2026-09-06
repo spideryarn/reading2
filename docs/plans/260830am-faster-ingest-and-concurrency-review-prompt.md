@@ -181,7 +181,7 @@ configurable" is the smaller half of the change.
 ### Everything that assumes serial execution is a *number*, not a lock
 
 The audit found no correctness hazard that survives the guards already in place — job-scoped `/tmp`
-([`src/store/data-root.ts`](../../src/store/data-root.ts)), `jobs_active_slug` (one in-flight job per
+(`src/store/data-root.ts`), `jobs_active_slug` (one in-flight job per
 article), and the `id + attempt_id + status` fence. What it found instead is a set of constants each
 measured with only one job running:
 
@@ -280,7 +280,7 @@ design decision below. Doing them first means the rest is built on ground that i
 **1a. `loadArticle` serves the wrong article.** `candidateDirs` returns `[data/<slug>, example]`
 unconditionally, so an article with no tree — which, after stage 2, is a state that lasts seconds
 rather than never happening — falls through to the hand-authored fixture and **serves somebody
-else's prose under the reader's slug**. `articleDir` ([`src/api.ts:620`](../../src/api.ts)) does the
+else's prose under the reader's slug**. `articleDir` (`src/api.ts:620`) does the
 same for the metadata page. This is the fallback that once hid a path traversal, and `src/api.ts`
 carries a standing alarm about it. Remove the fixture fallback for non-fixture slugs; a visible
 "still building" is strictly better than the wrong article.
@@ -375,7 +375,7 @@ Greg: *"N configurable, let's set the default to 2."*
 The index is the small half. The work is: replace `jobs_only_one_running` with a claim that counts
 running rows under the `queue_state` lock (`SELECT … FOR UPDATE SKIP LOCKED` gives per-worker
 concurrency, **not** a global N — [ingest-queue.md](../project/ingest-queue.md) is explicit); mirror
-it in [`src/store/jobs-fs.ts:235`](../../src/store/jobs-fs.ts); make something pick up jobs nobody is
+it in `src/store/jobs-fs.ts:235`; make something pick up jobs nobody is
 driving, or accept that N only helps tabs that stay open and say so; and revisit the four constants
 in the table above, `STEP_BUDGET_MS` first, because its failure mode is a mid-step kill that costs a
 paid call. `tests/helpers/running-slot.ts` and several suites wait on the global slot and change

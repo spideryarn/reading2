@@ -73,7 +73,8 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
-| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's three links, and the one place a tooltip's trigger is not a host element |
+| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
+| [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
 | [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
@@ -149,6 +150,23 @@ right edge, so a 22rem card cannot centre on it, and without `keepSide` the defa
 that as *not fitting* and throws the card onto the cross axis — landing it left of the button, over
 the article's own title. The exclusion the button's fixed corner already buys off
 ([feedback.md](feedback.md)) would have come straight back in through its tooltip.
+
+**The shelf's action row joined on 2026-09-05**, and it brought the one shape none of the others
+needed: a card on a control that *cannot be pressed*. That forces `aria-disabled` rather than the
+native attribute — a disabled button is out of the tab order and suppresses activation, and engines
+differ on whether it dispatches pointer events at all, so it is not a reliable tooltip trigger by any
+route. If a second row ever wants this, copy [`IconButton.tsx`](../../src/web/IconButton.tsx)'s
+handling rather than the idea, and read
+[library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job) for the
+jsdom trap that makes a test of it pass while doing nothing.
+
+It also brought the largest single haul of **false sentences** any card set here has produced: four
+of nine, all caught by a cross-family review rather than by a test, because
+[`ControlTip`'s restatement check](#controltip-which-is-what-most-of-them-are-now) can only see a
+card arguing with itself and not one arguing with the code. Worth knowing before writing the next
+set — the second paragraph is where the unguessable fact goes, which is exactly where a plausible
+invention goes too. The four are listed in
+[260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
 
 **A `title` attribute is not a small version of this**, and that is the argument for every one of
 them: it waits about a second, cannot be styled, truncates at the OS's idea of a line, and does not
@@ -336,7 +354,8 @@ line:
   concluding a card is broken — and it is the same fact the unit test is built on
   ([§ Five things](#five-things-that-are-load-bearing), point 5).
 - **The group's instant phase is real**: moving from Profile to Design opened the second card with
-  no measurable delay.
+  no measurable delay. (Design left the masthead for `/admin` on 2026-09-05 — the measurement stands
+  as a dated example of the group, not as a description of that row today.)
 - **Colours, read rather than eyeballed**: panel `oklch(0.26 0 0)`, border `oklch(0.36 0 0)`, first
   line `oklab(0.97 0 0 / 0.85)`, the address under it `oklch(0.63 0 0)` — quieter, and still well
   clear of the ground.

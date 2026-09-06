@@ -41,25 +41,13 @@ import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { exactly, timeAgo } from "./relative-time.js";
 
 /**
- * The default sort: **who signed up most recently, first.**
- *
- * A list of accounts is a list of things that arrived, which is the one shape
- * where "newest first" is not a preference but the question — *who is new?*
- * The shelf moved off that default because a shelf is not an inbox
- * (library-columns.tsx § DEFAULT_BY); this page is.
- *
- * Single-key, for the same reason the shelf's is: a compound default lights two
- * chips on a page nobody has clicked, which reads as somebody else's sort left
- * behind.
- */
-export const ADMIN_DEFAULT_BY = ["signedUp"];
-
-/**
  * The order the chips appear in, which is not the order of the columns.
  *
  * The table leads with the email, because that is what a row *is*. The chips
- * lead with `ADMIN_DEFAULT_BY`, because that is the page's resting state.
- * Anything sortable and missing from this list is appended rather than dropped.
+ * lead with the default sort — `ADMIN_DEFAULT_BY` in params.ts, which is where
+ * that constant lives so that this file stays on the far side of the lazy
+ * route boundary — because that is the page's resting state. Anything sortable
+ * and missing from this list is appended rather than dropped.
  */
 export const ADMIN_CHIP_ORDER = [
   "signedUp",

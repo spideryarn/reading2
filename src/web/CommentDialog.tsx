@@ -162,6 +162,94 @@ export function CommentDialog({
   useEscapeToClose(onClose);
 
   /**
+   * ## The dialog takes focus, and gives it back
+   *
+   * The same modeless-dialog lifecycle the Comments drawer has (Dock.tsx § the
+   * drawer takes focus, and gives it back), and it is here because of the one
+   * path that ties the two together: pressing a row in the drawer closes the
+   * drawer **and** opens this dialog in the same interaction, so the drawer's
+   * cleanup puts focus back on the Comments tab while this is arriving. Without
+   * this effect the reader ends up holding the tab — the dialog they just chose
+   * has no focus at all, and since it sits before the bar in DOM order the next
+   * Tab carries on *past* it. GPT Sol, F19 on the Stage 2 review, 2026-09-06;
+   * tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx.
+   *
+   * **It works because React flushes a commit's passive cleanups before its
+   * passive setups.** The drawer hands focus back first, so what this records
+   * as the opener is the stable Comments button rather than a row that is on
+   * its way out of the DOM — and `isConnected` covers the rest, where the
+   * control that opened the dialog (a gutter chip, a row in a drawer) has gone
+   * by the time it closes.
+   *
+   * **The close button is the target**: it is stable across comment changes and
+   * is the reader's explicit way out. Not the *first* thing in the tab order —
+   * Previous and Next precede it in the header whenever there is more than one
+   * comment — which the note here claimed until GPT Sol went and looked (F27 on
+   * the second Stage 2 review).
+   *
+   * **And deliberately no trap.** The prose behind is fully live: the panel
+   * dodges out of the way while you drag out a new selection (below), and
+   * asking about several passages at once is the point. A trap would fight all
+   * of that. There is no `aria-modal` here either, for the same reason.
+   *
+   * **The opener may be gone by the time the dialog is.** Deleting the last
+   * comment takes the gutter mark that opened it away in the same commit as the
+   * dialog and the focused Delete button, so `isConnected` is false and there
+   * is nothing to go back to — and focus lands on `<body>`, which loses the
+   * reader their place. The Comments button is the meaningful fallback after a
+   * deletion, and it naturally does nothing when the whole article and its dock
+   * are unmounting together. GPT Sol, F24. **Not a regression**: before this
+   * effect existed nothing moved focus at all, so `<body>` is where the reader
+   * already ended up — doing focus properly is what made the gap worth closing.
+   */
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    openerRef.current = opener instanceof HTMLElement ? opener : null;
+    closeRef.current?.focus();
+    return () => {
+      const back = openerRef.current;
+      openerRef.current = null;
+      if (back?.isConnected) {
+        back.focus();
+        return;
+      }
+      document.querySelector<HTMLButtonElement>('.dock button[aria-label="Comments"]')?.focus();
+    };
+  }, []);
+
+  /**
+   * ## And again when the drawer swaps the comment underneath it
+   *
+   * `App` renders this dialog **without a `key`**, so choosing another comment
+   * in the Comments drawer changes the `comment` prop on a component that stays
+   * mounted: the mount effect above does not re-run, focus stays wherever the
+   * drawer's own cleanup put it (the Comments button), and `openerRef` goes on
+   * describing how comment *A* was opened — so closing *B* could restore a
+   * gutter mark that has nothing to do with it. GPT Sol, F23;
+   * tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx.
+   *
+   * **Not a regression either**, for the same reason as the fallback above: the
+   * reader was left holding the bar before any of this existed.
+   *
+   * **It bails out when focus is already inside**, which is what keeps it clear
+   * of the paths that change the comment from *within* the dialog — prev/next,
+   * and deleting to a neighbour. Those already hold focus on a control in here,
+   * and the opener they should return to is the one the mount recorded.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the id is the trigger; the refs are stable
+  useEffect(() => {
+    const active = document.activeElement;
+    if (dialogRef.current?.contains(active)) return;
+    if (active instanceof HTMLElement && active !== document.body) {
+      openerRef.current = active;
+    }
+    closeRef.current?.focus();
+  }, [comment.id]);
+
+  /**
    * Get out of the way while the reader is dragging out a new selection.
    *
    * The panel is pinned bottom-right, over the prose column — which is exactly
@@ -192,6 +280,8 @@ export function CommentDialog({
 
   return (
     <aside
+      /* How the comment-change effect above asks "is focus already in here?" */
+      ref={dialogRef}
       /* `busy` holds the box at a constant height while an answer is arriving.
          Two separate things used to move the ✕ under the reader's finger — the
          box is pinned by its BOTTOM edge so it grew upward with every paragraph,
@@ -240,7 +330,16 @@ export function CommentDialog({
             </button>
           </span>
         )}
-        <button type="button" className="cmt-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
+        <button
+          type="button"
+          className="cmt-close"
+          /* Where focus lands when the dialog opens — § the dialog takes focus,
+             and gives it back. */
+          ref={closeRef}
+          onClick={onClose}
+          title="Close (Esc)"
+          aria-label="Close"
+        >
           <X size={15} />
         </button>
       </header>
@@ -461,8 +560,20 @@ export function CommentDialog({
         {/* Not "Try again", which is what the error state offers and means
             something else. This is the reader saying the answer was thin, and
             the model is told exactly that. Hidden while one is running, because
-            two overlapping re-asks race to write the same row. */}
-        {own && comment.status !== "pending" && (
+            two overlapping re-asks race to write the same row.
+
+            **And hidden on a FREE comment**, which `!== "pending"` alone let
+            through. `status: "none"` is every bookmark and every note written
+            without ticking "Also ask the AI" — and `beginAnswer` in
+            src/comments.ts refuses exactly that with a 409, *"was never a
+            question, so there is nothing to answer"*. So a reader who wrote
+            "what is the evidence for this?" as a plain comment was offered a
+            button saying **Search the web** and told, on pressing it, that they
+            had never asked anything. The refusal is right; the button was the
+            bug. Found while diagnosing report 1X, 2026-09-05;
+            tests/comment-dialog-search-the-web.test.tsx renders all four
+            statuses so that narrowing this too far goes red as well. */}
+        {own && comment.status !== "pending" && comment.status !== "none" && (
           <Tooltip
             content={
               <>

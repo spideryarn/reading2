@@ -70,7 +70,9 @@ import { isSlug, PUBLIC_LIBRARY_SLUG } from "../ingest.js";
    article's head has to know which view an address settles on, and it may not
    import anything under src/web/. */
 import {
+  hidesProse,
   isLegacyAboutPair,
+  isTextOffPair,
   queryPairs,
   redirectsToMetadata,
   type ArticleView,
@@ -129,7 +131,20 @@ export type Route =
    * and it has an address you can reload.
    */
   | { kind: "add-upload"; uploadId: string }
-  /** The design reference — every primitive on one page. See DesignPage.tsx. */
+  /**
+   * The design reference — every primitive on one page. See DesignPage.tsx.
+   *
+   * **On the administrator's list since 2026-09-05** (`ADMIN_ONLY` below), which
+   * is a courtesy and not a gate: it reads no data at all, so there is nothing
+   * behind it that could refuse anybody, and its code is a public asset that
+   * any browser can fetch either way. It is on the list because it is developer
+   * furniture, not because it is privileged.
+   *
+   * Since 2026-09-05 that code is **not** in every reader's first download —
+   * App.tsx loads it when somebody asks for the address (LazyPage.tsx). That
+   * changed the startup cost and nothing about who may see it: the chunk is
+   * served to anyone who requests it, with no auth in front of it.
+   */
   | { kind: "design" }
   /**
    * Profile, rather than an article — `/profile`. See ProfilePage.tsx and
@@ -165,13 +180,16 @@ export type Route =
    * places to answer it.
    *
    * **Parsing this says nothing about being allowed to see it.** The route
-   * exists for everybody; App.tsx renders the shelf instead for anybody who is
-   * not the administrator — **and deliberately not the 404 page**, which is
+   * exists for everybody; `ADMIN_ONLY` below is what App.tsx reads to render
+   * the shelf instead for anybody who is not the administrator — **and
+   * deliberately not the 404 page**, which is
    * where an address this file does not recognise goes since 2026-09-03. The
-   * reason is docs/project/admin.md's: these pages are in every signed-in
-   * reader's bundle, so 403 is the honest posture and a 404 would be pretending
+   * reason is docs/project/admin.md's: these pages' code is served to anybody
+   * who asks for it, so 403 is the honest posture and a 404 would be pretending
    * about something anyone can see is there. The refusal that matters is the
-   * server's, on `/api/admin/`.
+   * server's, on `/api/admin/`. Since 2026-09-05 the code arrives on demand
+   * rather than in everyone's first download (LazyPage.tsx) — a change to
+   * startup cost, not to who may have it.
    */
   | { kind: "admin"; page: AdminPage }
   /**
@@ -201,6 +219,16 @@ export type Route =
    */
   | { kind: "pricing" }
   /**
+   * How to reach us, and which way is best — `/contact`. See ContactPage.tsx
+   * and docs/project/website-text.md.
+   *
+   * Greg, 2026-09-05: *"Add a /contact page and link to it appropriately. For
+   * now it can be really brief."* Signed out for the same reason as `privacy`:
+   * the person most likely to want an address is somebody who has not signed up
+   * and has a question about whether to.
+   */
+  | { kind: "contact" }
+  /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
    * **The one route that must be exempt from every rewrite in main.tsx**, and
@@ -224,7 +252,7 @@ export type Route =
    * **It is not the same as "an address you may not use", and neither of those
    * became this.** `/admin` parses for everybody and App.tsx sends a
    * non-administrator to the shelf — a deliberate 403 posture rather than a
-   * 404, because the page is in everybody's bundle already and pretending
+   * 404, because the page's code is there for anybody who asks and pretending
    * otherwise buys nothing ([docs/project/admin.md](../../docs/project/admin.md)).
    * A slug you do not own parses as `read`, and the server's answer lands on
    * `NotSharedPage`, which says what this page must not: something about a
@@ -232,6 +260,66 @@ export type Route =
    * than a refusal.
    */
   | { kind: "not-found" };
+
+/**
+ * **Which pages are the administrator's, and it is a courtesy rather than a
+ * gate.**
+ *
+ * Read once at the top of `SignedIn` (App.tsx): a signed-in reader who is not
+ * the administrator gets the shelf at any address answering `true` here. Say
+ * plainly what that is and is not:
+ *
+ * - **It hides nothing.** `AdminPage.tsx` and `DesignPage.tsx` are absent from
+ *   the initial reader download since 2026-09-05 (LazyPage.tsx), but their
+ *   chunks are public assets served to anyone who requests them, and
+ *   vercel.json rewrites every non-`/api/` address to `index.html`, so these
+ *   paths answer 200 to anybody. A reader who wants to see the design reference
+ *   can still see it.
+ * - **The only real refusal is the server's**, on the `/api/admin` namespace,
+ *   above the route table in src/routes.ts. It would refuse a hand-written
+ *   `fetch` from any of these pages just the same, and it would refuse
+ *   identically if this file had never heard of an administrator.
+ * - **`/design` has nothing behind it to refuse.** It reads no data at all, so
+ *   there is no server half for it and none is wanted: it is on this list
+ *   because it is developer furniture that every reader was being shown, not
+ *   because it is privileged. docs/project/admin.md § The three refusals.
+ *
+ * **Why a map of every kind rather than a set of two.** The failure this
+ * replaces is `/design` itself: it was moved onto the `/admin` index on
+ * 2026-09-05 and the check stayed where it was, one `if` inside the `admin`
+ * branch, because a per-branch check has to be *remembered*. That is the same
+ * argument src/routes.ts makes for putting the server's check above the route
+ * table. A `Record<Route["kind"], boolean>` is exhaustive, so adding a member to
+ * the union above without answering the question here does not compile —
+ * the next administrator's page joins the gate by editing a list, and
+ * forgetting is not one of the available outcomes.
+ *
+ * What no mechanism can catch is answering it *wrongly* — writing `false` for a
+ * page that should be `true`. That is a judgment, and it is why the entries are
+ * a list somebody reviews rather than a rule somebody infers.
+ */
+const ADMIN_ONLY: Record<Route["kind"], boolean> = {
+  library: false,
+  read: false,
+  "public-library": false,
+  add: false,
+  "add-upload": false,
+  design: true,
+  profile: false,
+  login: false,
+  admin: true,
+  privacy: false,
+  features: false,
+  pricing: false,
+  contact: false,
+  callback: false,
+  "not-found": false,
+};
+
+/** Is this one of the administrator's pages? See `ADMIN_ONLY` above — cosmetic. */
+export function adminOnly(route: Route): boolean {
+  return ADMIN_ONLY[route.kind];
+}
 
 /**
  * The path segment for each view. `article` has none — the reading view is the
@@ -335,6 +423,7 @@ export function parseRoute(pathname: string): Route {
   if (new RegExp(`^${PRIVACY_HREF}/?$`).test(pathname)) return { kind: "privacy" };
   if (new RegExp(`^${FEATURES_HREF}/?$`).test(pathname)) return { kind: "features" };
   if (new RegExp(`^${PRICING_HREF}/?$`).test(pathname)) return { kind: "pricing" };
+  if (new RegExp(`^${CONTACT_HREF}/?$`).test(pathname)) return { kind: "contact" };
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to `not-found`, which is what every
@@ -532,6 +621,16 @@ export const FEATURES_HREF = "/features";
  * an address to send somebody, not because the numbers live anywhere new.
  */
 export const PRICING_HREF = "/pricing";
+/**
+ * How to reach us — linked from the footer row, which every page a reader lands
+ * on and reads carries (SiteFooter.tsx).
+ *
+ * The page is four sentences and one of them is the address, which is already a
+ * `mailto:` in that same row. It exists anyway because *"contact us"* is a thing
+ * people look for by name, and because the address is not the answer we want
+ * first: the Feedback button is. ContactPage.tsx.
+ */
+export const CONTACT_HREF = "/contact";
 /**
  * The shelf of public articles.
  *
@@ -746,6 +845,18 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacyAnchor(at);
   at = liftLegacySlug(at);
   at = liftLegacyAbout(at);
+  /* **Last, and both halves of that are deliberate.**
+     *After* `canonicalAddHref`, because an `/add/` address's query belongs to
+     the URL being added — `addUrlFrom` puts it straight back onto it — so
+     dropping a pair before canonicalisation adds a different article. Once that
+     has run, the query has been folded into the encoded segment and there is
+     nothing here to touch. *Last of all* rather than merely after it, because
+     the three lifts above each rebuild `search` (the anchor lift appends `at=`;
+     the other two move the query onto a different path), and this way there is
+     one shape of query to reason about instead of four. Nothing below it can be
+     affected either, because unlike the other four this rewrite never changes
+     which page you land on. */
+  at = liftStrandedText(at);
 
   const href = `${at.pathname}${at.search}${at.hash}`;
   return href === was ? null : href;
@@ -902,6 +1013,74 @@ function liftLegacyAbout(at: Address): Address {
 }
 
 /**
+ * **`?mode=hierarchy&text=0` → `?mode=outline`, and the `text` pair goes
+ * whatever the mode was.**
+ *
+ * The `Text` pill was the only way back to the prose, and it went with the rest
+ * of the controls bar on 2026-09-05 — so an old `?mode=hierarchy&text=0` link is
+ * a table with the article hidden and nothing on screen that puts it back. This
+ * is the fifth of these rewrites and the first that is about a state the app
+ * used to be able to leave.
+ *
+ * **Outline, and the argument is not the obvious one.** Neither destination
+ * restores the no-prose state — `proseVisible` is `modeBand || showText`, so a
+ * mode band always shows the article — which means "honour what they asked for"
+ * cannot decide it. What decides it is that **the reader who saved that link was
+ * looking at a bar that said OUTLINE**: the old `reading`/`outline` chip flipped
+ * to `outline` whenever `text=0` was on, granularity-zoom.md calls the compact
+ * table "outline mode" throughout, and TableView still classes it `zoom outline`.
+ * So Outline is the name that reader already associates with what they
+ * bookmarked, and a nested list that expands around them beats a table whose
+ * rows are separated by thousands of pixels of the prose it just put back.
+ * Arbitrated by Fable, 2026-09-05.
+ *
+ * **The unconditional half looks like tidying an inert parameter and is not.**
+ * `text=0` bites only in Hierarchy (`inMode` is `mode !== "hierarchy"`), so a
+ * bare `?text=0` lands harmlessly in Plain — and then strands the reader the
+ * moment they press Hierarchy on the Dock, because the parameter is still in the
+ * URL. Dropping it is defusing something with a delay on it.
+ *
+ * Everything else is carried through byte for byte, `?cols=0,1` included: a
+ * stale column set is dead weight in Outline and harmless, where reserialising
+ * it would turn those commas into `%2C`. The mode is rewritten **in place**, so
+ * the order the reader's link was written in survives too — and only the
+ * **first** `mode` pair, because that is the one every reader of this query
+ * gets back (`URLSearchParams.get` returns the first match, and so does nuqs).
+ * A duplicate further along is somebody else's already-ignored pair, and
+ * rewriting it would both be a lie and produce `?mode=outline&mode=outline`.
+ *
+ * The server predicts all of this — `readMode` in src/read-address.ts — or the
+ * tab would say Hierarchy and then say Outline a second later, which is the
+ * whole subject of docs/project/page-titles.md.
+ */
+function liftStrandedText(at: Address): Address {
+  /* **Two questions, and they are not the same one.** *Is there anything to
+     remove* is `.some()`: every `text=0` in the query goes, first or fortieth,
+     because an inert one left behind is the landmine this rewrite exists to
+     defuse. *Is the reader stranded* is `hidesProse`, which asks only the
+     first `text` pair — the one nuqs actually reads. `?text=1&text=0` is
+     therefore tidied without anybody being moved out of Hierarchy. Conflating
+     the two was GPT Sol's F2 on this stage, 2026-09-05. */
+  if (!queryPairs(at.search).some(isTextOffPair)) return at;
+  /* `hasKey` below rather than `pair.startsWith("mode=")`, and this read decodes
+     the key too — so `?%6dode=hierarchy` is answered the same way by the
+     decision and by the edit. A decoding decision paired with a literal removal
+     is the ninth address bug's whole shape. */
+  let stranded =
+    new URLSearchParams(at.search).get("mode") === "hierarchy" && hidesProse(at.search);
+  const kept = withoutPairs(at.search, isTextOffPair)
+    .split("&")
+    .filter((pair) => pair !== "")
+    .map((pair) => {
+      if (!stranded || !hasKey(pair, "mode")) return pair;
+      stranded = false;
+      return "mode=outline";
+    })
+    .join("&");
+  return { pathname: at.pathname, search: kept ? `?${kept}` : "", hash: at.hash };
+}
+
+/**
  * Go somewhere, without a page load.
  *
  * Scrolls to the top, because `history.scrollRestoration` is `manual` (see
@@ -934,6 +1113,24 @@ function subscribe(onChange: () => void): () => void {
     window.removeEventListener("popstate", onChange);
     window.removeEventListener(NAVIGATED, onChange);
   };
+}
+
+/**
+ * The same subscription `useAddress` uses, for a caller that wants to **hear**
+ * the address change without **re-rendering** when it does.
+ *
+ * There is exactly one such caller — `useLastView` in last-view.ts, which
+ * copies the query string into `localStorage` — and the distinction is the
+ * whole reason this is exported. `?at=` is rewritten about once a second while
+ * anybody scrolls, so a `useAddress()` high in the reading view would re-render
+ * the entire article on every one of those; the staleness work of 2026-09-04
+ * (§ `watchHistoryWrites` above) exists precisely to keep that subscription
+ * narrow. A listener that writes to storage and touches no state costs nothing.
+ *
+ * Returns its own unsubscriber, so it drops straight out of a `useEffect`.
+ */
+export function onAddressChange(listener: () => void): () => void {
+  return subscribe(listener);
 }
 
 /**

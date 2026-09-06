@@ -1,14 +1,20 @@
 /**
  * The two places outside data reaches a link card — src/web/link-facts.ts.
  *
- * The hook itself is not tested, and **the reason is not the one I first gave**.
- * I wrote that it would be a test of a mock; a GPT Sol review pointed out that
- * `useLinkFacts` is driven entirely by a prop and two deferred promises, which
- * is about as testable as a hook gets. The real reason is that this repo has no
- * React test harness at all — no `@testing-library/react`, nothing that renders
- * a component — and adding one is a dependency decision bigger than this
- * feature, taken deliberately rather than smuggled in behind it. The three
- * tests worth writing the day it exists are named at the foot of this file.
+ * The hook itself is not tested here, and **the reason given for that has now
+ * been wrong twice.** The first version said a test of it would be a test of a
+ * mock; a GPT Sol review pointed out that `useLinkFacts` is driven entirely by a
+ * prop and two deferred promises, which is about as testable as a hook gets. The
+ * second version said this repo has no React test harness at all — true when it
+ * was written on 2026-08-27 and false since, and it was still saying so on
+ * 2026-09-05 while `tests/a-failed-shelf-read-is-not-an-empty-shelf.test.tsx`
+ * sat two directories away *mounting this very hook*. A doc that says "this
+ * cannot be done here" outlives the reason it was true
+ * (docs/research/260903b-facts-that-were-wrong.md).
+ *
+ * So: the hook **is** tested, in the `.tsx` suites that mount the card, and what
+ * is left here is the part that needs no harness at all. The three tests named
+ * at the foot of this file are simply unwritten rather than impossible.
  *
  * What *is* tested is the pair of pure functions either side of the wire,
  * because those are where somebody else's bytes turn into something a React
@@ -169,9 +175,17 @@ describe("readSummary", () => {
 });
 
 /* --------------------------------------------------- what is not here --
-   The three tests to write the day this repo can render a component, from a
-   GPT Sol review of the hook (2026-08-27). Each names a real way it could
-   break that nothing here would catch:
+   The three tests to write, from a GPT Sol review of the hook (2026-08-27).
+   Each names a real way it could break that nothing here would catch.
+
+   **This used to say "the day this repo can render a component", and that day
+   has been and gone.** It was true when it was written; it is not now, and a
+   note that says something is impossible outlives the reason it was true. There
+   are 124 `tests/*.test.tsx` files as of 2026-09-05, mounting components with
+   `createRoot` under `IS_REACT_ACT_ENVIRONMENT` —
+   tests/add-to-shelf-from-the-card.test.tsx mounts the card this hook feeds,
+   with `../src/web/lib/api.js` posed, which is most of the harness these three
+   would need. So they are unwritten rather than unwritable.
 
    1. **A → B while A is in flight.** Resolve A's Wikipedia fetch *after* the
       reader has moved to B, and assert B never shows A's summary. This is what

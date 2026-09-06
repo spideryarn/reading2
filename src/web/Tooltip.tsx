@@ -297,6 +297,7 @@ export function ControlTip({
   what,
   drawn,
   how,
+  tap,
 }: {
   head: string;
   state?: string | undefined;
@@ -311,6 +312,23 @@ export function ControlTip({
    */
   drawn?: string | undefined;
   how: string;
+  /**
+   * **"Tap again to do it"**, and only ever that shape.
+   *
+   * A card opened by a *finger* is the one case where the reader has pressed
+   * the control and it has not done anything — reveal, then commit
+   * (docs/project/touch.md). Nothing else on the card says so, and a control
+   * that appears to have been pressed and ignored reads as broken.
+   *
+   * The caller decides when to pass it, and both halves of that decision are
+   * the spine's, made for the same reasons (Spine.tsx § `showTapHint`): only
+   * when a finger opened the card — saying "tap again" to somebody holding a
+   * mouse is noise — and only where a second tap would actually do something.
+   *
+   * Last in the card, because it is the only line that is about the *gesture*
+   * rather than the control.
+   */
+  tap?: string | undefined;
 }) {
   return (
     <>
@@ -319,6 +337,7 @@ export function ControlTip({
       <p>{what}</p>
       {drawn && <p className="tip-soon-drawn">{drawn}</p>}
       <p className="tip-soon-how">{how}</p>
+      {tap && <p className="tip-soon-tap">{tap}</p>}
     </>
   );
 }
@@ -337,14 +356,15 @@ export function ControlTip({
  * `.tip-soon`). Sized here rather than by adding a rule to styles.css, which
  * would be a fifth spelling of the same thing.
  *
- * `foreground/85` and NOT `ink-soft`, which is what the eye wants and what the
- * other tooltips use: `--ink-soft` is declared in styles.css but is not one of
- * the four reading-view names bridged into Tailwind's theme (tailwind.css), so
- * `tw:text-ink-soft` compiles to nothing at all and the text would simply
- * inherit — no error, no missing class, just the wrong colour.
+ * `ink-soft`, which is what the eye wants and what the other tooltips use.
+ * **This said `foreground/85` until 2026-09-05, and that was a bug rather than a
+ * preference**: `--ink-soft` was declared in styles.css but missing from the
+ * `@theme inline` bridge, so `tw:text-ink-soft` compiled to nothing at all and
+ * the text simply inherited — no error, no missing class, just the wrong
+ * colour. The workaround is not needed now the bridge has the name
+ * (docs/plans/260905f-…). Note the two are not equivalent: `--ink-soft` is an
+ * opaque grey, `foreground/85` composites over whatever is behind it.
  */
 export function TipNote({ children }: { children: ReactNode }) {
-  return (
-    <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-foreground/85">{children}</span>
-  );
+  return <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-ink-soft">{children}</span>;
 }

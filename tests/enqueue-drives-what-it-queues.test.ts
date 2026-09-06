@@ -35,19 +35,7 @@
  *
  * Skips loudly when there is no database; see tests/helpers/pg-ready.ts.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before **any** import, for the reason
- * tests/claim-session-postgres.test.ts sets out at length: `src/store/live.ts`
- * reads the flag once, the first time anything imports it, and imports are
- * hoisted above every statement in a module.
- */
-const HOISTED = vi.hoisted(() => {
-  const previousStore = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return { previousStore };
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
 
@@ -59,17 +47,13 @@ import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 loadEnvLocal();
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/enqueue-drives-what-it-queues.test.ts",
   tables: ["spideryarn.articles", "spideryarn.jobs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 const SLUG = "test-enqueue-pump-flag";
 
@@ -80,7 +64,6 @@ let article: ScratchArticle | undefined;
 let vercel: string | undefined;
 
 beforeAll(async () => {
-  if (!reachable) return;
   /* **`VERCEL` off for this whole file**, which is the opposite of what every
      other queue suite does — and it has to be, because the thing under test is
      whether the pump runs. With it set, both cases below would look identical
@@ -92,7 +75,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (vercel !== undefined) process.env.VERCEL = vercel;
-  if (!reachable) return;
   await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
   await article?.remove();
 });
@@ -118,7 +100,7 @@ async function statusAfterAMoment(id: string): Promise<string> {
   return (await as(() => getJob(id)))?.status ?? "gone";
 }
 
-when("enqueue and the in-process pump", () => {
+describe("enqueue and the in-process pump", () => {
   it("drives the job it queued, by default", async () => {
     /* **The positive control, and it is the half that can rot.** If this stopped
        being a skip — a step that fails, or a claim this process cannot take —

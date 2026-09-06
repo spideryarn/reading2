@@ -56,7 +56,7 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId, type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import type { Claim, ClaimsRun } from "../src/referee-claims.js";
-import { CLAIMS_SWEPT } from "../src/referee-claims-store.js";
+import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
   pgRefereeClaimsStore as store,
@@ -80,12 +80,10 @@ const BLOCK_ID = "spya-qwm234";
  */
 const OUTSIDER = "00000000-0000-4000-8000-0000000000f4" as OwnerId;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-pg-referee-claims.test.ts",
   tables: ["spideryarn.referee_claims"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /**
  * **A census of `ClaimsRun`, so a new field cannot arrive unnoticed.**
@@ -155,7 +153,7 @@ async function ageRunBy(ms: number): Promise<void> {
     .where(eq(refereeClaims.articleId, ARTICLE_ID));
 }
 
-when("the Postgres claims store", { timeout: 20_000 }, () => {
+describe("the Postgres claims store", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     await clean();
     const db = getDb();
@@ -257,7 +255,7 @@ when("the Postgres claims store", { timeout: 20_000 }, () => {
 
     const again = await store.begin(SLUG);
     expect(again.status).toBe("pending");
-    /* The corollary src/referee-claims-store.ts writes down: starting a run
+    /* The corollary src/store/pg-referee-claims.ts writes down: starting a run
        throws away the last answer before the new one exists, deliberately,
        because yesterday's claims under today's spinner is the one state a
        referee cannot interpret. */

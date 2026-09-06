@@ -55,18 +55,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Same
- * block, same reason, as tests/referee-routes-postgres.test.ts.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -92,28 +81,15 @@ const FRESH = "test-referee-claims-routes-fresh";
 /** A slug that is not an article at all. */
 const ABSENT = "test-referee-claims-routes-no-such-article";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/referee-claims-routes.test.ts",
   tables: ["spideryarn.referee_claims", "spideryarn.revision_blocks"],
   max: 2,
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { refereeClaimsStore, STORE } = await import("../src/store/index.js");
+const { refereeClaimsStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  /* The positive control, and it is not decoration: every assertion below
-     passed just as happily against the filesystem store for the four hours
-     Claims was answering 501 to everybody. */
-  it("is the Postgres one", () => {
-    expect(STORE).toBe("postgres");
-  });
-});
 
 interface Reply {
   status: number;
@@ -176,7 +152,7 @@ const URL = `/api/referee/claims/${SLUG}`;
 const abandoned = () => () =>
   new Date(Date.now() - CLAIMS_ORPHAN_GRACE_MS - 60_000).toISOString();
 
-when("Referee's claims routes", { timeout: 60_000 }, () => {
+describe("Referee's claims routes", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
   let fresh: ScratchArticle;
 

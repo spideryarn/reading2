@@ -41,9 +41,11 @@
  * - **A second module id.** `tests/store-fs-write-chains.test.ts` loads
  *   `ai-calls-fs` as `import("…?copy=2")` and `vi.mock`s `node:fs/promises`, so
  *   the wrapper is not what it gets. That duplication is that file's subject.
- * - **Source read as text.** `tests/slug.test.ts` reads `jobs-fs.ts` as a
- *   string. No import, no call, invisible to both witnesses — the manifest
- *   carries it by hand.
+ * - **Source read as text.** No import, no call, invisible to both witnesses —
+ *   the manifest has to carry such a file by hand. `tests/slug.test.ts` read
+ *   `jobs-fs.ts` as a string until stage G, 2026-09-05, when the case and the
+ *   module went together; there is no live example now, and the class is listed
+ *   anyway because nothing prevents the next one.
  * - **`src/store/blobs-fs.ts`**, deliberately: it is selected by credentials
  *   rather than by `SPIDERYARN_STORE` and is out of the migration's scope.
  *
@@ -89,17 +91,21 @@ const VITEST = join(REPO, "node_modules/.bin/vitest");
  *  go missing again — which is exactly what happened to the first instrument. */
 const REGENERATE = "npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json";
 
-/** The eight condemned modules, instrumented at method level. Kept in step with
+/** The modules still instrumented at method level. Eight until stage G,
+ *  2026-09-05, took `uploads-fs`, `ai-calls-fs`, `realtime-sessions-fs`,
+ *  `jobs-fs` and then `fs.ts` itself — the last one with `src/api.ts`, the
+ *  article reader it was assembled from, which this instrument never watched at
+ *  all (the third blind spot). The same day's last group took `artifacts-fs`
+ *  and `data-root`.
+ *
+ *  **One left, and it is not condemned.** `copy-artefacts.ts` survives stage
+ *  D's store-agnostic `ArtifactSource`, so this instrument is now watching a
+ *  module nothing is trying to delete: there is nothing condemned left for it
+ *  to witness. Retiring it belongs with the tombstone in stage I, so that stage
+ *  H still has a working witness if it wants one. Kept in step with
  *  `CONDEMNED` in vitest.witness.config.ts — `assertConfigAgrees()` checks. */
 const INSTRUMENTED = [
-  "src/store/fs.ts",
-  "src/store/artifacts-fs.ts",
-  "src/store/jobs-fs.ts",
-  "src/store/uploads-fs.ts",
-  "src/store/ai-calls-fs.ts",
-  "src/store/realtime-sessions-fs.ts",
   "src/store/copy-artefacts.ts",
-  "src/store/data-root.ts",
 ] as const;
 
 const NOT_INSTRUMENTED = ["src/store/blobs-fs.ts — selected by credentials, out of scope"];
@@ -108,7 +114,7 @@ const NOT_INSTRUMENTED = ["src/store/blobs-fs.ts — selected by credentials, ou
  *  tests/store-migration-registry.test.ts reads them: a witness that dropped
  *  its own blind spots would be a cleaner-looking lie. */
 const KNOWN_BLIND_SPOTS = [
-  "tests/store-fs-write-chains.test.ts loads ai-calls-fs under a second module id (import('...?copy=2')) and vi.mocks node:fs/promises, so the instrument cannot see it. That duplication is the file's own subject.",
+  "RETIRED 2026-09-05, stage G: tests/store-fs-write-chains.test.ts loaded ai-calls-fs under a second module id (import('...?copy=2')) and vi.mocked node:fs/promises, so the instrument could not see it. That duplication was the file's own subject; the file and both modules it was about are deleted. Kept because the dated measurement in tests/store-migration-witness.json still carries the live wording, and tests/store-migration-registry.test.ts asserts the file is now absent.",
   "THE INSTRUMENT RECORDS CALLS, NOT READS. A test that imports a non-function export from a condemned module and merely reads it executes nothing the proxy can observe, so it lands in ranAndTouchedNothing. Found by GPT Sol reviewing stage A, 2026-09-03: tests/store-artefacts-pg.test.ts reads PATHS from artifacts-fs and was filed as touching nothing. A static sweep for runtime imports of a condemned module across all test files found that to be the only member of the class, and it now has a registry entry carrying evidence 'static-only'. THIS IS WHY ranAndTouchedNothing IS NOT PROOF ON ITS OWN, and why the registry's hole check re-derives the static universe on every run rather than trusting this file.",
 ];
 
@@ -123,7 +129,12 @@ const KNOWN_BLIND_SPOTS = [
  * the registry depends on.
  */
 const READ_ONLY_BLIND_SPOTS: Record<string, string> = {
-  "tests/store-artefacts-pg.test.ts": "reads PATHS from artifacts-fs without calling anything — registry evidence: static-only",
+  /* **RETIRED 2026-09-05, stage G.** `tests/store-artefacts-pg.test.ts` read
+     `PATHS` from `artifacts-fs` and called nothing, which is why this list
+     exists at all. `artifacts-fs.ts` is deleted and that import with it, so the
+     file is now an ordinary member of whichever bucket it lands in. The *class*
+     is still real and is still recorded in `KNOWN_BLIND_SPOTS` above; only this
+     instance is gone. An empty map is the honest state, not a broken one. */
 };
 
 // ------------------------------------------------------------------- controls
@@ -138,18 +149,17 @@ type Control = {
 };
 
 /**
- * Seven positives, chosen so that **every module in `INSTRUMENTED` is covered
+ * Four positives, chosen so that **every module in `INSTRUMENTED` is covered
  * by at least one** — `assertControlsCoverEveryModule()` checks that rather
  * than trusting this comment — and so that the assertions are method-level
- * (`fsJobStore.get`, not merely `jobs-fs`), because a proxy that hooked modules
- * but lost methods would still look busy.
+ * (`copy-artefacts:readParts`, not merely `copy-artefacts`), because a proxy
+ * that hooked modules but lost methods would still look busy.
  *
- * **Four run in the `unit` lane and three in `private-postgres`**, which also
- * proves the private lane mints its database under the instrument. This
- * sentence used to say *"six in the unit lane; `upload-records` is
- * `private-postgres`"*, and both halves were wrong: two of these were already in
- * the database lane, and no control has ever been called `upload-records`.
- * Counted against `TEST_LANES` on 2026-09-05 rather than re-copied.
+ * **Both now run in the `unit` lane.** The ones that ran in
+ * `private-postgres` were among those stage G deleted, so this file no longer
+ * proves the private lane mints its database under the instrument — nothing
+ * else does either, and that is a gap rather than a decision. Counted against
+ * `TEST_LANES` on 2026-09-05.
  *
  * **They are a dated choice, not a fixture.** Stage B converts these files one
  * by one, and when it converts one this self-check goes red saying so. That is
@@ -157,24 +167,29 @@ type Control = {
  * same module, and if no file does, that module is done.
  */
 const POSITIVE_CONTROLS: readonly Control[] = [
-  { file: "tests/data-root.test.ts", expect: ["data-root:dataRoot", "data-root:chooseDataRoot", "artifacts-fs:fsLocations"] },
-  { file: "tests/jobs-fs-load.test.ts", expect: ["jobs-fs:fsJobStore.get", "jobs-fs:fsJobStore.list", "jobs-fs:reloadForTests"] },
-  { file: "tests/artefact-copy.test.ts", expect: ["copy-artefacts:copyArtefacts", "copy-artefacts:readParts", "artifacts-fs:createFsArtifactStore"] },
-  /* **Was `tests/cost-store-under-test.test.ts` until stage C, 2026-09-05**, and
-     the paragraph above is what happened: that file was converted, this
-     self-check went red saying so, and the control moved to a file that still
-     reaches the module. It was the fourth stage-C finding and the only one
-     nobody here looked for — GPT Sol's F1, on a review of the stage.
-     `store-ai-calls.test.ts` leaves `SPIDERYARN_STORE` unset, so it takes the
-     `files` branch of `selected()` and records through the filesystem adapter,
-     while its own subject is the Postgres one. */
-  { file: "tests/store-ai-calls.test.ts", expect: ["ai-calls-fs:fsCostStore.record", "ai-calls-fs:fsCostStore.describe"] },
-  {
-    file: "tests/store-realtime-sessions.test.ts",
-    expect: ["realtime-sessions-fs:fsRealtimeSessionStore.issue", "realtime-sessions-fs:fsRealtimeSessionStore.close", "realtime-sessions-fs:fsRealtimeSessionStore.markConnected"],
-  },
-  { file: "tests/store-uploads-parity.test.ts", expect: ["uploads-fs:fsUploadStore.create", "uploads-fs:fsUploadStore.claim", "uploads-fs:fsUploadStore.settle"] },
-  { file: "tests/store-chat-tail-guard.test.ts", expect: ["fs:fsChatStore.begin", "fs:fsChatStore.finish", "fs:fsChatStore.load"] },
+  { file: "tests/artefact-copy.test.ts", expect: ["copy-artefacts:copyArtefacts", "copy-artefacts:readParts"] },
+  /* **`tests/data-root.test.ts` was the sixth, and it went on 2026-09-05** with
+     `src/store/data-root.ts`, `src/store/artifacts-fs.ts` and `src/job-scope.ts`
+     — the last adapter group. Every one of its cases was about `chooseDataRoot`,
+     `findRepoRoot` or `fsLocations`, so there was nothing in it to relocate.
+     `tests/artefact-copy.test.ts` lost its `artifacts-fs:createFsArtifactStore`
+     site the same way and keeps the two that name the module it actually
+     controls. */
+  /* **Four controls stood here until stage G, 2026-09-05** — for `uploads-fs`,
+     `ai-calls-fs`, `realtime-sessions-fs` and `jobs-fs` (the last of them
+     `tests/jobs-fs-load.test.ts`, which was the whole of the cold-start
+     loader's coverage). They went with the modules they controlled, which is
+     the paragraph above happening for the last time on each: a control whose
+     module has been deleted has nothing left to prove.
+     `assertControlsCoverEveryModule()` is what says the remaining two still
+     cover the three that survive.
+
+     **A fifth went with `src/store/fs.ts` itself, later the same day** —
+     `tests/store-chat-tail-guard.test.ts`, controlling `fs:fsChatStore.*`.
+     `fs.ts` was assembled out of `src/api.ts`, the filesystem article reader,
+     which no instrument here ever watched; that was the third blind spot, and
+     it is written up in
+     docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G. */
 ];
 
 /**
@@ -244,9 +259,6 @@ function assertControlsCoverEveryModule(): void {
  *  non-zero: this tree has failures of its own and a red suite still records. */
 function runVitest(files: readonly string[], out: string): number {
   const env: NodeJS.ProcessEnv = { ...process.env, FSW_OUT: out };
-  /* The whole point is the *default* store. An inherited SPIDERYARN_STORE would
-     silently measure the Postgres path and report it as the filesystem one. */
-  delete env.SPIDERYARN_STORE;
   const result = spawnSync(VITEST, ["run", "--config", CONFIG, ...files], {
     cwd: REPO,
     env,
@@ -360,9 +372,17 @@ function selfCheck(): number {
 
   /* The control the controls cannot give: method-level detail. A proxy that
      wrapped modules but returned methods unwrapped would satisfy every
-     module-level expectation above and record no `export.method` site at all. */
+     module-level expectation above and record no `export.method` site at all.
+
+     **The floor is a margin above zero, not a census.** It was 10 against seven
+     controls; stage G deleted three of those with their modules and the four
+     that remain measure 8 (2026-09-05). Set to 5 rather than to 8 on purpose:
+     the sentence this prints diagnoses a *collapse* toward zero, and at 8 it
+     would fire with that wording for any ordinary edit to a control — which is
+     the failure being reported wrongly rather than caught. Losing a control's
+     sites is already caught above, by name. */
   const methodSites = [...records.values()].flatMap((s) => [...s]).filter((s) => s.includes("."));
-  if (methodSites.length < 10) {
+  if (methodSites.length < 5) {
     failures.push(`only ${methodSites.length} method-level sites across all controls — the object proxy has stopped wrapping methods`);
     console.log(`  FAIL  method-level detail: ${methodSites.length} sites`);
   } else {
@@ -376,7 +396,7 @@ function selfCheck(): number {
     console.log("\nDo not believe a witness whose instrument cannot pass this.");
     return 1;
   }
-  console.log("\nself-check passed: the instrument still hooks all eight modules, at method level.");
+  console.log(`\nself-check passed: the instrument still hooks all ${INSTRUMENTED.length} modules, at method level.`);
   return 0;
 }
 
@@ -423,7 +443,7 @@ function full(outJson: string): number {
   const payload = {
     what: `Witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact — see the plan's 'Counts are perishable'. Regenerate with: ${REGENERATE}`,
     measured: new Date().toISOString(),
-    store: "default (SPIDERYARN_STORE unset => files)",
+    store: "whatever the tree selects (there is one store since 2026-09-05)",
     instrumentedModules: [...INSTRUMENTED],
     notInstrumented: NOT_INSTRUMENTED,
     unresolved,

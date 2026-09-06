@@ -65,13 +65,14 @@ import {
   type RangedNode,
   structuralBlocksIn,
 } from "./hierarchy-cascade.js";
-import {
-  type BuildReport,
-  type ModelNode,
-  PRODUCTION_EFFORT,
-  PROMPT_VERSION,
-  renderBlocks,
-} from "./hierarchy.js";
+/* **Types only from `hierarchy.ts`, values only from `hierarchy-prompt.ts`.**
+   This file is imported (through `hierarchy-deepen.ts`) *by* `hierarchy.ts`, so
+   a value import from there is a cycle `npm run cycles` refuses; a type import
+   is erased and is not. The three values this needs — the stamp, the effort and
+   the renderer — were hoisted into the leaf on 2026-09-05 for exactly that
+   reason, unchanged. See `hierarchy-prompt.ts`. */
+import type { BuildReport, ModelNode } from "./hierarchy.js";
+import { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
 import type { MessagesBody } from "./messages-stream.js";
 import { type Effort, modelFor } from "./models.js";
 import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
@@ -97,7 +98,7 @@ import type { Block } from "./types.js";
  * question that did not ask for it, so it must read as a miss rather than be
  * resumed onto — which is the whole reason this string is in the key.
  */
-export const EXPAND_PROMPT_VERSION = "expand/2";
+export const EXPAND_PROMPT_VERSION = "expand/3";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
@@ -251,7 +252,20 @@ TITLES AND GISTS
   no heading — do not send an empty one.
 - gist: exactly ONE sentence, on every child. It is a CLAIM or a MOVE, not a
   topic label. Keep the work's own words for the things it names and ordinary
-  words for everything else.
+  words for everything else; where a shorter, commoner word loses nothing, use
+  it.
+- These are the FINE rungs, and a fine gist is longer than a coarse one, not
+  shorter: AT LEAST 22 words, and at most 32. The floor is the half that will
+  feel wrong, so obey it: down here a one-clause gist is too SHORT, not
+  admirably terse. A reader at this zoom is reading your sentence INSTEAD of the
+  paragraphs it covers, so give them the claim AND the ground it stands on — its
+  reason, contrast, consequence or example. The floor does not apply where the
+  RANGE itself is slight: a title, a credit line, a URL, a heading with nothing
+  under it. Never pad, never invent support, and never move a boundary to reach
+  a word count. One sentence still.
+- No narration of document order: not "this section explores", "the author then
+  turns to", "goes on to". Say what the child CLAIMS; do not narrate that it is
+  claiming. Ordinary "then" and "next" inside a claim are fine.
 - Your titles must distinguish these children from EACH OTHER and from the
   sibling sections in the outline above. Four children that all mean
   "Background" is the failure to avoid.
@@ -592,6 +606,85 @@ export interface ExpansionAnswerChild extends ProposedChild {
   why?: string;
 }
 
+/**
+ * **What a refused answer looked like**, kept so that a refusal can be read
+ * afterwards instead of guessed at.
+ *
+ * A refused answer is never checkpointed — a stored refusal would be replayed
+ * for ever — and until 2026-09-05 it was not kept anywhere else either. So when
+ * the first paid run of stage 5b lost a wave to a target the model declined
+ * three times, nobody could tell **whether the model had declined on the merits
+ * or fumbled the schema**, which was the only question worth asking about it.
+ *
+ * ## What is in here, and where it may go
+ *
+ * The child count and the verdicts are shape. `why` is the model's own dozen
+ * words *about the article*, so this whole structure belongs in the deepening
+ * **records file** and never in a log line — docs/project/logging.md, and the
+ * same rule `describeShape` above keeps for error messages. The type carries no
+ * `title` or `gist` for that reason: they are the article's prose restated, and
+ * the shape of a refusal does not need them.
+ */
+export interface RefusedAnswerShape {
+  /** How many sections it carried, or `null` if it was not readable as an answer at all. */
+  sections: number | null;
+  perSection: {
+    /** The ordinal the answer claimed, or `null` where it gave none that made sense. */
+    section: number | null;
+    children: number;
+    /** One per child, `null` where the child gave none or gave nonsense. */
+    verdicts: (string | null)[];
+    /** The model's own reason per child, `null` where absent. Article-adjacent text. */
+    why: (string | null)[];
+  }[];
+}
+
+/**
+ * **Read whatever can be read out of an answer that was refused**, without
+ * refusing again.
+ *
+ * Deliberately the opposite of `parseExpansionAnswer`, which throws on the first
+ * thing that is wrong — the point here is that something has *already* gone
+ * wrong and the shape is the evidence. So every field is optional, every
+ * malformed value becomes a `null` rather than an error, and the whole thing
+ * comes back `sections: null` if the text is not even JSON.
+ *
+ * Pure, and it never throws.
+ */
+export function readRefusedShape(raw: string): RefusedAnswerShape {
+  const nothing: RefusedAnswerShape = { sections: null, perSection: [] };
+  let answer: unknown;
+  try {
+    answer = parseJsonAnswer<unknown>(raw, "the refused expansion");
+  } catch {
+    return nothing;
+  }
+  if (typeof answer !== "object" || answer === null || Array.isArray(answer)) return nothing;
+  const sections = (answer as { sections?: unknown }).sections;
+  if (!Array.isArray(sections)) return nothing;
+  return {
+    sections: sections.length,
+    perSection: sections.map((entry) => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        return { section: null, children: 0, verdicts: [], why: [] };
+      }
+      const { section, children } = entry as { section?: unknown; children?: unknown };
+      const list = Array.isArray(children) ? children : [];
+      const field = (child: unknown, key: "verdict" | "why"): string | null => {
+        if (typeof child !== "object" || child === null) return null;
+        const value = (child as Record<string, unknown>)[key];
+        return typeof value === "string" ? value : null;
+      };
+      return {
+        section: typeof section === "number" && Number.isInteger(section) ? section : null,
+        children: list.length,
+        verdicts: list.map((c) => field(c, "verdict")),
+        why: list.map((c) => field(c, "why")),
+      };
+    }),
+  };
+}
+
 /** One parent's complete child set, paired with the ordinal it was asked under. */
 export interface ExpansionAnswerSection {
   /** 1-based, and equal to this entry's position in the returned array. */
@@ -604,7 +697,7 @@ const VERDICTS: readonly string[] = ["needs-deeper", "finished"];
 
 /** An answer that never reached the derivation planned nothing. */
 function nothingPlanned(): BuildReport {
-  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 }
 
 /**
@@ -918,8 +1011,33 @@ export function overrodeVerdict(
  * the article, and this travels into a log line. src/ids.ts § `nameValue`.
  */
 export interface CandidateRecord {
-  /** "root > child 2 > child 4". Derived from the tree's shape, so safe to log. */
+  /**
+   * "root > child 2 > child 4". Derived from the tree's shape, so safe to log.
+   *
+   * **It is not a repeat-stable identity**, which is why `range` sits beside it.
+   * The ordinal comes from the answer's own fan-out, so two repeats that split
+   * one parent at different points both emit `root > child 1` — and pairing on
+   * that reads a boundary that moved as a node whose verdict held.
+   */
   where: string;
+  /**
+   * **The first and last block id of this node's derived span**, which is what
+   * makes two runs' records pairable: the same parent plus the same range is the
+   * same prose, whatever ordinal the fan-out gave it.
+   *
+   * Safe to write down for the same reason `where` is, and it is worth saying
+   * plainly because the rule above it is "nothing here is prose from the
+   * article": a block id is `spya-k3m9qt`, minted by src/ids.ts from nothing the
+   * article contains ([block-ids.md](../docs/project/block-ids.md)). It is an
+   * address, not a quotation.
+   *
+   * `evals/deepen/report.ts` § `compareRepeats` is what reads it, and the
+   * classification lives there rather than here: a changed fan-out, and an
+   * unmatched range at equal fan-out, are **structural instability** — a
+   * different finding from a verdict that flipped, and one stage 6 must not
+   * confuse with it.
+   */
+  range: [string, string];
   /**
    * 1 for the whole-document call's own nodes; 2 for the first scoped wave, and
    * so on. Not the node's depth — a wave-2 call can produce a node at depth 3
@@ -951,6 +1069,27 @@ export interface CandidateRecord {
   retries: number;
   /** Children `normaliseExpansion` kept, or `null` where the node was not expanded. */
   fanOut: number | null;
+  /**
+   * **Set where the call about this node was refused on every draw its budget
+   * allowed**, and absent otherwise.
+   *
+   * The third of three states that must never share a spelling: *finished by the
+   * model* is `effective: {decision: "stop", because: "verdict"}`, *stopped by a
+   * bound* is `stop` with the bound's name, and this keeps the governor's own
+   * `decision: "expand"` — true, it did force the node open — and says the
+   * expansion never happened. Reading a refusal as "finished" is the move
+   * `granularity-zoom.md` § The supplement node forbids one field over: never
+   * infer the role from a missing answer.
+   *
+   * `shape` carries the model's own `why`, which is article-adjacent text — so
+   * this whole field belongs in the deepening records file and never in a log.
+   */
+  refused?: {
+    reason: string;
+    /** Draws made, counting the first. */
+    draws: number;
+    shape: RefusedAnswerShape;
+  };
   model: string;
   effort: Effort;
   /** Both stamps: the wave-1 prompt this outline came from, and the scoped one. */
@@ -990,6 +1129,9 @@ export function recordCandidate(opts: {
   const rawVerdict = opts.verdict ?? null;
   return {
     where: opts.where,
+    /* Copied rather than shared, so a later mutation of the node cannot rewrite
+       what was recorded about it. */
+    range: [node.range[0], node.range[1]],
     wave: opts.wave,
     depth: opts.depth,
     rawVerdict,

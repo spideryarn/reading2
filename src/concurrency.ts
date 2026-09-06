@@ -33,12 +33,74 @@
  *
  * The original error is rethrown, not wrapped: the caller wants to know which
  * chunk failed and why, and `stop` is cleanup rather than a second opinion.
+ *
+ * ## It does not return while paid work is still in the air
+ *
+ * `Promise.all` rejects the instant the first promise does, so the failure used
+ * to arrive back at the caller while the *other* calls were still running — and
+ * `stop` deliberately does not cancel a call already on the wire, because a
+ * cancelled model call is money spent for nothing. What that cost was the thing
+ * those calls were bought for: the deepening wave writes each answer's
+ * checkpoint row inside its own task, so a wave that failed reported the failure
+ * with its peers' rows not yet written, and a freeze or a warm label pass could
+ * end the attempt before they landed. **Calls that were paid for, whose answers
+ * were then thrown away.** ⟨GPT Sol's review of stage 5a, finding 3, 2026-09-05.⟩
+ *
+ * So the queue is cleared at once and the promises that already exist are then
+ * drained. Three consequences worth stating:
+ *
+ * - **`stop` must actually end the work**, by aborting it or by letting it
+ *   finish; a caller whose `stop` leaves a task that can never settle waits here
+ *   until `drainMs` — and for ever if it gave none.
+ * - **The drain is finite only because a caller bounds it**, and the first
+ *   draft of this docblock claimed otherwise: it said every caller either
+ *   aborted in flight (src/pdf-read.ts) or was bounded by the claimant's
+ *   deadline signal (src/hierarchy-deepen.ts). The second half is not true. The
+ *   deepening wave is reachable from the CLI and from an exported function with
+ *   **no signal at all**, and its `ExpansionExecutor` seam has no abort contract
+ *   even when there is one — so a single wedged call parked the wave for ever.
+ *   ⟨GPT Sol's second review of stage 5a, finding 3, 2026-09-05.⟩ Hence
+ *   `drainMs`: past it the original failure is rethrown with the stragglers
+ *   still running, which is worse than draining and much better than hanging.
+ *   The number belongs to the caller, because only the caller knows what one of
+ *   its stragglers is worth waiting for — src/hierarchy-deepen.ts §
+ *   `EXPANSION_DRAIN_MS` derives one.
+ * - **`allSettled`, not `all`**, so a second failure arriving during the drain
+ *   is handled rather than becoming an unhandled rejection — the same reason the
+ *   happy path is `Promise.all` and not a loop. Its handlers stay attached to a
+ *   straggler abandoned at `drainMs`, so a late failure is still swallowed
+ *   rather than crashing the process.
+ *
+ * **src/labels.ts still has the copy this was lifted from and it has not been
+ * changed**: its own test hands it a promise that never settles, which is a
+ * legal thing to hand the old contract and a hang under this one. The two are
+ * now genuinely different functions, and the one to import is this one.
  */
-export async function allOrStop<T>(work: Promise<T>[], stop: () => void): Promise<T[]> {
+export async function allOrStop<T>(
+  work: Promise<T>[],
+  stop: () => void,
+  /**
+   * How long to wait for the work still in the air, in milliseconds. Omitted,
+   * the drain is unbounded — which is right only for a caller whose `stop`
+   * genuinely ends every task, as src/pdf-read.ts's does by aborting them.
+   */
+  drainMs?: number,
+): Promise<T[]> {
   try {
     return await Promise.all(work);
   } catch (err) {
     stop();
+    const drained = Promise.allSettled(work);
+    if (drainMs === undefined) {
+      await drained;
+    } else {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const bell = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, drainMs);
+      });
+      await Promise.race([drained.then(() => undefined), bell]);
+      clearTimeout(timer);
+    }
     throw err;
   }
 }
@@ -132,6 +194,40 @@ interface Ticket {
   readonly epoch: number;
 }
 
+/**
+ * **What the gate did while one caller was using it** — and the distinction
+ * from `WidthGate.report()` is the whole reason this exists.
+ *
+ * `report()` is the singleton's life story: the narrowest it has *ever* been and
+ * every refusal it has *ever* seen, across every job in the process. Copying
+ * those onto one wave's artefact would attribute another job's rate limit to
+ * this book, and — worse for a measurement run — would make a wave that met
+ * nothing look like the wave that met everything.
+ *
+ * So a caller opens a window, and what it gets back is scoped to it. **Not
+ * scoped to its own calls**: the gate is shared on purpose (src/hierarchy-deepen.ts
+ * § `sharedGate`), so a refusal here may have been another job's. What this
+ * answers is *"what was the upstream doing while I ran"*, which is the question
+ * a slow wave has to be able to explain itself with.
+ */
+export interface GateWindow {
+  /** The width when the window opened. */
+  initialWidth: number;
+  /** The width when it closed. */
+  finalWidth: number;
+  /** The narrowest the gate went while it was open. */
+  narrowestWidth: number;
+  /** Refusals the gate saw while it was open, from every caller sharing it. */
+  refusals: number;
+}
+
+/** One open window's running totals. `WidthGate.watch` owns these. */
+interface OpenWindow {
+  initialWidth: number;
+  narrowestWidth: number;
+  refusals: number;
+}
+
 /** Somebody parked until a slot frees up, and whether they still want it. */
 interface Waiter {
   alive: boolean;
@@ -156,7 +252,11 @@ interface Waiter {
  * - **The pause is global, the backoff is per-request.** Shrinking the width
  *   does nothing for requests already admitted, so a refusal also parks new
  *   admissions briefly (`MAX_COOLOFF_MS`) — long enough for the narrower width
- *   to be the thing that governs.
+ *   to be the thing that governs. **And the pause, unlike the halving, is not
+ *   epoch-scoped**: the longest window any refusal of a burst named is the one
+ *   the gate keeps, because "the width is too high" is one fact reported many
+ *   times while "come back in thirty seconds" is a number that can differ. See
+ *   `refused`.
  * - **A refused chunk gives its slot back while it waits.** `run` wraps one
  *   *attempt*, so the backoff in src/pdf-read.ts § `withTransportRetries`
  *   happens outside the gate. This was only half true until 2026-09-04, when the
@@ -193,6 +293,14 @@ export class WidthGate {
   /** Counted for the log line, so an operator can see the gate working. */
   private refusals = 0;
   private narrowest: number;
+  /**
+   * Every window `watch` has opened and nobody has closed.
+   *
+   * **A window that is never closed is a leak on a process singleton**, so every
+   * caller closes in a `finally`. It is a `Set` rather than a counter because
+   * two jobs can be inside this gate at once and each wants its own numbers.
+   */
+  private windows = new Set<OpenWindow>();
 
   constructor(private readonly max: number) {
     this.width = max;
@@ -202,6 +310,35 @@ export class WidthGate {
   /** What the gate has learnt, for the one log line at the end of a step. */
   report(): { width: number; narrowest: number; refusals: number } {
     return { width: this.width, narrowest: this.narrowest, refusals: this.refusals };
+  }
+
+  /**
+   * **Watch what the gate does from now until `close()`** — see `GateWindow` for
+   * why the cumulative `report()` is the wrong number to put on one wave's
+   * artefact.
+   *
+   * `close()` is idempotent in the sense that matters: calling it twice returns
+   * the same window's totals and removes nothing a second time. Call it in a
+   * `finally` — an unclosed window stays in the set for the life of the process.
+   */
+  watch(): { close: () => GateWindow } {
+    const open: OpenWindow = {
+      initialWidth: this.width,
+      narrowestWidth: this.width,
+      refusals: 0,
+    };
+    this.windows.add(open);
+    return {
+      close: (): GateWindow => {
+        this.windows.delete(open);
+        return {
+          initialWidth: open.initialWidth,
+          finalWidth: this.width,
+          narrowestWidth: open.narrowestWidth,
+          refusals: open.refusals,
+        };
+      },
+    };
   }
 
   /**
@@ -354,11 +491,42 @@ export class WidthGate {
   }
 
   /**
-   * **Only the first refusal of an epoch moves anything**, and the rest are
+   * **Only the first refusal of an epoch moves the width**, and the rest are
    * news we already have. See the class docblock.
+   *
+   * **The pause is not epoch-scoped, and used to be**, because the early return
+   * sat above it. Within one burst that discarded the provider's own number for
+   * being late: a first refusal asking for one second bumped the epoch, and a
+   * second refusal of the same burst asking for thirty was counted and dropped
+   * entirely — so the gate reopened at one second, inside a window the upstream
+   * had just declared closed, which is the exact accident `MAX_COOLOFF_MS`
+   * exists to prevent from the other direction. ⟨GPT Sol's review of stage 5a,
+   * finding 2, 2026-09-05.⟩
+   *
+   * The two claims a refusal carries are different, and now they are read
+   * differently. *"The width is too high"* is one fact however many calls report
+   * it, so it is spent once per epoch. *"Come back in thirty seconds"* is a
+   * statement about the account's clock, and the longest one anybody was told is
+   * the true one. **Every refusal extends the pause; only the adaptation is
+   * epoch-scoped.**
+   *
+   * Nothing runs away with it: each hold is capped at `MAX_COOLOFF_MS` from the
+   * moment it arrives and `Math.max` only ever moves the pause later, so a
+   * sustained burst can slide the reopening by at most one cool-off past its
+   * last refusal — and every wait underneath it is cut short by the claimant's
+   * deadline signal.
    */
   private refused(ticket: Ticket, retryAfterMs: number | null): void {
     this.refusals += 1;
+    /* Every refusal, not only the one that moves the width: a wave that met
+       fifty and narrowed once is a different story from one that met one. */
+    for (const open of this.windows) open.refusals += 1;
+    const hold = Math.min(retryAfterMs ?? 2_000, MAX_COOLOFF_MS);
+    /* **`performance.now`, not `Date.now`.** The wall clock can step backwards —
+       an NTP correction is enough — and a `pausedUntil` computed from one that
+       then jumps back is a gate that holds every request for as long as the
+       correction was. Nothing here needs a date; it needs a duration. */
+    this.pausedUntil = Math.max(this.pausedUntil, performance.now() + hold);
     if (ticket.epoch !== this.epoch) return;
     this.epoch += 1;
     this.credits = 0;
@@ -369,12 +537,9 @@ export class WidthGate {
        ⟨GPT Sol, 2026-09-04, finding 3⟩ */
     this.width = Math.min(this.max, Math.max(MIN_WIDTH, Math.floor(this.width / 2)));
     this.narrowest = Math.min(this.narrowest, this.width);
-    const hold = Math.min(retryAfterMs ?? 2_000, MAX_COOLOFF_MS);
-    /* **`performance.now`, not `Date.now`.** The wall clock can step backwards —
-       an NTP correction is enough — and a `pausedUntil` computed from one that
-       then jumps back is a gate that holds every request for as long as the
-       correction was. Nothing here needs a date; it needs a duration. */
-    this.pausedUntil = Math.max(this.pausedUntil, performance.now() + hold);
+    for (const open of this.windows) {
+      open.narrowestWidth = Math.min(open.narrowestWidth, this.width);
+    }
   }
 }
 
@@ -387,6 +552,20 @@ function abortedWaiting(): Error {
   const err = new Error("The step gave up while waiting for a slot.");
   err.name = "AbortError";
   return err;
+}
+
+/**
+ * A wait that a cancelled step does not sit through.
+ *
+ * Exported since 2026-09-05 for the deepening wave (src/hierarchy-deepen.ts),
+ * which needs a floor under its retry loop and would otherwise be a third copy
+ * of these fifteen lines — src/pdf-read.ts § `waitOrGiveUp` is the second, and it
+ * is not moved here only because that file's own timing arguments hang off it.
+ * The abort spelling is the protocol every layer above reads: see
+ * `abortedWaiting`.
+ */
+export function sleepUnlessAborted(ms: number, signal?: AbortSignal): Promise<void> {
+  return sleep(ms, signal);
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

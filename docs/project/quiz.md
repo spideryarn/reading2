@@ -68,12 +68,48 @@ spread rule force the model to commit. The measurements are in
 **The spread rule is presence at each end, not a proportion.** A batch of four or more must carry at
 least one `easy` and one `hard`, measured against what survived validation; a shorter batch is asked
 for nothing, because demanding a spread from a three-question article is an instruction to pad. The
-prompt asks for three of each end of a full twelve, and that difference is deliberate: the prompt
-states a target, the gate enforces a floor, and asking the model for one of each would make the floor
-the normal distribution. **The prompt does not mention the floor**, for the same reason — publishing
-the lower number invites the model to aim at it. [`missingBandEnds`](../../src/quiz.ts) is where it
-lives; the prompt should state what a good batch looks like and describe our machinery not at all,
-which is what went wrong when it promised a retry that never existed.
+prompt asks for **five `easy` and three `hard`** of a full twelve, and that difference is deliberate:
+the prompt states a target, the gate enforces a floor, and asking the model for one of each would
+make the floor the normal distribution. **The prompt does not mention the floor**, for the same
+reason — publishing the lower number invites the model to aim at it.
+[`missingBandEnds`](../../src/quiz.ts) is where it lives; the prompt should state what a good batch
+looks like and describe our machinery not at all, which is what went wrong when it promised a retry
+that never existed.
+
+### It leans easy, since 2026-09-05
+
+The target was three and three until Greg said (SPIDERYARN-READING2-21):
+
+> The quiz questions are too hard. Certainly, they should start much, much easier. And they should
+> focus on what's most important.
+
+`quiz/3` answers both halves **in the prompt and nowhere else**: `easy` is redefined against the
+reader — *answered without effort, from one attentive read*, and a question between two bands belongs
+in the harder one — the easy end of the target goes from three to five, and a new section asks for
+most of a batch to sit at value 4 or 5, because `value` orders what has already been chosen and
+cannot make a peripheral batch central.
+
+**The easy end went up; the hard end did not come down**, and that asymmetry is a cross-family
+review's correction rather than the first instinct. Two hard questions would lean the batch a little
+further easier and halve the margin the gate runs on: `missingBandEnds` measures what *survived
+validation*, so with two asked for, losing both to a bad quote throws away a paid batch, where three
+has to lose three. That is
+[260903c](../plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md) wearing a
+different number — and the lead the reader meets is decided by the easy end anyway.
+
+One run each side of the edit, same article, same model —
+[`evals/results/quiz-easier-2026-09-05.md`](../../evals/results/quiz-easier-2026-09-05.md) against
+[`quiz.md`](../../evals/results/quiz.md): 4 easy / 3 medium / 4 hard became **6 / 3 / 3**, and
+questions at value 4-or-5 went from 5 of 11 to **9 of 12**. Two runs is not a measurement, and
+`evals/quiz.ts` says why the counts are a prompt to look rather than a verdict.
+
+**The ordering control Greg asked for in the same report is not built**, and the three decisions it
+collides with are written up as questions for him in
+[260905g](../plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md#three-questions-for-greg-and-one-decision).
+The short version: a blended `ease + value` score was proposed and killed on review because it leads
+with the hardest question; the panel deliberately shows neither `band` nor `value`, and the
+glossary's condition for keeping model scores is that the number you sorted by is on every row; and
+the quiz sorts on the server, once.
 
 It was a proportion — `min(3, floor(n / 4))` — until a production build failed on 2026-09-03 having
 paid for nine good questions carrying one `hard`, and the number is gone rather than retuned:
@@ -130,7 +166,17 @@ prompt.
 ## The artefact, and the batch every mark binds to
 
 `quiz` is a pipeline step like `ideas` or `timeline` — off the default list, run on demand by a
-button in the band, cached per article and stamped. Its fingerprint is
+button in the band — and, since 2026-09-06, by pressing the **Quiz** chip itself,
+which is Greg's rule that opening a mode is the reader asking for it
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md);
+[`activation.ts`](../../src/web/activation.ts)). The chip arms whether or not the
+sub-mode changes, so pressing Quiz while already in Quiz is how a reader asks
+again after a read that failed. `useQuiz` grew a second verb for it: **`ensure`**
+is unforced and is what both the automatic run and the empty state's button call,
+**`write`** is forced and is what *Write them again* calls. They must not be
+confused — `work_key` includes `force`, so the two are different requests and a
+reader who pressed the button beside an automatic run would pay for both.
+It is cached per article and stamped. Its fingerprint is
 `articleWithIdsFingerprint` (blocks, tree, and a head including the URL), shared with `ideas` and
 `sketch`. [architecture.md § Storage](architecture.md#storage) has the family.
 

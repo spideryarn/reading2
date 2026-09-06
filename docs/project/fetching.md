@@ -316,10 +316,11 @@ Three things follow, and all three are refusals rather than fallbacks:
 - **`readRaw(dir)` returning `null` no longer means "assume HTML".** It meant that until this change
   and stage 2 fell back to reading `raw.html`; nothing writes `raw.html` now, so the fallback had
   nothing to fall back to. Two articles in the local corpus were relying on it — `data/constitution`
-  and `data/noema-mythology-of-conscious-ai`. The function survives for one caller,
-  `articleMetadata` in [`src/api.ts`](../../src/api.ts), which shows the metadata page where a
-  document came from. `slugIsSpokenFor` was the other until 2026-08-31, when every slug gained a
-  short id and the collision question it answered stopped existing.
+  and `data/noema-mythology-of-conscious-ai`. `readRaw` itself is gone too, deleted 2026-09-05 along
+  with its last caller, `loadSource` in `src/api.ts`, and the filesystem store both belonged to
+  ([`src/fetch.ts`](../../src/fetch.ts) § *`readRaw(dir)` was here*). (`slugIsSpokenFor` was a similar
+  one-caller survivor, retired on 2026-08-31 when every slug gained a short id and the collision
+  question it answered stopped existing.)
 - **An object that is absent, corrupt, or longer than the manifest says, throws** —
   `RawDocumentUnavailable`, with the reason as a field.
 
@@ -336,7 +337,7 @@ fix — which is a re-fetch. The measurement, the two probes that produced it an
 **Retired 2026-09-05**, in stage E of
 [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md). It took a
 URL and wrote `data/<slug>/raw.html` (or `raw.pdf`) with the `raw.json` manifest beside it, off
-`process.cwd()` and by hand — which satisfied the queue's fetch step under `SPIDERYARN_STORE=files`
+`process.cwd()` and by hand — which satisfied the queue's fetch step under the filesystem store
 and, under Postgres, wrote files nothing reads.
 
 **A fetch-only job is not a thing the queue can express**, and that is the reason it became

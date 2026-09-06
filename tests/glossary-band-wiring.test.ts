@@ -189,3 +189,43 @@ describe("the threshold wiring", () => {
     }
   });
 });
+
+/**
+ * **That the quotes band marks the whole list and not one row.**
+ *
+ * The same kind of source-level assertion as the two blocks above, and it is
+ * here for the same reason: the *behaviour* is covered by
+ * tests/quote-marks.test.ts, which knows nothing about `App.tsx` and so cannot
+ * tell whether the reading view calls it. This is the cheap companion that
+ * catches the regression the feature was built out of — a memo that returned
+ * `[]` unless a row was selected, so the mode drew nothing at all on the page
+ * until you pressed one.
+ *
+ * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md.
+ */
+describe("the quotes band's marks", () => {
+  it("resolves the list the panel is showing, not the selected row", () => {
+    const body = hookBody("useQuotesMode");
+    /* One function answers "what is the panel showing", and the hook and the
+       panel both call it. Two expressions computing it is how a row comes to be
+       hidden with its wash still on the paragraph. */
+    expect(body).toMatch(/markedQuotes\(/);
+    expect(body).toMatch(/resolveQuotes\(blocks, /);
+    /* The bug itself, named: a guard that made the marks a function of the
+       selection. */
+    expect(body).not.toMatch(/if \(!selected\) return \[\];/);
+  });
+
+  it("hands the pressed quote's key up beside the marks, in one layout effect", () => {
+    /* With every quote marked, `mark.hit[data-hit-open]` is the only thing
+       saying which one the reader pressed. Pushed in the SAME effect as the
+       marks, so a paint can never show the ring on one quote and the wash set
+       of another — the ordering argument the ideas and referee bands both make.
+       And `Reader` must be holding it, or there is nothing for `hitMarks` to
+       compare a key against. */
+    expect(hookBody("useQuotesMode")).toMatch(
+      /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*onOpenKey\(/,
+    );
+    expect(app).toMatch(/mode === "quotes"\s*\?\s*quoteOpenKey/);
+  });
+});

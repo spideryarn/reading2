@@ -16,30 +16,37 @@
  *    `data/<slug>/raw.pdf` finds nothing and answers **404 for a PDF that
  *    exists** — an article reported as sourceless, which is what
  *    docs/reusable/silent-success.md is about.
- * 2. Deployed, it is a **jobless caller of `dataRoot()`**, which
- *    src/store/data-root.ts § *Deployed with no job is an error, deliberately*
- *    names by file and route. That function has two wrong answers available in
- *    that state and deliberately throws instead, so the route 500s.
+ * 2. Deployed, it was a **jobless caller of `dataRoot()`**, which had two wrong
+ *    answers available in that state and deliberately threw instead, so the
+ *    route 500'd.
  *
- * ## The three sections, and why the first one is a grep
+ * ## The two sections, and why the first one is a grep
  *
  * 1. **The route reaches the seam** — read out of src/routes.ts's own text.
  *    There is no type that can say "this function does not touch the disk", and
  *    the failure guarded against is somebody writing a perfectly well-typed
  *    `readFile`. It is the same instrument, for the same reason, as the ordering
  *    guard in tests/owner-isolation.test.ts, which this pairs with.
- * 2. **The filesystem adapter** does exactly what the route used to do, against
- *    a scratch `SPIDERYARN_DATA_ROOT`. "Behaves exactly as it does now" is half
- *    the brief, and this is the half that says so.
- * 3. **The Postgres adapter** serves the reference-backed source, refuses a
+ * 2. **The Postgres adapter** serves the reference-backed source, refuses a
  *    dangling one rather than reporting the article sourceless, and answers a
  *    stranger with nothing.
+ *
+ * ## The section that stood between them until 2026-09-05
+ *
+ * **The filesystem adapter**, doing exactly what the route used to do against a
+ * scratch `SPIDERYARN_DATA_ROOT`: six cases over `fsSourceStore.readPdf`. It was
+ * the parity arm of a two-store suite, and it went with `src/store/artifacts-fs.ts`
+ * when Postgres became the only store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * Every claim it made has a counterpart in section 2 below, asked of the store
+ * that is left: the bytes come back, the uploaded filename comes back with them,
+ * a web page answers `null`, an article with no source answers `null`, a slug
+ * nobody has answers `null`, and a reference that names a document which is not
+ * there is a **fault** rather than an answer.
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -48,10 +55,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId, type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { canonicalKey } from "../src/source.js";
-import { fsSourceStore } from "../src/store/artifacts-fs.js";
-import { storeRawSource } from "../src/store/blobs.js";
 import type { BlobHead, RawSourceStore } from "../src/store/blobs.js";
-import { DATA_ROOT_ENV } from "../src/store/data-root.js";
 import { createPgSourceStore, sourceReferenceQuery } from "../src/store/pg-source.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -91,13 +95,17 @@ describe("the source route", () => {
   /**
    * **The whole point of the change**, and the assertion that was red.
    *
-   * `fsLocations` is the filesystem store's path function and `readFile` is
-   * `node:fs/promises`. Either one inside this function means the route serves
-   * files whatever the store selection says.
+   * `readFile` is `node:fs/promises`, and a call to it inside this function
+   * means the route serves files rather than asking the store.
+   *
+   * It also named `fsLocations(` and `readRaw(` — the filesystem store's path
+   * function and its manifest reader, which are what this route actually called
+   * until 2026-08-31. Both were deleted with `src/store/artifacts-fs.ts` on
+   * 2026-09-05, and an assertion that a function which no longer exists is not
+   * called is one nothing can ever redden. `readFile` is the one of the three
+   * that is still reachable, so it is the one that stayed.
    */
   it("does not read the filesystem itself", () => {
-    expect(body).not.toContain("fsLocations(");
-    expect(body).not.toContain("readRaw(");
     expect(body).not.toContain("readFile(");
   });
 
@@ -112,132 +120,22 @@ describe("the source route", () => {
     );
   });
 
-  /** Nothing else in routes.ts picked the import back up. */
-  it("and routes.ts no longer imports the filesystem store's paths", () => {
-    expect(code).not.toContain("fsLocations");
-    /* Nor `node:fs` / `node:path` at all: the one filesystem read in this file
-       was this route, so an import of either is now a route that ignores
-       SPIDERYARN_STORE. */
+  /**
+   * Nothing else in routes.ts reaches for the disk.
+   *
+   * This named `fsLocations` too, and stopped being able to on 2026-09-05 for
+   * the reason above. What is left is the wider and still-falsifiable claim:
+   * **no `node:fs` or `node:path` at all**. The one filesystem read this file
+   * ever had was this route, so an import of either is a route going round the
+   * store again.
+   */
+  it("and routes.ts does not reach for the filesystem at all", () => {
     expect(code).not.toContain('from "node:fs/promises"');
     expect(code).not.toContain('from "node:path"');
   });
 });
 
-/* --------------------------------------------- 2. the filesystem adapter -- */
-
-describe("the filesystem source store", () => {
-  let root = "";
-  let saved: string | undefined;
-
-  beforeAll(async () => {
-    saved = process.env[DATA_ROOT_ENV];
-    root = await mkdtemp(path.join(tmpdir(), "spya-source-"));
-    process.env[DATA_ROOT_ENV] = root;
-  });
-
-  afterAll(async () => {
-    if (saved === undefined) delete process.env[DATA_ROOT_ENV];
-    else process.env[DATA_ROOT_ENV] = saved;
-    await rm(root, { recursive: true, force: true });
-  });
-
-  /**
-   * One article's `data/<slug>/`, with whatever stage 1 would have left.
-   *
-   * **And what stage 1 leaves changed on 2026-08-31.** It used to write the
-   * document beside its manifest; it now puts it in the content-addressed
-   * `sources` bucket and the manifest names it by hash
-   * (docs/plans/260831b-finish-the-database-move.md § Stage 2c). So `bytes` goes
-   * through `storeRawSource`, exactly as the stage does, and the manifest gets
-   * the `storedSha256` that read-back is addressed by. A fixture that went on
-   * writing `raw.pdf` would be describing a state stage 1 can no longer
-   * produce — and would have gone on passing while the real route 404'd for
-   * every newly-fetched PDF.
-   */
-  async function fixture(
-    slug: string,
-    manifest: Record<string, unknown> | null,
-    bytes?: Uint8Array,
-  ): Promise<void> {
-    const dir = path.join(root, "data", slug);
-    await mkdir(dir, { recursive: true });
-    let stored: Record<string, unknown> = {};
-    if (bytes && manifest) {
-      const kind = manifest.kind === "pdf" ? "pdf" : "html";
-      const put = await storeRawSource(bytes, kind);
-      stored = { storedSha256: put.sha256, storedBytes: bytes.byteLength };
-    }
-    if (manifest) {
-      await writeFile(
-        path.join(dir, "raw.json"),
-        JSON.stringify({ ...manifest, ...stored }),
-        "utf8",
-      );
-    }
-  }
-
-  const PDF = new TextEncoder().encode("%PDF-1.7\nnot really a pdf\n");
-
-  it("hands back the bytes the manifest names", async () => {
-    await fixture("fs-pdf", { kind: "pdf", file: "raw.pdf" }, PDF);
-    /* `filename: null` because this manifest has no `origin`, which means
-       `"url"` — we fetched it, and nobody named it. The route falls back to
-       `<slug>.pdf`. */
-    expect(await fsSourceStore.readPdf("fs-pdf")).toEqual({ bytes: PDF, filename: null });
-  });
-
-  /**
-   * **The reader's own name for their own file**, carried from the manifest to
-   * the `Content-Disposition`.
-   *
-   * It came onto this seam when the two 2026-08-31 source-reading changes were
-   * merged: the route used to be handed the whole document, name included, and
-   * `readPdf` originally answered with bytes alone — which would have renamed
-   * every download to `<slug>.pdf` without anything going red. `origin` is what
-   * distinguishes an upload from a fetch, and a name is only kept for an upload.
-   */
-  it("carries the name a reader uploaded the file under", async () => {
-    await fixture(
-      "fs-uploaded",
-      { kind: "pdf", file: "raw.pdf", origin: "upload", filename: "O'Brien (draft).pdf" },
-      PDF,
-    );
-    expect(await fsSourceStore.readPdf("fs-uploaded")).toEqual({
-      bytes: PDF,
-      filename: "O'Brien (draft).pdf",
-    });
-  });
-
-  it("answers null for an article that came from a web page", async () => {
-    await fixture("fs-html", { kind: "html", file: "raw.html" }, PDF);
-    expect(await fsSourceStore.readPdf("fs-html")).toBeNull();
-  });
-
-  it("answers null when there is no manifest at all", async () => {
-    await fixture("fs-bare", null);
-    expect(await fsSourceStore.readPdf("fs-bare")).toBeNull();
-  });
-
-  it("answers null for a slug with no directory", async () => {
-    expect(await fsSourceStore.readPdf("fs-missing")).toBeNull();
-  });
-
-  /**
-   * **A manifest that names a file which is not there is not "no PDF".**
-   *
-   * The old route let this throw ENOENT out of `readFile`, which routes.ts
-   * turns into a 404 by its `err.code === "ENOENT"` rule. Keeping it a throw
-   * rather than a `null` is deliberate: the manifest is the store asserting the
-   * bytes exist, and an assertion that turns out false is a fault, not an
-   * answer.
-   */
-  it("throws when the manifest names a file that has gone", async () => {
-    await fixture("fs-gone", { kind: "pdf", file: "raw.pdf" });
-    await expect(fsSourceStore.readPdf("fs-gone")).rejects.toThrow();
-  });
-});
-
-/* ----------------------------------------------- 3. the Postgres adapter -- */
+/* ----------------------------------------------- 2. the Postgres adapter -- */
 
 const SLUG = "test-source-store";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000c4";
@@ -332,13 +230,11 @@ function bucket(contents: Map<string, Uint8Array>): RawSourceStore {
  * The **reads** stay on drizzle, because `sourceReferenceQuery` is the thing
  * under test and a `SELECT` names only its projection.
  */
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/source-store.test.ts",
   columns: [{ table: "spideryarn.article_revisions", column: "raw_source_sha256" }],
   keepPool: true,
 });
-const when = reachable ? describe : describe.skip;
-
 /**
  * **Top-level, not inside the `describe`**, like tests/db-schema.test.ts.
  *
@@ -351,7 +247,7 @@ afterAll(async () => {
   await pool?.end();
 });
 
-when("the Postgres source store", { timeout: 20_000 }, () => {
+describe("the Postgres source store", { timeout: 20_000 }, () => {
   beforeAll(async () => {
     await clean();
     const owner = currentOwnerId();

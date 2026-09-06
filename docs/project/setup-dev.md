@@ -1,28 +1,126 @@
 # Setup and dev commands
 
-Everything here is one process and one terminal, deliberately —
-[architecture.md § Server and client](architecture.md#server-and-client):
+**New here? The quickstart below is the whole of it** — an empty checkout to an app you are signed
+into. Everything after it is depth: what each secret is for, which model does
+which job, how to run one pipeline stage on its own. You do not need any of that to start.
+
+## Quickstart
+
+### What you need first
+
+- **Node 26.** It is what Greg's laptop and the remote box both run, pinned in
+  [`infra/hetzner/variables.tf`](../../infra/hetzner/variables.tf) — *"a major-version gap between
+  the two is where 'works on my machine' comes from"*.
+- **Docker, running.** The database is a full Supabase stack in containers (Postgres, GoTrue,
+  Studio). On a Mac that is usually OrbStack — `open -a OrbStack`. **The first `npm run setup` pulls
+  around 2 GB of images**, so do it on a connection you do not mind.
+- **An OpenRouter API key**, from <https://openrouter.ai>. Every paid model call in the app goes
+  through it ([ai-gateway.md](ai-gateway.md)). Without one the app runs and articles already in the
+  database still read perfectly — but nothing can be ingested, and selecting a passage returns an
+  error into the dialog.
+
+Nothing else. No Google credentials, no Supabase account, no Vercel, no keys on any dashboard.
+
+### The commands, in this order
+
+**There is a chicken-and-egg in the middle of this and it is the only hard part.** `npm run setup`
+seeds an account, which needs the local stack's keys; the keys do not exist until the stack has been
+started. So the stack goes up first, you copy three values, and then the rest of setup runs.
+
+```bash
+git clone https://github.com/spideryarn/reading2.git && cd reading2
+npm install
+cp .env.example .env.local     # every variable, commented, with no values in it
+                               # → put OPENROUTER_API_KEY=sk-or-… in it now
+
+npm run db:start               # Docker. First run pulls ~2 GB of images.
+npm run db:status              # → copy the three values below into .env.local
+
+npm run setup                  # db:start (again, harmlessly), migrate, seed the
+                               # account, seed a shelf. Stops at the first failure.
+npm run db:admin-password      # prints the password for dev-admin@spideryarn.local
+npm run dev                    # http://localhost:5273
+```
+
+The three values to copy out of `npm run db:status`, which prints them as
+`SERVICE_ROLE_KEY` and `PUBLISHABLE_KEY`:
+
+```
+SUPABASE_SERVICE_ROLE_KEY=…         # seeding the account needs this
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_…      # the server verifies sessions with it
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_… # the same value again, for the browser
+```
+
+`SUPABASE_URL` and `VITE_SUPABASE_URL` already have the right value in `.env.example`, so those two
+lines need nothing.
+
+**Why the order is what it is**, since every step of it has been somebody's lost afternoon:
+
+- `db:seed-owner` — the third thing `npm run setup` does — reads `SUPABASE_SERVICE_ROLE_KEY` and
+  `SUPABASE_PUBLISHABLE_KEY`, and **refuses rather than guessing** if either is missing. Run
+  `npm run setup` on a freshly-copied `.env.example` and it will start the database, apply the
+  migrations, and then stop with a message naming the variable. That is the design working, not a
+  bug — but it is why `db:start` and `db:status` come first here.
+- The **client** throws at module load without `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_PUBLISHABLE_KEY`, so running `npm run dev` before you have them gives you a
+  **blank page** — deliberately, because the alternative is a sign-in button that does nothing
+  ([§ Signing in needs four more](#signing-in-needs-four-more)).
+- Vite reads `.env.local` once, **at startup**. Adding a variable means restarting `npm run dev`.
+
+### Signing in
+
+The landing page has an email form. Use **`dev-admin@spideryarn.local`** and the password
+`npm run db:admin-password` printed. There is no Google step and nothing to click on a dashboard —
+`db:seed-owner` created the account and generated the password, which is what makes a machine you
+can only reach over ssh usable
+([supabase-local.md § Signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach)).
+
+Neither seeded address is a real person's, on purpose. `dev@spideryarn.local` owns what the CLI and
+the pipeline write; `dev-admin@spideryarn.local` is the one you sign in as.
+
+### Did it work?
+
+The **library** at `/` should have a few articles on it — `npm run setup`'s last step seeds them, so
+a fresh clone has something to read rather than an empty shelf ([library.md](library.md)). Click one
+and you are at `/read/<slug>`, the reading view ([web-client.md](web-client.md)). Then paste a URL
+into the add box and watch the pipeline stages go past by name
+([ingest-queue.md](ingest-queue.md)) — that is the end-to-end check, and it is the first thing that
+spends money.
+
+Two commands worth running once so you know they pass: `npm test` and `npm run typecheck`.
+
+### If it didn't
+
+| What you see | What it is |
+|---|---|
+| A blank page, and a console error naming `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` | The three lines above are missing from `.env.local`, or Vite has not been restarted since you added them |
+| The dev server refuses to start, naming `npm run db:start` | The containers are down. `assertStoreReachable` in `vite.config.ts` runs one `select 1` before booting, on purpose — see [below](#the-database-locally) |
+| Vite says it is on **5274** or 5275 | Something else has 5273. Sign-in will fail for reasons that have nothing to do with your code — the port is on the redirect allow-list and the alternatives are not |
+| Google sign-in succeeds and dumps you on the bare site URL | The allow-list is baked into a running container, not read from the file. [§ Signing in needs four more](#signing-in-needs-four-more) has the `docker inspect` to check it |
+| The reading view works, but an ingest fails immediately | No `OPENROUTER_API_KEY` in `.env.local` |
+
+When something is broken and it is not on that list, [debugging.md](debugging.md) is where to start.
+
+## One process, one terminal
+
+That is deliberate — [architecture.md § Server and client](architecture.md#server-and-client):
 
 > One process, one command: `npm run dev`. The API is currently mounted as **Vite dev middleware**
 > rather than as a separate server, so there is nothing to run in a second terminal while the ideas
 > are still moving.
 
-```bash
-npm install
-npm run setup          # Docker up, migrations applied, accounts seeded — see below
-npm run dev            # Vite + the /api/article/:slug middleware, http://localhost:5273
-```
+**Everything serves from Postgres, and there is no way back to `data/`** — since 2026-09-05, when
+the filesystem store and the `SPIDERYARN_STORE` flag went
+([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F). The
+dev server, the CLI stages, seeding, the evals and the test suite all read one store, and nothing has
+to be told which. **Do not set `SPIDERYARN_STORE`**: what is left of it is a tombstone that throws on
+any value but `postgres` ([`src/store/live.ts`](../../src/store/live.ts)), because silently ignoring
+somebody who asked for the store that is gone is the failure this whole migration was leaving behind.
 
-**`npm run dev` serves from Postgres**, since 2026-09-02 — the script sets
-`SPIDERYARN_STORE=${SPIDERYARN_STORE:-postgres}`, so it is a default rather than an override.
-**The way back to `data/` is a `SPIDERYARN_STORE=files` line in `.env.local`**, not a command-line
-prefix: this file beats the environment on purpose (§ `.env.local` beats what the shell exported),
-so a prefix works only while `.env.local` says nothing — and `.env.example` ships the variable set
-to `postgres`. Everything else — the CLI stages, seeding, evals, the test suite, and `vite preview`,
-which has no npm script — still treats *unset* as `files`
-([`src/store/live.ts`](../../src/store/live.ts)). The reason is the queue: the filesystem adapter
-cannot fence two servers over one checkout and the database can, which cost a third of all the AI
-spend we have ever made ([260902j](../plans/260902j-one-job-claimed-by-many-servers-and-the-money-it-spends.md)).
+`npm run dev` had defaulted the flag to `postgres` since 2026-09-02, and the reason it did is the
+reason the store move happened at all: the filesystem adapter cannot fence two servers over one
+checkout and the database can, which cost a third of all the AI spend we have ever made
+([260902j](../plans/260902j-one-job-claimed-by-many-servers-and-the-money-it-spends.md)).
 
 **So a stopped database now refuses to boot the dev server.** `assertStoreReachable` in
 `vite.config.ts` runs one `select 1` first and fails loudly, naming `npm run db:start`,
@@ -30,8 +128,8 @@ spend we have ever made ([260902j](../plans/260902j-one-job-claimed-by-many-serv
 containers merely down and the server would start fine and die on the first `/api` request.
 
 **`npm run setup` is the whole of the database side of a fresh checkout**, and the one command to
-remember when building a box: it runs `db:start`, `db:migrate` and `db:seed-owner` in order and
-stops at the first failure saying what to do
+remember when building a box: it runs `db:start`, `db:migrate`, `db:seed-owner` and
+`db:seed-dev` in order and stops at the first failure saying what to do
 ([`scripts/setup-local.ts`](../../scripts/setup-local.ts),
 [supabase-local.md](supabase-local.md)). The last of those creates the account you sign in as and
 generates its password — `npm run db:admin-password` prints it — so there is no Google step and
@@ -301,11 +399,18 @@ project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.t
 ([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
 caller.
 
-**Every job is on the capable tier today.** The quick tier is about a tenth the price and nothing
-here has been measured on it, so it exists as a named option rather than as a change: moving a job
-means running an eval under [`evals/`](../../evals/README.md) first and writing down what it cost.
-Greg, 2026-08-26 — *"use your judgment about which tasks to use for which (default to capable-model
-for now)."*
+**Every job is on the capable tier except one.** The quick tier is about a tenth the price, and
+`link-summary` — how a hovered link's destination stands to the piece being read
+([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — was **written for it**
+rather than moved onto it, on 2026-09-05. That distinction is the whole of the policy: a new job may
+be born on the quick tier by judgment, and **moving an existing one still means running an eval under
+[`evals/`](../../evals/README.md) first and writing down what it cost**. Greg, 2026-08-26 — *"use
+your judgment about which tasks to use for which (default to capable-model for now)."*
+
+What that one job measured, which is all this repository knows about the tier: $0.00015 a call, 2–5
+seconds, and **no reasoning tokens reported at all** at `effort: "low"` — the 1,024-token floor the
+paragraph below warns about did not appear on the upstream that served it. That is one week's
+evidence from one job, not a general fact.
 
 **Changing a row is not the whole of moving a job**, and the file carries the list: the completion
 ceilings were sized for a model that does not spend a reasoning allocation out of them, the
@@ -365,6 +470,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
 | `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |
+| `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — **the one job on the quick tier**, so this is the variable for asking whether the cheap model is good enough |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the
@@ -410,8 +516,8 @@ here before ([260831b-finish-the-database-move.md](../plans/260831b-finish-the-d
 **Changed on 2026-09-05**, in stage E of
 [260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
 The five that were left had the same fault as the eight above, only quieter: each did a bare
-`fs.writeFile` to a path off `process.cwd()`, reaching neither the artefact store nor `data-root.ts`.
-Under Postgres they wrote files nothing reads, and reported success.
+`fs.writeFile` to a path off `process.cwd()`, reaching neither the artefact store nor `data-root.ts`
+(deleted 2026-09-05). Under Postgres they wrote files nothing reads, and reported success.
 
 They are [`scripts/stage.ts`](../../scripts/stage.ts) now — one script, four npm names, `enqueue`
 then `advanceJob` in a loop. **It is the same code the queue runs**, which is what makes a re-run
@@ -455,9 +561,9 @@ knowing here:
 | `npm run typecheck` | every tsconfig, plus the guards that the checking happened ([typechecking.md](typechecking.md)) | — |
 | `npm run lint` | Biome over `src/`, `tests/`, `scripts/` ([linting.md](linting.md)) | — |
 
-The comment endpoints have no CLI stage — they are driven from the reading view. They write
-`data/<slug>/comments.json`; deleting that file forgets every question asked about the article, and
-nothing else breaks.
+The comment endpoints have no CLI stage — they are driven from the reading view. They write rows in
+the `comments` table (`data/<slug>/comments.json` until 2026-09-05); deleting them forgets every
+question asked about the article, and nothing else breaks.
 
 **You do not have to run any of this by hand.** Paste a URL into the homepage's add box and the
 ingest queue runs the same chain in the server process, with each stage named as it goes —
@@ -530,10 +636,12 @@ broken, just the signal quietly gone.
 
 ## Where things live
 
-- `data/<slug>/` — real pipeline output. Gitignored. Every directory in here with a `blocks.json`
-  and a `tree.json` appears on the homepage ([library.md](library.md)).
-- [`example/`](../../example/README.md) — the hand-authored placeholder the client falls back to when
-  `data/<slug>/` doesn't exist yet.
+- `data/<slug>/` — until 2026-09-05, real pipeline output, gitignored, and every directory in here
+  with a `blocks.json` and a `tree.json` appeared on the homepage. Pipeline output is now Postgres
+  rows ([library.md](library.md)); nothing writes this layout on an ordinary run any more
+  ([architecture.md § Storage](architecture.md#storage)).
+- [`example/`](../../example/README.md) — the hand-authored placeholder. Nothing reads it at request
+  time any more; `npm run setup` seeds it into Postgres like any other article.
 - `output/` — the prototype extractor's scratch output, including the test article.
 - [`tests/`](../../tests) — Vitest unit tests. `npm test` (once) or `npm run test:watch`. See
   [testing.md](testing.md).

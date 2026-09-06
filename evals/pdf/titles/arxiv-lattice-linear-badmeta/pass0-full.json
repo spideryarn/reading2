@@ -1,0 +1,12 @@
+{
+  "metaTitle": "Eventually Lattice-Linear AlgorithmsTo appear in the Journal of Parallel and Distributed Computing.The experiments presented in this paper were supported through computational resources and services provided by the Institute for Cyber-Enabled Research, Michigan State University.A preliminary version of this paper was published in Proceedings of the 23rd International Symposium on Stabilization, Safety, and Security of Distributed Systems (SSS 2021) Gupta2021.Email addresses: {atgupta,sandeep}@msu.edu",
+  "furniture": [
+    "algorithm rules for node i",
+    "lemma algorithm is a silent eventually lattice linear self stabilizing algo",
+    "proof in an arbitrary non feasible state where the input graph g does not",
+    "the proposition p"
+  ],
+  "isScan": false,
+  "pages": 28,
+  "sha256": "ce816e28f2e7ad937d7f1931c812b2397bf1777e56828de34c5dece4b96e5a47"
+}

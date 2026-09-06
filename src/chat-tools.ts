@@ -64,7 +64,7 @@ import { termPattern } from "./term-match.js";
 import { librarySearch, loadArticle, loadGlossary } from "./store/index.js";
 import { errorFields, log, since } from "./log.js";
 import { isSlug } from "./ingest.js";
-import { hostOf, isWebUrl } from "./urls.js";
+import { hostOf, isWebUrl, sameTarget } from "./urls.js";
 
 /* --------------------------------------------------------------- the caps --
    All in characters, all small, and each one is the answer to "how much of this
@@ -659,49 +659,21 @@ interface Destination {
   fragment: string;
 }
 
-/**
- * What a GET would actually ask for, or `null` if this is not a web URL.
- *
- * **Everything but the fragment**, because the fragment is the one part of a URL
- * that is never sent: `…/x#a` and `…/x` are the same request, and that is the
- * whole reason this function exists.
- *
- * `urlKey` was used here first and a GPT Sol review was right that it is the
- * wrong tool. It is the *shelf's* notion of sameness, and it is deliberately
- * generous — it folds `http` into `https`, `www.` into the bare host and drops
- * tracking parameters, because two spellings of one address should be one row on
- * a bookshelf. Those are false positives here, and a false positive is this
- * tool telling the model "that page is already open" about a page that is not.
- * `normaliseUrl`'s own comments say `http` and `https` can serve different
- * pages. So: same scheme, same host, same port, same path, same query.
- *
- * The path is decoded where it can be, so `/%78` and `/x` are one request, and
- * a trailing dot is dropped from the host — two under-refusals the same review
- * found. `new URL` has already lowercased the host and dropped a default port.
- */
-function requestTarget(url: string): string | null {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    const host = u.hostname.replace(/\.$/, "");
-    let path = u.pathname;
-    try {
-      path = decodeURIComponent(path);
-    } catch {
-      /* A stray percent. The raw path is still a fine identity; it just will not
-         match its own decoded spelling, which is the conservative direction. */
-    }
-    return `${u.protocol}//${host}${u.port ? `:${u.port}` : ""}${path}${u.search}`;
-  } catch {
-    return null;
-  }
-}
-
-/** Would fetching these two ask a server for the same thing? */
-function sameTarget(a: string, b: string): boolean {
-  const one = requestTarget(a);
-  return one !== null && one === requestTarget(b);
-}
+/* `requestTarget` and `sameTarget` were declared here until 2026-09-05 and moved
+   to src/urls.ts when Debate needed the same identity: a citation
+   whose request target is the article's own address is the article presenting
+   itself as a response to itself, and the plan for that mode
+   (docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md
+   § Attribution rule 2) names *this* function rather than describing one. A
+   second copy of a rule about URL identity is the failure src/urls.ts exists to
+   prevent — and it is the same argument `collectCitations` makes one file along
+   about chat and explain each holding their own copy of the annotation rules.
+   The link-preview cache (src/link-previews.ts) is the other caller that
+   arrived the same day, and it is why `requestTarget` did **not** survive the
+   move unchanged: it used to percent-decode the path, which made `/a%2Fb` and
+   `/a/b` one key, and that key is a cache and authorization key. The decoding
+   lives on in `sameTarget`, which is what the two callers below use and which
+   is allowed to over-match. GPT Sol, 2026-09-05, P1-1. */
 
 /**
  * One href, resolved — split out of `articleLinks` because it is the whole of
@@ -894,8 +866,16 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
      the shelf's notion of sameness is generous on purpose — it folds `http` into
      `https` and `www.` into the bare host — and every one of those is a false
      positive here, which is this tool telling the model a page is already open
-     when it is not. `sameTarget` ignores the fragment and nothing else, which is
-     exactly the shape being defended against. Raised by a GPT Sol review on
+     when it is not.
+
+     `sameTarget` is `requestTarget` equality: the fragment ignored, the escapes
+     that are one spelling of one character folded (RFC 3986's unreserved set),
+     and nothing else. *It was briefly more generous than that — folding `%2F`
+     into `/` — on the argument that over-matching is safe here. It is not:
+     those are two different pages, and saying "already open" about one the
+     model has not got costs it the page rather than costing us a fetch.*
+
+     Raised by a GPT Sol review on
      2026-08-27, which made the point that the listing's wording could not
      enforce this, and again in the code pass, which found `urlKey` too loose for
      the job. */

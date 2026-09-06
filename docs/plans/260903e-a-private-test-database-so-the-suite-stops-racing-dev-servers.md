@@ -209,7 +209,7 @@ session's run alone and would be worth repeating.
       **This is a second cause of the original flakiness, and it is not contention** — a private
       database would never have fixed it. `aJob()`'s `createdAt` is millisecond-accurate and the
       enqueue between the two can return inside one millisecond; both stores then break the tie on
-      the id (`blockedByAnother`, [`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts)), and ids are
+      the id (`blockedByAnother`, `src/store/jobs-fs.ts`), and ids are
       random, so about half of all runs made `second` the predecessor and `claim(first)` correctly
       answered `busy`. Found by Sol; this session had earlier reasoned the round-trip made the
       ordering safe, and that was wrong.

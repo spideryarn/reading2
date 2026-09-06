@@ -23,7 +23,7 @@ prose. `GET`/`POST /api/referee/claims/:slug`,
 [`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) for what a referee sees.
 
 **Claims runs in the store that deploys, as of 2026-09-01.** It was files-only for a day: under
-`SPIDERYARN_STORE=postgres` every method refused with a 501, so on a deployed server *"Pull the
+Postgres — which is what deploys — every method refused with a 501, so on a deployed server *"Pull the
 paper's claims"* could not load, start or persist a run — which is how the cross-family review found
 it ([260831an-referee-mode-submodes-review-sol.md](../plans/260831an-referee-mode-submodes-review-sol.md),
 finding 4). Both adapters are real now and [`src/store/index.ts`](../../src/store/index.ts) picks
@@ -47,13 +47,15 @@ window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a 
 loading the panel would error a run the first one is still streaming
 ([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
 
-**Candidates works end to end** as of 2026-09-01 — open the sub-mode, press **Build the reviewer
-brief**, and that press creates the thread and sends the opening ask; then scope the search in the
-composer and names arrive with the shortlist above the transcript. **The brief used to arrive
-unprompted**, on a `useEffect` the first time the sub-mode was opened, and that is why the button
-exists: the other three chips are inert, so a first-time referee clicking through the radiogroup paid
-for a model call and sent paper-derived terms to a search engine without having asked for either
-(2026-09-02). It is a third `ThreadKind` on chat's own machinery
+**Candidates works end to end** as of 2026-09-01 — open the sub-mode and the opening ask goes out on
+the press that opened it, creating the thread; then scope the search in the composer and names arrive
+with the shortlist above the transcript. **The brief used to arrive unprompted**, on a `useEffect`
+the first time the sub-mode was *mounted*, and that is why the button was added: a mount is not a
+gesture — a pasted link, a Back step and a re-render all reach one — so a first-time referee paid for
+a model call and sent paper-derived terms to a search engine without having asked for either
+(2026-09-02). The press-not-mount rule survives; since 2026-09-06 a press on the **chip** counts as
+one, and the button stays for the reader whose automatic attempt failed
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md), and § the disclosure, below). It is a third `ThreadKind` on chat's own machinery
 (`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
 [`src/referee-candidates.ts`](../../src/referee-candidates.ts),
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
@@ -468,10 +470,39 @@ it, and the other three chips are inert to a press. So clicking Candidates to fi
 meant bought a run over the paper **and** sent search terms drawn from an unpublished manuscript to a
 search engine — *a different third party at a different time* from the model provider the band's
 notice is about, and one the notice cannot cover, because it is in the past tense and this had not
-happened yet. It is behind a labelled button now, and the button's visible words name both parties
-before either is reached. Everything after the first press is unchanged: the thread is stored, and
-coming back to the sub-mode finds it and asks nothing.
-[`tests/referee-candidates-press.test.tsx`](../../tests/referee-candidates-press.test.tsx).
+happened yet.
+
+**Since 2026-09-06 the chip runs it, and the disclosure moved rather than went.** Greg asked for
+every mode to start itself on being opened
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md)), and this is the sub-mode where
+that is most worth arguing about. What made the mount version wrong survives intact — a pasted link,
+a Back step and a re-render all reach a mount, and none of them is anybody asking — and none of them
+reaches a chip's `onClick`, which is where `armActivationForRefereeView` is called and the only place
+it is called from.
+
+What did *not* survive was the placement of the warning. The button's **visible words** named both
+parties before either was reached, and a chip press reaches the search engine before the panel is on
+screen at all. The rule two sections down says why a tooltip cannot stand in — *a tooltip is not read
+by anybody in a hurry* — so the sentence moved to the one place that is on screen before any chip has
+been pressed: `REFEREE_CANDIDATES_REACHES_SEARCH`, drawn under the confidentiality notice above the
+chips, in the future tense, and **outside the collapse**, because folding away a warning about
+something that has not happened yet is dismissing it. If Candidates ever goes back behind a button,
+that line goes with it.
+
+Everything after the first press is unchanged: the thread is stored, and coming back to the sub-mode
+finds it and asks nothing.
+[`tests/referee-candidates-press.test.tsx`](../../tests/referee-candidates-press.test.tsx) holds the
+mount rule; [`tests/pressing-a-chip-arms-it.test.tsx`](../../tests/pressing-a-chip-arms-it.test.tsx)
+holds which gesture mints the press.
+
+**Claims runs itself on the same rule, and Mirror does not.** Claims is one stream per paper and it
+is stored, so *"what's already generated, or generate it if needed"* means something — the press is
+retired unspent when a run exists. Mirror stores nothing
+([`useMirror.ts`](../../src/web/useMirror.ts): *"One button, one run, nothing stored"*), so there is
+no "already generated" for a press to find and every open would be a fresh paid call; the
+one-attempt-per-session cap would then make the second open of a visit behave unlike the first, which
+is worse than a button. Criteria arms nothing because it has nothing to run until the referee writes
+a criterion. The table is `REFEREE_TARGET` in [`activation.ts`](../../src/web/activation.ts).
 
 **Chat steers; a list is what you look at.** The panel keeps a browsable shortlist *above* the
 transcript, revised by whichever answer most recently carried one. This is the editor research's
@@ -560,10 +591,14 @@ still in turn five's fence; but nothing later, because a search run at turn five
 written at turn two is a rule that can be satisfied by waiting. What the pool still does **not**
 prove is that the page is about the person it is filed under: a hallucinated name paired with a real
 URL from an earlier search passes. Closing that means matching the person's name against the search
-result's own title and snippet — now feasible, since the Exa probe shows the wire supplies both, but
-it needs `Citation` to carry the snippet through [`types.ts`](../../src/types.ts),
-[`openrouter-stream.ts`](../../src/openrouter-stream.ts) and the thread store. That is the first
-follow-up job here.
+result's own title and snippet — now feasible, since the Exa probe shows the wire supplies both.
+**Half of that landed on 2026-09-05 for Debate**: `SearchEvidence` in
+[`types.ts`](../../src/types.ts) and `collectSearchEvidence` in
+[`openrouter-stream.ts`](../../src/openrouter-stream.ts) keep the extract, opt-in, so nothing here
+changed and nothing here stores one yet. It was deliberately *not* done by widening `Citation`, which
+would have started storing page extracts on every chat message and comment
+([260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) § Stage 1). What is
+left for Candidates is the thread store and the match itself. That is the first follow-up job here.
 
 **What was dropped is counted on screen, and so is what the cap never read.** *The model named
 nobody* and *the model named eleven people and none of them could be shown* are different sentences
@@ -608,7 +643,7 @@ Where the cards are, and the one thing each says that the label cannot:
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
 | the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
-| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine |
+| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine. Since 2026-09-06 the chip starts it too, so this card is no longer the *first* warning: `REFEREE_CANDIDATES_REACHES_SEARCH` is, above the chips and never behind the collapse |
 | Claims' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
 | Mirror's coverage row | it has nowhere to send you, which is the whole of what it is saying |
 | Mirror's jump button | the passage is where **you** anchored the comment — Mirror chose the remark and never the passage, and is not given the paper to pick one from |

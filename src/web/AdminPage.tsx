@@ -24,21 +24,27 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, type ReactNode } from "react";
-import { ArrowLeft, MessageSquareWarning, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
-import { ADMIN_CHIP_ORDER, ADMIN_DEFAULT_BY, adminColumns } from "./admin-columns.js";
+import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
 import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { adminByParam, sortDirParam } from "./params.js";
+import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
-import { ADMIN_FEEDBACK_HREF, ADMIN_HREF, ADMIN_USERS_HREF, LIBRARY_HREF } from "./router.js";
+import {
+  ADMIN_FEEDBACK_HREF,
+  ADMIN_HREF,
+  ADMIN_USERS_HREF,
+  DESIGN_HREF,
+  LIBRARY_HREF,
+} from "./router.js";
 import { FeedbackCard } from "./AdminFeedbackList.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
@@ -218,6 +224,25 @@ export function AdminHome() {
           }
           title="Feedback"
           blurb="Bug reports readers filed with the Feedback button, newest first"
+        />
+        {/* **Moved off the shelf's masthead on 2026-09-05**, at Greg's request:
+            > Move the Design link on the logged-in Homepage into /admin
+            > — Greg (SPIDERYARN-READING2-1T)
+
+            The odd one out on this page, and worth saying so rather than
+            letting the next reader wonder: `/design` reads across nothing and
+            has no server half to refuse anybody. It is here because it is
+            developer furniture rather than because it is privileged. Since
+            2026-09-05 it is on the administrator's list all the same
+            (router.ts § `ADMIN_ONLY`), so a reader who types the address gets
+            their shelf — **which hides nothing**: the page is in everybody's
+            bundle and the address answers 200 whoever asks
+            (docs/project/admin.md § The three refusals). */}
+        <Entry
+          href={DESIGN_HREF}
+          icon={<Palette size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Design"
+          blurb="Every token, face and component variant on one page — look here after changing tokens.css"
         />
       </ul>
       <BuildStampLine />

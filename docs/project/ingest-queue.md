@@ -43,12 +43,14 @@ stages ticking over while you watch. Since 2026-08-26 the watching happens on a 
 > reader asks for one. That is the hydration problem, and it is the next piece.
 >
 > **Fixed on 2026-09-01, and this paragraph is kept because the diagnosis was right.** `claimSession`
-> ([`src/jobs.ts`](../../src/jobs.ts)) is two lines now: under `SPIDERYARN_STORE=postgres` a claim
+> ([`src/jobs.ts`](../../src/jobs.ts)) is two lines now: under Postgres a claim
 > gets `openPgStoreSession`, whose reads are the article's own draft revision rather than a
 > job-scoped directory, and every late step's `run` takes the article through `readArticle(ctx.slug,
 > store)` instead of opening a path. `tests/claim-session-postgres.test.ts` § *"runs a late single
 > step that reads the article from the store, not from its empty root"* ingests under one job id and
-> then runs `["arc"]` under a second, which is exactly the shape above.
+> then runs `["arc"]` under a second, which is exactly the shape above. (The job-scoping this
+> paragraph contrasts against — `src/job-scope.ts` and `src/store/data-root.ts` — was itself deleted
+> 2026-09-05, once every store was Postgres.)
 
 > **Superseded, and kept.** *"This does not make an ingest work on Vercel, and the section below
 > saying it nearly does is the mistake worth not repeating."* Every stage still writes
@@ -78,6 +80,7 @@ the progress list.
 | [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the subscription over the engine, and the actions |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) | the box on the shelf, the progress list, and `JobCard` |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | `/add/<a whole URL>` — [§ The add page](#the-add-page) |
+| [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the third front door: *add to Spideryarn* on the hover card of an external hyperlink, which posts the same `{ url }` from inside the reading view — [links.md § Add it to Spideryarn](links.md#add-it-to-spideryarn) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
 | [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker, the drop zone and the progress bar — [§ Uploading a PDF](#uploading-a-pdf) |
@@ -698,16 +701,22 @@ pipeline already knows.
 
 ### A step is done when *all* its files are there
 
-`extract` writes the HTML **and** `meta.json`. `hierarchy` writes `tree.json` **and** its copy of
-`blocks.json`. Each step declares an `outputs` list rather than a single artefact, and counts as
-done only when every one of them is present — because a crash between the two writes would
+`extract` makes the HTML **and** the metadata. `hierarchy` makes the tree, the labels **and** its
+copy of the blocks. Each step declares a `produces` list rather than a single artefact, and counts
+as done only when every one of them is readable — because a crash between two writes would
 otherwise leave a step reporting itself finished with half its output, and the stage after it
 consuming the missing half.
 
-**There are two copies of `blocks.json`, and it matters here.** Stage 3 writes
-`output/<slug>.blocks.json`; stage 4 copies it into `data/<slug>/blocks.json` as it writes the tree,
-so the pair in the data directory is guaranteed to be the one the tree was built from. Each step's
-`done()` checks *its own* artefact — the first one for `blocks`, the second for `hierarchy`. Getting that
+(It declared an `outputs` list of repository paths beside `produces` until 2026-09-05, and the pair
+existed so the swap to kinds could be checked against the old declaration. The paths went with the
+filesystem store.)
+
+**There are two writes of the `blocks` kind, and it matters here.** Stage 3 produces `blocks`; stage
+4 produces `blocks` again as it writes the tree, so the copy that lands is guaranteed to be the one
+the tree was built from. (Until 2026-09-05 this was literally two files — stage 3's
+`output/<slug>.blocks.json`, stage 4's copy at `data/<slug>/blocks.json` — the reasoning is unchanged
+under Postgres, only the artefact is now a row rather than a path.) Each step's
+`done()` checks *its own* artefact — the first write for `blocks`, the second for `hierarchy`. Getting that
 backwards means a finished `blocks` step reports itself unfinished until `hierarchy` has also run, so
 every retry redoes stage 3 and a `{ steps: ["blocks"] }` job can never skip itself. Which also means:
 run `blocks` on its own and the two copies disagree until you run `hierarchy` as well. That is the
@@ -901,17 +910,18 @@ ever. A URL or upload mint is the exception, governed by reservation instead. A 
 is a **404, not a 403** ([auth.md](auth.md)); a slug *nobody* has is allowed through, because a
 random short id means no other reader can ever come to want that name.
 
-**What serialising is protecting is corruption, not ambiguity.**
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) keys every artefact write, the
-`beginStep`/`finishStep` marker and `interrupted()` on `(slug, step)` in one shared `data/<slug>/`
-directory with no job scoping, and on a laptop there is no per-job scratch to save it. Two jobs
-running at once on one article would overwrite each other's output outright.
+**What serialising is protecting is corruption, not ambiguity.** Under the filesystem store,
+`src/store/artifacts-fs.ts` (deleted 2026-09-05) keyed every artefact write, the
+`beginStep`/`finishStep` marker and `interrupted()`, on `(slug, step)` in one shared `data/<slug>/`
+directory with no job scoping, and on a laptop there was no per-job scratch to save it. Two jobs
+running at once on one article would have overwritten each other's output outright.
 ### On the filesystem, "one process" had to be made true
 
-The files adapter has always said its fence holds within one process and not across two, and that is
-still what it promises. What it did not survive was **one process with two copies of the module in
+The files adapter (`src/store/jobs-fs.ts`, deleted 2026-09-05 with the filesystem store) always said
+its fence held within one process and not across two, which was true only as far as it went. What it
+did not survive was **one process with two copies of the module in
 it**: saving anything the server imports restarts the Vite dev server in place, re-evaluating
-[`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts) with empty Maps while the request inside a step
+`src/store/jobs-fs.ts` with empty Maps while the request inside a step
 carries on. The new copy swept the `running` job back to `queued` and the browser started the same
 eight-minute model call again — eleven times on one job, on 2026-08-30, at $5.43.
 
@@ -925,7 +935,7 @@ been the wrong companion fix, is
 
 **Two OS processes over one `data/` are still not fenced**, and that is unchanged rather than fixed —
 `claimIn`'s single `update … where status = 'queued'` is what makes Postgres immune, and running with
-`SPIDERYARN_STORE=postgres` is what CLAUDE.md already asks for.
+Postgres is the only store there is, since 2026-09-05.
 ### The browser is the worker
 
 So a wedged job in production is not a queue that needs draining. It is a job whose only engine has
@@ -1039,10 +1049,11 @@ seen doing genuine work for 498s — the two longest failures ran fifteen and se
 model calls before hitting the token budget — and the claimant self-aborts at 740s, so ten minutes
 leaves ~140s in which the sentence is on screen before the lease settles the job.
 
-**How to measure it, since three attempts got this wrong.** Read `data/_jobs/*.json`, take each step
-whose **own** status is `done`, and compute `finishedAt − startedAt`. That is the same subtraction
-the card shows, over the same two fields, so the number can be held to the screen. Successful steps
-only, because a promise about finishing cannot be measured from something that did not finish.
+**How to measure it, since three attempts got this wrong.** Read the `steps` column of the `jobs`
+table (`data/_jobs/*.json` until 2026-09-05), take each step whose **own** status is `done`, and
+compute `finishedAt − startedAt`. That is the same subtraction the card shows, over the same two
+fields, so the number can be held to the screen. Successful steps only, because a promise about
+finishing cannot be measured from something that did not finish.
 
 > **The trap, sprung three times in one day, and the third time it survived two reviews.** The first
 > figure came from grouping `_ai-calls.jsonl` by `runId`, which pulls in **eval batches of several
@@ -1191,11 +1202,11 @@ Greg, asked whether an interrupted job should survive a restart (2026-08-25):
 > But if that's a lot more work, then make a note somewhere that this is the intention, and build
 > simpler machinery that's a step in that direction.
 
-**What is built.** Every step declares the files it produces, and a step whose files are all already
-on disk is *skipped* rather than run. Job records live behind `JobStore` — `data/_jobs/<id>.json`
-written atomically on the filesystem adapter, a row on the Postgres one. On startup the filesystem
-adapter returns anything still `running` to `queued`, because this process has just started and
-nothing on disk can have work happening against it; Postgres cannot reason that way and uses a
+**What is built.** Every step declares the artefact kinds it produces (files, until 2026-09-05), and
+a step whose artefacts are all already there is *skipped* rather than run. Job records live behind
+`JobStore` — a row in the `jobs` table (`data/_jobs/<id>.json`, written atomically, until
+2026-09-05). Postgres cannot reason from "this process has just started" the way the filesystem
+adapter once did — it returned anything still `running` to `queued` on startup — so it uses a
 **lease** instead. The steps keep their individual statuses either way, so a resumed job still shows
 which stages finished, and **Retry queues the same steps and skips them**.
 
@@ -1379,10 +1390,12 @@ So in practice: the server dies during `hierarchy`, you press Retry, and `fetch`
 are skipped in milliseconds while `hierarchy` starts again. That is "picks up from where it started" for
 the case that matters — the two model calls, which are the expensive part.
 
-**The check used to be existence, and it is not any more.** A step now declares `produces` — the
-*kinds* of thing it makes, `tree`, `labels`, `blocks` — beside the old `outputs` list of paths, and
-an **artefact store** ([`src/store/artifacts.ts`](../../src/store/artifacts.ts), file adapter
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)) answers whether they are all there.
+**The check used to be existence, and it is not any more.** A step declares `produces` — the
+*kinds* of thing it makes, `tree`, `labels`, `blocks` — which stood beside an `outputs` list of
+repository paths until that went with the filesystem store on 2026-09-05, and
+an **artefact store** ([`src/store/artifacts.ts`](../../src/store/artifacts.ts) — the file adapter,
+`src/store/artifacts-fs.ts`, was deleted 2026-09-05; `src/store/artifacts-pg.ts` is the only one now)
+answers whether they are all there.
 It answers by **parsing**, not by `stat`ing, which is the fix for the truncation hazard this section
 used to list as unbuilt: a `writeFile` killed halfway leaves a file that exists and will not parse,
 and that used to report its step done. `stepIsDone` takes a store, so the same question will be
@@ -1391,14 +1404,15 @@ argument rather than one that quietly defaults to the filesystem, since a Postgr
 forgot it used to compile and get a confident answer about the wrong store. See
 [260826e-postgres-storage-implementation.md § Step 11](../plans/260826e-postgres-storage-implementation.md), half B.
 
-**One step asks a second question, and only one.** `extract` and `blocks` write to the same path —
-`output/<slug>.html`, first as Readability left it and then with the block ids stamped in — so the
-filesystem cannot tell the two apart, and both are "some non-empty text". After a re-extraction an
-old `blocks.json` therefore sat beside new *unstamped* HTML with every check passing, and the
-reading view served an article whose paragraphs had no anchors and whose comments pointed at
-nothing. `blocks` now checks that every id in its `blocks.json` is actually in the HTML beside it —
-exact, not a spot check, and cheap because stage 3 makes no model call and re-running it carries the
-ids over rather than minting new ones.
+**One step asks a second question, and only one.** Until 2026-08-31, `extract` and `blocks` wrote to
+the same path — `output/<slug>.html`, first as Readability left it and then with the block ids
+stamped in — so the filesystem could not tell the two apart, and both were "some non-empty text".
+After a re-extraction an old `blocks.json` therefore sat beside new *unstamped* HTML with every check
+passing, and the reading view served an article whose paragraphs had no anchors and whose comments
+pointed at nothing. `blocks` checks that every id in its stored blocks is actually in the HTML beside
+it — exact, not a spot check, and cheap because stage 3 makes no model call and re-running it carries
+the ids over rather than minting new ones. Under Postgres this is a check between two columns rather
+than a shared path — see [block-ids.md § The freshness guard](block-ids.md#the-freshness-guard-and-the-two-ways-it-was-wrong).
 
 **What is still not built, honestly.** Three things, roughly in order of value:
 
@@ -1421,9 +1435,9 @@ ids over rather than minting new ones.
    generations at once, and no amount of looking at the files could say so.
 
    So the store records the **attempt** as well as the output —
-   [`beginStep` / `finishStep` / `interrupted`](../../src/store/artifacts.ts), a marker under
-   `data/<slug>/steps/` on the filesystem and `revision_step_runs.status` in Postgres. A marker
-   still sitting there is a run that did not finish, and a run that did not finish is not done
+   [`beginStep` / `finishStep` / `interrupted`](../../src/store/artifacts.ts), a marker in
+   `revision_step_runs.status` in Postgres (`data/<slug>/steps/` on the filesystem, until
+   2026-09-05). A marker still sitting there is a run that did not finish, and a run that did not finish is not done
    however good its files look. `finishStep` is on the success path only, so a throw, a cancel and a
    `kill -9` all leave the same honest answer.
 3. **Automatic resume on startup**, rather than a sweep to `error` and a Retry button. Cheap once
@@ -1740,7 +1754,7 @@ job hidden by mistake is a failure the reader never learns about and nothing on 
 ingest whose every step was green. Publication was a human running `npm run db:import`.
 
 What closes it is the **session a claim runs on**: [`claimSession`](../../src/jobs.ts) picks
-[`pgStoreSession`](../../src/store/pg-session.ts) under `SPIDERYARN_STORE=postgres`, every step
+[`pgStoreSession`](../../src/store/pg-session.ts), every step
 writes its product into that claim's own draft revision, and a `done` ending publishes the draft and
 finishes the job in **one transaction**.
 
@@ -1760,11 +1774,12 @@ Five things about it are worth knowing before touching it.
   lets a claim adopt what an earlier request of the same job left behind — a two-step job whose first
   request ran `fetch` and handed the claim back holds that work in the draft, so the second request
   can skip the step and still publish it.
-- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop where the flag is `files` — set
-  explicitly, since `npm run dev` itself now defaults to `postgres` — the session is the filesystem
-  one and behaves exactly as it always has: no draft, no publication, no database.
-  [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
-  claim, and it proves it by taking `DATABASE_URL` away.
+- **It happens on every run, since 2026-09-05.** There was a filesystem session beside it, chosen by
+  the store flag, that did none of this — no draft, no publication, no database — and a suite
+  that proved it by taking `DATABASE_URL` away. Both went with the flag
+  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F);
+  [`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) is what says
+  this line opens what it says it opens.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Three doors reach
   the same recovery in [`src/jobs.ts`](../../src/jobs.ts) (`endAsStorageFailure`): the publication
   that goes wrong when every step skipped, the session that would not open at all, and the draft that
@@ -1799,21 +1814,23 @@ persistence cannot quietly do the work Postgres is supposed to be doing.
 
 ## When this becomes Postgres
 
-`Job` and `JobStep` live in [`src/types.ts`](../../src/types.ts), shaped as table rows — every field
-a scalar or a small blob a column could hold. The same discipline `LibraryEntry` follows
+**Done, since 2026-08-27, and since 2026-09-05 the only queue there is** — kept here because the left
+column below is what the filesystem queue actually did. `Job` and `JobStep` live in
+[`src/types.ts`](../../src/types.ts), shaped as table rows — every field a scalar or a small blob a
+column could hold. The same discipline `LibraryEntry` follows
 ([library.md § When this becomes Postgres](library.md#when-this-becomes-postgres)).
 
 **Updated 2026-08-25.** The row that said "pg-boss" is
 [reversed by the Postgres plan](../plans/260825f-postgres-migration.md#the-queue), and the row that said
 `LISTEN/NOTIFY` was simply wrong. Both are corrected here rather than left to disagree.
 
-| Today | Then |
+| Then (filesystem, gone 2026-09-05) | Now |
 |---|---|
 | `data/_jobs/<id>.json`, one file per job | a `jobs` table, `steps` as `jsonb`. **`id` stays `text`** — jobs are minted by the same `mintId()` as blocks, so they are `spya-` ids, not uuids |
 | p-queue, in the server process | our own `jobs` table plus a singleton `queue_state` row, claimed under a lease, surviving the process |
 | restart sweep marks orphans `error` | lease expiry, and a rescue sweep that reclaims what a dead worker held |
 | one process, so the in-memory map is authoritative | the table is authoritative, and every write is **fenced on `attempt_id`** |
-| polling `/api/jobs` | still polling — it is fine, and it is the part that does not need to change |
+| polling `/api/jobs` | still polling — it is fine, and it is the part that did not need to change |
 
 Three things that changed since this table was first written:
 
@@ -1844,7 +1861,7 @@ loop, which is what a browser tab does. So "one code path per stage, and no way 
 drift" stopped being a discipline and became a fact about the shape.
 
 They had to move. Each of the five was a thin argv wrapper doing its own `fs.writeFile` to a path off
-`process.cwd()` — reaching neither the artefact store nor `data-root.ts` — so under Postgres they
+`process.cwd()` — reaching neither the artefact store nor `data-root.ts` (deleted 2026-09-05) — so under Postgres they
 wrote files nothing reads and reported success. And the command line could not live in the stage
 module: every Postgres artefact write is fenced on a running `jobs` row and a draft revision, so a
 standalone run has to reach `src/jobs.ts`, and `jobs.ts` → `pipeline.ts` → `blocks.ts` means a

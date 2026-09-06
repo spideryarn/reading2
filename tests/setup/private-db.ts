@@ -39,13 +39,14 @@
  * not visible from inside a test — everything passes — so it is asserted here,
  * per file, by looking for its `application_name` in `pg_stat_activity`.
  *
- * ## When there is no private database
+ * ## There is always a private database, since 2026-09-05
  *
- * `provide`d as `null` when the stack was unreachable and `REQUIRE_POSTGRES=1`
- * was not set. `DATABASE_URL` is then poisoned rather than left alone: a suite
- * that cannot have its private database must not fall back to the shared one,
- * and `pgReady` turns an unreachable URL into the skip and the warning it
- * already prints today.
+ * It used to be `provide`d as `null` when the stack was unreachable and
+ * `REQUIRE_POSTGRES=1` was not set, and this file then poisoned `DATABASE_URL`
+ * so that a suite skipped rather than falling back to the shared one. The
+ * preflight in [`private-db-global.ts`](private-db-global.ts) fails the whole
+ * command now, so that state cannot arrive — `null` is gone from the provided
+ * type, and `undefined` still means the harness fault it always meant.
  */
 import { Client } from "pg";
 import { inject } from "vitest";
@@ -81,14 +82,15 @@ loadEnvLocal();
 process.env[PINNED] = "DATABASE_URL";
 
 /**
- * `null` is "there was no reachable stack and none was required" — a state
- * `private-db-global.ts` provides on purpose. **`undefined` is different**: it
- * means this setup file ran without that global setup having run at all, which
- * is a harness fault rather than a missing database, and the bare symptom would
- * be `Cannot read properties of undefined (reading 'url')` three lines down.
- * The cast is because `inject`'s declared type cannot express "not provided".
+ * **`undefined` means this setup file ran without its global setup**, which is a
+ * harness fault rather than a missing database — the bare symptom would be
+ * `Cannot read properties of undefined (reading 'url')` three lines down. The
+ * cast is because `inject`'s declared type cannot express "not provided".
+ *
+ * There is no `null` any more: an unreachable stack fails the command in the
+ * global setup, so a worker that gets here has a database.
  */
-const db = inject("privateDatabase") as PrivateDatabase | null | undefined;
+const db = inject("privateDatabase") as PrivateDatabase | undefined;
 
 if (db === undefined) {
   throw new Error(
@@ -98,12 +100,7 @@ if (db === undefined) {
   );
 }
 
-if (db === null) {
-  /* Refused fast — port 1 answers ECONNREFUSED immediately — and named so that
-     the reason appears in `pgReady`'s warning rather than only in this file. */
-  process.env.DATABASE_URL =
-    "postgresql://spideryarn:none@127.0.0.1:1/no_private_test_database_was_created";
-} else {
+{
   /* AFTER loadEnvLocal(). See the header; this line either works or does
      nothing at all, and only the control below can tell the two apart. */
   process.env.DATABASE_URL = db.url;

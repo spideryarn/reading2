@@ -95,10 +95,18 @@ function Harness() {
       </table>
       <ProseHoverCard
         entries={[]}
+        /* No article, because nothing here is one: this suite mounts the card
+           over a footnote marker. The link-preview lookup needs a slug to have
+           permission to ask, so `null` is also "ask nobody". */
+        slug={null}
         sourceUrl={null}
         blockText={blockText}
         notes={index}
         lookUpLinks={false}
+        /* A visitor's card, as `lookUpLinks` above already says. Nothing here
+           is about a link out — a footnote marker resolves inside the article
+           — so this is the pair that asks nothing of the network at all. */
+        canAddToShelf={false}
         onOpenTerm={() => {}}
         onJump={(id) => jumped.push(id)}
         onFollowNote={(from, m) => followed.push([from, m.note.id, m.blockId])}

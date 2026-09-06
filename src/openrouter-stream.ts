@@ -39,7 +39,7 @@ import {
   tookTooLong,
   wentQuiet,
 } from "./messages.js";
-import type { Citation } from "./types.js";
+import type { Citation, SearchEvidence } from "./types.js";
 /* `src/urls.ts` has no imports of its own, and `src/types.ts` only a type from
    `messages.js` — so neither drags a logger, a store or a reader in here. That
    is the constraint this module's header states, and it is checked from outside
@@ -295,18 +295,6 @@ export async function* sseChunks(
 }
 
 /**
- * How many web searches the model ran, or `null` if this chunk did not say.
- *
- * Both spellings, exactly as explain.ts reads both — OpenRouter's docs say
- * `server_tool_use` and OpenRouter's responses have been observed to say
- * `server_tool_use_details`. `null` rather than `0` for "not stated" so a chunk
- * without usage cannot reset a count a previous chunk gave us.
- */
-export function searchCount(usage: Usage | undefined): number | null {
-  return whereSearchCountCameFrom(usage).searches;
-}
-
-/**
  * Where a search count came from — and it is worth knowing which.
  *
  * `neither` is the interesting one: `usage` arrived and neither field was in
@@ -360,12 +348,72 @@ export interface Usage {
      bug prompt caching was introduced to fix. */
   prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
   cache_write_tokens?: number;
+  /**
+   * **What the reasoning cost**, on the models that reason — declared since
+   * 2026-09-05, when `link-summary` became the first job on the quick tier.
+   *
+   * It matters there and nowhere else yet: Luna reasons by default, the
+   * allocation is billed against `max_completion_tokens` with a documented
+   * 1,024-token floor, and `reasoning: { effort: "low" }` is a request rather
+   * than a guarantee. A number far above the floor is how somebody finds out the
+   * effort was not honoured — a call that costs several times what it should and
+   * looks, from the answer, exactly right. src/link-summary.ts logs it.
+   */
+  completion_tokens_details?: { reasoning_tokens?: number };
 }
 
 interface Annotation {
   type: string;
-  url_citation?: { url?: string; title?: string };
+  /**
+   * **Five keys on the wire, three of them declared here.**
+   *
+   * `url` and `title` were all this interface knew until 2026-09-05, when a
+   * probe printed a raw `url_citation` and found
+   * `url title start_index end_index content`
+   * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § 2). Nothing was
+   * broken by the omission — an undeclared key is simply not read — but it did
+   * mean a page extract the search had already paid for looked, from in here,
+   * as though it did not exist, and a whole plan was written on the assumption
+   * that fetching it would be new work.
+   *
+   * `content` is that extract: 236–4,945 characters under the Exa engine
+   * across nineteen annotations, up to 9,858 under the default engine, measured
+   * the same day. Only `collectSearchEvidence` reads it.
+   *
+   * `start_index` and `end_index` are offsets into the answer's own text and
+   * are left undeclared deliberately. Under Exa they are `0` and `0` on every
+   * annotation, because the results arrive before the first content token
+   * (src/referee-candidates.ts § `citedUrls`), so they would be a field with a
+   * meaning that changes with the engine and no caller able to use it.
+   */
+  url_citation?: { url?: string; title?: string; content?: string };
 }
+
+/**
+ * **How much of somebody else's page we are willing to keep**: 8,000
+ * characters.
+ *
+ * Not a number the measured range comes near, and that is the point. Exa's
+ * extracts ran 236–4,945 characters over nineteen annotations on 2026-09-05
+ * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § 2), so at 8,000
+ * this cap does not bite on the engine Debate uses — ~1.6× the longest one
+ * seen. What it bounds is the case nobody measured: the default engine already
+ * returned 9,858 characters on the same probe (an extract of the article we
+ * were holding anyway), and OpenRouter publishes no ceiling at all, so an
+ * engine change or an upstream tweak could otherwise put an arbitrarily large
+ * slice of a third party's page into memory, into a stored artefact, and out
+ * through a public DTO to a stranger.
+ *
+ * **Truncation is silent, and the failure it can cause is the safe one.** A
+ * caller verifying a quote against the excerpt (the rule in
+ * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md
+ * § Attribution) will fail to find one that lived past character 8,000 and
+ * **drop that row**, which is counted and shown — rather than keep a row whose
+ * evidence we never actually read. A cap that admitted rows it could not check
+ * would be the wrong direction to fail in; this one loses a true row rather
+ * than passing an unchecked one.
+ */
+export const MAX_EVIDENCE_EXCERPT = 8_000;
 
 /**
  * Read one delta's `annotations` into the answer's citation list.
@@ -395,11 +443,81 @@ interface Annotation {
  * explain's logger carries a `blockId` child field and chat's does not.
  *
  * This module still has no logger and must not grow one — see the header.
+ *
+ * **It keeps two fields out of five, and the omission is a decision.** The
+ * annotation also carries `content`, an extract of the cited page. This
+ * function's callers store what it returns — chat into `chat_messages`, explain
+ * onto a comment — so keeping the extract here would mean keeping somebody
+ * else's page text on three features that show none of it. A caller that wants
+ * the extract asks `collectSearchEvidence` below for it.
  */
 export function collectCitations(
   annotations: Annotation[] | undefined,
   into: Map<string, Citation>,
   onDropped?: () => void,
+): void {
+  collectAnnotated(annotations, into, onDropped, (c) => ({
+    url: c.url,
+    ...(c.title ? { title: c.title } : {}),
+  }));
+}
+
+/**
+ * The same annotations, **kept with the extract the search returned** — for a
+ * caller that has to check what a page says, not merely that it exists.
+ *
+ * **Opt-in, and that is the whole design.** The obvious version of this was a
+ * third field on `Citation`, which would have started storing kilobytes of
+ * third-party page text in `chat_messages` and on comments for chat, explain
+ * and Referee Criteria — three features that never asked for it. The reasoning
+ * is written out at `SearchEvidence` in src/types.ts, where the type a caller
+ * chooses is the decision. Refused by a GPT Sol plan review (F5), 2026-09-05.
+ *
+ * **Every rule above still applies, because it is literally the same code**:
+ * `type` is the discriminator, the URL is optional on the wire, `isWebUrl`
+ * refuses anything that is not http(s), `onDropped` still takes no argument,
+ * and the dedupe is still first-sighting-wins on the URL. They share
+ * `collectAnnotated` rather than a second copy for the reason this file exists
+ * at all — chat and explain each held a byte-identical copy of these rules
+ * until 2026-08-28, and a fix to one would not have reached the other. A
+ * security rule with two implementations has one of them out of date.
+ *
+ * The one thing this adds is `excerpt`, capped at `MAX_EVIDENCE_EXCERPT`.
+ * `content` is absent on some rows and under some engines, so it is spread in
+ * only when there is something in it — an empty excerpt is a claim we cannot
+ * make, not a page that said nothing.
+ */
+export function collectSearchEvidence(
+  annotations: Annotation[] | undefined,
+  into: Map<string, SearchEvidence>,
+  onDropped?: () => void,
+): void {
+  collectAnnotated(annotations, into, onDropped, (c) => ({
+    url: c.url,
+    ...(c.title ? { title: c.title } : {}),
+    ...(c.content ? { excerpt: c.content.slice(0, MAX_EVIDENCE_EXCERPT) } : {}),
+  }));
+}
+
+/**
+ * The rules both collectors obey, in one place, with only *what to keep* left
+ * to the caller.
+ *
+ * `keep` is handed the annotation's own `url_citation` with a `url` narrowed to
+ * `string`, so neither caller can forget the presence check and neither can
+ * reach anything this function has not already vetted. It is derived from
+ * `Annotation` rather than spelled out again, so a sixth key arriving on the
+ * wire reaches both collectors by declaring it once. Everything a stored value
+ * could be wrong about — the discriminator, the dedupe, the scheme refusal — is
+ * decided here and cannot be varied per caller.
+ */
+type CitedPage = NonNullable<Annotation["url_citation"]> & { url: string };
+
+function collectAnnotated<T>(
+  annotations: Annotation[] | undefined,
+  into: Map<string, T>,
+  onDropped: (() => void) | undefined,
+  keep: (c: CitedPage) => T,
 ): void {
   for (const a of annotations ?? []) {
     const c = a.url_citation;
@@ -410,7 +528,7 @@ export function collectCitations(
       onDropped?.();
       continue;
     }
-    into.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
+    into.set(c.url, keep({ ...c, url: c.url }));
   }
 }
 

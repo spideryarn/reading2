@@ -34,8 +34,9 @@
  *    *cancellation*, and the draft has to be disposed of rather than left for
  *    the sweeper. This is the case that justifies taking the article lock on
  *    commits that will never publish.
- * 6. The preflight reads `session.reads` and never the disk — proved with a
- *    perfectly good `arc.json` sitting in `data/` saying the step is done.
+ * 6. ~~The preflight reads `session.reads` and never the disk~~ — **gone on
+ *    2026-09-05 with the store that could read a disk**; see where the case
+ *    stood, below.
  * 7. A claim where **every step skips** never calls `commit` at all, so the
  *    publication cannot hang off `commit` — and it is written as **two
  *    requests**, because the first request's released work is the only thing
@@ -65,8 +66,8 @@
  * Seven of these are claims about **`advanceJob` driving this session**, not
  * about the session's methods: "the skip check goes through `session.reads`" is
  * a statement about `runStep`, and calling a session helper directly would
- * prove something else. Production is hardwired to `fsStoreSession` and stays
- * that way until D2, so `advanceJobWith` takes the session factory and the step
+ * prove something else. Production was hardwired to `fsStoreSession` when this
+ * was written, so `advanceJobWith` takes the session factory and the step
  * registry as arguments and production supplies today's defaults. GPT Sol,
  * 2026-08-29, docs/plans/260827aa-delete-the-importer-d1b-design-sol.md finding 4.
  *
@@ -191,27 +192,11 @@
  * Skips loudly when there is no database — see tests/helpers/pg-ready.ts, and
  * note the top-level `await`: a flag checked in `beforeAll` reports *passed*.
  */
-import { mkdir, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Pool } from "pg";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres` before a single import is evaluated.
- *
- * `vi.hoisted` and not a plain statement, for the reason tests/store-guarded.ts
- * spells out: imports are hoisted above every statement in a module, so an
- * ordinary assignment runs *after* the module it is configuring has made up its
- * mind. src/store/live.ts reads the flag once, at first import.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const before = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return before;
-});
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, blockIdentities, jobs as jobsTable, revisionBlocks, revisionStepRuns } from "../src/db/schema.js";
@@ -220,7 +205,7 @@ import { mintId, mintUniqueId } from "../src/ids.js";
 import { STORAGE_FAILED } from "../src/messages.js";
 import { advanceJobWith, type AdvanceParts, type StepRegistry } from "../src/jobs.js";
 import { runAsOwner } from "../src/owner.js";
-import { STEPS, contextPaths } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import type {
   ConvertedProduct,
   PipelineStep,
@@ -228,11 +213,9 @@ import type {
   StepProduct,
 } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactOutcome, ArtifactReads } from "../src/store/artifacts.js";
 import { isGuardedStore } from "../src/store/db-errors.js";
 import { StaleAttemptError, mintAttempt } from "../src/store/jobs.js";
-import { STORE } from "../src/store/live.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import {
@@ -264,8 +247,6 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
    reuses a worker process across files. Leaving it set hands the next file a
    store it did not ask for — which is how tests/store-jobs-parity.test.ts once
    found a stray Postgres job left behind by tests/jobs.test.ts. */
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
 loadEnvLocal();
 
@@ -277,8 +258,6 @@ loadEnvLocal();
  * least informative way for a suite to report contention.
  */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
-
-const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * This suite's own person, seeded here and taken away again.
@@ -309,7 +288,7 @@ const LEASE_MS = 60_000;
  */
 let runLock: HeldRunLock | undefined;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-pg-session.test.ts",
   /* Schema-qualified, always. `to_regclass('jobs')` is null even on a fully
      migrated database, and this whole suite would then report itself skipped. */
@@ -322,33 +301,29 @@ const { reachable } = await pgReady({
   ],
 });
 
-if (reachable) {
-  /* After `pgReady`, and only when reachable — a file that is about to skip
-     must not sit holding the lock. See tests/helpers/run-lock.ts. */
-  /* Through `takeRunLockAndSetUp`, so a sweep statement that throws gives the
-     key back: this is module scope, and no `afterAll` exists yet to do it.
-     tests/helpers/lock-lifecycle.ts. */
-  runLock = await takeRunLockAndSetUp("tests/store-pg-session.test.ts", async (lockClient) => {
-    /* The lock is held, so no sibling can be using any of this. Jobs first: they
-       reference drafts, and a leftover `running` row from a killed run blocks
-       this file's own slugs and counts against the concurrency cap until its
-       lease lapses. */
-    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query(
-      "update spideryarn.articles set current_revision_id = null where slug like $1",
-      [SLUG_RUBBLE],
-    );
-    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-    await seedAuthUser(lockClient, {
-      id: OWNER,
-      email: `store-pg-session-${OWNER}@example.invalid`,
-    });
+/* After `pgReady`, and only when reachable — a file that is about to skip
+   must not sit holding the lock. See tests/helpers/run-lock.ts. */
+/* Through `takeRunLockAndSetUp`, so a sweep statement that throws gives the
+   key back: this is module scope, and no `afterAll` exists yet to do it.
+   tests/helpers/lock-lifecycle.ts. */
+runLock = await takeRunLockAndSetUp("tests/store-pg-session.test.ts", async (lockClient) => {
+  /* The lock is held, so no sibling can be using any of this. Jobs first: they
+     reference drafts, and a leftover `running` row from a killed run blocks
+     this file's own slugs and counts against the concurrency cap until its
+     lease lapses. */
+  await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+  await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query(
+    "update spideryarn.articles set current_revision_id = null where slug like $1",
+    [SLUG_RUBBLE],
+  );
+  await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+  await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+  await seedAuthUser(lockClient, {
+    id: OWNER,
+    email: `store-pg-session-${OWNER}@example.invalid`,
   });
-}
-
-const when = reachable ? describe : describe.skip;
+});
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -591,7 +566,6 @@ function fakeArc(
   return {
     name: "arc",
     label: "Reading the shape of the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     async run(ctx, store) {
       if (log) {
@@ -617,7 +591,6 @@ function fakeTweets(): PipelineStep<"tweets"> {
   return {
     name: "tweets",
     label: "Writing the thread",
-    outputs: (ctx) => [path.join(ctx.dir, "tweets.json")],
     produces: ["tweets"],
     async run() {
       throw new Error("the fake tweets step must not run: the fixture published a current thread");
@@ -770,11 +743,8 @@ async function claimWithSession(slug: string, names: StepName[]): Promise<Claime
 
 /** The context `runStep` would have built, for the cases that call `commit` directly. */
 function contextFor(slug: string): StepContext {
-  const { dir, htmlFile } = contextPaths(slug);
   return {
     slug,
-    dir,
-    htmlFile,
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -874,7 +844,7 @@ async function arcTextOf(revisionId: string): Promise<string | null> {
 const mine = (name: string, body: () => Promise<void>) =>
   it(name, () => runAsOwner(OWNER, body));
 
-when("the transactional session", () => {
+describe("the transactional session", () => {
   /* Nothing to build once and share: each case publishes its own article under
      its own slug, because half of them end the job and clear the draft, and a
      shared fixture would make the order of the file part of the test. */
@@ -896,7 +866,6 @@ when("the transactional session", () => {
    * the assertions above have already read.
    */
   afterEach(async () => {
-    if (!reachable) return;
     await db()
       .delete(jobsTable)
       .where(
@@ -905,7 +874,6 @@ when("the transactional session", () => {
   });
 
   afterAll(async () => {
-    if (!reachable) return;
     /* Release last, and whatever the cleanup did: one failed statement used to
        skip it, leaving the key held until the worker exited and every peer
        suite waiting on it. tests/helpers/lock-lifecycle.ts. */
@@ -930,10 +898,9 @@ when("the transactional session", () => {
         /* On the lock's own connection, so the person is taken away while this
            file still owns the slot rather than in the gap after letting go. */
         await runLock?.client.query("delete from auth.users where id = $1", [OWNER]);
-        await rm(path.join(ROOT, "data", `${SLUG_PREFIX}preflight`), {
-          recursive: true,
-          force: true,
-        });
+        /* **Nothing on a disk to sweep since 2026-09-05.** This took away
+           `data/<slug>/` for the preflight case, which was the one thing in
+           this file that wrote a file. */
       },
       async () => {
         await runLock?.release();
@@ -951,8 +918,6 @@ when("the transactional session", () => {
    * would only show up as a raw Drizzle error on somebody's homepage.
    */
   mine("runs against the Postgres job store, behind the error guard", async () => {
-    expect(STORE, "the vi.hoisted flag did not reach src/store/live.ts").toBe("postgres");
-
     const fixture = await publishArticle(`${SLUG_PREFIX}guard`, "old");
     const claimed = await claimWithSession(fixture.slug, ["arc"]);
     expect(isGuardedStore(claimed.session)).toBe("session");
@@ -1595,54 +1560,34 @@ when("the transactional session", () => {
 
   /* ------------------------------------------------------------------ 6 -- */
 
-  /**
-   * The preflight reads the draft, with a perfectly good `arc.json` on disk.
+  /*
+   * **Case 6 — `decides what to skip from the draft, not from the files on
+   * disk` — stood here until 2026-09-05, and it is gone because it cannot be
+   * written any more.**
    *
-   * A Postgres step deciding whether to skip by looking at files is the exact
-   * silent success this seam exists for, and it is not hypothetical: the
-   * filesystem store is what `src/jobs.ts` still imports, and `stepIsDone` used
-   * to be handed it. The disk is checked to be convincing first — a test where
-   * the files were not actually there would pass with `session.reads` swapped
-   * for anything at all.
+   * It published an article with no arc, wrote a perfectly good `arc.json` into
+   * `data/<slug>/`, and asserted the step ran anyway. **The control was the
+   * whole case**: `expect(await onDisk.has(slug, "arc", ["arc"])).toBe(true)`
+   * through a `createFsArtifactStore`, so that "the step ran" could not be
+   * satisfied by the file never having been written. Its own comment said so —
+   * *"a test where the files were not actually there would pass with
+   * `session.reads` swapped for anything at all"*.
+   *
+   * Stage G of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+   * deleted `src/store/artifacts-fs.ts`, so there is no store that can read a
+   * directory and therefore **no control**. Keeping the case without one would
+   * leave exactly the vacuous test its own comment refuses: it would pass
+   * against a system with no disk concept at all, which is the system we now
+   * have. Deleted rather than weakened, deliberately.
+   *
+   * **Where its surviving halves live.** *The step is not skipped when the
+   * draft lacks the artefact* is case 7's first request, which runs `arc` for
+   * that reason and then watches the second request skip it once the draft has
+   * it. *The run phase reads the draft* is case 1's
+   * `expect(seen.sawArc?.entries[0]?.text).toBe("the carried arc")`, which is
+   * the same claim asserted positively. Nothing is left with no home.
    */
-  mine("decides what to skip from the draft, not from the files on disk", async () => {
-    const slug = `${SLUG_PREFIX}preflight`;
-    /* No arc in Postgres: the draft will carry none forward. */
-    const fixture = await publishArticle(slug);
-
-    const dir = path.join(ROOT, "data", slug);
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      path.join(dir, "arc.json"),
-      `${JSON.stringify(arcSaying(slug, fixture.blocks, "the arc on disk"), null, 2)}\n`,
-      "utf8",
-    );
-    /* The control. Without it, "the step ran" is consistent with the file never
-       having been written, and the mutation that swaps the store back would not
-       redden anything. */
-    const onDisk = createFsArtifactStore();
-    expect(await onDisk.has(slug, "arc", ["arc"]), "the disk really does say done").toBe(true);
-
-    const seen: StepLog = { calls: 0, sawArc: null };
-    const step = fakeArc(
-      async (ctx) => ({
-        detail: "one entry",
-        parts: { arc: arcSaying(ctx.slug, fixture.blocks, "the arc in the draft") },
-      }),
-      seen,
-    );
-
-    const jobId = await queueJob(slug, ["arc"]);
-    const advanced = await advanceWhenSlotFree(jobId, partsWith(step));
-
-    expect(advanced?.ran, "the step must not have been skipped").toBe("arc");
-    expect(seen.calls).toBe(1);
-    /* And the run phase saw the draft too: no arc, where the disk has one. */
-    expect(seen.sawArc).toBeNull();
-
-    const published = (await articleRow(slug))?.currentRevisionId;
-    expect(await arcTextOf(published as string)).toBe("the arc in the draft");
-  });
 
   /* ------------------------------------------------------------------ 7 -- */
 

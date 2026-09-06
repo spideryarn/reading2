@@ -33,9 +33,13 @@
  * somebody to change a permission when their wifi is down sends them off to
  * break a setting that was fine.
  *
- * There are no bracketed codes on these, unlike src/messages.ts. Those exist
- * for failures a person might report to whoever runs the server; these are all
- * facts about the reader's own machine, which nobody here can look up.
+ * These are **not** in src/messages.ts, which is about failures a *model call*
+ * can return; a blocked permission and a headset unplugged mid-sentence are not
+ * that. They carry the same bracketed codes it does, though — this paragraph
+ * said the opposite until 2026-09-05, having been written before the two-pass
+ * rewrite added them, and a stale sentence in a header is worse than none
+ * because the next person reads it instead of the table below.
+ * docs/project/copy.md § The bracketed code.
  */
 
 /**
@@ -56,6 +60,19 @@ export type DictationVerdict =
   /** Stop, and tell the reader this. */
   | { keepGoing: false; message: string };
 
+/**
+ * One sentence, three codes that mean it.
+ *
+ * `language-not-supported`, `phrases-not-supported` and `bad-grammar` are three
+ * ways for a recogniser to say it cannot work in this language — and there is
+ * one thing to tell the reader about all three, which is
+ * [copy.md](../../docs/project/copy.md)'s rule that a code names a branch
+ * rather than a status. A shared constant rather than three literals, so that
+ * they cannot drift into three sentences under one code.
+ */
+const LANGUAGE =
+  "Speech recognition does not support this page's language. You can still type. [mic-language]";
+
 const MESSAGES: Record<string, string> = {
   "not-allowed":
     "Your browser blocked the microphone. Allow it for this site and try again. [mic-blocked]",
@@ -69,18 +86,47 @@ const MESSAGES: Record<string, string> = {
     "Your browser would not allow speech recognition on this page. You can still type. [mic-no-service]",
   /* Deliberately does not lead with "try again". Retrying is exactly what
      somebody does with a connection error, and it cannot work until the
-     connection does. */
+     connection does.
+
+     **`[mic-no-connection]`, and it used to be `[mic-offline]`.** Renaming a
+     shipped code orphans every support conversation that quoted it
+     (docs/project/copy.md), and it was done anyway on 2026-09-05 because the
+     alternative was worse: `dictation-upload.ts` raises a *different* sentence
+     under `[mic-offline]` — the upload failing after the reader has stopped
+     talking — so the four characters somebody quotes named two branches. A
+     feedback report reading only "I got a [mic-offline] error" could not be
+     resolved to either. `tests/dictation-codes.test.ts` is the guard.
+
+     The upload kept `[mic-offline]` rather than this one, because the upload is
+     the path a reader actually loses a dictation to. This one is now nearly
+     unreachable on purpose — see `useDictation.ts` § `r.onerror`: a recogniser
+     that dies while the tape is still running no longer says anything at all,
+     because the tape is what produces the words. */
   network:
-    "Speech recognition needs an internet connection, and the connection failed. Check you are online, then press the microphone again. [mic-offline]",
+    "Speech recognition needs an internet connection, and the connection failed. Check you are online, then press the microphone again. [mic-no-connection]",
   "audio-capture":
     "No microphone was available. Check the input device your computer is set to use. [mic-none]",
-  "language-not-supported":
-    "Speech recognition does not support this page's language. You can still type. [mic-language]",
-  "phrases-not-supported":
-    "Speech recognition does not support this page's language. You can still type.",
-  "bad-grammar":
-    "Speech recognition does not support this page's language. You can still type.",
+  "language-not-supported": LANGUAGE,
+  /* **These two carried the sentence without the code**, for a year, because
+     they were written as literals beside it rather than pointed at it — and
+     `tests/dictation-errors.test.ts` checked the codes over a hand-written list
+     of error names that did not include them. So the one family of messages
+     defined by having a code had two members with none, and both checks that
+     could have said so were looking somewhere else. Found by GPT Sol reviewing
+     the plan for 260905c (F11); the test now iterates `KNOWN_CODES` rather than
+     a list somebody has to remember to extend. */
+  "phrases-not-supported": LANGUAGE,
+  "bad-grammar": LANGUAGE,
 };
+
+/**
+ * Every recogniser code this file names, for a test that wants to check all of
+ * them rather than the ones somebody thought to type out.
+ *
+ * `verdictFor` is total, so this is **not** the set of codes it handles — it
+ * handles every string there is. It is the set that gets a sentence of its own.
+ */
+export const KNOWN_CODES = Object.keys(MESSAGES);
 
 /**
  * The sentence for a code we have never seen.

@@ -1,6 +1,6 @@
 # The tree goes as deep as each part of the article needs
 
-**Status: stages 1–4 done; stage 5 — the first live call — is next.** The measurements and the spikes
+**Status: stages 1–4 and 5a done; 5b — the first live call — is the next thing, and it is a decision rather than a task.** The measurements and the spikes
 are in `evals/results/hierarchy-waves-2026-09-04/`, and **stages 3 and 4 have landed in `src/`**, each
 reviewed across families. There is still no network call, no flag, and nothing wired into
 `generateHierarchy`: the cascade is called by nothing. What changed is that it now derives the same
@@ -1166,6 +1166,805 @@ rates by wave and size, and the real bill — before anything recursive is built
 the corpus's articles are untouched where nothing is eligible; the step fits its budget under load,
 or the plan records that it does not and what that costs.
 
+#### What the live run must answer, and what would make us stop <a id="stage-5-questions"></a>
+
+Written **before** the run, because a paid run with no stated question always succeeds. Stage 5 is
+split: **5a** is everything that costs nothing — the import-cycle hoist, the verdict pairing, the
+derived concurrency budget, and the wiring behind a flag that is off — and **5b** is the first live
+wave. 5b is a separate decision because it is the first irreversible spend in this plan, at roughly
+$8.40 a book against today's $1.00, and repeats multiply it.
+
+Five questions, each with the number that answers it and the reading that would stop the plan:
+
+| | question | measured as | what would mean stop |
+|---|---|---|---|
+| 1 | **Is the verdict stable?** | the same node's raw verdict across N repeats of one wave | a flip rate high enough that obeying it is a coin toss — then stage 6 is unbuildable and the mechanical bounds have to carry the whole thing |
+| 2 | **Does the model always say yes?** | raw yes rate, by wave and by node size | a rate near 1 turns a bounded cascade into a bill; the plan named this failure before the prompt was written, so it is a measurement rather than a worry |
+| 3 | **How often does a bound overrule it?** | `because` tallied over every `decideExpansion` — the point of returning a union | if the bounds decide nearly everything, the verdict is costing money to be ignored, and the cheaper conditional-depth prompt is the honest answer |
+| 4 | **What does it actually cost?** | per book and per ordinary article, against the incumbent's $1.00 | materially past the ~8× the plan costed, without a proportionate gain in what the reader can navigate |
+| 5 | **Does it fit the budget under load?** | the whole hierarchy step including labels, under `DEFAULT_JOB_CONCURRENCY` jobs at once | past the 740 s self-abort with checkpoints that do not make the next attempt cheap |
+
+**Two of these can only be answered by repeats**, which is where the cost is. Question 1 is the one
+the rest of the plan leans on: stage 6 obeys the verdict recursively, and it should not be built on a
+signal that changes its mind. **Question 3 is the one that could retire the feature** — if the
+heading rule and the two counters are doing all the work, then the self-assessment is an expensive
+opinion and [the conditional-depth prompt](#the-free-experiment-a-conditional-fourth-level-in-the-one-whole-document-call)
+does the same job for nothing.
+
+**The corpus's ordinary articles are part of the run, not an afterthought.** An article where nothing
+is eligible must come out byte-identical to today, and that is the cheapest possible evidence that
+this is inert until it is wanted.
+
+#### What stage 5a landed, and the six P1s that shaped it <a id="stage-5a-landed"></a>
+
+**5a is everything that costs nothing, and it is done.** The wave is wired into `generateHierarchy`
+behind `SPIDERYARN_DEEPEN_HIERARCHY`, **off by default**, seeded from the built tree, exercised end to
+end against a fake executor. An ordinary ingest today does not call it, and a test asserts that
+directly: no flag, no executor call, `deepen: null` rather than a row of zeros, and the tree unchanged
+in depth. "Nobody asked" and "asked and found nothing" stay different facts.
+
+Three prerequisites came first. **The import cycle was broken before it closed** — `PROMPT_VERSION`,
+`PRODUCTION_EFFORT` (which this plan had not noticed was also a value import) and `renderBlocks`
+hoisted into `src/hierarchy-prompt.ts` and re-exported, so no existing importer changed. That move is
+**proven inert rather than asserted**: the pre-move `hierarchy.ts` taken out of git at `9afcc37f` and
+the new one both mint the structure checkpoint key `2993e1e4b2aaf1d6`, which is pinned as a literal.
+A single changed character there would have missed every checkpoint row ever written and bought every
+reader's stored table of contents again, with nothing to see but the bill. **The verdict is paired
+with the child that survived** — `normaliseExpansion` is generic and returns `{node, proposed}` pairs
+carrying the caller's own object by identity, so a field this file has never heard of survives the
+derivation. And **the concurrency is derived rather than borrowed**: `EXPANSION_CONCURRENCY = 8`, from
+`ceil(20 calls / W) × 45 s ≤ 300 s` where the 300 is the step budget less measured wave-1 and label
+times — four leaves 79 s that one redraw eats, eight leaves a whole further round. The arithmetic is
+itself a test, so moving `STEP_BUDGET_MS.hierarchy` goes red rather than stale.
+
+**The review refused on six established P1s** ⟨GPT Sol, 2026-09-05⟩, and one of them changed what the
+paid run is worth:
+
+- **The per-candidate records never left `deepenTree`.** `DeepenStats` had no field for them, so
+  `generateHierarchy` dropped them at the seam — and three of the five questions above need exactly
+  those records. **Stage 5b would have spent the money and been unable to answer its own questions**,
+  which is the waste [§ the questions](#stage-5-questions) was written to prevent. Now
+  `saveDeepenRecords` writes one file per pass to `SPIDERYARN_DEEPEN_RECORDS`, unset for every reader.
+- **The wave was not deterministic, and this plan claimed it was.** `WidthGate` reserves a slot and
+  *then* jitters, so calls admitted together split randomly between executed and out-of-time, and the
+  completed ones were published anyway. Admission is atomic; dispatch is not. Publication is now all
+  or nothing, with `withheld` counting the bought answers left in checkpoint rows. **Atomic
+  publication does not restore full determinism** — the deadline is wall-clock, so two runs can still
+  differ between "wave-1 tree" and "fully deepened". What it removes is the *partial* tree.
+- **A truncated answer was published as complete.** The executor ignored `stop_reason`, and a response
+  cut exactly after a closing brace parses. Now `ExpansionTruncated`, failing the wave rather than
+  redrawing — an identical redraw truncates identically, and a larger budget is a different question
+  under a different checkpoint key.
+- **A failed wave returned while paid peers were still in the air**, so their checkpoint rows might
+  never land: calls bought and thrown away. `allOrStop` now drains before rethrowing.
+- **Retries and fan-out were recorded on the wrong nodes** — children inheriting the parent call's
+  redraw count, `fanOut` null everywhere. Instrumentation describing the wrong node is worse than
+  none.
+- **And one that was never ours.** `WidthGate.refused` returned early on a stale epoch *before*
+  applying its pause, so within one burst a first short refusal bumped the epoch and a later, longer
+  `Retry-After` was discarded entirely. Pre-existing shared code from the PDF stage's gate, live for
+  real readers at `CHUNK_CONCURRENCY = 100` today. Every refusal now extends the pause; only the
+  halving stays epoch-scoped.
+
+**Resumption is documented rather than built**, and the distinction matters: a withheld wave returns
+normally, labels are written and the job commits done, so **nothing schedules a retry**. It is the
+reader's next Retry or a re-ingest, exactly as a long PDF's second lease window. The rows are there
+and make that attempt cheap; nothing makes it happen.
+
+#### And what a second review of the same code found <a id="stage-5a-round-2"></a>
+
+⟨GPT Sol, 2026-09-05, reviewing stage 5a's code a second time. Refused on one P0 and five P1s; all
+seven findings taken.⟩ **Five of the seven were ways the paid run would take the money and be unable
+to answer**, which is the exact waste [§ the questions](#stage-5-questions) exists to prevent.
+
+- **P0 — the re-ask switch was process-wide and persistent.** Written up under
+  [§ the levers](#stage-5-levers) above, because that is where the lever is described.
+- **`withheld` claimed checkpoint rows that did not exist.** The write is deliberately best-effort
+  and its failure is a `warn`; the outcome was counted anyway, so the number saying *"this is what
+  the next attempt gets for free"* included answers with no row. `ExpansionCallOutcome.checkpointed`
+  is what it is read off now, and `uncheckpointed` beside it counts the answers that were paid for,
+  withheld and lost — money that buys the next attempt nothing, and a `warn` when it is above zero.
+  The trade stands for the *article*; the count stopped lying.
+- **The drain was unbounded for a caller with no signal.** `allOrStop` waits for the calls still in
+  the air before it rethrows, so a paid peer gets to write its row — and its docblock claimed that
+  wait was finite because every caller either aborts in flight or is bounded by a claimant's
+  deadline. Not true here: the wave is reachable from the CLI and from an exported `deepenTree` with
+  no signal at all, and `ExpansionExecutor` has no abort contract. **Bounded rather than aborted**,
+  because aborting the live calls would undo the change the drain exists for. `EXPANSION_DRAIN_MS`
+  is 60 s and shows its arithmetic: the abort reaches every *wait*, so `EXPANSION_ATTEMPTS` and
+  `MAX_RETRY_AFTER_MS` are not in the sum — one packed model call at 45 s, plus the third of it again
+  `CALL_RESERVE_MS` allows for reading the answer and writing the row.
+- **Two record files in one second overwrote.** `<slug>-<stamp>-<pid>.json` cannot separate two
+  passes of one process, which is exactly what `--repeat` is — so the repeat overwrote the run it
+  was bought to be compared against. A process-local counter, and the file is created `wx` so a
+  collision fails loudly and is retried rather than overwriting.
+- **A thrown wave lost its measurement.** `saveDeepenRecords` was only on the success path, so a
+  fatal wave took wave 1's governor decisions, its paid peers' records, the gate's report and the
+  token accounting with it. The partial telemetry now travels on `ExpansionWaveFailed` and then on
+  `DeepenFailed`, and `generateHierarchy` writes a `failed: true` records file before it falls back
+  to wave 1. `deepen-records/2`.
+- **`where` is not a repeat-stable identity.** It is an ordinal path derived from the answer's own
+  fan-out, so two repeats that split one parent at different points both emit `root > child 1` and a
+  moved boundary reads as a verdict that held — wrong in the direction that flatters the feature, on
+  the question most likely to retire it. `CandidateRecord.range` carries the node's derived first and
+  last block id (an address, not prose), pairing is parent-plus-range, and a changed fan-out or an
+  unmatched range is **structural instability** rather than a flip. The counting is in
+  [`evals/deepen/report.ts`](../../evals/deepen/report.ts), which refuses to compare a record with no
+  range.
+- **The gate's explanation was discarded.** `runExpansionWave` computed `gate.report()` and dropped
+  it, and `DeepenStats` kept only `rateLimited` — a count with no width beside it, so a slow wave
+  could not say whether the gate had narrowed to one. `WidthGate.watch()` gives a **per-wave** window
+  — initial, final and narrowest width, and the refusals seen while it was open — because the gate is
+  a process singleton shared with every concurrent job and its cumulative figures would put another
+  book's rate limit on this one's artefact.
+
+#### Two levers, so the paid run can answer what it is being paid for <a id="stage-5-levers"></a>
+
+Built after the review, both free:
+
+- **`SPIDERYARN_DEEPEN_REASK`** names the articles to re-ask — a comma-separated list of slugs — and
+  for those it skips the expansion checkpoint *read* — not read-and-discard, so `found` cannot report
+  rows nobody used — and still **writes**, so a genuine resumption afterwards is still cheap. Without
+  it a repeat is free and the verdicts are identical *by construction*, which is not a stability
+  measurement. No `delete` was added to `CheckpointStore`; its header rules one out.
+  **The structure call is deliberately still resumed**, holding the seed constant so a moving verdict
+  is the scoped call changing its mind rather than a different tree being asked a different question —
+  and saving about two dollars and eight minutes a repeat.
+
+  **It was a boolean for a day, and that was a P0.** The variable is read from `process.env` on
+  *every wave*, so a worker started with it set re-asked for every eligible article it later picked
+  up — and 5b goes through the queue, so the worker doing the repeats is the worker serving everyone
+  else. Real money on strangers' articles, for as long as the process lived. Now the switch is
+  article-scoped: `1`, `true` and `yes` are read as slugs, match nothing, and log a warning naming
+  what was parsed, because *"I set it and nothing re-asked"* must not be silent. **There is
+  deliberately no spelling that means "all articles".**
+- **The wave's tokens reach `HierarchyRun`**, accumulated per *draw*, so a call refused twice and
+  answered on the third reports all three. Flag off, the added term is zero, and a test asserts the
+  four figures are arithmetically unchanged.
+
+**And the obvious command would have been the wrong one.** `npm run hierarchy` passes
+`nullCheckpointStore()`, so it resumes nothing: every repeat would re-buy the structure call *and*
+hand each repeat a different seed, which is exactly the confound the paragraph above exists to avoid.
+Stage 5b goes through the queue.
+
+> **True when written, and overtaken within the day.** Stage E of
+> [260903f](260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) put every stage CLI
+> through the queue on 2026-09-05, so `npm run hierarchy` resumes like any other claim and the
+> sentence above no longer describes it. Kept because the *reason* still holds and is the reason the
+> harness exists: a repeat that re-buys the structure call is a repeat with a different seed, and
+> question 1 cannot be asked of it. What that change also settles is that `--force` re-runs the
+> **step** and not the **purchase** — it replays the structure call out of its checkpoint — so
+> forcing alone would have made every repeat free and identical, and it is
+> `SPIDERYARN_DEEPEN_REASK` that makes the wave cost anything the second time.
+
+#### The harness, and the command to run it <a id="stage-5b-harness"></a>
+
+**Built 2026-09-05, reviewed, fixed, still unrun.** [`evals/deepen/`](../../evals/deepen/) is a
+self-contained eval that
+drives the four phases above through the **production** ingest queue and answers all five questions
+from one run's artefacts. `report.ts` is the arithmetic and has no IO, `harness.ts` owns the ingress
+and the levers, `run.ts` only drives and prints; the cost eval's proved mechanisms — the
+`scopeKind: "eval"` overlay and the fixture stage-1 step — are imported from
+[`evals/cost/harness.ts`](../../evals/cost/harness.ts) rather than copied. ⟨There were three: the
+`pump()` silencer is gone, replaced by `pump: false` on the request itself — see the dated note
+below.⟩
+[`tests/deepen-eval.test.ts`](../../tests/deepen-eval.test.ts) holds it to a case per way it could
+report a clean result having measured nothing.
+
+```
+npm run eval:deepen -- --book output/2701-h.html \
+  --article output/noema-mythology-of-conscious-ai.html --repeats 3          # preflight, free
+npm run eval:deepen -- --book … --article … --repeats 3 --dry-run            # the shape, free
+npm run eval:deepen -- --book … --article … --repeats 3 --spend              # ~$41
+```
+
+**Preflight is the default and `--spend` is the only way to spend.** Preflight prints the plan, the
+bill and every check the run will make, and it *proves the seam rather than asserting it*: it
+exercises `SPIDERYARN_DEEPEN_REASK` against this run's own book and article slugs, and runs a
+`deepenTree` probe against a synthetic article under the book's slug — cold buys N calls, an ordinary
+repeat buys 0, a re-asking repeat buys N again with **zero** reads, and the only checkpoint namespace
+touched is `hierarchy-deepen`. That last one is how *"wave 1 stays resumed, so the seed is held"*
+becomes an observation.
+
+The book and the article are **named on the command line and hashed at run time**, because `output/`
+is gitignored: adding them to `evals/cost/fixtures.ts` would point a committed manifest at a file
+nobody else has and break that eval for everyone.
+
+Two things it refuses to do, both of them the difference between a measurement and a bill:
+
+- **Pair candidates on `where`.** A record with no `range` is refused outright rather than paired
+  approximately, and the three outcomes are separate rows that must not be added together — but only
+  **one** of the three pairs is disjoint, and saying otherwise was wrong. A changed fan-out is
+  counted alone, because a parent that came back with a different number of children produced other
+  nodes rather than changing its mind. A **moved boundary and a surviving child's verdict flip
+  overlap deliberately**: one parent can do both, both facts are true, and making them disjoint would
+  discard valid same-range verdict evidence — which is the number stage 6 leans on. The overlap is
+  counted and printed. ⟨Sol was right, and my earlier instruction to make them disjoint was wrong.⟩
+- **Report a repeat that bought nothing.** `stats.calls === 0` where `stats.targets > 0` is fatal,
+  and so is a **repeat** whose `hierarchy` ledger rows carry a whole structure call's input tokens —
+  the seed moved, and the flip rate would be measuring the tree and the verdict at once. So is a
+  wave-1 frontier that differs between repeats, which is the same fact seen from the tree's side.
+  **Phase A is not a repeat**: buying the structure call is the whole point of the ingest, and see
+  below for what applying the guard there would have cost.
+
+#### What the pre-spend review refused, and why it was worth having <a id="stage-5b-review"></a>
+
+**GPT Sol reviewed the harness before it was allowed to spend, and refused it** — thirteen findings,
+seven P0. The refusal earned its keep twice over:
+
+- **The structure-rebought guard was applied to phase A.** The measured Moby-Dick structure call is
+  453,832 input tokens ([the artefact](../../evals/results/hierarchy-waves-2026-09-04/2701-h.tree.json)
+  § `usage`) against a floor of 256,900, so a **successful** $40.90 run would have spent the money
+  and then reported `structure-rebought` fatally over the phase whose job is to buy it. The real
+  token count is now pinned in a test.
+- **$40.90 was never a bound, and neither is $85.30.** A re-asking pass that hands its claim back at
+  its own 740 s deadline is requeued, and the driver re-claimed it at once — with the slug still
+  named in the re-ask lever, so the next claim ignored the checkpoint rows just written and bought
+  the wave again. `REQUEUE_BUDGET = 2` permits three windows, so one nominal pass could buy the
+  book's wave three times, and none of it was in the printed estimate. **What the run does is stop,
+  not enforce a cap**: a re-asking pass stops on its first requeue, the job is left `queued` and
+  resumable, and the self-abort is a fatal finding. The estimate prints $40.90 as the **nominal
+  estimate** and $85.30 as the **three-window requeue exposure**; *neither is a bound*, and nothing
+  anywhere refuses a call at $N. ⟨This bullet said "the run enforces the bound" and called $85.30 a
+  "worst case" until 2026-09-05, contradicting the runtime text it describes. Sol had asserted the
+  bound version twice and retracted it; the plan kept the retracted claim for another round. DPN-22.⟩
+
+The other eleven were one disease in eleven places: **an answer computed over evidence that is
+absent, partial or failed, printed as though it were a result**
+([silent-success.md](../reusable/silent-success.md)). What changed:
+
+- **Every one of Q1–Q5 has an answerability gate**, and "not measured" is visibly different from
+  "measured zero". Q1 refuses fewer passes than the run set out to make, a pass whose wave threw, and
+  a comparison that matched nothing and found no structural instability either — `0 of 0` printed as
+  a flip rate of none. Q2 and Q3 refuse a rate over no verdicts. Q4 keeps a job whose ledger was
+  never read as `NOT READ` rather than filtering it out of the bill. Q5 needs three steps that
+  finished `done` with a wave's stats behind them.
+- **Q1 is computed from phases A and B only.** The repeats are serial *because* a contended repeat
+  confounds question 1, and the harness contradicted its own design by folding phase D's book pass
+  into the same population. D's pass is reported beside question 5, where the contention is the
+  point.
+- **Concurrency is measured over the steps' own windows, not the jobs'.** All three phase-D promises
+  stay alive while two of them are told `busy`, so a whole-job overlap check passes over a phase that
+  ran serially. `peakConcurrency` has to reach three, and the runtime `jobConcurrency()` is asserted
+  before anything is enqueued — it reads its environment variable at call time, so a shell that set
+  it to 1 would serialise phase D while the metadata went on saying 3.
+- **The money is watched from both ends.** Every ledger row must carry `scopeKind: "eval"` or it is
+  being billed to Product — this eval drives jobs with no `fetch` step, so the fixture check cannot
+  stand in for it — and every call each step's own collector saw must have a row, because a row that
+  was never inserted reads back as `unreadable: 0`. Both are `evals/cost/report.ts`'s, imported. The
+  ledger is re-read once every job has stopped, to say whether the numbers stood still.
+- **A failure no longer takes the phase down with it.** Phase D drains with `Promise.allSettled`
+  before the levers are restored, `driveJob` turns a failed ledger read or records parse into a fatal
+  finding rather than a rejection, and the run file's checkpoint writer is serialised with a unique
+  temporary name — three concurrent jobs racing on one `run.json.<pid>.tmp` left the loser's rename
+  with `ENOENT`.
+- **Phase C's control has to be a control.** An "ordinary" article with eligible sections is fatal
+  now rather than a note: an unchanged tree there is a coincidence, not the evidence phase C exists
+  to produce.
+
+**It was refused five times.** ⟨GPT Sol, 2026-09-05.⟩ The second pass found seven more, two of them
+reopening findings the first round had been recorded as closing — which is the argument for reviewing
+the *code* as well as the plan. The fourth and fifth are [below](#stage-5b-round-4), and each of them
+found that the previous round's fix was not the fix it looked like: **twice running, a fix removed
+the version of the hole it had been shown and left the version it had not.**
+
+- **Phase C assigned over the findings array instead of appending to it**, so a fatal scope or
+  ledger-completeness finding recorded moments earlier was dropped, and nothing downstream recomputes
+  those checks. The sweep it prompted found one more of the shape: `passesOf` was called twice over
+  the same jobs, reporting a re-driven job's extra records file twice.
+- **The scope and completeness checks now run on the end-of-run ledger read as well.** Where the
+  per-job read failed, those checks had never run over those rows at all — the failure was recorded
+  and the checks it would have performed were simply skipped, so a job billed to Product could have
+  gone unreported.
+- **A fatal finding on a job that has stopped now stops the run.** Turning a failed ledger read into
+  a finding was right — a throw takes the levers down under two jobs still running — but nothing
+  acted on it: an unreadable phase A, whose records are the whole of question 1, went on to buy B, C
+  and D anyway. Phase D still drains all three before stopping.
+- **A requeued re-asking pass is retained rather than cleaned up.** "Left `queued` and resumable" was
+  a claim the harness then undid: ordinary cleanup deleted the article, which cascades to its
+  expansion checkpoint rows, so the paid answers the refusal existed to keep were thrown away under a
+  comment saying they had been kept. It retains them and goes no further, so no later job can publish
+  over that slug.
+- **`hasStats` became `hasSuccessfulStats`, and now means the wave did not fail.** When a wave
+  exhausts its redraws, `generateHierarchy` catches it, writes stats with `failed: true`, falls back
+  to wave 1, generates labels and **completes the step** — so three failed waves were `done`, carried
+  clocks, carried stats and overlapped, and question 5 read as measured. It was measuring the
+  fallback path.
+- **The estimate stopped calling itself a bound.** $40.90 is the **nominal estimate** and $85.30 the
+  **three-window requeue exposure**; neither is a bound and nothing enforces a cap. An ordinary,
+  non-re-asking pass can requeue and re-buy any answer whose best-effort checkpoint write failed, and
+  a redraw buys a second answer. The sentence claiming otherwise was an overclaim and is gone.
+- **The records file is published atomically.** Phase D reads one directory from three jobs at once
+  and could parse a sibling's file mid-write, fail, and mark the wrong job fatal
+  ([hierarchy.md](../project/hierarchy.md#deepening)). The reader also filters by slug on the
+  filename before opening anything.
+- **The run's own errors stopped replacing each other.** `reportRun` runs whether or not the phases
+  finished, so a throw from the reporting used to replace whatever had actually killed the run; both
+  travel in an `AggregateError` now, and the reporting is told that the run died so it can say so at
+  the top instead of reading like a run that finished. The end-of-run ledger re-reads are concurrent
+  and under a deadline. ⟨Where this went against Sol: he asked for a *database-side* statement
+  deadline. `costStore.forJob` takes its connection from the shared pool, so a `SET statement_timeout`
+  would land on whichever of five connections it got and outlive this function on it — a change to
+  every later query a paid job makes. The client-side deadline does the job the deadline is for,
+  which is making sure the original error still arrives; what is genuinely lost, and owed, is
+  cancelling the query at the server rather than abandoning it here.⟩
+- **Phase D starts its three measured steps together before it measures them.** The concurrency
+  arithmetic was right and the phase did not arrange the thing it measures: the book's job is a
+  forced `hierarchy` and starts its measured step at once, while the two load articles start at
+  `fetch` and get there only after stages 1–3. The two load jobs are driven first and are **held at
+  the entry** to their measured step; a **readiness wait** ends when both are there, with the gate
+  still shut and nothing of the book driven or bought; then the book is driven, reaches the same
+  entry through the same hook, and **all three are released together**. **It took three goes.** The
+  first was a latch: announcing an arrival held nobody, so load1 could run its whole step and finish
+  before load2 announced, and the wait still ended `"all"` (DPN-20). The second held the loads and
+  then released them *before* driving the book, which moved the same hole one party over — with the
+  third queue slot taken, both released loads could finish before the book reached `hierarchy`, and
+  the outcome still said `"all"` (DPN-20-R). So the book holds too, inside its own claim, and that
+  costs it nothing: its step needs 658–778 s against a 740 s deadline and can give up none of it, but
+  by the time it is driven everybody else is already waiting *for it*, so its wait is one microtask.
+  The two load steps are the ones that really hold, bounded at three minutes, and what it cost each
+  of them is reported as a note. **A readiness wait that does not end `"all"` stops the run rather
+  than buying the book** (DPN-23). **What a successful gate guarantees is a shared start, not a
+  shared window**: the queue's concurrency cap is global and shared, so whether the three overlap for
+  long
+  enough is still `peakConcurrency`'s to measure and refuse. Sol's other
+  suggestion — pre-ingest the load articles as far as `blocks`, then force three hierarchy-only jobs
+  together — cannot work, and a free `--dry-run` is what showed it: a job that stops short of a
+  publishable article fails, and a failed job's draft revision is rolled back, so the second job
+  opens on an article with no fetched document.
+
+#### And a fourth review, on the last round before the money <a id="stage-5b-round-4"></a>
+
+**Three P0s, and all three were the same disease in different clothes: the run went on buying after
+it already knew the answer would be incomplete.** ⟨GPT Sol, 2026-09-05.⟩ `stopIfCompromised` reads
+*findings*, and only findings — so anything a stopped job did not turn into one looked, to the run,
+exactly like a clean job.
+
+- **A paid job could end non-`done` with no fatal finding** (DPN-18). A phase-B `hierarchy` writes
+  valid deepening records and then label generation throws; `driveJob` recorded `jobStatus: "error"`
+  and nothing more, and phase C was purchased over a repeat that never finished. Every terminal
+  status other than `done` is fatal now, on a paid run. `--dry-run` is exempt, and that is the
+  rehearsal's shape rather than a loophole: its step list stops at `extract`, so its jobs are
+  *expected* to fail at their last free step.
+- **A deepen-on job could finish `done` with no records file** (DPN-19). `saveDeepenRecords` swallows
+  filesystem and hard-link failures on purpose — instrumentation must not fail a reader's article —
+  and `readRecordsDir` then returned `[]`, which the run printed as *"no records file — nobody
+  asked"*. **"Nobody asked" and "asked and the record was lost" are different facts**, and questions
+  1–3 are computed entirely out of those records. This was the seam where they got confused; it is
+  fatal now, and the line prints which of the two it is.
+- **The phase-D barrier was a latch, not a rendezvous** (DPN-20) — the fix the *third* round asked
+  for, which looked done and was not. See the phase-D bullet above for what it does now and what it
+  does not.
+
+  > **And the fix for that was not the fix either.** ⟨GPT Sol, round 5, 2026-09-05.⟩ Holding the two
+  > load steps and releasing them before the book was driven is a **two-party** gate: they waited for
+  > each other and nothing waited for the book. With another job holding the third queue slot, both
+  > released loads could finish their measured step before the book reached `hierarchy`, and the
+  > outcome still read `"all"` — the same defect, one party over (DPN-20-R). Worth recording as a
+  > *pattern*: each round's fix removed the version of the hole it was shown and left the version it
+  > was not, because "the parties I am holding" kept being a smaller set than "the parties whose
+  > windows have to overlap". **Three attempts at one hole, and rounds 4 and 5 each found that the
+  > previous round's fix was not the fix it looked like** — which is the argument for reviewing the
+  > code after every round rather than declaring the finding closed when its example stops
+  > reproducing. The third go names the invariant instead of patching the example: **no measured
+  > step may start until every measured step is at the entry.**
+- **The immediate ledger read was unbounded** (DPN-21). The end-of-run re-read got a deadline in
+  round 3; the read `driveJob` makes the instant a job stops did not, and that one sits inside phase
+  D's `allSettled` — so one read that never answers is a phase that never reaches reporting. Same
+  mechanism, one constant, both callers.
+- **This plan contradicted the runtime text** (DPN-22), and that is the one worth naming as a
+  failure of this document rather than of the code: the estimate had stopped calling itself a bound
+  and the plan still said the run "enforces the bound" and called $85.30 a "worst case". A claim that
+  has been retracted must not survive in the doc that describes it.
+
+**And a fifth review found the round-4 fix had left one more of each.** ⟨GPT Sol, 2026-09-05.⟩ Both
+in `runPhaseD`, and both are the two diseases of this stage meeting in one function:
+
+- **DPN-20-R — the rendezvous was still two-party.** Recorded with the DPN-20 bullet above, because
+  the pattern is only visible with all three attempts side by side.
+- **DPN-23 — the run still bought after known failure**, in the one place round 4's own fix could not
+  reach. If both load jobs fail before `hierarchy`, the readiness wait ends `"jobs finished first"`,
+  their DPN-18 findings are already on the record — and phase D then drove the paid book anyway,
+  because "drive the book" was an unconditional statement. **The book's phase-D pass exists to answer
+  question 5 and nothing else** (question 1 is phases A and B only), and question 5 needs three
+  windows open at one instant, so a book bought into a phase whose load steps are gone buys nothing
+  at all. `loadReadiness` is the refusal, and it is pure so it can be watched refusing without a
+  database. The book's job is still *queued*, deliberately: `budgetReport`'s `expected` counts
+  phase-D jobs, so a queued-and-refused book still demands a third clock and question 5 still
+  refuses — where a book that was never queued would have quietly lowered the bar to two.
+
+Two smaller things fell out of DPN-23's shape. The readiness wait abandons on **the first load job to
+stop**, not on all of them: `allSettled` cannot resolve while a sibling is held at the entry waiting
+for a gate that wait has not opened yet, so the old form sat out the whole three-minute timeout to
+learn something that was true in the first second. And the gate's own abandon signal is the *book*
+alone, for the same reason.
+
+**And then the last known money-waster, closed on purpose rather than on a review.** ⟨Greg,
+2026-09-05.⟩ Round 5 left one path that still spent knowing the answer could not come back: the
+readiness wait succeeds, the book is driven, and *the gate* then gives up — the book failing to get a
+claim slot inside the deadline being the likeliest way. All three steps ran, `peakConcurrency`
+refused question 5 afterwards, and $7.40 of a $40.90 run had bought an answer the report would not
+quote. **18% of the run, spent on a question already lost, on a shared box where "another agent holds
+the third claim slot" is nearer the expected case than the tail.** So the gate tells a released step
+which of two things happened — `arrive` resolves to `"go"` or `"abandoned"` — and an abandoned step
+throws before `step.run`, having bought nothing. Two guards: never on `"go"`, and never under
+`--dry-run`, whose jobs already stop at their last free step and must not be given a second way to
+fail. The verdict is **latched at the first opening**, because `runPhaseD`'s `finally` releases on
+every path including the successful one, and a second call must not tell three running steps they
+were abandoned. It is the one place this eval fails a step deliberately, so it says so twice: the
+thrown error carries `ABANDONED_MARKER`, and — because the queue rewrites a failed step's message
+into a reader-facing sentence, the trap `checkDriving` already exists for — a fatal finding goes on
+the job's own record, where `run.json` and the closing findings block will both carry it. What phase D
+now guarantees end to end is written out in numbered statements in `runPhaseD`'s docblock.
+
+**A sixth review found two more, and both were phase D again.** ⟨GPT Sol, 2026-09-05.⟩
+
+- **A re-driven measured job ran outside the gate** (DPN-25). A load job is not re-asking, so a
+  requeue re-drove it as any ordinary pass — and its second `arrive()` took the rendezvous's
+  *latched* verdict and returned at once, so the retry ran beside whatever its siblings happened to
+  be doing while the queue replaced the first attempt's clock (`src/jobs.ts` § `runStep`). What came
+  back looked like an ordinary question-5 pass and its duration omitted the attempt that had been
+  lined up. `requeueVerdict` now has a second reason to stop, and it is about evidence rather than
+  money: a job whose step question 5 is timing stops on its first requeue whether or not the re-ask
+  lever names it.
+- **The three measured jobs had no failure signal between them** (DPN-26) — the *fifth* instance of
+  "it buys after it already knows". They were driven concurrently and drained together and that was
+  all, so load 1's `hierarchy` could fail on its structure call while the book and load 2 went on
+  admitting expansion and label calls, for a question 5 that could no longer reach three usable
+  completions. Sol asked for the invariant rather than a fifth guard, and it is this: **the three
+  measured jobs share one fate, and none of them starts more paid work after any of them has lost
+  it** (`startPhaseFate`). A measured step that failed, a wave that fell back, a claim handed back —
+  any of them loses it, and the others stop before their next claim. The honest verb is **stops
+  starting**: a call already in flight belongs to the pipeline, and `src/` is not this eval's to
+  change.
+
+Three smaller ones came with them. Abandonment was producing a **false** `no-records` finding — the
+records were never *requested*, because an abandoned step never runs, and "they were lost" is exactly
+the invented fact DPN-19 exists to have stopped, one branch further on; `no-records` now fires only
+on a job that ended `done` (DPN-27). The abandoned jobs were named off `wait`'s `held` snapshot,
+which cannot see a step that arrived *after* the gate closed, so a late arrival was refused and left
+unexplained; the gate now says who it turned away, because the gate is the only thing that knows
+(DPN-28). And the three claims in the docblock were not exact (DPN-29): retries falsified the first
+until DPN-25 closed them, the second needed a paid-run qualification because `abandonStep` stands
+down under `--dry-run`, and the third repeated a risk **that is simply not real** — after a
+successful gate all three jobs hold claims, which is all three of `DEFAULT_JOB_CONCURRENCY`'s slots,
+so no other job can serialise them. I had asserted the contrary three times. Sol's narrower one-liner
+replaces mine and is the sentence to quote: **"it no longer starts paid measured work when the
+rendezvous already knows Q5 is impossible."**
+
+**And a seventh review found the sixth instance of the class, one level below where the fifth was
+fixed.** ⟨GPT Sol, 2026-09-05.⟩
+
+- **The shared fate stopped new claims, not new calls** (DPN-30). One claim runs the *whole*
+  `hierarchy` step, and that step buys a structure call, an expansion wave **and a whole pass of
+  labels** — `generateHierarchy` catches a failed wave and falls straight through to `generateLabels`
+  regardless (`src/hierarchy.ts`, the `deepenFailed` catch). So the exact DPN-26 scenario survived at
+  the level below: after question 5 was known unanswerable, a sibling could still *begin* an entire
+  label pass. My own sentence — *"a call already in flight finishes"* — was the overclaim, which is
+  the DPN-29 standard failing on the sentence DPN-29 wrote. Up to about **$10.80 of phase D's
+  $14.20** was exposed: the book's $7.40 pass plus whatever remained of the other load's ~$3.40.
+
+  **It was fixable without touching `src/`, and the fix is the abort path `src/` already documents.**
+  The claim's own `AbortController` is private to `advanceJobWith`, so the *claim* cannot be
+  cancelled — and does not need to be. `announcing` already intercepts `run(ctx, …)`, so it hands the
+  step a `ctx` whose `signal` is `AbortSignal.any([ctx.signal, fate.signal])`; `StepContext` is plain
+  data whose `report` is an arrow closing over the step, so a shallow spread carries the rest across
+  intact. Only a *lost* fate aborts, and `ctx.signal` keeps doing its own job. What that buys was read
+  out of `src/` rather than assumed: label batches are queued **with** the signal
+  (`src/labels.ts` § `queue.add(…, { signal })`), and `tests/labels-batching.test.ts` already pins the
+  consequence — *"the callback must never run either, or the 'stop paying' half of fail-fast buys
+  nothing"*. The honest remaining bound is **the single request already in flight**, which may still
+  be billed.
+- **`peakConcurrency` had become a tautology, and `fullConcurrencyMs` replaces it.** Sol confirmed
+  the argument: given three valid completions, all three clocks open before `arrive()` returns and the
+  gate says go only once all three have arrived, so `peakConcurrency === 3` is *constructed* and false
+  only if a clock is corrupt. It is kept as the wiring check it has become. The load measurement is
+  now the longest interval with all three genuinely in flight — `min(finishedAt) - max(startedAt)` —
+  held to a floor **declared before the run and printed in preflight**, so it cannot be chosen after
+  the figure is seen. It is bounded by the shortest of the three, which is the point: below the floor,
+  question 5 reports *latency after a synchronised start*, not sustained three-job load.
+- **The rehearsal could not exercise the failure path**, which was a fair hit: the fate was disarmed
+  wholesale under `--dry-run`, so the one thing DPN-26 and DPN-30 are about — a live failure reaching
+  its siblings — was the one thing the free run could never show. `fateReason` draws the line
+  instead: a rehearsal job failing at the **last** step it was asked to run is the expected ending and
+  loses nothing, while a failure earlier in the list, a requeue, or a fallen-back wave lose the phase
+  in the rehearsal exactly as in the paid run.
+- Non-blocking, fixed with them: `budgetReport` still told a reader that another agent could have
+  serialised a successful gate. It cannot, for the reason DPN-29 established, and a peak below three
+  now means **a clock is wrong** rather than that the phase was serialised.
+
+**The dry run found a live bug on its first pass.** `enqueue` ends with `pump()`, which drives the
+job with the *production* registry, and `withoutTheInProcessPump` silences it by setting one global
+variable across that call — so two overlapping `enqueue`s race on it and one job runs production's
+stage 1 with no eval overlay and goes to the real network. Phase D queued its three jobs
+concurrently; one of the three failed with a DNS error. Queueing is serial now and only the driving
+is concurrent. The check that catches it reads the fixture step's own `detail` —
+`"1382 KB (fixture book)"` — rather than the error text, because the queue replaces a failed step's
+message with a reader-facing sentence: the error-matching version was watched printing *"none"* over
+a run where **every fetch had gone to the network**.
+
+> **Overtaken, 2026-09-05.** `withoutTheInProcessPump` is gone: `enqueue` takes `pump: false` on the
+> request now (`src/jobs.ts` § `pump`), so the hazard is per-request and there is no global for two
+> `enqueue`s to race on. **Serial queueing is therefore no longer load-bearing** — it is kept because
+> it reads better, and phase D now says so in as many words rather than justifying itself by a race
+> that cannot happen. The `detail`-reading check outlived its bug and stays.
+
+**What `--dry-run` cannot prove**: that anything published. Publishing needs a tree and a tree needs
+a model call, so every dry-run job stops at its last free step and fails, and the run prints what the
+driving proved instead of a table of zeroes.
+
+> **And what it did not prove, 2026-09-05.** For a morning it proved nothing at all: `dev` merged in
+> `unrunnableStepPlan`, which refuses `blocks` without `hierarchy` — exactly what the free step list
+> asked for — so every phase threw at `enqueue`, no job was created, and the run printed its whole
+> closing report including `Findings: none` before dying on its last line.
+> [260905b](../postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md) is the
+> write-up. The free lists are `fetch,extract` and a forced `extract` now, every list is checked
+> against the queue's own rule before anything is enqueued (`assertStepPlansRunnable`), and the
+> summaries can say *there was nothing here*. The same run also proved, for free, that **the ingest
+> cannot be split across two jobs**: a job that stops short of a publishable article fails, and a
+> failed job's draft revision is rolled back, so the second job finds no fetched document. That is
+> why phase D starts its three windows together with a start rendezvous rather than by pre-ingesting.
+
+#### A refused target no longer fails the wave <a id="refused-target-not-the-wave"></a>
+
+**2026-09-05, after the first paid run died at phase A having spent $2.73.** One target — Moby-Dick's
+title page, four blocks and twenty-one words — was refused on all three draws its budget allowed, and
+that took the whole wave with it: thirteen paid calls, every peer's answer withheld, `expanded: 0`.
+
+`MAX_EXPANSION_REDRAWS` had already written the rule down — *"a request the model refuses three times
+is not unlucky, it is a request this recipe cannot ask"* — and the code then treated it as unlucky.
+**The pattern to copy was already in the file**: `OversizedTarget`, which `deepenTree` explicitly does
+not withhold the wave for, because *"it was never asked about, the decision is deterministic, and the
+rest of the wave is complete over the batches that were planned."* A target refused on every draw is
+now in the same box: recorded, left exactly as wave 1 made it, and the wave published without it.
+
+- **The unit of failure is the call's targets** — at most `maxParentsPerBatch` — and not one section.
+  `readExpansion` throws on the first bad section, the checkpoint row holds the whole raw answer, and
+  a redraw has to be the same request or it is a different question under a different key. Losing up
+  to three good targets beside one bad one is the price of one code path instead of two, and it is
+  worth paying.
+- **The `not-an-expansion` refusal itself stays.** You cannot build a subtree from one child spanning
+  its parent; `tests/hierarchy-cascade.test.ts` is right about that and nothing here changes it.
+- **`assertCascadeComplete` now demands a record for a refused terminal node**, exactly as it does
+  for `capReached` — `CascadeState.refused`. Without it, a refused node is indistinguishable from one
+  that legitimately stopped, which is a whole level of the reader's tree gone in silence.
+- **`ExpansionTruncated` is deliberately unchanged**, but its docblock leaned on *"publication is
+  all-or-nothing anyway, so skip-this-one-and-publish-the-rest is not on the table"* — which has
+  stopped being true. The comment now says so and names *should a truncated target join the refused
+  ones?* as a separate, unanswered question.
+
+**And what was refused is now written down, which it never was before.** A refused answer is never
+checkpointed — correctly, since a stored refusal would replay for ever — and until now it was not
+kept anywhere else either, so nobody could tell whether the model had **declined on the merits or
+fumbled the schema**. That is the only question worth asking about a refusal, and it is exactly the
+one the title-page case turns on. So a refusal carries its reason, its draw count, and the *shape of
+the last refused answer*: child counts, the verdicts, and the model's own dozen-word `why`. The `why`
+goes in the **records file and never in a log line** — it is text about the article
+([logging.md](../project/logging.md)).
+
+Three states must never share a spelling: *finished by the model*, *stopped by a bound*, and
+*refused*. A refused node keeps the governor's `decision: "expand"` — true, it did force it open —
+and carries `refused` beside it. Reading a one-child answer as "finished" would be the move
+[granularity-zoom.md § The supplement node](../project/granularity-zoom.md) already forbids one field
+over: never infer the role from a missing answer.
+
+The records file is **`deepen-records/3`**, and the bump is not bookkeeping: a `/2` file has no
+`refused` on any record, so the eval would read it as *nothing was refused* — over exactly the runs
+where a refusal was the whole story.
+
+**The eval reports the refused rate by size bucket and by forcing bound** (`refusedRates`), beside
+Q2's yes rate, because a quiet absence needs something that prints when we are defeated. Two diseases
+wear one symptom: a model dodging genuinely fat sections shows up on `10+ blocks, 2000+ words` — the
+feature not working — while a **selector** fault shows up only on tiny nodes forced open by
+`authored-heading`. Different cures, and only the bucket tells them apart. Which is the question
+below.
+
+#### Open question for Greg: should the heading rule fire on a node that cannot be split? <a id="open-heading-rule-tiny-nodes"></a>
+
+**Deliberately not decided here.** The paid run of 2026-09-05 failed on the *first* target it chose,
+and what it ran into is a product judgment rather than a bug.
+
+**The question.** Should the heading rule force a node open when the split the protocol demands
+**cannot yield two children of two structural blocks or more**?
+
+**Scope, explicitly.** This is *not* a reopening of *"the heading rule beats the floor"*
+([§ The four bounds](#the-four-bounds-and-which-of-them-can-overrule-the-verdict)). That precedence
+is the most valuable line in this plan and nothing below argues against it. Only the narrow case
+above is in question.
+
+##### The stated rationale does not hold, though the rule may still
+
+[`shouldExpand`](../../src/hierarchy-cascade.ts) (`src/hierarchy-cascade.ts:607`) justifies its
+heading clause like this:
+
+> A node of eight blocks containing two of the author's own headings would stop, and its leaves would
+> then span a heading — which the prompt calls a hard boundary everywhere else.
+>
+> — `src/hierarchy-cascade.ts:596-600`
+
+But [`buildTree`](../../src/hierarchy.ts)'s own contract is that *"Every block gets exactly one leaf"*
+(`src/hierarchy.ts:1539`). A leaf **is** one block, so a leaf cannot span a heading, whatever the node
+above it does. What forcing the node open actually buys is a **spine row that begins on the heading** —
+the finest *titled* row respecting the author's boundary rather than merging across it. That is
+plainly right for "CHAPTER 34" and plainly absurd for a byline, and the rule as written cannot tell
+the two apart.
+
+##### The evidence: the first target of the paid run was a title page
+
+`evals/results/deepen-5b-2026-09-05-h21i14ig/records/` — the very first record, `root > child 1 >
+child 1`, range `spya-y22uzv … spya-zfhdft`: **4 structural blocks, 21 body words, 2 authored
+headings**, `effective: {decision: "expand", because: "authored-heading"}`. It is under the
+divisibility floor by a factor of two and a half, and the heading clause overruled that.
+
+Its range is Moby-Dick's opening. `output/2701-h.html` already carries stamped ids, and its first five
+blocks are:
+
+| id | tag | text |
+|---|---|---|
+| `spya-mctgxr` | `h1` | Moby Dick; or The Whale |
+| `spya-xf5635` | `p` | ` · ~1331 min read` |
+| `spya-vjuv0b` | `p` | `*** START OF THE PROJECT GUTENBERG EBOOK 2701 ***` |
+| `spya-qphj8e` | `h2` | By Herman Melville |
+| `spya-zfhdft` | `hr` | — |
+
+Four structural blocks (the `<hr>` is not one), 21 body words, two authored headings, ending on
+`spya-zfhdft`: the record's node is the title page and nothing else.
+
+The heading the rule wants resolved is **"By Herman Melville"**. Under the settled precedence — an
+authored heading always begins a child ([§ Where the author's headings and the fan-out target
+collide](#where-the-authors-headings-and-the-fan-out-target-collide-the-author-wins)) — the only
+protocol-compliant answer is to give the byline a spine row of its own, leaving children of three and
+one structural blocks. The model declined, three draws running (one plus `MAX_EXPANSION_REDRAWS = 2`,
+`src/hierarchy-cascade.ts:229`), and returned the truthful answer instead:
+
+> The expansion of root > child 1 > child 1 came back with 1 usable child from 1 proposed […] One
+> child covers its parent's whole range.
+>
+> — the run's `waveFailureReason`
+
+**It was right and the governor was wrong**, and the whole wave then failed: 32 targets, 0 expanded,
+13 calls bought and nothing kept.
+
+##### It is not one book's quirk
+
+Every Project Gutenberg text opens with a heading-tagged byline on its title page, so this fires on
+the first target of every book. Corroborated on Darwin — `output/1228-h.html`, which lives in the
+**primary checkout** rather than in this worktree (`docs/plans` § "For whoever picks this up" says
+so, and `output/` is gitignored) — whose first nine blocks are `h1, p, p, p, table, h4, h3, h2, h4`:
+
+| id | tag | text |
+|---|---|---|
+| `spya-uaqmvk` | `h4` | BY MEANS OF NATURAL SELECTION, |
+| `spya-j50kzt` | `h3` | OR THE PRESERVATION OF FAVOURED RACES… |
+| `spya-ppumnb` | `h2` | By Charles Darwin, M.A., |
+| `spya-v9nz84` | `h4` | Fellow Of The Royal, Geological, Linnæan, Etc., Societies;… |
+
+The 2026-09-04 wave-1 tree groups exactly those four as node `n0009`, titled **"Title Page"**
+(`evals/results/hierarchy-waves-2026-09-04/1228-h.tree.json`). Four blocks, four authored headings,
+three of them unresolved: the same shape, one level worse, and its only compliant split is four
+single-block children. ⟨Verified 2026-09-05 by reading both HTML fixtures and the record; the earlier
+claim that `1228-h.html` was missing was true of this worktree only.⟩
+
+##### The cheap options, none of them chosen
+
+- **A minimum-viable-split precondition on the heading rule** — force open only where the demanded
+  split yields at least two children of two structural blocks or more. Costs a predicate and a test,
+  and a fifth thing to explain in § The four bounds; it would also suppress a genuinely short
+  authored section (a two-block preamble above a two-block chapter), which is the case to check
+  before adopting it.
+- **Exclude a document's leading front matter.** Costs a definition of "front matter" that is not a
+  heuristic about Gutenberg. The pipeline has no such concept today, so this is a new idea in a stage
+  that currently has none.
+- **Leave it, and let the per-target refusal absorb it.** Costs three paid draws on the first target
+  of every book, forever, on a node nobody wants divided — cheap in money. What it really costs is
+  the signal: the refusal rate stops being evidence about the tree and becomes noise the governor
+  manufactures.
+
+**A sibling change is in flight as this is written**: a refused target will no longer fail the whole
+wave. That fixes the blast radius, not the question. This section asks whether we are putting a bad
+question to the model at all.
+
+#### What stage 5b actually measured <a id="stage-5b-results"></a>
+
+**Run `evals/results/deepen-5b-2026-09-05-e5aq8o9s/`, 2026-09-05, $8.98 and a floor.** Three passes of
+Moby-Dick (2,569 blocks) landed; the fourth hit its claim deadline and the run stopped itself rather
+than re-claiming, so **phases C and D were never bought and questions 4 and 5 are absent rather than
+zero**. Every number below is over three passes of one book, which is the sample — not a corpus.
+
+⟨A first attempt the same afternoon died at $2.73 in phase A, on the title-page refusal
+[§ A refused target no longer fails the wave](#refused-target-not-the-wave). Its single pass showed
+**4 raw yeses in 224 candidates**, which was read here as "the model barely contributes and the
+feature might be retired". **Three complete passes say the opposite**, and the retraction is the
+point: a partial pass from a wave that then threw is not evidence, and it was quoted as though it
+were.⟩
+
+##### Question 1 — the verdict is stable. The *division* is not.
+
+| | |
+|---|---|
+| verdict flips | **0 of 27 matched ranges — 0.0%** |
+| fan-out changed | **15 parents** |
+| boundaries moved at equal fan-out | 0 |
+
+Two different findings wearing one question. The model never once changed its mind about *whether* a
+section wants another level. It changed its mind about *how to divide one* on 15 of the 22 parents
+that appeared in all three passes — `root > child 6 > child 3` came back with 10, then 7, then 6
+children. **Stage 6 is governed by the verdict, and the verdict is what held still**; the tree the
+reader sees is what moved.
+
+##### Question 2 — it does not always say yes, and where it says yes is the story
+
+| bucket | raw yes |
+|---|---|
+| under the floor (<10 blocks) | 0 / 216 |
+| 10+ blocks, <800 words | 0 / 23 |
+| 10+ blocks, 800–2,000 words | 0 / 51 |
+| **10+ blocks, 2,000+ words** | **18 / 42 — 42.9%** |
+| overall | 18 / 332 — 5.4% |
+
+Not one request to go deeper on a small section, across 290 chances. This is the answer the question
+was designed to get, and it is a good one: **the verdict is selective**, so the yes-rate gate stage 6
+was going to need may not have much to gate.
+
+**Refusals: 0 of 121 targets asked**, in every bucket and under every forcing bound. The title page
+that killed the first run expanded cleanly three times here, so `not-an-expansion` is **luck of the
+draw rather than a property of the node** — which makes the per-target fix right and the
+[open question](#open-heading-rule-tiny-nodes) *harder*, not easier: the bad question gets a usable
+answer most of the time, so the refusal rate will not reliably tell us we are asking it.
+
+##### Question 3 — the heading rule is doing the work, not the model
+
+| | expand | | stop | |
+|---|---|---|---|---|
+| authored-heading | **100** | | divisibility-floor | 221 |
+| forced-open | 15 | | verdict | 68 |
+| unassessed-ceiling | 3 | | no-verdict | 9 |
+| verdict | **3** | | | |
+
+**100 of the 121 expansions came from the heading rule; the model's verdict independently opened
+three.** A bound overruled a stated verdict 34 times in 332 assessed (10.2%) — `authored-heading` 19,
+`forced-open` 15.
+
+So the honest answer to *"how often does a bound overrule the model?"* is that the question is
+slightly wrong. Overruling is rare; **pre-empting is the norm.** The model is mostly being asked
+about sections a mechanical rule has already decided to open, and it agrees or is ignored. That is
+the strongest available argument for settling
+[the heading-rule question](#open-heading-rule-tiny-nodes) before stage 6, because the rule under
+question is the one producing five sixths of the tree's new depth.
+
+##### Question 4 — the cost, as a floor
+
+| pass | |
+|---|---|
+| A book ingest, deepening on | $3.4845 — 3.5× the incumbent $1.00 |
+| B forced hierarchy, repeat 2 | $2.5355 — 2.5× |
+| B forced hierarchy, repeat 3 | $2.9563 — 3.0×, **one call never recorded** |
+| **total** | **$8.9763, INCOMPLETE — a floor** |
+
+Every row came in **well under the plan's estimate** ($8.40 and $7.40): the estimates were upper
+bounds from arithmetic, and the checkpoint resume is worth more than they assumed. The total refused
+to present itself as a bill, which is `LedgerTotal` working on its first real outing —
+[§ A refused target no longer takes the wave with it](#refused-target-not-the-wave).
+
+##### Question 5 — not measured, and it did not need to be
+
+Phase D never ran. **The deadline answered itself in phase B**: the book's `hierarchy` step took
+**574.5 s, then 516.2 s, then overran the 740 s claim deadline** and was handed back — uncontended,
+on a box at load 9–18.
+
+**This is the failure the whole plan exists to remove, and the cascade has made it worse rather than
+better.** A step that is marginal alone will not survive `DEFAULT_JOB_CONCURRENCY = 3`, and phase D
+would have been buying a more precise account of a thing already established. Nothing downstream
+should be built until this is answered; it belongs beside
+[stage 8](#stage-8) rather than after it.
+
+##### One job is still held
+
+`evaldeepen-e5aq8o9s-book-spya-yynkqz` (job `spya-fm4y2w`) is `queued` at requeue window 1 with paid
+answers in its checkpoint rows, deliberately **not** cleaned up — partial paid work is resumable only
+while its article exists. Resume it or delete the article by hand; leaving it costs a row, and
+`SPIDERYARN_DEEPEN_REASK` naming that slug is what would make a re-claim buy the whole wave again.
+
 ### Stage 6 — recursion, once the verdict has earned it
 
 Waves 3 and beyond, governed by the verdict, with the depth cap and the yes-rate gate. Only if stage
@@ -1248,6 +2047,9 @@ All 2026-09-04.
 - **Nothing in `src/` has changed.** The two spike scripts are new and throwaway
   (`scripts/spike-book-structure.ts`, `scripts/spike-expand-section.ts`); delete them when stages 3–5
   have made them redundant.
+- **There is one question waiting on Greg**, and it stopped the first paid run dead:
+  [§ Open question — should the heading rule fire on a node that cannot be split?](#open-heading-rule-tiny-nodes).
+  Nothing downstream of stage 5 should be tuned before it is answered.
 - **Start at [stage 3](#stage-3)**,
   which is pure and needs no network. Its first test is one that fails on today's
   `normaliseExpansion` because of the missing heading snap; write that red before anything else.

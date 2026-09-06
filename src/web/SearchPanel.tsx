@@ -94,7 +94,6 @@ import {
   LoaderCircle,
   Palette,
   RotateCcw,
-  Search as SearchIcon,
   Sparkles,
   Trash2,
   Type,
@@ -280,10 +279,11 @@ export function SearchPanel({
 
   return (
     <aside className="mode-band srch" aria-label="Search this article">
-      <div className="band-head">
-        <SearchIcon size={14} className="band-head-icon" aria-hidden />
-        <h2>Search</h2>
-      </div>
+      {/* **No title row**, for the reason SummaryPanel.tsx gives at length: it
+          said the mode's own name and the Dock is already saying it (Greg,
+          2026-09-05). The search box below is the mode, and it explains itself
+          better than a word above it did. `aria-label` on the `<aside>` names
+          the region. */}
 
       {/* **Absent for a visitor, not disabled**, and it takes the words matcher
           with it — the box is one input over both, so there is no half of it to

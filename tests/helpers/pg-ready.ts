@@ -1,11 +1,33 @@
 /**
- * "Is Postgres up, and is it migrated far enough for THIS suite?" — once.
+ * "Is this database migrated far enough for THIS suite?" — asked once, and
+ * **fatal when the answer is no.**
  *
- * Around thirty test files each hand-rolled this probe, and the copies drifted:
- * three were still on a two-second connect timeout, and five skipped without
- * saying a word. Both drifts are the same failure — a suite that opts itself
- * out and lets the run print a green tick for having checked nothing.
- * See docs/reusable/silent-success.md.
+ * ## It used to be a skip, and since 2026-09-05 it is a failure
+ *
+ * The database was optional. Around thirty test files each hand-rolled a probe,
+ * every one of them opted its own suite out with `describe.skip` when Postgres
+ * was not there, and `npm test` printed a green tick over the half of the suite
+ * that touches the store — *"the tests pass on the box"* saying nothing at all.
+ * `REQUIRE_POSTGRES=1` turned that into a failure for the runs that cared, and
+ * the default stayed a skip.
+ *
+ * There is one store since the hinge
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F), so a machine with no database cannot run this application at all and a
+ * suite that skips over that is describing a configuration that does not exist.
+ * The database is now **required, unconditionally**:
+ *
+ * - `tests/setup/private-db-global.ts` fails the whole command **once**, before
+ *   a single file is collected, when there is no stack to mint from. That is the
+ *   preflight, and it is where a missing Docker is reported.
+ * - this helper is the **per-suite** half: the stack is up, and the question left
+ *   is whether *this* database has the table, column or grant this file needs. It
+ *   throws, naming the thing and the command that fixes it.
+ *
+ * Nothing here returns a boolean any more, and **no caller gates a `describe` on
+ * one**. `tests/one-store-only.test.ts` enforces that, because a
+ * `reachable ? describe : describe.skip` reintroduced anywhere would take the
+ * whole family of silent skips back with it.
  *
  * ## Why ten seconds and not two
  *
@@ -17,46 +39,25 @@
  * > out when the machine is busy is worse than one that fails, because the
  * > signal it gives is indistinguishable from success.
  *
- * ## Why it warns, and why only sometimes
- *
- * Also verbatim, from the same file:
- *
- * > Said out loud. DATABASE_URL being SET and the database being unreachable is
- * > a different situation from having no database at all, and only the first
- * > one means somebody's Docker is off while they believe these ran.
- *
- * So: no `DATABASE_URL` is the fresh-clone-with-no-Docker case and stays quiet;
- * `DATABASE_URL` set and the probe failing gets one line on stderr naming the
- * suite that just opted out.
- *
- * **And it is `process.stderr.write`, not `console.warn`, which is not a style
- * choice.** Every copy this replaces used `console.warn`, and vitest's console
- * interception swallows a `console.warn` made at module load by a file whose
- * tests then all skip — measured on 2026-08-28 by pointing `DATABASE_URL` at a
- * refused port: the default reporter printed `1 skipped` and not one word of the
- * warning. So the "loud skip" the whole family was built around had been silent
- * under `npm test` the entire time, which is precisely the shape of thing
- * silent-success.md is about. `process.stderr.write` is not intercepted and does
- * print. (`--disableConsoleIntercept` or `--reporter=verbose` also surface a
- * `console.warn`, but nobody runs `npm test` that way.)
+ * The skip is gone and the reasoning is not: a ten-second budget is what stops a
+ * busy box being reported as a broken migration.
  *
  * ## Why the caller must `await` this at module load
  *
- * The skip has to be a real vitest skip, so the run reports "9 skipped" rather
- * than "9 passed". A flag set in `beforeAll` with every test returning early
- * reports **passed** — tests/db-schema.test.ts did exactly that, and was an
- * example in silent-success.md within four minutes of being written. Call this
- * with a top-level `await`, at module scope, above the `describe`.
+ * Because the failure has to arrive before the suite is registered, and because
+ * a suite whose fixtures reach the database in `beforeAll` would otherwise fail
+ * with a connection error instead of an instruction. Call it with a top-level
+ * `await`, at module scope, above the `describe`.
  *
- * ## Why it is parameterised rather than one boolean
+ * ## Why it is parameterised rather than one check
  *
  * Because the suites differ in what "ready enough" means, and flattening that
- * away would trade one silent skip for another:
+ * away would trade one clear failure for a confusing one:
  *
  * - most want a **table** to exist (`to_regclass`);
  * - four want a specific **column**, because the migration that added it is the
  *   thing under test and a database one migration behind would otherwise fail
- *   with a confusing column error instead of "run npm run db:migrate";
+ *   with a confusing 42703 instead of "run npm run db:migrate";
  * - one suite used to need `auth.users` **readable** and no longer does: the
  *   admin store asks the Auth service over HTTP instead, and leaving the
  *   requirement here made its tests skip under exactly the least-privileged
@@ -68,32 +69,15 @@
  * Usage:
  *
  * ```ts
- * const { reachable } = await pgReady({ suite: "the Postgres comment store",
- *                                       tables: ["spideryarn.comments"] });
- * const when = reachable ? describe : describe.skip;
+ * await pgReady({ suite: "the Postgres comment store",
+ *                 tables: ["spideryarn.comments"] });
+ *
+ * describe("…", () => { … });
  * ```
  *
- * ## `REQUIRE_POSTGRES=1`, and why the skip is still the default
- *
- * Everything above stays true of a laptop, and none of it is true of a run whose
- * whole purpose is to prove a machine works. `npm test` is green with every
- * Postgres suite skipped, so "the tests pass on the box" says nothing about the
- * half of the suite that touches the database — `scripts/deploy.ts` names the
- * same hole as a deploy gate.
- *
- * So: set `REQUIRE_POSTGRES=1` and a skip becomes a **failure**. Not a throw at
- * module load, which fails the file with a stack trace and buries which suite
- * needed what; a real test, registered here, that fails with the missing thing
- * and the command that fixes it. The suite itself still skips — one clear red
- * beats thirty connection errors — so the run reports `1 failed | N skipped` and
- * exits non-zero.
- *
- * Unset, nothing changes: same verdict, same warning, same silence when there is
- * no `DATABASE_URL` at all. docs/project/testing.md § When a skip is not
- * acceptable.
+ * docs/project/testing.md § When a skip is not acceptable.
  */
 import type { Pool } from "pg";
-import { describe, it } from "vitest";
 
 /** A column the suite needs, named the way Postgres stores it (snake_case). */
 export interface RequiredColumn {
@@ -103,7 +87,7 @@ export interface RequiredColumn {
 }
 
 export interface PgReadyOptions {
-  /** Named in the warning, so a skipped suite is identifiable from one line. */
+  /** Named in the failure, so one line identifies the suite that could not run. */
   suite: string;
   /** Tables that must exist. `to_regclass`, so `schema.table`. */
   tables?: readonly string[];
@@ -120,12 +104,15 @@ export interface PgReadyOptions {
   keepPool?: boolean;
 }
 
+/**
+ * What a *successful* probe hands back — and it only ever returns successfully.
+ *
+ * There is no `reachable` and no `why`: an unusable database throws, so a caller
+ * that gets a value back has one. That is the whole shape change of 2026-09-05,
+ * and it is what makes `reachable ? describe : describe.skip` unwritable.
+ */
 export interface PgReady {
-  /** True only if every check passed. The suite runs iff this is true. */
-  reachable: boolean;
-  /** Empty when reachable; otherwise what was missing, already warned about. */
-  why: string;
-  /** Only when `keepPool`, and only when a connection was attempted at all. */
+  /** Only when `keepPool`. The caller then owns it and must `end()` it. */
   pool?: Pool;
 }
 
@@ -148,80 +135,44 @@ const FIX: Record<MissingKind, string> = {
   grant: "The table is there but this role cannot read it. A grant, not a migration.",
 };
 
-/**
- * Has this run declared that skipping Postgres is not an acceptable outcome?
- *
- * Exactly `"1"`, not "any non-empty value": an env var left as `REQUIRE_POSTGRES=0`
- * meaning "off" is a thing people write, and having it mean "on" would be its own
- * silent surprise.
- */
-export function postgresRequired(): boolean {
-  return process.env.REQUIRE_POSTGRES === "1";
-}
-
 /** The failure text: what is missing, then what to run about it. */
 export function requiredFailureMessage(suite: string, why: string, kind: MissingKind): string {
   return (
     `${suite} needs Postgres, and ${why}.\n\n` +
     `  ${FIX[kind]}\n\n` +
-    `  This is a failure rather than a skip because REQUIRE_POSTGRES=1 is set.\n` +
+    `  This is a failure rather than a skip because there is one store and it is\n` +
+    `  Postgres — a suite that opted itself out here would be describing a\n` +
+    `  configuration this application no longer has.\n` +
     `  docs/project/testing.md § When a skip is not acceptable.`
   );
 }
 
 /**
- * Under `REQUIRE_POSTGRES=1`, turn a skip into one failing test. Otherwise nothing.
+ * Stop this suite, loudly, naming the missing thing and the command that fixes it.
  *
- * **Call it at module scope**, beside the `describe.skip` it accompanies — the
- * same place and for the same reason `pgReady` itself must be awaited there.
- * Vitest refuses to register a suite from inside a running test, so a call from
- * a `beforeAll` or an `it` throws rather than quietly registering nothing; the
- * catch below says which situation that is, because the bare vitest message
- * ("Calling the suite function inside test function is not allowed") does not
- * mention Postgres and would send the reader somewhere else entirely.
+ * **It used to register a failing test and let the suite skip anyway** — one red
+ * line and a skipped suite at the same time, which is the shape of report that
+ * lets somebody read the red as noise. It throws at module scope now, so the
+ * file fails to collect and the message is the only thing about it in the output.
  *
  * The suites that hand-roll their own probe — `tests/blocks-baseline.test.ts` and
  * the others that need a specific column and say so in their own words — call
- * this directly, so `REQUIRE_POSTGRES=1` covers them too rather than covering
- * only the thirty-odd files that go through `pgReady`.
+ * this directly, so they refuse the same way the thirty-odd `pgReady` callers do.
  */
-export function failIfPostgresRequired(suite: string, why: string, kind: MissingKind): void {
-  if (!postgresRequired()) return;
-  const message = requiredFailureMessage(suite, why, kind);
-  try {
-    describe(`REQUIRE_POSTGRES=1 — ${suite}`, () => {
-      it("has the Postgres it was told to require", () => {
-        throw new Error(message);
-      });
-    });
-  } catch (err) {
-    throw new Error(
-      `${message}\n\n  (and this could not be reported as a test failure, because ` +
-        `failIfPostgresRequired was called from inside a running test rather than at ` +
-        `module scope: ${(err as Error).message})`,
-    );
-  }
+export function refusePostgres(suite: string, why: string, kind: MissingKind): never {
+  throw new Error(requiredFailureMessage(suite, why, kind));
 }
 
 /**
- * Probe Postgres for this suite, warn if it is not there, and say so.
+ * Probe Postgres for this suite, and refuse to run it if the answer is no.
  *
- * Never throws: a probe that threw would take the whole file down, which is
- * louder than the situation warrants but also less informative than the warning.
- * The one exception is `REQUIRE_POSTGRES=1` from somewhere other than module
- * scope, where the failing test cannot be registered — see
- * `failIfPostgresRequired`, which explains itself in the message.
+ * **It throws.** A probe that returned a boolean is what let a hundred suites
+ * opt themselves out of a run that printed green; there is one store now, and a
+ * database this suite cannot use is a failure rather than a configuration.
  */
 export async function pgReady(options: PgReadyOptions): Promise<PgReady> {
   const url = process.env.DATABASE_URL;
-  /* No database configured at all — the fresh clone. Quiet on purpose, and
-     quiet still under REQUIRE_POSTGRES=1: the failing test is the loud part,
-     and "these tests are skipping" would be a lie when they are about to fail. */
-  if (!url) {
-    const why = "DATABASE_URL is not set";
-    failIfPostgresRequired(options.suite, why, "no-url");
-    return { reachable: false, why };
-  }
+  if (!url) refusePostgres(options.suite, "DATABASE_URL is not set", "no-url");
 
   /* Imported here, not at the top, so a file with no DATABASE_URL never pays
      for loading `pg`. Every copy this replaces did the same. */
@@ -239,26 +190,13 @@ export async function pgReady(options: PgReadyOptions): Promise<PgReady> {
     missing = { kind: "unreachable", why: `could not reach it: ${(err as Error).message}` };
   }
 
-  const reachable = missing === undefined;
-  if (!options.keepPool || !reachable) await pool.end();
+  /* The pool is closed **before** the refusal, so neither road out of here leaks
+     a connection — `refusePostgres` throws, and an earlier draft of this threw
+     before the `end()`. */
+  if (missing || !options.keepPool) await pool.end();
+  if (missing) refusePostgres(options.suite, missing.why, missing.kind);
 
-  /* The pool is closed first, so neither road out of here leaks a connection:
-     `failIfPostgresRequired` throws in one case, and did so before the `end()`
-     in an earlier draft of this. */
-  if (missing) {
-    if (postgresRequired()) failIfPostgresRequired(options.suite, missing.why, missing.kind);
-    else {
-      process.stderr.write(
-        `\n  ⚠ ${options.suite}: DATABASE_URL is set but these tests are skipping: ${missing.why}\n`,
-      );
-    }
-  }
-
-  return {
-    reachable,
-    why: missing?.why ?? "",
-    ...(options.keepPool && reachable ? { pool } : {}),
-  };
+  return options.keepPool ? { pool } : {};
 }
 
 /** The first thing the suite asked for that is not there, and which kind it is. */

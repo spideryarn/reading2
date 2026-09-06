@@ -293,8 +293,13 @@ describe("what a visitor is told, mode by mode", () => {
        mode id to name the button with. It has an `owners-only` row in the total
        `POLICY` record now, and there is no fall-through left to reach.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
+    /* `debate` joined them on 2026-09-05 and is the one entry here that is
+       expected to leave again: it is owners-only only until Stage 4 builds the
+       public projection its rows must not bypass, at which point it drops out
+       with the glossary and the quotes and this line loses a word.
+       src/web/visitor.ts § POLICY.debate. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "referee", "remember"].sort(),
+      ["chat", "debate", "referee", "remember"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes", "timeline"] as const) {

@@ -101,6 +101,7 @@ describe("an article", () => {
       chat: "Chat",
       remember: "Remember",
       timeline: "Timeline",
+      debate: "Debate",
     };
     for (const mode of MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });
@@ -195,6 +196,7 @@ describe("every title, whatever the page", () => {
     { kind: "privacy" },
     { kind: "features" },
     { kind: "pricing" },
+    { kind: "contact" },
     { kind: "landing" },
     { kind: "not-found" },
     { kind: "login" },

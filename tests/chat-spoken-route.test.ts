@@ -96,18 +96,7 @@
  * wrong message, rather than none, would need its own run.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-/**
- * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
- * reads the flag once and imports are hoisted above every statement. Copied
- * from tests/candidates-route.test.ts, which explains the shape.
- */
-const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
-  const previous = process.env.SPIDERYARN_STORE;
-  process.env.SPIDERYARN_STORE = "postgres";
-  return previous;
-});
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -122,29 +111,14 @@ loadEnvLocal();
 /** A throwaway slug, so the conversations written below belong to nobody. */
 const SLUG = "test-chat-spoken-route";
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/chat-spoken-route.test.ts",
   tables: ["spideryarn.chat_threads", "spideryarn.chat_messages", "spideryarn.revision_blocks"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, STORE } = await import("../src/store/index.js");
+const { chatStore } = await import("../src/store/index.js");
 
-if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
-else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
-
-const when = reachable ? describe : describe.skip;
-
-describe("the store these tests are actually talking to", () => {
-  it("is the Postgres one", () => {
-    /* Not gated on the database being up, deliberately: a control that vanishes
-       when Postgres is missing vanishes exactly when it matters. A flag that
-       failed to take looks precisely like this suite working — the filesystem
-       store answers every append happily, and the two-row write the read-backs
-       below are about does not exist there. */
-    expect(STORE).toBe("postgres");
-  });
-});
 
 /**
  * Every read-back runs as the reader the request ran as.
@@ -212,7 +186,6 @@ let article: ScratchArticle | undefined;
 let REAL_BLOCK = "";
 
 beforeAll(async () => {
-  if (!reachable) return;
   /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
      Postgres reader filters every article by owner. An article seeded as
      anybody else is invisible and every route below answers 404, which looks
@@ -253,7 +226,7 @@ const exchange = (over: Record<string, unknown> = {}) => ({
 
 const threadOf = (answer: Answer): ChatThread => answer.body.thread as ChatThread;
 
-when("appending one exchange", () => {
+describe("appending one exchange", () => {
   it("writes both rows, done, and titles the conversation", async () => {
     const out = await post("spya-vaaaaa", exchange());
     expect(out.status).toBe(200);
@@ -305,7 +278,7 @@ when("appending one exchange", () => {
   });
 });
 
-when("what the route refuses to take the browser's word for", () => {
+describe("what the route refuses to take the browser's word for", () => {
   it("NEVER stores a tool run as running", async () => {
     /* The live panel's own idea of a run says `running` while it is going, and
        that object is what the browser has to hand when the exchange ends. A
@@ -411,7 +384,7 @@ when("what the route refuses to take the browser's word for", () => {
   });
 });
 
-when("the expected tail, which is also the idempotency", () => {
+describe("the expected tail, which is also the idempotency", () => {
   it("appends a second exchange behind the first", async () => {
     const first = threadOf(await post("spya-vaaaba", exchange()));
     const tail = first.messages.at(-1)!.id;

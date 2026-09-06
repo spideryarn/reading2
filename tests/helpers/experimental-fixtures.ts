@@ -16,7 +16,7 @@
  * While the prop was one field, a signed-out reader's answer *was*
  * `EXPERIMENTAL_OFF` — forcibly off, and nothing else about them showed. Since
  * the bar draws the switch itself (2026-09-03), signed-out and signed-in-and-off
- * are two different bars: one has sixteen buttons and the other seventeen. A
+ * are two different bars: one has seventeen buttons and the other eighteen. A
  * test that means the stranger has to say so.
  *
  * Failure states are built by `broken()` rather than kept as fixtures: there are

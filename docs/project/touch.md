@@ -25,7 +25,6 @@ window listeners. The reasoning, the sources and the two mechanisms we rejected 
 | Where the finger goes down | A vertical drag does |
 |---|---|
 | A gist column at depth *d* — the panel over it, or the cell beside it | steps one item at that level |
-| The arc column (L0) | steps one **part**, the same rung ← / → reach |
 | The prose column | nothing of ours: momentum, rubber-banding, stopping on a line |
 | A gist column at the last item | moves one screenful on — see below |
 | A gist column at the first item, swiping back | the same, upwards; this is how you get the masthead back by touch |
@@ -39,7 +38,7 @@ property of the region rather than of the gesture. A table too wide for the wind
 panned by hand; you do it from a gist column rather than from the middle of a sentence. See
 [260827t-mobile-reading-view.md § One axis at a time](../plans/260827t-mobile-reading-view.md).
 
-A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Three places reveal
+A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Four places reveal
 first and act second**, and all for the same reason: they carry a hover card, and a surface with
 no hover has to let the first press mean *show me* or the reader commits blind.
 
@@ -105,6 +104,23 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   finding is worth anything: Chrome at 834×1194 with `hasTouch`, driven through CDP
   `Input.dispatchTouchEvent` so the browser generates the pointer stream itself. Synthetic events
   would have agreed with a broken build, and once did.
+- **The shelf card's five action buttons**, since 2026-09-05 — first tap reads the control, second
+  presses it. They are visible on a touch screen (`hover-none:opacity-100`, so that a control you
+  cannot see is not also one you can hit by accident), and once
+  [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md) gave each of them a card
+  saying what it does, the tap that opens the card was also the tap that archived the article.
+  [260905i](../plans/260905i-reveal-then-commit-for-the-shelf-action-row-on-touch.md).
+
+  **The gesture is one `onClickCapture` on the row, not five handlers on five controls**, and that
+  is the one thing worth copying. Capture runs before any control's own click, so a reveal cancels
+  the press outright — which is what makes a single handler cover controls that are not alike: an
+  `<a>` whose default is to navigate, and two `IconButton`s that **refuse their own click** when
+  drawn unavailable and so would never run an injected one. The button goes on refusing; the row
+  has already stopped the event.
+
+  It also puts five *controlled* tooltips inside one `<TooltipGroup>`, which is the shape
+  [260828g](../postmortems/260828g-spine-hover-cards.md) ends by warning about — nine of that
+  change's eleven tests go red if the identity guard on the close is removed.
 
 ## Why the prose is untouched
 
@@ -214,6 +230,14 @@ repeating, is in [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touc
   a finger does — and `touch-action` constrains it too. Accepting only `touch` would have left every
   gist column dead under the Pencil: native scrolling gone, and nothing put back. A mouse is still
   excluded, by that check and by the media query on the CSS.
+
+  **This is a rule for every gesture here, and two of them do not follow it.** `swipe.ts` and the
+  shelf's action row take `touch` and `pen`; [`Spine.tsx`](../../src/web/Spine.tsx) § `bandPress`
+  takes only `touch`, so a Pencil on a spine band jumps on the first press rather than revealing —
+  and Floating UI classes `pen` as mouse-like, so no hover card opens for it either. Found by GPT
+  Sol reviewing the shelf row on 2026-09-05 and **not fixed then**, because changing what a Pencil
+  does in the reading view wants an iPad in front of it rather than a shelf change. Whoever has one:
+  it is a two-word edit and the test beside it.
 - **The ends of the article move a screenful**, rather than doing nothing. This is the one place the
   swipe cannot copy the keyboard: at the ends, a key simply declines to handle itself and the browser
   scrolls the last screenful into view
@@ -366,6 +390,54 @@ was that Send sat underneath the keys, which is a sizing problem —
 [feedback.md § The keyboard, and the button under it](feedback.md#the-keyboard-and-the-button-under-it).
 No floating toolbar or keyboard accessory was built, and none should be: it is a
 large, fragile, iOS-only thing, and the reader's real need is to reach the button.
+
+## One banner, once, when both will not fit
+
+Past a crossover the mode band stops taking room from the article and is laid **over** it instead —
+`bandCoversProse` in [`src/web/layout.ts`](../../src/web/layout.ts), and styles.css § a band with no
+room. That is the design ([reading-view-overview.md](reading-view-overview.md)), and from the outside
+it reads as the text having disappeared.
+
+> it's really designed for larger screens. It's possible to use it, but it can really only show
+> either the mode panel or the text … You could also try it in Landscape, and this is a work in
+> progress.
+>
+> — Greg, 2026-09-05
+
+So a reader on a **coarse pointer**, in a window on the wrong side of that crossover, gets one
+sentence at the top of the article saying so and naming **Plain** as the way back to the text.
+[`SmallScreenHint.tsx`](../../src/web/SmallScreenHint.tsx), and
+[260905e-a-small-screen-banner-on-a-phone.md](../plans/260905e-a-small-screen-banner-on-a-phone.md)
+for the four decisions behind it.
+
+**The contract is *until dismissed*, not *once*.** It is on every article and every visit until the
+× is pressed, and then never again on that device. Greg's ask said "the 1st time", and this is
+deliberately not that: a banner that spent itself on a visit where the reader happened to scroll
+straight past would have explained nothing to the one person it is for. Nothing records a *view*;
+the one bit in `localStorage` records a *press*.
+
+**It asks the layout rather than a width**, and that is the part worth carrying elsewhere: an iPad in
+portrait is 834px, which is *above* `MODE_MIN + PROSE_MIN` and *below* the real crossover with the
+12px rail on. A gate written as the sum warned every phone and no iPad — the device it was most
+obviously for — by two pixels.
+
+**Landscape is suggested only when there is a landscape to turn to.** `moreRoomSideways` compares the
+viewport's two sides; a phone already held sideways gets the rest of the sentence and not that
+advice. The crossover itself lands at 844px of *usable* width — and note that is a window rather than
+a device, since `useWindowWidth` takes the safe-area insets out first, so a notched phone whose
+screen is 844pt sideways is handed rather less and keeps the banner.
+
+**Arriving with a mode already open is the one case it does not cover**, and that is accepted rather
+than solved. A covering band is `position: fixed` over the whole article, so there is no stable place
+for a sentence underneath it, and left in flow the banner would land beneath the fixed corner logo —
+the collision `.shared-notice` already hit in August. So `?mode=chat` on a phone shows the covering
+band and no explanation until the reader reaches Plain. The default mode is Plain and a shared link
+carries no mode, so the ordinary first arrival does get it.
+
+It is a sibling of the install hint above it (`InstallHint`, [`install-hint.ts`](../../src/web/install-hint.ts)),
+which tells an iOS reader how to get the browser's own chrome out of the way, and the two share
+`media()` in [`src/web/media.ts`](../../src/web/media.ts). They say different things and sit in
+different places: this one is in flow at the top of the article, that one is fixed above the dock.
 
 ## What we deliberately did not build
 

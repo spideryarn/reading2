@@ -49,6 +49,7 @@ import {
   planExpansionBatches,
   predictedChildren,
   proposalFromTree,
+  type ProposedChild,
   shouldExpand,
   structuralBlocksIn,
 } from "../src/hierarchy-cascade.js";
@@ -140,12 +141,17 @@ function target(from: number, to: number, where: string): ExpansionTarget {
 }
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [] };
+  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 }
 
-const state = (root: CascadeNode, capReached: CascadeState["capReached"] = []): CascadeState => ({
+const state = (
+  root: CascadeNode,
+  capReached: CascadeState["capReached"] = [],
+  refused: CascadeState["refused"] = [],
+): CascadeState => ({
   root,
   capReached,
+  refused,
 });
 
 /* ------------------------------------------------- the stopping rule ----- */
@@ -686,13 +692,29 @@ describe("planExpansionBatches", () => {
 
 /* ------------------------------------------------------- normalisation --- */
 
+/**
+ * `normaliseExpansion`, with the proposals dropped again.
+ *
+ * It hands back a `DerivedChild` — the node **and** the proposal it was built
+ * from — since 2026-09-05, so that a caller can find the verdict of the child in
+ * front of it. Most of the cases below are about ranges, drops and refusals and
+ * have nothing to say about the pairing, so they take the nodes and read as they
+ * did. The pairing has its own case at the end of this block, and
+ * `tests/hierarchy-deepen.test.ts` is where it is asserted against real verdicts.
+ */
+function expandedNodes<C extends ProposedChild>(
+  opts: Parameters<typeof normaliseExpansion<C>>[0],
+): ModelNode[] {
+  return normaliseExpansion(opts).map((c) => c.node);
+}
+
 describe("normaliseExpansion", () => {
   const blocks = article(20);
   const parent = [blockId(4), blockId(15)] as const;
 
   it("pins the first child to the parent's start and derives every end", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(5), title: "One" },
         { start: blockId(9), title: "Two" },
@@ -737,7 +759,7 @@ describe("normaliseExpansion", () => {
     ];
     for (const starts of cases) {
       const report = emptyReport();
-      const children = normaliseExpansion({
+      const children = expandedNodes({
         children: starts.map((start, i) => ({ start, title: `Child ${i + 1}` })),
         parent,
         blocks,
@@ -858,7 +880,7 @@ describe("normaliseExpansion", () => {
    */
   it("drops a duplicate start, and counts it", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(4), title: "One" },
         { start: blockId(4), title: "Two" },
@@ -888,7 +910,7 @@ describe("normaliseExpansion", () => {
    */
   it("keeps what a reversed list still supplies, and reports the distance", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(12), title: "Late" },
         { start: blockId(8), title: "Middle" },
@@ -910,7 +932,7 @@ describe("normaliseExpansion", () => {
 
   it("drops a non-increasing start in the middle and keeps its neighbours", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(4), title: "One" },
         { start: blockId(9), title: "Two" },
@@ -935,7 +957,7 @@ describe("normaliseExpansion", () => {
    * identical model output, silently. ⟨GPT Sol, 2026-09-04⟩
    */
   it("carries an empty sourceHeading and an empty gist through, rather than deleting them", () => {
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(4), title: "One", gist: "", sourceHeading: "" },
         { start: blockId(10), title: "Two", gist: "A gist.", sourceHeading: "Two" },
@@ -1040,7 +1062,7 @@ describe("normaliseExpansion", () => {
    */
   it("pins an in-parent first start back to the parent's own start, and measures it", () => {
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(8), title: "One" },
         { start: blockId(9), title: "Two" },
@@ -1072,7 +1094,7 @@ describe("normaliseExpansion", () => {
   it("moves a child back onto the heading it names, as planChildRanges does", () => {
     const withHeading = article(20, (i) => (i === 8 ? heading(i) : para(i)));
     const report = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(5), title: "One" },
         { start: blockId(9), title: "Two", sourceHeading: "Heading 8" },
@@ -1114,7 +1136,7 @@ describe("normaliseExpansion", () => {
   it("agrees with buildTree: a fresh build changes no range and records no repair", () => {
     const whole = article(16);
     const normalised = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(2), title: "One" },
         { start: blockId(6), title: "Two" },
@@ -1154,7 +1176,7 @@ describe("normaliseExpansion", () => {
   it("agrees with buildTree on a section that began one block after its heading", () => {
     const whole = article(16, (i) => (i === 8 ? heading(i) : para(i)));
     const normalised = emptyReport();
-    const children = normaliseExpansion({
+    const children = expandedNodes({
       children: [
         { start: blockId(0), title: "One" },
         { start: blockId(9), title: "Two", sourceHeading: "Heading 8" },
@@ -1250,14 +1272,23 @@ describe("normaliseExpansion", () => {
 describe("proposalFromTree", () => {
   const blocks = article(16, (i) => (i === 8 ? heading(i) : para(i)));
   const navLabels = { [blockId(2)]: "A leaf label" };
+  /* **The root and both parts carry a `question`**, and that is not decoration:
+     a field this fixture does not exercise is a field `proposalFromTree` can
+     quietly drop. It dropped exactly this one — GPT Sol reproduced four
+     questions before `deepenTree` and zero after, because deepening any single
+     section rebuilds the whole tree through that function
+     (SPIDERYARN-READING2-1V). `toEqual(proposal)` below is what now says so.
+     A new optional field on `TreeNode` belongs here the day it is added. */
   const proposal: ModelNode = {
     title: "Root",
     gist: "The whole argument, in one sentence.",
+    question: "Why should the whole argument be believed?",
     range: [blockId(0), blockId(15)],
     children: [
       {
         title: "One",
         gist: "The first half.",
+        question: "How does the first half get off the ground?",
         range: [blockId(0), blockId(7)],
         children: [
           { title: "One a", gist: "Opening.", range: [blockId(0), blockId(3)] },
@@ -1267,6 +1298,7 @@ describe("proposalFromTree", () => {
       {
         title: "Two",
         gist: "The second half.",
+        question: "What follows if the second half is right?",
         range: [blockId(8), blockId(15)],
         sourceHeading: "Heading 8",
       },
@@ -1332,8 +1364,11 @@ describe("proposalFromTree", () => {
 
 describe("assertCascadeComplete", () => {
   const blocks = article(40);
-  const check = (root: CascadeNode, capReached: CascadeState["capReached"] = []) =>
-    assertCascadeComplete(state(root, capReached), blocks, CASCADE_RECIPE);
+  const check = (
+    root: CascadeNode,
+    capReached: CascadeState["capReached"] = [],
+    refused: CascadeState["refused"] = [],
+  ) => assertCascadeComplete(state(root, capReached, refused), blocks, CASCADE_RECIPE);
 
   it("throws when any node is still pending", () => {
     const root = expanded(0, 9, [terminal(0, 4), pending(5, 9)]);
@@ -1399,6 +1434,50 @@ describe("assertCascadeComplete", () => {
       { where: "root > child 1", range: [blockId(0), blockId(14)] as const, structuralBlocks: 15 },
     ];
     expect(() => check(root, recorded)).not.toThrow();
+  });
+
+  /**
+   * **A refused target is the second way a node the governor would split ends up
+   * terminal**, and it needs a record for exactly the reason the cap does.
+   *
+   * From 2026-09-05 a call the model refuses on every draw no longer fails the
+   * wave: its targets keep the shape wave 1 gave them and the wave publishes
+   * without them (`RefusedCall` in src/hierarchy-deepen.ts). That is the right
+   * behaviour and it creates precisely the state this guard exists to catch — a
+   * node `shouldExpand` says should have been split, sitting terminal. Silent,
+   * it is indistinguishable from one that legitimately stopped.
+   */
+  it("throws on a terminal node the governor would expand, unless a refusal says why", () => {
+    const root = expanded(0, 19, [terminal(0, 14), terminal(15, 19)]);
+    expect(() => check(root)).toThrow(/marked terminal but holds 15 structural block\(s\)/);
+
+    const refused = [
+      {
+        where: "root > child 1",
+        range: [blockId(0), blockId(14)] as const,
+        structuralBlocks: 15,
+        reason: "not-an-expansion",
+        draws: 3,
+      },
+    ];
+    expect(() => check(root, [], refused)).not.toThrow();
+  });
+
+  /** Bookkeeping that has drifted from the tree it describes explains nothing. */
+  it("throws on a refusal record naming no terminal node in the tree", () => {
+    const root = expanded(0, 9, [terminal(0, 4), terminal(5, 9)]);
+    const refused = [
+      {
+        where: "root > child 7",
+        range: [blockId(0), blockId(4)] as const,
+        structuralBlocks: 15,
+        reason: "not-an-expansion",
+        draws: 3,
+      },
+    ];
+    expect(() => check(root, [], refused)).toThrow(
+      /names root > child 7, which is not a terminal node/,
+    );
   });
 
   /** Bookkeeping that has drifted from the tree it describes explains nothing. */

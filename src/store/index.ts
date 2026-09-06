@@ -1,12 +1,17 @@
 /**
- * Which store the server is using, and the one place that decides.
+ * Which store object answers which contract — and since 2026-09-05 there is
+ * only one store, so this file wires rather than chooses.
  *
- *     SPIDERYARN_STORE=postgres npm run dev
+ * ## The choice is gone, and this is what that means here
  *
- * Default is `files`, so nothing changes for anyone who has not opted in. The
- * flag is read once at module load rather than per call: a store that could
- * change under a running request is a much worse thing to debug than one that
- * needs a restart.
+ * `SPIDERYARN_STORE` selected between a directory under `data/` and Postgres
+ * until 2026-09-05, when the flag and the filesystem store went
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § F). Every seam below is now the Postgres adapter, unconditionally, and the
+ * three refusals that used to stand in for a filesystem side — admin, sharing,
+ * feedback — are gone with the side they were refusing for. What is left of the
+ * flag is a tombstone in [live.ts](live.ts): unset and `postgres` pass, anything
+ * else throws, until Greg takes the variable out of Vercel.
  *
  * `src/routes.ts` imports the article reads from here instead of from
  * `src/api.ts`. That is a one-line change in a file several agents are editing,
@@ -15,33 +20,19 @@
  * ## The rule this file exists to keep
  *
  * **No fallback, ever.** Nothing here catches a Postgres error and retries
- * against the filesystem. A fallback would hide exactly the divergence the
- * parity test is built to find, and would do it in production, silently, where
+ * against anything else. A fallback would hide exactly the divergence the parity
+ * tests were built to find, and would do it in production, silently, where
  * nobody is comparing. From
  * [the order of work](../../docs/plans/260825f-postgres-migration.md#the-order-of-work):
- * *"Do not catch a Postgres error and fall back to files."*
+ * *"Do not catch a Postgres error and fall back to files."* With one store there
+ * is nothing to fall back **to**, which is the strongest form of that rule and
+ * the point of having got here.
  *
  * The corollary was the `notMigrated` helper in [live.ts](live.ts): a write with
- * no Postgres implementation must fail loudly rather than quietly write a file
- * the reader will never read back. A write that lands in the store nobody is
- * reading is the worst available outcome — it reports success and loses the
- * data.
- *
- * **`notMigrated` can only guard what comes through this file.** For most of
- * 2026-08-26 chat and meaning-search did not: src/routes.ts imported their
- * writes straight from src/chat.ts and src/searches.ts, which write to disk
- * with `node:fs/promises` and never read the flag. So in `postgres` mode those
- * two did the thing the paragraph above calls the worst available outcome, and
- * no line written *here* could change it — which mattered, because two plans
- * proposed extending `notMigrated` to cover them and it could not: the call
- * never arrived. They refused at their own `save()` in the interim.
- *
- * **Nothing in this file refuses any more.** `chatStore`, `searchStore` and
- * `glossaryLookupStore` are wired below and routes.ts calls them; `deleteGlossary`
- * was the last one holding out, and it was built on 2026-09-03
- * (docs/plans/260903e-glossary-delete-in-postgres.md). The helper still exists
- * for the next seam that needs it, and `SEAM_ASYMMETRIES` in
- * [live.ts](live.ts) is what keeps a refusal from being mistaken for a store.
+ * no Postgres implementation had to fail loudly rather than quietly write a file
+ * the reader would never read back. **Nothing in this file refuses any more** —
+ * `deleteGlossary` was the last one holding out and was built on 2026-09-03
+ * (docs/plans/260903e-glossary-delete-in-postgres.md).
  *
  * ## The other thing this file is the boundary for
  *
@@ -53,6 +44,17 @@
  * a store that can publish the article in a 500.
  */
 
+/* **The `SPIDERYARN_STORE` tombstone is not imported here, and that is the
+   correction.** It was, for about a day: this file is the reader wiring hub and
+   the obvious place. It is also only one door — `src/jobs.ts`,
+   `src/upload-records.ts` and `src/store/ai-calls.ts` all reach Postgres without
+   coming through here, so the refusal was in the program on one path of several
+   and the fix looked complete because the reported symptom went away. It lives
+   at [`src/db/client.ts`](../db/client.ts) now, which is the boundary every one
+   of them crosses, and that file says why at length.
+
+   Every seam below reaches `getDb`, so importing one of them loads it. */
+
 import { log } from "../log.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
@@ -61,9 +63,12 @@ import type {
   ChatStore,
   CommentStore,
   FeedbackStore,
+  FetchAllowanceStore,
   GlossaryLookupStore,
   GlossaryStore,
   LibrarySearch,
+  LinkPreviewStore,
+  LinkSummaryStore,
   ReaderStore,
   RealtimeSessionStore,
   RefereeClaimsStore,
@@ -74,23 +79,6 @@ import type {
   VisibilityStore,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
-import { fsSourceStore } from "./artifacts-fs.js";
-import {
-  fsArticleReader,
-  fsAssertWritableGlossary,
-  fsChatStore,
-  fsCommentStore,
-  fsGlossaryLookupStore,
-  fsGlossaryStore,
-  fsLibrarySearch,
-  fsReaderStore,
-  fsRefereeClaimsStore,
-  fsRefereeCriteriaStore,
-  fsSearchStore,
-  fsShelfStore,
-} from "./fs.js";
-import { STORE } from "./live.js";
-import { fsRealtimeSessionStore } from "./realtime-sessions-fs.js";
 import { pgRealtimeSessionStore } from "./realtime-sessions-pg.js";
 import { pgAdminStore } from "./pg-admin.js";
 import { pgArticleReader } from "./pg.js";
@@ -98,6 +86,9 @@ import { pgChatStore } from "./pg-chat.js";
 import { pgCommentStore } from "./pg-comments.js";
 import { pgFeedbackStore } from "./pg-feedback.js";
 import { pgGlossaryStore } from "./pg-glossary.js";
+import { pgLinkPreviewStore } from "./pg-link-previews.js";
+import { pgLinkSummaryStore } from "./pg-link-summaries.js";
+import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
@@ -107,106 +98,99 @@ import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
 import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
 
-/**
- * The flag and the refusal both live in [live.ts](live.ts), which imports
- * nothing of ours.
- *
- * They were here until 2026-08-26 and had to move, for a reason worth knowing
- * before anybody moves them back: `src/chat.ts` and `src/searches.ts` need to
- * ask which store is live, and this file imports [fs.ts](fs.ts), which imports
- * both of them. Asking from here would be an import cycle, and `npm run check`
- * gates on cycles.
- *
- * Re-exported rather than merely imported, because `STORE` is what
- * `src/vercel-health.ts` reports and `storeFromEnv` is what
- * `tests/store-selection.test.ts` drives — neither should have to know the flag
- * moved house.
- */
-export { type StoreName, STORE, storeFromEnv } from "./live.js";
-
 import { postgresBlobStore } from "./blobs.js";
 
-if (STORE === "postgres") {
-  /**
-   * **Postgres without a matching bucket is not a configuration, it is a split
-   * brain.** Article rows would go to Postgres while their source documents
-   * went to `data/_blobs/` on whichever machine happened to run the fetch,
-   * where no other instance can reach them — or to a *different* Supabase
-   * project from the one the row is stored in, which is the same failure by a
-   * longer route. `DATABASE_URL` chooses the database and the presence of a
-   * service key chooses the blob store; two independent choices, and once a
-   * revision row holds an object key they must agree or the row points at
-   * nothing.
-   *
-   * Both refusals now live in the **constructor**, `postgresBlobStore` in
-   * [blobs.ts](blobs.ts), and this line is one of its two callers. They were
-   * written out here until 2026-08-28, and that is exactly how
-   * `scripts/db-export.ts` came to have neither: it imports `src/store/export.js`
-   * and never this file, so the rollback tool ran unchecked. A check that only
-   * one door passes through is not a check.
-   *
-   * Boot-time rather than per-request, because otherwise it surfaces as a
-   * missing source document on some article weeks later, which reads like a
-   * lost file rather than like a configuration that was never coherent. Loud,
-   * now, before anybody's data is involved. Only under `postgres`, because it is
-   * only there that a reference is written down at all. GPT Sol raised the
-   * project pair, 2026-08-27, as the one way a dangling reference arrives
-   * without anybody deleting anything — and found that the credentials check I
-   * had written beside it missed the commonest case.
-   *
-   * The store itself is discarded: the fetch and upload paths call `blobStore()`
-   * for their own, deliberately following the credentials rather than
-   * `SPIDERYARN_STORE` (blobs.ts § Why selection does not read
-   * `SPIDERYARN_STORE`). Constructing one here is how the pair is checked.
-   */
-  postgresBlobStore('SPIDERYARN_STORE is "postgres"');
-
-  // info, not debug: which store is serving reads is the first thing anybody
-  // investigating a wrong answer needs to know, and it is one line per boot.
-  log("store").info({ store: STORE }, "serving article reads from Postgres");
-} else if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
-  /**
-   * **The filesystem store cannot be the live one where strangers can sign in.**
-   *
-   * It has no owner column and no owner filter — it is one directory per slug
-   * under `data/`, and there is nowhere for a second reader's articles to go.
-   * Postgres got `owner_id` filtering on 2026-08-27 (src/store/pg.ts §
-   * `ownedSlug`); the filesystem side deliberately did not, because it is the
-   * local development store and its replacement is the whole point of
-   * docs/plans/260825f-postgres-migration.md.
-   *
-   * So this is a boot-time refusal rather than a per-request one. On Vercel it
-   * would have failed anyway — there is no writable disk — but it would have
-   * failed as ENOENT on the first read, which reads as a missing article rather
-   * than as a store that must never have been selected. Loud, at the moment the
-   * configuration is wrong, and before anybody's data is involved.
-   */
-  throw new Error(
-    `SPIDERYARN_STORE is "${STORE}" in production. The filesystem store has no ` +
-      "owner column, so every signed-in reader would share one library. " +
-      "Set SPIDERYARN_STORE=postgres. See src/store/index.ts.",
-  );
+/**
+ * **Postgres without a matching bucket is not a configuration, it is a split
+ * brain.** Article rows go to Postgres while their source documents would go to
+ * `data/_blobs/` on whichever machine happened to run the fetch, where no other
+ * instance can reach them — or to a *different* Supabase project from the one
+ * the row is stored in, which is the same failure by a longer route.
+ * `DATABASE_URL` chooses the database and the presence of a service key chooses
+ * the blob store; two independent choices, and once a revision row holds an
+ * object key they must agree or the row points at nothing.
+ *
+ * Both refusals live in the **constructor**, `postgresBlobStore` in
+ * [blobs.ts](blobs.ts), and this line is one of its two callers. They were
+ * written out here until 2026-08-28, and that is exactly how
+ * `scripts/db-export.ts` came to have neither: it imports `src/store/export.js`
+ * and never this file, so the rollback tool ran unchecked. A check that only one
+ * door passes through is not a check.
+ *
+ * Boot-time rather than per-request, because otherwise it surfaces as a missing
+ * source document on some article weeks later, which reads like a lost file
+ * rather than like a configuration that was never coherent. Loud, now, before
+ * anybody's data is involved. GPT Sol raised the project pair, 2026-08-27, as
+ * the one way a dangling reference arrives without anybody deleting anything —
+ * and found that the credentials check I had written beside it missed the
+ * commonest case.
+ *
+ * **It used to sit under `if (STORE === "postgres")`**, whose `else` was the
+ * boot-time refusal that stopped the filesystem store serving a signed-in world.
+ * Both went with the flag on 2026-09-05: there is no other store to select, so
+ * there is no configuration in which the pair does not have to agree.
+ *
+ * ## Why it is off under the test runner, which is a real weakening said out loud
+ *
+ * Because the unit lane **deliberately** points `DATABASE_URL` and
+ * `SUPABASE_URL` at two different loopback ports, so that an escapee reaching
+ * either fails in milliseconds naming the one it reached
+ * ([`tests/helpers/unit-lane-poison.ts`](../../tests/helpers/unit-lane-poison.ts)).
+ * That is exactly the split brain this line refuses, and with the flag gone the
+ * line runs on every import — so around thirty unit-lane files that merely
+ * import a route stopped collecting at all, on a message about Supabase ports
+ * and nothing to do with what they test.
+ *
+ * A test importing this module is not a server boot, and two poisons are not a
+ * configuration anybody deployed. `src/env.ts` and `src/log.ts` already draw a
+ * line at `NODE_ENV === "test"` for the same kind of reason.
+ *
+ * **`VITEST` as well as `NODE_ENV`, and the second one is not belt and braces.**
+ * Four suites spawn a child with `NODE_ENV=development` **on purpose**, because
+ * `src/log.ts` is silent under `test` and their evidence is the child's stdout
+ * (`tests/chat-empty-answer-log.test.ts` says why). Those children inherit the
+ * poison and *not* the `NODE_ENV`, so a `NODE_ENV`-only guard let them through
+ * and nine cases died on the port message — measured 2026-09-05, after the
+ * one-condition version was written. `VITEST=true` is set by the runner and does
+ * survive into a child, which is precisely the property needed here.
+ *
+ * **What it costs**: nothing exercises this call under the runner any more.
+ * `tests/blobs.test.ts` drives `postgresBlobStore` directly and owns both
+ * refusals, and `tests/one-store-only.test.ts` asserts *this line still exists*,
+ * because a check nobody runs is one somebody deletes.
+ *
+ * The store itself is discarded: the fetch and upload paths call `blobStore()`
+ * for their own, following the credentials (blobs.ts § Why selection does not
+ * read `SPIDERYARN_STORE`). Constructing one here is how the pair is checked.
+ */
+if (!process.env.VITEST && process.env.NODE_ENV !== "test") {
+  postgresBlobStore("the store is Postgres");
 }
 
+// info, not debug: which store is serving reads is the first thing anybody
+// investigating a wrong answer needs to know, and it is one line per boot.
+log("store").info("serving article reads from Postgres");
+
 /**
- * Which of the two a seam gets — and, for the Postgres one, a second guard.
+ * What a seam gets: the Postgres store, with a second guard round it.
+ *
+ * **It used to choose**, taking a filesystem store as a third argument and a
+ * flag deciding. There is one store since 2026-09-05, so all that is left is the
+ * guard — kept as a helper rather than inlined, because the thing worth keeping
+ * from the choice is that every seam below is wired through *one* line that
+ * cannot forget it.
  *
  * **The wrapping here is now redundant, and deliberately so.** Every Postgres
  * store this helper is handed already comes out of `guardDbStore` at its own
  * export (`pgCommentStore` in pg-comments.ts, and so on for all seventeen), so
  * `guardDbStore` sees a store that is already marked and hands the same object
  * straight back. Guarding at the export is what makes the guard travel with the
- * store rather than depend on whoever selects it — the 2026-08-27 accident in
+ * store rather than depend on whoever wires it — the 2026-08-27 accident in
  * docs/postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md
  * was three selection sites, one of which forgot. Keeping the call here costs
  * nothing (the early return in db-errors.ts, proved by
  * tests/store-guard-idempotent.test.ts) and means a store added tomorrow is
  * wrapped even if its author has read none of this.
- *
- * The filesystem stores are not wrapped, deliberately. They bind no parameters,
- * so they cannot leak one — and routes.ts reads `err.code === "ENOENT"` off
- * them to answer 404, which a translation would take away. Narrower blast
- * radius, and the honest reason: the hazard is Drizzle's, not storage's.
  *
  * A store that already guards itself at its own export — `pgCommentStore` does,
  * the way src/store/pg-jobs.ts and src/store/pg-uploads.ts do — passes through
@@ -215,11 +199,11 @@ if (STORE === "postgres") {
  * a wrapped store is a no-op), where it protects every caller and not just this
  * one.
  */
-function guarded<T extends object>(what: string, pg: T, files: T): T {
-  return STORE === "postgres" ? guardDbStore(what, pg) : files;
+function guarded<T extends object>(what: string, pg: T): T {
+  return guardDbStore(what, pg);
 }
 
-const reader: ArticleReader = guarded("reader", pgArticleReader, fsArticleReader);
+const reader: ArticleReader = guarded("reader", pgArticleReader);
 
 export const loadArticle = reader.loadArticle.bind(reader);
 export const listArticles = reader.listArticles.bind(reader);
@@ -232,6 +216,7 @@ export const loadTimeline = reader.loadTimeline.bind(reader);
 export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);
+export const loadDebate = reader.loadDebate.bind(reader);
 /* The one read whose answer is bytes. See `ArticleReader.loadSource` in
    contracts.ts for what `null` means and what it deliberately does not. */
 export const loadSource = reader.loadSource.bind(reader);
@@ -250,9 +235,9 @@ export const loadArc = reader.loadArc.bind(reader);
  * failed query's message here are the reader's question and the model's whole
  * answer — see [db-errors.ts](db-errors.ts) before adding a fourth.
  */
-export const chatStore: ChatStore = guarded("chat", pgChatStore, fsChatStore);
+export const chatStore: ChatStore = guarded("chat", pgChatStore);
 
-export const searchStore: SearchStore = guarded("searches", pgSearchStore, fsSearchStore);
+export const searchStore: SearchStore = guarded("searches", pgSearchStore);
 
 /**
  * **A referee's own criteria, run over the paper** — the same flag as the
@@ -272,11 +257,7 @@ export const searchStore: SearchStore = guarded("searches", pgSearchStore, fsSea
  * query's message here are the referee's criterion and the passages the model
  * quoted — see [db-errors.ts](db-errors.ts).
  */
-export const refereeCriteriaStore: RefereeCriteriaStore = guarded(
-  "referee-criteria",
-  pgRefereeCriteriaStore,
-  fsRefereeCriteriaStore,
-);
+export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-criteria", pgRefereeCriteriaStore);
 
 /**
  * **A paper's claims run** — `guarded(...)` like the criteria above it, since
@@ -312,17 +293,9 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded(
  * but quotations from somebody else's unpublished work. See
  * [db-errors.ts](db-errors.ts).
  */
-export const refereeClaimsStore: RefereeClaimsStore = guarded(
-  "referee-claims",
-  pgRefereeClaimsStore,
-  fsRefereeClaimsStore,
-);
+export const refereeClaimsStore: RefereeClaimsStore = guarded("referee-claims", pgRefereeClaimsStore);
 
-export const glossaryLookupStore: GlossaryLookupStore = guarded(
-  "lookups",
-  pgGlossaryLookupStore,
-  fsGlossaryLookupStore,
-);
+export const glossaryLookupStore: GlossaryLookupStore = guarded("lookups", pgGlossaryLookupStore);
 
 /**
  * Checking one term on the web.
@@ -335,14 +308,15 @@ export const glossaryLookupStore: GlossaryLookupStore = guarded(
  * filter is the divergence this whole seam exists to make impossible.
  * src/term-lookup.ts.
  *
- * `assertWritable` is the one genuinely file-shaped piece: the filesystem can
- * reach the committed `example/` article, which nobody owns, so it needs a 403
- * that Postgres does not (no such article there at all).
+ * **No `assertWritable` since 2026-09-05.** It was the one genuinely file-shaped
+ * piece: the filesystem could reach the committed `example/` article, which
+ * nobody owns, so it needed a 403 that Postgres does not — there is no such
+ * article in the database at all. The seam in src/term-lookup.ts stays optional
+ * for the next store-shaped 403; nothing supplies one.
  */
 export const lookUpTerm = makeLookUpTerm({
   reader,
   lookups: glossaryLookupStore,
-  ...(STORE === "postgres" ? {} : { assertWritable: fsAssertWritableGlossary }),
 });
 
 /**
@@ -355,11 +329,10 @@ export const lookUpTerm = makeLookUpTerm({
  * built from `anchorIn` in src/term-lookup.ts, which is the whole argument for
  * that file existing.
  *
- * `assertWritable` for the same file-shaped reason as its neighbour.
+ * No `assertWritable`, for the same reason as its neighbour above.
  */
 export const askAboutTerm = makeAskAboutTerm({
   reader,
-  ...(STORE === "postgres" ? {} : { assertWritable: fsAssertWritableGlossary }),
 });
 
 /**
@@ -368,20 +341,19 @@ export const askAboutTerm = makeAskAboutTerm({
  * The glossary panel's **Start again**, and one method: null the list on the
  * article's current revision and say whether there was one to null. It answered
  * 501 under `postgres` until 2026-09-03, which meant the button worked for
- * nobody but a developer on a laptop.
+ * nobody but a developer on a laptop — and the button itself went on 2026-09-05
+ * (`Foot` in src/web/GlossaryPanel.tsx), so this has no client caller now. Kept
+ * deliberately: docs/project/glossary.md § Finding more.
  *
  * **It can now answer 409**, and that is the one thing a reader can be told here
  * that they could not before: while a live job holds a draft of this article,
  * the delete is refused, because every draft carries the glossary forward and
- * publishing one after the delete would put the old list back. The panel shows
- * the message and does not fall through to a run.
+ * publishing one after the delete would put the old list back. The panel used to
+ * show that message; with the button gone the caller is whatever reaches the
+ * route, so the sentence names no button.
  * src/store/pg-glossary.ts; docs/plans/260903e-glossary-delete-in-postgres.md.
  */
-const glossary: Pick<GlossaryStore, "deleteGlossary"> = guarded(
-  "glossary",
-  pgGlossaryStore,
-  fsGlossaryStore,
-);
+const glossary: Pick<GlossaryStore, "deleteGlossary"> = guarded("glossary", pgGlossaryStore);
 
 export const deleteGlossary = glossary.deleteGlossary;
 
@@ -393,7 +365,7 @@ export const deleteGlossary = glossary.deleteGlossary;
  * the article came from Postgres would mean the reader's questions and the
  * paragraphs they point at living in two stores that nothing keeps in step.
  */
-export const commentStore: CommentStore = guarded("comments", pgCommentStore, fsCommentStore);
+export const commentStore: CommentStore = guarded("comments", pgCommentStore);
 
 /**
  * The shelf's write side, and the library-wide search box.
@@ -405,9 +377,9 @@ export const commentStore: CommentStore = guarded("comments", pgCommentStore, fs
  * prevent above, and it is why these are wired here rather than imported
  * directly by routes.ts.
  */
-export const shelfStore: ShelfStore = guarded("shelf", pgShelfStore, fsShelfStore);
+export const shelfStore: ShelfStore = guarded("shelf", pgShelfStore);
 
-export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch, fsLibrarySearch);
+export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch);
 
 /**
  * The reader's global profile — "about you", not scoped to any article.
@@ -417,7 +389,7 @@ export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch, 
  * `reader_profiles` is a write nothing will ever read back — the exact
  * failure `notMigrated` exists to prevent. docs/plans/260826t-reader-profile.md.
  */
-export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore, fsReaderStore);
+export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore);
 
 /**
  * **The document the article was made from** — `GET /api/source/:slug`.
@@ -427,7 +399,8 @@ export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore,
  * `data/<slug>/raw.pdf` off the disk itself, whatever `SPIDERYARN_STORE` said,
  * so under `postgres` it reported *"that article did not come from a PDF"*
  * about a PDF sitting in the `sources` bucket — and on a deployment it was the
- * jobless `dataRoot()` caller that src/store/data-root.ts names by route.
+ * jobless `dataRoot()` caller that src/store/data-root.ts named by route,
+ * before that file was deleted 2026-09-05.
  * docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
  * `guarded(...)` like the reads above it, because there really are two
@@ -435,82 +408,29 @@ export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore,
  * reference to a content-addressed object in the bucket. Not `notMigrated`, not
  * a refusal — both stores can answer.
  */
-export const sourceStore: SourceStore = guarded("source", pgSourceStore, fsSourceStore);
+export const sourceStore: SourceStore = guarded("source", pgSourceStore);
 
 /**
  * Who has signed up — the admin page's one endpoint.
  *
- * **Not `guarded(...)` like everything above it**, and the asymmetry is the
- * point: the other stores have two real implementations and a flag choosing
- * between them, while this one has a Postgres implementation and a filesystem
- * *refusal*. There is no user list on a filesystem — `data/` is one directory
- * per slug and nothing in it records that a person exists — so the `files`
- * side cannot be written, only declined.
- *
- * Declined loudly, with its own sentence rather than `notMigrated`'s: that one
- * says "no Postgres implementation yet", which is the opposite of what is true
- * here and would send whoever reads it to the wrong plan. The alternative — an
- * empty array — is the failure this whole directory keeps warning about: a page
- * that says *you have no users* and looks exactly like a page that works.
- * docs/reusable/silent-success.md.
+ * **There was a filesystem *refusal* beside this until 2026-09-05**, and it is
+ * worth knowing what it was refusing: there is no user list on a filesystem —
+ * `data/` was one directory per slug and nothing in it recorded that a person
+ * exists — so that side could only be declined, never written. It is gone with
+ * the store it was declining for, and this is now `guarded(...)` like every
+ * other seam. docs/project/admin.md.
  */
-const adminOnFiles: AdminStore = {
-  listUsersAcrossOwners: () => {
-    throw Object.assign(
-      new Error(
-        "The admin users page needs Postgres — there are no user accounts on the " +
-          "filesystem store. Run with SPIDERYARN_STORE=postgres. See docs/project/admin.md.",
-      ),
-      { status: 501 },
-    );
-  },
-  /* Same refusal, same reason, and stated separately rather than shared: an
-     empty array here would be a page saying *nobody has reported anything*,
-     which is the exact silent success `feedbackOnFiles` below is written to
-     avoid at the other end of the same feature. */
-  listFeedbackAcrossOwners: () => {
-    throw Object.assign(
-      new Error(
-        "The admin feedback page needs Postgres — the filesystem store has no " +
-          "feedback table, so there are no reports to show. Run with " +
-          "SPIDERYARN_STORE=postgres. See docs/project/admin.md.",
-      ),
-      { status: 501 },
-    );
-  },
-  readFeedbackAcrossOwners: () => {
-    throw Object.assign(
-      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
-      { status: 501 },
-    );
-  },
-  readFeedbackScreenshotAcrossOwners: () => {
-    throw Object.assign(
-      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
-      { status: 501 },
-    );
-  },
-};
-
-export const adminStore: AdminStore =
-  STORE === "postgres" ? guardDbStore("admin", pgAdminStore) : adminOnFiles;
+export const adminStore: AdminStore = guarded("admin", pgAdminStore);
 
 /* ------------------------------------------------------------- sharing -- */
 
 /**
  * May a stranger read this article — the owner's switch.
  *
- * Selected the same way `adminStore` is, and for the same reason: there is a
- * Postgres implementation and a filesystem *refusal*, not two implementations
- * and a flag. `data/` is one directory per slug and there is nowhere in it to
- * record that a document is shared.
- *
- * Declined with its own sentence rather than `notMigrated`'s, which says "no
- * Postgres implementation yet" — the opposite of what is true here, and it would
- * send whoever read it to the wrong plan. The alternative — quietly reporting
- * success — is the failure this whole directory keeps warning about: a toggle
- * that flips, says nothing, and shares nothing.
- * docs/reusable/silent-success.md.
+ * **A filesystem *refusal* stood beside this until 2026-09-05.** `data/` was one
+ * directory per slug and there was nowhere in it to record that a document is
+ * shared, so a files adapter could only have reported success and shared
+ * nothing. It is gone with the store, and this is `guarded(...)` like the rest.
  *
  * The public *reads* are deliberately not wired through this file at all. They
  * go straight to src/store/public-reader.ts from src/public/routes.ts, because
@@ -518,80 +438,57 @@ export const adminStore: AdminStore =
  * asserted closed against it — tests/public-imports.test.ts.
  * docs/plans/260827ai-public-read-only-access.md.
  */
-const visibilityOnFiles: VisibilityStore = {
-  set: () => {
-    throw Object.assign(
-      new Error(
-        "Sharing needs Postgres — the filesystem store has no visibility column, so " +
-          "there is nowhere to record that a document is shared. Run with " +
-          "SPIDERYARN_STORE=postgres. See docs/plans/260827ai-public-read-only-access.md.",
-      ),
-      { status: 501 },
-    );
-  },
-};
-
-export const visibilityStore: VisibilityStore =
-  STORE === "postgres" ? guardDbStore("visibility", pgVisibilityStore) : visibilityOnFiles;
+export const visibilityStore: VisibilityStore = guarded("visibility", pgVisibilityStore);
 
 /* ------------------------------------------------------------- feedback -- */
 
 /**
  * **A bug report from a reader who is looking at the thing that went wrong.**
  *
- * Selected the way `adminStore` and `visibilityStore` are, and for the same
- * reason: there is a Postgres implementation and a filesystem *refusal*, not two
- * implementations and a flag. A files adapter would be twenty lines written
- * against a module that docs/plans/260831b-finish-the-database-move.md deletes
- * this week, plus a `tests/store-parity.test.ts` obligation to keep two
- * implementations agreeing until one of them goes.
- *
- * Declined with its own sentence rather than `notMigrated`'s, which says "no
- * Postgres implementation yet" — the opposite of what is true here. The
- * alternative — quietly reporting success — is the failure this whole directory
- * keeps warning about, and it would be at its worst here: a Feedback button that
- * accepts a report and drops it teaches the one reader who tried to tell us
- * something that telling us does nothing. docs/reusable/silent-success.md.
- *
- * The refusal has to reach the reader as a **sentence**, not as a spinner that
- * stops — the rule `Masthead.tsx` already states about the rename pencil: a
- * button that can only fail is worse than no button, because pressing it is how
- * you find out.
+ * **A filesystem *refusal* stood beside this until 2026-09-05**, because there
+ * was no feedback table on a filesystem and a Feedback button that accepts a
+ * report and drops it teaches the one reader who tried to tell us something that
+ * telling us does nothing (docs/reusable/silent-success.md). There is one store
+ * now, so there is nothing to decline.
  */
-const feedbackOnFiles: FeedbackStore = {
-  submit: () => {
-    throw Object.assign(
-      new Error(
-        "Feedback needs Postgres — the filesystem store has no feedback table, so " +
-          "there is nowhere to keep a bug report. Your report was not saved. Run " +
-          "with SPIDERYARN_STORE=postgres. See " +
-          "docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.",
-      ),
-      { status: 501 },
-    );
-  },
-  read: () => {
-    throw Object.assign(
-      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
-      { status: 501 },
-    );
-  },
-  markMirrorAttempted: () => {
-    throw Object.assign(
-      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
-      { status: 501 },
-    );
-  },
-  markMirrored: () => {
-    throw Object.assign(
-      new Error("Feedback needs Postgres — there are no reports on the filesystem store."),
-      { status: 501 },
-    );
-  },
-};
+export const feedbackStore: FeedbackStore = guarded("feedback", pgFeedbackStore);
 
-export const feedbackStore: FeedbackStore =
-  STORE === "postgres" ? guardDbStore("feedback", pgFeedbackStore) : feedbackOnFiles;
+/* -------------------------------------------------------- link previews -- */
+
+/**
+ * **What the page on the other end of a hyperlink says about itself.**
+ *
+ * The one seam here whose rows have **no owner** — see src/db/schema.ts §
+ * `linkPreviews` for why that is the privacy feature rather than a lapse, and
+ * what three things had to be true before it could be. Guarded like the rest:
+ * `guardDbStore` matters as much here as anywhere, because a failed Drizzle
+ * query puts every bound parameter into `Error.message` and the bound parameter
+ * here is a URL somebody hovered.
+ */
+export const linkPreviewStore: LinkPreviewStore = guarded("link-previews", pgLinkPreviewStore);
+
+/**
+ * **How that page stands to the piece the reader is holding** — the Luna
+ * summary, cached per reader, per article, per address.
+ *
+ * The owned half of the same card, and the counterpart to the ownerless seam
+ * above: one holds what a page says about itself and is the same for everybody,
+ * this one is written from a reader's own profile and is shared with nobody.
+ * src/db/schema.ts § `linkSummaries` for why the two are separate tables.
+ */
+export const linkSummaryStore: LinkSummaryStore = guarded("link-summaries", pgLinkSummaryStore);
+
+/**
+ * **How many outbound fetches one reader's pointer may cause.**
+ *
+ * Owner-scoped where the table above is ownerless, and the two must never be
+ * joined: one knows what was fetched and nothing about who asked, the other
+ * knows who asked and nothing about what. src/store/pg-rate-limit.ts.
+ */
+export const fetchAllowanceStore: FetchAllowanceStore = guarded(
+  "fetch-allowance",
+  pgFetchAllowanceStore,
+);
 
 /* -------------------------------------------------------- the AI ledger -- */
 
@@ -634,7 +531,7 @@ export { costStore } from "./ai-calls.js";
  * production reads it; the filesystem adapter exists so the laptop default keeps
  * working.
  */
-export const realtimeSessionStore: RealtimeSessionStore =
-  STORE === "postgres"
-    ? guardDbStore("realtime-sessions", pgRealtimeSessionStore)
-    : fsRealtimeSessionStore;
+export const realtimeSessionStore: RealtimeSessionStore = guarded(
+  "realtime-sessions",
+  pgRealtimeSessionStore,
+);

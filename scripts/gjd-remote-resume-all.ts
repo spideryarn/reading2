@@ -225,12 +225,41 @@ export function selectScript(): string {
   ].join("\n");
 }
 
-/** What goes into a fresh tab. `name` is a session slug, already validated. */
-export function resumeCommand(bin: string, name: string, transport?: "ssh"): string {
-  return `${bin} resume ${name}${transport === "ssh" ? " --ssh" : ""}`;
+/**
+ * What goes into a fresh tab.
+ *
+ * **It addresses the id and shows the name in a comment.** The tab is opened
+ * and typed into seconds after the list was read, and `resume <name>` resolves
+ * the name again at that moment — so a session that ended and had its name
+ * taken would hand the tab to the replacement. The trailing `# name` keeps the
+ * line readable, which is what the name was there for.
+ *
+ * **Both are quoted, and `--` precedes the id.** Neither is a slug: `ls` lists
+ * every tmux session on the box, including ones an agent made by hand, so a
+ * name can be anything tmux accepts — spaces, quotes, a leading hyphen. This
+ * string is TYPED INTO A SHELL, so an unquoted value is a command somebody else
+ * gets to finish. Sol found both halves.
+ */
+export function resumeCommand(bin: string, tab: Tab, transport?: "ssh"): string {
+  const q = (v: string) => `'${v.replaceAll("'", `'\\''`)}'`;
+  // Newlines out of the comment, or the rest of the line becomes a command the
+  // shell runs on its own. A tmux name can hold one.
+  const label = tab.name.replace(/[\r\n]+/g, " ");
+  return `${bin} resume${transport === "ssh" ? " --ssh" : ""} -- ${q(tab.id)}   # ${label}`;
 }
 
-export type Plan = { open: string[]; skipped: { name: string; why: string }[] };
+/**
+ * A session a tab will be opened for: tmux's id to address, the name to show.
+ *
+ * The ID IS THE POINT. `resume-all` reads the session list, then opens tabs and
+ * types a `resume` into each — seconds later, and each one re-resolves whatever
+ * it is given. Carrying only the name reopened the exact race that addressing
+ * by id removes: a session ends, another takes its name, and the tab attaches
+ * to the replacement. Sol's finding in review.
+ */
+export type Tab = { id: string; name: string };
+
+export type Plan = { open: Tab[]; skipped: { name: string; why: string }[] };
 
 /**
  * Which sessions get a tab, oldest first.
@@ -245,7 +274,7 @@ export type Plan = { open: string[]; skipped: { name: string; why: string }[] };
  * so the newest session lands nearest the right-hand end where you left it.
  */
 export function planTabs(
-  list: readonly { name: string; attached: boolean; created: Date }[],
+  list: readonly { id: string; name: string; attached: boolean; created: Date }[],
   opts: { includeAttached: boolean },
 ): Plan {
   const byAge = [...list].sort((a, b) => a.created.getTime() - b.created.getTime());
@@ -254,7 +283,7 @@ export function planTabs(
     if (s.attached && !opts.includeAttached) {
       plan.skipped.push({ name: s.name, why: "already attached — --include-attached to take it over" });
     } else {
-      plan.open.push(s.name);
+      plan.open.push({ id: s.id, name: s.name });
     }
   }
   return plan;

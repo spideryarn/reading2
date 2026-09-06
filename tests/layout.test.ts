@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ROOT_PX,
   fitView,
+  offerableGists,
   proseAloneMaxPx,
   SPINE_W,
   type FitInput,
@@ -20,6 +21,24 @@ import {
 const article = { gistDepths: [0, 1, 2], leafDepth: 3 };
 const fit = (o: Partial<FitInput> & { windowWidth: number }) =>
   fitView({ ...article, showText: true, chosen: null, ...o });
+
+/**
+ * The one rule about *which* columns exist to be chosen from, tested where it
+ * lives rather than where each caller applies it.
+ *
+ * Both callers matter and they want different things: `fitView` below, and the
+ * pill row in App.tsx, which offers exactly this list. A pill for a column the
+ * fit will never open is a control that does nothing — which is what `Arg` had
+ * become by the time it was deleted.
+ */
+describe("offerableGists", () => {
+  it("drops depth 0 and keeps the rest, in order", () => {
+    expect(offerableGists([0, 1, 2])).toEqual([1, 2]);
+    expect(offerableGists([0])).toEqual([]);
+    expect(offerableGists([1, 2, 3])).toEqual([1, 2, 3]);
+    expect(offerableGists([])).toEqual([]);
+  });
+});
 
 describe("the widths granularity-zoom.md promises", () => {
   it("1600px: L1 and L2 at 240 and 1108 of prose — L0 stays closed", () => {
@@ -81,17 +100,40 @@ describe("the default hierarchy view (no ?cols=)", () => {
     expect(f.columns).toEqual([1]);
   });
 
-  it("an explicit ?cols= is honoured exactly, L0 included if asked for", () => {
-    const wide = fit({ windowWidth: 1600, chosen: [0, 1, 2] });
-    expect(wide.columns).toEqual([0, 1, 2]);
+  it("an explicit ?cols= is honoured exactly", () => {
+    const wide = fit({ windowWidth: 1600, chosen: [1, 2] });
+    expect(wide.columns).toEqual([1, 2]);
 
-    const narrow = fit({ windowWidth: 760, chosen: [0, 1, 2] });
+    const narrow = fit({ windowWidth: 760, chosen: [1, 2] });
     // Unchanged even though it overflows — the window must not overrule it.
-    expect(narrow.columns).toEqual([0, 1, 2]);
+    expect(narrow.columns).toEqual([1, 2]);
     expect(narrow.overflowing).toBe(true);
 
-    const onlyCoarse = fit({ windowWidth: 1600, chosen: [0] });
-    expect(onlyCoarse.columns).toEqual([0]);
+    const onlyCoarse = fit({ windowWidth: 1600, chosen: [1] });
+    expect(onlyCoarse.columns).toEqual([1]);
+  });
+
+  /**
+   * **An old link is not an error.** The L0 column left Hierarchy on
+   * 2026-09-05 — Greg: "let's get rid of the 'Arg' button and functionality
+   * altogether" — and every `?cols=0,1,2` written before that day is still in
+   * somebody's tabs and somebody's notes. The `0` is dropped in silence and
+   * the rest of the link works, which is the only behaviour that does not
+   * punish a reader for having saved something.
+   *
+   * The arc artefact itself survives all of this: `src/arc.ts` still runs and
+   * Outline mode still renders its sentence — see layout.ts § `offerableGists`
+   * and docs/plans/260905d-declutter-the-reading-view-top-bars.md.
+   */
+  it("drops the 0 from an old ?cols=0,1,2 rather than breaking the link", () => {
+    expect(fit({ windowWidth: 1600, chosen: [0, 1, 2] }).columns).toEqual([1, 2]);
+    // Still honoured exactly in the direction that matters: it does not fit,
+    // and it is not quietly cut down to what does.
+    const narrow = fit({ windowWidth: 760, chosen: [0, 1, 2] });
+    expect(narrow.columns).toEqual([1, 2]);
+    expect(narrow.overflowing).toBe(true);
+    // `?cols=0` on its own is an empty table, not a column of one cell.
+    expect(fit({ windowWidth: 1600, chosen: [0] }).columns).toEqual([]);
   });
 });
 
@@ -121,11 +163,12 @@ describe("which levels get given up", () => {
   });
 
   it("a phone-width outline is the leaf column at full width", () => {
-    // showText: false, so the leaf column is the detail column and the spine is
-    // off. Nothing to scroll sideways to.
+    // showText: false, so the leaf column is the detail column. It takes the
+    // whole window less the rail, which since 2026-09-05 is on here too — see
+    // "hiding the spine" below. Nothing to scroll sideways to either way.
     const f = fit({ windowWidth: 390, showText: false });
     expect(f.columns).toEqual([3]);
-    expect(f.widths).toEqual([390]);
+    expect(f.widths).toEqual([378]);
     expect(f.overflowing).toBe(false);
   });
 
@@ -145,8 +188,8 @@ describe("which levels get given up", () => {
        still cut off the right-hand edge when they get there. So the widths
        follow the window, always; only the set of columns is theirs. */
     expect(f.widths).toEqual([176, 378]);
-    const wide = fit({ windowWidth: 900, chosen: [0, 1, 2] });
-    expect(wide.columns).toEqual([0, 1, 2]);
+    const wide = fit({ windowWidth: 900, chosen: [1, 2] });
+    expect(wide.columns).toEqual([1, 2]);
     expect(wide.overflowing).toBe(true);
   });
 
@@ -202,8 +245,8 @@ describe("a wider window never shows less of the article", () => {
 
 describe("the reader's choice beats the window", () => {
   it("an explicit set is honoured even when it doesn't fit", () => {
-    const f = fit({ windowWidth: 700, chosen: [0, 1, 2] });
-    expect(f.columns).toEqual([0, 1, 2]);
+    const f = fit({ windowWidth: 700, chosen: [1, 2] });
+    expect(f.columns).toEqual([1, 2]);
     expect(f.overflowing).toBe(true);
   });
 
@@ -214,7 +257,7 @@ describe("the reader's choice beats the window", () => {
   });
 
   it("ignores a depth this article hasn't got", () => {
-    expect(fit({ windowWidth: 1600, chosen: [0, 9] }).columns).toEqual([0]);
+    expect(fit({ windowWidth: 1600, chosen: [1, 9] }).columns).toEqual([1]);
   });
 });
 
@@ -224,8 +267,8 @@ describe("the leaf column", () => {
     // L0 stays closed here too — automatic fit is the same negotiation in
     // outline mode, and this file stays free of mode names on purpose.
     expect(f.columns).toEqual([1, 2, 3]);
-    // No prose, so no rail either: the table already is the whole-article view.
-    expect(f.spine).toBe("off");
+    // The rail is there as well, since 2026-09-05 — see "hiding the spine".
+    expect(f.spine).toBe("on");
   });
 
   it("rides beside the prose when explicitly asked for", () => {
@@ -254,13 +297,14 @@ describe("the table always has room for its own width", () => {
 
 /**
  * The reader's own hand on the rail — `?spine=`, added 2026-08-26 for the pill
- * in the controls bar. Three states, and the third one is the point: absent is
- * not the same as on.
+ * in the controls bar. The pill went on 2026-09-05 and the parameter stayed:
+ * three states still, but the point moved. Absent used to differ from *on*;
+ * now it differs from *off*.
  */
 describe("hiding the spine", () => {
-  it("is off by default in outline mode and on in reading mode", () => {
+  it("is on by default, in outline mode as well as reading mode", () => {
     expect(fit({ windowWidth: 1600 }).spine).toBe("on");
-    expect(fit({ windowWidth: 1600, showText: false }).spine).toBe("off");
+    expect(fit({ windowWidth: 1600, showText: false }).spine).toBe("on");
   });
 
   it("goes away when asked, and gives its width to the table", () => {
@@ -287,11 +331,14 @@ describe("hiding the spine", () => {
     expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("on");
   });
 
-  // The reason the parameter has no default: `null` has to keep meaning
-  // "nobody has touched this", or the `auto` control has nothing to put back.
-  it("absent is not the same as true", () => {
-    expect(fit({ windowWidth: 1600, showText: false, showSpine: null }).spine).toBe("off");
+  // Absent and `true` now agree, and the parameter still has three states
+  // because `false` is the one that has to be distinguishable from both:
+  // App.tsx puts `null` back when Search or Ideas opens with the rail hidden,
+  // and that only works if "nobody has touched this" is still a thing to say.
+  it("absent means on; only an explicit false takes the rail away", () => {
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: null }).spine).toBe("on");
     expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("on");
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: false }).spine).toBe("off");
   });
 
   it("keeps the fit monotonic in window width", () => {
@@ -319,7 +366,10 @@ describe("the article on its own stops at the measure", () => {
   it("caps the lone reading column at proseAloneMaxPx", () => {
     const f = alone(1600);
     expect(f.columns).toEqual([]);
-    expect(f.widths).toEqual([832]); // 49rem + the gutter's 48px, at the 16px default
+    // 49rem + the gutter's 24px, at the 16px default. It was 48px and the
+    // gutter two columns wide until 2026-09-05, when the bookmark moved into
+    // the line and the second column went — layout.ts § proseAloneMaxPx.
+    expect(f.widths).toEqual([808]);
     /* Through the function rather than `PROSE_ALONE_MAX_REM * root`, because the
        cap stopped being one rem number on 2026-09-04: the gutter's slot is
        `max(1.5rem, 24px)`, so below a 16px root it stops shrinking and the cell's
@@ -339,22 +389,24 @@ describe("the article on its own stops at the measure", () => {
        and both of the cell's pads 25% wider — so a fixed 800 would have clipped
        their measure to about 51ch, which is the one thing this cap must never
        do. Found by GPT Sol reviewing the built code, 2026-09-03. */
-    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 20 }).tableW).toBe(1040);
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 20 }).tableW).toBe(1010);
     // 624 until 2026-09-04, and 624 was the bug: at a 12px root the gutter's
-    // px floor makes the left pad 4.7rem, not 3.7, and a rem constant could not
-    // follow it. GPT Sol's stage 1 review.
-    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 12 }).tableW).toBe(636);
+    // px floor makes the left pad 2.7rem, not 2.2, and a rem constant could not
+    // follow it. GPT Sol's stage 1 review. 636 until 2026-09-05, when the
+    // gutter halved: one slot at every root, so this term is 24px here and 30
+    // at a 20px root rather than 48 and 60.
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 12 }).tableW).toBe(612);
     // And it is still a cap, not a width: a window narrower than it wins.
     expect(fit({ windowWidth: 700, chosen: [], rootFontPx: 20 }).tableW).toBe(688);
   });
 
   it("leaves every narrower window exactly as it was", () => {
-    // 844 = `proseAloneMaxPx(16)` plus the spine, so the cap stops
+    // 820 = `proseAloneMaxPx(16)` plus the spine, so the cap stops
     // biting one pixel below it. Under that the column is still the whole
     // window, which is what every phone gets and what the § gistsThatFit
     // examples above assert.
-    expect(alone(844).tableW).toBe(832);
-    expect(alone(843).tableW).toBe(831);
+    expect(alone(820).tableW).toBe(808);
+    expect(alone(819).tableW).toBe(807);
     expect(alone(390).tableW).toBe(378);
   });
 
@@ -379,7 +431,7 @@ describe("the article on its own stops at the measure", () => {
     // one-line labels capped at 800px would just be a narrower list.
     const f = fit({ windowWidth: 1600, showText: false, chosen: [] });
     expect(f.columns).toEqual([3]);
-    expect(f.widths).toEqual([1600]);
+    expect(f.widths).toEqual([1588]); // the window, less the rail
     expect(f.alone).toBe(false);
   });
 });

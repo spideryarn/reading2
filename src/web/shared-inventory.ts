@@ -16,7 +16,7 @@
  * ## Why this walks `MODES` instead of listing anything
  *
  * [visitor.ts](visitor.ts) already answers *what stands between this visitor and
- * this mode*, for all thirteen, and `markedModes` already sweeps them. A second
+ * this mode*, for all fourteen, and `markedModes` already sweeps them. A second
  * list here would be a second answer to a question already decided — and the
  * copy in this repo has drifted exactly that way before, when the dock's
  * tooltip carried a sentence a few words off the band's (visitor.ts §

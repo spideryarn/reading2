@@ -427,7 +427,7 @@ test is an app-wide sweep rather than a list of three files.
       - Read the note on `sketch` in that policy before writing it: a scene is up to 46KB, and
         reading it to answer a boolean is exactly the cost
         [260828c](260828c-library-read-latency.md) was written about. Presence, never value.
-- [ ] Filesystem: five presence checks in [`src/api.ts`](../../src/api.ts) § `loadArticle`, against
+- [ ] Filesystem: five presence checks in `src/api.ts` § `loadArticle`, against
       the `dir` it has already resolved. **Decide deliberately between `stat` and the artifact
       store's `has`** — `has` parses rather than stats, because a `writeFile` killed halfway leaves
       a file that exists and will not parse

@@ -28,10 +28,11 @@
  * them are a `Trigger` wrapping one React element, which is the property that
  * rules them out. What a link *can* honestly say is docs/project/links.md.
  */
-import { useCallback, useMemo, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useReducer, type ReactElement } from "react";
 import {
   Asterisk,
   BookA,
+  BookCheck,
   BookMarked,
   BookOpen,
   CornerDownRight,
@@ -40,14 +41,28 @@ import {
   FileText,
   Globe,
   LoaderCircle,
+  Plus,
+  /* The house mark for "a model wrote this" — `SearchPanel`'s meaning search and
+     `QuotesPanel` both use it for the same distinction, and using a different
+     icon here would make the same claim in a second vocabulary. */
+  Sparkles,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import type { BlockId, GlossaryEntry } from "../types.js";
+import type { BlockId, GlossaryEntry, Job, PagePreview } from "../types.js";
+import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
+/* The same words-per-minute the masthead and the shelf card use. A second
+   arithmetic here would be a card and a masthead disagreeing about one page,
+   which is the drift src/reading-time.ts exists to make impossible. */
+import { readingMinutes } from "../reading-time.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
-import { useLinkFacts, type LinkFacts } from "./link-facts.js";
+import { worthRetrying } from "../messages.js";
+import { refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
+import { leavesTheApp } from "./external-links.js";
+import { QuotaNotice } from "./QuotaNotice.js";
+import { useJobs } from "./useJobs.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
@@ -68,6 +83,14 @@ interface Hit {
   link: LinkPreview | null;
   /** For an in-article anchor: the block it resolves to. */
   anchor: { blockId: BlockId; text: string } | null;
+  /**
+   * **The block the anchor itself sits in** — where the reader is standing,
+   * rather than where the link goes, which is `anchor` above.
+   *
+   * `null` off the prose: a link in a chat answer or in the sources under one is
+   * in no article's block, and the summary route refuses those anyway.
+   */
+  inBlock: BlockId | null;
   /** The raw href, for the foot of the card. */
   href: string | null;
   /**
@@ -84,6 +107,7 @@ interface Hit {
 
 export function ProseHoverCard({
   entries,
+  slug,
   sourceUrl,
   blockText,
   notes,
@@ -91,8 +115,32 @@ export function ProseHoverCard({
   onJump,
   onFollowNote,
   lookUpLinks,
+  canAddToShelf,
 }: {
   entries: GlossaryEntry[];
+  /**
+   * **Which article the reader is in**, and both server-side sources are
+   * article-scoped: `GET /api/link-preview` and, since 2026-09-05,
+   * `GET /api/link-summary`.
+   *
+   * Neither will touch a URL until it has proved the caller owns this article
+   * *and* that this article really points at that URL — which is what turns an
+   * arbitrary-URL fetch endpoint into one that can only ever reach things an
+   * author already published in a piece this reader owns. GPT Sol, 2026-09-05,
+   * P1-1; src/link-previews.ts.
+   *
+   * **The slug means something different to each of them, and the difference is
+   * the whole shape of the feature.** To the preview it is the *permission* and
+   * nothing more: what a page says about itself is a property of the address, so
+   * that cache is keyed on the address alone and shared with everybody. To the
+   * summary it is part of the *question* — how this destination stands to *this*
+   * piece — so that cache is keyed on the reader, the article and the address
+   * together, and is shared with nobody. src/link-summary.ts.
+   *
+   * `null` in any context that has no article — the card then keeps its two
+   * href-and-Wikipedia lookups and asks the server nothing.
+   */
+  slug: string | null;
   /**
    * Where the article itself came from.
    *
@@ -146,6 +194,25 @@ export function ProseHoverCard({
    * card.
    */
   lookUpLinks: boolean;
+  /**
+   * **May this reader put a link on a shelf?**
+   *
+   * A second boolean rather than a reuse of `lookUpLinks`, even though App.tsx
+   * derives both from the same `owner !== null` today. They are different
+   * questions — *may this card ask about a link* and *may this reader add to a
+   * shelf* — and the first is about reading while the second spends a metered
+   * ingest slot (docs/project/billing.md). The day either one moves, it moves
+   * on its own: a signed-in reader looking at somebody else's article could
+   * plausibly be allowed the lookups and not the button, and there is no
+   * expression here that would have to be untangled to say so.
+   *
+   * The enforcement is the same one `lookUpLinks` uses and for the same
+   * reason: **`useJobs` is not called**, because `WithAddToShelf` is not
+   * rendered. A prop read inside a hook would be a card that draws no button
+   * and still subscribes a visitor's tab to a job queue it has no business
+   * knowing about. src/web/reader-capability.ts is the written-up version.
+   */
+  canAddToShelf: boolean;
 }) {
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
@@ -186,12 +253,28 @@ export function ProseHoverCard({
          anchor card: "elsewhere in this article", with the note's first 260
          characters under it, is a worse answer than the note. */
       const note = anchorEl ? noteMarkerAt(anchorEl, document, notes) : null;
-      if (note) return { termIds, link, anchor, href, note, back: false };
+
+      /* **Which paragraph the pointer is in**, read the way `onFollowNote` and
+         TableView's own link handler read it: the row is the block, and
+         `data-block` is the id every feature here addresses text by
+         (docs/project/block-ids.md). It is what tells the summary which of two
+         mentions of one destination the reader is actually looking at. */
+      const inBlock = anchorEl?.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+
+      if (note) return { termIds, link, anchor, inBlock, href, note, back: false };
 
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
       if (termIds.length === 0 && !link) return null;
       if (termIds.length === 0 && link?.kind === "anchor" && !anchor) return null;
-      return { termIds, link, anchor, href, note: null, back: !!anchorEl && isBackLink(anchorEl) };
+      return {
+        termIds,
+        link,
+        anchor,
+        inBlock,
+        href,
+        note: null,
+        back: !!anchorEl && isBackLink(anchorEl),
+      };
     },
     [byId, sourceUrl, blockText, notes],
   );
@@ -312,7 +395,7 @@ export function ProseHoverCard({
   });
 
   if (!shown) return null;
-  const { termIds, link, anchor, href, note, back } = shown.data;
+  const { termIds, link, anchor, inBlock, href, note, back } = shown.data;
   const found = termIds
     .map((id) => byId.get(id))
     .filter((e): e is GlossaryEntry => e !== undefined);
@@ -340,7 +423,7 @@ export function ProseHoverCard({
    * the same way, and the difference is entirely in what was asked of the
    * network before it ran.
    */
-  const card = (facts: LinkFacts) => (
+  const card = (facts: LinkFacts, add: AddToShelf) => (
     <FloatingPortal>
       {/* `dialog`, not `tooltip`: WAI's tooltip pattern is for text describing
           the thing you point at, and says outright that a tooltip does not take
@@ -386,6 +469,7 @@ export function ProseHoverCard({
               anchor={anchor}
               href={href}
               facts={facts}
+              add={add}
               back={back}
               divided={found.length > 0}
               onJump={(id) => { close(); onJump(id); }}
@@ -411,12 +495,55 @@ export function ProseHoverCard({
      purpose: a card takes 320ms of rest to open, so a pointer crossing the
      prose asks Wikipedia about nothing. link-facts.ts § What Wikipedia is told
      has the caveat to that. */
-  if (!lookUpLinks) return card(NO_LINK_FACTS);
-  return (
-    <WithLinkFacts link={link} sourceUrl={sourceUrl}>
-      {card}
-    </WithLinkFacts>
-  );
+  const withFacts = (add: AddToShelf) =>
+    lookUpLinks ? (
+      <WithLinkFacts link={link} sourceUrl={sourceUrl} slug={slug} inBlock={inBlock}>
+        {(facts) => card(facts, add)}
+      </WithLinkFacts>
+    ) : (
+      card(NO_LINK_FACTS, add)
+    );
+
+  /**
+   * **The second gate, wrapped around the first rather than folded into it.**
+   *
+   * Two conditions, two component boundaries: each one's rule is "this hook is
+   * not called", and in React the only way to say that is a component that does
+   * not exist. Combining them into one wrapper would make the two questions one
+   * question, which is exactly what `canAddToShelf`'s comment says they are not.
+   *
+   * `leavesTheApp` as well as `kind === "external"`, because `describeLink`
+   * calls any http(s) address external — including one pointing back at
+   * Spideryarn, which is a page rather than an article and has nothing to
+   * ingest. It is the same predicate that decided this link opens in a new tab
+   * (external-links.ts), so the card cannot disagree with the anchor about
+   * whether the link leaves.
+   *
+   * **Outside `WithLinkFacts`, so it does not know whether the shelf already
+   * has this page.** A card over an article the reader owns therefore mounts a
+   * `useJobs` subscriber it will draw nothing with, which costs one idle poll
+   * for as long as the pointer rests there. The other order would put the
+   * subscriber *under* an answer that arrives late, so the component would
+   * mount and unmount as the lookup landed — a worse trade than one poll. The
+   * "already on the shelf" rule is applied in `ExternalBody` instead.
+   *
+   * **A link to the piece the reader is standing in is refused here, from the
+   * href alone.** `useLinkFacts` works the same equality out, but only hands it
+   * back *inside* a `LibraryMatch` — so until the shelf has loaded there is
+   * nothing to suppress the button with, and the noema essay links to itself in
+   * its own prose. Offering to ingest the article you are reading is the worst
+   * thing this button could do with a metered slot, and the href already knows.
+   * GPT Sol, 2026-09-05, P1-1.
+   */
+  const addable =
+    canAddToShelf &&
+    link?.kind === "external" &&
+    leavesTheApp(link.url) &&
+    !(sourceUrl !== null && urlKey(sourceUrl) === urlKey(link.url))
+      ? link.url
+      : null;
+  if (addable === null) return withFacts(NO_ADD_TO_SHELF);
+  return <WithAddToShelf url={addable}>{withFacts}</WithAddToShelf>;
 }
 
 /**
@@ -434,17 +561,340 @@ export function ProseHoverCard({
 function WithLinkFacts({
   link,
   sourceUrl,
+  slug,
+  inBlock,
   children,
 }: {
   link: LinkPreview | null;
   sourceUrl: string | null;
+  slug: string | null;
+  inBlock: BlockId | null;
   children: (facts: LinkFacts) => ReactElement;
 }) {
-  return children(useLinkFacts(link, sourceUrl));
+  return children(useLinkFacts(link, sourceUrl, slug, inBlock));
 }
 
-/** What a visitor's card knows: whatever the href itself says, and no more. */
-const NO_LINK_FACTS: LinkFacts = { loading: false, library: null, wiki: null };
+/**
+ * What a visitor's card knows: whatever the href itself says, and no more.
+ *
+ * `shelfKnown: false` is the literal truth — nobody asked — and it is also the
+ * safe value, since it is what stops the Add button being drawn. A visitor is
+ * already kept from it by `canAddToShelf`; this is the second lock on the same
+ * door, and it costs a word.
+ */
+const NO_LINK_FACTS: LinkFacts = {
+  loading: false,
+  library: null,
+  wiki: null,
+  shelfKnown: false,
+  /* And no server fetch on their behalf either — `/api/link-preview` is
+     authenticated and article-scoped, so a visitor could not call it if the
+     card tried. This is the same second lock on the same door. */
+  page: null,
+  /* And nothing bought on their behalf. `/api/link-summary` is behind the same
+     gate and, unlike the fetch, spends money — so this is the second lock on a
+     door that costs something to have opened. */
+  summary: null,
+};
+
+/* ------------------------------------------------- add it to my shelf --- */
+
+/**
+ * **What the card may say and do about putting this link on the reader's own
+ * shelf.**
+ *
+ * > It should show an Add to Spideryarn button, which would kick off ingestion
+ * > of that article to my shelf. … I don't want to open in a new tab, because
+ * > that's disruptive when I've added Spideryarn to my Homepage on iPad …
+ * > Card shows progress is fine for now — eventually we'll want a richer
+ * > per-article-queue progress bar for this and other per-article jobs.
+ * >
+ * > — Greg, 2026-09-05
+ *
+ * A union rather than a button plus a bag of optionals, because exactly one of
+ * these is true at a time and every other combination is a card that cannot be
+ * drawn: a spinner next to an enabled button, a refusal next to a running job.
+ *
+ * **Where the compiler actually helps is `describeAdd`**, whose two `switch`es
+ * have no `default` — so a new `JobStatus` or a new `Asked` member stops the
+ * build rather than falling through to whichever arm happened to be last.
+ * `ExternalBody` draws each member with a `kind ===` test and is *not* checked
+ * for exhaustiveness; a sixth member added here needs a line adding there, and
+ * would otherwise simply draw nothing.
+ */
+type AddToShelf =
+  /**
+   * Nothing to offer, and the four reasons are all different: a visitor, a
+   * link that does not leave the app, an article already on the shelf, or the
+   * piece the reader is standing in.
+   */
+  | { kind: "none" }
+  /**
+   * There is something to press.
+   *
+   * `after` is the sentence explaining why this is a *second* attempt, or null
+   * for the ordinary first one — the button says "try again" rather than "add
+   * to Spideryarn" when it is set. One arm rather than two, because the two
+   * differ only in what is printed above the same button doing the same thing.
+   */
+  | { kind: "offer"; add(): void; after: string | null }
+  /** The POST is in flight, or the job it made is still going. */
+  | { kind: "working"; line: string }
+  /** It finished, and the shelf has not caught up. See `describeAdd`. */
+  | { kind: "added" }
+  /**
+   * It went wrong and **another press would not help**, so this arm has no
+   * action in it at all. `message` is the server's own sentence and may be a
+   * quota refusal, which is why it goes to `QuotaNotice` rather than into a
+   * paragraph — a 402 needs the way out beside it, and that way out is a link
+   * to a pricing page, never a button that spends the slot again.
+   */
+  | { kind: "refused"; message: string };
+
+/** A visitor's card, and every card with nothing addable under the pointer. */
+const NO_ADD_TO_SHELF: AddToShelf = { kind: "none" };
+
+/**
+ * **What this tab has already asked about a URL** — keyed by `urlKey`, and
+ * module-level because the card is not a place to keep anything.
+ *
+ * The card is torn down when the pointer leaves *and* by the `MutationObserver`
+ * in `useHoverCard` whenever the prose re-renders, so component state here has
+ * the lifetime of a hover. Three things have to outlive that, and GPT Sol named
+ * all three reviewing the plan on 2026-09-05 (finding P2-1):
+ *
+ *  - **An add that has been pressed and not yet answered.** Until `add()`
+ *    resolves there is no job for the engine to know about, so a reader who
+ *    presses, moves away and re-hovers would be shown a second enabled button.
+ *    A second press is deduplicated by the queue, but it can still transiently
+ *    reserve or be refused a slot (docs/project/billing.md).
+ *  - **A refusal.** `lastFailure()` is a ref inside one `useJobs` subscriber
+ *    (useJobs.ts § lastFailure), so a message kept only in the card is gone the
+ *    instant the pointer moves — and a 402 the reader never got to read is a
+ *    slot spent for nothing.
+ *  - **Which job this URL became**, so a re-hover watches *that* job by id
+ *    rather than guessing from the slug. AddPage.tsx § What it does with the URL
+ *    is where that trap is written up.
+ *
+ * **`urlKey` rather than the exact address**, which is the one place this
+ * deliberately differs from the plan review's wording. `urlKey` is what decides
+ * whether two spellings are the same article — it is what the shelf is indexed
+ * by, two files away — so two hrefs in one essay that differ only by `www.` or
+ * a `?utm_source=` are one entry here, exactly as they are one article on the
+ * shelf and one job in the queue. Keying by the raw href would put an enabled
+ * button on the second spelling of an article already being added. The review's
+ * own finding P1-2 draws the same line: `urlKey` for reader-facing equivalence,
+ * an exact target only for what we ask the network for — and nothing here asks
+ * the network for anything.
+ *
+ * Never pruned. It holds one small record per URL a reader actually pressed a
+ * button on, and it dies with the tab.
+ *
+ * **In development it also dies on every edit to this file**, and that is worth
+ * knowing before it wastes somebody's afternoon: exporting `describeAdd` — a
+ * function rather than a component — makes React Fast Refresh give up on this
+ * module (`hmr invalidate … "describeAdd" export is incompatible`), so vite
+ * re-evaluates it and this map starts empty. An add pressed a moment ago then
+ * looks un-pressed. It cost one inconclusive browser pass on 2026-09-05. The
+ * export stays because the alternative is an untested five-arm state machine,
+ * and `entryProse` in GlossaryPanel.tsx already makes the same trade; the fix
+ * if it ever matters is to move the pure half into a `.ts` of its own.
+ */
+type Asked =
+  | { kind: "sending"; wait: Promise<void> }
+  | { kind: "queued"; jobId: string }
+  | { kind: "refused"; message: string };
+
+const asked = new Map<string, Asked>();
+
+/**
+ * Jobs whose completion has already been spent on a shelf refresh.
+ *
+ * Also module-level, and for the same reason as `asked`: the completion is
+ * noticed by whichever card happens to be open when the job goes terminal — or,
+ * more often, by the next one to open — and without this every subsequent hover
+ * of that link would re-read `GET /api/library`.
+ */
+const refreshedFor = new Set<string>();
+
+/** The line while no step is running — before the first, and between two. */
+const ADDING = "adding it to your shelf…";
+
+/**
+ * **The add control, and the component boundary that keeps it away from a
+ * visitor.**
+ *
+ * A render prop for the same reason `WithLinkFacts` is one: the rule it
+ * enforces is about *calling* `useJobs` at all, a hook cannot be skipped
+ * conditionally inside one component, and the only conditional React has is
+ * whether a component exists. And it earns the shape twice over here, because
+ * what it hands down is drawn in two places — the progress line in the body of
+ * the card, and the button in its foot.
+ *
+ * **Everything durable is read, never held.** The state below carries nothing
+ * at all: `tick` exists only to re-render when the module map or the job engine
+ * has moved on, which is `useLinkFacts`'s trick and for the same reason — an
+ * answer derived during render cannot disagree with the URL the rest of the
+ * card was drawn from.
+ */
+function WithAddToShelf({
+  url,
+  children,
+}: {
+  /** The address to add. Non-null: the caller decides whether there is one. */
+  url: string;
+  children: (add: AddToShelf) => ReactElement;
+}) {
+  const queue = useJobs();
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  const key = urlKey(url);
+  const state = asked.get(key);
+
+  /* Wake when the POST answers.
+
+     **Keyed on the record itself, which is safe because every write to `asked`
+     replaces the object rather than mutating it.** That is what makes a module
+     map usable as an effect dependency at all: pressing the button stores a
+     fresh `sending` record and bumps, so the next render sees a new identity
+     and this arms; the record it settles into is a new identity again, so this
+     tears down. A `tick` counter in the list here would only re-arm it on
+     renders where nothing about the add had changed. */
+  useEffect(() => {
+    if (state?.kind !== "sending") return;
+    let live = true;
+    void state.wait.then(() => {
+      if (live) bump();
+    });
+    return () => {
+      live = false;
+    };
+  }, [state]);
+
+  /* **By job id, out of the engine's own snapshot** — never by slug, and never
+     from a completion callback. `useJobs(onFinished)` announces only jobs that
+     finish while it is mounted, and this component's whole problem is that it
+     usually is not: the reader presses, moves the pointer away, and the card is
+     gone long before the ingest is. Reading the terminal status off the list
+     replays that history on the next hover; a callback silently would not.
+     GPT Sol, 2026-09-05, finding P2-1. */
+  const job: Job | null =
+    state?.kind === "queued" ? (queue.jobs.find((j) => j.id === state.jobId) ?? null) : null;
+
+  /* **The loop that makes this feature compound.** link-facts.ts's shelf is
+     read once per page load, so without this the card goes on offering to add
+     an article the reader has just watched arrive, until they reload. Guarded
+     by job id in a module set, so the refresh happens once however many cards
+     see the same finished job. */
+  const finished = job?.status === "done" ? job.id : null;
+  useEffect(() => {
+    if (finished === null || refreshedFor.has(finished)) return;
+    /* Marked before, so two cards over the same finished job make one request —
+       and **un-marked if it did not work**, which is the half that was missing.
+       A refresh that failed is not a refresh that happened, and remembering it
+       as one leaves the card on *added to your shelf* with nothing ever asking
+       again. GPT Sol, 2026-09-05, P2-1. */
+    refreshedFor.add(finished);
+    /* No `bump` on the way back: `refreshShelf` wakes every `useLinkFacts`,
+       and it is that hook — a descendant of this component — whose re-render
+       turns "add to Spideryarn" into "read it here". */
+    void refreshShelf().then((installed) => {
+      if (!installed) refreshedFor.delete(finished);
+    });
+  }, [finished]);
+
+  const add = () => {
+    const wait = (async () => {
+      const started = await queue.add(url);
+      /* **Read straight after the await.** `error` on the queue is engine state
+         that this action's own follow-up poll clears milliseconds later;
+         `lastFailure()` is the durable one, and three surfaces got this wrong
+         before it existed. useJobs.ts § lastFailure. */
+      const why = started ? null : queue.lastFailure();
+      if (started) asked.set(key, { kind: "queued", jobId: started.id });
+      else if (why) asked.set(key, { kind: "refused", message: why });
+      /* Refused with nothing to say — which should not happen, since every
+         refusal carries the server's sentence. Put the button back rather than
+         leave a silent dead end. */
+      else asked.delete(key);
+    })();
+    asked.set(key, { kind: "sending", wait });
+    bump();
+  };
+
+  return children(describeAdd(state, job, add));
+}
+
+/**
+ * What the card draws, given what we asked and where that got to.
+ *
+ * Split out and exported so it can be tested as arithmetic: this is a five-way
+ * decision over two inputs that can disagree, and every wrong branch of it is a
+ * card that lies about a metered action.
+ */
+export function describeAdd(state: Asked | undefined, job: Job | null, add: () => void): AddToShelf {
+  if (!state) return { kind: "offer", add, after: null };
+  switch (state.kind) {
+    case "sending":
+      return { kind: "working", line: ADDING };
+    case "refused":
+      /* **`worthRetrying` decides whether there is a button at all**, and it is
+         the same question `AddArticle.tsx` asks of a failed job. A `[pay-free]`
+         refusal says in its own words that the pricing page is the way forward;
+         putting *try again* under that sentence invites the reader to spend the
+         attempt the sentence has just told them will not work. src/messages.ts. */
+      return worthRetrying(state.message)
+        ? { kind: "offer", add, after: state.message }
+        : { kind: "refused", message: state.message };
+    case "queued":
+      /* The POST has answered and the engine has not polled since — the common
+         case, and it lasts about a second, because `useJobs` pokes the poller
+         the moment an action returns.
+
+         **It also covers a job that has left the list**, which the card cannot
+         distinguish and therefore goes on calling "going" — retention is
+         bounded, so a reader who neither hovers nor reloads between completion
+         and the record ageing out keeps this line. Named rather than fixed:
+         closing it properly needs a tab-level observer over the engine, and
+         Greg's answer to this whole surface is that the durable home is the
+         per-article queue that does not exist yet. GPT Sol, 2026-09-05, P2-2. */
+      if (!job) return { kind: "working", line: ADDING };
+      switch (job.status) {
+        case "queued":
+        case "running": {
+          /* The pipeline's own present-tense label — "Fetching the page". A
+             line and a spinner, deliberately: this is a hover card, not
+             AddArticle.tsx's `JobCard`, so there is no Stop, no elapsed clock
+             and nothing that needs re-rendering every second under a pointer.
+             Greg asked for exactly this much, and named the richer per-article
+             queue as the thing that comes later. */
+          const step = job.steps.find((s) => s.status === "running");
+          return { kind: "working", line: step?.label ?? ADDING };
+        }
+        case "done":
+          /* Normally invisible: by the time this renders, the shelf refresh has
+             usually landed and the caller has switched to `none` with "on your
+             shelf" above it. What it covers is the case where it has not — a
+             refresh still in flight or refused, or an ingest whose canonical URL
+             keys differently from the href the author wrote. */
+          return { kind: "added" };
+        case "error":
+          /* **The sentence, and no button** — even when the failure is one
+             another go could fix. Retrying an ingest is `POST /api/jobs/:id/retry`,
+             which keeps the slug and the steps that already succeeded; this card
+             holds a URL, so the only thing it could press is a fresh `add`,
+             which is a different and worse action wearing the same label. Retry
+             lives on the job card that knows `jobWorthRetrying` and can call the
+             right route (AddArticle.tsx). GPT Sol, 2026-09-05, P1-2. */
+          return job.error
+            ? { kind: "refused", message: job.error }
+            : { kind: "offer", add, after: null };
+        case "cancelled":
+          /* You stopped it, which is not the same as not wanting it — and
+             nothing failed, so there is no sentence to print. */
+          return { kind: "offer", add, after: null };
+      }
+  }
+}
 
 /**
  * Where a link goes, as far as we can say without asking anybody.
@@ -464,10 +914,12 @@ const NO_LINK_FACTS: LinkFacts = { loading: false, library: null, wiki: null };
  *    plainly rather than dressed up as a page.
  *
  * **The asynchronous half is additive, never load-bearing.** The card is drawn
- * and complete from the href alone; a shelf match or a Wikipedia summary is a
- * section that appears under it a moment later. Nothing above waits, and a
- * lookup that fails or finds nothing leaves a card that was already worth
- * reading. That is what lets those lookups be allowed to be slow.
+ * and complete from the href alone; a shelf match, a Wikipedia summary, what the
+ * page says about itself, and — since 2026-09-05 — a model's line on how that
+ * page stands to the piece being read are all sections that appear under it a
+ * moment later. Nothing above waits, and a lookup that fails or finds nothing
+ * leaves a card that was already worth reading. That is what lets those lookups
+ * be allowed to be slow, and the last of them to be allowed to *stream*.
  *
  * One thing above *does* change, and it is deliberate rather than a wobble: a
  * real title replaces the path trail rather than sitting under it, so the guess
@@ -479,6 +931,7 @@ function LinkCard({
   anchor,
   href,
   facts,
+  add,
   back,
   divided,
   onJump,
@@ -488,6 +941,8 @@ function LinkCard({
   href: string | null;
   /** What the two lookups found, and whether either is still outstanding. */
   facts: LinkFacts;
+  /** Whether this reader may put it on their shelf, and where that has got to. */
+  add: AddToShelf;
   /**
    * This anchor is a note's back-link — the same resolution pointing the other
    * way, and the one place "elsewhere in this article" is true and useless.
@@ -538,12 +993,96 @@ function LinkCard({
       );
     }
 
-    return <ExternalBody link={link} facts={facts} href={href} />;
+    return <ExternalBody link={link} facts={facts} add={add} href={href} />;
   };
 
   const content = body();
   if (!content) return null;
   return <div className={`prose-card-body${divided ? " divided" : ""}`}>{content}</div>;
+}
+
+/**
+ * **What the page says about itself**, fetched by our server once and cached for
+ * everybody — the third source, and the only one that can answer for an
+ * arbitrary destination. src/link-previews.ts, docs/project/links.md.
+ *
+ * Every line of it is the destination's own words, so it is labelled as theirs
+ * in the same way Wikipedia's is: this is not a summary, and there is nothing
+ * here that we wrote.
+ *
+ * **The description and the opening paragraph are not both drawn.** Where a page
+ * has both they are usually the same sentences twice — an `og:description` is
+ * very often the first line of the piece — and the opening is the better of the
+ * two when it survived the sanity check (`saneParagraph` in
+ * src/link-previews.ts), because it is prose the author wrote rather than a
+ * field somebody's CMS filled in.
+ *
+ * Its own component rather than four more lines in `ExternalBody`, for the
+ * reason that function's own comment gives about the complexity lint: the branch
+ * had already become a card, and a fourth source in it would have been the same
+ * signal a second time.
+ */
+function PageSaid({ page }: { page: PagePreview }) {
+  const opening = page.firstParagraph ?? page.description;
+  return (
+    <div className="prose-card-part prose-card-part-page">
+      <p className="prose-card-label">
+        <Globe size={9} />
+        {page.siteName ? clip(page.siteName, 40) : "from the page itself"}
+      </p>
+      {page.title && <p className="prose-card-title">{clip(page.title, 120)}</p>}
+      {opening && <p className="prose-card-text">{clip(opening, 260)}</p>}
+      {page.words !== undefined && (
+        <p className="prose-card-meta">
+          {page.words.toLocaleString()} words · ~{readingMinutes(page.words)} min
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * **How the destination stands to the piece in your hands** — the one part of
+ * this card that we wrote, and the only one that costs money.
+ *
+ * Every other section is quoted: the shelf's own gist, Wikipedia's lead
+ * paragraph, the page's own `og:description`. This one is a model's answer, so
+ * it is labelled differently — *"in relation to what you're reading"* rather
+ * than a source's name — because a reader is owed the difference between a page
+ * saying something about itself and us saying something about it.
+ *
+ * **It streams, and the cursor is why the flag exists.** A paragraph that has
+ * stopped growing and a paragraph still arriving look identical, and the second
+ * one ending mid-sentence is a stream that broke rather than a summary that
+ * chose to stop. `LinkFacts.summary` carries `streaming` for exactly this.
+ *
+ * There is deliberately **no spinner before the first token**. The card is
+ * already useful and already complete-looking by then, and an empty section with
+ * a heading reads as a lookup that broke — `readSummary`'s rule, one source up.
+ * What the reader sees is nothing, and then a paragraph appearing.
+ */
+function LinkRelation({ summary }: { summary: { text: string; streaming: boolean } }) {
+  return (
+    <div className="prose-card-part prose-card-part-relation">
+      <p className="prose-card-label">
+        <Sparkles size={9} />
+        in relation to what you're reading
+      </p>
+      <p className="prose-card-text">
+        {/* **Clipped, and the number is a bound on the card rather than an
+            editorial view.** `.tooltip` has a width cap and no height cap, so an
+            answer that ran long would make a card taller than a phone with
+            nothing to scroll. Nine hundred characters is about a hundred and
+            fifty words against a prompt that asks for under a hundred, so it
+            should never bite — and if it starts biting, the prompt is what to
+            look at. The other sections clip at 220–260 for a different reason:
+            they are somebody else's blurb, and this is the section the reader is
+            here for. */}
+        {clip(summary.text, 900)}
+        {summary.streaming && <span className="prose-card-caret" aria-hidden="true" />}
+      </p>
+    </div>
+  );
 }
 
 /**
@@ -562,17 +1101,49 @@ function LinkCard({
 function ExternalBody({
   link,
   facts,
+  add,
   href,
 }: {
   link: ExternalPreview;
   facts: LinkFacts;
+  add: AddToShelf;
   href: string | null;
 }) {
-  const { library, wiki, loading } = facts;
+  const { library, wiki, loading, shelfKnown, page, summary } = facts;
+  /**
+   * **Nothing to add when we already have it — or when we cannot yet say.**
+   *
+   * `library !== null` is the easy half: an article on the shelf, which the
+   * foot already offers to open. It is also what keeps the foot to two controls
+   * at most, since "read it here" and "add to Spideryarn" are mutually
+   * exclusive by construction and the three-control wrap this was expected to
+   * need never arises (GPT Sol, P2-4).
+   *
+   * `!shelfKnown` is the half that had to be added: `library` is null while the
+   * shelf is still loading and again if the request failed, so a card drawn in
+   * either state would offer to add an article the reader already owns — and
+   * pressing it spends a metered slot. **Under uncertainty about a metered
+   * action, offer nothing**, which costs at most a few hundred milliseconds on
+   * the first hover of a session. GPT Sol, P1-1.
+   */
+  const adding: AddToShelf = library !== null || !shelfKnown ? NO_ADD_TO_SHELF : add;
+  /**
+   * **What the destination itself said, but only when nobody better placed
+   * already answered.**
+   *
+   * The three sources overlap and their order is a ranking rather than a
+   * layout: an article on the reader's own shelf has a title, our gist and a
+   * real length, and Wikipedia's summary is a lead paragraph written by people.
+   * Both beat `og:description`. `link-facts.ts` already declines to *ask* in
+   * those two cases, and this is the same rule applied to drawing — because the
+   * shelf can arrive after the answer did, and a card is not a place to show
+   * two descriptions of one page and let the reader pick.
+   */
+  const said = library === null && wiki === null ? page : null;
   /* A real title supersedes the path trail rather than joining it. The trail is
      a guess read off an address; a title is a title, and printing both would
      show the reader our working next to the answer. */
-  const titled = library !== null || wiki !== null;
+  const titled = library !== null || wiki !== null || said?.title !== undefined;
 
   return (
     <>
@@ -637,6 +1208,29 @@ function ExternalBody({
         </div>
       )}
 
+      {/* **What the page says about itself**, fetched by our server once and
+          cached for everybody — the third source, and the only one that can
+          answer for an arbitrary destination. Every line of it is the
+          destination's own words, so it is labelled as theirs in the same way
+          Wikipedia's is; this is not a summary and there is nothing here we
+          wrote. src/link-previews.ts, docs/project/links.md.
+
+          The description and the opening paragraph are not both drawn. Where a
+          page has both they are usually the same sentences twice — an
+          `og:description` is very often the first line of the piece — and the
+          opening is the better of the two when it survived the sanity check
+          (`saneParagraph`), because it is prose the author wrote rather than a
+          field somebody's CMS filled in. */}
+      {said && <PageSaid page={said} />}
+
+      {/* **And what it has to do with the piece in your hands** — the only
+          section here that we wrote, streamed in under the destination's own
+          words once they have landed. It comes last on purpose: the reader
+          should meet what the page says about itself before they meet what a
+          model says about it, so the quoted half is never framed by ours.
+          src/link-summary.ts, docs/project/links.md. */}
+      {summary && <LinkRelation summary={summary} />}
+
       {/* Only while something is genuinely outstanding, and only when there is
           nothing yet to show — a spinner *under* an answer that has already
           arrived reads as the answer being incomplete. The card is drawn and
@@ -648,6 +1242,44 @@ function ExternalBody({
           looking it up…
         </p>
       )}
+
+      {/* **What the reader asked for, and where it has got to** — a line, in
+          the same shape as the lookup's own. It sits here rather than in the
+          foot because it is news about this link, like the sections above it,
+          and because the foot is two controls and a rule rather than a place
+          things happen.
+
+          Unlike the spinner above, this one is drawn *whatever else is on the
+          card*: the reader pressed a button and is owed an answer, where a
+          lookup nobody asked for is not worth a line under an answer that has
+          already arrived. */}
+      {adding.kind === "working" && (
+        <p className="prose-card-text prose-card-waiting">
+          <LoaderCircle className="cmt-spinner" size={11} />
+          {adding.line}
+        </p>
+      )}
+      {adding.kind === "added" && (
+        <p className="prose-card-text prose-card-waiting">
+          <BookCheck size={11} />
+          added to your shelf
+        </p>
+      )}
+      {/* **Why it did not go through** — the refusal that ends it, and the one
+          the reader may press past, drawn identically because they read
+          identically to whoever is looking.
+
+          A 402 has three shapes and three different places to send somebody,
+          and `QuotaNotice` is the one component that knows which; everything
+          else it is handed renders as the plain sentence it already was. A
+          generic "couldn't add it" here would be a slot spent and no way to
+          spend the next one. QuotaNotice.tsx. */}
+      <QuotaNotice
+        message={
+          adding.kind === "refused" ? adding.message : adding.kind === "offer" ? adding.after : null
+        }
+        className="prose-card-text prose-card-refused"
+      />
 
       {/* The address itself. Everything above is us deciding what matters about
           this URL, and a reader who wants to judge it for themselves — a paywall
@@ -688,6 +1320,27 @@ function ExternalBody({
             <BookOpen size={10} />
             read it here
           </Link>
+        )}
+        {/* **The other way in, for a page we have not got.** The same
+            `POST /api/jobs { url }` the shelf's own Add box sends, so slot
+            admission, deduplication and the 402 all arrive here without being
+            re-implemented — and the reader never leaves the piece they are in
+            the middle of, which is Greg's whole reason for not opening a tab.
+
+            Never beside "read it here": `adding` is `none` whenever the library
+            found something, so the foot is at most this and "open in a new
+            tab".
+
+            **And there is no button under a refusal that says another go will
+            not help.** `describeAdd` has already asked `worthRetrying`, so the
+            only refusal that reaches `offer` is one worth pressing — a reader
+            at their quota gets the sentence and the link to the page that
+            answers it, and nothing to spend the next attempt on. */}
+        {adding.kind === "offer" && (
+          <button type="button" className="prose-card-open" onClick={adding.add}>
+            <Plus size={10} />
+            {adding.after === null ? "add to Spideryarn" : "try again"}
+          </button>
         )}
       </p>
     </>

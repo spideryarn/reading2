@@ -141,6 +141,19 @@ export interface ArmResult {
      * stop. src/hierarchy.ts § `collapseRestatedRungs`.
      */
     collapsedRungs: string[];
+    /**
+     * **Socratic questions the arm wrote that the tree did not keep** — too
+     * deep, or a restatement of the node's own gist. src/hierarchy.ts §
+     * `questionFor`.
+     *
+     * **Optional, because every result written before 2026-09-05 has none**,
+     * and read through `?? []` below for the same reason `collapsedRungs` is.
+     * It is here because this eval's job is to notice a prompt that has
+     * drifted, and a question silently dropped on every node is exactly the
+     * drift nothing else would report: the panel looks as it did before the
+     * feature existed. GPT Sol's F4, 2026-09-05.
+     */
+    droppedQuestions?: string[];
   };
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
   vsDisk?: TreeAgreement;
@@ -351,12 +364,14 @@ function print(r: ArmResult): void {
   /* `?? []` rather than a required read: a run file written before 2026-09-05
      has no `collapsedRungs`, and this printer is pointed at old artefacts. */
   const collapsedRungs = r.repaired?.collapsedRungs ?? [];
+  const droppedQuestions = r.repaired?.droppedQuestions ?? [];
   if (
     r.repaired &&
     (r.repaired.ranges > 0 ||
       r.repaired.droppedChildren.length > 0 ||
       r.repaired.droppedHeadings.length > 0 ||
-      collapsedRungs.length > 0)
+      collapsedRungs.length > 0 ||
+      droppedQuestions.length > 0)
   ) {
     console.log(
       `  repaired      ${r.repaired.ranges} misaligned boundary(ies) moving ` +
@@ -364,7 +379,8 @@ function print(r: ArmResult): void {
         `${r.repaired.where.length ? ` [${r.repaired.where.join("; ")}]` : ""}, ` +
         `${r.repaired.droppedChildren.length} dropped section(s), ` +
         `${r.repaired.droppedHeadings.length} unbacked heading claim(s), ` +
-        `${collapsedRungs.length} restated rung(s) — ` +
+        `${collapsedRungs.length} restated rung(s), ` +
+        `${droppedQuestions.length} dropped question(s) — ` +
         `this answer was NOT valid as written`,
     );
   }
@@ -628,6 +644,7 @@ async function main(): Promise<void> {
                      — so it is counted apart rather than folded into `ranges`.
                      ⟨GPT Sol's review of stage 3, F1.⟩ */
                   collapsedRungs: chose.built.collapsedRungs,
+                  droppedQuestions: chose.built.droppedQuestions,
                 },
               }
             : {}),

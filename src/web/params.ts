@@ -18,6 +18,11 @@
  * `limitUrlUpdates`).
  *
  * A note on where position is *not* kept: not `localStorage`, and not the hash.
+ * (`last-view.ts` keeps a *copy* of this query string per slug since
+ * 2026-09-05, so that reopening an article at a bare address puts you back where
+ * you were. It is read once, before anything paints, to choose the address you
+ * arrive at — and never again, so nothing here has a second source of truth to
+ * reconcile with.)
  * The hash would make the browser jump to the block itself, before our own
  * offset-for-the-sticky-bars scroll runs, so you would see it land twice. It
  * would also mean two unsynchronised state systems — `hashchange` for position,
@@ -27,7 +32,6 @@ import { createParser, debounce } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
-import { ADMIN_DEFAULT_BY } from "./admin-columns.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
@@ -106,7 +110,9 @@ export const parseAsDepths = createParser<number[]>({
    a time. Clicking a gist to jump is the one scroll that pushes, because it is
    a deliberate act too; that override lives at the call site in TableView. */
 
-/** Reading mode (text column on) vs outline mode. */
+/** Reading mode (text column on) vs outline mode. Read-only since 2026-09-05:
+    the `Text` pill that wrote it went with the controls bar, so `?text=0` is
+    something a reader arrives with — docs/project/url-state.md. */
 export const textParam = parseAsBit
   .withDefault(true)
   .withOptions({ history: "push" });
@@ -114,20 +120,19 @@ export const textParam = parseAsBit
 /**
  * Whether the bird's-eye rail down the left is on screen — see Spine.tsx.
  *
- * **No default, deliberately** — the same call `colsParam` makes below, for
- * nearly the same reason. Absent means *nobody has touched this*, and the rail
- * follows the window and the mode exactly as it always did: off in outline
- * mode, where the table already is a whole-article overview, and labelled only
- * when the labels are free (layout.ts § fitView). Giving it a default here
- * would make "the reader hid the rail" indistinguishable from "outline mode
- * dropped it", and those want opposite things when the text comes back.
+ * **No default, deliberately** — the same call `colsParam` makes below.
+ * Absent means *nobody has touched this*, which since 2026-09-05 resolves to
+ * *on* (layout.ts § `spine`): the pill that used to write this went with the
+ * rest of the controls bar, so a rail nobody can ask for has to be there by
+ * default. `?spine=0` is the only thing that takes it away, and the third state
+ * survives because App.tsx puts `null` back — not `true` — when Search or Ideas
+ * opens with the rail hidden, and "nobody has touched this" is what that means.
  *
- * It only says on or off. Whether an on rail shows its labels or collapses to
- * ticks stays with the window width, because that is a question about how much
- * room there is rather than about what the reader wants to see.
+ * It only says on or off; there is one rail, 12px wide at every window size.
  *
  * `push`, like `cols` and `text`: hiding a whole column of the view is a
- * deliberate act, and Back should undo it.
+ * deliberate act, and Back should undo it. Nothing in the UI writes it any
+ * more, so in practice it arrives in the URL — docs/project/url-state.md.
  */
 export const spineParam = parseAsBit.withOptions({ history: "push" });
 
@@ -364,8 +369,12 @@ export const termParam = parseAsBlockId.withOptions({ history: "replace" });
 export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * Which quote is selected, and therefore which passage is marked in the prose
- * and painted down the rail.
+ * Which quote is selected, and therefore which marked passage wears the ring.
+ *
+ * **Not which passage is marked**, since 2026-09-05: every quote the panel is
+ * showing is washed in the prose and drawn in the rail, and the selection is
+ * only which of them the reader pressed (`mark.hit[data-hit-open]`).
+ * docs/project/quotes.md § Every visible quote is marked.
  *
  * A quote's id is minted by `mintId`, so it is a block id by construction and
  * the same parser validates it for free — and the same "a mangled link degrades
@@ -868,10 +877,12 @@ export const confParam = createParser<number>({
  * about which reader they are.
  *
  * **This costs nothing to arrive at.** `sketch` is never drawn until it is
- * asked for, so an owner opening Diagram with no picture yet meets an
- * invitation carrying the price and the wait (SketchView.tsx § the empty
- * state); only a press on the chip or that button spends anything
- * (src/web/activation.ts). The old default, `force`, was chosen for the
+ * asked for — and since 2026-09-06 it is also what a press on the bar's Diagram
+ * button *starts*, because this parser is what decides which picture that press
+ * lands on (src/web/activation.ts § MODE_TARGET). An owner who arrives without
+ * pressing — a pasted link, a Back step — still meets the invitation carrying
+ * the price and the wait (SketchView.tsx § the empty state), and spends nothing
+ * until they press. The old default, `force`, was chosen for the
  * opposite property — it was the only one that drew something real *before* its
  * model call landed — which was the right rule while it was the picture
  * everybody saw.
@@ -885,12 +896,44 @@ export const confParam = createParser<number>({
  * somebody pasted in August, saying `?diagram=strata` or `?diagram=tree`, from
  * opening a broken page.
  */
+/**
+ * **Sketch**, named once so that `diagramParam` and `diagramInSearch` below
+ * cannot come to disagree about what a missing or unrecognised `?diagram=`
+ * means. Why it is Sketch rather than Force is
+ * [diagram.md](../../docs/project/diagram.md#why-force-was-the-default-and-why-sketch-is-now).
+ */
+const DEFAULT_DIAGRAM: DiagramKind = "sketch";
+
 export const diagramParam = createParser<DiagramKind>({
   parse: (v) => (DIAGRAMS.includes(v as DiagramKind) ? (v as DiagramKind) : null),
   serialize: (v) => v,
 })
-  .withDefault("sketch")
+  .withDefault(DEFAULT_DIAGRAM)
   .withOptions({ history: "push" });
+
+/**
+ * **Which picture a reader with this query string is looking at**, degraded the
+ * way `diagramParam` degrades it — the same rule, from the same two constants,
+ * for a caller that has a search string rather than a mounted `useQueryState`.
+ *
+ * One caller: the bottom bar, which arms the picture a press on Diagram is about
+ * to open ([`Dock.tsx`](./Dock.tsx), `src/web/activation.ts` §
+ * `armActivationForDiagram`). It cannot use the hook — it is not inside the
+ * mode, and the value it needs is the one that *will* apply after the press.
+ *
+ * **It exists because reading the raw parameter is wrong in a way that is easy
+ * to miss.** A link from August saying `?diagram=tree` names a picture that was
+ * cut; `diagramParam` opens the Sketch, and a bar that armed the raw word armed
+ * nothing at all — so the mode opened on an empty state and the press did
+ * nothing, which is the behaviour this whole change exists to remove. GPT Sol,
+ * reviewing the built code, 2026-09-06.
+ */
+export function diagramInSearch(search: string): DiagramKind {
+  const named = new URLSearchParams(search).get("diagram");
+  return named !== null && DIAGRAMS.includes(named as DiagramKind)
+    ? (named as DiagramKind)
+    : DEFAULT_DIAGRAM;
+}
 
 /**
  * What sideways means on the Drift picture.
@@ -1228,6 +1271,29 @@ export const sortDirParam = createParser<("asc" | "desc")[]>({
   serialize: (v) => v.join(","),
   eq: sameList,
 }).withOptions({ history: "push" });
+
+/**
+ * The admin users table's default sort: **who signed up most recently, first.**
+ *
+ * A list of accounts is a list of things that arrived, which is the one shape
+ * where "newest first" is not a preference but the question — *who is new?*
+ * The shelf moved off that default because a shelf is not an inbox
+ * (library-columns.tsx § DEFAULT_BY); that page is.
+ *
+ * Single-key, for the same reason the shelf's is: a compound default lights two
+ * chips on a page nobody has clicked, which reads as somebody else's sort left
+ * behind.
+ *
+ * **It lives here rather than beside the columns it sorts**, which is where it
+ * was until 2026-09-05. This file is eager — the reader imports it to read an
+ * article — and `admin-columns.tsx` is 497 lines of administrator's table, so
+ * one three-word import held the whole thing in every reader's startup. Moving
+ * the page behind `React.lazy` without moving this would have changed nothing
+ * at all, which is the trap
+ * docs/plans/260905i-lazy-load-admin-and-design-routes.md is built around and
+ * tests/eager-client-graph.test.ts now watches for.
+ */
+export const ADMIN_DEFAULT_BY = ["signedUp"];
 
 /**
  * What the admin users table is sorted by — `?by=signedUp`.

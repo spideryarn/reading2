@@ -53,7 +53,6 @@ import path from "node:path";
 import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { articleMetadata as fsArticleMetadata } from "../src/api.js";
 import type { Assets } from "../src/assets.js";
 import { ASSETS_VERSION } from "../src/collect-assets.js";
 import { closeDb, getDb } from "../src/db/client.js";
@@ -96,12 +95,10 @@ const DIR = path.join(ROOT, "data", SLUG);
 
 /* ---------------------------------------------------- is there a database -- */
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-carry-forward.test.ts",
   tables: ["spideryarn.article_revisions"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /* ------------------------------------------------------------ the article -- */
 
@@ -410,7 +407,7 @@ let articleId = "";
 let firstRevision = "";
 let secondRevision = "";
 
-when("a re-extraction, through beginRevision and publishRevision", () => {
+describe("a re-extraction, through beginRevision and publishRevision", () => {
   beforeAll(async () => {
     await writeTheFiles();
 
@@ -584,31 +581,30 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     );
   }, 30_000);
 
-  it("reports the three as not done, in both stores", async () => {
+  it("reports the three as not done", async () => {
     const fromPg = await pgArticleReader.articleMetadata(SLUG);
-    const fromFiles = await fsArticleMetadata(SLUG);
 
     const doneIn = (meta: { stages: { step: StepName; done: boolean }[] }) =>
       Object.fromEntries(meta.stages.map((s) => [s.step, s.done]));
     const pg = doneIn(fromPg);
-    const files = doneIn(fromFiles);
 
-    /* **`assets` is in this list, and it is the one that would have diverged.**
-       The filesystem asks the step's own `stamp`, so it gets this right for
-       free; Postgres has a hand-written `isCurrent` switch whose `default` arm
-       returns `true`, so a manifest with no case there would report itself
-       current on this page while the files said the opposite about the same
-       article. Delete `case "assets"` from src/store/pg.ts and the `pg` half of
-       this goes red while the `files` half stays green — which is exactly the
-       divergence a parity test is for. */
+    /* **`assets` is in this list, and it is the one that would diverge.**
+       Postgres has a hand-written `isCurrent` switch whose `default` arm returns
+       `true`, so a manifest with no case there reports itself current on this
+       page for an article whose blocks have moved underneath it. Delete
+       `case "assets"` from src/store/pg.ts and this goes red.
+
+       It was compared against `articleMetadata` off the filesystem until
+       2026-09-05, which asked the step's own `stamp` and so got it right for
+       free — that arm went with src/api.ts, and what it was buying (a second
+       opinion the switch could be checked against) is not replaceable, only
+       nameable. docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G. */
     for (const name of ["assets", "glossary", "tweets"] as StepName[]) {
       expect(pg[name], `Postgres should offer to regenerate ${name}`).toBe(false);
-      expect(files[name], `the files should offer to regenerate ${name}`).toBe(false);
     }
     /* The step that WAS re-run, so this is not a test that everything is
        false — which is the shape this assertion could rot into. */
     expect(pg.hierarchy).toBe(true);
-    expect(files.hierarchy).toBe(true);
   }, 30_000);
 
   it("keeps the identity of a paragraph the re-extraction dropped", async () => {
@@ -662,7 +658,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
 
 /* ------------------------------------------------------- the fixture's own -- */
 
-when("the fixture itself", () => {
+describe("the fixture itself", () => {
   it("really is a re-extraction: same ids, different text", () => {
     expect(B2.map((b) => b.id)).toEqual([B1[0]?.id, KEPT]);
     expect(B2[1]?.text).not.toBe(B1[1]?.text);

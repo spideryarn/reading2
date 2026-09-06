@@ -1,24 +1,27 @@
 /**
- * The two upload stores, asked the same questions.
+ * The upload store, asked the questions its contract owes an answer to.
  *
- * Two adapters exist so that a laptop and production behave the same, and the
- * only way that claim means anything is if one test file drives both. So every
- * case below runs twice, and the ones that matter are the ones where the two
- * implementations are genuinely *different code*:
+ * **This is the only file that asks `pgUploadStore` for its contract.** Two
+ * others name it — `an-upload-is-queued-only-once-its-bytes-arrive` calls
+ * `create` to seed a row before driving a route, and `store-guarded` checks it
+ * is wrapped — and neither asserts what it does. So a behaviour dropped here is
+ * dropped. It was written as a parity suite against a second,
+ * filesystem adapter; that adapter was deleted on 2026-09-05 with the rest of
+ * the filesystem store, and the `stores` array below is what is left of the
+ * loop. The two things it was written to pin are still exactly what it pins:
  *
  * **The claim race.** Finalising has to be exactly once — two tabs, or one
  * double-click, otherwise both pass the same checks and both queue a job that
- * spends model money. The filesystem does it with a create-only marker
- * (`open(…, "wx")`, atomic at the kernel); Postgres does it with a conditional
- * `UPDATE` and `rowCount`. Same guarantee, no shared code, so the test has to be
- * shared instead.
+ * spends model money. Postgres does it with a conditional `UPDATE` and
+ * `rowCount`, and "lets exactly one of two simultaneous claims win" below is
+ * the only thing that would notice that condition being loosened.
  *
  * **The shape that comes back.** A row has `null` where a record has *nothing*,
  * and `UploadRecord`'s optional fields are checked with `!== undefined` all over
- * the app. A `null` leaking out of the Postgres adapter would read as present-
- * and-empty in some places and be serialised onto the wire in others, where the
- * client's own type says it cannot be. So the round-trip is asserted with
- * `toEqual` against an object that simply has no such key.
+ * the app. A `null` leaking out of the adapter would read as present-and-empty
+ * in some places and be serialised onto the wire in others, where the client's
+ * own type says it cannot be. So the round-trip is asserted with `toEqual`
+ * against an object that simply has no such key.
  *
  * See docs/plans/260827h-durable-queue-and-uploads.md.
  */
@@ -28,7 +31,6 @@ import { loadEnvLocal } from "../src/env.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { closeDb } from "../src/db/client.js";
 import type { UploadRecord, UploadStore } from "../src/store/uploads.js";
-import { fsUploadStore } from "../src/store/uploads-fs.js";
 import { pgUploadStore } from "../src/store/pg-uploads.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -38,7 +40,7 @@ loadEnvLocal();
    says "skipped" rather than showing a green tick for having checked nothing.
    docs/reusable/silent-success.md. Until this used the shared helper it also
    skipped **silently**, which is the same failure one step earlier. */
-const { reachable: pgReachable } = await pgReady({
+await pgReady({
   suite: "tests/store-uploads-parity.test.ts",
   tables: ["spideryarn.uploads"],
 });
@@ -78,13 +80,10 @@ function pending(store: UploadStore, over: Partial<UploadRecord> = {}): UploadRe
   };
 }
 
-const stores: [string, UploadStore, boolean][] = [
-  ["the filesystem store", fsUploadStore, true],
-  ["Postgres", pgUploadStore, pgReachable],
-];
+const stores: [string, UploadStore][] = [["Postgres", pgUploadStore]];
 
-for (const [name, store, available] of stores) {
-  describe.skipIf(!available)(name, () => {
+for (const [name, store] of stores) {
+  describe(name, () => {
     it("hands back exactly what it was given, with nothing turned into null", async () => {
       const record = pending(store);
       await store.create(record);

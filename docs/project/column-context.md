@@ -18,7 +18,7 @@ review of it, is [docs/plans/260825b-column-context.md](../plans/260825b-column-
 >
 > — Greg, 2026-08-25
 
-Mid-article the L0 and L1 columns are about 80% blank: the sticky gist sits at the top of a cell
+Mid-article the coarse columns are about 80% blank: the sticky gist sits at the top of a cell
 that runs for thousands of pixels, and nothing in the column says what came before or what is
 coming. That is a direct consequence of [the tabular view](granularity-zoom.md#the-tabular-view)'s
 alignment invariant, and the same limit the spine was built to get round. The spine answers "where
@@ -91,20 +91,21 @@ outline mode there is no panel: the table is itself the list.
 > — Greg, 2026-08-26
 
 It did already show them all, and the current one was already centred — the thing actually missing
-was **density**. A landmark got one clamped line of sentence in the arc column and, in the parts and
-sections columns, its title and nothing else, however much room the column had. So the arc's five
-parts left most of a twelve-hundred-pixel panel blank: the same complaint the panel was built to
-answer, one level up.
+was **density**. A landmark got its title and nothing else, however much room the column had, so a
+level of five parts left most of a twelve-hundred-pixel panel blank: the same complaint the panel
+was built to answer, one level up.
 
 So a landmark's line budget is worked out from **how many entries the level has and how tall the
 panel is** — [`landmarkLines`](../../src/web/context.ts), tested in
 [`tests/context.test.ts`](../../tests/context.test.ts). A level of five gets several lines each, so
-the arc column reads as five sentences with the one you are in set large and unclamped; forty
-sections under six part headings get none and stay the title-only list they already were. In
-between it steps down, and where it lands depends on the window as much as the count. A title
-column shows its gist under its title; the arc column, which has no titles, keeps at least one line
-whatever the budget says, because its sentence is the only content it has and a landmark reading
-`3 / 5` and nothing else is a hole in the list.
+it reads as five sentences with the one you are in set large and unclamped; forty sections under six
+part headings get none and stay the title-only list they already were. In between it steps down, and
+where it lands depends on the window as much as the count. A title column shows its gist under its
+title; a column with no titles — which the arc's was, until it left Hierarchy on 2026-09-05
+([granularity-zoom.md § the arc](granularity-zoom.md#the-arc)) — keeps at least one line whatever the
+budget says, because its sentence is the only content it has and a landmark reading `3 / 5` and
+nothing else is a hole in the list. That path is still in `ContextItem` and `ContextList`, with
+nothing setting it.
 
 Three things about that number are deliberate:
 
@@ -131,7 +132,10 @@ Three things about that number are deliberate:
 
   The second is **the panel's own top edge**, and it is the one that actually bit. `ColumnRect.top`
   is the header row's bottom, and that row is sticky under the masthead, so it settles over the
-  first hundred and fifty pixels of scroll — as its own doc comment says. The version of this that
+  first hundred and fifty pixels of scroll — as its own doc comment says. (Since 2026-09-05 that row
+  has **no height**, so its bottom edge is the controls bar's own and a panel now starts directly
+  under the bar. The row is still there, and deleting it would leave every panel with no rectangle
+  at all — [granularity-zoom.md § the header row](granularity-zoom.md#the-header-row).) The version of this that
   took `stableH - rect.top` fixed the phone and reopened the identical hole on every desktop:
   measured in a browser at four lines and three, two hundred pixels down the article, against two
   and one at the top of it. A reader arriving at an article and scrolling once watched every

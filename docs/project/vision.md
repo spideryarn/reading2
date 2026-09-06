@@ -193,6 +193,21 @@ these, each to be judged against the principles above:
   ([reading-view-overview.md](reading-view-overview.md)) is the simpler-first version of this, not
   the end state.
 
+### Further out
+
+Two of Greg's, 2026-09-05, recorded so they aren't lost — neither is on the near list, and
+*"for now I just want to make what we have work well"*:
+
+- **A command bar.** Type or talk, and the right mode opens on the right passage — *"a bit like
+  Spotlight/Alfred on the Mac"*: *"take me to the bit where the article introduces access
+  consciousness"*, *"generate me Quotes and an Illustrated diagram"*, *"explain how access
+  consciousness is different from phenomenal consciousness"*. Greg: *"Dunno if a mode registry would
+  help with this!"* — one was deliberately rejected for the current shape, and the reasoning is in
+  [new-mode.md](new-mode.md); a command bar would be the first argument on the other side.
+- **Reader-built modes.** *"a world in which users can build their own new modes (generate UI), or a
+  marketplace of modes — though all that is far in the future"*.
+
+
 ## Under this doc
 
 `vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Three things sit

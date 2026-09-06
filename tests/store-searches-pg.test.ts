@@ -26,6 +26,7 @@ import { articles, searchRuns } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { isSpideryarnId } from "../src/ids.js";
+import { kindOfMessage, providerHttpFailure, worthRetrying } from "../src/messages.js";
 import { MAX_RUNS } from "../src/searches.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -55,12 +56,10 @@ const FIXTURE_IDS = [
   "spya-zzz002",
 ] as const;
 
-const { reachable } = await pgReady({
+await pgReady({
   suite: "tests/store-searches-pg.test.ts",
   tables: ["spideryarn.search_runs"],
 });
-
-const when = reachable ? describe : describe.skip;
 
 /** A clock the test drives, so `createdAt` is a fact rather than a race. */
 function clockFrom(startMs: number, stepMs = 1000): () => string {
@@ -68,7 +67,7 @@ function clockFrom(startMs: number, stepMs = 1000): () => string {
   return () => new Date(startMs + stepMs * n++).toISOString();
 }
 
-when("the Postgres searches store", () => {
+describe("the Postgres searches store", () => {
   it("uses fixture ids the store will actually accept", () => {
     for (const id of FIXTURE_IDS) {
       expect(isSpideryarnId(id), `${id} is not a valid id, so the store would mint another`).toBe(
@@ -296,6 +295,52 @@ when("the Postgres searches store", () => {
     ).rejects.toThrow(/must end a run/);
   });
 
+  /* ---- ported from tests/searches.test.ts, 2026-09-05 ----------------------
+     § *a failure survives being written down and read back*. It went through
+     `beginRun`/`finishRun` on the filesystem side; those went with the
+     filesystem store
+     (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+     the stage-G section) and the claim had no home on this side at all.
+
+     The gap it closes: every other test of `kindOfMessage` hands it a message
+     straight from the factory, so all of them would keep passing if something
+     between the throw and the screen decorated the string — `Search failed:
+     ${msg} — tap to retry` is the plausible one, and it would move the bracket
+     off the end and silently turn every permanent failure back into a Retry
+     button. Nothing about that has a symptom. So this one goes through the real
+     path: store the failure the way the route does, read it back out of
+     Postgres, and ask the question the panel asks. */
+
+  it("still knows a topped-out account cannot be retried, after a round trip", async () => {
+    const permanent = providerHttpFailure(402);
+    expect(worthRetrying(permanent.message)).toBe(false); // before the round trip
+
+    const { run, attempt } = await pgSearchStore.begin(SLUG, "does this survive a write");
+    await pgSearchStore.finish(
+      SLUG,
+      run.id,
+      { status: "error", error: permanent.message },
+      attempt,
+    );
+
+    const stored = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id);
+    expect(stored?.status).toBe("error");
+    expect(worthRetrying(stored?.error)).toBe(false);
+    expect(kindOfMessage(stored?.error ?? "")).toBe("ours");
+  });
+
+  it("still offers another go for a transient one, after a round trip", async () => {
+    const { run, attempt } = await pgSearchStore.begin(SLUG, "and the other direction");
+    await pgSearchStore.finish(
+      SLUG,
+      run.id,
+      { status: "error", error: providerHttpFailure(429).message },
+      attempt,
+    );
+    const stored = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id);
+    expect(worthRetrying(stored?.error)).toBe(true);
+  });
+
   it("never lets a patch rename a run or change its question", async () => {
     const { run, attempt } = await pgSearchStore.begin(SLUG, "about time");
     await pgSearchStore.finish(
@@ -468,6 +513,80 @@ when("the Postgres searches store", () => {
       const [stored] = await pgSearchStore.load(SLUG);
       expect(stored?.sourceHash).toBe(hash);
     });
+  });
+
+  /**
+   * **Two runs, seven writes, asserted after every one.**
+   *
+   * Ported from `tests/store-reader-state-parity.test.ts`, which went with the
+   * filesystem store (86a4ef7c). There it drove both stores through this
+   * sequence and compared them step by step; with one store left, each
+   * comparison becomes an assertion about what Postgres should hold at that
+   * point.
+   *
+   * The sequence is the value. Every other case here begins from an empty
+   * article, so **nothing above can see one run's write reaching another** — a
+   * reset that clears the wrong row, a finish that lands on the neighbour, a
+   * delete that takes more than it names. Two of its steps have no other home
+   * at all: finishing a run that has been **reset** (the reset case above stops
+   * at the blank row, so a `model` left over from before it would go unnoticed),
+   * and `remove`, which nothing else in this file calls.
+   */
+  it("walks one search through begin, finish, fail, retry, finish, delete", async () => {
+    const clock = clockFrom(Date.parse("2026-08-01T00:00:00.000Z"));
+
+    // 1. begin — pending, and nothing an answer would have put there.
+    const first = await pgSearchStore.begin(SLUG, "mentions of arches", "spya-runaa2", clock);
+    expect(first.run.id).toBe("spya-runaa2");
+    expect(first.run.criterion).toBe("mentions of arches");
+    expect(first.run.status).toBe("pending");
+    expect("model" in first.run).toBe(false);
+    expect((await pgSearchStore.load(SLUG)).length).toBe(1);
+
+    // 2. finish it.
+    await pgSearchStore.finish(SLUG, first.run.id, { status: "done", hits: [], model: "m" }, first.attempt);
+    const done = (await pgSearchStore.load(SLUG))[0];
+    expect(done?.status).toBe("done");
+    expect(done?.model).toBe("m");
+    expect(done?.hits).toEqual([]);
+
+    // 3. begin another — a second row, and the first is not disturbed.
+    const second = await pgSearchStore.begin(SLUG, "mentions of vaults", undefined, clock);
+    expect(second.run.id).not.toBe(first.run.id);
+    const both = await pgSearchStore.load(SLUG);
+    expect(both.length).toBe(2);
+    expect(both.find((r) => r.id === first.run.id)?.status).toBe("done");
+    expect(both.find((r) => r.id === second.run.id)?.status).toBe("pending");
+
+    // 4. fail it — and only it.
+    await pgSearchStore.finish(SLUG, second.run.id, { status: "error", error: "fell over" }, second.attempt);
+    const failed = (await pgSearchStore.load(SLUG)).find((r) => r.id === second.run.id);
+    expect(failed?.status).toBe("error");
+    expect(failed?.error).toBe("fell over");
+    expect((await pgSearchStore.load(SLUG)).find((r) => r.id === first.run.id)?.model).toBe("m");
+
+    // 5. retry — same row reset, not a third one, and the error gone with it.
+    const retried = await pgSearchStore.begin(SLUG, "mentions of vaults", second.run.id, clock);
+    expect(retried.run.id).toBe(second.run.id);
+    expect(retried.run.status).toBe("pending");
+    expect("error" in retried.run, "the failed attempt's error survived the reset").toBe(false);
+    // Same question, so the same clock — the opposite of a chat retry.
+    expect(retried.run.createdAt).toBe(second.run.createdAt);
+    expect((await pgSearchStore.load(SLUG)).length).toBe(2);
+
+    // 6. finish the retry, with a different model from the run beside it.
+    await pgSearchStore.finish(SLUG, retried.run.id, { status: "done", hits: [], model: "m2" }, retried.attempt);
+    const answered = (await pgSearchStore.load(SLUG)).find((r) => r.id === second.run.id);
+    expect(answered?.status).toBe("done");
+    expect(answered?.model).toBe("m2");
+    expect("error" in (answered ?? {})).toBe(false);
+
+    // 7. delete the first — the answer is the list that is left, and it agrees
+    //    with what a fresh read says.
+    const remaining = await pgSearchStore.remove(SLUG, first.run.id);
+    expect(remaining.map((r) => r.id)).toEqual([second.run.id]);
+    expect(remaining[0]?.model).toBe("m2");
+    expect((await pgSearchStore.load(SLUG)).map((r) => r.id)).toEqual([second.run.id]);
   });
 
   it("404s for an article that is not there, and 400s for a non-slug", async () => {

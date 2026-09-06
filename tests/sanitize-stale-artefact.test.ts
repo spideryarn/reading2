@@ -23,18 +23,25 @@
  *
  * A stamp nothing checks is decoration; a check on a stamp nobody writes never
  * fires. Both are pinned below.
+ *
+ * **The behavioural half of the second one went on 2026-09-05**, and it is a
+ * real loss rather than a tidy-up: a `describe` that wrote a stamp-less
+ * `blocks.json` under `data/`, read it back through the filesystem
+ * `loadArticle`, and asserted the payload did not come out. It drove the one
+ * reader that needed no database, and that reader was src/api.ts
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * What is left for the surviving readers is the source read below — a *call*,
+ * not a mention — which is what this file already accepted for the Postgres
+ * reader and for the same reason. What it cannot see is a call whose result is
+ * thrown away.
  */
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { blocksArtefact } from "../src/blocks.js";
 import { STEPS } from "../src/pipeline.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
 import { sanitizeStoredBlocks } from "../src/sanitize.js";
-import { loadArticle } from "../src/api.js";
 import type { Block } from "../src/types.js";
 
 /**
@@ -79,25 +86,22 @@ const dirtyBlock = (): Block => ({
  * and this goes red — with no subprocess and no 60-second timeout.
  */
 describe("the stamp stage 3 writes", () => {
+  /* **The `mkdtemp` scratch directory this used to mint went on 2026-09-05**,
+     with `StepContext.dir`. It existed so that a stage 3 which wrote into
+     `data/<slug>` could not reach the real repository; there is no directory on
+     the context for it to write into now. */
   const stage3 = async (store: ReturnType<typeof memoryArtefacts>) => {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-stamp-"));
-    try {
-      const out = await STEPS.blocks.run(
-        {
-          slug: "a-slug",
-          dir,
-          htmlFile: path.join(dir, "a-slug.html"),
-          report: () => {},
-          signal: new AbortController().signal,
-          cacheArticle: false,
-        },
-        store,
-        nullCheckpointStore(),
-      );
-      return out.parts?.blocks as { sanitizer?: number; blocks: Block[] };
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    const out = await STEPS.blocks.run(
+      {
+        slug: "a-slug",
+        report: () => {},
+        signal: new AbortController().signal,
+        cacheArticle: false,
+      },
+      store,
+      nullCheckpointStore(),
+    );
+    return out.parts?.blocks as { sanitizer?: number; blocks: Block[] };
   };
 
   it("puts the sanitiser version it used into the blocks artefact", async () => {
@@ -266,23 +270,31 @@ describe("every writer of a blocks.json stamps it", () => {
 
 describe("every reader of stored html guards it", () => {
   /**
-   * **There are two stores, and a fix that guards one of them passes every
-   * test.** `loadArticle` exists twice: the filesystem reader in src/api.ts and
-   * the Postgres reader in src/store/pg.ts, whose `blocksFor` hands back
-   * `html: row.html`. Guard only the first and the fs half is genuinely
-   * protected, the suite is green, and the store that is in the middle of
-   * *replacing* the filesystem serves old HTML unchecked.
+   * **There is more than one reader, and a fix that guards one of them passes
+   * every test.** `loadArticle` existed twice — the filesystem reader in
+   * src/api.ts and the Postgres reader in src/store/pg.ts, whose `blocksFor`
+   * hands back `html: row.html`. Guard only the first and the fs half was
+   * genuinely protected, the suite was green, and the store in the middle of
+   * *replacing* the filesystem served old HTML unchecked.
    *
    * That is the same shape as everything else in this file — the check you would
    * run comes back clean because it shares an assumption with the code, here
    * that there is one reader. Raised by review rather than found by a test,
-   * which is why the test now exists.
+   * which is why the test exists.
    *
-   * Kept as a source read for the same reason as the writers above: the
-   * Postgres reader needs a live database, so a behavioural test for it skips on
-   * most machines — and a security guard whose test skips is not a guard.
+   * **src/api.ts went on 2026-09-05** with the filesystem store, and
+   * `src/store/public-reader.ts` took its place on this list rather than the
+   * list simply getting shorter: it is the third reader, it builds a
+   * `PublicArticle` out of `revision_blocks.html` for a logged-out stranger,
+   * and nothing had ever asked whether it sanitised. It does — which is the
+   * point, because a list that only ever names readers somebody already checked
+   * is decoration.
+   *
+   * Kept as a source read for the same reason as the writers above: these
+   * readers need a live database, so a behavioural test for them skips on most
+   * machines — and a security guard whose test skips is not a guard.
    */
-  const READERS = ["api.ts", "store/pg.ts"];
+  const READERS = ["store/pg.ts", "store/public-reader.ts"];
 
   it("calls sanitizeStoredBlocks in every loadArticle", async () => {
     const { readFileSync } = await import("node:fs");
@@ -363,38 +375,5 @@ describe("sanitizeStoredBlocks", () => {
     const { blocks } = sanitizeStoredBlocks([before], undefined);
     expect(blocks[0]?.text).toBe(before.text);
     expect(blocks[0]?.words).toBe(before.words);
-  });
-});
-
-describe("loadArticle, over an artefact from before the sanitiser", () => {
-  /* The behavioural test, through the real read seam. The two above prove the
-     helper works and that stage 3 stamps; neither would notice `loadArticle`
-     forgetting to call it, which is the mistake that reopens the gap. */
-  const slug = "test-stale-sanitiser-artefact";
-  const dir = path.join(process.cwd(), "data", slug);
-
-  afterAll(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  it("does not serve the stored payload", async () => {
-    await mkdir(dir, { recursive: true });
-    // No `sanitizer` key: exactly what a file written before the stamp looks
-    // like, which is also what a file written before DOMPurify looks like.
-    await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: [dirtyBlock()] }));
-    await writeFile(
-      path.join(dir, "tree.json"),
-      JSON.stringify({
-        rootId: "n1",
-        nodes: { n1: { id: "n1", parentId: null, childIds: [], range: ["spya-k3m9qt", "spya-k3m9qt"], depth: 0 } },
-      }),
-    );
-
-    const article = await loadArticle(slug);
-    expect(JSON.stringify(article.blocks)).not.toContain("onerror");
-    expect(JSON.stringify(article.blocks)).not.toContain("STOREDPAYLOAD");
-    // Not by serving nothing: the block is still there, id intact.
-    expect(article.blocks[0]?.id).toBe("spya-k3m9qt");
-    expect(article.blocks[0]?.html).toContain("<img");
   });
 });

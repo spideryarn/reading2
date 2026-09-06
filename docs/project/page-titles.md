@@ -500,14 +500,23 @@ effects nothing can call. Each had tests; the sequence had none.
 Two things changed, and the second is the more important:
 
 1. **The query is edited as text throughout.** That was already this file's rule for `?slug=` and
-   `about=` — round-tripping re-encodes as it serialises, and `?cols=0,1` comes back as
-   `?cols=0%2C1`, still correct and no longer readable ([params.ts](../../src/web/params.ts) spells
+   `about=` — round-tripping re-encodes as it serialises, and `?cols=1,2` comes back as
+   `?cols=1%2C2`, still correct and no longer readable ([params.ts](../../src/web/params.ts) spells
    those commas out on purpose). The hash rewrite was the one breaking the rule, and it was mangling
    those commas too.
 2. **The sequence is one pure function** — `settleAddress` in [`router.ts`](../../src/web/router.ts).
    `main.tsx` calls it once. That also collapses four `onCallback` guards into one, so a fifth
    rewrite is exempt from the auth callback *by construction* rather than by the person adding it
    remembering.
+
+**The fifth arrived on 2026-09-05**, `liftStrandedText`, and it is the first that changes the *mode*
+rather than the page: `?mode=hierarchy&text=0` became a state with no exit when the `Text` pill left
+the controls bar, so it is rewritten to `?mode=outline`
+([url-state.md](url-state.md#the-parameters)). The mode is in the tab, so this is a title divergence
+by construction and `readMode` in [read-address.ts](../../src/read-address.ts) predicts it — the same
+shape as `redirectsToMetadata`, one function deciding for both sides. The cross-product below caught
+it: with the server half removed it reports sixteen disagreements, which is the reason to believe
+the corpus rather than the reasoning.
 
 ### Eight fixed one at a time is not a fix
 

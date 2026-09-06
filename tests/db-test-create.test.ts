@@ -65,7 +65,6 @@ import {
   urlForDatabase,
   type Baseline,
 } from "../scripts/db-test-create.js";
-import { failIfPostgresRequired } from "./helpers/pg-ready.js";
 
 /* Long, because each of these builds a database and some of them migrate it —
    4–5s of real work apiece on an idle box, and this box is never idle. */
@@ -523,7 +522,6 @@ if (!optedIn) {
   process.stderr.write(
     `\n  ⚠ the test-database factory's integration tests are skipping: ${probe.why}\n`,
   );
-  failIfPostgresRequired("the private test database factory", probe.why, "unreachable");
 }
 
 const live = probe.ok ? describe : describe.skip;

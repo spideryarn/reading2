@@ -152,7 +152,6 @@ import { effortFor, STAGE_EFFORT } from "../../src/models.js";
 import { environmentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../../src/owner.js";
 import { DEFAULT_INGEST_STEPS, STEPS } from "../../src/pipeline.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import { STORE } from "../../src/store/live.js";
 import type { Job, StepName } from "../../src/types.js";
 import { type CostFixture, FIXTURES, fixtureByName } from "./fixtures.js";
 import {
@@ -222,7 +221,6 @@ interface RunMeta {
    * could not be asked. GPT Sol, 2026-09-02.
    */
   srcPatchSha256: string | null;
-  store: string;
   databaseTarget: string;
   /** Who the articles belong to. Never the environment owner — see `assertDistinctEvalOwner`. */
   evalOwnerId: string;
@@ -304,6 +302,18 @@ interface Draw {
   ledgerWallClockMs?: number | null;
   /** Lines of the ledger that could not be read. A total that is short must say so. */
   unreadable?: number;
+  /**
+   * Calls that finished after their collector had reported, so no row was ever
+   * written for them — process-wide, and so not attributable to this draw.
+   *
+   * The *other* way `money` below can be short, and deliberately a separate
+   * field: `unreadable` is a line on disk that will not parse, this is a line
+   * that does not exist. `observedSpend` and `checkLedgerComplete` are the
+   * sharper instrument for the same failure — they compare calls made against
+   * rows kept, per step — and this is the blunt one the store can offer any
+   * caller. See `LedgerRead` in src/store/contracts.ts.
+   */
+  lateCalls?: number;
   money?: Money;
   byStep?: StepSpend[];
   byAiJob?: StepSpend[];
@@ -681,6 +691,7 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
      this database were buying at the same moment. */
   const ledger = await costStore.forJob(job.id);
   draw.unreadable = ledger.unreadable;
+  draw.lateCalls = ledger.lateCalls;
   draw.money = totalMoney(ledger.rows);
   draw.byStep = aggregateByStep(ledger.rows);
   draw.byAiJob = aggregateByAiJob(ledger.rows);
@@ -787,6 +798,12 @@ function printDraw(draw: Draw): void {
       "   (fetch is a fixture read, so no network latency is in either)",
   );
   if (draw.unreadable) console.log(`  UNREADABLE    ${draw.unreadable} ledger line(s) could not be read`);
+  /* Said apart from UNREADABLE, because they send a reader to different places:
+     one is damage in the file, the other is a row the file never got. */
+  if (draw.lateCalls)
+    console.log(
+      `  LATE          ${draw.lateCalls} call(s) in this process finished after their collector reported, so no row was written`,
+    );
   if (draw.byStep?.length) {
     console.log("  by step");
     console.log(formatStepTable(draw.byStep));
@@ -883,7 +900,6 @@ function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): Run
        to `src` and `evals`, which are the directories that decide what a call
        costs; a doc edit does not make two runs incomparable. */
     srcPatchSha256: patchDigest(git),
-    store: STORE,
     databaseTarget,
     evalOwnerId: EVAL_OWNER_ID,
     environmentOwnerId: environmentOwnerId(),
@@ -1155,7 +1171,7 @@ async function runDraws(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const databaseTarget = localTarget(STORE, process.env.DATABASE_URL);
+  const databaseTarget = localTarget(process.env.DATABASE_URL);
   /* **Before anything else that could spend.** A job in one job is one cache
      group, so a step list holding two compatible modes measures the second one
      warm — and no amount of checking afterwards can un-warm it. */
@@ -1164,7 +1180,7 @@ async function main(): Promise<void> {
   const meta = currentMeta(databaseTarget, args.batchedModes ? "batched-modes" : "per-mode");
 
   console.log(`Target: ${databaseTarget}`);
-  console.log(`Store:  ${meta.store}   commit ${meta.commit.slice(0, 8)}${meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""}`);
+  console.log(`Commit: ${meta.commit.slice(0, 8)}${meta.gitDirty ? ` (tree dirty, src+evals patch ${meta.srcPatchSha256?.slice(0, 12) ?? "?"})` : ""}`);
   console.log(`Ledger: ${costStore.describe()}`);
   console.log(`Owner:  ${meta.evalOwnerId}   (environment owner ${meta.environmentOwnerId})`);
   console.log(

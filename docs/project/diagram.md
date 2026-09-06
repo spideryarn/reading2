@@ -161,9 +161,10 @@ no picker at all, and `/api/similar/:slug` and `/api/projection/:slug` sit behin
 
 **What this does and does not change about spend.** It changes discoverability,
 not authority. Every article owner could already start unlimited paid Sketch
-reruns and still can; a shared visitor is still Force-only; entering the mode or
-following a link still buys nothing, because only a chip *gesture* arms an
-automatic run ([`activation.ts`](../../src/web/activation.ts)). There is no
+reruns and still can; a shared visitor is still Force-only; *following a link*
+still buys nothing, because only a **gesture** arms an automatic run — a chip
+inside the mode, or, since 2026-09-06, the bar's own Diagram button
+([`activation.ts`](../../src/web/activation.ts), and the section below). There is no
 per-owner or cumulative spend cap in this repo, which was true before this change
 and is why the empty state has to stay cheap — see the next section.
 
@@ -174,14 +175,37 @@ picture everybody can see, and a default most readers cannot see would be an odd
 thing to keep. It is `sketch` whether the switch is on or off — one default
 rather than two, so a pasted link and a fresh arrival land on the same picture.
 
-**Arriving costs nothing**, and that is the whole safety of the move. A Sketch
-nobody has drawn is an empty state that says what it costs and what it takes and
-draws nothing until asked ([`SketchView.tsx`](../../src/web/SketchView.tsx));
-`diagram` is deliberately absent from `MODE_TARGET` in
-[`activation.ts`](../../src/web/activation.ts), so pressing the mode button arms
-no run. `tests/public-network-trace.test.tsx` asserts the GET settles and no job
-is posted, for an owner arriving at `?mode=diagram` and at
+**Arriving still costs nothing. Pressing the button no longer does**, and the two
+halves of that sentence separated on 2026-09-06.
+
+*Arriving* — a pasted link, a bookmark, a Back or Forward step, a link in from
+the metadata page — lands on an empty state that says what it costs and what it
+takes and draws nothing ([`SketchView.tsx`](../../src/web/SketchView.tsx)).
+`tests/public-network-trace.test.tsx` asserts the GET settles and no job is
+posted, for an owner arriving at `?mode=diagram` and at
 `?mode=diagram&diagram=sketch`.
+
+*Pressing Diagram in the bar* now draws the picture it is about to open, which
+makes it the dearest button in the bar that is in front of every reader: about
+$0.20 and two minutes. Greg's rule
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md)):
+
+> By opening the mode, the user is implicitly indicating that they want what's
+> already generated, or to generate it if needed.
+
+**The picture it arms is the one `?diagram=` names**, not a fixed `sketch`, and
+that is not a nicety —
+[`activation.ts`](../../src/web/activation.ts) § `armActivationForDiagram` has the
+five-step sequence a fixed target would have paid for, in which a press that
+opens Illustrated leaves a sketch token nobody claims and a later **Back** step
+spends it. `tests/modes-that-start-themselves.test.tsx` § *spends nothing on a
+Back step after opening a picture it did not arm* is the only thing in the suite
+that notices.
+
+The three geometries arm nothing, because they cost nothing. Illustrated is
+armed by a bar press only if it is the picture the reader is already on; with no
+Sketch drawn, that press is retired unspent by `useIllustrated`'s own gate rather
+than enqueuing a job the server would refuse.
 
 Force held the default until then, on the opposite argument:
 
@@ -1247,7 +1271,11 @@ can still get taller, because the flexible item inside it wraps its own text
 once it has been shrunk far enough. The only thing stopping that here was that
 `.band-head`'s heading is the single unbreakable word "Diagram" — a fact about
 today's copy, which would stop being true the moment the heading became two
-words. `.band-head h2` now declares `min-width: 0`, `overflow: hidden`,
+words. (**That heading has since gone**, on 2026-09-05, with every other band's
+name — the Dock says which mode you are in, so the row here holds only the
+scatter's caveat. The declarations below still stand and still matter: Chat's
+heading is a thread *title* and can run to sixty characters.
+[260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5.) `.band-head h2` now declares `min-width: 0`, `overflow: hidden`,
 `text-overflow: ellipsis` and `white-space: nowrap` — since 2026-09-02 for
 every band's head, not only this one, which is what the single `.band-head`
 family in `styles.css` § mode band is for — and
@@ -1877,6 +1905,38 @@ for has not been said. The brief is one press behind a `<details>` rather than
 open: it is 200–500 words of composition plus the register the model chose, which
 open by default pushed the *what it depicts* list off the bottom of a 1280-tall
 screen. The one that must be readable without a gesture is the label.
+
+#### At full screen the brief is a column, not a `<details>`
+
+Greg, 2026-09-05 (SPIDERYARN-READING2-1P):
+
+> For the Illustrated diagram, if I have clicked Enlarge, show the prompt text in
+> a column to one side so I can scroll up down independently through that text
+> while looking at the image it refers to.
+
+Which names the one thing a `<details>` under the picture cannot do. It sits
+*below* the plate in a single scrolling column, so reading the brief against the
+picture means scrolling the picture off the screen — and reading it against the
+picture is the entire reason the brief is shown at all.
+
+So above 1080px the overlay has two columns: the plate with its list, and the
+brief with its own scroller, `.ill-aside`. They are siblings inside the same
+`<dialog>`, which was already a centred flex row, so neither knows about the
+other and each scrolls alone.
+
+**The prompt is on screen exactly once at any width.** One media query flips both
+copies together — below the breakpoint there is no room for a column, so the
+column is not drawn and the band's `<details>` stays; above it, they swap. Two
+queries would leave a width where both showed or neither did.
+
+Stacking was the alternative for narrow screens and is worse: `.ill-in-full` is
+`height: 100dvh`, so a column stacked under it begins one whole screen down,
+which is the scrolling this report was about.
+
+The measured lengths that make a column worth having, across the 15 stored plates
+on 2026-09-05: **1400–2200 characters, 240–345 words** — squarely inside the
+200–500 the brief model is asked for, and enough that a reader really does lose
+their place in it.
 
 What *is* checked is the brief. Every vignette names a block id that must exist
 and quotes a passage that must occur **in that block** —

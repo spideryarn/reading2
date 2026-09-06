@@ -16,9 +16,12 @@
  *
  *  - **Shrink first, drop second.** Gists squeeze from a comfortable 15rem down
  *    to 11rem before any level is given up.
- *  - **Give up the coarse levels first.** They are what the spine already
- *    shows; the finest gist is the one that earns its place beside the
- *    paragraph it summarises. So L0 goes, then L1.
+ *  - **L0 is not a candidate at all** — the spine already shows what it would,
+ *    and since 2026-09-05 it is not an offerable column from any source
+ *    (`offerableGists`). Among what is left, the *finest* goes first: a reader
+ *    squeezed to one column is choosing between "the part I'm in" and "the
+ *    paragraph I'm in", and the part is what orients them, so L2 goes before
+ *    L1. See the `chosen === null` branch of `fitView` for the history.
  *
  * The detail column — prose in reading mode, the leaf column in outline mode —
  * takes whatever is left, so the table fills the window exactly when it can and
@@ -134,14 +137,22 @@ export const BLK_SLOT_REM = 1.5;
  * `PROSE_ALONE_MAX_REM * root` would be the whole answer if every term scaled
  * with the root. Two of the gutter's do not: `--blk-slot` is `max(1.5rem, 24px)`,
  * so below a 16px root the gutter stops shrinking and the *rem* width of the
- * cell's left padding goes **up** — 3.7rem at 16, 4.7rem at 12. A single rem
+ * cell's left padding goes **up** — 2.2rem at 16, 2.7rem at 12. A single rem
  * constant therefore cannot be right at every root, and the one that was here
  * under-reserved by 1.2px at 12px and by 12.9px at 9px, silently clipping the
  * measure it exists to protect. GPT Sol's stage 1 review, 2026-09-04.
  *
- * Adding the gutter as its own term instead is exact at every root **and does
- * not move the common ones**: 832px at 16 and 1040 at 20, both unchanged, with
- * only the 12px case widening (624 → 636) — which is the case that was wrong.
+ * Adding the gutter as its own term instead is exact at every root, and when it
+ * landed on 2026-09-04 it did not move the common ones: 832px at 16 and 1040 at
+ * 20, both unchanged, with only the 12px case widening (624 → 636) — which is
+ * the case that was wrong.
+ *
+ * **One slot, not two, since 2026-09-05.** The gutter had a second column for
+ * the reader's bookmark and the bookmark is now in the line, so `--blk-gutter-w`
+ * is `var(--blk-slot)` and this term halves with it: 808px at a 16px root, 1010
+ * at 20, 612 at 12. Greg asked for the margin back — *"especially on mobile we
+ * want the margins either side of the text to be minimal"* — and this is the
+ * half of that a stylesheet cannot state.
  *
  * `Math.round` because a fractional CSS pixel in a table width is a hairline
  * seam, and because every number derived from this is asserted by hand in
@@ -149,7 +160,7 @@ export const BLK_SLOT_REM = 1.5;
  */
 export function proseAloneMaxPx(rootFontPx: number): number {
   const slot = Math.max(BLK_SLOT_REM * rootFontPx, BLK_SLOT_MIN_PX);
-  return Math.round(PROSE_ALONE_MAX_REM * rootFontPx + slot * 2);
+  return Math.round(PROSE_ALONE_MAX_REM * rootFontPx + slot);
 }
 
 /** The root font size everything not told otherwise assumes. */
@@ -244,7 +255,77 @@ function spineWidth(mode: SpineMode): number {
   return mode === "on" ? SPINE_W : 0;
 }
 
+/**
+ * **The rail, in a mode**: on unless the reader turned it off.
+ *
+ * `?spine=0` is a choice about the page rather than about the mode you happen
+ * to be in, so `null` — nobody has chosen — means on. Named because two
+ * functions now resolve it and they must not drift: `fitMode` needs the mode
+ * for its own arithmetic, and `bandCoversProse` needs it to answer the same
+ * question one press earlier.
+ *
+ * **It is deliberately not `Fit.spine`**, which is what the *current* layout
+ * resolved to and answers a different question — `fitView` turns the rail off
+ * in outline mode, where there is no band at all. A caller asking "would a band
+ * cover the article" has to be told about the rail the band would find, not the
+ * one on screen beside something else.
+ */
+function modeSpine(showSpine: boolean | null): SpineMode {
+  return showSpine === false ? "off" : "on";
+}
+
+/**
+ * **Would an open mode band cover the article rather than sit beside it?**
+ *
+ * The crossover `fitMode` turns on, lifted out so there is exactly one
+ * statement of it. Below this width the band stops taking room from the prose
+ * and is laid over it instead — see the long note inside `fitMode` for why that
+ * is the design and not a failure, and styles.css § a band with no room for the
+ * other half of it.
+ *
+ * **It moves with the rail**, which is why it takes `showSpine` rather than
+ * being a number: 844 with the rail on, 832 without. A caller that guessed the
+ * rail was on would miss an iPad in portrait by two pixels, and one that
+ * guessed it was off would warn a reader whose band fits perfectly well.
+ * Getting that wrong from a hand-copied breakpoint is the accident this
+ * codebase has already had once — see `App.tsx` § `band-covers`.
+ *
+ * **It answers a hypothetical when no band is open**, and that is the point:
+ * `SmallScreenHint` is the other caller, and its whole job is to say what will
+ * happen when the reader presses a mode button, *before* the article vanishes
+ * underneath one.
+ */
+export function bandCoversProse(windowWidth: number, showSpine: boolean | null = null): boolean {
+  return MODE_MIN + PROSE_MIN > Math.max(0, windowWidth - spineWidth(modeSpine(showSpine)));
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * The gist columns a reader may open, out of every gist depth the article has.
+ *
+ * **Depth 0 is not one of them, whoever asks.** Until 2026-09-05 it was merely
+ * closed by automatic fit and still honoured from `?cols=`; Greg took the whole
+ * column out — *"For Hierarchy mode, let's get rid of the 'Arg' button and
+ * functionality altogether"* — so the exclusion moved in front of the reader's
+ * choice as well. An old `?cols=0,1,2` therefore drops the `0` in silence and
+ * opens 1 and 2: a link somebody saved is not an error, and a column with one
+ * cell in it spanning the whole article was close to zero information per
+ * pixel anyway ("I can't currently see any value to the L0 column", Greg —
+ * granularity-zoom.md).
+ *
+ * **The arc artefact is not what left.** `src/arc.ts`, the `arc` job step and
+ * `arc.json` all still run, and Outline mode still renders the arc sentence for
+ * the part you are in. What went is the *column* in Hierarchy that used to draw
+ * it — docs/plans/260905d-declutter-the-reading-view-top-bars.md § Decisions 5.
+ *
+ * Exported because two things have to agree about it: this file, which decides
+ * which columns are on screen, and the pill row in App.tsx, which offers them.
+ * A pill for a column the fit will never open is a control that does nothing.
+ */
+export function offerableGists(gistDepths: number[]): number[] {
+  return gistDepths.filter((d) => d !== 0);
+}
 
 export interface FitInput {
   windowWidth: number;
@@ -360,8 +441,9 @@ export function fitView({
    * § Open for Greg.
    *
    * Takes `maxN` rather than always starting from `gistDepths.length`, because
-   * automatic fit (below) no longer considers L0 a candidate at all — the pool
-   * it is choosing among can be smaller than the article's full depth range.
+   * the pool it is choosing among is `offerableGists` rather than the
+   * article's full depth range — smaller by one on every article that has an
+   * L0 at all.
    */
   const gistsThatFit = (avail: number, maxN: number) => {
     let n = maxN;
@@ -370,38 +452,43 @@ export function fitView({
   };
 
   /**
-   * In outline mode the table *is* a whole-article overview, so a bird's-eye
-   * rail beside it would be a second copy of the same thing; the space goes
-   * back to the columns instead. That is what the reader gets by default, and
-   * `showSpine` is how they say otherwise in either direction.
+   * **The rail is on unless the URL says otherwise** — Greg, 2026-09-05: "we
+   * don't need the 'Spine' button (let's just default to always showing it)".
+   * The pill that asked the question went with the rest of the controls bar
+   * (docs/plans/260905d-declutter-the-reading-view-top-bars.md), so nothing on
+   * screen can turn the rail on any more and a default of "off" would be a
+   * state the reader has no way out of. `?spine=0` still wins outright — same
+   * rule `chosen` follows, that the window must not overrule a choice somebody
+   * made — which is why the parameter stays three-state rather than boolean.
    *
-   * Automatic is therefore "on wherever there is prose", which is that rule
-   * written as one word. An explicit `?spine=` wins outright, both ways: the
-   * reader may keep the rail in outline mode, and may take it away in reading
-   * mode. Same rule `chosen` follows — the window must not overrule a choice
-   * somebody made.
+   * **What this overrules, and it was a real argument**: until 2026-09-05 the
+   * default was `showSpine ?? showText`, on the reasoning that in outline mode
+   * the table *is* a whole-article overview, so a bird's-eye rail beside it is
+   * a second copy of the same thing and the 12px is better spent on the
+   * columns. Still true, and now outweighed by the rail being unaskable-for.
    *
    * The window width is not consulted at all, and used to be: the rail had a
    * labelled 13rem form that appeared when it was affordable, and deciding
    * *when* was the fiddliest arithmetic in this file. One width means the
-   * question no longer exists.
+   * question no longer exists — the rail is 12px at every size, so there is no
+   * width at which it fails to fit.
+   *
+   * **The same rule `fitMode` and `SmallScreenHint` follow, and now literally
+   * the same function.** This landed as its own `showSpine ?? true` on the same
+   * day `modeSpine` was extracted on `dev` for the band's crossover; two
+   * phrasings of one rule is the drift that function exists to prevent, so the
+   * merge collapsed them.
    */
-  const spine: SpineMode = (showSpine ?? showText) ? "on" : "off";
+  const spine: SpineMode = modeSpine(showSpine);
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   /**
-   * **Automatic never opens L0.** `?cols=` unset is not "every level that
-   * fits" — it is a starting *preference*, and L0 is not in it: the spine
-   * already carries the coarse levels (granularity-zoom.md#the-arc), a
-   * single-cell column spanning the whole article is close to zero
-   * information per pixel, and Greg's own read of it was "I can't currently
-   * see any value to the L0 column" (same doc). A reader who wants it back
-   * still can — `?cols=0,1,2` is honoured exactly, below.
+   * The choice, out of the columns there are to choose from — and `?cols=`
+   * cannot reach past that pool, which is the whole of what changed on
+   * 2026-09-05. See `offerableGists`.
    */
-  let gists =
-    chosen === null
-      ? gistDepths.filter((d) => d !== 0)
-      : gistDepths.filter((d) => chosen.includes(d));
+  const offerable = offerableGists(gistDepths);
+  let gists = chosen === null ? offerable : offerable.filter((d) => chosen.includes(d));
 
   /**
    * The leaf column — one nav label per paragraph — beside the prose.
@@ -515,7 +602,7 @@ export function fitView({
  *    only other caller did not know about.
  */
 function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
-  const spine: SpineMode = showSpine === false ? "off" : "on";
+  const spine = modeSpine(showSpine);
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   /**
@@ -574,8 +661,15 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
    * move without anything in CSS moving with it.
    * `tests/spine-width.test.ts` § the band covers the article on a fact, not on
    * a width holds that line.
+   *
+   * **The condition itself moved to `bandCoversProse` on 2026-09-05** and this
+   * function now asks it rather than spelling it out, because a second reader
+   * of the same crossover arrived: the banner that tells a phone reader why the
+   * article vanished (src/web/SmallScreenHint.tsx). Two hand-written copies of
+   * a width is how the stylesheet and this file came to disagree in the first
+   * place, and the fix there was the same one — derive it, do not restate it.
    */
-  if (MODE_MIN + PROSE_MIN > avail) {
+  if (bandCoversProse(windowWidth, showSpine)) {
     return {
       columns: [],
       widths: [avail],

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 /**
- * **Four of the thirteen modes are only drawn for a reader who asked for them.**
+ * **Five of the fourteen modes are only drawn for a reader who asked for them.**
  *
  * Quotes, Timeline, Referee and Remember are behind the
  * experimental-features switch since 2026-09-03
  * (docs/project/experimental-features.md,
- * docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md).
+ * docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md),
+ * and Debate joined them on 2026-09-05.
  * Greg, looking at a shared article while signed out:
  *
  * > When a non-logged-in user reads a Public-readable article, I thin it should
@@ -18,9 +19,9 @@
  * row's end of that is tests/diagram-kind-gating.test.tsx; both ends draw by one
  * rule, src/web/experimental-visibility.ts.
  *
- * **The counts here are nine and thirteen, not seven and twelve.** Structure —
+ * **The counts here are nine and fourteen, not eight and thirteen.** Structure —
  * the merge of Hierarchy and Outline — has not landed, so both of those are
- * today's default-visible stand-ins for it. Seven/twelve is the shape *after*
+ * today's default-visible stand-ins for it. Eight/thirteen is the shape *after*
  * that merge and must not be written down before it.
  *
  * ## The two rules, and the second is the one that is easy to lose
@@ -53,8 +54,8 @@ import {
   EXPERIMENTAL_SIGNED_OUT,
 } from "./helpers/experimental-fixtures.js";
 
-/** The four, by name, so a fifth cannot be added without this file saying so. */
-const BEHIND_THE_SWITCH: readonly Mode[] = ["quotes", "timeline", "referee", "remember"];
+/** The five, by name, so a sixth cannot be added without this file saying so. */
+const BEHIND_THE_SWITCH: readonly Mode[] = ["quotes", "timeline", "referee", "remember", "debate"];
 
 /** Everything else — nine of them, until Structure replaces two with one. */
 const ALWAYS: readonly Mode[] = MODES.filter((m) => !BEHIND_THE_SWITCH.includes(m));
@@ -91,7 +92,7 @@ function reading(props: Record<string, unknown>): void {
   });
 }
 
-/** The bar off the reading view: thirteen loose links, or nine of them. */
+/** The bar off the reading view: fourteen loose links, or nine of them. */
 function loose(search: string, props: Record<string, unknown> = {}): void {
   history.replaceState(null, "", `/read/a-piece/metadata${search}`);
   act(() => {
@@ -137,9 +138,9 @@ describe("how many buttons the bar draws", () => {
     expect([...radioModes()].sort()).toEqual(labels(ALWAYS));
   });
 
-  it("thirteen, with the switch on", () => {
+  it("fourteen, with the switch on", () => {
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(radioModes()).toHaveLength(13);
+    expect(radioModes()).toHaveLength(14);
     expect([...radioModes()].sort()).toEqual(labels(MODES));
   });
 

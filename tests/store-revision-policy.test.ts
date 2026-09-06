@@ -161,13 +161,13 @@ describe("deriveLibraryScalars", () => {
    stderr, because only the `catch` warned. */
 let liveColumns: string[] | null = null;
 
-const { reachable, pool } = await pgReady({
+const { pool } = await pgReady({
   suite: "tests/store-revision-policy.test.ts",
   tables: ["spideryarn.article_revisions"],
   keepPool: true,
 });
 
-if (reachable && pool) {
+if (pool) {
   const probe = await pool.query<{ column_name: string }>(
     `select column_name from information_schema.columns
      where table_schema = 'spideryarn' and table_name = 'article_revisions'`,
@@ -176,9 +176,7 @@ if (reachable && pool) {
   await pool.end();
 }
 
-const when = liveColumns ? describe : describe.skip;
-
-when("the policy against the live table", () => {
+describe("the policy against the live table", () => {
   it("knows about every column Postgres actually has", () => {
     /* The half `getTableColumns` cannot see. A `drizzle-kit generate --custom`
        migration — and this repo has eight of them — adds a column that
