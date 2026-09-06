@@ -1,0 +1,91 @@
+{
+  "fixture": "negative-controls",
+  "file": "synthetic/negative_controls.html",
+  "note": "THE NEGATIVE CONTROLS, and the first manifest written, before any manifest that could be satisfied by deleting things. Hand-built rather than captured, because the corpus does not contain these shapes: a probe over all 35 committed fixtures (2026-09-05) found no scoreline block, no numeric table cell as a block, and no symbol-only scene break that is article content rather than junk — which is the gap fixtures/README.md admits in 'a page of genuinely one- and two-character article content is still missing here'. 260830at's <=6-character marker rule scored 246/246 on that corpus. It scores 0 on this page. The structure floors say 'exactly' because this page was written and its counts are known by construction: five <h2>, one <table>, one <blockquote>, and the <h1> that Readability hoists into `title`. minArticleChars 4400: the <article> element holds 4,564 gistable characters including that hoisted <h1>, and the shipped extraction returns 4,507, so 4,400 is the piece itself less the title and a margin — enough that an arm returning only the ten needles above, which is what this page is most vulnerable to, fails on size alone. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The <article> holds 3,760 characters against 3,854 for the whole hand-built page. The shipped extraction returns 3,713; the 47 it misses are the <h1>, which Readability hoists into `title`. The floor is 3,600.",
+  "mustContain": [
+    {
+      "text": "1–0",
+      "why": "the scoreline: three characters, no letters, and the result of the match",
+      "negativeControl": "scoreline"
+    },
+    {
+      "text": "23.6",
+      "why": "a table cell holding only a number — the datum the table exists for",
+      "negativeControl": "numeric-cell"
+    },
+    {
+      "text": "21.0",
+      "why": "a second numeric cell, so deleting one cell is not enough to pass",
+      "negativeControl": "numeric-cell"
+    },
+    {
+      "text": "(9.4 + 11.8 + 12.1 + 7.7) / 4 = 10.25",
+      "why": "the only line of arithmetic in the piece, alone on its own line",
+      "negativeControl": "equation-line"
+    },
+    {
+      "text": "❦",
+      "why": "a scene break the author put there; one character, no letters",
+      "negativeControl": "scene-break"
+    },
+    {
+      "text": "“A little.”",
+      "why": "a complete line of dialogue in three words",
+      "negativeControl": "short-dialogue"
+    },
+    {
+      "text": "“Not one.”",
+      "why": "and the answer to the next question, in two",
+      "negativeControl": "short-dialogue"
+    },
+    {
+      "text": "Update (11 March):",
+      "why": "the author correcting themselves, dated — never fold, never drop",
+      "negativeControl": "dated-update"
+    },
+    {
+      "text": "The ledger says what the ledger says",
+      "why": "the pull quote, which must stay inside its blockquote"
+    },
+    {
+      "text": "four hundred and eleven people on the touchline",
+      "why": "ordinary body prose, so a total wipe-out cannot pass by luck"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Subscribe today",
+      "why": "a header nav item; site chrome, not the piece"
+    },
+    {
+      "text": "Privacy policy",
+      "why": "a footer link, and the shape that leaks in when a container is chosen badly"
+    },
+    {
+      "text": "All rights reserved",
+      "why": "the footer's own boilerplate"
+    }
+  ],
+  "structure": {
+    "h2": {
+      "exactly": 5
+    },
+    "table": {
+      "exactly": 1
+    },
+    "blockquote": {
+      "exactly": 1
+    }
+  },
+  "byline": "Hester Nolan",
+  "title": "The Braemar Result — a match, a measurement and a mistake",
+  "maxBlockChars": 2000,
+  "articleRegion": {
+    "within": [
+      "article"
+    ],
+    "why": "Hand-built, so the region is known by construction: the single <article> is the piece and the surrounding nav and footer are the furniture it was written to have."
+  },
+  "minArticleChars": 3600,
+  "noPunctuationOnlyBlocks": false
+}

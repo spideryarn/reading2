@@ -15,7 +15,7 @@
  * column instead, so all of them are visible at once rather than one at a time
  * behind a control you would have to press.
  *
- *   npm run dev  →  http://localhost:<vite's port>/preview-composer.html
+ *   npm run dev  →  http://localhost:<vite's port>/preview/preview-composer.html
  *
  * `localhost`, not `127.0.0.1`: vite binds IPv6, so the numeric form refuses
  * the connection on a perfectly healthy server.

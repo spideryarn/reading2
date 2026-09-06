@@ -1401,14 +1401,14 @@ describe("a signed-out browser on a shared document", () => {
     }
 
     /* **The bar drew what a default reader sees, and not one button more.** The
-       five behind the switch are absent from a stranger's bar by construction;
+       modes behind the switch are absent from a stranger's bar by construction;
        this is the assertion that they really were, so the second pass below is
        testing something rather than repeating the first. */
     expect(pressed.length, "a stranger's bar is the non-experimental modes").toBeLessThan(
       MODES.length,
     );
 
-    /* **The second pass: the hidden five, each at the address that reaches it.**
+    /* **The second pass: the hidden modes, each at the address that reaches it.**
        Pressing a button that is already checked is a real reader action — it is
        what the empty state's "try again" amounts to — and it runs the same
        `armActivationForMode` + `onMode` path the first pass exercises, which is
@@ -2130,12 +2130,14 @@ describe("a signed-in reader who does not own it", () => {
   it("stays inside the public namespace when the modes are pressed", async () => {
     session.user = { id: "somebody-else", email: "else@example.com" };
     owned = () => json({ error: "not yours" }, 404);
-    /* **The switch on, so this sweep still presses all fourteen.** Four modes
-       went behind it on 2026-09-03 and a fifth, Debate, followed on 2026-09-05,
-       and this reader is the only one in the file who *can* turn it on — a
-       stranger is forcibly off. That makes this the exhaustive press sweep,
-       and the signed-out one above reaches the hidden five by their URLs
-       instead. Neither count was weakened. */
+    /* **The switch on, so this sweep still presses all fourteen.** Modes have
+       been going behind it since 2026-09-03 (and Quotes came back out on
+       2026-09-06 — which side each is on is
+       tests/dock-experimental-modes.test.tsx § BEHIND_THE_SWITCH), and this
+       reader is the only one in the file who *can* turn it on — a stranger is
+       forcibly off. That makes this the exhaustive press sweep, and the
+       signed-out one above reaches the hidden ones by their URLs instead.
+       Nothing was weakened. */
     experimentalSince = "2026-09-01T00:00:00.000Z";
     await open();
     /* Clears the three requests a signed-in reader legitimately makes that a

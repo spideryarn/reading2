@@ -162,7 +162,7 @@ server.listen(PORT, HOST, () => {
      `localhost`, not 127.0.0.1: vite binds IPv6, so the numeric form refuses
      the connection on a perfectly healthy server. */
   console.log(`  now run "npm run dev" and open, on whichever port it prints:`);
-  console.log(`  http://localhost:<vite's port>/preview-live.html?slug=noema-mythology-of-conscious-ai`);
+  console.log(`  http://localhost:<vite's port>/preview/preview-live.html?slug=noema-mythology-of-conscious-ai`);
   if (!process.env.OPENAI_API_KEY) {
     console.log(``);
     console.log(`  ! OPENAI_API_KEY is not set — /session will refuse.`);

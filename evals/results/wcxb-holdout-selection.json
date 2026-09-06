@@ -1,0 +1,1038 @@
+{
+  "dataset": {
+    "doi": "10.5281/zenodo.19316874",
+    "zenodoRecord": 19316874,
+    "repo": "https://github.com/Murrough-Foley/web-content-extraction-benchmark",
+    "tag": "v1.0",
+    "licence": "CC-BY-4.0",
+    "archiveBytes": 84289810,
+    "pages": {
+      "dev": 1497,
+      "test": 511,
+      "total": 2008
+    },
+    "alsoKnownAs": "WCEB",
+    "selfReportedReadability": {
+      "devF1": 0.675,
+      "devPrecision": 0.685,
+      "devRecall": 0.713,
+      "testF1": 0.726
+    },
+    "verifiedOn": "2026-09-05"
+  },
+  "seed": "spideryarn-260904e-stageB",
+  "split": "test",
+  "pageType": "article",
+  "size": 200,
+  "custodian": "Greg Detre — holds the frozen thresholds; nobody opens a page before they are frozen",
+  "selectedOn": "2026-09-05",
+  "scores": "text-selection-only",
+  "excluded": {
+    "exactUrlOverlap": [],
+    "hostOverlap": [],
+    "nonArticle": 254,
+    "noUrl": 1
+  },
+  "chosen": [
+    {
+      "file_id": "4997",
+      "url": "https://www.arcintermedia.com/knowledge-base/seo-and-organic-reach/how-much-do-seo-agencies-charge/",
+      "host": "arcintermedia.com"
+    },
+    {
+      "file_id": "5442",
+      "url": "https://swagger.io/blog/api-documentation-guide/",
+      "host": "swagger.io"
+    },
+    {
+      "file_id": "5620",
+      "url": "https://itsatravelod.substack.com/p/digitalnomad",
+      "host": "itsatravelod.substack.com"
+    },
+    {
+      "file_id": "4643",
+      "url": "https://synergycustomfitness.com/blogs/synergy-custom-blog/home-gym-ideas-on-a-budget-home-gym-equipment-tips?srsltid=AfmBOorygy_0t2zxxE1NWb4xzt53Xwlm8lzk8C75jg3GWSxIxJVrLKin",
+      "host": "synergycustomfitness.com"
+    },
+    {
+      "file_id": "4126",
+      "url": "https://www.healthyforlifemeals.com/blog/10-nutrition-myths-debunked",
+      "host": "healthyforlifemeals.com"
+    },
+    {
+      "file_id": "5693",
+      "url": "https://www.townsquareinteractive.com/blog/hubspot-alternatives/",
+      "host": "townsquareinteractive.com"
+    },
+    {
+      "file_id": "5435",
+      "url": "https://www.heretto.com/blog/api-documentation",
+      "host": "heretto.com"
+    },
+    {
+      "file_id": "5644",
+      "url": "https://remotewize.com/slack-alternatives/",
+      "host": "remotewize.com"
+    },
+    {
+      "file_id": "4092",
+      "url": "https://www.citizensbank.com/learning/a-young-professionals-guide-to-saving.aspx",
+      "host": "citizensbank.com"
+    },
+    {
+      "file_id": "4709",
+      "url": "https://www.pikenursery.com/garden-guides/houseplants-for-low-light2",
+      "host": "pikenursery.com"
+    },
+    {
+      "file_id": "5623",
+      "url": "https://travellingbuzz.com/my-digital-nomad-story/",
+      "host": "travellingbuzz.com"
+    },
+    {
+      "file_id": "4103",
+      "url": "https://www.cybersaint.io/blog/cybersecurity-best-practices-for-small-businesses-and-startups",
+      "host": "cybersaint.io"
+    },
+    {
+      "file_id": "5013",
+      "url": "https://digital-photography-school.com/welcome-to-the-newly-updated-dps-forum/comment-page-1/",
+      "host": "digital-photography-school.com"
+    },
+    {
+      "file_id": "5554",
+      "url": "https://taketinyaction.com/debt-free-my-4-year-journey-to-financial-freedom/",
+      "host": "taketinyaction.com"
+    },
+    {
+      "file_id": "5642",
+      "url": "https://www.banani.co/blog/best-figma-make-ai-alternatives",
+      "host": "banani.co"
+    },
+    {
+      "file_id": "5607",
+      "url": "https://digital-photography-school.com/composing-dynamic-landscape-images/",
+      "host": "digital-photography-school.com"
+    },
+    {
+      "file_id": "4978",
+      "url": "https://www.cohesity.com/glossary/enterprise-cloud-storage/",
+      "host": "cohesity.com"
+    },
+    {
+      "file_id": "4048",
+      "url": "https://www.consumerreports.org/cars/hybrids-evs/buying-guide/",
+      "host": "consumerreports.org"
+    },
+    {
+      "file_id": "5463",
+      "url": "https://wikiteq.com/post/setting-up-a-local-wiki",
+      "host": "wikiteq.com"
+    },
+    {
+      "file_id": "5225",
+      "url": "https://www.revolt.tv/article/most-anticipated-festivals-2026-hip-hop-rnb-jazz",
+      "host": "revolt.tv"
+    },
+    {
+      "file_id": "5433",
+      "url": "https://steampunk.si/spotter/blog/ansible-playbook-development-step-by-step-guide/",
+      "host": "steampunk.si"
+    },
+    {
+      "file_id": "5539",
+      "url": "https://climatedrift.substack.com/p/abracadabra-unlocking-the-capital",
+      "host": "climatedrift.substack.com"
+    },
+    {
+      "file_id": "5628",
+      "url": "https://redwhiteadventures.com/productive-digital-nomad/",
+      "host": "redwhiteadventures.com"
+    },
+    {
+      "file_id": "4171",
+      "url": "https://scottdavenportphoto.com/blog/5-tips-for-landscape-composition",
+      "host": "scottdavenportphoto.com"
+    },
+    {
+      "file_id": "5562",
+      "url": "https://jessieonajourney.com/backpacking-southeast-asia/",
+      "host": "jessieonajourney.com"
+    },
+    {
+      "file_id": "4645",
+      "url": "https://xmarkfitness.com/blogs/news/affordable-home-gyms-setup?srsltid=AfmBOop3k25_Qk233hm53wZZYUDrYn6tCfvjsQyuprlRDMTJPem7SoR7",
+      "host": "xmarkfitness.com"
+    },
+    {
+      "file_id": "5434",
+      "url": "https://stoplight.io/api-documentation-guide",
+      "host": "stoplight.io"
+    },
+    {
+      "file_id": "5555",
+      "url": "https://www.getrichslowly.org/life-after-debt/",
+      "host": "getrichslowly.org"
+    },
+    {
+      "file_id": "5289",
+      "url": "https://www.hfotusa.org/donor-tips-importance-charity-ratings/",
+      "host": "hfotusa.org"
+    },
+    {
+      "file_id": "5650",
+      "url": "https://pumble.com/blog/best-zoom-alternatives/",
+      "host": "pumble.com"
+    },
+    {
+      "file_id": "5673",
+      "url": "https://www.buzzcube.io/shopify-alternatives/",
+      "host": "buzzcube.io"
+    },
+    {
+      "file_id": "5189",
+      "url": "https://www.higherlogic.com/blog/online-community-forum/",
+      "host": "higherlogic.com"
+    },
+    {
+      "file_id": "5690",
+      "url": "https://www.emailtooltester.com/en/blog/hubspot-alternatives/",
+      "host": "emailtooltester.com"
+    },
+    {
+      "file_id": "5330",
+      "url": "https://bookriot.com/december-2025-book-club-picks/",
+      "host": "bookriot.com"
+    },
+    {
+      "file_id": "5533",
+      "url": "https://delphizero.substack.com/p/tree",
+      "host": "delphizero.substack.com"
+    },
+    {
+      "file_id": "4456",
+      "url": "http://www.startuplessonslearned.com/2008/09/lean-startup.html",
+      "host": "startuplessonslearned.com"
+    },
+    {
+      "file_id": "5534",
+      "url": "https://climatedrift.substack.com/p/the-climate-tech-marketing-starter",
+      "host": "climatedrift.substack.com"
+    },
+    {
+      "file_id": "5676",
+      "url": "https://webstudio.is/blog/best-wordpress-alternatives",
+      "host": "webstudio.is"
+    },
+    {
+      "file_id": "5205",
+      "url": "https://thewhetpalette.com/2026/02/09/the-worlds-50-best-restaurants-awards-heads-to-abu-dhabi-for-the-first-time/",
+      "host": "thewhetpalette.com"
+    },
+    {
+      "file_id": "5149",
+      "url": "https://www.discovertenkara.com/ultralight-backpacking/",
+      "host": "discovertenkara.com"
+    },
+    {
+      "file_id": "5587",
+      "url": "https://www.gamedeveloper.com/design/5-tips-for-no-bull-indie-game-design",
+      "host": "gamedeveloper.com"
+    },
+    {
+      "file_id": "5209",
+      "url": "https://coe.gatech.edu/news/2025/09/undergrad-engineering-program-returns-no-3-us-news-2026-rankings",
+      "host": "coe.gatech.edu"
+    },
+    {
+      "file_id": "5170",
+      "url": "https://sewingworkshop.com/new-blog/sewing-for-beginners",
+      "host": "sewingworkshop.com"
+    },
+    {
+      "file_id": "4038",
+      "url": "https://www.microsoft.com/en-us/microsoft-365/blog/2020/03/20/helping-developers-stay-productive-working-remotely/",
+      "host": "microsoft.com"
+    },
+    {
+      "file_id": "4277",
+      "url": "https://www.ecomobl.com/blog/how-fast-electric-skateboards-go/?srsltid=AfmBOoo42x2Hv31Uoe-nBdQUwdaZZT6sVC6k2eV7pqZXtbP_wrs9jgpA",
+      "host": "ecomobl.com"
+    },
+    {
+      "file_id": "4542",
+      "url": "https://www.creditkarma.com/Error_Credit_Karma.htm?referenceerror=18.d4e1202.1773517969.11a18e45",
+      "host": "creditkarma.com"
+    },
+    {
+      "file_id": "5326",
+      "url": "https://lithub.com/the-ultimate-best-books-of-2025-list/",
+      "host": "lithub.com"
+    },
+    {
+      "file_id": "5691",
+      "url": "https://www.emailvendorselection.com/hubspot-alternatives/",
+      "host": "emailvendorselection.com"
+    },
+    {
+      "file_id": "4562",
+      "url": "https://tinyhousegiantjourney.com/2018/07/02/tiny-house-cons/",
+      "host": "tinyhousegiantjourney.com"
+    },
+    {
+      "file_id": "4381",
+      "url": "https://softwaremill.com/business-insights/best-tech-podcasts-for-ctos-and-it-decision-makers/",
+      "host": "softwaremill.com"
+    },
+    {
+      "file_id": "4113",
+      "url": "https://www.omventure.com/blog/affordable-ethical-sustainable-clothing-brands",
+      "host": "omventure.com"
+    },
+    {
+      "file_id": "5233",
+      "url": "https://podnews.net/press-release/best-true-crime-podcasts-2025",
+      "host": "podnews.net"
+    },
+    {
+      "file_id": "4478",
+      "url": "https://www.packhacker.com/blog/general/best-portable-bluetooth-speaker/",
+      "host": "packhacker.com"
+    },
+    {
+      "file_id": "4011",
+      "url": "https://www.nytimes.com/wirecutter/reviews/best-laptop-under-500/",
+      "host": "nytimes.com"
+    },
+    {
+      "file_id": "5152",
+      "url": "https://www.fieldmag.com/articles/samaya-ultralight-mountaineering-gear",
+      "host": "fieldmag.com"
+    },
+    {
+      "file_id": "5530",
+      "url": "https://sustainabilitynews.substack.com/p/whats-next-in-climate-tech-here-are",
+      "host": "sustainabilitynews.substack.com"
+    },
+    {
+      "file_id": "5594",
+      "url": "https://blog.ultimateperformance.com/my-fitness-journey-week-5-transformation-test/",
+      "host": "blog.ultimateperformance.com"
+    },
+    {
+      "file_id": "4596",
+      "url": "https://www.diggs.pet/blogs/posts/puppy-obedience-training?srsltid=AfmBOorfdENyq_MOafNqoOk1XiIy_mr-gpsHZ40eP2G_mPwzmbhACzPb",
+      "host": "diggs.pet"
+    },
+    {
+      "file_id": "5577",
+      "url": "https://www.hannahillphotography.com/blog-education/balance-as-a-working-mom",
+      "host": "hannahillphotography.com"
+    },
+    {
+      "file_id": "5695",
+      "url": "https://leadsbridge.com/blog/hubspot-alternatives/",
+      "host": "leadsbridge.com"
+    },
+    {
+      "file_id": "5468",
+      "url": "https://www.cloudways.com/blog/install-mediawiki/",
+      "host": "cloudways.com"
+    },
+    {
+      "file_id": "5294",
+      "url": "https://wholewhale.com/tips/nonprofit-transparency-best-practices/",
+      "host": "wholewhale.com"
+    },
+    {
+      "file_id": "4633",
+      "url": "https://lillieeatsandtells.com/7-healthy-air-fryer-recipes/",
+      "host": "lillieeatsandtells.com"
+    },
+    {
+      "file_id": "4440",
+      "url": "https://nathanbenaich.substack.com/about",
+      "host": "nathanbenaich.substack.com"
+    },
+    {
+      "file_id": "5621",
+      "url": "https://www.indietraveller.co/how-to-work-remotely/",
+      "host": "indietraveller.co"
+    },
+    {
+      "file_id": "4150",
+      "url": "https://www.heatherhandmade.com/best-sewing-machine-for-making-clothes/",
+      "host": "heatherhandmade.com"
+    },
+    {
+      "file_id": "5290",
+      "url": "https://www.savethechildren.org/us/about-us/charity-ratings",
+      "host": "savethechildren.org"
+    },
+    {
+      "file_id": "4598",
+      "url": "https://www.eukanuba.com/au/articles/training/the-top-10-commands-to-teach-your-puppy-first",
+      "host": "eukanuba.com"
+    },
+    {
+      "file_id": "5596",
+      "url": "https://rishabhdev.com/fitness-journey/",
+      "host": "rishabhdev.com"
+    },
+    {
+      "file_id": "5654",
+      "url": "https://www.obsbot.com/blog/video-conferencing/zoom-alternatives?srsltid=AfmBOoqgUv5LkHfKIlyCEQbCFN3IFspqTRdz9RsqC2APIqBKksOuVqfy",
+      "host": "obsbot.com"
+    },
+    {
+      "file_id": "5649",
+      "url": "https://ifttt.com/explore/top-slack-alternatives",
+      "host": "ifttt.com"
+    },
+    {
+      "file_id": "5663",
+      "url": "https://www.emailtooltester.com/en/blog/mailchimp-alternatives/",
+      "host": "emailtooltester.com"
+    },
+    {
+      "file_id": "5610",
+      "url": "https://modernminimalism.com/how-to-declutter-your-home/",
+      "host": "modernminimalism.com"
+    },
+    {
+      "file_id": "5416",
+      "url": "https://zerotomastery.io/blog/typescript-generics-explained/",
+      "host": "zerotomastery.io"
+    },
+    {
+      "file_id": "5536",
+      "url": "https://futurebeat.substack.com/p/climate-tech-needs-a-reboot",
+      "host": "futurebeat.substack.com"
+    },
+    {
+      "file_id": "5447",
+      "url": "https://www.freecodecamp.org/news/how-to-create-documentation-with-docspage/",
+      "host": "freecodecamp.org"
+    },
+    {
+      "file_id": "5570",
+      "url": "https://www.delallo.com/blog/authentic-italian-recipes/?srsltid=AfmBOorGdFWLkqQSm9Ol9GP769ljV3GTG3iUjuqnq5vCnsl8RSEzKq34",
+      "host": "delallo.com"
+    },
+    {
+      "file_id": "5195",
+      "url": "https://penncomp.com/common-it-issues-and-troubleshooting/",
+      "host": "penncomp.com"
+    },
+    {
+      "file_id": "4976",
+      "url": "https://www.cloudtech.com/resources/cloud-services-guide-small-businesses",
+      "host": "cloudtech.com"
+    },
+    {
+      "file_id": "5643",
+      "url": "https://www.rocket.chat/blog/slack-alternative",
+      "host": "rocket.chat"
+    },
+    {
+      "file_id": "5521",
+      "url": "https://features.api.westelm.com/pages/features/lighting-buying-guide/",
+      "host": "features.api.westelm.com"
+    },
+    {
+      "file_id": "5167",
+      "url": "https://www.needleinkandthread.com/blog/five-easy-beginner-sewing-patterns/?srsltid=AfmBOooUf1fYal4wuYUblD-GAC7dGIRODl2w_mDytyEvhKRB5IxN620e",
+      "host": "needleinkandthread.com"
+    },
+    {
+      "file_id": "4608",
+      "url": "https://earth5r.org/a-beginners-guide-to-zero-waste-living-2/",
+      "host": "earth5r.org"
+    },
+    {
+      "file_id": "4691",
+      "url": "https://www.thewinesociety.com/discover/explore/regional-guides/american-wine-ultimate-guide/",
+      "host": "thewinesociety.com"
+    },
+    {
+      "file_id": "5235",
+      "url": "https://www.thebigpossible.com/blog/whats-the-best-true-crime-podcast-in-2025",
+      "host": "thebigpossible.com"
+    },
+    {
+      "file_id": "5696",
+      "url": "https://www.insightly.com/blog/hubspot-crm-competitors/",
+      "host": "insightly.com"
+    },
+    {
+      "file_id": "5549",
+      "url": "https://klementoninvesting.substack.com/p/philosophical-economics-the-golden",
+      "host": "klementoninvesting.substack.com"
+    },
+    {
+      "file_id": "5031",
+      "url": "https://en.aqua-fish.net/articles/guide-setting-up-aquarium-pictures",
+      "host": "en.aqua-fish.net"
+    },
+    {
+      "file_id": "5581",
+      "url": "https://laurenconrad.com/blog/2016/04/go-for-it-5-work-life-balance-hacks-from-a-working-mom/",
+      "host": "laurenconrad.com"
+    },
+    {
+      "file_id": "4587",
+      "url": "https://thegrangehallohio.com/blog/12-month-wedding-planning/",
+      "host": "thegrangehallohio.com"
+    },
+    {
+      "file_id": "5611",
+      "url": "https://nourishingminimalism.com/declutter-organize-home/",
+      "host": "nourishingminimalism.com"
+    },
+    {
+      "file_id": "4644",
+      "url": "https://tribelifting.com/blogs/news/building-a-home-gym-on-a-budget-essential-tools?srsltid=AfmBOoqCKnqzBB4T51JqKLVT-H0cgNQKAPfk1CbEuI91NaYgjMEbjmWd",
+      "host": "tribelifting.com"
+    },
+    {
+      "file_id": "5406",
+      "url": "https://www.integralist.co.uk/posts/rust-ownership/",
+      "host": "integralist.co.uk"
+    },
+    {
+      "file_id": "5601",
+      "url": "https://www.mikesmithphotography.com/blogindex/landscape-photography-tips",
+      "host": "mikesmithphotography.com"
+    },
+    {
+      "file_id": "4830",
+      "url": "https://www.wareable.com/fitness-trackers/the-best-fitness-tracker",
+      "host": "wareable.com"
+    },
+    {
+      "file_id": "5592",
+      "url": "https://simplychristylynn.com/blog//fitness-transformation-before-and-after-strength-journey",
+      "host": "simplychristylynn.com"
+    },
+    {
+      "file_id": "5576",
+      "url": "https://www.psychedmommy.com/blog/working-mom",
+      "host": "psychedmommy.com"
+    },
+    {
+      "file_id": "5413",
+      "url": "https://graphite.com/guides/typescript-generics",
+      "host": "graphite.com"
+    },
+    {
+      "file_id": "5083",
+      "url": "https://hikemuch.com/best-backpacking-forums/",
+      "host": "hikemuch.com"
+    },
+    {
+      "file_id": "5635",
+      "url": "https://buildin.ai/blog/notion-alternatives-2025",
+      "host": "buildin.ai"
+    },
+    {
+      "file_id": "5614",
+      "url": "https://minimalisthome.ca/a-to-z-minimalist-home-decluttering-strategies/",
+      "host": "minimalisthome.ca"
+    },
+    {
+      "file_id": "4669",
+      "url": "https://petticoatjunktion.com/furniture/antique-furniture-restored/",
+      "host": "petticoatjunktion.com"
+    },
+    {
+      "file_id": "4179",
+      "url": "https://mommywise.com/blog/top-10-toddler-sleep-training-tips/",
+      "host": "mommywise.com"
+    },
+    {
+      "file_id": "5535",
+      "url": "https://opportunitymia.substack.com/p/climate-tech-recap-the-latest-innovations",
+      "host": "opportunitymia.substack.com"
+    },
+    {
+      "file_id": "4067",
+      "url": "https://facet.com/real-estate/home-renovation-costs-room-by-room-costs-and-rois/",
+      "host": "facet.com"
+    },
+    {
+      "file_id": "5603",
+      "url": "https://timshields.com/landscape-photography-tips/",
+      "host": "timshields.com"
+    },
+    {
+      "file_id": "5602",
+      "url": "https://stephenbayphotography.com/blog/my-creative-process-for-landscape-photography/",
+      "host": "stephenbayphotography.com"
+    },
+    {
+      "file_id": "4117",
+      "url": "https://www.takethemagicstep.com/training-exercise/beginners/run-a-marathon-in-one-year-a-long-term-training-schedule-for-beginners/",
+      "host": "takethemagicstep.com"
+    },
+    {
+      "file_id": "4443",
+      "url": "https://clouddb.substack.com/p/recommended-10-noteworthy-substacks",
+      "host": "clouddb.substack.com"
+    },
+    {
+      "file_id": "5627",
+      "url": "https://blog.nomadstays.com/travel-slow-stay-longer-the-digital-nomads-guide-to-off-peak-off-the-beaten-track-travel/",
+      "host": "blog.nomadstays.com"
+    },
+    {
+      "file_id": "5597",
+      "url": "https://www.oreateai.com/blog/a-year-of-transformation-my-journey-through-fitness/85d18ab40eb5d5f3f2fe398e9cbd800d",
+      "host": "oreateai.com"
+    },
+    {
+      "file_id": "4538",
+      "url": "https://www.nationwide.com/lc/resources/home/articles/home-insurance-tips",
+      "host": "nationwide.com"
+    },
+    {
+      "file_id": "5437",
+      "url": "https://buildwithfern.com/post/api-documentation-best-practices-guide",
+      "host": "buildwithfern.com"
+    },
+    {
+      "file_id": "4051",
+      "url": "https://podenergy.com/guides/your-guide-to-choosing-an-ev?srsltid=AfmBOorhfDqMziMKLsdyLLwLRD7ZS7HLaoeMqOEftExeFDPLuXI5zKtv",
+      "host": "podenergy.com"
+    },
+    {
+      "file_id": "5584",
+      "url": "https://attachmentparenting.org/blog/2015/01/08/a-working-mom-seeks-balance/",
+      "host": "attachmentparenting.org"
+    },
+    {
+      "file_id": "5674",
+      "url": "https://jumpseller.com/learn/best-shopify-alternative-for-building-a-website/",
+      "host": "jumpseller.com"
+    },
+    {
+      "file_id": "4442",
+      "url": "https://fdaudens.substack.com/p/i-dont-check-my-inbox-anymore-and",
+      "host": "fdaudens.substack.com"
+    },
+    {
+      "file_id": "4498",
+      "url": "https://www.soundstagexperience.com/index.php/features-menu/pulse-menu/686-the-five-best-noise-canceling-headphones-and-earphones-according-to-me",
+      "host": "soundstagexperience.com"
+    },
+    {
+      "file_id": "5218",
+      "url": "https://www.empower.com/the-currency/life/top-states-to-retire",
+      "host": "empower.com"
+    },
+    {
+      "file_id": "4132",
+      "url": "https://www.veros.com/housing-market-predictions-for-2026",
+      "host": "veros.com"
+    },
+    {
+      "file_id": "4174",
+      "url": "https://www.uchicagomedicine.org/forefront/pediatrics-articles/sleep-training-in-infants-and-toddlers",
+      "host": "uchicagomedicine.org"
+    },
+    {
+      "file_id": "5672",
+      "url": "https://www.tooltester.com/en/blog/shopify-alternatives/",
+      "host": "tooltester.com"
+    },
+    {
+      "file_id": "5559",
+      "url": "https://alittleadrift.com/solo-asia/",
+      "host": "alittleadrift.com"
+    },
+    {
+      "file_id": "4599",
+      "url": "https://www.cctvcameraworld.com/security-camera-systems/best-cheap-home-security-cameras/",
+      "host": "cctvcameraworld.com"
+    },
+    {
+      "file_id": "5291",
+      "url": "https://www.nonprofitaccountingbasics.org/form-990/charity-ratings-why-they-matter-ways-improve",
+      "host": "nonprofitaccountingbasics.org"
+    },
+    {
+      "file_id": "5662",
+      "url": "https://www.any.do/blog/lightweight-kanban-alternatives-to-trello-and-asana/",
+      "host": "any.do"
+    },
+    {
+      "file_id": "4787",
+      "url": "https://www.btod.com/blog/best-standing-desk-converters/?srsltid=AfmBOoodFB_-HWymvH9--V-04Rd4H93nmoisK2uvnId5B4fR92hx5FOh",
+      "host": "btod.com"
+    },
+    {
+      "file_id": "4064",
+      "url": "https://uk.pcmag.com/computer-mice/127428/the-best-ergonomic-mice",
+      "host": "uk.pcmag.com"
+    },
+    {
+      "file_id": "5626",
+      "url": "https://www.peakforce.dev/blog/travel-remote-work-starter-guide-for-digital-nomads",
+      "host": "peakforce.dev"
+    },
+    {
+      "file_id": "4993",
+      "url": "https://www.contractorgrowthnetwork.com/seo-pricing-guide-2023/",
+      "host": "contractorgrowthnetwork.com"
+    },
+    {
+      "file_id": "5210",
+      "url": "https://www.go.study/blog/best-engineering-universities-in-usa-2026-guide",
+      "host": "go.study"
+    },
+    {
+      "file_id": "5357",
+      "url": "https://tccl.libnet.info/event/7538072",
+      "host": "tccl.libnet.info"
+    },
+    {
+      "file_id": "5617",
+      "url": "https://minimalism.co/articles/daily-decluttering",
+      "host": "minimalism.co"
+    },
+    {
+      "file_id": "5545",
+      "url": "https://antonvorobets.substack.com/p/the-finance-and-economics-problem",
+      "host": "antonvorobets.substack.com"
+    },
+    {
+      "file_id": "5629",
+      "url": "https://absolutelylucy.com/becoming-a-digital-nomad/",
+      "host": "absolutelylucy.com"
+    },
+    {
+      "file_id": "5566",
+      "url": "https://www.bemytravelmuse.com/solo-female-travel-southeast-asia/",
+      "host": "bemytravelmuse.com"
+    },
+    {
+      "file_id": "5595",
+      "url": "https://tarasfitworld.com/2022/09/29/fitness-transformation-story/",
+      "host": "tarasfitworld.com"
+    },
+    {
+      "file_id": "4058",
+      "url": "https://www.health.harvard.edu/mind-and-mood/regular-physical-activity-can-boost-mood",
+      "host": "health.harvard.edu"
+    },
+    {
+      "file_id": "5540",
+      "url": "https://phinancenet.substack.com/p/financial-economics-what-kind-of",
+      "host": "phinancenet.substack.com"
+    },
+    {
+      "file_id": "5579",
+      "url": "https://blog.themomproject.com/the-balance-of-being-a-single-working-mom",
+      "host": "blog.themomproject.com"
+    },
+    {
+      "file_id": "4672",
+      "url": "https://www.oldcrowsantiques.com/blog/tips-for-restoring-and-refinishing-antique-furniture",
+      "host": "oldcrowsantiques.com"
+    },
+    {
+      "file_id": "4995",
+      "url": "https://www.searchbloom.com/blog/how-much-does-it-cost-to-hire-an-seo-company/",
+      "host": "searchbloom.com"
+    },
+    {
+      "file_id": "4579",
+      "url": "https://drinkkoia.com/blogs/blog/7-ways-to-help-you-transition-to-a-plant-based-diet?srsltid=AfmBOopUUajsTEsEgJ9LBFJ6AGPylrI1_bx1o4NY1ODT6v9iFKGsbAHv",
+      "host": "drinkkoia.com"
+    },
+    {
+      "file_id": "5651",
+      "url": "https://getvoip.com/blog/zoom-alternatives/",
+      "host": "getvoip.com"
+    },
+    {
+      "file_id": "5665",
+      "url": "https://www.gmass.co/blog/mailchimp-alternatives/",
+      "host": "gmass.co"
+    },
+    {
+      "file_id": "5582",
+      "url": "https://fargomom.com/working-mom-tips-finding-balance-in-routine/",
+      "host": "fargomom.com"
+    },
+    {
+      "file_id": "5547",
+      "url": "https://thecounterbalance.substack.com/p/balanced-economy-project-launches",
+      "host": "thecounterbalance.substack.com"
+    },
+    {
+      "file_id": "5667",
+      "url": "https://moosend.com/blog/mailchimp-alternatives/",
+      "host": "moosend.com"
+    },
+    {
+      "file_id": "4833",
+      "url": "https://www.health.com/condition/oral-health/best-electric-toothbrush",
+      "host": "health.com"
+    },
+    {
+      "file_id": "5548",
+      "url": "https://robertpuelz.substack.com/p/sneak-peek-whats-inside-economics",
+      "host": "robertpuelz.substack.com"
+    },
+    {
+      "file_id": "5168",
+      "url": "https://crazylittleprojects.com/25-beginner-sewing-projects/",
+      "host": "crazylittleprojects.com"
+    },
+    {
+      "file_id": "4055",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9902068/",
+      "host": "pmc.ncbi.nlm.nih.gov"
+    },
+    {
+      "file_id": "5216",
+      "url": "https://www.travelandleisure.com/best-big-town-for-elderly-to-live-in-2026-11880421",
+      "host": "travelandleisure.com"
+    },
+    {
+      "file_id": "4486",
+      "url": "https://www.texasmattressmakers.com/blog/what-is-best-mattress-side-sleepers/?srsltid=AfmBOoo_Xw7RuMTtX4IiaTgTYOKGWloJcBHlXQicUhSxvf5PKVHyLKJf",
+      "host": "texasmattressmakers.com"
+    },
+    {
+      "file_id": "5580",
+      "url": "https://littlesunshine.com/blog/tips-for-working-moms-balancing-work-and-family-life/",
+      "host": "littlesunshine.com"
+    },
+    {
+      "file_id": "5656",
+      "url": "https://opensource.com/alternatives/trello",
+      "host": "opensource.com"
+    },
+    {
+      "file_id": "4114",
+      "url": "https://everywomansmarathon.com/beginner-plan/",
+      "host": "everywomansmarathon.com"
+    },
+    {
+      "file_id": "5551",
+      "url": "https://michellewhitley.com/blog/our-debt-free-journey/",
+      "host": "michellewhitley.com"
+    },
+    {
+      "file_id": "5678",
+      "url": "https://www.squarespace.com/blog/wordpress-alternatives",
+      "host": "squarespace.com"
+    },
+    {
+      "file_id": "5550",
+      "url": "https://ordinarytobadass.com/debt-free-journey/",
+      "host": "ordinarytobadass.com"
+    },
+    {
+      "file_id": "5618",
+      "url": "https://www.thesimplicityhabit.com/the-best-blogs-on-simple-living-minimalism-and-decluttering/",
+      "host": "thesimplicityhabit.com"
+    },
+    {
+      "file_id": "4570",
+      "url": "https://ocs.yale.edu/job-offers-salary-negotiation/",
+      "host": "ocs.yale.edu"
+    },
+    {
+      "file_id": "5266",
+      "url": "https://eu.jsonline.com/story/money/business/onramp/2018/01/23/looking-place-work-here-9-co-working-spots-around-milwaukee/1043688001/",
+      "host": "eu.jsonline.com"
+    },
+    {
+      "file_id": "5677",
+      "url": "https://www.rocket.new/blog/best-wordpress-website-builder-alternatives-for-growing-brands",
+      "host": "rocket.new"
+    },
+    {
+      "file_id": "5689",
+      "url": "https://www.accountingdepartment.com/blog/bid/387042/3-QuickBooks-Alternatives-For-Small-Business-Accounting-Software",
+      "host": "accountingdepartment.com"
+    },
+    {
+      "file_id": "4044",
+      "url": "https://www.charlestoncoffeeroasters.com/brief-history-of-coffee/?srsltid=AfmBOopF3oGqvNbKG9KDw1o2zDRDW1jSLz1cvhbHYCO2T_moZvzQCJZ3",
+      "host": "charlestoncoffeeroasters.com"
+    },
+    {
+      "file_id": "5407",
+      "url": "https://oneuptime.com/blog/post/2026-01-26-rust-ownership-borrowing-guide/view",
+      "host": "oneuptime.com"
+    },
+    {
+      "file_id": "4846",
+      "url": "https://beefound.agency/google-product-review-guide/",
+      "host": "beefound.agency"
+    },
+    {
+      "file_id": "5631",
+      "url": "https://www.teamwork.com/blog/notion-alternatives/",
+      "host": "teamwork.com"
+    },
+    {
+      "file_id": "4680",
+      "url": "https://www.boardgamequest.com/the-best-board-games-from-2025/",
+      "host": "boardgamequest.com"
+    },
+    {
+      "file_id": "5565",
+      "url": "https://grrrltraveler.com/7-month-backpacking-trip-asia-southeast-asia/",
+      "host": "grrrltraveler.com"
+    },
+    {
+      "file_id": "5541",
+      "url": "https://nickpardini.substack.com/p/how-to-teach-yourself-finance-and",
+      "host": "nickpardini.substack.com"
+    },
+    {
+      "file_id": "4992",
+      "url": "https://foxxr.com/blog/how-much-does-seo-cost/",
+      "host": "foxxr.com"
+    },
+    {
+      "file_id": "5203",
+      "url": "https://www.theworlds50best.com/stories/News/asias-50-best-restaurants-2026-the-51-100-list.html",
+      "host": "theworlds50best.com"
+    },
+    {
+      "file_id": "5546",
+      "url": "https://capitalismandfreedom.substack.com/p/episode-43-myron-scholes-stanford",
+      "host": "capitalismandfreedom.substack.com"
+    },
+    {
+      "file_id": "5634",
+      "url": "https://pivot.app/blog/notion-alternative-team-collaboration",
+      "host": "pivot.app"
+    },
+    {
+      "file_id": "4979",
+      "url": "https://www.filecloud.com/5-best-cloud-storage-providers/",
+      "host": "filecloud.com"
+    },
+    {
+      "file_id": "5441",
+      "url": "https://www.gravitee.io/blog/api-documentation-done-right-technical-guide",
+      "host": "gravitee.io"
+    },
+    {
+      "file_id": "5532",
+      "url": "https://newsletter.mcj.vc/p/sandboxiq?utm_campaign=post&utm_medium=web",
+      "host": "newsletter.mcj.vc"
+    },
+    {
+      "file_id": "5438",
+      "url": "https://konghq.com/blog/learning-center/guide-to-api-documentation",
+      "host": "konghq.com"
+    },
+    {
+      "file_id": "5420",
+      "url": "https://oneuptime.com/blog/post/2026-01-30-graphql-schema-design/view",
+      "host": "oneuptime.com"
+    },
+    {
+      "file_id": "4370",
+      "url": "https://www.theguardian.com/books/2025/dec/05/best-science-fiction-books-2025-ej-swift-jacek-dukaj-silvia-park",
+      "host": "theguardian.com"
+    },
+    {
+      "file_id": "4072",
+      "url": "https://www.outdoorgearlab.com/topics/camping-and-hiking/best-gps-watch",
+      "host": "outdoorgearlab.com"
+    },
+    {
+      "file_id": "5292",
+      "url": "https://hbkcpa.com/insights/nonprofit-ratings-do-make-a-difference/",
+      "host": "hbkcpa.com"
+    },
+    {
+      "file_id": "5609",
+      "url": "https://formedfromlight.com/blog/tips-to-improve-your-landscape-photography/",
+      "host": "formedfromlight.com"
+    },
+    {
+      "file_id": "5591",
+      "url": "https://www.positech.co.uk/cliffsblog/2025/11/08/is-indie-game-dev-even-viable-as-a-business-in-2025/",
+      "host": "positech.co.uk"
+    },
+    {
+      "file_id": "5624",
+      "url": "https://becomenomad.com/embracing-the-digital-nomad-lifestyle-work-remotely-travel/",
+      "host": "becomenomad.com"
+    },
+    {
+      "file_id": "5684",
+      "url": "https://www.accountingseed.com/quickbooks-alternatives/",
+      "host": "accountingseed.com"
+    },
+    {
+      "file_id": "5578",
+      "url": "https://parentingoc.com/health-wellness/balance-for-working-moms/",
+      "host": "parentingoc.com"
+    },
+    {
+      "file_id": "5612",
+      "url": "https://www.becomingminimalist.com/start-decluttering-easy/",
+      "host": "becomingminimalist.com"
+    },
+    {
+      "file_id": "5670",
+      "url": "https://www.mailercloud.com/blog/best-mailchimp-alternatives",
+      "host": "mailercloud.com"
+    },
+    {
+      "file_id": "4368",
+      "url": "https://www.grimdarkmagazine.com/the-best-fantasy-horror-and-sci-fi-books-of-2025/",
+      "host": "grimdarkmagazine.com"
+    },
+    {
+      "file_id": "4142",
+      "url": "https://reolink.com/blog/diy-smart-home-automation-system/?srsltid=AfmBOorzynNVp9Pk9dqkASQ0Pe6hlZQjo9zI0P8lVzZ_F06ZOt3440Qu",
+      "host": "reolink.com"
+    },
+    {
+      "file_id": "5640",
+      "url": "https://designmodo.com/figma-alternatives/",
+      "host": "designmodo.com"
+    },
+    {
+      "file_id": "4702",
+      "url": "https://www.grafgrowers.com/5-expert-tips-picking-low-light-houseplants/",
+      "host": "grafgrowers.com"
+    },
+    {
+      "file_id": "5324",
+      "url": "https://bookclubs.com/blog/top-25-book-club-books-of-2025",
+      "host": "bookclubs.com"
+    },
+    {
+      "file_id": "5648",
+      "url": "https://opensource.com/alternatives/slack",
+      "host": "opensource.com"
+    },
+    {
+      "file_id": "4692",
+      "url": "https://www.primermagazine.com/2022/learn/different-wine-types",
+      "host": "primermagazine.com"
+    },
+    {
+      "file_id": "5253",
+      "url": "https://www.goabroad.com/articles/scholarships-abroad/scholarships-for-study-abroad-around-the-world",
+      "host": "goabroad.com"
+    },
+    {
+      "file_id": "5542",
+      "url": "https://larrykotlikoff.substack.com/p/economics-based-financial-planning",
+      "host": "larrykotlikoff.substack.com"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "fixture": "quanta-year-physics",
+  "file": "quanta_year_physics.html",
+  "note": "THE BYLINE FIXTURE. Stage 2 produces 'By \\n Natalie Wolchover\\n \\n \\nDecember 17, 2024' — whitespace not collapsed, and the date glued on. The byline asserted here is what a reader should see, so this manifest fails today and stops failing when it is fixed. Not the other way round. A WHOLE SECTION IS ALSO MISSING, found 2026-09-05 while checking the heading counts: the piece has five section headings and the shipped extraction also has five, so no count-based floor could ever have seen it — 'Astronomical Discoveries' is gone and 'Next article' has taken its place. Verified by text: neither the heading nor its body ('The night sky holds many secrets…', 'Banana-shaped galaxies, little red dots…') is in the output. That is why the heading is now a mustContain and not merely a number. STRUCTURE: of the source's 10 <h2>, five are the article's sections (Dark Matter Is Dead Long Live Dark Matter, Astronomical Discoveries, Happy Days in the Lab, A Peek Beneath Space-Time, All Riled Up) and five are chrome (Saved Articles, Also in Physics, Comment on this article, Next article, Use your social network), so 'exactly 5' is source truth and also a ceiling. The 3 <h3> are all 'Also in Physics' card titles. The figure floor is the five section illustrations, each carrying its own credit line. No img floor is honest here: the hero image appears both at the top of the piece and inside an onward-journey card, so the source's 14 <img src> cannot be split into article and chrome by count alone. minArticleChars 8800: the article's own six div.post__content sections hold 8,884 gistable characters, and the shipped extraction returns 8,353 — short by the 734-character section it lost, and padded by the 'Next article' rail it kept. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The six div.post__content.wysiwyg blocks hold 7,501 characters against 11,300 for the source body. The shipped extraction returns 6,871, and THE 630 IT MISSES ARE THE ASTRONOMICAL DISCOVERIES SECTION, element by element: its <strong> heading, its two paragraphs and its six links. Nothing in the region is droppable, so the floor is 7,100 and fails today — the same loss the mustContain needle names, measured rather than asserted.",
+  "mustContain": [
+    {
+      "text": "Physicists discovered strange supersolids",
+      "why": "the standfirst"
+    },
+    {
+      "text": "Will 2024 be remembered as a banner year",
+      "why": "the article's first sentence"
+    },
+    {
+      "text": "Astronomical Discoveries",
+      "why": "the second of the piece's five section headings. It and its whole section are absent from the shipped extraction, and the heading count cannot show it because 'Next article' arrived to make the total five again"
+    },
+    {
+      "text": "The night sky holds many secrets",
+      "why": "the first sentence under that heading — the body of the missing section, so recovering the heading alone is not enough to pass"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Next article",
+      "why": "the onward-journey rail, kept as the last block today"
+    },
+    {
+      "text": "Get the latest news delivered to your inbox.",
+      "why": "the newsletter prompt in the site header"
+    },
+    {
+      "text": "About Quanta",
+      "why": "a masthead nav item"
+    }
+  ],
+  "structure": {
+    "h2": {
+      "exactly": 5
+    },
+    "figure": {
+      "atLeast": 5
+    }
+  },
+  "byline": "Natalie Wolchover",
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "div.post__content.wysiwyg"
+    ],
+    "why": "Six div.post__content.wysiwyg blocks: the standfirst and the five section bodies. The seventh div.post__content is the byline-and-PDF rail, and the 'Next article' card that took the place of the missing Astronomical Discoveries section is in a different container again, so neither is credited to the piece."
+  },
+  "minArticleChars": 7100
+}
