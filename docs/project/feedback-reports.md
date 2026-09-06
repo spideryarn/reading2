@@ -133,6 +133,16 @@ It is [engineering-manager.md](../reusable/engineering-manager.md), with the rep
    for `SPIDERYARN-READING2-2A`. That is not tidiness; it is the claim register, and § A report
    dispatched is still `unresolved` says why.
 
+   **Pass it positionally, as above, or the tool will take it back.** A `new-claude` with no name is
+   flagged provisional (`const provisional = !given`,
+   [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts)), and `adoptTitles` — which runs as part of
+   `ls` — renames every provisional session to Claude's own slugified title as soon as it has one.
+   That is the right behaviour and is not a bug to work around: its comment reads *"a name you chose
+   is yours"*, and a name you chose is exactly what a passed name is. But it means the bare
+   `new-claude --no-attach -p -` form cannot hold a claim: the prefix is erased at the moment the
+   session starts work, which is the whole of the period the claim needs to survive. Measured
+   2026-09-06, on a session that came back as `upload-html-file-and-pdf-url-support`.
+
    **Each session does its own bookkeeping** — its own note in `docs/user-feedback/` and its own
    Sentry status write, per § Three ways a report ends. Nothing does it for them afterwards, and a
    report whose agent forgot comes back in the next queue.
