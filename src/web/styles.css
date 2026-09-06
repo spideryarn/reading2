@@ -531,6 +531,73 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    otherwise imposes, because an icon-only button has no text baseline worth
    aligning; the inner flex centres the SVG in the circle. Icons are Lucide —
    docs/project/icons.md. */
+/* Where the article came from, directly under the title — Masthead.tsx §
+   `OriginLine`. The address itself when there is one, and a sentence when there
+   is not.
+
+   **The whole rule exists so that the host is never the part that gets cut.**
+   A URL is longer than the window on plenty of articles, and the half a reader
+   needs is the beginning: `newyorker.com` decides how much of the piece to
+   believe and `/magazine/2026/…/the-long-slug` does not. So the line is a flex
+   row in which only `.origin-path` may shrink, and it is the one carrying the
+   ellipsis. `min-width: 0` on both the row and the path, because a flex item's
+   default `min-width: auto` refuses to shrink below its content and the
+   overflow would leave the row instead.
+
+   Sized and coloured to sit between the title and `.facts` below it: a step
+   quieter than the heading, a step louder than the counts. */
+.origin {
+  display: flex;
+  min-width: 0;
+  max-width: 48rem;
+  margin: 0.3rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+}
+.origin-link,
+.origin-said {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.origin-link { color: var(--ink-soft); text-decoration: none; }
+.origin-link:hover { color: var(--highlight); text-decoration: underline; }
+/* Not a control and not a link — the tooltip is the only thing here, so the
+   cursor is what says there is one. Masthead.tsx says why this is not a button. */
+.origin-said { color: var(--ink-faint); cursor: help; }
+/* `align-self: center` for the same reason the chevron above has it: a glyph
+   has no text baseline worth aligning to, and on a baseline row it hangs low. */
+.origin-icon { flex: none; align-self: center; opacity: 0.75; }
+/* **`flex: none` and a clamp, which is not a contradiction.** The host must not
+   shrink while the path still has anything left to give — that is the whole
+   priority this rule exists to state. But `flex: none` on its own is a promise
+   the row cannot keep: a legal hostname runs to 253 unbroken characters, and a
+   non-shrinking child that long overflows the masthead however wide the parent's
+   `max-width` is. So the cap is a `max-width` rather than a shrink factor: the
+   path collapses first, and only once it is gone does the host reach the edge
+   and take the ellipsis itself. GPT Sol, 2026-09-06. */
+.origin-host {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* **`opacity`, not a colour of its own**, and that is the whole reason the
+   hover state needs no second rule: the path has to fade *with* the host when
+   the link lights up, and a `.origin-link:hover .origin-path` override to put
+   it back would be a descending-specificity selector biome objects to. */
+.origin-path {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.72;
+}
+
 /* The facts line: byline, source, and the article's measurements. Separators
    are drawn by ::before on every span after the first, so a missing byline or
    siteName can't leave a stranded interpunct. */
@@ -3780,6 +3847,12 @@ td.text.has-hit[data-hues="8"] {
 .tip-soon-head {
   font-weight: 600;
   color: var(--ink);
+  /* Every other head here is a phrase with spaces in it and never needs this.
+     The masthead's origin card puts a *hostname* in the head (Masthead.tsx §
+     `OriginLine`), and a hostname is one unbroken token that can legally run to
+     253 characters — with no break opportunity it would push straight through
+     the `max-width` above. GPT Sol, 2026-09-06. */
+  overflow-wrap: anywhere;
 }
 .tip-soon-flag {
   margin-left: 0.4rem;
