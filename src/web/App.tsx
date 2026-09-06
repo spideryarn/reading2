@@ -241,6 +241,7 @@ import {
 } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { SmallScreenHint } from "./SmallScreenHint.js";
+import { ViewportProbe } from "./ViewportProbe.js";
 import { useRenderCount } from "./perf.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
@@ -3856,6 +3857,14 @@ function Reader({
               }
         }
       />
+
+      {/* **`?probe=1` only, and `null` for everybody else** — the viewport
+          diagnostic that stage 4 of
+          docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md
+          exists to get a measurement from. Inside `.reader` because that is
+          where `--mode-w` and `--spine-w` resolve, and after the `Dock` so it
+          is over the bars it is measuring. ViewportProbe.tsx. */}
+      <ViewportProbe />
     </div>
   );
 }
