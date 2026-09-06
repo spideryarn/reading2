@@ -50,7 +50,7 @@ import {
   type TargetBriefing,
   tallyVerdicts,
 } from "../src/hierarchy-expand.js";
-import { CACHE_FLOOR_TOKENS } from "../src/article-prompt.js";
+import { CACHE_FLOOR_TOKENS, estimateTokens } from "../src/article-prompt.js";
 import { PROMPT_VERSION, STRUCTURE_HEADROOM } from "../src/hierarchy.js";
 import type { BuildReport, ModelNode } from "../src/hierarchy.js";
 import { THINKING_HEADROOM } from "../src/token-budget.js";
@@ -260,21 +260,50 @@ describe("the constants a scoped call is made with", () => {
    * `expand/2` asks for the order. A stored answer written under the first was
    * answering a different question, and the stamp is inside the checkpoint key
    * precisely so it cannot be resumed onto by the second.
+   *
+   * `expand/3`, 2026-09-06: the gist rules gained a length — 22-32 words at
+   * these fine rungs — and a ban on meta-narration. An `expand/2` answer is
+   * shorter by construction, so resuming onto one would leave half a tree
+   * written to the old budget and half to the new, which is the visible defect
+   * a reader would call a bug. Greg's brief in
+   * docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md.
    */
-  it("is at expand/2, since the prompt began asking for document order", () => {
-    expect(EXPAND_PROMPT_VERSION).toBe("expand/2");
+  it("is at expand/3, since the gists gained a length and lost the narration", () => {
+    expect(EXPAND_PROMPT_VERSION).toBe("expand/3");
   });
 
   /**
    * The floor is a property of the model, not of us, and the estimate is four
-   * characters to a token — so a prefix within a few percent of it could fall
-   * either side. This pins which side of the line the function draws, which is
-   * the only thing about it that is ours to decide.
+   * characters to a token.
+   *
+   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,078 estimated tokens
+   * against 1,024, so `expansionPrefixIsCacheable` is `true` for every outline
+   * including none at all. Until `expand/3` it was 893.
+   *
+   * **What that changed, stated exactly**, because the loose version of it was
+   * wrong and GPT Sol caught it: eligibility moved from *outline-dependent* to
+   * *estimated-always*. It did **not** go from "never cacheable" to "always
+   * cacheable" — `EXPAND_SYSTEM + outline` could already clear the floor before,
+   * which is precisely what the old form of this test padded an outline to
+   * demonstrate. And `estimatedCacheable` means **our four-characters-per-token
+   * estimate** clears the floor, not that the provider took the prefix or that
+   * any call got a hit.
+   *
+   * This test used to pin the boundary by padding an outline to either side of
+   * it. It cannot any more — the padding length went negative — and there is no
+   * honest fixture for the `false` branch, because every caller's prefix
+   * contains `EXPAND_SYSTEM`. So the pin is on the margin instead, which is the
+   * thing that could actually move: shorten the prompt back under the floor and
+   * this reddens, rather than a cache-hit rate quietly going to zero.
    */
-  it("draws the cache floor at the model's own threshold", () => {
-    const room = CACHE_FLOOR_TOKENS * 4 - EXPAND_SYSTEM.length;
-    expect(expansionPrefixIsCacheable("x".repeat(room - 4))).toBe(false);
-    expect(expansionPrefixIsCacheable("x".repeat(room))).toBe(true);
+  it("clears the cache floor on the prompt alone, with room to spare", () => {
+    expect(estimateTokens(EXPAND_SYSTEM)).toBeGreaterThan(CACHE_FLOOR_TOKENS);
+    /* Not a snug fit, and worth asserting as such: sitting at 1,024 exactly, an
+       edit trimming two words would put the prefix back to outline-dependent
+       for the whole cascade without a single test noticing. Fifty tokens of
+       daylight is what makes that hard to do by accident. */
+    expect(estimateTokens(EXPAND_SYSTEM)).toBeGreaterThan(CACHE_FLOOR_TOKENS + 50);
+    expect(expansionPrefixIsCacheable("")).toBe(true);
   });
 });
 
@@ -347,19 +376,28 @@ describe("the expansion request", () => {
    * `cache_read_input_tokens` is what a working cache reports on its first call
    * too, so without this flag nobody can tell the two apart — which is how
    * src/labels.ts came to write a marker that did nothing for months.
+   *
+   * **Since `expand/3` every prefix clears the floor**, because `EXPAND_SYSTEM`
+   * does on its own — 1,078 estimated tokens against 1,024, up from 893. So the
+   * case this used to prove `false` with is now `true`, and **no case here
+   * proves the flag false any more.** That is the honest state rather than a
+   * gap: no caller can produce one, because every prefix contains
+   * `EXPAND_SYSTEM`. The margin is pinned by the sibling test above, which is
+   * also where the exact claim lives — eligibility went from outline-dependent
+   * to estimated-always, which is a smaller thing than it first sounds.
    */
   it("reports whether the prefix clears the model's floor, rather than assuming it", () => {
+    /* The smallest real request is over the line, and since expand/3 it is over
+       it before the outline is added at all — the sibling test above pins the
+       margin. */
     const short = expansionRequest({
       briefings: [briefing(10, 19, "root > child 2")],
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
     });
-    expect(short.estimatedCacheable).toBe(false);
+    expect(short.estimatedCacheable).toBe(true);
 
-    /* A book's outline is ten chapters with a sentence each, which is still not
-       a kilobyte — so this asserts the flag can go true, not that it does on any
-       real article. Stage 5 measures the real one. */
     const long = expansionRequest({
       briefings: [briefing(10, 19, "root > child 2")],
       blocks,

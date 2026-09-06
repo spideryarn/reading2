@@ -108,6 +108,16 @@ export interface VariantsFile {
   questions: Map<string, string>;
   /** The one replacement GISTS block. */
   gists: string;
+  /**
+   * **Shipped GISTS blocks, pinned by prompt version** — `"toc/5"`, `"toc/6"`.
+   *
+   * These are not variants anybody is choosing between: they are copies of what
+   * `src/hierarchy.ts` sent before and after a bump, so an arm can measure the
+   * bump itself over the same fixed trees. `productionGists()` slices the *live*
+   * SYSTEM and therefore always carries the newest one — which is exactly why a
+   * before/after cannot be built out of the `incumbent` arm alone.
+   */
+  shippedGists: Map<string, string>;
   anchors: AnchorRow[];
 }
 
@@ -137,6 +147,19 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
     }
   }
   const gists = fencedUnder(markdown, /^The GISTS block\b/, "The GISTS block");
+  /* Discovered from the file the same way the variants are, so pinning a
+     `toc/7` block later is a section plus an ARMS entry and no code change. */
+  const shippedGists = new Map<string, string>();
+  for (const line of markdown.split("\n")) {
+    const m = /^## The shipped GISTS block, (toc\/\d+)\s*$/.exec(line);
+    if (m) {
+      const version = m[1]!;
+      shippedGists.set(
+        version,
+        fencedUnder(markdown, new RegExp(`^The shipped GISTS block, ${version.replace("/", "\\/")}\\s*$`), `the shipped ${version} GISTS block`),
+      );
+    }
+  }
   const anchors = anchorRows(markdown);
 
   if (questions.size < 4) {
@@ -150,10 +173,15 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
   if (!gists.startsWith("GISTS")) {
     throw new Error(`variants.md: the GISTS block does not begin "GISTS"`);
   }
+  for (const [version, text] of shippedGists) {
+    if (!text.startsWith("GISTS")) {
+      throw new Error(`variants.md: the shipped ${version} GISTS block does not begin "GISTS" — it begins ${JSON.stringify(text.slice(0, 40))}`);
+    }
+  }
   if (anchors.length !== 5) {
     throw new Error(`variants.md: found ${anchors.length} anchor rows, expected 5 — the calibration gate's claim is about all five`);
   }
-  const parsed = { questions, gists, anchors };
+  const parsed = { questions, gists, shippedGists, anchors };
   if (path === VARIANTS_PATH) cached = parsed;
   return parsed;
 }

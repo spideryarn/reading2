@@ -645,11 +645,44 @@ The answer is rendered as **text**, never as HTML: there is no `dangerouslySetIn
 path and there should never be one. It is model output landing beside the author's prose, and it
 must not be able to dress itself up as the article.
 
+## The drawer that lists them, and what kind of thing it is <a id="the-drawer"></a>
+
+The Comments button in the bottom bar raises a drawer with the list in it — the one panel the dock
+still has ([`Dock.tsx`](../../src/web/Dock.tsx)). Its interaction contract was settled by a browser
+pass on 2026-09-06 rather than argued from the CSS, and it is worth writing down because the markup
+used to claim the opposite:
+
+- **Modeless with respect to the dock.** `.dock` sits at `z-index: 96`, above the scrim's 92, so the
+  bar stays visible and clickable with the drawer open — pressing a mode changes the mode and leaves
+  the drawer up.
+- **Pointer-blocking over the reader beneath the dock:** the fixed scrim intercepts
+  pointer events over the prose and the other reader chrome below it. Nothing behind it
+  is inert or hidden from keyboard or assistive-technology navigation.
+- **Focus moves in on open** — to the drawer's close button, since `DockTab` otherwise left it on the
+  bar and a keyboard reader tabbed straight past the thing they had just opened — **and back to the
+  opener on every close path**: Escape, the scrim, the ×, and the same tab pressed again.
+- **Choosing a comment is the fifth close path**, and it hands focus on rather than back:
+  [`CommentDialog`](../../src/web/CommentDialog.tsx) carries the same lifecycle, so the dialog takes
+  focus as it opens and returns it to the Comments button when it closes. React flushes the drawer's
+  cleanup before the dialog's setup, which is what makes the hand-off land on a stable control.
+  [`tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx`](../../tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx).
+- **Tab is deliberately not trapped**, because the bar behind it is meant to stay reachable. So the
+  drawer keeps a labelled `role="dialog"` and carries **no `aria-modal`**: that attribute tells
+  assistive technology the rest of the page does not exist, which was a false statement about a bar
+  that is visible, operable and Tab-reachable. It said `true` until 2026-09-06.
+
+[`tests/the-dock-drawer-is-not-a-modal.test.tsx`](../../tests/the-dock-drawer-is-not-a-modal.test.tsx)
+holds all of it; the reproduction is in
+[260905h](../plans/260905h-a-mode-failure-should-leave-the-article-readable.md#stage-2-the-docks-real-focus-contract-reproduced).
+Escape's capture-phase handler in `Dock` is untouched by any of this, and must stay that way — it is
+what stops one press closing `CommentDialog` underneath the dim.
+
 ## Where the code is
 
 | File | What it does |
 |---|---|
 | [`src/web/selection.ts`](../../src/web/selection.ts) | mouse selection → `{ blockId, quote, start }`, clamped to one block |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the drawer the list lives in, and its focus contract — [§ The drawer](#the-drawer) |
 | [`src/web/annotate.ts`](../../src/web/annotate.ts) | re-find a quote, and draw the `<mark>` runs over it |
 | [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a Copy button, a box, and the tick-box |
 | [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, and the client-minted id |
