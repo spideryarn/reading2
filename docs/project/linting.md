@@ -210,6 +210,13 @@ So `biome.jsonc` sets `"useEditorconfig": true` even though the formatter is off
 today, and it means that whoever eventually flips `enabled` to `true` gets space/2 from
 `.editorconfig` rather than silently converting all 10,151 lines to tabs on the first run.
 
+**And never pass `--formatter-enabled=true` on the command line.** It overrides the decision above
+without touching the config, so nothing in the tree records that it happened. Measured once: a single
+`biome check --write --formatter-enabled=true` reflowed **205 lines, of which 8 were the author's**
+— in a tree several agents have edits in flight in, which is the whole reason the formatter is off.
+There is no undo: the recovery is `git show HEAD:<file> >` the file and re-apply your own change by
+hand, which is only possible because the other 197 lines were committed. Wrap by hand instead.
+
 ## What the first run found
 
 Twenty diagnostics on the first real run. They sorted into three piles, and the split is the useful

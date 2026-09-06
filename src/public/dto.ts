@@ -62,6 +62,7 @@ import type {
   Glossary,
   Idea,
   Ideas,
+  NavLabelStatus,
   Quote,
   Quotes,
   NodeId,
@@ -629,6 +630,8 @@ export function publicArticle(row: {
   comments: readonly Comment[];
   searches: readonly (SearchRun & { stale: boolean })[];
   sketch: Sketch | null;
+  /** Where the paragraph nav labels are — the column, `not null`, so no `| null`. */
+  navLabelStatus: NavLabelStatus;
 }): PublicArticle {
   return {
     meta: publicMeta(row),
@@ -651,6 +654,15 @@ export function publicArticle(row: {
        public article that silently hot-links every image. See the field's note
        in src/public-types.ts. */
     assets: row.assets ?? undefined,
+    /* **Named, and it is a plain assignment rather than a conditional spread**,
+       because there is no "absent" reading of it: the column is `not null`, and
+       the reader has to be told *which* of the three it is in order to know
+       whether to draw the paragraph layer at all. A key that could go missing
+       would be a fourth state meaning nothing.
+
+       The enum crosses whole and nothing else does — no reason, no provider
+       message, no timestamp. See `PublicArticle.navLabelStatus`. */
+    navLabelStatus: row.navLabelStatus,
     /* `!== null` rather than truthiness, on all four. An artefact is an object
        and so always truthy, so the two agree today — but the day one of these
        becomes a value that can be falsy while present, truthiness silently

@@ -86,6 +86,7 @@ import type {
   Glossary,
   Ideas,
   JobStep,
+  NavLabelStatus,
   Quiz,
   Quotes,
   SearchHit,
@@ -957,6 +958,51 @@ export const articleRevisions = spideryarn.table(
     labels: jsonb("labels").$type<LabelsFile>(),
 
     /**
+     * **Where this revision's paragraph nav labels are** — `NavLabelStatus` in
+     * src/types.ts, one of `pending` / `ready` / `failed`.
+     *
+     * **It sits among the artefact columns and is not one of them**: it holds a
+     * lifecycle rather than a thing, which on this table only `status` above
+     * does, and `status` is about the revision where this is about one artefact
+     * inside it. It exists because absence on `TreeNode.navLabel` already means
+     * something else. A leaf with no label is
+     * a caption or a pull-quote, deliberately unlabelled and legal since the
+     * tree was written; *not written yet* is a different claim and had nowhere
+     * to live. src/hierarchy.ts asked for it by name — deferring the labels
+     * "needs a state that says 'still arriving' rather than an absence that says
+     * nothing".
+     *
+     * **A column rather than a field on `tree` or on `labels`**, and that is
+     * GPT Sol's F6 rather than a preference: a labels run that fails has to mark
+     * **the revision the reader is actually looking at**, which is the published
+     * one — its own candidate tree is thrown away, and a terminal job's history
+     * is not permanent. So the state has to be reachable and writable
+     * independently of whatever draft was in flight, exactly as
+     * `pgGlossaryStore.deleteGlossary` reaches the published revision (see the
+     * `glossary` note above for the price that exception pays).
+     *
+     * **`not null default 'ready'`, and the default is a true statement about
+     * every existing row**: they have their labels, because until stage 2 of
+     * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md the
+     * `hierarchy` step could not finish without producing them. So the migration
+     * backfills nothing and there is no null to read as a fourth state.
+     *
+     * **`carry` in `REVISION_CARRY_POLICY`**, beside `tree` and `labels`: a
+     * `{ steps: ["blocks"] }` job copies those two forward, and a status that
+     * did not travel with them would say `ready` about labels the draft had not
+     * inherited — or, worse, `pending` for ever about labels that are right
+     * there.
+     *
+     * The CHECK is the guard the type cannot be: `text` with a two-word typo in
+     * it compiles, and the client's `switch` would then fall to whichever arm it
+     * happens to have. Drizzle does not validate a `$type` at runtime.
+     */
+    navLabelStatus: text("nav_label_status")
+      .$type<NavLabelStatus>()
+      .notNull()
+      .default("ready"),
+
+    /**
      * The library's scalars, computed once here instead of by a directory walk
      * per request — the discipline `LibraryEntry` was already written to.
      */
@@ -970,6 +1016,20 @@ export const articleRevisions = spideryarn.table(
   },
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
+    /**
+     * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
+     * same standing hazard `revision_step_runs_step` has, which has drifted
+     * twice and has `tests/db-step-constraint.test.ts` watching it.
+     * `drizzle-kit generate` diffs the TypeScript and knows nothing about a
+     * CHECK expression, so a fourth member added to the union in src/types.ts
+     * would compile, migrate cleanly and then be rejected at the UPDATE with a
+     * `23514 check_violation` naming none of this.
+     * `tests/nav-label-status.test.ts` compares the two.
+     */
+    check(
+      "article_revisions_nav_label_status",
+      sql`${t.navLabelStatus} in ('pending','ready','failed')`,
+    ),
     /** Lets children key on (article_id, revision_id) and inherit the article. */
     unique("article_revisions_article_id_id").on(t.articleId, t.id),
     /**

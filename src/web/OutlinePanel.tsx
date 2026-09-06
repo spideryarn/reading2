@@ -39,11 +39,28 @@ interface Props {
   focusRow: number;
   /**
    * False where the band covers the prose instead of sitting beside it — below
-   * `MODE_MIN + PROSE_MIN` in layout.ts, which is iPad portrait. Paragraph rows
+   * `MODE_MIN + MODE_PROSE_FLOOR` in layout.ts (700px), which since 2026-09-06 is
+   * narrower than a phone in landscape rather than wider than one. Paragraph rows
    * are navigation chrome justified by the prose being visible next to them, so
    * where it is not, they are the substitution principle 1 forbids.
    */
   proseBeside: boolean;
+  /**
+   * **Are there paragraph labels to draw** — `paragraphLabelsReady` in
+   * nav-labels.ts, off `Article.navLabelStatus`.
+   *
+   * False while a labels run is owed or has failed, and then rung 5 is not a
+   * candidate at all. It is a second gate beside `proseBeside` rather than a
+   * widening of it because the two refuse for unrelated reasons — one is about
+   * the window, the other about the article — and a single boolean would make
+   * the next reader guess which.
+   *
+   * Without it the rung draws whatever labels happen to exist and silently
+   * omits the rest (`rowText` returns null and the row is not drawn), so a
+   * section of eight paragraphs comes out as two: our unfinished work rendered
+   * as the article's own shape. nav-labels.ts § why withhold.
+   */
+  paragraphLabels: boolean;
   onJump(id: BlockId): void;
 }
 
@@ -53,6 +70,7 @@ export function OutlinePanel({
   arcByRow,
   focusRow,
   proseBeside,
+  paragraphLabels,
   onJump,
 }: Props) {
   const panelRef = useRef<HTMLElement>(null);
@@ -86,6 +104,15 @@ export function OutlinePanel({
   const [covers, setCovers] = useState(false);
   const beside = proseBeside && !covers;
 
+  /**
+   * **Two independent refusals, and they stay two words.** `beside` is about
+   * the window — paragraph rows are navigation chrome, justified only while the
+   * prose is on screen next to them. `paragraphLabels` is about the article —
+   * whether there are labels to draw at all (nav-labels.ts). Folding them into
+   * one name would leave the next reader unable to tell which one said no.
+   */
+  const allowParagraphs = beside && paragraphLabels;
+
   const candidates = useMemo(
     () =>
       RUNGS.map((r) =>
@@ -95,10 +122,10 @@ export function OutlinePanel({
           arcByRow,
           focusRow,
           rung: r,
-          allowParagraphs: beside,
+          allowParagraphs,
         }),
       ),
-    [root, supplementOf, arcByRow, focusRow, beside],
+    [root, supplementOf, arcByRow, focusRow, allowParagraphs],
   );
 
   /**
