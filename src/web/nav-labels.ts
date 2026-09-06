@@ -89,3 +89,29 @@ export function paragraphLabelNotice(status: NavLabelStatus): string | null {
       return "Paragraph labels aren't available.";
   }
 }
+
+/**
+ * **What the controls bar puts where the `Paragraphs` pill goes** — the pill
+ * itself, or the sentence standing in for it.
+ *
+ * The sentence replaces the pill rather than sitting in its tooltip, because a
+ * touch reader cannot open a tooltip. But `toggle` in App.tsx is the **only**
+ * caller of `setCols`, so replacing the pill also removes the only way to
+ * *close* the column — and the leaf depth can already be open without the pill
+ * having done it, from a `?cols=` that was shared or bookmarked. Such a reader
+ * was left with a wide column of one repeated sentence and no way to shut it,
+ * for ever if the status is `failed`.
+ *
+ * So the sentence stands in only while the column is **shut**, which is the case
+ * it was written for: it stops the column being opened onto nothing. Once the
+ * column is open the pill comes back, because the column is already carrying the
+ * sentence (TableView § `withheldLeafCell`) and what the reader needs from the
+ * bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06.
+ *
+ * A function here rather than a ternary at the call site so it can be tested
+ * without standing up the whole reading view — the defect it fixes is one a
+ * component test of the table could not see.
+ */
+export function paragraphPill(status: NavLabelStatus, leafOn: boolean): "toggle" | "notice" {
+  return paragraphLabelsReady(status) || leafOn ? "toggle" : "notice";
+}

@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: reviewed, stages agreed, stage 1 built (see [§ What stage 1 landed](#stage1)).** Written 2026-09-06, out of
+**Status: stage 1 landed and reviewed; stage 2 next.** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -396,6 +396,69 @@ against `<col>`s ([`tests/paragraph-labels-withheld.test.tsx`](../../tests/parag
 watched red on the unguarded code. The lesson for stage 2 is the one in
 [silent-success.md](../reusable/silent-success.md): a renderer test that only inspects the element it
 added cannot see the element it displaced.
+
+### What the stage 1 review found <a id="stage1-review"></a>
+
+GPT Sol, 2026-09-06, at `high`, on the live pre-commit tree, closed against commit `bea197dc`.
+**No P0 and no P1 — it would not refuse the stage.** Two P2s, both real when checked and both fixed:
+
+- **F1 — the drift test did not pin what it claimed.** `NavLabelStatus` and `NAV_LABEL_STATUSES`
+  were *independent* declarations, and `readonly NavLabelStatus[]` proves only that every value
+  listed belongs to the union — never that the list exhausts it. A fourth member added to the union
+  and forgotten in the list would have compiled, and the drift test built on that list would then
+  have compared the migration against an incomplete set and passed. Worse, the test read only
+  `drizzle/` and never the **second** hand-kept CHECK literal in
+  [`schema.ts`](../../src/db/schema.ts) — whose own comment already claimed the test compared the
+  two. Fixed by deriving the union from an `as const` list, so the two cannot disagree, and by a case
+  that reads the `schema.ts` literal as text. Watched red by adding a fourth value to that literal.
+- **F2 — a withheld column that was already open could not be closed.** `toggle` in
+  [`App.tsx`](../../src/web/App.tsx) is the only caller of `setCols`, so replacing the `Paragraphs`
+  pill with the notice removed the only way to *close* the leaf column as well as the only way to
+  open it. The column can already be open without the pill — a `?cols=` naming the leaf depth,
+  shared or bookmarked — and that reader was left with a wide column of one repeated sentence and
+  nothing to shut it with, **for ever if the status is `failed`**. Unreachable through stage 1's
+  writes, which is why it is a P2; user-visible the moment stage 2 writes `pending`.
+
+  Fixed by `paragraphPill(status, leafOn)` in [`nav-labels.ts`](../../src/web/nav-labels.ts): the
+  notice stands in only while the column is **shut**, which is the case it was written for; once the
+  column is open the pill returns, because the column is already carrying the sentence. Extracting it
+  from the ternary is what makes it testable at all — Sol's own note was that the existing test
+  renders `TableView` directly and so *"cannot catch this integration issue"*.
+
+**Two answers worth keeping.** First, the review is right that *"no behaviour change"* was broader
+than the truth: both article JSON responses gain a field, and the reader's export gains
+`navLabelStatus: "ready"` through the whole-row `content/revision.json`. Nothing **rendered** changes.
+
+Second, it correctly refused my evidence for the migration: the query I sent reported *statuses*, not
+label contents, so it could not establish that all 225 rows actually hold completed labels. I had
+measured that separately and after sending the prompt, so it is recorded here instead — grouped by
+status and by whether `labels` is null:
+
+```
+  published   labels present   ready    94    (39 current)
+  draft       labels present   ready     2
+  draft       no labels        ready     5
+  failed      labels present   ready     4
+  failed      no labels        ready   120
+```
+
+**Every published revision has its labels**, and reachable false-`ready` — published or current, with
+no labels — is **0**. The 125 rows where `ready` is untrue are all failed or draft and none is
+current, so the no-backfill decision is measured rather than argued.
+
+**And it independently confirmed the stage 2 trap** I had found in the write seam: artefact presence
+cannot remain the discriminator, because both the stamped-empty manifest and the completed one
+contain `parts.labels`. Stage 2 needs an explicit producer-to-status decision, *"otherwise any mapped
+future writer of `labels` implicitly claims `ready`, exposing incomplete labels as article
+structure."*
+
+### Both suite failures were the box, not the change
+
+The full suite came back `2 failed / 737 passed`. Run alone, `tests/step-failure-seam.test.ts` passes
+and `tests/admin-store.test.ts` passes (3/3) — the latter had failed on a **20 s timeout** rather
+than an assertion, at load average 61.5 on 16 cores. Neither touches this change.
+The standing rule held again: on this box, re-run each failure alone before
+believing a red batch — [testing.md](../project/testing.md).
 
 ## What this deliberately does not fix
 

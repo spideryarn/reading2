@@ -39,7 +39,7 @@ import { describe, expect, it } from "vitest";
 import { readJournal } from "../scripts/migration-ledger.js";
 import { REVISION_CARRY_POLICY } from "../src/store/pg-revisions.js";
 import { NAV_LABEL_STATUSES, type NavLabelStatus } from "../src/types.js";
-import { paragraphLabelNotice, paragraphLabelsReady } from "../src/web/nav-labels.js";
+import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "../src/web/nav-labels.js";
 
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "article_revisions_nav_label_status";
@@ -103,6 +103,32 @@ describe("the nav_label_status CHECK", () => {
     expect(existsSync(path.join(DRIZZLE, file))).toBe(true);
   });
 
+  it("is spelled the same way in src/db/schema.ts, which is a second hand-kept copy", () => {
+    /* **The gap this closes, and it was a review finding rather than a
+       precaution.** The migration is the truth and `schema.ts` carries a
+       `check(...)` literal beside the column that no compiler compares to it —
+       so the two could part, and the assertions above would go on passing
+       because they only ever read `drizzle/`. `schema.ts`'s own comment already
+       claimed "tests/nav-label-status.test.ts compares the two"; until this
+       case it did not. GPT Sol's F1 on stage 1, 2026-09-06.
+
+       Read as text rather than by importing the table, because a Drizzle
+       `check()` holds its expression as an opaque `SQL` object: importing gives
+       you a builder, not the string a reader would diff. Same instrument as
+       `declaredStatuses` above, pointed at a different file. */
+    const schema = readFileSync(
+      path.resolve(import.meta.dirname, "..", "src", "db", "schema.ts"),
+      "utf-8",
+    );
+    const m = new RegExp(`"${CONSTRAINT}"[\\s\\S]*?in \\(([^)]*)\\)`).exec(schema);
+    expect(m, `no ${CONSTRAINT} CHECK literal found in src/db/schema.ts`).not.toBeNull();
+    const inSchema = (m?.[1] ?? "")
+      .split(",")
+      .map((s) => s.trim().replace(/^'|'$/g, ""))
+      .filter(Boolean);
+    expect([...inSchema].sort()).toEqual([...NAV_LABEL_STATUSES].sort());
+  });
+
   it("adds the column without touching the step constraint", () => {
     /* The one thing this migration must NOT do. `revision_step_runs_step` has to
        be dropped and re-added by anything that changes it, and a migration that
@@ -152,6 +178,32 @@ describe("what the client does with it", () => {
        state the type system forbids is reached at all — which is the state this
        is about. */
     expect(paragraphLabelsReady("arriving" as NavLabelStatus)).toBe(false);
+  });
+
+  it("leaves a way to close a withheld column that is already open", () => {
+    /* **The bug this pins, which a component test of the table could not see.**
+       `toggle` in App.tsx is the only caller of `setCols`, so replacing the pill
+       with the sentence removed the only way to *close* the leaf column as well
+       as the only way to open it. The column can already be open without the
+       pill having done it — a `?cols=` naming the leaf depth, shared or
+       bookmarked — and that reader was left with a wide column of one repeated
+       sentence and nothing to shut it with. For ever, if the status is `failed`.
+       GPT Sol's F2 on stage 1, 2026-09-06. */
+    expect(paragraphPill("pending", true)).toBe("toggle");
+    expect(paragraphPill("failed", true)).toBe("toggle");
+  });
+
+  it("still refuses to open a column onto nothing", () => {
+    /* The other half, and the case the sentence was written for: while the
+       column is shut, the pill would open it onto a run of one repeated notice.
+       That is what the notice replaces. */
+    expect(paragraphPill("pending", false)).toBe("notice");
+    expect(paragraphPill("failed", false)).toBe("notice");
+  });
+
+  it("is the ordinary pill whenever the labels are there", () => {
+    expect(paragraphPill("ready", false)).toBe("toggle");
+    expect(paragraphPill("ready", true)).toBe("toggle");
   });
 
   it("says nothing at all when there is nothing to say", () => {

@@ -133,7 +133,7 @@ import {
   columnHint,
   columnLabel,
 } from "./tree.js";
-import { paragraphLabelNotice, paragraphLabelsReady } from "./nav-labels.js";
+import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "./nav-labels.js";
 import {
   atParam,
   colsParam,
@@ -2975,9 +2975,23 @@ function Reader({
                 from `L3` to `Paragraphs` in the first place (tree.ts §
                 `columnLabel`). A pill that opened a column of blank cells is
                 the failure nav-labels.ts exists to prevent; a pill that opened
-                a column of one repeated notice would be worse still. */}
+                a column of one repeated notice would be worse still.
+
+                **`|| leafOn` is the door back out, and it is not a hedge.**
+                `toggle` is the only caller of `setCols` in this file, so
+                replacing the control replaces the only way to *close* the
+                column as well as the only way to open it. The leaf depth can
+                already be on without this pill — `?cols=` naming it, shared or
+                bookmarked — and such a reader was left with a wide column of
+                one repeated sentence and nothing to shut it with: for ever, if
+                the status is `failed`. So the notice stands in for the pill
+                only while the column is shut, which is the case it was written
+                for; once the column is open the pill comes back, because the
+                column itself is already carrying the sentence
+                (TableView § `withheldLeafCell`) and what the reader needs from
+                the bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06. */}
             {showText &&
-              (paragraphNotice === null ? (
+              (paragraphPill(article.navLabelStatus, leafOn) === "toggle" ? (
                 <Toggle
                   className={PILL}
                   pressed={leafOn}

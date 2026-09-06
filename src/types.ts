@@ -275,15 +275,24 @@ export interface Tree {
  * Everything writes `ready` today. Stage 2 of that plan is what starts writing
  * the other two.
  */
-export type NavLabelStatus = "pending" | "ready" | "failed";
+export type NavLabelStatus = (typeof NAV_LABEL_STATUSES)[number];
 
 /**
- * The three, as a runtime list — **and it exists for one job**: the CHECK
- * expression in `drizzle/` is a hand-kept literal that no compiler reads, so
- * something has to be able to enumerate the union and compare.
- * `tests/nav-label-status.test.ts` is that something, and without this it would
- * have to write the three names out a fourth time, which is a fourth thing to
- * forget.
+ * The three, as a runtime list — **and it is the source, not a copy of one.**
+ * `NavLabelStatus` above is derived from it with `(typeof …)[number]`, which is
+ * the whole point: the two used to be independent declarations, and
+ * `readonly NavLabelStatus[]` proves only that every value listed *belongs to*
+ * the union — never that the list *exhausts* it. A fourth member added to the
+ * union and forgotten here would have compiled, and then the drift test built
+ * on this list would have checked the migration against an incomplete set and
+ * passed. One declaration cannot disagree with itself. GPT Sol's F1 on stage 1,
+ * 2026-09-06.
+ *
+ * It exists at runtime for one job: the CHECK expression is a hand-kept literal
+ * in **two** places that no compiler reads — the migration under `drizzle/` and
+ * the copy in [`src/db/schema.ts`](db/schema.ts) — so something has to be able
+ * to enumerate the union and compare against both.
+ * `tests/nav-label-status.test.ts` is that something.
  *
  * **No `isNavLabelStatus` beside it**, and that is a decision rather than an
  * omission: a runtime parse would have no caller. The database's CHECK is what
@@ -292,7 +301,7 @@ export type NavLabelStatus = "pending" | "ready" | "failed";
  * `=== "ready"` precisely so that anything it does not recognise withholds
  * (src/web/nav-labels.ts). A guard nobody calls is a guard nobody maintains.
  */
-export const NAV_LABEL_STATUSES: readonly NavLabelStatus[] = ["pending", "ready", "failed"];
+export const NAV_LABEL_STATUSES = ["pending", "ready", "failed"] as const;
 
 /**
  * One article-level sentence per part: where the argument stands there.
