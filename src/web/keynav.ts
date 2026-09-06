@@ -222,9 +222,22 @@ export function nextAim(
  * finger and a key must not disagree about which item the reader is in.
  */
 export function measureRow(): number {
+  return activeSectionIndex(rowTops(), readingLine());
+}
+
+/** Every article row's distance from the top of the viewport, in order. */
+function rowTops(): number[] {
   const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
-  const tops = Array.from(rows, (r) => r.getBoundingClientRect().top);
-  return activeSectionIndex(tops, stickyOffset() + 1);
+  return Array.from(rows, (r) => r.getBoundingClientRect().top);
+}
+
+/**
+ * The line a row has to cross to count as the one being read — the sticky
+ * chrome's lower edge, and one pixel past it so that a row resting exactly on
+ * the edge counts as arrived.
+ */
+function readingLine(): number {
+  return stickyOffset() + 1;
 }
 
 /* --------------------------------------------------------------- a jump -- */
@@ -251,16 +264,37 @@ export function measureRow(): number {
  * about which item the reader is in. That is why this pair lives here rather
  * than in jump-history.ts, which router.ts imports and which therefore has to
  * stay clear of the reading view's layout code (see that file's header).
+ *
+ * ## "Am I at the top" is a layout question, not a scroll-offset one
+ *
+ * The first cut asked `window.scrollY <= stickyOffset()`, copying the test
+ * `positionToWrite` uses (App.tsx). That is wrong here, and not narrowly: the
+ * masthead and the controls scroll away *above* the first row, so there is a
+ * band several hundred pixels deep in which the reader has scrolled past the
+ * offset and yet no article row has reached the reading line. `measureRow()`
+ * clamps to row 0 throughout it, so a jump made from anywhere in that band
+ * recorded the first block, and Back then put that paragraph under the chrome
+ * with the masthead gone — which is F8 again, inside the window F8's own fix
+ * left open. GPT Sol F13, 2026-09-06.
+ *
+ * So the question is put to the rows: **has the first one crossed the line?**
+ * That is the same fact `measureRow` reads one array later, so the two cannot
+ * drift apart. `positionToWrite` still asks it the old way, and is left alone:
+ * a lagging `?at=` in that band writes a block the reader can see, which is
+ * what that parameter is for, while a *jump origin* is a promise to put them
+ * back exactly.
  */
 export function measureOrigin(blocks: Block[]): JumpOrigin {
-  /* Above the first row's sticky line there is no block to name, and saying
-     `top` rather than "block 0" is what lets Back restore the actual top of the
-     page instead of scrolling the first paragraph under the chrome. Same test
-     `positionToWrite` uses for the same question. */
-  if (window.scrollY <= stickyOffset()) return { kind: "top" };
-  const block = blocks[measureRow()];
-  /* No rows at all — an empty article, or a mode that is not drawing the table.
-     There is nowhere to go back to but the beginning. */
+  const tops = rowTops();
+  const first = tops[0];
+  /* No rows at all — an empty article, or a mode not drawing the table — or
+     every row still below the line. Either way no block is under the reader,
+     and `top` is what lets Back restore the actual top of the page rather than
+     scrolling the first paragraph under the chrome. */
+  if (first === undefined || first > readingLine()) return { kind: "top" };
+  const block = blocks[activeSectionIndex(tops, readingLine())];
+  /* More rows drawn than blocks handed in. Not reachable today, and a wrong
+     block is worse than an honest "the beginning". */
   return block === undefined ? { kind: "top" } : { kind: "block", blockId: block.id };
 }
 
@@ -306,7 +340,15 @@ export function beginJump(
   clearArmedJump();
   const origin = measureOrigin(blocks);
   if (origin.kind === "block" && origin.blockId === target) return false;
-  armJump({ pathname: location.pathname, origin, target });
+  /* `from` is the whole address, not just the path: it is what lets the wrapper
+     tell this jump's push from one made after the reader has been somewhere
+     else and come back. jump-history.ts § `from`. */
+  armJump({
+    pathname: location.pathname,
+    from: location.pathname + location.search,
+    origin,
+    target,
+  });
   push(target);
   scrollToBlock(target);
   return true;

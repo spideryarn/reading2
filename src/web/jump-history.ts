@@ -137,20 +137,48 @@ export function readStamp(state: unknown): JumpOrigin | null {
  * state. Not reachable today, since only nuqs and router.ts write here.
  */
 export function withStamp(state: unknown, from: JumpOrigin | null): unknown {
+  if (!canStamp(state)) return state;
   /* `null` and `undefined` are *absence*, which is somebody's state only in the
      sense that nobody has written one — so they are merged into, not declined.
      Declining them was a bug for one test run: it made every stamp a no-op,
      because the entry a jump pushes has no state until we give it one. */
-  const foreign = state ?? null;
-  if (foreign !== null && !isPlainObject(foreign)) return foreign;
-  const next: Record<string, unknown> = isPlainObject(foreign) ? { ...foreign } : {};
+  const next: Record<string, unknown> = isPlainObject(state) ? { ...state } : {};
   if (from === null) delete next[STAMP_KEY];
   else next[STAMP_KEY] = { from: from.kind === "top" ? TOP : from.blockId };
   return Object.keys(next).length === 0 ? null : next;
 }
 
+/**
+ * **Whether a stamp can be written onto this state without destroying it** —
+ * and the caller has to ask *before* it does anything else.
+ *
+ * `withStamp` returns a state it cannot merge into unchanged, which is the
+ * right answer on its own; but a jump is two writes, and the wrapper used to
+ * rewrite the predecessor entry before discovering that the destination could
+ * not be stamped. That leaves half a pair: a predecessor truthfully rewritten
+ * to somewhere the reader can no longer get back to, and no chip to take them
+ * there. GPT Sol F16, 2026-09-06.
+ */
+export function canStamp(state: unknown): boolean {
+  return state === null || state === undefined || isPlainObject(state);
+}
+
+/**
+ * A state object we may copy keys out of and back into.
+ *
+ * **Plain, in the strict sense: an object literal or a `null`-prototype bag.**
+ * `typeof x === "object"` is true of a `Date`, a `Map`, a typed array and every
+ * class instance, and spreading one of those into `{}` yields an object with
+ * none of its behaviour and usually none of its data — a `Date` spreads to
+ * `{}`, which this file would then store as `null`, silently throwing away
+ * somebody else's state to make room for a chip. Nothing in this repo writes
+ * such a state today; the browser restoring one, or a router added later, is
+ * not something the chip gets to break. GPT Sol F15, 2026-09-06.
+ */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  if (typeof value !== "object" || value === null) return false;
+  const proto = Object.getPrototypeOf(value) as object | null;
+  return proto === Object.prototype || proto === null;
 }
 
 /* ------------------------------------------------------- the handshake -- */
@@ -159,6 +187,21 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 interface ArmedJump {
   /** The article it belongs to. An excursion belongs to one path. */
   readonly pathname: string;
+  /**
+   * **The whole address the reader was standing at when they asked**, which is
+   * what makes the arm belong to a moment rather than merely to a page.
+   *
+   * The push is not made until nuqs flushes its queue — 50ms here, 120ms on
+   * Safari, 320ms on an older one — and an ordinary navigation in that window
+   * makes nuqs abandon the write altogether. The arm outlived it, and a later
+   * push that happened to name the same article and the same block could then
+   * wear an origin from minutes ago: a chip on a mode toggle, promising a
+   * return it never made, and a predecessor entry rewritten to a place the
+   * reader had already left. Requiring the address to be *unchanged* since the
+   * arm was set closes it, because getting back to that article again cannot
+   * be done without changing the address on the way. GPT Sol F14, 2026-09-06.
+   */
+  readonly from: string;
   readonly origin: JumpOrigin;
   /** Which block the push is expected to name, so a stranger cannot claim it. */
   readonly target: BlockId;
@@ -193,12 +236,23 @@ export function armJump(jump: ArmedJump): void {
 /**
  * The armed origin **if this push is the one it was armed for**, taken once.
  *
+ * Three things have to agree: the push goes to the article the jump was armed
+ * on, it names the block the jump was aimed at, and the reader has not moved
+ * since — `here` is the address being written *from*, and it must still be the
+ * one the arm was set at (§ `from` above).
+ *
  * `target` is the `?at=` of the push being made, or null when it names no
  * block; either way a mismatch leaves the arm where it was rather than
- * spending it, so the real push can still find it.
+ * spending it, so the real push can still find it. What clears an arm nobody
+ * claims is `clearArmedJump`, and router.ts calls it on every popstate.
  */
-export function consumeArmedJump(pathname: string, target: BlockId | null): JumpOrigin | null {
-  if (armed === null || armed.pathname !== pathname || armed.target !== target) return null;
+export function consumeArmedJump(
+  here: string,
+  pathname: string,
+  target: BlockId | null,
+): JumpOrigin | null {
+  if (armed === null) return null;
+  if (armed.from !== here || armed.pathname !== pathname || armed.target !== target) return null;
   const { origin } = armed;
   armed = null;
   return origin;
@@ -207,11 +261,13 @@ export function consumeArmedJump(pathname: string, target: BlockId | null): Jump
 /**
  * Forget an arm nobody claimed.
  *
- * Called at the top of every jump: nuqs can coalesce a queued update away, and
- * a component can unmount between the arming and the flush, so an arm that
- * never met its push is possible. One that outlived its jump would attach a
- * stale origin to the *next* jump's push, which is a chip pointing at a place
- * the reader left minutes ago.
+ * Called at the top of every jump, and on every `popstate` (router.ts): nuqs
+ * can coalesce a queued update away, an ordinary navigation makes it abandon
+ * one outright, and a component can unmount between the arming and the flush,
+ * so an arm that never met its push is ordinary rather than exotic. One that
+ * outlived its jump would attach a stale origin to some later push — a chip
+ * pointing at a place the reader left minutes ago, on an entry whose Back does
+ * something else entirely.
  */
 export function clearArmedJump(): void {
   armed = null;

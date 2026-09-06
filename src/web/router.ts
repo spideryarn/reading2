@@ -79,7 +79,14 @@ import {
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
 import type { BlockId } from "../types.js";
-import { consumeArmedJump, type JumpOrigin, readStamp, withStamp } from "./jump-history.js";
+import {
+  canStamp,
+  clearArmedJump,
+  consumeArmedJump,
+  type JumpOrigin,
+  readStamp,
+  withStamp,
+} from "./jump-history.js";
 export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
@@ -1191,6 +1198,10 @@ export function onAddressChange(listener: () => void): () => void {
  *    trusting the argument would erase the chip the moment the reader moved.
  *  - **A change of pathname clears it.** An excursion belongs to one article.
  *
+ * An armed jump is held to the same standard: it is spent only by a push made
+ * from the address it was armed at, and every `popstate` throws it away. GPT
+ * Sol F14.
+ *
  * ## The jump transaction happens here, not at the call site
  *
  * A jump has to write two entries: the one being left gains a `?at=` naming
@@ -1212,6 +1223,11 @@ export function onAddressChange(listener: () => void): () => void {
  * second throws.
  */
 let historyWatched = false;
+/**
+ * `replaceState` as it was before the wrapper below was installed, or `null`
+ * until it is. See `dismissJumpOrigin`, the only thing that reads it.
+ */
+let capturedReplace: History["replaceState"] | null = null;
 export function watchHistoryWrites(): void {
   if (historyWatched) return;
   historyWatched = true;
@@ -1220,13 +1236,30 @@ export function watchHistoryWrites(): void {
      two. Everything below calls these, never `history.pushState`. */
   const innerPush = history.pushState.bind(history);
   const innerReplace = history.replaceState.bind(history);
+  /* Kept for `dismissJumpOrigin` below, which is the one caller that has to get
+     *underneath* the wrapper installed on the next two lines. */
+  capturedReplace = innerReplace;
+
+  /* An arm belongs to the moment the reader asked, and going Back ends that
+     moment as surely as a push does. nuqs abandons a queued write when the page
+     navigates, so without this an arm could outlive the jump it was set for and
+     be worn by some later push. GPT Sol F14, 2026-09-06. */
+  window.addEventListener("popstate", clearArmedJump);
 
   history.pushState = (state: unknown, marker: string, url?: string | URL | null) => {
-    /* Consumed up front rather than in a `finally`: taking it before either
+    /* **Whether the destination can carry a stamp is settled before anything is
+       written.** The predecessor rewrite is the irreversible half: doing it and
+       *then* finding the state unmergeable would leave a truthful predecessor
+       and no chip to reach it with — half a pair, which is worse than neither
+       half. GPT Sol F16, 2026-09-06.
+
+       Consumed up front rather than in a `finally`: taking it before either
        native call means a throw from one of them cannot leave the arm behind to
        be claimed by whatever the app does next. A push that is not this jump's
        leaves it armed — see jump-history.ts § the handshake. */
-    const origin = consumeArmedJump(pathnameOfWrite(url), atOfWrite(url));
+    const origin = canStamp(state)
+      ? consumeArmedJump(location.pathname + location.search, pathnameOfWrite(url), atOfWrite(url))
+      : null;
     if (origin !== null) innerReplace(history.state, marker, originHref(origin));
     innerPush(withStamp(state, origin), marker, url ?? null);
     window.dispatchEvent(new Event(NAVIGATED));
@@ -1237,6 +1270,40 @@ export function watchHistoryWrites(): void {
     innerReplace(withStamp(state, kept), marker, url ?? null);
     window.dispatchEvent(new Event(NAVIGATED));
   };
+}
+
+/**
+ * **Take the stamp off the entry the reader is standing on**, so the return
+ * chip goes away without anything else about the page changing.
+ *
+ * The chip is truthful for as long as the stamp is there, which after a jump is
+ * the rest of the reading session: ordinary scrolling replaces the entry and
+ * the replace preserves the stamp deliberately. On a phone that is a permanent
+ * tenant of reading space, and an *inferred* hide rule is exactly what GPT
+ * Sol's F2 refused — so the escape is one the reader asks for. F12, 2026-09-06.
+ *
+ * **It must get underneath our own wrapper, and that is the whole reason this
+ * is a function here rather than four lines in the component.** The wrapper's
+ * `replaceState` re-applies the stamp it finds on `history.state`, on purpose —
+ * the scroll spy rewrites `?at=` about once a second and passes `null` state,
+ * so trusting the caller's argument would erase the chip the moment the reader
+ * moved. A dismissal that went through it would therefore be a no-op that
+ * looked exactly like a working button. So it calls the `replaceState` we
+ * captured when we patched, and falls back to whatever is on `history` when the
+ * wrapper was never installed — a test, or an entry point that is not main.tsx
+ * — where there is nothing to get underneath.
+ *
+ * **A replace, so the stack does not grow.** A push would mean that leaving the
+ * chip cost a press of Back, which is the thing the chip exists to spare.
+ *
+ * The URL is unchanged, so nuqs's own patch skips its `sync()` (it compares the
+ * write's search against the last it saw) and no parameter hook is disturbed;
+ * `NAVIGATED` is ours to fire, and it is what redraws `useJumpOrigin`.
+ */
+export function dismissJumpOrigin(): void {
+  const replace = capturedReplace ?? history.replaceState.bind(history);
+  replace(withStamp(history.state, null), "", location.href);
+  window.dispatchEvent(new Event(NAVIGATED));
 }
 
 /**
@@ -1311,6 +1378,43 @@ export function useAddress(): string {
     () => location.pathname + location.search,
     () => "",
   );
+}
+
+/**
+ * **Where the reader jumped from to reach the entry they are on**, as state —
+ * `null` on an entry no jump stamped.
+ *
+ * A store of its own rather than anything derived from `useAddress`, and the
+ * reason is the whole of GPT Sol's F6: `useAddress` snapshots
+ * `pathname + search`, and **two entries can carry the same URL and differ only
+ * in their state**. The wrapper above strips the stamp from every push it did
+ * not arm, and a `mode` or `sort` toggle can land on the address the reader is
+ * already at — so the snapshot compares equal, React commits nothing, and the
+ * chip stays up over an entry whose Back does something else entirely. router.ts
+ * has one of these already: the 2026-09-04 staleness bug § `watchHistoryWrites`
+ * records is the same class, one layer down.
+ *
+ * `subscribe` is the right one unchanged: `popstate` covers Back and Forward,
+ * and `NAVIGATED` covers every write the wrapper makes, which is all of them.
+ *
+ * **The cached object is not an optimisation.** `useSyncExternalStore` compares
+ * snapshots with `Object.is` and re-renders whenever they differ, so returning
+ * a freshly parsed `{ kind, blockId }` each call would loop for ever — the same
+ * trap `useAddress` and `useRoute` avoid by snapshotting a string. Here the
+ * value the caller wants is an object, so the identity is held instead, keyed
+ * on a serialisation of it. `history.state` is one global, so one cache serves
+ * every caller.
+ */
+let originCache: { key: string; origin: JumpOrigin | null } = { key: "", origin: null };
+function jumpOriginSnapshot(): JumpOrigin | null {
+  const next = readStamp(history.state);
+  const key = next === null ? "" : JSON.stringify(next);
+  if (key !== originCache.key) originCache = { key, origin: next };
+  return originCache.origin;
+}
+
+export function useJumpOrigin(): JumpOrigin | null {
+  return useSyncExternalStore(subscribe, jumpOriginSnapshot, () => null);
 }
 
 /**

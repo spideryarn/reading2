@@ -1,11 +1,13 @@
 # Back to where you jumped from
 
-Status as of 2026-09-06: **planned, not built** — evidence: no `jump-history.ts` in `src/web/`.
+Status as of 2026-09-06: **Stages A and B built**; B2, C and the docs are not — evidence:
+`src/web/ReturnChip.tsx` exists, and `goToComment` in `App.tsx` still pushes nothing.
 Revised twice, after two cross-family reviews that each refused the draft before them —
 [round 1](260906g-plan-review-sol.md) on four established P1s,
 [round 2](260906g-plan-review2-sol.md) on three more. What changed is in
-[§ What the reviews changed](#what-the-reviews-changed). Discovery is now closed: twelve findings,
-all accepted, none overruled.
+[§ What the reviews changed](#what-the-reviews-changed), which also carries
+[the third review](260906g-stage-a-review-sol.md) — of Stage A's **code**, and also a refusal.
+Eighteen findings over three rounds, all accepted, none overruled.
 
 A reader clicks a glossary term, lands three thousand words away, and cannot find their way home.
 On a desktop browser they press Back and it mostly works. Added to an iOS home screen — which is
@@ -127,10 +129,11 @@ lane. That is Stage C.
 
 ## What the reviews changed
 
-Two rounds, both **refusals**, twelve findings, all twelve accepted after being checked against the
-source. Nothing was overruled. Round two settled the one question round one left open — how the
-transaction can be atomic against nuqs's setter queue — by reading the queue rather than reasoning
-about it, which is why F11 specifies a code shape and not a principle.
+Three rounds, three **refusals**, eighteen findings, all eighteen accepted after being checked
+against the source. Nothing was overruled. Round two settled the one question round one left open —
+how the transaction can be atomic against nuqs's setter queue — by reading the queue rather than
+reasoning about it, which is why F11 specifies a code shape and not a principle. Round three read
+the code that shape produced, and is below.
 
 ### Round 1 — [260906g-plan-review-sol.md](260906g-plan-review-sol.md)
 
@@ -171,6 +174,25 @@ On my three round-2 suspicions: rewriting `?at=` at jump time is **defensible an
 adds nothing shareable; the `isBlockOnScreen` guard is **not** enough for comment stepping (F9); and
 never hiding the chip is semantically sound, but explicit dismissal is safer than any distance- or
 section-based rule that would try to guess.
+
+### Round three: the code
+
+[The Stage A review](260906g-stage-a-review-sol.md), against commit `25a16a38`. **A third refusal**,
+and worth more than the first two: a plan review cannot find a wrapper that writes one entry and
+drops the other. Six findings, all six checked and accepted.
+
+| ID | Finding | What changed |
+|----|---------|--------------|
+| F13 | P1 — **the masthead is misclassified as the first block.** `measureOrigin` asked `window.scrollY <= stickyOffset()`, copying `positionToWrite`. But the masthead scrolls away *above* the first row, so there is a band several hundred pixels deep where the reader is past the offset and no row has reached the reading line — and `measureRow()` clamps to row 0 throughout it. Reproduced at `scrollY = 100` with the first row at `top = 200` | **Accepted.** The question is put to the rows instead: has the first one crossed the line? That is the fact `measureRow` already reads, so the two cannot drift. F8 again, inside the window F8's own fix left open. `positionToWrite` keeps the old test deliberately — a lagging `?at=` names a block the reader can see, while a jump origin is a promise to put them back exactly |
+| F14 | P1 — **an abandoned arm can be claimed by a later unrelated push.** The push is up to 320ms away on an older Safari, and an ordinary navigation in that window makes nuqs abandon it — but the arm survived. Sol's sequence: arm, navigate away, come Back, then an ordinary mode push that happens to keep `at=B` wears an origin from before the reader ever left | **Accepted.** The arm now carries the whole address it was set at and is spent only by a push made from *that* address, and every `popstate` throws it away. Getting back to an article cannot be done without changing the address on the way, which is what makes the check a usable proxy for "the reader has not been anywhere since" |
+| F15 | P2 — **`isPlainObject` destroyed valid foreign state.** `typeof x === "object"` is true of a `Date`, a `Map`, a typed array and every class instance; spreading one into `{}` throws its data away, and the empty result was then stored as `null` | **Accepted.** A strict check: `Object.prototype` or a null prototype, nothing else. Nothing in this repo writes such a state today, and a browser restoring one must not lose it to a chip |
+| F16 | P2 — **the predecessor was rewritten before the destination was known to be stampable.** Half a pair: a truthful predecessor and no chip to reach it with | **Accepted.** `canStamp` is asked before anything is written; an unstampable state gets an ordinary push and no rewrite |
+| F17 | P2 — **the atomicity test did not establish what it claimed.** React batches, so two ordinary writes in one task render as one update too; Sol reproduced the same single render from a plain replace-then-push. The test would not have caught a dropped `__nuqs__` marker | **Accepted**, and confirmed by mutation: dropping the marker from the predecessor write leaves the render test green. A second test now taps *between* the two patches and asserts the pair and both markers. The render test stays as the user-visible check |
+| F18 | P3 — **the plan contradicted the committed source** in four places: the status line, the arm "consumed in a `finally`", a `scrollY === 0` the test cannot observe, and the batching claim F17 disproved | **Accepted**, all four corrected above |
+
+Sol also confirmed what it could not fault: the four permitted suites pass, and no same-path replace
+in the app — `last-view`, the canonical rewrites, ordinary query replaces — discards a stamp it
+should have kept.
 
 ## What the research turned up
 
@@ -233,9 +255,15 @@ The predecessor entry must name where the reader actually was, and the stamp mus
       and makes **exactly one** nuqs call — the destination push. When `watchHistoryWrites`
       intercepts the matching armed push it synchronously calls its **captured inner**
       `replaceState` to rewrite the current entry to the origin, then its **captured inner**
-      `pushState` with the destination and the stamped state; it consumes the arm in a `finally` and
-      emits `NAVIGATED` once after the pair rather than once per call. The arm is matched against
-      its expected pathname and target, so an unrelated push cannot consume it.
+      `pushState` with the destination and the stamped state; it emits `NAVIGATED` once after the
+      pair rather than once per call. The arm is matched against its expected pathname and target,
+      so an unrelated push cannot consume it.
+
+      Two details the plan got wrong and the code settled. The arm is consumed **before** either
+      native call, not in a `finally`: taking it first means a throw from one of them cannot leave
+      it behind for whatever the app does next. And whether the destination state can carry a stamp
+      at all is settled before anything is written, because the predecessor rewrite is the
+      irreversible half (F16).
 
       **Two `setAt` calls would not have worked**, which is why this is spelled out: nuqs keys
       pending updates with `Map.set`, so the second overwrites the first, any push option upgrades
@@ -267,7 +295,9 @@ The predecessor entry must name where the reader actually was, and the stamp mus
       jump carrying **one**, jumping within a section after manual scrolling, jumping while the
       300ms position replace is pending, and both variants of `JumpOrigin` round-tripping through
       the stamp. Two of them assert more than a stamp's existence:
-      - **from the top**: the predecessor URL has **no** `?at=`, and the final `scrollY` is `0`
+      - **from the top**: the predecessor URL has **no** `?at=`, which is the branch the restore
+        effect takes to `scrollToTop()`. Not the resulting `scrollY === 0`, which jsdom cannot
+        observe — a test that claimed it would be claiming more than it checks.
       - **the F10 abort**: `scrollToBlock` was **not called**, not merely that no entry appeared
 - [x] Mutate the finished code at the end of the stage and check the suite notices — red-first only
       tests the diff ([silent-success.md](../reusable/silent-success.md)).
@@ -283,14 +313,19 @@ limitUrlUpdates: throttle(0) })` — so App.tsx's `jumpTo` is four lines and own
 because the address written into the predecessor entry and a permalink to that block must be the
 same string or Back and the link go to different places.
 
-**The evidence for the atomic shape, since F11 named it but could not test it.** `tests/jump-history.test.ts`
-§ never renders the intermediate origin mounts nuqs and React and records every `?at=` React is
-rendered with; the destination is the only one that ever appears. Both of the wrapper's writes carry
-nuqs's own `"__nuqs__"` marker, so nuqs's history patch skips its `sync()` on both and the single
-update the hooks receive is the one nuqs emits for the destination — the atomicity is *by
-construction* rather than by React's batching. Under the rejected two-setter shape the origin would
-be rendered first and `useReadingPosition`'s restore effect would drag the reader back to where they
-came from and then forward again. § discards a position write pins the other half: a scroll write
+**The evidence for the atomic shape, since F11 named it but could not test it — and it took two
+tests, because the obvious one proves less than it looks.** § never renders the intermediate origin
+mounts nuqs and React and records every `?at=` React is rendered with; the destination is the only
+one that appears. That is the user-visible claim, and it is **not** evidence of the construction:
+React batches, so two ordinary history writes in one task would render as one update too and the
+test would pass just the same (F17). So § performs the pair beneath nuqs taps *between* the two
+patches — under ours, over nuqs's — and pins the pair itself: one replace carrying the origin, one
+push carrying the destination, **both wearing nuqs's `"__nuqs__"` marker**, which is what makes
+nuqs's patch skip its `sync()` and hand the hooks a single update. Only that second test fails when
+the marker is dropped from one of the writes; the render test goes on passing, which is exactly the
+shape of a check that shares an assumption with the code
+([silent-success.md](../reusable/silent-success.md)). § discards a position write pins the last
+piece: a scroll write
 still inside its 300ms debounce is aborted by the jump's own `throttle(0)`, so it cannot land on the
 entry the jump just pushed.
 
@@ -308,30 +343,83 @@ predecessor entry carries **no** `?at=` at all, which is the branch `useReadingP
 effect takes to `scrollToTop()`. The stamp round-trips as `{ kind: "top" }` beside it. Said plainly
 here because a test that claims more than it checks is the failure mode this stage kept hitting.
 
-### Stage B — the chip
+### Stage B — the chip — **built, 2026-09-06**
 
-- [ ] `useJumpOrigin`: a `useSyncExternalStore` hook whose snapshot includes the validated stamp and
+- [x] `useJumpOrigin`: a `useSyncExternalStore` hook whose snapshot includes the validated stamp and
       which subscribes to **both** `popstate` and the `NAVIGATED` event (F6). `useAddress` is not
       enough — two entries can share a URL and differ only in state.
-- [ ] `src/web/ReturnChip.tsx`: a small pill, bottom left, above the `Dock`, reading
+- [x] `src/web/ReturnChip.tsx`: a small pill, bottom left, above the `Dock`, reading
       `↩ back to <section>`, following `.cmt-dialog`'s positioning at z-index 46.
-- [ ] Drawn **exactly when** the current entry carries a stamp naming a block this article has —
+- [x] Drawn **exactly when** the current entry carries a stamp naming a block this article has —
       no section-equality hide rule (F2). Pressing Back, or any push that clears the stamp, removes
       it.
-- [ ] Pressing it calls `history.back()` and **nothing else** — popstate → nuqs →
+- [x] Pressing it calls `history.back()` and **nothing else** — popstate → nuqs →
       `useReadingPosition` already does the scroll.
-- [ ] A stamped block the article no longer has (re-extraction) hides the chip rather than pointing
+- [x] A stamped block the article no longer has (re-extraction) hides the chip rather than pointing
       at nothing — the same graceful nothing `scrollToBlock` gives a stale `?at=`.
-- [ ] An origin of `{ kind: "top" }` reads **"↩ back to the beginning"** rather than naming a
+- [x] An origin of `{ kind: "top" }` reads **"↩ back to the beginning"** rather than naming a
       section (F8).
-- [ ] **A dismiss control** (F12): a small × that strips only the current entry's stamp with a
+- [x] **A dismiss control** (F12): a small × that strips only the current entry's stamp with a
       `replaceState`. The chip is otherwise honest for as long as the stamp is on the entry, which
       can be the rest of a long session — and an *inferred* hide rule is what F2 already refused, so
       the escape has to be one the reader asks for.
-- [ ] Tests: the gate, the label (both origin variants), that a `cols` push after a jump draws no
+- [x] Tests: the gate, the label (both origin variants), that a `cols` push after a jump draws no
       chip, and that dismissing strips the stamp without adding a history entry.
-- [ ] Browser check in a Sonnet subagent at phone width, per
-      [browser-control.md](../project/browser-control.md).
+      `tests/return-chip.test.tsx`, twelve of them. Four mutations of the finished code at the end
+      of the stage, each caught: dropping `NAVIGATED` from the subscription (six red), dismissing
+      through the wrapper instead of under it (one), naming the first section for a `top` origin
+      (one), and labelling an unresolvable stamp instead of hiding it (one).
+- [x] Browser check in a Sonnet subagent at phone width, per
+      [browser-control.md](../project/browser-control.md). Playwright on the box, at 390×844, on
+      "Cargo Cult Science": a glossary term and a spine band both draw the chip; the press returns
+      the reader to `scrollY` 0 and the chip goes; the × leaves the URL and the scroll alone and
+      **Back afterwards still reaches the entry before the jump**. The spine's right edge is at
+      x=12 and the chip's left at x=20. The home-indicator case was checked by injecting
+      `--safe-bottom: 34px` — the technique `scripts/safe-area-check.ts` uses, since the real
+      insets are `0px` on every machine we develop on — and the chip stayed clear of the dock as it
+      grew. **Not seen on a real phone**, which is the one thing that check cannot claim.
+
+#### What was built, and the four things the code says that the plan could not
+
+[`ReturnChip.tsx`](../../src/web/ReturnChip.tsx) is the pill and the label;
+[`router.ts`](../../src/web/router.ts) holds `useJumpOrigin` and `dismissJumpOrigin`;
+[`position.ts`](../../src/web/position.ts) gained `sectionIndexContaining`, which is
+`sectionContaining`'s walk with the answer stopping one step earlier — the spy wants the section's
+first block, the chip wants its title, and there must not be two walks that can disagree about which
+section a block is in.
+
+**`useJumpOrigin` is in router.ts, not beside the chip, and `NAVIGATED` is why.** The event is not
+exported and should not be: `subscribe` — the private function behind `useAddress`, `useRoute` and
+`onAddressChange` — already listens for it *and* `popstate`, which is exactly the pair F6 asks for.
+Exporting the event name to let another module rebuild that subscription would be a second copy of
+the same three lines. So the hook sits with the other two history-backed stores, one screen below
+the wrapper that writes the stamp, and `jump-history.ts` stays free of React.
+
+**The snapshot has to be a cached object.** `useSyncExternalStore` compares snapshots with
+`Object.is`, so returning a freshly parsed `{ kind, blockId }` on every call renders for ever —
+which is why `useAddress` and `useRoute` both snapshot strings and say so. The caller here wants an
+object, so the identity is held instead, keyed on a serialisation.
+
+**The dismiss has to get *underneath* our own wrapper, and the naive version is a silent success.**
+`watchHistoryWrites`'s `replaceState` re-applies the stamp it finds on `history.state` rather than
+trusting the caller's argument, deliberately — the scroll spy rewrites `?at=` about once a second
+passing `null` state, and trusting it would erase the chip the moment the reader moved. So a
+`replaceState(withStamp(history.state, null), …)` is a no-op that looks exactly like a working
+button. `dismissJumpOrigin` calls the `replaceState` captured when we patched, and falls back to
+whatever is on `history` when the wrapper was never installed, where there is nothing to get under.
+
+**`left: 1.25rem` is right only in the mode it was measured in.** It clears the 12px spine, but the
+mode band takes real width from that same edge on a wide window, and a chip in a flat gutter would
+sit inside an open chat panel. The rule uses `calc(var(--spine-w) + var(--mode-w) + var(--safe-left)
++ 0.5rem)` — the expression `.reader`'s padding, `.masthead`, `.controls` and `td.pin-left` all
+already use for "after the furniture on the left" — which comes to the same 20px where the plan
+measured it. Everything else is as specified: `.cmt-dialog`'s bottom arithmetic mirrored, z-index 46.
+
+Two smaller ones. `rowOf` now comes out of `useReadingPosition` rather than being rebuilt in the
+chip: it is a `Map` over every block in the article, and two of them kept in step by nothing is the
+kind of thing that goes wrong quietly. And a section whose title is empty draws
+**"↩ back to where you were"** rather than nothing — the return is valid and only its *name* is
+missing, which is not the case F2 refused to suppress.
 
 ### Stage B2 — opening a question is a jump; stepping between them is not
 

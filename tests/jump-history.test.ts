@@ -43,6 +43,7 @@ import {
   armJump,
   clearArmedJump,
   consumeArmedJump,
+  type JumpOrigin,
   readStamp,
   withStamp,
 } from "../src/web/jump-history.js";
@@ -71,6 +72,34 @@ vi.mock("../src/web/scroll.js", async (importOriginal) => {
    does. Installed once, at module scope, because both are idempotent by design
    and a second patch would double every event. */
 enableHistorySync();
+
+/**
+ * **A tap between the two patches**, which is the only place the transaction is
+ * observable at all.
+ *
+ * `watchHistoryWrites` calls the functions it captured, so its two writes never
+ * reach the outside world separately — that is what makes them one operation,
+ * and it is also what makes them invisible to any assertion made from outside.
+ * Sitting here, under our wrapper and over nuqs's, records exactly the pair.
+ *
+ * It exists because of what the render-based test could **not** establish: React
+ * batches, so two ordinary history writes in one task render as one update too,
+ * and § never renders the intermediate origin would have passed just the same
+ * had the transaction been split in two. GPT Sol F17, 2026-09-06.
+ */
+const inner: { kind: "push" | "replace"; marker: string; url: string }[] = [];
+for (const name of ["pushState", "replaceState"] as const) {
+  const real = history[name].bind(history);
+  history[name] = (state: unknown, marker: string, url?: string | URL | null) => {
+    inner.push({
+      kind: name === "pushState" ? "push" : "replace",
+      marker,
+      url: String(url ?? location.href),
+    });
+    real(state, marker, url ?? null);
+  };
+}
+
 watchHistoryWrites();
 
 /* Ids in the real shape **and valid**, because `readStamp` checks them against
@@ -155,30 +184,40 @@ describe("the stamp on a history entry", () => {
 /* --------------------------------------------------- the arm/consume pair -- */
 
 describe("arming a jump", () => {
+  const HERE = "/read/x?at=spya-paraaa";
+  const arm = () => armJump({ pathname: "/read/x", from: HERE, origin: at(A), target: B });
+
   beforeEach(() => clearArmedJump());
 
   it("hands the origin back once and then nothing", () => {
-    armJump({ pathname: "/read/x", origin: at(A), target: B });
-    expect(consumeArmedJump("/read/x", B)).toEqual(at(A));
-    expect(consumeArmedJump("/read/x", B)).toBeNull();
+    arm();
+    expect(consumeArmedJump(HERE, "/read/x", B)).toEqual(at(A));
+    expect(consumeArmedJump(HERE, "/read/x", B)).toBeNull();
   });
 
   it("is empty until something arms it", () => {
-    expect(consumeArmedJump("/read/x", B)).toBeNull();
+    expect(consumeArmedJump(HERE, "/read/x", B)).toBeNull();
   });
 
   /**
    * A push that is not this jump's must not be able to wear its origin — and
    * must leave it behind, so the real push can still find it. GPT Sol F11.
+   *
+   * The last row is F14: nuqs abandons a queued write when the page navigates,
+   * so an arm can outlive its jump. Getting back to this article afterwards
+   * cannot be done without changing the address on the way, which is what makes
+   * "the address is still the one I armed at" a usable proxy for "the reader
+   * has not been anywhere since".
    */
-  it.each<[string, BlockId | null, string]>([
-    ["/read/y", B, "another article"],
-    ["/read/x", block(9), "another block"],
-    ["/read/x", null, "a push that names no block at all"],
-  ])("refuses %s %s (%s) and stays armed", (pathname, target) => {
-    armJump({ pathname: "/read/x", origin: at(A), target: B });
-    expect(consumeArmedJump(pathname, target)).toBeNull();
-    expect(consumeArmedJump("/read/x", B)).toEqual(at(A));
+  it.each<[string, string, BlockId | null, string]>([
+    [HERE, "/read/y", B, "another article"],
+    [HERE, "/read/x", block(9), "another block"],
+    [HERE, "/read/x", null, "a push that names no block at all"],
+    ["/read/x?at=spya-parabf", "/read/x", B, "a push from an address the reader has since left"],
+  ])("refuses (%s) and stays armed", (here, pathname, target) => {
+    arm();
+    expect(consumeArmedJump(here, pathname, target)).toBeNull();
+    expect(consumeArmedJump(HERE, "/read/x", B)).toEqual(at(A));
   });
 });
 
@@ -189,6 +228,20 @@ function push(url: string, state: unknown = history.state): void {
   history.pushState(state, "", url);
 }
 
+/**
+ * Arm a jump from wherever the address currently is — which is what
+ * `beginJump` does, and the `from` is load-bearing: an arm is spent only by a
+ * push made from the address it was set at (GPT Sol F14).
+ */
+function arm(origin: JumpOrigin, target: BlockId): void {
+  armJump({
+    pathname: location.pathname,
+    from: location.pathname + location.search,
+    origin,
+    target,
+  });
+}
+
 describe("which entries carry a stamp", () => {
   beforeEach(() => {
     history.replaceState(null, "", "/read/x");
@@ -196,7 +249,7 @@ describe("which entries carry a stamp", () => {
   });
 
   it("stamps the push its jump armed", () => {
-    armJump({ pathname: "/read/x", origin: at(A), target: B });
+    arm(at(A), B);
     push(`/read/x?at=${B}`);
     expect(readStamp(history.state)).toEqual(at(A));
   });
@@ -209,7 +262,7 @@ describe("which entries carry a stamp", () => {
    * on an entry whose Back merely undoes the toggle. GPT Sol F3, 2026-09-06.
    */
   it("does not let a later push inherit the last jump's stamp", () => {
-    armJump({ pathname: "/read/x", origin: at(A), target: B });
+    arm(at(A), B);
     push(`/read/x?at=${B}`);
     push("/read/x?cols=0,2");
     expect(readStamp(history.state)).toBeNull();
@@ -217,7 +270,7 @@ describe("which entries carry a stamp", () => {
 
   /** The counterpart: a replace must **not** lose it, or the chip blinks out. */
   it("keeps the stamp across a replace, whatever the caller passed", () => {
-    armJump({ pathname: "/read/x", origin: at(A), target: B });
+    arm(at(A), B);
     push(`/read/x?at=${B}`);
     history.replaceState(null, "", `/read/x?at=${block(9)}`);
     expect(readStamp(history.state)).toEqual(at(A));
@@ -225,14 +278,14 @@ describe("which entries carry a stamp", () => {
 
   /** An excursion belongs to one article. */
   it("clears the stamp when a replace changes the pathname", () => {
-    armJump({ pathname: "/read/x", origin: at(A), target: B });
+    arm(at(A), B);
     push(`/read/x?at=${B}`);
     history.replaceState(history.state, "", `/read/y?at=${block(9)}`);
     expect(readStamp(history.state)).toBeNull();
   });
 
   it("refuses to stamp a push that leaves the article", () => {
-    armJump({ pathname: "/read/x", origin: at(A), target: B });
+    arm(at(A), B);
     push("/read/y");
     expect(readStamp(history.state)).toBeNull();
   });
@@ -240,7 +293,7 @@ describe("which entries carry a stamp", () => {
   /** The armed push rewrites the entry it leaves, in the same operation. */
   it("rewrites the predecessor's ?at= to the origin", async () => {
     history.replaceState(null, "", `/read/x?cols=0,2&at=${block(9)}`);
-    armJump({ pathname: "/read/x", origin: at(block(15)), target: block(25) });
+    arm(at(block(15)), block(25));
     push(`/read/x?cols=0,2&at=${block(25)}`);
     expect(location.search).toBe(`?cols=0,2&at=${block(25)}`);
     await goBack();
@@ -262,11 +315,64 @@ describe("which entries carry a stamp", () => {
    */
   it("writes the top of the article by taking ?at= away", async () => {
     history.replaceState(null, "", `/read/x?cols=0,2&at=${block(9)}`);
-    armJump({ pathname: "/read/x", origin: TOP, target: block(25) });
+    arm(TOP, block(25));
     push(`/read/x?cols=0,2&at=${block(25)}`);
     expect(readStamp(history.state)).toEqual(TOP);
     await goBack();
     expect(location.search).toBe("?cols=0,2");
+  });
+
+  /**
+   * **An arm that outlived its jump must not be worn by a later push.**
+   *
+   * nuqs abandons a queued write when the page navigates, and its flush is up
+   * to 50ms away here — 320ms on an older Safari — so an arm whose push never
+   * comes is ordinary. The address check alone would not catch this sequence:
+   * Back lands on exactly the address the jump was armed at, so a stale arm
+   * would match again and a later mode push would wear an origin from before
+   * the reader ever left. GPT Sol F14, 2026-09-06.
+   */
+  it("throws an unclaimed arm away when the reader goes Back", async () => {
+    push("/read/x?panel=notes");
+    /* Armed on the entry we are about to return to, so that only the popstate
+       rule can be what refuses it. */
+    armJump({ pathname: "/read/x", from: "/read/x", origin: at(A), target: B });
+    await goBack();
+    expect(location.search).toBe("");
+    push(`/read/x?at=${B}`);
+    expect(readStamp(history.state)).toBeNull();
+  });
+
+  /**
+   * **State that is not ours to merge into is forwarded, not flattened.**
+   *
+   * `typeof x === "object"` is true of a `Date`, a `Map` and every class
+   * instance, and spreading one into `{}` throws its data away — a `Date`
+   * spreads to nothing, which the old code then stored as `null`. Nothing in
+   * this repo writes such a state today; a browser restoring one, or a router
+   * added later, must not lose it to a chip. GPT Sol F15, 2026-09-06.
+   */
+  it("preserves a state it cannot merge into rather than emptying it", () => {
+    const when = new Date(0);
+    history.replaceState(when, "", "/read/x");
+    expect(history.state).toEqual(when);
+  });
+
+  /**
+   * **Half a pair is worse than neither half.** The predecessor rewrite is the
+   * irreversible one; doing it and only then discovering the destination cannot
+   * carry a stamp would leave the reader an honest predecessor and no chip to
+   * reach it with. GPT Sol F16, 2026-09-06.
+   */
+  it("leaves the predecessor alone when the destination cannot be stamped", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(9)}`);
+    arm(at(block(15)), block(25));
+    /* An array: a state `withStamp` forwards untouched rather than merging. */
+    history.pushState([1, 2, 3], "", `/read/x?at=${block(25)}`);
+    expect(readStamp(history.state)).toBeNull();
+    expect(history.state).toEqual([1, 2, 3]);
+    await goBack();
+    expect(location.search).toBe(`?at=${block(9)}`);
   });
 });
 
@@ -298,6 +404,14 @@ function layOut(tops: number[]): void {
 
 /** Rows 0–15 have gone past the reading line; 16 onwards have not. */
 const READING_AT_15 = Array.from({ length: 30 }, (_, i) => (i <= 15 ? -10 : 500));
+
+/**
+ * **Every row still below the line** — the masthead, the byline and the
+ * controls are on screen and no article row has arrived yet. This is the layout
+ * at the top of an article, and it stays this layout for the several hundred
+ * pixels it takes to scroll the masthead away.
+ */
+const NOTHING_REACHED = Array.from({ length: 30 }, (_, i) => 200 + i * 100);
 
 const BLOCKS: Block[] = Array.from({ length: 30 }, (_, i) => ({
   id: block(i),
@@ -401,11 +515,31 @@ describe("the jump transaction", () => {
    */
   it("records the top of the article as the top, not as its first block", async () => {
     Object.defineProperty(window, "scrollY", { value: 0, writable: true, configurable: true });
-    layOut([0, 200, 400, 600]);
+    layOut(NOTHING_REACHED);
     expect(query()).toBeNull();
     act(() => void jump(block(20)));
     await settled();
     expect(query()).toBe(block(20));
+    expect(readStamp(history.state)).toEqual(TOP);
+    await act(async () => await goBack());
+    expect(query()).toBeNull();
+  });
+
+  /**
+   * **The band F8's own fix left open.** The first cut asked
+   * `window.scrollY <= stickyOffset()`, so a reader who had scrolled a little —
+   * past the offset, but not far enough to bring any row to the reading line —
+   * counted as standing on a block, and `measureRow()` clamps to row 0
+   * throughout. The jump recorded the first block, and Back put that paragraph
+   * under the chrome with the masthead gone. The masthead scrolls above the
+   * table, so the band is several hundred pixels deep rather than a corner.
+   * GPT Sol F13, 2026-09-06.
+   */
+  it("records the top while the masthead is still on screen, scrolled or not", async () => {
+    Object.defineProperty(window, "scrollY", { value: 150, writable: true, configurable: true });
+    layOut(NOTHING_REACHED);
+    act(() => void jump(block(20)));
+    await settled();
     expect(readStamp(history.state)).toEqual(TOP);
     await act(async () => await goBack());
     expect(query()).toBeNull();
@@ -449,6 +583,29 @@ describe("the jump transaction", () => {
     await settled();
     expect(seen.at(-1)).toBe(block(25));
     expect(seen).not.toContain(block(15));
+  });
+
+  /**
+   * **What the render assertion above cannot say**, and the reason both are
+   * here. React batches: a transaction split into two ordinary writes in one
+   * task would render as one update too, and § never renders the intermediate
+   * origin would go on passing. So this looks *underneath* our wrapper instead
+   * (§ a tap between the two patches) and pins the construction: one replace
+   * carrying the origin and one push carrying the destination, back to back,
+   * **both wearing nuqs's own `__nuqs__` marker** — which is what makes nuqs's
+   * patch skip its `sync()` on the pair and hand the hooks a single update. Let
+   * the marker slip on either call and nuqs would publish the intermediate
+   * address to every parameter hook in the app. GPT Sol F17, 2026-09-06.
+   */
+  it("performs the pair beneath nuqs, both writes carrying its marker", async () => {
+    layOut(READING_AT_15);
+    inner.length = 0;
+    act(() => void jump(block(25)));
+    await settled();
+    expect(inner).toEqual([
+      { kind: "replace", marker: "__nuqs__", url: expect.stringContaining(`at=${block(15)}`) },
+      { kind: "push", marker: "__nuqs__", url: expect.stringContaining(`at=${block(25)}`) },
+    ]);
   });
 
   /**

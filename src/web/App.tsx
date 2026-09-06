@@ -75,6 +75,7 @@ import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
 import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
+import { ReturnChip } from "./ReturnChip.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { useLiveConversation } from "./live/useLiveConversation.js";
 import {
@@ -1700,7 +1701,12 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
   // `at` goes out as well as `jumpTo` because it is half of the answer to
   // "where should this link land" — the other half being `?note=`, which the
   // caller has and this hook does not. See arrivalTarget in scroll.ts.
-  return { at, jumpTo };
+  //
+  // `rowOf` goes out because `ReturnChip` asks the same question of it that the
+  // spy does — which section is this block in — and a second `new Map` over
+  // every block in the article, kept in step by nothing, is two indexes that
+  // can disagree.
+  return { at, jumpTo, rowOf };
 }
 
 /**
@@ -2014,7 +2020,7 @@ function Reader({
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
   const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
-  const { at, jumpTo } = useReadingPosition(sections, article.blocks, layoutKey);
+  const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
    * **Tell the Feedback dialog where the reader is.** feedback-context.ts.
@@ -3703,6 +3709,13 @@ function Reader({
           onOpenKey={setOpenRefereeKey}
         />
       )}
+
+      {/* **The way back from a jump**, drawn only on an entry a jump stamped —
+          ReturnChip.tsx, which owns that rule and the words. It takes the
+          sections this component already built rather than resolving the
+          origin block itself: the label is a section title, and there must be
+          one answer to "which section is this block in" on the page. */}
+      <ReturnChip sections={sections} rowOf={rowOf} />
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
