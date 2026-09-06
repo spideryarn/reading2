@@ -219,8 +219,8 @@ export function useSearch(slug: string): SearchApi {
 
              This endpoint sends **no fingerprint at all**: the searches GET
              answers `{ runs }` and nothing else (src/routes.ts §
-             `sweepSearches`; `readSearches` in src/searches.ts is the half that
-             reads both together, and no route calls it). So setting the
+             `sweepSearches`; the referee routes beside it are the ones that
+             send a fingerprint alongside the list). So setting the
              fingerprint unconditionally here would put "answered about an
              earlier version" on every saved search on every article, on the
              strength of a key nobody sends. The consequence of leaving it is

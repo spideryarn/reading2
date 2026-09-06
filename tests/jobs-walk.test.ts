@@ -116,12 +116,12 @@
  *   commit.
  * - **budget exhaustion hands back**: delete the `STEP_BUDGET_MS` comparison in
  *   `transitionAfter`, so every non-final step keeps.
- * - **`runInJob` is in effect**: call `walkClaim` directly rather than through
- *   `runInJob` — which is the state production actually shipped in, and nothing
- *   caught it (docs/plans/260830k-v1-stages01-review-sol.md critical 1).
+ * - ~~**`runInJob` is in effect**~~ — the sixth of the seven. Its case and its
+ *   mechanism both went on 2026-09-05; see where the case stood, below.
  *
  * **Mutation.** Seven, then, one per case listed above, all seven watched red on
- * 2026-08-30 against the coordinator in `src/jobs.ts`.
+ * 2026-08-30 against the coordinator in `src/jobs.ts` — **six of them still
+ * have a case to be red in**; the seventh's mechanism is gone.
  *
  * **Blind to.** Every one of those seven was watched on the filesystem queue and
  * against `src/jobs.ts` alone, so not one of them reaches a line of SQL: a
@@ -139,7 +139,6 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, jobs as jobsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
-import { currentJobId } from "../src/job-scope.js";
 import {
   advanceJobWith,
   claimSession,
@@ -365,7 +364,6 @@ function fakeStep(
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: STEPS[name].produces,
     async run(ctx: StepContext): Promise<StepProduct> {
       ran.names.push(name);
@@ -813,32 +811,24 @@ describe("one claim walks the whole job", () => {
     expect(ran.names, "and it picked up at the step that had not run").toEqual(["fetch", "hierarchy"]);
   });
 
-  it("puts the job id in scope for the steps it runs", async () => {
-    /**
-     * **`runInJob` existed and nothing called it.** The bundle carried an
-     * `AsyncLocalStorage` and a `currentJobId()` with no way to fill it, so on a
-     * deployed instance `dataRoot()` was asked for a directory with no job in
-     * scope and threw before the first step started — every import on production
-     * failing in 16ms. GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md critical 1.
-     *
-     * Asserted from **inside** a step and after an `await`, because that is the
-     * property: an `AsyncLocalStorage` that survives the awaits between the
-     * claim and the stage's own writes.
-     */
-    const seen: { before: string | null; inside?: string | null } = { before: currentJobId() };
-    const { job, parts } = await fixture("test-walk-scope", ["fetch"], {
-      fetch: async () => {
-        await Promise.resolve();
-        seen.inside = currentJobId();
-      },
-    });
-
-    await advanceAsOwner(job.id, parts);
-
-    expect(seen.before, "nothing outside a claim is in a job scope").toBeNull();
-    expect(seen.inside, "and the step ran inside this job's").toBe(job.id);
-    expect(currentJobId(), "and the scope closed again afterwards").toBeNull();
-  });
+  /*
+   * **`puts the job id in scope for the steps it runs` stood here until
+   * 2026-09-05, and the scope it asserted no longer exists.**
+   *
+   * `runInJob` (src/job-scope.ts) wrapped the whole claimed body so that
+   * `dataRoot()` could pick `/tmp/spideryarn/<owner>/<job>/` on a deployed
+   * instance — a job-scoped scratch directory, so that a failed job's warm
+   * `/tmp` could not be served as the next job's article. It had exactly one
+   * reader, and that reader was the filesystem store. Both went in stage G of
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+   * and `src/job-scope.ts` with them.
+   *
+   * The accident is worth keeping even though the mechanism is not, because it
+   * is this repo's dominant shape: `runInJob` existed for a day with **nothing
+   * calling it**, so every deployed import failed at step one in 16ms, and this
+   * case was what stopped that happening twice. GPT Sol,
+   * docs/plans/260830k-v1-stages01-review-sol.md critical 1.
+   */
   /**
    * **Two jobs on one article: the second waits, and the first's work survives
    * it.**

@@ -1,19 +1,23 @@
 /**
- * **The two reader stores, asked the same questions about the switch.**
+ * **The reader store, asked the questions the switch is subtle about.**
  *
- * `ReaderStore.readExperimental` / `writeExperimental` are two genuinely
- * different implementations of one promise, and the promise is subtle enough
- * that prose alone will not hold it:
+ * Two arms until 2026-09-05, when the filesystem store was deleted
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * The cases are unchanged and all six now run against Postgres alone; only the
+ * `stores` array lost an entry. The promise they hold is subtle enough that
+ * prose alone will not hold it:
  *
  *  - **on twice must not move the date.** Postgres does it with
- *    `coalesce(experimental_since, now())` inside `on conflict do update`; the
- *    filesystem does it by deciding inside its own write queue. No shared code,
- *    so the test has to be the shared part.
- *  - **the profile and the switch live on one row and one file**, so each write
- *    has to leave the other alone. The filesystem writer used to build the whole
- *    file from its single argument, which was correct with one field in it and
- *    would have deleted the switch the day a second arrived — with both writes
- *    reporting success. docs/reusable/silent-success.md.
+ *    `coalesce(experimental_since, now())` inside `on conflict do update`, and
+ *    the two `now()`s inside one millisecond compare equal — so the case that
+ *    checks it waits 20ms rather than trusting the clock.
+ *  - **the profile and the switch live on one row**, so each write has to leave
+ *    the other alone. The filesystem writer used to build the whole file from
+ *    its single argument, which was correct with one field in it and would have
+ *    deleted the switch the day a second arrived — with both writes reporting
+ *    success. That is the accident `keeps both when the two writes are started
+ *    at once` below was written for, and it has no second home in the tree.
+ *    docs/reusable/silent-success.md.
  *
  * docs/project/experimental-features.md; docs/plans/experimental-features-toggle.md.
  *
@@ -25,12 +29,10 @@
  * file creates an `auth.users` row of its own, uses that, and deletes both rows
  * afterwards: it only ever touches what it made.
  *
- * The Postgres half **skips loudly** without a migrated database, and it skips
- * on the column this whole file is about — so an unmigrated laptop is told to
- * run `npm run db:migrate` rather than shown a confusing missing-column error.
+ * It **skips loudly** without a migrated database, and it skips on the column
+ * this whole file is about — so an unmigrated laptop is told to run
+ * `npm run db:migrate` rather than shown a confusing missing-column error.
  */
-import { rm } from "node:fs/promises";
-import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -39,7 +41,6 @@ import { readerProfiles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import type { ReaderStore } from "../src/store/contracts.js";
-import { fsReaderStore } from "../src/store/fs.js";
 import { pgReaderStore } from "../src/store/pg-reader.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -69,24 +70,16 @@ await pgReady({
  */
 const OWNER = "00000000-0000-4000-8000-000000005e11" as OwnerId;
 
-/** `data/_test-reader-parity.json`, for the same reason routes.test.ts has one. */
-const FILE = path.resolve(import.meta.dirname, "..", "data", "_test-reader-parity.json");
-
 /**
- * Run `body` with whatever the store under test needs around it.
+ * Run `body` inside a request scope owned by this suite's reader.
  *
- * The filesystem store reads `SPIDERYARN_READER_FILE` at call time; the
- * Postgres one reads `currentOwnerId()`, which is why its half runs inside a
- * request scope. Wrapping both here is what lets every case below be written
- * once and mean the same thing twice — the point of a parity suite.
+ * `pgReaderStore` reads `currentOwnerId()`, so every case needs one. It was a
+ * two-branch helper while the filesystem arm existed — that store read
+ * `SPIDERYARN_READER_FILE` from the environment instead — and the wrapper is
+ * what let each case be written once and mean the same thing twice. The shape
+ * is kept, because the cases below are still written against it.
  */
-function on(store: ReaderStore, body: () => Promise<void>): Promise<void> {
-  if (store !== pgReaderStore) {
-    process.env.SPIDERYARN_READER_FILE = FILE;
-    return body().finally(() => {
-      delete process.env.SPIDERYARN_READER_FILE;
-    });
-  }
+function on(_store: ReaderStore, body: () => Promise<void>): Promise<void> {
   return runInRequest(async () => {
     setRequestOwner(OWNER);
     await body();
@@ -110,23 +103,20 @@ async function seedOwner(): Promise<void> {
 }
 
 afterAll(async () => {
-  await rm(FILE, { force: true });
   const db = getDb();
   await db.delete(readerProfiles).where(eq(readerProfiles.ownerId, OWNER));
   await db.execute(sql`delete from auth.users where id = ${OWNER}`);
   await closeDb();
 });
 
-const stores: [string, ReaderStore][] = [
-  ["the filesystem store", fsReaderStore],
-  ["Postgres", pgReaderStore],
-];
+/* One entry since 2026-09-05, and it is deliberately still an array: the
+   cases are written against `store` and read the same either way, so the shape
+   records that this was a parity suite rather than pretending it never was. */
+const stores: [string, ReaderStore][] = [["Postgres", pgReaderStore]];
 
 for (const [name, store] of stores) {
   describe(name, () => {
-    beforeAll(async () => {
-      if (store === pgReaderStore) await seedOwner();
-    });
+    beforeAll(seedOwner);
 
     /* Every case starts from off and unwritten, so none of them depends on the
        order the others ran in — and so a failure names the case that failed

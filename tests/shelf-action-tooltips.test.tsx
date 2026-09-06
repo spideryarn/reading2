@@ -366,6 +366,34 @@ describe("a control that cannot act", () => {
     }
   });
 
+  /**
+   * **There may be no clipboard object at all**, and the copy handler used to
+   * dereference it anyway.
+   *
+   * `navigator.clipboard` is undefined outside a secure context, so on anything
+   * but https or localhost the press threw a `TypeError` straight out of a React
+   * event handler — past the handler's own `.catch`, which only ever sees a
+   * *rejected promise* — and the reader got a button that did nothing and said
+   * nothing. `BlockGutter.tsx` and `AccessSharing.tsx` had both guarded this for
+   * weeks, each with a comment about the same trap; this was the odd one out.
+   *
+   * Found on 2026-09-05 by a new touch case that happened to press Copy: vitest
+   * reported an uncaught exception while every assertion in the file passed,
+   * which is why the report is asserted here rather than the absence of a throw.
+   */
+  it("says so when the browser gives the page no clipboard", () => {
+    const shelf = stubShelf();
+    const had = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    render(FETCHED, shelf);
+    act(() => {
+      control("Copy link").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(shelf.report, "the press was swallowed with nothing said").toHaveBeenCalledTimes(1);
+    expect(vi.mocked(shelf.report).mock.calls[0]?.[0]).toMatch(/copy/i);
+    if (had) Object.defineProperty(navigator, "clipboard", had);
+  });
+
   it("still links out where the address is a real one", () => {
     render(FETCHED);
     const a = host.querySelector("a");

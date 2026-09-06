@@ -212,10 +212,28 @@ Prompt rules, derived from the [vision](vision.md#principles):
 - Reuse the author's distinctive vocabulary verbatim. Those words are the reader's handholds when
   they descend.
 - Never introduce a fact that isn't in the range below.
-- No meta-narration ("this section explores…", "the author then turns to…").
+- No meta-narration ("this section explores…", "the author then turns to…"). **In the prompt only
+  since `toc/6`** — this line described a rule the prompt did not contain, which is the sort of thing
+  [260903b](../research/260903b-facts-that-were-wrong.md) is about.
+- **Length runs the opposite way to intuition, and it has to be told to**: the root is the briefest
+  line in the tree and the fine rungs are the longest. Left to itself the model does the reverse —
+  measured across 1,239 stored gists, the mean ran 28.8 words at the root down to 14.9 at depth 3,
+  because "one sentence" applied at every depth means a root sentence grows clauses until a whole
+  article fits in it. A fine gist is read *instead of* the paragraphs it covers and can afford a
+  subordinate clause; the root is a shelf blurb and cannot. The ceilings live in
+  [`src/hierarchy.ts`](../../src/hierarchy.ts) § `GISTS` and
+  [`src/hierarchy-expand.ts`](../../src/hierarchy-expand.ts) § `TITLES AND GISTS`, which must agree
+  or a tree obeys two budgets.
+  [260905f](../plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md).
+- **The register of a length rule moves the number; its content mostly does not.** Measured over five
+  drafts of the same change: a descriptive wording lands on the model's own default, a softened norm
+  gives back half, and only a blunt imperative — *"AT LEAST 22 words … the floor is the half that
+  will feel wrong, so obey it"* — moves it. It pushes the ceilings too, in both directions, which is
+  the price. Worth knowing before rewriting any of these rules "more clearly".
 
-Determinism and cost: the whole tree is generated once per article and cached under
-`data/<slug>/tree.json` ([storage layout](architecture.md#storage)), keyed on
+Determinism and cost: the whole tree is generated once per article and cached in the revision's
+`tree` column ([`src/db/schema.ts`](../../src/db/schema.ts); `data/<slug>/tree.json` until
+2026-09-05 — [storage layout](architecture.md#storage)), keyed on
 `hash(extracted blocks) + prompt version + model id`. It is not
 lazy — the reader needs the entire leftmost column instantly, since scanning the whole landscape is
 the point.

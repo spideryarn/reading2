@@ -136,9 +136,14 @@ export type Route =
    *
    * **On the administrator's list since 2026-09-05** (`ADMIN_ONLY` below), which
    * is a courtesy and not a gate: it reads no data at all, so there is nothing
-   * behind it that could refuse anybody, and the page is in every signed-in
-   * reader's bundle either way. It is on the list because it is developer
+   * behind it that could refuse anybody, and its code is a public asset that
+   * any browser can fetch either way. It is on the list because it is developer
    * furniture, not because it is privileged.
+   *
+   * Since 2026-09-05 that code is **not** in every reader's first download —
+   * App.tsx loads it when somebody asks for the address (LazyPage.tsx). That
+   * changed the startup cost and nothing about who may see it: the chunk is
+   * served to anyone who requests it, with no auth in front of it.
    */
   | { kind: "design" }
   /**
@@ -179,10 +184,12 @@ export type Route =
    * the shelf instead for anybody who is not the administrator — **and
    * deliberately not the 404 page**, which is
    * where an address this file does not recognise goes since 2026-09-03. The
-   * reason is docs/project/admin.md's: these pages are in every signed-in
-   * reader's bundle, so 403 is the honest posture and a 404 would be pretending
+   * reason is docs/project/admin.md's: these pages' code is served to anybody
+   * who asks for it, so 403 is the honest posture and a 404 would be pretending
    * about something anyone can see is there. The refusal that matters is the
-   * server's, on `/api/admin/`.
+   * server's, on `/api/admin/`. Since 2026-09-05 the code arrives on demand
+   * rather than in everyone's first download (LazyPage.tsx) — a change to
+   * startup cost, not to who may have it.
    */
   | { kind: "admin"; page: AdminPage }
   /**
@@ -245,7 +252,7 @@ export type Route =
    * **It is not the same as "an address you may not use", and neither of those
    * became this.** `/admin` parses for everybody and App.tsx sends a
    * non-administrator to the shelf — a deliberate 403 posture rather than a
-   * 404, because the page is in everybody's bundle already and pretending
+   * 404, because the page's code is there for anybody who asks and pretending
    * otherwise buys nothing ([docs/project/admin.md](../../docs/project/admin.md)).
    * A slug you do not own parses as `read`, and the server's answer lands on
    * `NotSharedPage`, which says what this page must not: something about a
@@ -262,10 +269,12 @@ export type Route =
  * the administrator gets the shelf at any address answering `true` here. Say
  * plainly what that is and is not:
  *
- * - **It hides nothing.** `AdminPage.tsx` and `DesignPage.tsx` are in the
- *   JavaScript bundle every signed-in reader downloads, and vercel.json rewrites
- *   every non-`/api/` address to `index.html`, so these paths answer 200 to
- *   anybody. A reader who wants to see the design reference can still see it.
+ * - **It hides nothing.** `AdminPage.tsx` and `DesignPage.tsx` are absent from
+ *   the initial reader download since 2026-09-05 (LazyPage.tsx), but their
+ *   chunks are public assets served to anyone who requests them, and
+ *   vercel.json rewrites every non-`/api/` address to `index.html`, so these
+ *   paths answer 200 to anybody. A reader who wants to see the design reference
+ *   can still see it.
  * - **The only real refusal is the server's**, on the `/api/admin` namespace,
  *   above the route table in src/routes.ts. It would refuse a hand-written
  *   `fetch` from any of these pages just the same, and it would refuse

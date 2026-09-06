@@ -1100,7 +1100,7 @@ The prompt asks a model to emit a partition over 139 ids. It will occasionally e
 in the input, or a range with a one-block gap. Never trust a generated tree:
 
 ```
-npm run validate-tree -- example        # or data/<slug> once stage 4 writes one
+npm run validate-tree -- example        # or a directory `npm run db:export` wrote for a slug
 ```
 
 It takes a *directory* holding both `blocks.json` and `tree.json`, not two file paths.

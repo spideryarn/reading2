@@ -388,7 +388,7 @@ manifest reporting itself current on `sourceHash` alone, and no article would ev
 
 And **`assets` must be added explicitly to both read projections.** `Article`
 ([`types.ts:1048`](../../src/types.ts)) carries only `meta`, `blocks`, `tree` and optional `arc`; the
-filesystem loader returns exactly those fields ([`api.ts:231`](../../src/api.ts)); Postgres uses an
+filesystem loader returns exactly those fields (`api.ts:231`); Postgres uses an
 allowlisted projection ([`pg.ts:400`](../../src/store/pg.ts)). Making the field optional would let
 every one of those omissions typecheck while the reader quietly went on hot-linking.
 

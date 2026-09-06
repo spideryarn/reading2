@@ -590,10 +590,22 @@ describe("the store-migration registry", () => {
 
       /* Controls first. Both differences below are empty when the inputs are
          empty, so an unread witness or a walk that parsed nothing would pass
-         silently — which is the exact shape this whole plan exists to stop. */
-      expect(reports.length, "the graph walk produced no reports at all").toBeGreaterThan(100);
+         silently — which is the exact shape this whole plan exists to stop.
+
+         **The first two floors were 100 until 2026-09-05**, and they fell
+         because the condemned list did: stage G's last adapter group deleted
+         `src/store/artifacts-fs.ts` and `src/store/data-root.ts`, leaving
+         `TARGETS` naming `src/store/copy-artefacts.ts` alone — which is not
+         condemned at all, since stage D gave it a store-agnostic
+         `ArtifactSource`. Measured the same day: **42 files reach it, 41 of
+         them through `tests/helpers/load-article.ts` and one directly**, and
+         nothing reaches it type-only. So 20 is a floor under a walk that is
+         doing its job rather than a number with an argument behind it; the
+         control being defended is still "the walk parsed something", and the
+         instrument itself is retired with the tombstone in stage I. */
+      expect(reports.length, "the graph walk produced no reports at all").toBeGreaterThan(20);
       expect(reaching.size, "the graph walk found nothing reaching a condemned module")
-        .toBeGreaterThan(100);
+        .toBeGreaterThan(20);
       expect(
         witness.ranAndTouchedNothing.length,
         "the witness recorded nothing as having run and touched nothing",

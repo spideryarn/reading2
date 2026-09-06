@@ -898,8 +898,9 @@ export interface SearchStore {
    * so both stores share one rule as well as one hash.
    *
    * **A method rather than a field on what `load` returns**, so a caller that
-   * only wants the list does not pay for a scan of every block. The read seam
-   * asks for both together (`readSearches`).
+   * only wants the list does not pay for a scan of every block. The routes that
+   * need both ask for both in one response, and say why where they do it
+   * (`refereeCriteria` and `refereeClaims` in src/routes.ts).
    *
    * `undefined` when the article has no readable blocks. That is not "current"
    * — `isStale` counts it as stale, because not knowing and knowing it is fine
@@ -1081,7 +1082,7 @@ export interface RefereeClaimsStore {
    *
    * There is no `wantedId` and no retry rule, because there is nothing to
    * collide with: a second run is a run, and the answer it overwrites was about
-   * the same paper. src/referee-claims-store.ts § What differs.
+   * the same paper. src/store/pg-referee-claims.ts § One run per article.
    */
   begin(slug: string, now?: () => string): Promise<ClaimsRun>;
 
@@ -1136,10 +1137,11 @@ export interface GlossaryLookupStore {
  *
  * Not article-scoped, unlike everything else in this file — there is one
  * profile per reader, which today means one profile, full stop
- * (docs/project/auth.md). The filesystem adapter is a thin wrapper over
- * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, which already
- * does the normalising, capping and atomic write; the Postgres adapter is
- * `reader_profiles`, one row per `owner_id`.
+ * (docs/project/auth.md). There was a filesystem adapter — a thin wrapper over
+ * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, over one
+ * `data/reader.json` — and it went on 2026-09-05 with the rest of the
+ * filesystem store. `src/profile.ts` kept the normalising, capping and hashing
+ * and lost the file; the adapter is `reader_profiles`, one row per `owner_id`.
  *
  * **It holds the reader's settings too**, since 2026-08-31 — the switch below
  * is on the same row rather than in a store of its own, for the reason
@@ -1879,3 +1881,359 @@ export interface FeedbackStore {
    */
   markMirrored(id: string, sentryEventId: string | null): Promise<boolean>;
 }
+
+/* ---------------------------------------------------------- link previews -- */
+
+import type { PagePreview } from "../types.js";
+
+/**
+ * **What one row of `link_previews` is**, as a union the compiler can check.
+ *
+ * The table stores this flattened into columns with a CHECK that keeps them in
+ * step (src/db/schema.ts § `linkPreviews`); this is the shape everything above
+ * the store speaks in, and the reason it is a union rather than a bag of
+ * optionals is that every other combination is unrepresentable nonsense — an
+ * `ok` with no content, an alias that also failed, a claim holding a title.
+ *
+ * **There is no timestamp on it.** The store answers *is this still an answer*
+ * itself, so nothing above it can be tempted to return a `fetchedAt` and tell a
+ * caller when some prior reader caused a fetch. GPT Sol, 2026-09-05, P1-7.
+ */
+export type CachedPreview =
+  /** Somebody is fetching this right now and holds the claim. */
+  | { kind: "pending" }
+  /**
+   * We have something worth showing.
+   *
+   * `excerpt` is the opening of the destination's plain text, capped — what
+   * stage 3's summariser reads, and **the one field here that never leaves the
+   * server**: `answerFrom` in src/link-previews.ts hands the client `page` and
+   * nothing else. `null` is ordinary and means *no summary for this address*:
+   * a row written before the column existed, or a page whose text Readability
+   * could not reach. src/db/schema.ts § `linkPreviews.excerpt`.
+   *
+   * **Required and nullable rather than optional**, so that a writer which
+   * forgets it is a compile error. Forgetting it would otherwise be invisible:
+   * previews would go on working and summaries would silently never appear.
+   */
+  | { kind: "ok"; page: PagePreview; excerpt: string | null }
+  /**
+   * We asked and could not use the answer. `why` is a `FetchFailureCode` or one
+   * of this feature's own classes; it is diagnostic and never reaches a reader.
+   *
+   * `transient` earns a short expiry and `permanent` a long one — see
+   * `PREVIEW_LIFETIMES` in src/link-previews.ts.
+   */
+  | { kind: "transient"; why: string }
+  | { kind: "permanent"; why: string }
+  /** This target redirected; the answer lives under `finalTarget`. */
+  | { kind: "alias"; finalTarget: string };
+
+/** A row to write, and when it stops being an answer. */
+export interface PreviewToStore {
+  /** `requestTarget(url)` — never `urlKey`. src/urls.ts. */
+  target: string;
+  entry: CachedPreview;
+  expiresAt: Date;
+}
+
+/**
+ * **Fetch once for everybody in the ordinary case, and never lose a good answer
+ * in the extraordinary one.**
+ *
+ * The single-flight half is `claim`, and it is the reason this is a store
+ * interface rather than two loose queries: the read, the staleness test and the
+ * claim have to happen inside one transaction under one lock, or two cold
+ * requests both miss, both fetch and both spend. A unique row prevents duplicate
+ * *storage* and never duplicate *traffic*. GPT Sol, 2026-09-05, P1-4.
+ *
+ * **The promise is deliberately weaker than "exactly once", and the first
+ * version of this comment claimed more than the code delivers.** A claim has a
+ * lease, and a claimant that stalls past its lease still comes back and fetches
+ * — nothing here can reach into another process's `await` and stop it. The
+ * second review's answer was: either weaken the promise or add real fencing.
+ * Both, in the proportion the stage is worth. What is true:
+ *
+ * - two cold requests arriving inside one lease cause **one** fetch;
+ * - a request whose claim has expired may cause a second fetch, and that is the
+ *   accepted cost — one duplicate metadata fetch, no model spend, no reader
+ *   waiting differently;
+ * - **a loser can never destroy a winner**: `release` is fenced on the claim
+ *   token, and `fill` refuses to turn a live `ok` row into a failure.
+ *
+ * The third of those is the one worth machinery, because it is the only failure
+ * a reader would ever see — a good preview replaced by a week of nothing.
+ */
+export interface LinkPreviewStore {
+  /**
+   * What we already know about this exact request target, following one alias
+   * hop, or `null` for "nothing usable".
+   *
+   * **An expired row reads as nothing**, so a caller cannot accidentally serve
+   * a stale answer by forgetting to check a date. A `pending` row whose lease
+   * has run out is nothing too.
+   *
+   * This is the path a cache *hit* takes, and it deliberately takes no lock and
+   * consumes no allowance — the steady state must not queue behind anything.
+   */
+  read(target: string): Promise<CachedPreview | null>;
+  /**
+   * Read again under the lock, and take the claim if there is nothing there.
+   *
+   * Returns what the caller should do:
+   * - `hit` — somebody filled it while we were waiting for the lock.
+   * - `claimed` — you are the one fetching. Write the answer with `fill`, and
+   *   if you cannot, `release` so the next caller may try before the lease ends.
+   * - `pending` — somebody else is fetching it right now.
+   *
+   * `leaseMs` is how long the claim is good for. Long enough to cover the fetch
+   * deadline with room, short enough that a killed process does not wedge a URL.
+   */
+  claim(target: string, leaseMs: number): Promise<PreviewClaim>;
+  /**
+   * Store the answer, and the alias row when the fetch was redirected.
+   *
+   * **It will not turn a live `ok` row into a failure**, whoever asks — see the
+   * `setWhere` in the implementation. That is the one guarantee here that a
+   * per-target claim cannot give, because the two writers of a final target need
+   * not hold the same claim or even the same lock.
+   */
+  fill(rows: readonly PreviewToStore[]): Promise<void>;
+  /**
+   * Give **your own** claim back without an answer, so the next caller may try.
+   *
+   * The token is not decoration: a claimant that stalled past its lease and woke
+   * up would otherwise delete its successor's claim. GPT Sol, 2026-09-05, P1-2.
+   */
+  release(target: string, claimId: string): Promise<void>;
+}
+
+export type PreviewClaim =
+  | { kind: "hit"; entry: CachedPreview }
+  /**
+   * You are fetching. `claimId` is the fencing token — hand it back to
+   * `release`, and hold on to it for as long as you might still write.
+   */
+  | { kind: "claimed"; claimId: string }
+  | { kind: "pending" };
+
+/* ------------------------------------------------------- fetch allowance -- */
+
+/**
+ * The two allowances there are. A closed set, matching the table's CHECK.
+ *
+ * They are separate buckets rather than one, because they bound different
+ * things: `link-preview-fetch` bounds how much of somebody else's server a
+ * reader's pointer may ask for, and `link-summary-fill` bounds how much money it
+ * may spend. A reader who has hovered a hundred cold links has done nothing
+ * wrong by the second measure.
+ */
+export type RateBucket = "link-preview-fetch" | "link-summary-fill";
+
+/**
+ * **How many outbound fetches one reader's pointer may cause.**
+ *
+ * Keyed solely on the authenticated owner — never on the article or the URL,
+ * which an attacker varies freely — and atomic across instances, because
+ * `count` then `insert` without a lock is a suggestion rather than a cap. GPT
+ * Sol, 2026-09-05, P1-5. src/db/schema.ts § `rateLimitEvents` says what this
+ * records about a reader and what it deliberately does not.
+ *
+ * **Cache hits never come here at all.** The cache absorbs the steady state;
+ * this is for the pathological one.
+ */
+export interface FetchAllowanceStore {
+  /**
+   * Take one fill's worth of allowance, or refuse.
+   *
+   * `true` means the caller may fetch and **must** call `finish` with the token
+   * afterwards, whatever happened, or it holds a concurrency slot until its
+   * lease runs out.
+   */
+  take(bucket: RateBucket, policy: RatePolicy): Promise<AllowanceTaken>;
+  /** The fetch is over. Frees the concurrency slot; the fill still counts. */
+  finish(id: string): Promise<void>;
+}
+
+export type AllowanceTaken =
+  /** `id` is the token to hand back to `finish`. */
+  | { kind: "allowed"; id: string }
+  /** Too many fills in the window. */
+  | { kind: "rate" }
+  /** Too many at once. */
+  | { kind: "concurrency" }
+  /**
+   * **Everybody together has spent the day's allowance** — the fuse, not this
+   * reader's own limit.
+   *
+   * Its own member rather than folding into `rate`, because the two send
+   * whoever reads the logs to different places: one is a reader hovering a lot
+   * of links, the other is the app as a whole being further through the day's
+   * money than anybody expected. Only a policy with a `daily.globalFills` can
+   * ever answer this.
+   */
+  | { kind: "global" };
+
+/**
+ * The numbers, which are **guesses rather than measurements**.
+ *
+ * Straight from GPT Sol's review, which said so itself: *"these are starting
+ * limits, not numbers established by repository evidence; tune them from
+ * telemetry and the maximum acceptable daily loss."* Nothing in this repository
+ * has measured how many distinct links a reader hovers in an hour. The noema
+ * essay has 62 distinct destinations and both caches absorb every hover after
+ * the first, so 120 is roughly "two whole unread articles' worth of links, all
+ * cold, in one hour" — which is a reader nobody has yet observed.
+ *
+ * Recorded as a guess on purpose, so the next person to touch them tunes them
+ * from telemetry rather than treating them as established.
+ */
+export interface RatePolicy {
+  /** How many fills in the window. */
+  fills: number;
+  /** The rolling window, in ms. */
+  windowMs: number;
+  /** How many fills may be in flight at once. */
+  concurrency: number;
+  /** How long a fill holds its concurrency slot if nothing releases it. */
+  leaseMs: number;
+  /**
+   * **A second, longer window — and the fuse that goes with it.** Absent for a
+   * bucket that has only an hourly cap.
+   *
+   * One optional object rather than three optional fields, so that a daily
+   * per-owner cap with no window, or a fuse with no window to count it over,
+   * are states nobody can write. A policy that carries this is counted three
+   * times in the one transaction: the hourly cap, this cap for the owner, and
+   * this fuse across everybody.
+   */
+  daily?: {
+    /** How many fills one owner gets over `windowMs` below. */
+    fills: number;
+    /**
+     * How many fills **everybody together** gets over the same window.
+     *
+     * The blast radius, not a fairness rule: it is what stands between a bug or
+     * a determined account and a day's worth of model spend. Counted across
+     * owners, which is the one query in the limiter that is not per-reader.
+     */
+    globalFills: number;
+    /** The rolling window both of the above are counted over, in ms. */
+    windowMs: number;
+  };
+}
+
+/* -------------------------------------------------------- link summaries -- */
+
+/**
+ * **How the destination stands to the piece the reader is holding**, cached per
+ * reader, per article, per address, per mention.
+ *
+ * `LinkPreviewStore` above is the ownerless half — what a page says about
+ * itself, fetched once for everybody. This is the owned half, and the two must
+ * stay apart: this row is written from the reader's own profile, so a shared one
+ * would be a disclosure as well as a wrong answer. src/db/schema.ts §
+ * `linkSummaries`.
+ *
+ * **Deliberately the same shape as the preview store rather than a shared
+ * generic.** The claim protocol is the same idea — one advisory lock, a
+ * `pending` row with a lease, a `claim_id` that fences the destructive writes —
+ * and the *data* is not: a preview is a five-member union keyed by one string, a
+ * summary is one string keyed by four and validated against four fingerprints.
+ * A generic over both would have to take the columns, the validity test and the
+ * key builder as parameters, which is more machinery than the second copy and
+ * harder to read than either. The protocol is written down in one place — this
+ * comment and `LinkPreviewStore`'s — and copied deliberately.
+ */
+export interface LinkSummaryStore {
+  /**
+   * The summary we already hold for this key, or `null` for "nothing usable".
+   *
+   * **An expired row, a `pending` row and a row whose inputs have moved on all
+   * read as nothing**, so no caller can serve a stale summary by forgetting to
+   * compare a hash. This is the path a cache hit takes and it takes no lock.
+   */
+  read(key: SummaryKey, inputs: SummaryInputs): Promise<string | null>;
+  /**
+   * Read again under the lock, and take the claim if there is nothing there.
+   *
+   * `hit` — somebody filled it while we waited. `claimed` — you are the one
+   * spending, so `fill` the answer or `release` the claim. `pending` — somebody
+   * else is generating it right now.
+   */
+  claim(key: SummaryKey, inputs: SummaryInputs, leaseMs: number): Promise<SummaryClaim>;
+  /**
+   * Store the answer, **if this claim is still the live one** — and say whether
+   * it was.
+   *
+   * Fenced on the token for `release`'s reason: a claimant that stalled past its
+   * lease and woke up must not write its stale answer over the row its successor
+   * has already filled.
+   *
+   * **It returns whether the write landed, and that is not decoration.** The
+   * first version returned `void`, so a caller whose claim had been taken away
+   * wrote nothing and then handed the reader its own superseded answer anyway —
+   * a summary about an older profile or an older version of the article,
+   * presented as current, and cached in that reader's tab for the session. The
+   * fence stopped the *database* being wrong and let the *screen* be wrong,
+   * which is the half a reader can see. GPT Sol, 2026-09-05.
+   *
+   * `false` means: somebody else owns this key now. Ask again rather than
+   * answering.
+   */
+  fill(key: SummaryKey, claimId: string, summary: string, expiresAt: Date): Promise<boolean>;
+  /** Give **your own** claim back without an answer, so the next caller may try. */
+  release(key: SummaryKey, claimId: string): Promise<void>;
+}
+
+/**
+ * Which article, and which address in it.
+ *
+ * **A slug rather than an article id, and no owner at all** — the store resolves
+ * both, through `articleIdForOwned`, exactly as `pgGlossaryLookupStore` does.
+ * That keeps the owner-scoped resolution in one place: a caller that assembled
+ * its own `ownerId` would be a second answer to "whose article is this", and the
+ * one that matters is the one the database enforces.
+ */
+export interface SummaryKey {
+  slug: string;
+  /** `requestTarget(url)` — never `urlKey`. */
+  target: string;
+  /**
+   * **The block the hovered anchor sits in**, which is what makes two mentions
+   * of one destination two rows rather than one row they take turns rewriting.
+   *
+   * Always the *resolved* sighting rather than what a client asked for —
+   * `linkInArticle`'s `LinkOccurrence` — so a request that named no block is
+   * keyed under the first one rather than under a blank. src/db/schema.ts §
+   * `linkSummaries`.
+   */
+  blockId: string;
+}
+
+/**
+ * **Everything the answer depends on that is not in the key**, so that a change
+ * to any of it is a miss rather than a stale row for ever.
+ *
+ * GPT Sol, 2026-09-05, P1-3: `(owner, article, url)` alone never changes when
+ * the article is re-extracted or the reader edits their profile, and both are
+ * prompt inputs.
+ */
+export interface SummaryInputs {
+  /** A hash of the destination text the model was given. */
+  destHash: string;
+  /** A hash of what the reader is currently reading, as the prompt carried it. */
+  contextHash: string;
+  /** `hashProfile`, or the sentinel for a reader who has written nothing. */
+  profileHash: string;
+  /** `LINK_SUMMARY_PROMPT_VERSION`. */
+  promptVersion: number;
+  /** The model id, so a tier change makes every row stale. */
+  model: string;
+}
+
+export type SummaryClaim =
+  | { kind: "hit"; summary: string }
+  /** You are spending. `claimId` is the fencing token. */
+  | { kind: "claimed"; claimId: string }
+  | { kind: "pending" };

@@ -101,8 +101,11 @@ export async function copyArtefacts(
      56 test files executed it and 14 named it.
      `tests/helpers/fixture-artefacts.ts` is now what goes here, and it cannot
      write at all. Nothing about the copy itself changed, and `ArtifactStore` is
-     still assignable, so the fs-to-fs direction in `tests/artefact-copy.test.ts`
-     passes exactly as before.
+     still assignable, so `tests/artefact-copy.test.ts` passed exactly as before
+     — which mattered for a day: the filesystem store was deleted on 2026-09-05
+     and that file now copies from the fixture reader into `memoryArtefacts()`.
+     This function is the half of the pair that survived, and it survived
+     because of this widening.
      docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § D. */
   from: ArtifactSource,
   to: ArtifactStore,

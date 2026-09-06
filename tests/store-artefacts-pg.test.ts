@@ -72,7 +72,6 @@ import {
 } from "../src/db/schema.js";
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { loadEnvLocal } from "../src/env.js";
-import { PATHS } from "../src/store/artifacts-fs.js";
 import {
   NoStoredDocument,
   RawSourceDisagrees,
@@ -91,7 +90,9 @@ import {
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { ArtifactKind } from "../src/store/artifacts.js";
-import { STEPS, STEP_ORDER } from "../src/pipeline.js";
+import { STEPS, STEP_ORDER, stepIsDone } from "../src/pipeline.js";
+import type { StepContext } from "../src/pipeline.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import {
@@ -128,25 +129,50 @@ const DEV_OWNER_ID = ADMIN_USER_ID_LOCAL;
 /* ------------------------------------------- the map, which needs no database -- */
 
 /**
- * The two adapters must know about exactly the same artefacts.
+ * The storage map must know about exactly the artefacts the steps declare.
  *
- * A parity oracle that is not the importer and not a database: if one store
- * grows a `(step, kind)` the other has never heard of, a stage writes through
- * one and reads back nothing through the other, and the only symptom is a step
- * that will not stay done.
+ * **This was a parity oracle between two maps until 2026-09-05**: `keysOf(STORAGE)`
+ * against `keysOf(PATHS)`, the filesystem store's `(step, kind) → path` table,
+ * so that a store growing a pair the other had never heard of showed up as a
+ * step that would not stay done. `PATHS` went with `src/store/artifacts-fs.ts`
+ * in stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+ *
+ * **Nothing real was lost, and that is a claim rather than a hope.** The two
+ * maps were both derived; the assertion below holds `STORAGE` against
+ * `STEPS[step].produces` in `src/pipeline.ts`, which is where a step actually
+ * declares what it makes. Everything the deleted comparison could catch — a
+ * kind homed in one map and not the other — this catches at the source, and
+ * one thing more: a pair `PATHS` knew about that no step produces was invisible
+ * to the old assertion and is an error here.
  */
-describe("the two storage maps", () => {
-  const keysOf = (map: Record<string, Partial<Record<ArtifactKind, unknown>>>) =>
-    STEP_ORDER.flatMap((step) => Object.keys(map[step] ?? {}).sort().map((k) => `${step}/${k}`));
-
-  it("cover the same (step, kind) pairs", () => {
-    expect(keysOf(STORAGE)).toEqual(keysOf(PATHS));
-  });
-
-  it("cover exactly what every step declares it produces", () => {
+describe("the storage map", () => {
+  it("covers exactly what every step declares it produces", () => {
     for (const step of STEP_ORDER) {
       expect(Object.keys(STORAGE[step]).sort(), step).toEqual([...STEPS[step].produces].sort());
     }
+  });
+
+  /**
+   * **Ported from `tests/step-context-paths.test.ts` on 2026-09-05**, which
+   * asked it of `STEPS[…].outputs(ctx)` — a list of repository paths — and named
+   * this file as its home in advance:
+   *
+   * > The one thing to port rather than drop when `StepContext.dir` does go: a
+   * > step must declare **every** artefact it writes, or a crash between two
+   * > writes leaves a step reporting itself finished with half its output. In
+   * > Postgres that claim belongs to `produces`.
+   *
+   * The counts are the point and the assertion above cannot make them: deleting
+   * `labels` from `hierarchy.produces` **and** from `STORAGE` leaves that one
+   * green, and leaves `hierarchy` calling itself finished with a tree and no
+   * labels beside it. `hierarchy` went from two to three when the nav labels
+   * became a second model pass (docs/plans/260826h-toc-scaling.md), which is
+   * why src/hierarchy.ts writes the tree last of the three.
+   */
+  it("has both of extract's and all three of hierarchy's", () => {
+    expect(STEPS.extract.produces).toEqual(["extractedHtml", "meta"]);
+    expect([...STEPS.hierarchy.produces].sort()).toEqual(["blocks", "labels", "tree"]);
   });
 
   it("refuses a pair no step produces, rather than returning undefined", () => {
@@ -154,16 +180,43 @@ describe("the two storage maps", () => {
   });
 
   it("puts stage 3's and stage 4's blocks in the same place", () => {
-    /* Two files on disk, deliberately. One table here, necessarily — and this
-       is the assertion that says the difference was noticed rather than
-       missed. */
+    /* Two files on disk, deliberately, when there was a disk. One table here,
+       necessarily — and this is the assertion that says the difference was
+       noticed rather than missed. */
     expect(siteFor("blocks", "blocks")).toEqual(siteFor("hierarchy", "blocks"));
   });
 
   it("gives the two HTMLs different places, unlike the filesystem", () => {
-    /* On disk `extract` writes `output/<slug>.html` and `blocks` overwrites it,
-       so stage 2's output is destroyed. Two columns here. */
+    /* On disk `extract` wrote `output/<slug>.html` and `blocks` overwrote it,
+       so stage 2's output was destroyed. Two columns here. */
     expect(siteFor("extract", "extractedHtml")).not.toEqual(siteFor("blocks", "stampedHtml"));
+  });
+});
+
+/**
+ * **Also ported from `tests/step-context-paths.test.ts` on 2026-09-05**, and it
+ * needs no database either: `memoryArtefacts()` is a `Map`.
+ *
+ * The claim is that `stepIsDone` cannot answer *done* about a store that holds
+ * nothing. It reads as trivial and is not: `stepIsDone` asks presence first and
+ * then narrows with `stamp`/`isDone`, and a step whose `produces` list emptied —
+ * or whose presence check short-circuited — would report every one of thirteen
+ * steps finished over an empty article, skip the lot, and publish nothing with a
+ * row of green ticks over it.
+ */
+describe("what a step counts as done", () => {
+  it("is not done when the store holds nothing", async () => {
+    const artefacts = memoryArtefacts();
+    const ctx: StepContext = {
+      slug: "nothing-here",
+      report: () => {},
+      signal: new AbortController().signal,
+      // Nothing here sends the article anywhere, so there is no prefix to pay for.
+      cacheArticle: false,
+    };
+    for (const name of STEP_ORDER) {
+      expect(await stepIsDone(STEPS[name], ctx, artefacts), name).toBe(false);
+    }
   });
 });
 

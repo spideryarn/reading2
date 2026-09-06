@@ -696,7 +696,7 @@ Several agents are working this tree, and this plan reaches into two live pieces
   as its **fifth** field, not beside it. Two things follow that the first draft missed: `sameStamp`
   only compares keys the caller *declares*, so "no profile" has to be declared as
   `profileHash: null` rather than omitted; and the filesystem adapter reads only `sourceHash`,
-  `version` and `generator` today ([`src/store/artifacts-fs.ts:332`](../../src/store/artifacts-fs.ts)),
+  `version` and `generator` today (`src/store/artifacts-fs.ts:332`),
   so both the read and write paths need extending or the recorded hash is always `undefined` and a
   glossary tops up for ever.
 - **`src/web/SummaryPanel.tsx` is being edited by someone else.** Commit narrowly, by pathspec, per

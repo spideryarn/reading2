@@ -19,7 +19,6 @@
  * their exported functions, never by reimplementing what they do.
  */
 import { createHash } from "node:crypto";
-import path from "node:path";
 import { eq } from "drizzle-orm";
 import { readArticle, tryReadArticle } from "./article-input.js";
 import {
@@ -122,7 +121,6 @@ import {
 } from "./messages.js";
 import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
-import { fsLocations } from "./store/artifacts-fs.js";
 import { blobStore, CONTENT_TYPE, storeRawSource } from "./store/blobs.js";
 import {
   type ArtifactKind,
@@ -441,10 +439,16 @@ export interface StepContext {
    * putting it into every step is what keeps it true.
    */
   upload?: JobUpload;
-  /** `data/<slug>` — where the durable artefacts live. */
-  dir: string;
-  /** `output/<slug>.html` — the debug page, and what stage 3 reads and writes ids into. */
-  htmlFile: string;
+  /*
+   * **`dir` and `htmlFile` stood here until 2026-09-05, and nothing goes back
+   * in their place.** They were `data/<slug>` and `output/<slug>.html`, computed
+   * by `contextPaths` on every step of every job and read by nothing but the
+   * `outputs` closures that have gone with them. A step is told what it may
+   * read and where its product goes by the `ArtifactStore` it is handed; a path
+   * on the context is a second answer to that question, and the one the
+   * filesystem store used to give.
+   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G.
+   */
   /** Say something short about how this step is going. Shown live; not persisted. */
   report(detail: string): void;
   signal: AbortSignal;
@@ -600,36 +604,27 @@ export interface PipelineStep<N extends StepName = StepName> {
   /** Present tense, naming the actual thing — "Fetching the page", never "Loading". */
   label: string;
   /**
-   * Every file this step writes.
+   * **What** this step produces — the kinds of thing it makes
+   * (src/store/artifacts.ts), with the `ArtifactStore` deciding where they go.
    *
-   * A step counts as done when **all** of them are present, which is the only
-   * safe reading for the two steps that write more than one: `extract` writes
-   * the HTML and `meta.json`, `hierarchy` writes `tree.json` and its copy of
-   * `blocks.json`. Checking only the first would let a crash between the two
-   * writes leave a step that reports itself finished with half its output, and
-   * the stage after it would consume the missing half.
+   * A step counts as done when **all** of them are readable, which is the only
+   * safe reading for the two steps that make more than one: `extract` makes the
+   * HTML and the metadata, `hierarchy` the tree, the labels and its copy of the
+   * blocks. Checking only the first would let a crash between the two writes
+   * leave a step that reports itself finished with half its output, and the
+   * stage after it would consume the missing half.
    *
    * **For most steps this is still an existence check, not a correctness
    * check** — unless the step supplies `isDone` below. See the honest account of
    * the gap in
    * docs/project/ingest-queue.md#idempotent-is-the-goal-this-is-a-step-towards-it.
-   */
-  outputs(ctx: StepContext): string[];
-  /**
-   * The same list said the other way: **what** this step produces, rather than
-   * where it lands.
    *
-   * `outputs` is repo paths, and after the move to Postgres there are no paths
-   * — the tree is a column, not a file. So a step names the *kinds* of thing it
-   * makes (src/store/artifacts.ts) and an `ArtifactStore` decides where those
-   * go. The file adapter maps them back to exactly the paths `outputs` returns,
-   * which is what tests/pipeline-artifact-store.test.ts asserts step by step.
-   *
-   * **Both are here on purpose, for now.** Landing the new declaration beside
-   * the old one, with a test holding them together, is what makes the swap
-   * checkable before anything depends on it. `outputs` goes when the Postgres
-   * adapter lands and `assertProduced` stops needing a path — see
-   * docs/plans/260826e-postgres-storage-implementation.md § The order.
+   * **An `outputs(ctx): string[]` stood beside it until 2026-09-05**, saying the
+   * same list as repository paths, and the pair existed so the swap to kinds
+   * could be checked against the old declaration before anything depended on it
+   * (docs/plans/260826e-postgres-storage-implementation.md § The order). The
+   * paths went with the filesystem store; `produces` is the whole declaration
+   * now, and `assertProduced` reads it through the store.
    */
   produces: readonly ArtifactKind[];
   /**
@@ -666,10 +661,10 @@ export interface PipelineStep<N extends StepName = StepName> {
    * architecture.md#storage has always specified for a cached artefact and what
    * nothing had implemented.
    *
-   * Kept optional, and kept out of `outputs`, on purpose: this is the only
-   * place in the interface that can read a file's *contents*, so a step that
-   * gets it wrong burns a model call every run. Adding one is a deliberate act.
-   * `assertProduced` still uses `outputs`, because "did you write the file"
+   * Kept optional, and kept out of `produces`, on purpose: this is the only
+   * place in the interface that can read an artefact's *contents*, so a step
+   * that gets it wrong burns a model call every run. Adding one is a deliberate
+   * act. `assertProduced` reads `produces` instead, because "did you write it"
    * stays a separate question from "was it worth writing".
    *
    * **`stamp` above is what replaces this, and one step is still here** —
@@ -682,9 +677,10 @@ export interface PipelineStep<N extends StepName = StepName> {
    * it now (`tweets/2`), as `glossary` did when it made the move.
    * What is left is one `stamp` line here and one deletion in the stage.
    *
-   * Worth doing before the artefacts leave the filesystem rather than after:
-   * both of these `isDone` implementations read `ctx.dir`, and under Postgres
-   * there is no directory to read. docs/plans/260827j-transactional-stage-runner.md § D.
+   * Worth doing before the artefacts left the filesystem rather than after:
+   * both of these `isDone` implementations used to read a directory off `ctx`,
+   * and under Postgres there is no directory to read.
+   * docs/plans/260827j-transactional-stage-runner.md § D.
    */
   isDone?(ctx: StepContext, store: ArtifactReads): Promise<boolean>;
   /**
@@ -707,8 +703,8 @@ export interface PipelineStep<N extends StepName = StepName> {
    * and `ideas`, are the next piece of work and this is the seam they take.
    *
    * **`checkpoints` is the third argument and not a field of `ctx`**, and the
-   * reason is the same as `store`'s: `ctx` also reaches `stamp`, `isDone` and
-   * `outputs`, none of which may buy anything, and a capability that only the
+   * reason is the same as `store`'s: `ctx` also reaches `stamp` and `isDone`,
+   * neither of which may buy anything, and a capability that only the
    * run phase has should only be reachable from the run phase. Two of the
    * thirteen steps use it — `extract`, for a PDF's per-chunk transcriptions, and
    * `hierarchy`, for the nav-label batches — and both hand it straight down to
@@ -780,7 +776,8 @@ function canonicalBlock(block: Block): string {
  *
  * This began as `htmlCarriesItsIds`, which asked it alone. On disk that was
  * enough **by accident**: `extract.extractedHtml` and `blocks.stampedHtml` both
- * resolve to `at.htmlFile` (`PATHS` in src/store/artifacts-fs.ts), so a
+ * resolved to the same `output/<slug>.html` in the filesystem store's path map
+ * (deleted 2026-09-05), so a
  * re-extraction overwrites the very file question 1 reads and the missing ids
  * give it away. In Postgres they are two columns (`extracted_html`,
  * `stamped_html`), question 1 compares stage 3's own output against stage 3's
@@ -900,11 +897,6 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
   if (run.html !== stamped) return false;
   if (run.blocks.length !== file.blocks.length) return false;
   return run.blocks.every((c, i) => canonicalBlock(c) === canonicalBlock(file.blocks[i]!));
-}
-
-/** Stage 3's own artefact, beside the HTML. Stage 4 copies it into `data/<slug>/`. */
-function blocksPathFor(ctx: StepContext): string {
-  return ctx.htmlFile.replace(/\.html$/, ".blocks.json");
 }
 
 /*
@@ -1084,8 +1076,9 @@ export async function assertProduced(
  *
  * It used to read `data/<slug>/meta.json` and nothing else. On Vercel that
  * directory is empty on every fresh invocation — `/tmp` is per-instance and
- * scoped to one job (src/store/data-root.ts) — so this answered **"no article
- * exists" for every slug in the library**, and so did `urlForSlug`. What that
+ * was scoped to one job by src/store/data-root.ts (deleted 2026-09-05) — so
+ * this answered **"no article exists" for every slug in the library**, and so
+ * did `urlForSlug`. What that
  * costs, traced from `freeSlug` (src/jobs.ts) through `onShelfOrInFlight`:
  *
  * 1. `freeSlug` believes the slug is unclaimed and hands it out.
@@ -1127,11 +1120,12 @@ export async function assertProduced(
  * the failure this function exists to prevent.
  *
  * **There was a filesystem branch here until 2026-09-05**, reading `meta.json`
- * out of `fsLocations(slug).dir`. It is gone with the flag, and with it the one
- * way this function and `contextPaths` could disagree about where `data/` is:
- * they were called one line apart in `slugIsSpokenFor` (src/jobs.ts), and with
- * `SPIDERYARN_DATA_ROOT` set, one read `meta.json` out of one tree and the other
- * `raw.json` out of another with no way to notice.
+ * out of the filesystem store's `data/<slug>`. It is gone with the flag, and
+ * with it the one way this function and `contextPaths` could disagree about
+ * where `data/` is: they were called one line apart in `slugIsSpokenFor`
+ * (src/jobs.ts), and with a data-root override set, one read `meta.json` out of
+ * one tree and the other `raw.json` out of another with no way to notice.
+ * `contextPaths` itself went the same day — see where it stood, below.
  */
 export async function articleExists(slug: string): Promise<boolean> {
   return (await ownedArticle(slug)) !== undefined;
@@ -1196,16 +1190,19 @@ export async function urlForSlug(slug: string): Promise<string | undefined> {
   return (await ownedArticle(slug))?.url ?? undefined;
 }
 
-/**
- * Everything a step needs to know about where this article's files go.
+/*
+ * **`contextPaths(slug)` stood here until 2026-09-05.** It returned
+ * `data/<slug>` and `output/<slug>.html`, `src/jobs.ts` called it on every step
+ * of every job to fill `StepContext.dir` and `htmlFile`, and by the end nothing
+ * read the answer: the last consumers were the `outputs` closures, which went
+ * with it. Proved before deleting rather than after, by making it return
+ * `/nonexistent` and watching ten pipeline, job and session suites — 86 tests —
+ * stay green.
  *
- * The definition itself is `fsLocations` in src/store/artifacts-fs.ts, because
- * the store is the layer allowed to know about paths at all. This stays here,
- * and stays exported, so the callers that already use it did not have to move.
+ * Nothing replaces it. Where an article's artefacts live is the
+ * `ArtifactStore`'s business and no step's, which is the seam
+ * docs/project/architecture.md § Stage ownership describes.
  */
-export function contextPaths(slug: string): { dir: string; htmlFile: string } {
-  return fsLocations(slug);
-}
 
 /**
  * The URL a step needs, or a clear error rather than a fetch of `undefined`.
@@ -1595,7 +1592,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * done". Listing `raw.html` would make an article that turned out to be a
      * PDF look permanently unfetched, and it would re-fetch on every retry.
      */
-    outputs: (ctx) => [path.join(ctx.dir, "raw.json")],
     produces: ["raw"],
     async run(ctx) {
       /* **The one branch in the whole pipeline that knows where an article came
@@ -1655,7 +1651,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   extract: {
     name: "extract",
     label: "Extracting the article",
-    outputs: (ctx) => [ctx.htmlFile, path.join(ctx.dir, "meta.json")],
     produces: ["extractedHtml", "meta"],
     async run(ctx, store, checkpoints) {
       /* **The manifest through the store, and the bytes by content address.**
@@ -1858,7 +1853,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * would redo stage 3 every time, and `{ steps: ["blocks"] }` could never
      * skip itself.
      */
-    outputs: (ctx) => [blocksPathFor(ctx), ctx.htmlFile],
     produces: ["blocks", "stampedHtml"],
     /* Presence is not enough here, and this is the only step where that is
        true for a reason other than cost — see `blocksMatchTheirHtml`. */
@@ -2019,11 +2013,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     /* `labels.json` is in here as well as the tree, because stage 4 is two model
        passes now and a directory with a tree but no labels is a half-run step,
        not a finished one. src/hierarchy.ts writes the tree last for the same reason. */
-    outputs: (ctx) => [
-      path.join(ctx.dir, "tree.json"),
-      path.join(ctx.dir, "labels.json"),
-      path.join(ctx.dir, "blocks.json"),
-    ],
     produces: ["tree", "labels", "blocks"],
     /**
      * **No `stamp`, and it is not an oversight — one was written and withdrawn
@@ -2288,7 +2277,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   assets: {
     name: "assets",
     label: "Fetching the images",
-    outputs: (ctx) => [path.join(ctx.dir, "assets.json")],
     produces: ["assets"],
     /* Two values, not three: the blocks it would be built from, and this step's
        own version. **No model**, so no `generator` on the artefact and no
@@ -2354,7 +2342,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   arc: {
     name: "arc",
     label: "Writing the arc",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     /**
      * **Added 2026-08-29, and it fixes a live bug rather than only enabling the
@@ -2439,7 +2426,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   tweets: {
     name: "tweets",
     label: "Writing the thread",
-    outputs: (ctx) => [path.join(ctx.dir, "tweets.json")],
     produces: ["tweets"],
     /* Was `threadIsCurrent(ctx.dir)`, which did these same three comparisons by
        hand and read the article's directory rather than the store — deleted in
@@ -2500,7 +2486,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   glossary: {
     name: "glossary",
     label: "Finding the terms",
-    outputs: (ctx) => [path.join(ctx.dir, "glossary.json")],
     produces: ["glossary"],
     /* The first step through the new seam, and the shape the other two follow.
        Three values — the blocks it would be written from, the prompt that would
@@ -2608,7 +2593,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   quotes: {
     name: "quotes",
     label: "Choosing the quotes",
-    outputs: (ctx) => [path.join(ctx.dir, "quotes.json")],
     produces: ["quotes"],
     /**
      * Three values, not four — **the profile is deliberately not in here**, and
@@ -2709,7 +2693,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   ideas: {
     name: "ideas",
     label: "Finding the ideas",
-    outputs: (ctx) => [path.join(ctx.dir, "ideas.json")],
     produces: ["ideas"],
     /**
      * Four values, where most stamped steps declare three.
@@ -2827,7 +2810,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   timeline: {
     name: "timeline",
     label: "Reading the dates",
-    outputs: (ctx) => [path.join(ctx.dir, "timeline.json")],
     produces: ["timeline"],
     /**
      * **Three values, and the third is one no other step hashes: the
@@ -2978,7 +2960,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   quiz: {
     name: "quiz",
     label: "Writing the questions",
-    outputs: (ctx) => [path.join(ctx.dir, "quiz.json")],
     produces: ["quiz"],
     /**
      * `articleWithIdsFingerprint`, the one `ideas` and `sketch` use — the
@@ -3088,7 +3069,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   sketch: {
     name: "sketch",
     label: "Drawing the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "sketch.json")],
     produces: ["sketch"],
     /**
      * The blocks, the tree, the prompt, the model and the reader — all five.
@@ -3221,7 +3201,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   illustrated: {
     name: "illustrated",
     label: "Painting the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "illustrated.json")],
     produces: ["illustrated"],
     /**
      * The Sketch, this stage's prompt, and the model that writes the brief.
@@ -3393,7 +3372,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   debate: {
     name: "debate",
     label: "Asking the web",
-    outputs: (ctx) => [path.join(ctx.dir, "debate.json")],
     produces: ["debate"],
     /**
      * `articleWithIdsFingerprint`, the one `ideas`, `sketch` and `quiz` use —

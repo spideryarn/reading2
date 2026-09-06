@@ -792,6 +792,35 @@ describe("hitMarks", () => {
   it("is empty when nothing was found, so the prose is untouched", () => {
     expect(hitMarks([], null, "rg").size).toBe(0);
   });
+
+  /**
+   * **The `unpressed` cache's immutability, as a compiler rule rather than a
+   * sentence.**
+   *
+   * `hitMarks` hands back arrays and a map it keeps in a `WeakMap` keyed on the
+   * `Found[]` — so a caller that pushed into one would poison every later
+   * result for that search, and one that edited a `Found` in place would get
+   * marks at the offsets it used to have. A GPT Sol review demonstrated both by
+   * probe (docs/plans/260905i-stage2-review-sol.md § F22); no caller does
+   * either, which is exactly why the guarantee needed something stronger than a
+   * docstring nobody has to read.
+   *
+   * There is nothing to run: the assertions are the three `@ts-expect-error`
+   * directives, and **only `npm run typecheck` evaluates them** — vitest strips
+   * them, so this stays green in the runner however the types are weakened.
+   * Drop a `readonly` and typecheck reports `Unused '@ts-expect-error'`.
+   */
+  it("refuses at compile time to let a caller mutate what it cached", () => {
+    const refused = (marks: ReturnType<typeof hitMarks>, hits: Found[]) => {
+      // @ts-expect-error the map is the cache itself; writing to it is writing to the cache.
+      marks.set("spya-k3m9qt", []);
+      // @ts-expect-error the arrays are shared: a push poisons every later result.
+      marks.get("spya-k3m9qt")?.push({ id: "x", start: 0, end: 1, kind: "hit" });
+      // @ts-expect-error the cache is keyed on this array's identity, not its contents.
+      hits[0]!.start = 5;
+    };
+    expect(typeof refused).toBe("function");
+  });
 });
 
 describe("blockStrength", () => {

@@ -125,7 +125,7 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { mintId, mintUniqueId } from "../src/ids.js";
 import { runAsOwner } from "../src/owner.js";
-import { STEPS, contextPaths } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import type { ConvertedProduct, PipelineStep, StepContext } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { mintAttempt } from "../src/store/jobs.js";
@@ -368,7 +368,6 @@ function fakeArc(): PipelineStep<"arc"> {
   return {
     name: "arc",
     label: "Reading the shape of the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     async run() {
       return { detail: "one entry" } as ConvertedProduct;
@@ -446,11 +445,8 @@ async function reopenWithSession(slug: string, jobId: string): Promise<Claimed> 
 
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
-  const { dir, htmlFile } = contextPaths(slug);
   return {
     slug,
-    dir,
-    htmlFile,
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,

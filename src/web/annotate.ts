@@ -37,6 +37,7 @@ import { termPattern, termSpans } from "../term-match.js";
 import { PALETTE_SLOTS } from "./hit-colours.js";
 import type { ValenceDirection } from "./valence.js";
 import type { Block, BlockId } from "../types.js";
+import { costOn, leafClock, noteCost } from "./annotation-cost.js";
 
 /**
  * What a mark is *for*, and therefore how it is drawn and what listens to it.
@@ -233,7 +234,14 @@ export interface Anchor {
  * else in this file speaks.
  */
 export function renderedText(html: string): string {
-  return host(html).textContent ?? "";
+  // Counted in place rather than through a wrapper because there is exactly one
+  // `return` here and it is an expression. `leafClock()` reads the clock only in
+  // the diagnostic mode — annotation-cost.ts § Three states, not two.
+  const counting = costOn();
+  const t0 = leafClock();
+  const text = host(html).textContent ?? "";
+  if (counting) noteCost("renderedText", t0);
+  return text;
 }
 
 /**
@@ -243,6 +251,18 @@ export function renderedText(html: string): string {
  * worse than highlighting none.
  */
 export function resolveMark(text: string, anchor: Anchor): { start: number; end: number } | null {
+  /* The measurement wraps the worker rather than sitting in front of each of
+     its three `return`s, so a fourth one added later cannot escape being
+     counted — annotation-cost.ts § the header. */
+  const counting = costOn();
+  const t0 = leafClock();
+  const found = findQuote(text, anchor);
+  if (counting) noteCost("resolveMark", t0);
+  return found;
+}
+
+/** `resolveMark` without the stopwatch — the whole of the real work. */
+function findQuote(text: string, anchor: Anchor): { start: number; end: number } | null {
   if (anchor.quote.length === 0) return null;
   // The overwhelmingly common case: nothing moved. The bounds check is not
   // paranoia: `startsWith` clamps a negative position to 0 and happily matches,
@@ -270,7 +290,20 @@ export function resolveMark(text: string, anchor: Anchor): { start: number; end:
  * on a sentence containing a glossary term draw one element with both classes
  * rather than two nested ones. See `MarkKind`.
  */
-export function annotateHtml(html: string, marks: Mark[]): string {
+export function annotateHtml(html: string, marks: readonly Mark[]): string {
+  /* Wrapped rather than timed at each `return`, for the reason `resolveMark`
+     above gives. The fast path counts as a call: `TableView` reaches it once
+     per marked block per re-annotation, and hiding the cheap calls would
+     flatter the number this instrument exists to produce. */
+  const counting = costOn();
+  const t0 = leafClock();
+  const out = annotate(html, marks);
+  if (counting) noteCost("annotateHtml", t0);
+  return out;
+}
+
+/** `annotateHtml` without the stopwatch. */
+function annotate(html: string, marks: readonly Mark[]): string {
   const live = marks.filter((m) => m.end > m.start);
   if (live.length === 0) return html;
 

@@ -91,6 +91,24 @@
  * against whatever mounted next; `owner` is what makes it safe, since the only
  * mount that can spend it is the one still looking at the error.
  *
+ * **And, since 2026-09-05, a band whose very first render threw.**
+ * `retireActivation` below is called from `FeatureBoundary`'s
+ * `componentDidCatch` (src/web/FeatureBoundary.tsx) with the identity the
+ * caught render was holding — that file says exactly why "the render that
+ * threw" is not quite the right phrase. That case was previously invisible
+ * here: the effect that claims a token never runs if the render before it
+ * throws, so the token was left `owner: null` — unclaimed, un-retired, and
+ * spendable by whichever mount of that band came next. A later Back could
+ * therefore start a paid job nobody pressed for, which is the bug `owner` was
+ * introduced to close.
+ *
+ * Retiring it at the point of failure rather than leaving it to
+ * `claimActivation` is earlier and stronger. `claimActivation` only retires a
+ * stale token when a **different mount asks**, so the token survives until
+ * something arrives to spend it — and the arrival is the thing we are trying to
+ * make safe. The boundary knows the moment the press became unspendable, so it
+ * says so then. docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md.
+ *
  * ## What this module is deliberately not
  *
  * It is not a queue of work and it is not permission to spend. It says only
@@ -233,6 +251,80 @@ export function armActivationForMode(slug: string, mode: Mode): void {
  */
 export function pendingActivation(slug: string, target: AutoRunTarget): number | null {
   return pending.get(keyOf(slug, target))?.nonce ?? null;
+}
+
+/**
+ * **Exactly which press**, for a caller that has to be able to say later that
+ * it means *that one and no other*.
+ *
+ * The two fields are the whole of the identity a retirement is allowed to act
+ * on. `slug` and `target` are not in it because they are the key it is looked
+ * up under, and a value that carried its own key would let the two disagree.
+ */
+export interface ActivationIdentity {
+  nonce: number;
+  sessionEpoch: number;
+}
+
+/**
+ * The full identity of the press whose `nonce` the caller just observed, or
+ * `null` if the slot has changed since.
+ *
+ * **A plain read, not a snapshot.** `pendingActivation` stays the thing
+ * `useSyncExternalStore` subscribes to, because a snapshot that returned a
+ * fresh object on every call would never compare equal and would loop; this is
+ * what a caller then asks to fill the primitive out.
+ *
+ * **It takes the nonce the caller observed** rather than reading whichever
+ * token happens to be there now — GPT Sol, 2026-09-05. Between the subscription
+ * waking a component and that component rendering, the press can have been
+ * spent and a newer one armed; returning the newer one's epoch under the older
+ * one's nonce would mint an identity that never existed. So the nonce is the
+ * question, and a mismatch is `null`.
+ */
+export function activationIdentity(
+  slug: string,
+  target: AutoRunTarget,
+  nonce: number,
+): ActivationIdentity | null {
+  const held = pending.get(keyOf(slug, target));
+  if (!held || held.nonce !== nonce) return null;
+  return { nonce: held.nonce, sessionEpoch: held.sessionEpoch };
+}
+
+/**
+ * **This press is unspendable; take it away.** Compare-and-retire, and the
+ * comparison is the whole of it.
+ *
+ * Called from `FeatureBoundary.componentDidCatch` when a band's render threw —
+ * see § What else retires a token. It deletes only when **both** the stored
+ * `nonce` and the stored `sessionEpoch` match, so it cannot erase a newer press
+ * (different nonce), a different reader's press (different epoch) or another
+ * target's token (different key, so nothing is even looked at).
+ *
+ * **`owner` is deliberately not compared.** Both states a failed render can
+ * leave the token in are wrong to keep: unclaimed, because the effect that
+ * would have claimed it never ran; and claimed, because the mount that claimed
+ * it is the one that has just been torn down. Neither can ever be spent by
+ * anybody who should be allowed to.
+ *
+ * Returns whether it deleted anything, so a caller can assert the case it meant
+ * to be in rather than assume it. `emit()` fires only on a real deletion — a
+ * no-op notification would wake every subscriber to tell them nothing changed.
+ */
+export function retireActivation(
+  slug: string,
+  target: AutoRunTarget,
+  identity: ActivationIdentity,
+): boolean {
+  const key = keyOf(slug, target);
+  const held = pending.get(key);
+  if (!held) return false;
+  if (held.nonce !== identity.nonce) return false;
+  if (held.sessionEpoch !== identity.sessionEpoch) return false;
+  pending.delete(key);
+  emit();
+  return true;
 }
 
 /**

@@ -77,7 +77,7 @@ a different anchor.
 
 The obstacle is not the streaming. It is **where the answer is stored.**
 
-`lookUpTerm` in [`api.ts`](../../src/api.ts) does two jobs in one function:
+`lookUpTerm` in `api.ts` does two jobs in one function:
 validate-and-load, then call the model *and persist the result*. It is reached
 through `GlossaryStore` — a contract with a filesystem implementation and, in
 `postgres` mode, `notMigrated()` — so a route that streamed by calling

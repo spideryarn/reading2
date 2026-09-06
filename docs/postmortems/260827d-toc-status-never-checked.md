@@ -110,7 +110,7 @@ model to follow. [`stepIsDone`](../../src/pipeline.ts) (`src/pipeline.ts:497-510
 `store.interrupted()` — the liveness question — before it ever asks about a stamp — the currency
 question — and never conflates them. `ArtifactStore.interrupted`
 ([`src/store/artifacts.ts:327`](../../src/store/artifacts.ts)) is implemented for the filesystem in
-[`src/store/artifacts-fs.ts:525`](../../src/store/artifacts-fs.ts). There is no Postgres
+`src/store/artifacts-fs.ts:525`. There is no Postgres
 implementation of `ArtifactStore` yet — `pg.ts` and `pg-revisions.ts` answer the same questions by
 hand, against `revision_step_runs` directly, rather than through that interface — which is exactly how
 two independent, differently-complete answers to "is this row good" were free to exist side by side.

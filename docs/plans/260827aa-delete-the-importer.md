@@ -759,7 +759,7 @@ holds an array of batch entries, and `pdf-chunks/` is one file per chunk. A tabl
 run, read on none" failure arriving by a different door. `(revision_id, step, key)` with `key` an
 opaque caller-supplied string, and the store never interprets it.
 
-**Concurrency is designed for, not hypothetical.** [`src/store/artifacts-fs.ts:349-352`](../../src/store/artifacts-fs.ts)
+**Concurrency is designed for, not hypothetical.** `src/store/artifacts-fs.ts:349-352`
 ties it to the browser-driven advance endpoint letting two processes advance the same article.
 `labels.ts` already handles it: each run mints a random `runId`, stamps every write with it, and
 `clearCheckpoint` refuses to delete a file that is not its own. `pdf-chunks` handles it by having a
@@ -772,7 +772,7 @@ Two more things the inventory turned up:
   hundreds of KB. The largest labels file is 47.8 KB. A Postgres table is right; nothing here needs
   the bucket.
 - **The `.running` attempt markers are not B3's.** `data/<slug>/steps/<step>.running`
-  ([`src/store/artifacts-fs.ts:441`](../../src/store/artifacts-fs.ts)) looks like scratch state and is
+  (`src/store/artifacts-fs.ts:441`) looks like scratch state and is
   not — it already maps onto `revision_step_runs.status` and `attempt_id`, which C2 built. Named here
   so that nobody designs it a second home.
 - **Nothing has ever deleted a pdf chunk**, on success or failure, so retention today is unbounded
@@ -2248,7 +2248,7 @@ the tree — so do not assume its conversion is mechanical because the other fiv
 
 **D4 (was D3) — `toc`, with `labels` already moved.** Three artefacts written in one call, an input that is
 stage 3's copy rather than stage 4's, and the deliberate `blocks` duplication in `PATHS`
-([`src/store/artifacts-fs.ts:91`](../../src/store/artifacts-fs.ts)) that has to survive the move. Its
+(`src/store/artifacts-fs.ts:91`) that has to survive the move. Its
 own stage because it is the one place where *write everything at once* has an atomicity story the
 filesystem adapter cannot honour and Postgres can.
 
@@ -2263,7 +2263,7 @@ thing.
 `readRaw(contextPaths(candidate).dir)` before an article has a store at all (`articleExists`,
 `urlForSlug`, [`src/jobs.ts:1377`](../../src/jobs.ts) `slugIsSpokenFor`); `src/store/slug-is-taken.ts`
 exists and nothing in that path calls it. Two independent `readdir(data/)` walks enumerate the library
-([`src/library-search.ts:207`](../../src/library-search.ts), [`src/api.ts:1005`](../../src/api.ts)).
+([`src/library-search.ts:207`](../../src/library-search.ts), `src/api.ts:1005`).
 And **reader state is a different drawer entirely** — comments, chat, searches, shelf, glossary
 lookups and the reader profile all build their own `data/` paths and never touch the artefact store.
 `data/` does not disappear at the end of D, and this plan should stop implying that it does.
@@ -2355,7 +2355,7 @@ is *"safe to leave for a week"* is only true under the filesystem runner — not
 
 **The `blocks` stamp as I wrote it does not work on either adapter.** On the filesystem
 `extract.extractedHtml` and `blocks.stampedHtml` are **the same path**
-([`src/store/artifacts-fs.ts:119`, `:123`](../../src/store/artifacts-fs.ts) — both `at.htmlFile`), so
+(`src/store/artifacts-fs.ts:119`, `:123` — both `at.htmlFile`), so
 a stamp over the stage-2 HTML self-invalidates the moment stage 3 overwrites that file: hash recorded,
 file replaced, never current again. And on Postgres, recording the run row's `input_hash` does not
 help either, because `stampForStep` treats the **artefact** as the freshness authority and does not
@@ -2391,7 +2391,7 @@ resolves the revision *first* and then proxies or signs — preserving the order
 on raw files.
 
 **And `toc`'s one-call write is not atomic on the filesystem.** The adapter loops and renames each
-part separately ([`src/store/artifacts-fs.ts:506`](../../src/store/artifacts-fs.ts)). The interrupted
+part separately (`src/store/artifacts-fs.ts:506`). The interrupted
 marker stops a later *done*, but a concurrent reader can still see mixed generations. The honest
 contract, written down rather than implied: Postgres has transaction-wide atomicity; the filesystem
 has whole-file writes plus interrupted-run detection, and not atomic visibility across a set. Test an

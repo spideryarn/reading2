@@ -109,7 +109,7 @@ configurable" is the smaller half of the change.
 ### Everything that assumes serial execution is a *number*, not a lock
 
 The audit found no correctness hazard that survives the guards already in place — job-scoped `/tmp`
-([`src/store/data-root.ts`](../../src/store/data-root.ts)), `jobs_active_slug` (one in-flight job per
+(`src/store/data-root.ts`), `jobs_active_slug` (one in-flight job per
 article), and the `id + attempt_id + status` fence. What it found instead is a set of constants each
 measured with only one job running:
 
@@ -414,7 +414,7 @@ Both are on the ToC path, both are already costing real readers, and both are in
 design decision below. Sol endorsed keeping 1a as its own thing.
 
 **1a — DONE, 2026-08-30.** `candidateDirs` now offers `example/` to the fixture's own slug and to
-nothing else ([`src/api.ts`](../../src/api.ts)). One line of behaviour; the reach was the rest of it.
+nothing else (`src/api.ts`). One line of behaviour; the reach was the rest of it.
 Twenty-four tests were relying on the fallback — three asserting the bug directly, twenty-one using
 it as a free article — and each of those now seeds its own copy from `example/`, an idiom
 `routes.test.ts` already used. Four sibling modules documented the old fallback in their own comments
@@ -435,7 +435,7 @@ instead.
 **1a. `loadArticle` serves the wrong article.** `candidateDirs` returns `[data/<slug>, example]`
 unconditionally, so an article with no tree falls through to the hand-authored fixture and **serves
 somebody else's prose under the reader's slug**. `articleDir`
-([`src/api.ts:620`](../../src/api.ts)) does the same for the metadata page. This is the fallback that
+(`src/api.ts:620`) does the same for the metadata page. This is the fallback that
 once hid a path traversal, and `src/api.ts` carries a standing alarm about it.
 
 It is not hygiene. After stage 2, *"blocks exist and the tree does not"* goes from impossible to a
@@ -769,7 +769,7 @@ via `session.reads` — the **filesystem** store. If that root holds no earlier 
 `previousBlocksFrom` returns nothing, `assertIdsCarried` takes its first-ingest branch and asserts
 nothing, and stage 3 **mints a fresh set of ids for prose that already has them**.
 
-On Vercel, [`src/store/data-root.ts`](../../src/store/data-root.ts) scopes that root **by job id** —
+On Vercel, `src/store/data-root.ts` scopes that root **by job id** —
 deliberately, so one job never finds another's files. Its own header accepts the price: *"a retry
 gets a new job id and repays for the work already done."* Repaying for the work is not the whole
 price. **A retry also gets an empty root**, and an empty root is indistinguishable from a first
