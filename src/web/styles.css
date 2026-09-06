@@ -12776,9 +12776,13 @@ td.text.kind-heading .blk-gutter[data-open] {
    screen.**
 
    **It is the one width-shaped behaviour in this file that is not written as a
-   width, and it cannot be.** The crossover is `MODE_MIN + PROSE_MIN` against the window
-   **minus the rail** — 844 with the rail on, 832 with `?spine=0` — and a media
-   query cannot see a query parameter. It was `@media (max-width: 843px)` from
+   width, and it cannot be.** The crossover is `MODE_MIN + MODE_PROSE_FLOOR` against the
+   window **minus the rail** — 700 with the rail on, 688 with `?spine=0` — and a
+   media query cannot see a query parameter. (It was `MODE_MIN + PROSE_MIN`, 844
+   and 832, until 2026-09-06; layout.ts § `MODE_PROSE_FLOOR` is why the prose now has
+   two numbers, and why no iPhone in landscape ever cleared the old one.) The
+   numbers below are the old pair, and they are the widths the measurements were
+   taken at rather than claims about today. It was `@media (max-width: 843px)` from
    2026-08-27 to 2026-09-03, and across **832–843 with the rail off** the two
    halves disagreed: `fitMode` handed the band 288–299px and squeezed the table
    to make room for it, while this query widened that same band to the whole
@@ -12822,7 +12826,8 @@ td.text.kind-heading .blk-gutter[data-open] {
 
    layout.ts § fitMode has what was tried first, and why a fixed element cannot
    be one of two panes you scroll between. `tests/chat.test.ts` still pins the
-   844/843 crossover on the TypeScript side. */
+   crossover on the TypeScript side — 700/699 since 2026-09-06, and 844/843
+   before it. */
 /* **The window minus the rail — not the whole window.** `left: 0` was tried
    first and the panel came out with its left-hand rail-width missing: every
    term name lost its first letter, the slider ran off the edge, and the
@@ -13502,8 +13507,9 @@ td.text.kind-heading .blk-gutter[data-open] {
    below the width at which the bar has less room than the measure the term goes
    negative, and the title stays at the gutter while the prose slides towards
    it. That width is much lower than it was, the reservations having been the
-   thing that raised it. Below 844px the question does not arise anyway — a mode
-   band with no room hides this bar outright (§ a band with no room). */
+   thing that raised it. Below the mode crossover (700px since 2026-09-06, 844
+   before it) the question does not arise anyway — a mode band with no room
+   hides this bar outright (§ a band with no room). */
 .reader:has(table.only-prose):not(.text-alone) .masthead-inner {
   /* `65ch` measured in the article's face rather than the chrome's — the same
      line, and the same reason, as `font-size` on `.blk-gutter` (§ the gutter).

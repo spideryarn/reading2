@@ -327,7 +327,8 @@ state it was for cannot arise now: this is a CLI script, the variable used to de
 one of those, and a dev server reading `files` served articles off `data/` — so the seed worked, the
 shelf looked empty, and `npm run setup` reported completion over it. There is one store, so whatever
 starts the dev server reads what this wrote. **Do not put `SPIDERYARN_STORE` in `.env.local`**: it is
-off `push-env`'s allowlist, and `src/store/live.ts` throws on any value but `postgres`.
+off `push-env`'s allowlist, and since 2026-09-06 nothing reads it at all — the tombstone that used to
+throw on a wrong value went with the variable itself (260903f § I).
 
 And the end-to-end check, which needs no human:
 

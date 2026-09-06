@@ -84,26 +84,19 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 const INHERITED: Readonly<Record<string, string | undefined>> = { ...process.env };
 
-/**
- * **What the shell exported, before `.env.local` had a chance to replace it.**
+/* **`inheritedEnv(name)` read one name out of that snapshot until 2026-09-06.**
+ * A plain block rather than a JSDoc one, because there is no longer a
+ * declaration under it for a doc comment to belong to.
  *
- * The precedence rule above is right and it has one consequence worth being able
- * to see from outside: a value a person deliberately exported can be silently
- * overruled by a file, and the warning that says so is suppressed under
- * `NODE_ENV=test`. Most callers should not care — the applied value is the one
- * that decides. **A refusal is the exception**: `src/store/live.ts` throws on
- * `SPIDERYARN_STORE=files`, and a file quietly rewriting that to `postgres`
- * would mean an operator who asked for the store that is gone was served the
- * other one without a word. That is the whole failure the tombstone exists to
- * prevent, arriving by a different door.
- *
- * So the snapshot is readable, one name at a time. Not the whole object: this is
- * for asking "did the shell say something different", not for a second source of
- * configuration.
+ * A caller could ask *what did the shell say, before `.env.local` replaced it?*
+ * — which only a refusal ever needs, and there was exactly one: the
+ * `SPIDERYARN_STORE` tombstone threw on `files`, and a file quietly rewriting
+ * that to `postgres` would have served an operator the other store without a
+ * word. That caller went in stage I of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * and the helper went with it rather than sitting exported and uncalled.
+ * `INHERITED` stays: `loadEnvLocal` and `resolveTargetUrl` both read it.
  */
-export function inheritedEnv(name: string): string | undefined {
-  return INHERITED[name];
-}
 
 let done = false;
 
