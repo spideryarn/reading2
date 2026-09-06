@@ -17,7 +17,7 @@
  * `.reader`, which reserves the band's width as padding and renders everything
  * into a 0×0 box.
  *
- * Delete this file and preview-diagram-wait.html when the check is done;
+ * Delete this file and preview/preview-diagram-wait.html when the check is done;
  * nothing links to either.
  */
 import { createRoot } from "react-dom/client";

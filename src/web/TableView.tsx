@@ -76,6 +76,7 @@ import {
   zoomTargetOf,
   type ZoomedFigure,
 } from "./zoomable.js";
+import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 
 /**
  * How long the live region stays empty between two announcements.
@@ -492,6 +493,17 @@ interface Props {
    * not have been — the thirty-sixth is covered too. BlockRef.tsx § `blockHref`.
    */
   linkBase: string;
+  /**
+   * **The article's slug, from the route** — for the *view the original*
+   * control beside a PDF's figures (PdfFigureNote.tsx).
+   *
+   * A prop rather than `article.meta.slug`, and the reason is `Origin`'s in
+   * Metadata.tsx: an address with no article of its own is answered with a
+   * fixture's meta, so the two can disagree, and a control that opens *a
+   * document* must be about the one the reader is standing on. It is also a
+   * string, so it cannot cost this memo a render.
+   */
+  slug: string;
 }
 
 /**
@@ -555,6 +567,7 @@ function TableViewInner({
   sections,
   layoutKey,
   linkBase,
+  slug,
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
@@ -999,6 +1012,24 @@ function TableViewInner({
    * this component re-renders on a pointer crossing from one row to the next,
    * and the answer changes only when the article does.
    */
+  /**
+   * **The figures a PDF came with, and what became of each** —
+   * PdfFigureNote.tsx.
+   *
+   * Memoised for `proseHtml`'s reason and keyed on the whole article: this
+   * component re-renders on a pointer crossing from one row to the next, and
+   * the answer changes only when the article does. `article.assets` is half the
+   * input and `article.blocks` is the other, and both arrive together.
+   *
+   * Empty for every article that did not come from a PDF, which is almost all
+   * of them, and the walk that produces it is one `String.includes` per block.
+   */
+  const figureNotes = useMemo(() => pdfFigureNotesIn(article), [article]);
+  /* One boolean for the whole article: is there an original to open at all.
+     PdfFigureNote.tsx § `hasOriginalPdf` — which is also the ownership gate,
+     and says why that is safe and where to look if it stops being. */
+  const canOpenSource = hasOriginalPdf(article);
+
   const noteStarts = useMemo(() => {
     const out = new Map<BlockId, NoteStart>();
     if (!notes) return out;
@@ -1567,6 +1598,21 @@ function TableViewInner({
                      an empty paragraph. */
                   dangerouslySetInnerHTML={proseHtml.get(block.id)?.out ?? { __html: block.html }}
                 />
+                {/* **After the prose, and outside it.** A PDF figure that could
+                    not be recovered gets one muted line here, and every PDF
+                    figure gets a way back to the page it was on. It is a sibling
+                    of `.prose` rather than markup inside the block for the
+                    reason `notes-head` above is a real element: `selection.ts`
+                    roots comment offsets at `td.text .prose`, so a generated
+                    sentence written into `block.html` would shift every anchor
+                    in that block, silently. PdfFigureNote.tsx; GPT Sol, I-4. */}
+                {figureNotes.has(block.id) && (
+                  <PdfFigureNotes
+                    notes={figureNotes.get(block.id) ?? []}
+                    slug={slug}
+                    canOpenSource={canOpenSource}
+                  />
+                )}
               </td>
             )}
           </tr>

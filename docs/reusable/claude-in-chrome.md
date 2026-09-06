@@ -1,9 +1,13 @@
 # Connecting Claude-in-Chrome
 
-Getting the extension to talk to Claude Code at all. Once it does,
-[browser-testing.md](browser-testing.md) is what to do with it — this doc stops at the handshake.
-On the remote box there is no extension to connect and there cannot be one, so none of this applies
-there; [browser-control.md](browser-control.md) is the fork in the road.
+Getting the extension to talk to Claude Code at all. **This doc stops at the handshake** — what to
+do with the browser once you have one is a separate question, and in this repo it is
+[browser-testing.md](../project/browser-testing.md).
+
+**None of this applies on a headless server.** The extension needs a Chrome a human has signed into,
+so there is no version of it that works on a remote box; drive Playwright there instead
+([playwright-browser-control.md](playwright-browser-control.md), and
+[browser-control.md](../project/browser-control.md) for which machine gets which).
 
 > **This is a fluid situation.** The extension, the pairing flow and the transport are all moving,
 > and the version numbers below (extension 1.0.85, Claude Code 2.1.251, 2026-08-30) are the ones
@@ -95,7 +99,7 @@ Every browser here is named `Browser 1`, so the name distinguishes nothing. Comp
 
 An agent cannot do this part: it's an OAuth flow, and there's no browser connection to drive yet
 anyway — which is the whole chicken-and-egg of it. Write the clicks down and hand them over
-(the habit is [asking-greg-questions](../reusable/README.md), and it applies to any blocked auth):
+(the habit is [asking-greg-questions](README.md), and it applies to any blocked auth):
 
 1. In the window of the profile you want, click the Claude extension icon (puzzle piece → **Claude**).
 2. Sign in.
@@ -111,11 +115,7 @@ reinstall the extension in that profile to clear it, then sign in fresh.
 
 Browser work goes to a Sonnet subagent — it's mostly click-look-click and the screenshots are large.
 But **do the handshake in the parent first**, or the subagent will stall silently for half an hour:
-[browser-testing.md § A browser subagent stalls silently unless the parent does the handshake first](browser-testing.md#a-browser-subagent-stalls-silently-unless-the-parent-does-the-handshake-first).
+[browser-testing.md § A browser subagent stalls silently unless the parent does the handshake first](../project/browser-testing.md#a-browser-subagent-stalls-silently-unless-the-parent-does-the-handshake-first).
 
 That section also has the rule that matters more than any of this — a stuck browser agent and a
 working one look identical from outside, so read the dev server's log rather than the agent.
-
----
-
-Up: [code-quality-overview.md](code-quality-overview.md)

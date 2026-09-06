@@ -2646,22 +2646,15 @@ export interface ChatMessage {
    */
   passages?: { blockIds: string[]; why: string }[];
   /**
-   * **The reader talked over this answer, so it may contain words they never
-   * heard.** Assistant turns only.
+   * **A spoken answer ended early**, through interruption, hangup or provider
+   * failure. Assistant turns only. Its partial transcript remains readable,
+   * with an explanation that it may contain words never heard; it must not
+   * appear to be a complete answer or claim the reader caused the interruption.
    *
-   * A second flag beside `stopped` rather than a fourth `status`, for the
-   * reason `stopped` gives: nothing failed, the words were generated, some of
-   * them were heard. It must not render as an error, be swept, or be retried.
-   *
-   * **It is the inverse of `stopped` in the one way that matters.** A stopped
-   * answer's stored text *is* what the reader read, so it is kept as model
-   * history. An interrupted answer's is not: the realtime server truncates the
-   * unplayed audio and does **not** hand back a corrected transcript, so the
-   * tail of this string is words nobody heard. `recentHistory` in
-   * src/converse.ts therefore drops the pair rather than transforming it —
-   * feeding unheard words into the next turn is the one outcome to refuse, and
-   * a synthetic "the reader interrupted here" marker would be assistant text
-   * the model never said.
+   * Unlike a typed `stopped` answer, the realtime transcript is not corrected
+   * to match played audio. `recentHistory` in src/converse.ts therefore drops
+   * the pair from model history rather than feeding unheard or unfinished
+   * words into the next turn. There is no automatic retry or invented text.
    */
   interrupted?: boolean;
   /**

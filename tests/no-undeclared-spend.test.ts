@@ -146,6 +146,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "The allowlist of which .env.local keys may travel to the remote box. It exists precisely to name credentials — an allowlist that could not write them down would be a blocklist — and it copies a file over scp. It never reads a value and never speaks to a provider.",
   "scripts/gjd-remote.ts":
     "The remote-box CLI. Names a credential only in help text and in the error it prints when the box lacks one. No transport of any kind.",
+  "scripts/run-claude.ts":
+    "The Claude subagent wrapper. It names ANTHROPIC_API_KEY and its two siblings to decide whether they cross into the child process at all — the credential list *is* the mechanism, and every other ANTHROPIC_* variable is dropped by prefix because an inherited endpoint or provider override re-points the run at another bill. It makes no request itself: it spawns `claude -p`, which is why it also has a line in UNMETERED_SPEND. Unlike scripts/run-codex.ts, this scan can see it, so it needs both.",
   "scripts/ai-cost.ts":
     "Reads GET /api/v1/key to reconcile. Costs nothing and buys no inference.",
   "evals/hierarchy-structure/verify-costs.ts":

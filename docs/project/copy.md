@@ -171,7 +171,25 @@ running for a while"* would invite a bug report about a step that is working. Th
 import can have already have codes, and they come from `src/messages.ts` through
 `failureKind` as they always did.
 
-**The paragraph-label sentences are the third exception**, and they follow the import-state family
+**The unrecovered figure is the third exception**, and it is the import states' argument rather
+than the boundaries'. `FIGURE_NOT_RECOVERED` in
+[`PdfFigureNote.tsx`](../../src/web/PdfFigureNote.tsx) — *"We couldn't recover this figure from the
+PDF."* — is the muted line a reader gets under the caption of a figure the pipeline could not get a
+picture out of ([article-images.md](article-images.md)). No code, because **it is not a problem**: the
+reader did not cause it, cannot act on it, and a re-run would not change it, so a code would invite a
+bug report about a PDF whose figure is a vector drawing. Not in `src/messages.ts` for the `mic-`
+family's reason — that file is about failures a model call can return, and this is a fact about a
+document.
+
+The harder half is that it **names no cause**. The extraction caps a decode and pdf.js answers a
+refusal by dropping the image operation entirely, so *a figure too big to decode is
+indistinguishable from a figure that was never a bitmap*
+([the plan](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md)). "This figure is
+vector art" would be a confident guess. What we can say is that we looked and could not get it, and
+that there is an original to open — so the sentence says that, and *view the original* sits beside
+it.
+
+**The paragraph-label sentences are the fourth exception**, and they follow the import-state family
 exactly: *"Paragraph labels are still arriving."* / *"Paragraph labels aren't available."*, in
 [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) beside the rule that decides which one applies,
 and **no bracketed code**. Not in `src/messages.ts` because that file is about failures a model call
@@ -181,7 +199,7 @@ labels run fails for whatever reason a provider gives, and none of that reaches 
 DTO: the enum is the whole of what crosses.
 [granularity-zoom.md § the paragraph outline](granularity-zoom.md#both-at-once-the-paragraph-outline-beside-the-prose).
 
-**The three error boundaries are the fourth exception.** `[render]` is the whole
+**The three error boundaries are the fifth exception.** `[render]` is the whole
 app failing to draw, `[chunk]` is a lazy route failing to arrive, and
 `[mode-render]` is one mode failing while the article stays readable. In that order:
 [`AppBoundary.tsx`](../../src/web/AppBoundary.tsx) (2026-08-27),

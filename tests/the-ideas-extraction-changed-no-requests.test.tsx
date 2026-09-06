@@ -720,6 +720,10 @@ const CHAT: Shape[] = [
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/reader?slug=${SLUG}`),
   GET(`/api/reader?slug=${SLUG}`),
+  // The loaded empty Chat list now offers its composer, including Live. Its
+  // profile checkbox reads once per StrictMode effect pass too (260906f).
+  GET(`/api/reader?slug=${SLUG}`),
+  GET(`/api/reader?slug=${SLUG}`),
   GET("/api/reader"),
 ];
 

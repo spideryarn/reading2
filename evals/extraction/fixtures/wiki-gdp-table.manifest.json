@@ -1,0 +1,54 @@
+{
+  "fixture": "wiki-gdp-table",
+  "file": "wiki_gdp_table.html",
+  "note": "TOTAL LOSS OF A DATA TABLE — the point of the page. This manifest is EXPECTED TO FAIL on every arm shipping today; it is written as what the reader should get, not as what they do get, because a manifest that records the bug as the answer can never show the bug being fixed. STRUCTURE, CHECKED TABLE BY TABLE 2026-09-05: the source's 8 <table> are the map wrapper, the map's value legend, the sortable country table, the regional-groupings table, and four navboxes (Lists of countries by financial rankings, by GDP rankings, Economic classification of countries, and a navbox subgroup). Three of those are article — the legend, the country table, the regional table — which is where 'atLeast 3' comes from; a raw source count of 8 would have asserted the navboxes. The shipped extraction returns 1, and it is the legend, so both real data tables are gone. The 6 <h2> are the five article sections (Table, Nominal GDP of regional groupings, See also, Notes, References) plus 'Contents', the pinnable table-of-contents header, so 'exactly 5' is source truth and also catches an arm that admits the ToC. THE 'United States' NEEDLE WAS REPLACED 2026-09-05: it was labelled negativeControl 'numeric-cell' and was neither numeric nor table-specific — the string occurs four times in today's output, all of it ordinary prose, so it was satisfied while the table it was written for was being destroyed. Two real cells stand in its place. minArticleChars 18000: the article region (div.mw-content-ltr) holds 24,001 gistable characters, 19,426 of them once the four navboxes and the reference list are taken out; the shipped extraction returns 11,027, so more than a third of the article's text is missing with the tables. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The parser output less its three navboxes holds 16,939 characters against 23,176 for the source body. THE SHIPPED EXTRACTION RETURNS 9,507 — 56.1%, and 1,052 region elements are missing, which is the two data tables cell by cell. The floor is 16,000 and fails today by 6,493 characters. This is what a length floor on the ARTICLE can see and a length floor on the output could not: the old floor of 18,000 also failed, but it failed on a number that could have been made up with anything on the page.",
+  "mustContain": [
+    {
+      "text": "Gross domestic product (GDP) is the market value of all final goods",
+      "why": "the lead paragraph"
+    },
+    {
+      "text": "32,383,920",
+      "why": "the United States' figure in the IMF(2026) column, the first country row of the sortable 'GDP forecast or estimate (million US$) by country' table — the largest single datum the page exists to carry. Ten characters, no letters, and it occurs exactly once in the fixture's bytes",
+      "negativeControl": "numeric-cell"
+    },
+    {
+      "text": "23,034,637",
+      "why": "the European Union's figure in the IMF(2026) column of the second data table, 'GDP forecast or estimate (million US$) by region or grouping' — a cell from the OTHER lost table, so recovering one of the two is not enough to pass",
+      "negativeControl": "numeric-cell"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "From Wikipedia, the free encyclopedia",
+      "why": "site furniture kept as a block today"
+    },
+    {
+      "text": "Learn to edit",
+      "why": "a Wikipedia main-menu item, in the page header"
+    },
+    {
+      "text": "Toggle the table of contents",
+      "why": "an interface affordance; never article text under any policy"
+    }
+  ],
+  "structure": {
+    "table": {
+      "atLeast": 3
+    },
+    "h2": {
+      "exactly": 5
+    }
+  },
+  "maxBlockChars": 8000,
+  "articleRegion": {
+    "within": [
+      "div.mw-content-ltr"
+    ],
+    "except": [
+      ".navbox"
+    ],
+    "why": "MediaWiki's parser output is the article; the three .navbox tables inside it are Wikipedia's cross-article furniture and the manifest already declines to count them in the table floor. The notes and reference sections are kept, because they are the article's own apparatus."
+  },
+  "minArticleChars": 16000
+}

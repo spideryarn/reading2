@@ -75,7 +75,7 @@ import { apiFetch } from "./lib/api.js";
  * credential — so for a visitor a `null` here is *either* an upload *or* an
  * address we would not publish, and nothing on this side can tell them apart.
  * Whoever turns a `null` into the sentence "this was uploaded" has to establish
- * the reader owns the article first; `OriginMark` in Masthead.tsx is the one
+ * the reader owns the article first; `OriginLine` in Masthead.tsx is the one
  * place that does.
  */
 export function webSource(meta: Meta): string | null {
@@ -89,12 +89,34 @@ export function SourceLink({
   children,
   className,
   title,
+  fragment,
 }: {
   slug: string;
   children: React.ReactNode;
-  /** Replaces the default link styling — both callers put this in a sentence. */
+  /** Replaces the default link styling — most callers put this in a sentence. */
   className?: string;
   title?: string;
+  /**
+   * **Where in the document to open**, as a URL fragment without the `#` —
+   * `page=7` for a PDF.
+   *
+   * Added 2026-09-06 for the figures in the prose: we know which page a figure
+   * came from (its `data-spya-pdf-figure` marker carries it), so *view the
+   * original* beside that figure can open the page it is on rather than page
+   * one of a thirty-page paper. Greg asked for the control; opening it at the
+   * page is what makes it worth pressing.
+   *
+   * **A fragment and not a query**, because that is what a PDF viewer reads:
+   * `#page=N` is the PDF Open Parameters convention, honoured by Chrome's and
+   * Firefox's built-in viewers. It is appended to the `blob:` URL rather than
+   * sent to the server, which is the only place it *could* go — the bytes come
+   * back through `apiFetch` and the tab is handed a local object URL, so the
+   * server never sees it and there is nothing to validate.
+   *
+   * Not typed as a number or a page: a fragment is a fragment, and a caller
+   * that one day wants `#nameddest=` should not have to change this signature.
+   */
+  fragment?: string;
 }) {
   /* Said beside the button, which is where both callers want it: each of them
      sits in a paragraph, so the explanation can too. */
@@ -112,8 +134,13 @@ export function SourceLink({
         const res = await apiFetch(`/api/source/${encodeURIComponent(slug)}`);
         if (!res.ok) throw new Error(`The server said ${res.status}.`);
         const url = URL.createObjectURL(await res.blob());
-        if (tab) tab.location.href = url;
-        else window.location.href = url;
+        /* The fragment goes on the address the tab is sent to, and **not** on
+           the object URL we revoke below: `revokeObjectURL` matches the URL it
+           was given, so a `#page=7` glued on before the revoke would leave the
+           blob alive for the life of the document. */
+        const at = fragment ? `${url}#${fragment}` : url;
+        if (tab) tab.location.href = at;
+        else window.location.href = at;
         /* Revoked on a timer rather than immediately: the tab has to have
            started loading it first, and there is no event here that says it
            has. A minute is far longer than the load and still bounds the leak. */

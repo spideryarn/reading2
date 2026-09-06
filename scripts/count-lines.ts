@@ -77,7 +77,6 @@ const isTest = (f: string) =>
  * are listed and kept out of the headline, same as the lockfile.
  */
 const isFixture = (f: string) =>
-  f.startsWith("test/fixtures/") ||
   f.startsWith("example/") ||
   f.includes("/fixtures/") ||
   /^evals\/pdf\/(?!bakeoff\/)/.test(f);
@@ -113,7 +112,7 @@ const CONFIG_FILES = new Set([
  * essays as generated output.
  *
  * The three "nobody wrote this" rules come next, above `tests`. Otherwise
- * `test/fixtures/structures.blocks.json` — pipeline output, committed so a test
+ * `tests/fixtures/structures.blocks.json` — pipeline output, committed so a test
  * has something to run against — counts as a test somebody sat down and wrote.
  */
 const CATEGORIES: Category[] = [

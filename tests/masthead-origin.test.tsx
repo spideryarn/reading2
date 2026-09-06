@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 /**
- * **Where the article came from, said beside the title — and never guessed.**
+ * **Where the article came from, said under the title — and never guessed.**
+ *
+ * It was a glyph beside the title until 2026-09-06 and is a line under it now,
+ * carrying the address itself: Greg, *"Show the url from which the original came
+ * … I think it's important that we are prominent about the origin."*
+ * src/web/Masthead.tsx § `OriginLine`. Everything below is unchanged in what it
+ * asserts and changed only in where it looks — the sentences are visible text
+ * now rather than an `aria-label`, which is the point of the change.
  *
  * The masthead's title has been an `<a href={meta.url}>` since it existed, which
  * says where a piece is from only when you already suspect there is somewhere.
@@ -131,16 +138,21 @@ async function mount(meta: Partial<Meta>, owner: boolean) {
 /** Every `href` anywhere in the masthead, so a link cannot hide inside a wrapper. */
 const hrefs = () => [...host.querySelectorAll("a[href]")].map((a) => a.getAttribute("href"));
 
-/** Every accessible name in the masthead — this mark is a glyph, so it has no text. */
+/**
+ * Every accessible name in the masthead. The origin *link* has one and it is
+ * deliberately not its visible text — an address read aloud does not announce
+ * that it goes anywhere (src/web/Masthead.tsx § `OriginLine`). The two states
+ * with no address have none at all, because their text is the sentence.
+ */
 const names = () =>
   [...host.querySelectorAll("[aria-label]")].map((el) => el.getAttribute("aria-label"));
 
-describe("the mark beside the title", () => {
+describe("the origin line under the title", () => {
   it("points the owner at the original when the article has a web address", async () => {
     await mount({ url: "https://example.com/the-piece" }, true);
 
     /* Twice on purpose: the title itself, which has always been a link, and the
-       icon, which is the half a reader can actually see is a link. */
+       origin line, which is the half a reader can actually see is a link. */
     expect(hrefs().filter((h) => h === "https://example.com/the-piece")).toHaveLength(2);
     /* The host in the name, because "View the original" alone does not say
        whose site you are about to be sent to. */
@@ -148,11 +160,81 @@ describe("the mark beside the title", () => {
     expect(host.textContent).not.toContain(UPLOADED);
   });
 
+  /**
+   * **The whole of the 2026-09-06 change, in one assertion.** The address used
+   * to be reachable only by hovering an arrow or by clicking the title to find
+   * out; it is on the page now. Asserted on the *text* rather than on the
+   * `href`, because an `href` nobody can read is exactly the state this
+   * replaced.
+   */
+  it("prints the address itself, host first and path after it", async () => {
+    await mount({ url: "https://www.example.com/2026/the-piece/" }, true);
+
+    /* `hostOf`'s doing: no scheme, no `www.`. The trailing slash goes with it —
+       one page, and only one of the two spellings looks deliberate. */
+    expect(host.textContent).toContain("example.com");
+    expect(host.textContent).toContain("/2026/the-piece");
+    expect(host.textContent).not.toContain("https://");
+    /* And the address the link actually goes to is untouched by any of that. */
+    expect(hrefs()).toContain("https://www.example.com/2026/the-piece/");
+  });
+
+  /**
+   * **What is drawn is the address the link goes to, or it is not worth
+   * drawing.** Three ways the first version's `pathOf` broke that, all found by
+   * GPT Sol on 2026-09-06 and none of them visible on a normal article: it
+   * stripped a trailing slash from the whole `pathname + search + hash` rather
+   * than from the path, so a query or a fragment ending in one came out
+   * *different*; and it took the host from `hostOf`, which reports
+   * `URL.hostname` and so silently dropped a non-default port.
+   *
+   * A line whose whole job is provenance may not show one address and follow
+   * another, however small the difference.
+   */
+  it("shows the address it actually links to, down to the query and the port", async () => {
+    for (const [url, shown] of [
+      ["https://example.com/a?next=/", "example.com/a?next=/"],
+      ["https://example.com/a#section/", "example.com/a#section/"],
+      ["https://example.com:8443/p", "example.com:8443/p"],
+    ] as const) {
+      await mount({ url }, true);
+      expect({ url, shown: host.querySelector(".origin-link")?.textContent }).toEqual({
+        url,
+        shown,
+      });
+      expect(hrefs()).toContain(url);
+    }
+  });
+
+  /**
+   * **A malformed address is not printed**, and this is a sink that did not
+   * exist before the line did. `webSource`'s allowlist is a `/^https?:\/\//`
+   * regex rather than a parse (src/web/SourceLink.tsx), so a value like this
+   * reaches the masthead — and an *imported* article's metadata goes straight
+   * into the row. React escapes it, so it was never markup; it could still be a
+   * screenful of control characters under the title. GPT Sol, 2026-09-06.
+   */
+  it("refuses to print an address it cannot parse, and still offers the way out", async () => {
+    await mount({ url: "https://[bad" }, true);
+
+    expect(host.textContent).not.toContain("[bad");
+    /* The words instead, and the link still there: nothing dangerous can reach
+       this `href` — `webSource` refuses every scheme but `http(s)` — so the
+       reader keeps the way out and loses only the unreadable text. */
+    expect(host.querySelector(".origin-link")?.textContent).toBe("View the original");
+    expect(hrefs()).toContain("https://[bad");
+  });
+
   it("tells the owner an article with no web address was uploaded", async () => {
     await mount({ source: "pdf" }, true);
 
-    expect(names().some((n) => n?.startsWith(UPLOADED))).toBe(true);
-    expect(hrefs()).not.toContain(null);
+    expect(host.textContent).toContain(UPLOADED);
+    /* And the sentence is *all* it is: an upload has nowhere to send anybody, so
+       the line must not have grown a link out. (This read `hrefs()` for a `null`
+       until 2026-09-06, which the `a[href]` selector had already made
+       impossible — a check that could never fail. GPT Sol.) */
+    expect(hrefs()).not.toContain("");
+    expect(host.querySelectorAll(".origin a")).toHaveLength(0);
   });
 
   /**
@@ -187,22 +269,26 @@ describe("the mark beside the title", () => {
   it("does not call a web article with no address an upload", async () => {
     await mount({}, true);
 
-    expect(names().some((n) => n?.startsWith(UPLOADED))).toBe(false);
+    expect(host.textContent).not.toContain(UPLOADED);
     /* And it says the true thing rather than nothing: the owner is looking at
        their own library and the gap is a fact about it. */
-    expect(names().some((n) => n?.startsWith(UNRECORDED))).toBe(true);
+    expect(host.textContent).toContain(UNRECORDED);
   });
 
   /**
-   * **The one this file exists for.** A visitor's meta has no `url` whatever the
-   * article is, so the same absence must produce no claim at all rather than the
-   * claim above.
+   * **The one this file exists for.** A visitor *does* get a `url` when we have
+   * one to give — that is the test three above. What they never get is the
+   * *inference*: an absent `PublicMeta.url` means an upload or an address
+   * `publicSourceUrl` withheld, so the same absence must produce no claim at all
+   * rather than the claim above.
    */
   it("tells a visitor nothing, because it cannot tell", async () => {
     await mount({ source: "pdf" }, false);
 
     expect(host.textContent).not.toContain(UPLOADED);
-    expect(names().some((n) => n?.startsWith(UPLOADED))).toBe(false);
+    /* Nor the other half of the line: a visitor gets no origin state at all,
+       rather than the one we happen to be able to infer. */
+    expect(host.textContent).not.toContain(UNRECORDED);
   });
 
   /**
@@ -217,6 +303,6 @@ describe("the mark beside the title", () => {
     expect(host.innerHTML).not.toContain("/Users/greg");
     /* And it lands in the other branch rather than in neither: a `webSource`
        that returned `null` for everything would pass the two lines above. */
-    expect(names().some((n) => n?.startsWith(UPLOADED))).toBe(true);
+    expect(host.textContent).toContain(UPLOADED);
   });
 });

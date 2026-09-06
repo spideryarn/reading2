@@ -422,7 +422,7 @@ async function sourceRowFor(
  * deliberate difference from the filesystem, where an absent file and a file
  * containing `{"blocks": []}` are distinguishable. There is no such
  * distinction here — no rows is no rows — so the question is which of the two
- * it should be read as, and "absent" is the safe one. `inputHashFor` in
+ * it should be read as, and "absent" is the safe one. Every stamp in
  * src/pipeline.ts does `if (!file?.blocks) return null`, which an empty array
  * passes; every late step would then be compared against `hashBlocks([])`, a
  * real-looking fingerprint of nothing. The consequence is worth stating: after

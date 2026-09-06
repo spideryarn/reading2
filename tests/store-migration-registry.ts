@@ -2204,6 +2204,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/acquire-extract-blocks-end-to-end.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
+  /* The two asset routes, 2026-09-06. Postgres for the two seeded articles and
+     their manifests; the bucket is a temp directory, mocked at the `blobStore()`
+     selector exactly as `illustrated-route` mocks it, so nothing here touches
+     Storage. */
+  "tests/asset-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. Its header used to say **"no database at
      all, deliberately"**; it now seeds one article and drives a real
      `claimSession` claim over it, so it writes an article, a revision, its
@@ -2910,6 +2915,15 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "`OUTSIDER` reaches Postgres only through `setRequestOwner`, to show `ownedSlug` filters " +
         "on the owner and not on the slug. Every insert in the file belongs to " +
         "`currentOwnerId()`, which the private lane provides.",
+    },
+  },
+  "tests/asset-route.test.ts": {
+    "0e5c0001-0000-4000-8000-0000000000a5": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request `sub` and nothing else — the asset route must not serve another " +
+        "reader's picture. The same shape as `illustrated-route`'s below, for the same reason: a " +
+        "`where` clause needs no row.",
     },
   },
   "tests/illustrated-route.test.ts": {

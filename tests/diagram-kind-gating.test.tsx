@@ -216,10 +216,14 @@ describe("the mode itself", () => {
   it("is in the bar for a reader who has asked for nothing", () => {
     const modes = visibleModes(false, undefined).map((m) => m.mode);
     expect(modes).toContain("diagram");
-    /* And the four that are still behind the switch are still behind it. */
-    for (const hidden of ["quotes", "timeline", "referee", "remember"]) {
-      expect(modes, `${hidden} escaped`).not.toContain(hidden);
-    }
+    /* **And nothing here about which other modes are hidden.** This used to
+       carry its own literal list of them, which named `quotes` for a day after
+       it was promoted and never learned about `debate` at all — and stayed
+       green throughout, because a stale name in a `not.toContain` loop is a
+       weaker assertion rather than a failing one. The classification has one
+       home, tests/dock-experimental-modes.test.tsx § BEHIND_THE_SWITCH, which
+       compares identities and so fails in both directions. GPT Sol,
+       2026-09-06. */
   });
 
   /**

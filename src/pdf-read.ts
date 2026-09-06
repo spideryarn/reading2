@@ -97,6 +97,9 @@ import {
   pdfPagesFiltered,
   pdfTooManyPages,
 } from "./messages.js";
+import { pdfFigureMarkerValue } from "./assets.js";
+import { pdfFigureRef } from "./pdf-figures.js";
+import { RESERVED_ATTRS } from "./reserved.js";
 import { whyUnusable } from "./store/artifacts.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
@@ -1515,10 +1518,40 @@ export function mendSeamHyphens(records: PdfRecord[], pass: Pass0): PdfRecord[] 
   return out;
 }
 
-export function renderHtml(records: PdfRecord[], title: string): string {
+/**
+ * The records as one HTML document — and, on every figure, **a marker saying
+ * which page of which PDF its picture is on**.
+ *
+ * `rawSha256` is the raw PDF's own hash, threaded in rather than recomputed:
+ * it is what makes the ref fail closed when the document underneath a carried
+ * manifest changes (src/pdf-figures.ts § `pdfFigureRef`), and the caller has
+ * already computed it for `Meta.rawSha256` and for the chunk checkpoint keys.
+ * Required rather than optional, because a default of "no sha, no markers"
+ * would be a whole feature switching itself off in silence.
+ *
+ * **Only `figure` records are marked, never `table`**, though both render as a
+ * `<figure>`. The figure record is the gate the whole recovery route stands on:
+ * every masthead and publisher's logo in the eval corpus sits on a page that
+ * gets `cover`/`publisher` records rather than a `figure` one, so the gate
+ * excludes them without a threshold anywhere. Marking tables as well would put
+ * a second claimant on any page holding both and turn a recoverable figure into
+ * an `ambiguous` one. docs/plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md.
+ *
+ * **A record with no caption still produces nothing at all**, because of the
+ * `if (!text) continue` a few lines below — so a captionless figure has no
+ * block, no marker and nothing to re-mint. That is v1's boundary rather than an
+ * oversight; giving those a media block of their own is a separate decision.
+ * GPT Sol, I-3.
+ */
+export function renderHtml(records: PdfRecord[], title: string, rawSha256: string): string {
   const parts: string[] = [];
   let list: "ul" | null = null;
   let previous: { type: RecordType; index: number } | null = null;
+  /* Per page, and counted over the figures actually **emitted** — a record
+     joined onto the one before it by `continues` is not a new figure, and a
+     record skipped for having no text never had one. The ordinal is an input to
+     the ref, so it has to mean the same thing here and in the manifest. */
+  const ordinals = new Map<number, number>();
 
   for (const record of records) {
     if (!RENDERED.has(record.type)) {
@@ -1550,7 +1583,7 @@ export function renderHtml(records: PdfRecord[], title: string): string {
     const cls = record.uncertain ? ' class="pdf-uncertain"' : "";
     const html =
       record.type === "figure" || record.type === "table"
-        ? `<figure${cls}><figcaption>${escapeHtml(text)}</figcaption></figure>`
+        ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}><figcaption>${escapeHtml(text)}</figcaption></figure>`
         : `<${tag}${cls}>${escapeHtml(text)}</${tag}>`;
     previous = { type: record.type, index: parts.length };
     parts.push(html);
@@ -1565,6 +1598,32 @@ ${parts.join("\n")}
 </article>
 </body></html>
 `;
+}
+
+/**
+ * ` data-spya-pdf-figure="…"` for a figure record, or the empty string.
+ *
+ * The attribute is written **unquoted-safe by construction rather than by
+ * escaping**: `pdfFigureMarkerValue` composes a ref that is a version tag and
+ * thirty-two hex digits with two decimal integers, so there is no input here
+ * that could reach the page's own text. That is the same property `escapeHtml`
+ * gives the caption beside it, arrived at by not having anything to escape.
+ *
+ * A `table` record renders as a `<figure>` too and is deliberately not marked —
+ * see `renderHtml` above.
+ */
+function figureMarker(
+  record: PdfRecord,
+  caption: string,
+  rawSha256: string,
+  ordinals: Map<number, number>,
+): string {
+  if (record.type !== "figure") return "";
+  const ordinal = (ordinals.get(record.page) ?? 0) + 1;
+  ordinals.set(record.page, ordinal);
+  const figureRef = pdfFigureRef({ rawSha256, page: record.page, ordinal, caption });
+  const value = pdfFigureMarkerValue({ figureRef, page: record.page, ordinal });
+  return ` ${RESERVED_ATTRS.pdfFigure}="${value}"`;
 }
 
 // ─────────────────────────────────────────────────────────── the stage
@@ -2489,7 +2548,12 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 
   return {
     slug: opts.slug,
-    extractedHtml: renderHtml(mended, title),
+    /* `rawSha256` is what every figure marker's ref folds in, so that a manifest
+       carried into a revision whose PDF has changed matches nothing rather than
+       matching wrongly. It is the same value `meta.rawSha256` above carries and
+       the same one `storeRawSource` puts the document under, computed once at
+       the top of this function. src/pdf-figures.ts § `pdfFigureRef`. */
+    extractedHtml: renderHtml(mended, title, rawSha256),
     meta,
     pages: pass.pages.length,
     chunks: chunks.length,

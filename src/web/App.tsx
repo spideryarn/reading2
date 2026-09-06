@@ -50,7 +50,7 @@ import {
   useRoute,
 } from "./router.js";
 import type { User } from "@supabase/supabase-js";
-import { FeedbackButton } from "./FeedbackButton.js";
+import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { Metadata } from "./Metadata.js";
 import { IdeasBand, VisitorIdeasBand } from "./modes/ideas/IdeasMode.js";
 import { FeatureBoundary } from "./FeatureBoundary.js";
@@ -63,6 +63,7 @@ import { armActivationForRefereeView } from "./activation.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
+import { rehostImages } from "./rehost.js";
 import { TableView } from "./TableView.js";
 import type { SelectionAnchor } from "./selection.js";
 import type { TermSelection } from "./annotate.js";
@@ -467,12 +468,27 @@ export function App() {
      client draws. **A hidden button is not a gate**, so both halves are tested
      rather than only the visible one — GPT Sol asked for that, and it is the
      difference between a rule and an appearance. See FeedbackButton.tsx and
-     docs/project/feedback.md. */
+     docs/project/feedback.md.
+
+     **The one line is now the host's mount point rather than the button's**,
+     since 2026-09-06. `FeedbackHost` holds the `open` state and the dialog and
+     wraps every signed-in page, so no navigation can destroy a half-written
+     report; the buttons that open it are placed where each page wants one. The
+     rule is unchanged and it now reaches further than a mount site can see: a
+     trigger with no host above it renders nothing, so the branches below that
+     draw one unconditionally are still drawing nothing for a stranger.
+
+     **And it stops covering `read`**, which is the route whose corners moved
+     into the bottom bar. The reading view, the metadata and tweets pages and
+     the three visitor stand-ins all mount a `Dock` and draw the trigger there
+     (Dock.tsx). `ArticlePage`'s four branches that have no `Dock` — loading,
+     error, not-shared and reauth-required — each draw the corner trigger
+     themselves, so nothing that has one today loses it. */
   return (
-    <>
+    <FeedbackHost>
       <SignedIn route={route} user={user} />
-      <FeedbackButton />
-    </>
+      {route.kind !== "read" && <FeedbackTrigger variant="corner" />}
+    </FeedbackHost>
   );
 }
 
@@ -903,7 +919,27 @@ function useArticleAccess(slug: string, readerId: string | null): ArticleAccess 
 async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAccess> {
   const found = await findArticle(slug, signedIn);
   if (found.kind === "not-shared" || found.kind === "reauth-required") return found;
-  const article = sanitizeArticle(found.article);
+  /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
+     of why it is here at all.** `stripOwnApiUrls` (src/sanitize-policy.ts)
+     removes any `src` resolving to our own API, deliberately — an article may
+     not point a reader's browser at our endpoints — so a URL of ours written
+     before this line would be deleted by the line itself. rehost.ts § Why it
+     cannot be done in the pipeline has the rest, including the tempting way
+     round it and why not to take it.
+
+     **On both branches**, for `sanitizeArticle`'s own reason: a shared article
+     is the same extracted HTML through a different projection, and a visitor
+     looking at eight blank figures is the reported bug with the audience we
+     invited. What differs is only how the bytes are reached — `apiFetch` with a
+     token on `/api/asset/…` for an owner, a bare `publicFetch` on
+     `/api/public/asset/…` for a visitor — which is the `footing` argument and
+     nothing else. Both end in a `blob:`, and rehost.ts § Why every picture
+     arrives as a `blob:` says what changed on 2026-09-06 and why. */
+  const article = await rehostImages(
+    sanitizeArticle(found.article),
+    slug,
+    found.kind === "owned" ? "owned" : "public",
+  );
   return found.kind === "owned"
     ? { kind: "owned", article }
     : {
@@ -1065,11 +1101,14 @@ function ArticlePage({
     ),
   );
 
-  /* **The one branch with no corner wordmark**, and the reason is that
-     `LandingPage` draws its own. Everything else on this page gets the corner
-     mark, because the reader may have arrived straight here from a pasted link
-     with no shelf behind them — and a visitor with no account especially so,
-     since the mark is the only thing on screen that says whose page this is. */
+  /* **Which of the six branches below draws a way home, and where.**
+     `LandingPage` draws its own wordmark, so this branch adds nothing. The four
+     that follow — not-shared, reauth-required, error and loading — keep the
+     corner mark, because the reader may have arrived straight here from a
+     pasted link with no shelf behind them, and a visitor with no account
+     especially so, since the mark is the only thing on screen that says whose
+     page this is. The last branch draws none: it mounts a `Dock`, and the bar
+     carries the wordmark there (2026-09-06 — see that branch). */
   if (access.kind === "not-shared") return signedIn ? <NotSharedPage /> : <LandingPage />;
 
   /* **Its own branch, beside `error` and never through it.** The reader can fix
@@ -1077,10 +1116,19 @@ function ArticlePage({
      its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
 
+  /* **The corner pair, on the two branches with no bar to put it in.**
+     `App` stopped drawing the corner Feedback trigger on the `read` route on
+     2026-09-06, because the pages that mount a `Dock` draw it in the bar
+     instead — and these two mount none. Without this line a signed-in reader
+     waiting for an article, or looking at one that failed, would have no way to
+     report the thing they are looking at, which is the state a report is most
+     likely to be about. `FeedbackTrigger` renders nothing with no host above
+     it, so a stranger here still gets none. */
   if (access.kind === "error")
     return (
       <>
         <HomeLogo />
+        <FeedbackTrigger variant="corner" />
         <pre className="error">{access.message}</pre>
       </>
     );
@@ -1091,6 +1139,7 @@ function ArticlePage({
     return (
       <>
         <HomeLogo />
+        <FeedbackTrigger variant="corner" />
         <div className="loading">{slow ? "Fetching the article and its summaries…" : ""}</div>
       </>
     );
@@ -1099,9 +1148,22 @@ function ArticlePage({
      one article's reading position — or one owner's rename, or one visitor's
      artefact flags — into another's. NOT keyed on the view: switching view is
      meant to keep the fetch, which is the whole reason it happens up here. */
+  /* **No corner pair here since 2026-09-06, and this is the branch that lost
+     it.** Every page below this line mounts a `Dock` — the reading view, the
+     metadata and tweets pages, and the three visitor stand-ins in
+     PublicPages.tsx — and the bar draws both the wordmark and the Feedback
+     trigger itself (Dock.tsx). A `<HomeLogo />` here would be a second way home
+     on the same screen, one of them fixed over the top of the spine while the
+     bars are hidden, which is the live bug this move dissolves:
+     docs/postmortems/260905g-the-top-of-the-spine-is-under-the-wordmark-on-a-phone.md.
+
+     **The reservation has not followed yet**, and that is the intended
+     intermediate state rather than a miss: the masthead and the controls bar
+     still hold ~136px of left gutter and ~120px of right open on these pages
+     for controls that are no longer in them. Stage 2 of the plan takes it out,
+     across the five `main` elements that hold it. */
   return (
     <>
-      <HomeLogo />
       {access.kind === "owned" ? (
         <OwnedArticle key={slug} slug={slug} article={access.article} view={view} />
       ) : (
@@ -3025,6 +3087,10 @@ function Reader({
       </div>
       <TableView
         article={article}
+        /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
+           has the reason, and it is the same one `Origin` gives in
+           Metadata.tsx. */
+        slug={slug}
         sections={sections}
         layoutKey={layoutKey}
         /* The permalink base — this page's whole address, including every
@@ -4199,6 +4265,9 @@ export function ConversationBand({
    */
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
+  const selectedThread = useRef(thread);
+  selectedThread.current = thread;
+  const [pendingLive, setPendingLive] = useState<{ id: string; from: string | null } | null>(null);
 
   /**
    * **The live conversation, owned here** — above the panel, above the keyed
@@ -4223,7 +4292,10 @@ export function ConversationBand({
   const live = useLiveConversation(slug, {
     speak,
     tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
-    onThreadId: (id) => void setThread(id),
+    onThreadId: (id, startedThreadId) => {
+      // A delayed spoken append may finish after the reader has left its thread.
+      if (selectedThread.current === startedThreadId) void setThread(id);
+    },
   });
 
   /**
@@ -4249,6 +4321,19 @@ export function ConversationBand({
     if (live.threadId && live.threadId !== thread) void hangUp.current();
   }, [thread, live.phase, live.threadId]);
 
+  useEffect(() => {
+    if (!pendingLive) return;
+    if (thread !== pendingLive.id) {
+      if (thread !== pendingLive.from) setPendingLive(null);
+      return;
+    }
+    if (live.phase !== "idle" && live.phase !== "failed") return;
+    // Selection must reach the render before start, or the navigation effect above
+    // mistakes a just-created session for one the reader has already left.
+    setPendingLive(null);
+    live.start({ threadId: pendingLive.id });
+  }, [pendingLive, thread, live.phase, live.start]);
+
   /**
    * A counter that goes up whenever a *new* conversation is started, so the
    * composer knows to take focus.
@@ -4266,6 +4351,7 @@ export function ConversationBand({
    */
   const [focusNonce, setFocusNonce] = useState(0);
   const startNew = useCallback(() => {
+    setPendingLive(null);
     void setThread(begin(kind));
     setFocusNonce((n) => n + 1);
   }, [begin, setThread, kind]);
@@ -4391,6 +4477,7 @@ export function ConversationBand({
        * Remember-thread entry on the Back stack in between.
        */
       onThread={(id) => {
+        setPendingLive(null);
         const target = id ? threads.find((t) => t.id === id) : null;
         /* `ThreadKind` and `Mode` are separate vocabularies (src/types.ts,
            src/modes.ts) that agree on the two *conversation* kinds — since
@@ -4417,7 +4504,13 @@ export function ConversationBand({
       /* **Owned above this panel**, which is remounted on every conversation
          switch — see the note where the hook is called. */
       live={live}
-      onStartLive={(id) => live.start({ threadId: id })}
+      onStartLive={(id) => {
+        if (!id && kind !== "chat") return;
+        const next = id ?? begin("chat");
+        setPendingLive({ id: next, from: thread });
+        void setThread(next);
+        return next;
+      }}
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}

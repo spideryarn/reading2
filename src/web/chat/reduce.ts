@@ -57,7 +57,7 @@ import {
   withServerIds,
   writerOf,
 } from "./model.js";
-import { turnMessages } from "./project.js";
+import { storedSpoken, turnMessages } from "./project.js";
 
 export interface Outcome {
   state: ChatState;
@@ -1271,15 +1271,9 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
       };
     }
     case "spoken.refused": {
-      /* **The refusal and the repair are one decision**, exactly as
-         `turn.refused` says. Dropping the operation is the whole of putting the
-         screen back — these rows were drawn, never written — and the repair
-         then goes and asks, because a 409 here has three possible causes and
-         only the server can say which: somebody typed into this conversation,
-         somebody edited a turn away, or *this very request already succeeded*
-         and its response was lost. The third is why there is no exchange id,
-         and it is the one where the reader's words are already on disk and must
-         come back on screen. */
+      /* A lost success is indistinguishable from a refused append until the
+         repair answers. Transfer its provisional rows instead of telling the
+         live hook they are unsaved while this read is still in flight. */
       const repair: Registering<RepairOperation> = {
         id: event.repair.id,
         kind: "repair",
@@ -1288,11 +1282,11 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
            succeeds, so there is nothing of this operation's left in it. */
         drop: [],
         saw: state.base.find((t) => t.id === (op.kind === "spoken" ? op.threadId : "")) ?? null,
+        ...(op.kind === "spoken" ? { spoken: { operation: op, error: event.error } } : {}),
       };
       const dropped: ChatState = {
         ...state,
         operations: withoutOp(state, op.id),
-        error: event.error,
       };
       return {
         state: register<RepairOperation>(
@@ -1336,12 +1330,20 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
         return { state: retired, commands: NOTHING };
       }
       const fresh = event.thread;
+      const spokenLanded = op.spoken && storedSpoken(fresh, op.spoken.operation);
       const base = fresh
-        ? rewrite(retired.base, op.threadId, (t) => merged(t, fresh, op))
+        ? rewrite(retired.base, op.threadId, (t) => spokenLanded
+          ? underneath(t, fresh, namesIt(retired, op.threadId))
+          : merged(t, fresh, op))
         : /* The server does not have it at all: it was deleted, or it was never
              written down. Either way it is not a conversation. */
           retired.base.filter((t) => t.id !== op.threadId);
-      return { state: { ...retired, base }, commands: NOTHING };
+      return {
+        state: { ...retired, base,
+          ...(spokenLanded ? { unnamed: knownAs(retired, op.threadId) } : {}),
+          ...(op.spoken && !spokenLanded ? { error: op.spoken.error } : {}),
+        }, commands: NOTHING,
+      };
     }
     case "repair.failed":
       return {

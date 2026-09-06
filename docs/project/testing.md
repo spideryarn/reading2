@@ -755,6 +755,34 @@ Map-backed fake rather than assuming jsdom provides one; in the app, don't let `
 only home for something the rest of a feature depends on (a Safari private window has it, and
 *throws on write*).
 
+### A nuqs write outlives the test that started it
+
+**If a jsdom test causes a URL parameter to change, wait for the address before the case returns.**
+`nuqs` does not write on the render, and there are **two stages**, not one. A parameter declared
+`debounce(200)` — like `gateParam` ([`src/web/params.ts`](../../src/web/params.ts)) — waits first in
+a per-key debounce queue; every parameter then joins one shared throttle queue, which flushes from a
+`setTimeout` at 50ms. Both queues are `globalSingleton`s stored on **`globalThis`**, keyed by the
+package version, so they belong to the realm rather than to the React root: **unmounting cancels
+nothing**, and neither does anything else short of a new realm.
+
+A case that returns with a write still queued leaves an armed timer. Vitest tears the environment
+down, the timer fires, and nuqs reads a `location` that is gone. The run then fails as an
+*unhandled error* with **every test still reported green** — no assertion fails, nothing is named,
+and it is intermittent, so it reads like box contention. It cost nine days once:
+[260906c](../postmortems/260906c-a-url-write-outlived-the-page-that-asked-for-it.md).
+
+Poll for the value; don't sleep past the throttle:
+
+```ts
+await vi.waitFor(() => {
+  expect(new URLSearchParams(location.search).get("thread")).toBe(expectedId);
+});
+```
+
+A fixed delay works today and bakes the current throttle into the file, so it goes quietly
+green-then-flaky if that number ever moves. `tests/remember-url-rules.test.tsx`'s `until()` helper
+and `sendNew` in `tests/conversation-band-send-new.test.tsx` are the two worked examples.
+
 ## Nothing under `tests/` may call a paid provider
 
 [`vitest.config.ts`](../../vitest.config.ts) loads

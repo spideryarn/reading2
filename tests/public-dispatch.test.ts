@@ -474,7 +474,13 @@ describe("the closed public namespace", () => {
        rather than here, so all three sweeps ask it the same way. And the set is
        asserted rather than assumed: a sweep that walked an inventory which had
        quietly lost its collection route would go on passing over one kind. */
-    expect(new Set(PUBLIC_ROUTES.map((r) => r.kind))).toEqual(new Set(["slug", "collection"]));
+    /* Three since 2026-09-06, when `asset` landed — the one public route whose
+       answer is bytes. It is swept exactly like the other two: the method check
+       runs before any read, so a `POST` to it is a 405 without the manifest ever
+       being consulted. */
+    expect(new Set(PUBLIC_ROUTES.map((r) => r.kind))).toEqual(
+      new Set(["slug", "collection", "asset"]),
+    );
     for (const route of PUBLIC_ROUTES) {
       for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE"]) {
         const path = pathOf(route, "example");
@@ -531,17 +537,22 @@ describe("the closed public namespace", () => {
    * **The filter is the deliberate half.** A collection route captures nothing,
    * so there is no slug to mis-encode and `pathOf` would hand back the same
    * constant path six times — six requests that answer 501 and prove nothing,
-   * while looking exactly like coverage. `kind === "slug"` narrows the type too,
-   * so `route.path(bad)` is the arity the compiler already agrees with.
+   * while looking exactly like coverage.
+   *
+   * **`asset` is in, since 2026-09-06.** It captures a slug like the `slug`
+   * routes do and runs the same `slugFrom`, so it gets the decode for free —
+   * and `pathOf` is what knows to fill in its other two segments, which is why
+   * the loop asks that rather than calling `route.path` at two different
+   * arities.
    */
   it("400s percent-encoding that cannot be decoded, rather than 500ing", async () => {
-    const slugRoutes = PUBLIC_ROUTES.filter((route) => route.kind === "slug");
+    const slugRoutes = PUBLIC_ROUTES.filter((route) => route.kind !== "collection");
     /* Not vacuous: if the last slug route ever left the inventory this would
        silently pass over nothing at all. */
     expect(slugRoutes.length).toBeGreaterThan(0);
     for (const route of slugRoutes) {
       for (const bad of ["%", "%2", "%zz", "%E0%A4%A", "a%", "%C3%28"]) {
-        const r = await call("GET", route.path(bad));
+        const r = await call("GET", pathOf(route, bad));
         expect({ route: route.name, bad, status: r.status }).toEqual({
           route: route.name,
           bad,
@@ -670,6 +681,53 @@ describe("the closed public namespace", () => {
     expect(read).toHaveBeenCalledWith();
     expect(r.status).toBe(THREW);
     expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  /**
+   * **And the asset route reaches its handler with all three of its captures.**
+   *
+   * The third kind, added 2026-09-06. Said here for the reason the collection
+   * case above is: the sweeps prove what it refuses, and this is the one line
+   * that proves the pattern matches at all — a route whose regex missed would
+   * make every refusal above pass over nothing.
+   *
+   * **All three arguments, in order**, because that is the dispatch bug this
+   * file exists to catch: a handler handed the extension where the hash goes
+   * would look up nothing, 404, and read exactly like an article that has no
+   * such picture.
+   */
+  it("and the asset route reaches the public handler with slug, hash and extension", async () => {
+    const read = readerRan("asset");
+    const hash = "a".repeat(64);
+    const r = await call("GET", `/api/public/asset/example/${hash}.png`);
+    expect(r.handled).toBe(true);
+    expect(read).toHaveBeenCalledWith("example", hash, "png");
+    expect(r.status).toBe(THREW);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  /**
+   * **A hash that is not one is not this route**, and so is a 404 rather than a
+   * 400 or a request the reader ever reaches.
+   *
+   * The pattern narrows the hash to 64 hex characters and the extension to the
+   * three formats we host. Nothing downstream trusts either — both are only
+   * compared with the manifest — so this is not a security boundary; it is the
+   * line that keeps the next reader from mistaking the capture for a storage
+   * key. Checked so that "narrowed" is a fact rather than a claim in a comment.
+   */
+  it("does not match a malformed hash or an extension we do not host", async () => {
+    for (const path of [
+      "/api/public/asset/example/short.png",
+      `/api/public/asset/example/${"a".repeat(63)}.png`,
+      `/api/public/asset/example/${"A".repeat(64)}.png`,
+      `/api/public/asset/example/${"a".repeat(64)}.webp`,
+      `/api/public/asset/example/${"a".repeat(64)}`,
+    ]) {
+      const r = await call("GET", path);
+      expect({ path, status: r.status }).toEqual({ path, status: 404 });
+      expect(String(r.body.error), path).toMatch(/No public API route/);
+    }
   });
 
   /**

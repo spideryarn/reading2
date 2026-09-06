@@ -1,17 +1,118 @@
 # Setup and dev commands
 
-Everything here is one process and one terminal, deliberately —
-[architecture.md § Server and client](architecture.md#server-and-client):
+**New here? The quickstart below is the whole of it** — an empty checkout to an app you are signed
+into. Everything after it is depth: what each secret is for, which model does
+which job, how to run one pipeline stage on its own. You do not need any of that to start.
+
+For the *why* behind any of it — what the Docker stack is standing in for, what shipping looks like,
+and what the production host takes away that your laptop gives you for free — read
+[260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+in a browser. It is written for somebody who has never opened the code.
+
+## Quickstart
+
+### What you need first
+
+- **Node 26.** It is what Greg's laptop and the remote box both run, pinned in
+  [`infra/hetzner/variables.tf`](../../infra/hetzner/variables.tf) — *"a major-version gap between
+  the two is where 'works on my machine' comes from"*.
+- **Docker, running.** The database is a full Supabase stack in containers (Postgres, GoTrue,
+  Studio). On a Mac that is usually OrbStack — `open -a OrbStack`. **The first `npm run setup` pulls
+  around 2 GB of images**, so do it on a connection you do not mind.
+- **An OpenRouter API key**, from <https://openrouter.ai>. Every paid model call in the app goes
+  through it ([ai-gateway.md](ai-gateway.md)). Without one the app runs and articles already in the
+  database still read perfectly — but nothing can be ingested, and selecting a passage returns an
+  error into the dialog.
+
+Nothing else. No Google credentials, no Supabase account, no Vercel, no keys on any dashboard.
+
+### The commands, in this order
+
+**There is a chicken-and-egg in the middle of this and it is the only hard part.** `npm run setup`
+seeds an account, which needs the local stack's keys; the keys do not exist until the stack has been
+started. So the stack goes up first, you copy three values, and then the rest of setup runs.
+
+```bash
+git clone https://github.com/spideryarn/reading2.git && cd reading2
+npm install
+cp .env.example .env.local     # every variable, commented, with no values in it
+                               # → put OPENROUTER_API_KEY=sk-or-… in it now
+
+npm run db:start               # Docker. First run pulls ~2 GB of images.
+npm run db:status              # → copy the three values below into .env.local
+
+npm run setup                  # db:start (again, harmlessly), migrate, seed the
+                               # account, seed a shelf. Stops at the first failure.
+npm run db:admin-password      # prints the password for dev-admin@spideryarn.local
+npm run dev                    # http://localhost:5273
+```
+
+The three values to copy out of `npm run db:status`, which prints them as
+`SERVICE_ROLE_KEY` and `PUBLISHABLE_KEY`:
+
+```
+SUPABASE_SERVICE_ROLE_KEY=…         # seeding the account needs this
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_…      # the server verifies sessions with it
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_… # the same value again, for the browser
+```
+
+`SUPABASE_URL` and `VITE_SUPABASE_URL` already have the right value in `.env.example`, so those two
+lines need nothing.
+
+**Why the order is what it is**, since every step of it has been somebody's lost afternoon:
+
+- `db:seed-owner` — the third thing `npm run setup` does — reads `SUPABASE_SERVICE_ROLE_KEY` and
+  `SUPABASE_PUBLISHABLE_KEY`, and **refuses rather than guessing** if either is missing. Run
+  `npm run setup` on a freshly-copied `.env.example` and it will start the database, apply the
+  migrations, and then stop with a message naming the variable. That is the design working, not a
+  bug — but it is why `db:start` and `db:status` come first here.
+- The **client** throws at module load without `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_PUBLISHABLE_KEY`, so running `npm run dev` before you have them gives you a
+  **blank page** — deliberately, because the alternative is a sign-in button that does nothing
+  ([§ Signing in needs four more](#signing-in-needs-four-more)).
+- Vite reads `.env.local` once, **at startup**. Adding a variable means restarting `npm run dev`.
+
+### Signing in
+
+The landing page has an email form. Use **`dev-admin@spideryarn.local`** and the password
+`npm run db:admin-password` printed. There is no Google step and nothing to click on a dashboard —
+`db:seed-owner` created the account and generated the password, which is what makes a machine you
+can only reach over ssh usable
+([supabase-local.md § Signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach)).
+
+Neither seeded address is a real person's, on purpose. `dev@spideryarn.local` owns what the CLI and
+the pipeline write; `dev-admin@spideryarn.local` is the one you sign in as.
+
+### Did it work?
+
+The **library** at `/` should have a few articles on it — `npm run setup`'s last step seeds them, so
+a fresh clone has something to read rather than an empty shelf ([library.md](library.md)). Click one
+and you are at `/read/<slug>`, the reading view ([web-client.md](web-client.md)). Then paste a URL
+into the add box and watch the pipeline stages go past by name
+([ingest-queue.md](ingest-queue.md)) — that is the end-to-end check, and it is the first thing that
+spends money.
+
+Two commands worth running once so you know they pass: `npm test` and `npm run typecheck`.
+
+### If it didn't
+
+| What you see | What it is |
+|---|---|
+| A blank page, and a console error naming `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` | The three lines above are missing from `.env.local`, or Vite has not been restarted since you added them |
+| The dev server refuses to start, naming `npm run db:start` | The containers are down. `assertStoreReachable` in `vite.config.ts` runs one `select 1` before booting, on purpose — see [below](#the-database-locally) |
+| Vite says it is on **5274** or 5275 | Something else has 5273. Sign-in will fail for reasons that have nothing to do with your code — the port is on the redirect allow-list and the alternatives are not |
+| Google sign-in succeeds and dumps you on the bare site URL | The allow-list is baked into a running container, not read from the file. [§ Signing in needs four more](#signing-in-needs-four-more) has the `docker inspect` to check it |
+| The reading view works, but an ingest fails immediately | No `OPENROUTER_API_KEY` in `.env.local` |
+
+When something is broken and it is not on that list, [debugging.md](debugging.md) is where to start.
+
+## One process, one terminal
+
+That is deliberate — [architecture.md § Server and client](architecture.md#server-and-client):
 
 > One process, one command: `npm run dev`. The API is currently mounted as **Vite dev middleware**
 > rather than as a separate server, so there is nothing to run in a second terminal while the ideas
 > are still moving.
-
-```bash
-npm install
-npm run setup          # Docker up, migrations applied, accounts seeded — see below
-npm run dev            # Vite + the /api/article/:slug middleware, http://localhost:5273
-```
 
 **Everything serves from Postgres, and there is no way back to `data/`** — since 2026-09-05, when
 the filesystem store and the `SPIDERYARN_STORE` flag went
@@ -32,8 +133,8 @@ checkout and the database can, which cost a third of all the AI spend we have ev
 containers merely down and the server would start fine and die on the first `/api` request.
 
 **`npm run setup` is the whole of the database side of a fresh checkout**, and the one command to
-remember when building a box: it runs `db:start`, `db:migrate` and `db:seed-owner` in order and
-stops at the first failure saying what to do
+remember when building a box: it runs `db:start`, `db:migrate`, `db:seed-owner` and
+`db:seed-dev` in order and stops at the first failure saying what to do
 ([`scripts/setup-local.ts`](../../scripts/setup-local.ts),
 [supabase-local.md](supabase-local.md)). The last of those creates the account you sign in as and
 generates its password — `npm run db:admin-password` prints it — so there is no Google step and

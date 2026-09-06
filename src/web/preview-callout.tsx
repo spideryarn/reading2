@@ -15,7 +15,7 @@
  * text would have answered a different question — the whole judgement here is
  * whether a reader can tell a callout from a quotation while reading past both.
  *
- * Delete this file, preview-callout.html and the fixture when the check is
+ * Delete this file, preview/preview-callout.html and the fixture when the check is
  * done; nothing links to any of them. See docs/plans/260831ae-callouts-the-box-the-author-drew.md.
  */
 import { createRoot } from "react-dom/client";
@@ -94,6 +94,10 @@ function Frame({ width, label }: { width: number; label: string }) {
           /* A preview page, not the reader: the address is the design page itself
              and there is no view state to carry. */
           linkBase="/design"
+          /* A fixture, not an article on the shelf. Nothing here carries a PDF
+             figure marker, so the *view the original* control never renders and
+             this slug is never put in a URL. */
+          slug="design-preview"
           geometry={geometry}
           columns={[]}
           layout={{ widths: [width - 12], tableW: width, overflowing: false }}

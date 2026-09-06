@@ -1,0 +1,1403 @@
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:11141) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/chat-live-handoff.test.tsx (13 tests | 7 failed) 108ms
+     × starts a new conversation from the list composer 7ms
+     × shows an actionable failure and allows typing in the same conversation 6ms
+     × shows streaming words by default, and hiding them does not stop the session 5ms
+     × shows the acquired microphone, input meter and playback recovery action 7ms
+     × reports thinking and tool work without claiming the companion is speaking 4ms
+     × offers cancellation while the session is connecting 4ms
+     × explains voice and thread continuity in a keyboard-reachable tooltip 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+AssertionError: there is no way to begin a spoken conversation: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:225:74
+    223|     expect(host.querySelector("textarea.chat-input"), "no box to check…
+    224|     const button = host.querySelector<HTMLButtonElement>(".chat-live-b…
+    225|     expect(button, "there is no way to begin a spoken conversation").n…
+       |                                                                          ^
+    226|     act(() => button!.click());
+    227|     expect(events).toEqual(["startLive:new"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+AssertionError: expected 'An earlier conversationtypedansweredA…' to contain 'Microphone permission was denied'
+
+Expected: "Microphone permission was denied"
+Received: "An earlier conversationtypedansweredAnswer ready.Where your microphone isAutoHeadsetLaptopYour profile"
+
+ ❯ tests/chat-live-handoff.test.tsx:243:30
+    241|     api.error = "Microphone permission was denied. Allow access in you…
+    242|     paint(api);
+    243|     expect(host.textContent).toContain("Microphone permission was deni…
+       |                              ^
+    244|     const retry = [...host.querySelectorAll("button")].find((b) => b.t…
+    245|     expect(retry).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ tests/chat-live-handoff.test.tsx:260:70
+    258|     ];
+    259|     paint(api);
+    260|     expect(host.querySelector(".chat-live-transcript")?.textContent).t…
+       |                                                                      ^
+    261|     const toggle = host.querySelector<HTMLInputElement>('input[aria-la…
+    262|     expect(toggle?.checked).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+AssertionError: the microphone has no local level meter: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:273:93
+    271|     api.quietInput = true;
+    272|     paint(api);
+    273|     expect(host.querySelector(".mic-level"), "the microphone has no lo…
+       |                                                                                             ^
+    274|     expect(host.textContent).toContain("MacBook Pro Microphone");
+    275|     expect(host.textContent).toContain("No sound detected yet");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+AssertionError: expected 'An earlier conversationtypedansweredA…' to contain 'Thinking…'
+
+Expected: "Thinking…"
+Received: "An earlier conversationtypedansweredAnswer ready.LiveWhere your microphone isAutoHeadsetLaptopYour profile"
+
+ ❯ tests/chat-live-handoff.test.tsx:286:30
+    284|     api.thinking = true;
+    285|     paint(api);
+    286|     expect(host.textContent).toContain("Thinking…");
+       |                              ^
+    287|     api.pendingTools = [{ callId: "c1", name: "search_article_words" }…
+    288|     paint(api);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+AssertionError: a startup that stalls cannot be cancelled: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/chat-live-handoff.test.tsx:308:75
+    306|     paint(api);
+    307|     const button = host.querySelector<HTMLButtonElement>(".chat-live-b…
+    308|     expect(button?.disabled, "a startup that stalls cannot be cancelle…
+       |                                                                           ^
+    309|     act(() => button!.click());
+    310|     expect(events).toEqual(["stop"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ tests/chat-live-handoff.test.tsx:319:34
+    317|     await act(async () => { button!.focus(); });
+    318|     const tooltip = document.querySelector('[role="tooltip"]');
+    319|     expect(tooltip?.textContent).toContain("Talk about the article");
+       |                                  ^
+    320|     expect(tooltip?.textContent).toContain("same conversation");
+    321|     expect(button?.hasAttribute("title")).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 6 passed (13)
+   Start at  12:17:33
+   Duration  1.20s (transform 248ms, setup 46ms, import 519ms, tests 108ms, environment 428ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:12653) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/chat-live-handoff.test.tsx (14 tests | 8 failed) 123ms
+     × starts a new conversation from the list composer 7ms
+     × shows an actionable failure and allows typing in the same conversation 6ms
+     × shows streaming words by default, and hiding them does not stop the session 5ms
+     × shows the acquired microphone, input meter and playback recovery action 7ms
+     × reports thinking and tool work without claiming the companion is speaking 4ms
+     × offers cancellation while the session is connecting 5ms
+     × flushes a new spoken conversation before deciding whether it is empty 7ms
+     × explains voice and thread continuity in a keyboard-reachable tooltip 11ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+AssertionError: there is no way to begin a spoken conversation: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:225:74
+    223|     expect(host.querySelector("textarea.chat-input"), "no box to check…
+    224|     const button = host.querySelector<HTMLButtonElement>(".chat-live-b…
+    225|     expect(button, "there is no way to begin a spoken conversation").n…
+       |                                                                          ^
+    226|     act(() => button!.click());
+    227|     expect(events).toEqual(["startLive:new"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+AssertionError: expected 'An earlier conversationtypedansweredA…' to contain 'Microphone permission was denied'
+
+Expected: "Microphone permission was denied"
+Received: "An earlier conversationtypedansweredAnswer ready.Where your microphone isAutoHeadsetLaptopYour profile"
+
+ ❯ tests/chat-live-handoff.test.tsx:243:30
+    241|     api.error = "Microphone permission was denied. Allow access in you…
+    242|     paint(api);
+    243|     expect(host.textContent).toContain("Microphone permission was deni…
+       |                              ^
+    244|     const retry = [...host.querySelectorAll("button")].find((b) => b.t…
+    245|     expect(retry).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ tests/chat-live-handoff.test.tsx:260:70
+    258|     ];
+    259|     paint(api);
+    260|     expect(host.querySelector(".chat-live-transcript")?.textContent).t…
+       |                                                                      ^
+    261|     const toggle = host.querySelector<HTMLInputElement>('input[aria-la…
+    262|     expect(toggle?.checked).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+AssertionError: the microphone has no local level meter: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:273:93
+    271|     api.quietInput = true;
+    272|     paint(api);
+    273|     expect(host.querySelector(".mic-level"), "the microphone has no lo…
+       |                                                                                             ^
+    274|     expect(host.textContent).toContain("MacBook Pro Microphone");
+    275|     expect(host.textContent).toContain("No sound detected yet");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+AssertionError: expected 'An earlier conversationtypedansweredA…' to contain 'Thinking…'
+
+Expected: "Thinking…"
+Received: "An earlier conversationtypedansweredAnswer ready.LiveWhere your microphone isAutoHeadsetLaptopYour profile"
+
+ ❯ tests/chat-live-handoff.test.tsx:286:30
+    284|     api.thinking = true;
+    285|     paint(api);
+    286|     expect(host.textContent).toContain("Thinking…");
+       |                              ^
+    287|     api.pendingTools = [{ callId: "c1", name: "search_article_words" }…
+    288|     paint(api);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+AssertionError: a startup that stalls cannot be cancelled: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/chat-live-handoff.test.tsx:308:75
+    306|     paint(api);
+    307|     const button = host.querySelector<HTMLButtonElement>(".chat-live-b…
+    308|     expect(button?.disabled, "a startup that stalls cannot be cancelle…
+       |                                                                           ^
+    309|     act(() => button!.click());
+    310|     expect(events).toEqual(["stop"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+AssertionError: the empty base was discarded while speech was still in flight: expected [ Array(2) ] to deeply equal [ 'stop' ]
+
+- Expected
++ Received
+
+  [
+-   "stop",
++   "discard:spya-k3m9qt",
++   "thread:null",
+  ]
+
+ ❯ tests/chat-live-handoff.test.tsx:318:85
+    316|     const leave = host.querySelector<HTMLButtonElement>('button[title=…
+    317|     act(() => leave!.click());
+    318|     expect(events, "the empty base was discarded while speech was stil…
+       |                                                                                     ^
+    319|     await act(async () => { finish(); });
+    320|     expect(events).toEqual(["stop", `discard:${THREAD.id}`, "thread:nu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ tests/chat-live-handoff.test.tsx:329:34
+    327|     await act(async () => { button!.focus(); });
+    328|     const tooltip = document.querySelector('[role="tooltip"]');
+    329|     expect(tooltip?.textContent).toContain("Talk about the article");
+       |                                  ^
+    330|     expect(tooltip?.textContent).toContain("same conversation");
+    331|     expect(button?.hasAttribute("title")).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 6 passed (14)
+   Start at  12:19:43
+   Duration  1.25s (transform 252ms, setup 57ms, import 531ms, tests 123ms, environment 447ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:12785) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |unit| tests/chat-live-handoff.test.tsx (15 tests | 15 failed) 6ms
+     × does NOT send until the hang-up has finished 3ms
+     × sends straight away when there is no session to end 0ms
+     × does not wait on a session that already failed 0ms
+     × is in the composer of a conversation 0ms
+     × starts a new conversation from the list composer 0ms
+     × is absent entirely when the panel was given no session 0ms
+     × shows an actionable failure and allows typing in the same conversation 0ms
+     × shows streaming words by default, and hiding them does not stop the session 0ms
+     × shows the acquired microphone, input meter and playback recovery action 0ms
+     × reports thinking and tool work without claiming the companion is speaking 0ms
+     × remembers a replacement microphone and flushes before reconnecting 0ms
+     × does not show another conversation's live words or error 0ms
+     × offers cancellation while the session is connecting 0ms
+     × flushes a new spoken conversation before deciding whether it is empty 0ms
+     × explains voice and thread continuity in a keyboard-reachable tooltip 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does NOT send until the hang-up has finished
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > sends straight away when there is no session to end
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does not wait on a session that already failed
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is in the composer of a conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is absent entirely when the panel was given no session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > remembers a replacement microphone and flushes before reconnecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > does not show another conversation's live words or error
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ tests/chat-live-handoff.test.tsx:154:16
+    152| beforeEach(() => {
+    153|   events = [];
+    154|   localStorage.clear();
+       |                ^
+    155|   host = document.createElement("div");
+    156|   document.body.appendChild(host);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/30]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does NOT send until the hang-up has finished
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > sends straight away when there is no session to end
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does not wait on a session that already failed
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is in the composer of a conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is absent entirely when the panel was given no session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > remembers a replacement microphone and flushes before reconnecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > does not show another conversation's live words or error
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+TypeError: Cannot read properties of undefined (reading 'unmount')
+ ❯ tests/chat-live-handoff.test.tsx:163:18
+    161|
+    162| afterEach(() => {
+    163|   act(() => root.unmount());
+       |                  ^
+    164|   host.remove();
+    165| });
+ ❯ Proxy.process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:814:22
+ ❯ tests/chat-live-handoff.test.tsx:163:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/30]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  15 failed (15)
+   Start at  12:20:33
+   Duration  889ms (transform 243ms, setup 43ms, import 448ms, tests 6ms, environment 287ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:12930) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |unit| tests/chat-live-handoff.test.tsx (15 tests | 15 failed) 6ms
+     × does NOT send until the hang-up has finished 3ms
+     × sends straight away when there is no session to end 0ms
+     × does not wait on a session that already failed 0ms
+     × is in the composer of a conversation 0ms
+     × starts a new conversation from the list composer 0ms
+     × is absent entirely when the panel was given no session 0ms
+     × shows an actionable failure and allows typing in the same conversation 0ms
+     × shows streaming words by default, and hiding them does not stop the session 0ms
+     × shows the acquired microphone, input meter and playback recovery action 0ms
+     × reports thinking and tool work without claiming the companion is speaking 0ms
+     × remembers a replacement microphone and flushes before reconnecting 0ms
+     × does not show another conversation's live words or error 0ms
+     × offers cancellation while the session is connecting 0ms
+     × flushes a new spoken conversation before deciding whether it is empty 0ms
+     × explains voice and thread continuity in a keyboard-reachable tooltip 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does NOT send until the hang-up has finished
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > sends straight away when there is no session to end
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does not wait on a session that already failed
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is in the composer of a conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is absent entirely when the panel was given no session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > remembers a replacement microphone and flushes before reconnecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > does not show another conversation's live words or error
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ tests/chat-live-handoff.test.tsx:154:23
+    152| beforeEach(() => {
+    153|   events = [];
+    154|   window.localStorage.clear();
+       |                       ^
+    155|   host = document.createElement("div");
+    156|   document.body.appendChild(host);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/30]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does NOT send until the hang-up has finished
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > sends straight away when there is no session to end
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > Send while a live conversation is running > does not wait on a session that already failed
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is in the composer of a conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > is absent entirely when the panel was given no session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > remembers a replacement microphone and flushes before reconnecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > does not show another conversation's live words or error
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+TypeError: Cannot read properties of undefined (reading 'unmount')
+ ❯ tests/chat-live-handoff.test.tsx:163:18
+    161|
+    162| afterEach(() => {
+    163|   act(() => root.unmount());
+       |                  ^
+    164|   host.remove();
+    165| });
+ ❯ Proxy.process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:814:22
+ ❯ tests/chat-live-handoff.test.tsx:163:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/30]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  15 failed (15)
+   Start at  12:20:51
+   Duration  877ms (transform 231ms, setup 42ms, import 432ms, tests 6ms, environment 290ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:13096) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > remembers a replacement microphone and flushes before reconnecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > remembers a replacement microphone and flushes before reconnecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/chat-live-handoff.test.tsx (15 tests | 9 failed) 119ms
+     × starts a new conversation from the list composer 7ms
+     × shows an actionable failure and allows typing in the same conversation 6ms
+     × shows streaming words by default, and hiding them does not stop the session 6ms
+     × shows the acquired microphone, input meter and playback recovery action 6ms
+     × reports thinking and tool work without claiming the companion is speaking 4ms
+     × remembers a replacement microphone and flushes before reconnecting 5ms
+     × offers cancellation while the session is connecting 4ms
+     × flushes a new spoken conversation before deciding whether it is empty 4ms
+     × explains voice and thread continuity in a keyboard-reachable tooltip 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > starts a new conversation from the list composer
+AssertionError: there is no way to begin a spoken conversation: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:233:74
+    231|     expect(host.querySelector("textarea.chat-input"), "no box to check…
+    232|     const button = host.querySelector<HTMLButtonElement>(".chat-live-b…
+    233|     expect(button, "there is no way to begin a spoken conversation").n…
+       |                                                                          ^
+    234|     act(() => button!.click());
+    235|     expect(events).toEqual(["startLive:new"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows an actionable failure and allows typing in the same conversation
+AssertionError: expected 'An earlier conversationtypedansweredA…' to contain 'Microphone permission was denied'
+
+Expected: "Microphone permission was denied"
+Received: "An earlier conversationtypedansweredAnswer ready.Where your microphone isAutoHeadsetLaptopYour profile"
+
+ ❯ tests/chat-live-handoff.test.tsx:251:30
+    249|     api.error = "Microphone permission was denied. Allow access in you…
+    250|     paint(api);
+    251|     expect(host.textContent).toContain("Microphone permission was deni…
+       |                              ^
+    252|     const retry = [...host.querySelectorAll("button")].find((b) => b.t…
+    253|     expect(retry).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows streaming words by default, and hiding them does not stop the session
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ tests/chat-live-handoff.test.tsx:268:70
+    266|     ];
+    267|     paint(api);
+    268|     expect(host.querySelector(".chat-live-transcript")?.textContent).t…
+       |                                                                      ^
+    269|     const toggle = host.querySelector<HTMLInputElement>('input[aria-la…
+    270|     expect(toggle?.checked).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > shows the acquired microphone, input meter and playback recovery action
+AssertionError: the microphone has no local level meter: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:281:93
+    279|     api.quietInput = true;
+    280|     paint(api);
+    281|     expect(host.querySelector(".mic-level"), "the microphone has no lo…
+       |                                                                                             ^
+    282|     expect(host.textContent).toContain("MacBook Pro Microphone");
+    283|     expect(host.textContent).toContain("No sound detected yet");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > reports thinking and tool work without claiming the companion is speaking
+AssertionError: expected 'An earlier conversationtypedansweredA…' to contain 'Thinking…'
+
+Expected: "Thinking…"
+Received: "An earlier conversationtypedansweredAnswer ready.LiveWhere your microphone isAutoHeadsetLaptopYour profile"
+
+ ❯ tests/chat-live-handoff.test.tsx:294:30
+    292|     api.thinking = true;
+    293|     paint(api);
+    294|     expect(host.textContent).toContain("Thinking…");
+       |                              ^
+    295|     api.pendingTools = [{ callId: "c1", name: "search_article_words" }…
+    296|     paint(api);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > remembers a replacement microphone and flushes before reconnecting
+AssertionError: there is no way to escape a silent virtual microphone: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:318:83
+    316|       await act(async () => { await Promise.resolve(); });
+    317|       const picker = host.querySelector<HTMLSelectElement>('select[ari…
+    318|       expect(picker, "there is no way to escape a silent virtual micro…
+       |                                                                                   ^
+    319|       act(() => {
+    320|         picker!.value = "headphones";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > offers cancellation while the session is connecting
+AssertionError: a startup that stalls cannot be cancelled: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/chat-live-handoff.test.tsx:348:75
+    346|     paint(api);
+    347|     const button = host.querySelector<HTMLButtonElement>(".chat-live-b…
+    348|     expect(button?.disabled, "a startup that stalls cannot be cancelle…
+       |                                                                           ^
+    349|     act(() => button!.click());
+    350|     expect(events).toEqual(["stop"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > flushes a new spoken conversation before deciding whether it is empty
+AssertionError: the empty base was discarded while speech was still in flight: expected [ Array(2) ] to deeply equal [ 'stop' ]
+
+- Expected
++ Received
+
+  [
+-   "stop",
++   "discard:spya-k3m9qt",
++   "thread:null",
+  ]
+
+ ❯ tests/chat-live-handoff.test.tsx:358:85
+    356|     const leave = host.querySelector<HTMLButtonElement>('button[title=…
+    357|     act(() => leave!.click());
+    358|     expect(events, "the empty base was discarded while speech was stil…
+       |                                                                                     ^
+    359|     await act(async () => { finish(); });
+    360|     expect(events).toEqual(["stop", `discard:${THREAD.id}`, "thread:nu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > explains voice and thread continuity in a keyboard-reachable tooltip
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ tests/chat-live-handoff.test.tsx:369:34
+    367|     await act(async () => { button!.focus(); });
+    368|     const tooltip = document.querySelector('[role="tooltip"]');
+    369|     expect(tooltip?.textContent).toContain("Talk about the article");
+       |                                  ^
+    370|     expect(tooltip?.textContent).toContain("same conversation");
+    371|     expect(button?.hasAttribute("title")).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 6 passed (15)
+   Start at  12:21:13
+   Duration  970ms (transform 236ms, setup 42ms, import 439ms, tests 119ms, environment 287ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/css-tokens.test.ts tests/chat-live-handoff.test.tsx tests/chat-list-composer.test.tsx tests/chat-list-loading.test.tsx tests/conversation-band-send-new.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:19443) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19442) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19441) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19440) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  5 passed (5)
+      Tests  55 passed (55)
+   Start at  12:29:55
+   Duration  2.78s (transform 2.25s, setup 258ms, import 3.81s, tests 547ms, environment 2.74s)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:21682) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > makes the latest spoken passage pressable and excludes invented block ids
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > makes the latest spoken passage pressable and excludes invented block ids
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/chat-live-handoff.test.tsx (16 tests | 1 failed) 224ms
+     × makes the latest spoken passage pressable and excludes invented block ids 14ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > makes the latest spoken passage pressable and excludes invented block ids
+AssertionError: show_passage never puts a passage on screen: expected  to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/chat-live-handoff.test.tsx:311:66
+    309|     ]));
+    310|     const links = host.querySelectorAll<HTMLAnchorElement>(".chat-live…
+    311|     expect(links, "show_passage never puts a passage on screen").toHav…
+       |                                                                  ^
+    312|     expect(links[0]?.href).toContain("at=spya-a2b3c4");
+    313|     act(() => links[0]!.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 passed (16)
+   Start at  12:30:42
+   Duration  1.13s (transform 253ms, setup 48ms, import 474ms, tests 224ms, environment 299ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx tests/css-tokens.test.ts
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:21975) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  2 passed (2)
+      Tests  36 passed (36)
+   Start at  12:31:37
+   Duration  1.57s (transform 352ms, setup 130ms, import 697ms, tests 253ms, environment 568ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:30625) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > offers Live on an empty loaded list after an unused thread was closed
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > where the button is offered > offers Live on an empty loaded list after an unused thread was closed
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/chat-live-handoff.test.tsx (17 tests | 1 failed) 227ms
+     × offers Live on an empty loaded list after an unused thread was closed 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > where the button is offered > offers Live on an empty loaded list after an unused thread was closed
+AssertionError: expected null not to be null
+ ❯ tests/chat-live-handoff.test.tsx:241:54
+    239|     const { api } = fakeLive("idle");
+    240|     paint(api, null, []);
+    241|     expect(host.querySelector(".chat-live-btn")).not.toBeNull();
+       |                                                      ^
+    242|   });
+    243|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  12:34:30
+   Duration  1.41s (transform 278ms, setup 47ms, import 591ms, tests 227ms, environment 449ms)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx tests/chat-list-composer.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:31067) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31068) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  2 passed (2)
+      Tests  28 passed (28)
+   Start at  12:35:30
+   Duration  1.50s (transform 524ms, setup 108ms, import 1.08s, tests 306ms, environment 1.12s)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/conversation-band-live.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:31297) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  12:36:31
+   Duration  2.19s (transform 1.13s, setup 42ms, import 1.58s, tests 188ms, environment 296ms)
+
+
+MUTATION WITNESS: bypass selected-thread guard and start before URL selection.
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/conversation-band-live.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+ ❯ |unit| tests/conversation-band-live.test.tsx (3 tests | 2 failed) 238ms
+   × creates and selects a new thread before starting Live, without cancelling its own startup 104ms
+   × does not follow a late spoken append back into the thread the reader left 121ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  12:37:15
+   Duration  11.55s (transform 7.73s, setup 214ms, import 9.33s, tests 238ms, environment 1.49s)
+
+(node:35349) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/conversation-band-live.test.tsx > creates and selects a new thread before starting Live, without cancelling its own startup
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > creates and selects a new thread before starting Live, without cancelling its own startup
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > creates and selects a new thread before starting Live, without cancelling its own startup
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > creates and selects a new thread before starting Live, without cancelling its own startup
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > creates and selects a new thread before starting Live, without cancelling its own startup
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > creates and selects a new thread before starting Live, without cancelling its own startup
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+
+stderr | tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+The current testing environment is not configured to support act(...)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/conversation-band-live.test.tsx > creates and selects a new thread before starting Live, without cancelling its own startup
+AssertionError: expected [ { id: 'spya-vauyx0', …(1) } ] to deeply equal [ { id: 'spya-vauyx0', …(1) } ]
+
+- Expected
++ Received
+
+  [
+    {
+      "id": "spya-vauyx0",
+-     "selected": "spya-vauyx0",
++     "selected": null,
+    },
+  ]
+
+ ❯ tests/conversation-band-live.test.tsx:85:18
+     83|   expect(created).not.toBe(STORED_ID);
+     84|   await waitForThread(created!);
+     85|   expect(starts).toEqual([{ id: created, selected: created }]);
+       |                  ^
+     86|   expect(stops).toBe(0);
+     87| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |unit| tests/conversation-band-live.test.tsx > does not follow a late spoken append back into the thread the reader left
+AssertionError: expected 'spya-c2r3ct' to be null
+
+- Expected:
+null
+
++ Received:
+"spya-c2r3ct"
+
+ ❯ tests/conversation-band-live.test.tsx:106:26
+    104|   // Flushing another URL write would expose a callback that incorrect…
+    105|   await act(async () => { await new Promise((resolve) => setTimeout(re…
+    106|   expect(panel.threadId).toBeNull();
+       |                          ^
+    107|   expect(new URLSearchParams(location.search).get("thread")).toBeNull(…
+    108| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+Process exit: 1
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:60286) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > keeps a failed new conversation that still holds unsaved spoken words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > keeps a failed new conversation that still holds unsaved spoken words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/chat-live-handoff.test.tsx (18 tests | 1 failed) 991ms
+     × keeps a failed new conversation that still holds unsaved spoken words 46ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-handoff.test.tsx > the live session in the shipping chat composer > keeps a failed new conversation that still holds unsaved spoken words
+AssertionError: discard made the only unsaved transcript unreachable: expected [ Array(2) ] to deeply equal [ 'thread:null' ]
+
+- Expected
++ Received
+
+  [
++   "discard:spya-k3m9qt",
+    "thread:null",
+  ]
+
+ ❯ tests/chat-live-handoff.test.tsx:392:76
+    390|     paint(api, THREAD.id, [{ ...THREAD, messages: [] }]);
+    391|     act(() => host.querySelector<HTMLButtonElement>('button[title="All…
+    392|     expect(events, "discard made the only unsaved transcript unreachab…
+       |                                                                            ^
+    393|   });
+    394|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  12:38:16
+   Duration  4.90s (transform 1.32s, setup 313ms, import 1.96s, tests 991ms, environment 1.36s)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx tests/chat-list-composer.test.tsx tests/chat-list-loading.test.tsx tests/conversation-band-live.test.tsx tests/conversation-band-send-new.test.tsx tests/css-tokens.test.ts
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:71478) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:71485) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:71479) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:71476) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:71472) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  6 passed (6)
+      Tests  61 passed (61)
+   Start at  12:38:40
+   Duration  12.57s (transform 16.79s, setup 639ms, import 26.26s, tests 3.42s, environment 11.94s)
+
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/chat-live-handoff.test.tsx tests/chat-list-composer.test.tsx tests/chat-list-loading.test.tsx tests/conversation-band-live.test.tsx tests/conversation-band-send-new.test.tsx tests/css-tokens.test.ts
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:21793) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21796) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21797) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21794) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21795) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  6 passed (6)
+      Tests  62 passed (62)
+   Start at  12:41:27
+   Duration  15.06s (transform 22.75s, setup 1.57s, import 38.25s, tests 4.87s, environment 12.71s)
+
+
+
+Sol code review F2 — pending Live ticket must not overrule later Dictate choice
+2026-09-06. Real Composer + useLiveConversation + microphone lock; fake dictation capture and provider wire.
+RED: npx vitest run tests/chat-live-dictation.test.tsx (exit 1; Chat and Remember lose dictation after late ticket, existing fallback passes).
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:13483) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |unit| tests/chat-live-dictation.test.tsx (3 tests | 2 failed) 82ms
+   × chat Dictate cancels pending Live before claiming the microphone 52ms
+   × remember Dictate cancels pending Live before claiming the microphone 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-live-dictation.test.tsx > chat Dictate cancels pending Live before claiming the microphone
+ FAIL  |unit| tests/chat-live-dictation.test.tsx > remember Dictate cancels pending Live before claiming the microphone
+AssertionError: expected null not to be null
+ ❯ tests/chat-live-dictation.test.tsx:152:73
+    150|   // prove the old attempt will not later evict dictation through mic-…
+    151|   await act(async () => { releaseTicket(TICKET); });
+    152|   expect(host.querySelector('button[aria-label="Stop dictating"]')).no…
+       |                                                                         ^
+    153|   expect(live.phase).toBe("idle");
+    154|   expect(connections).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  13:17:57
+   Duration  1.23s (transform 272ms, setup 51ms, import 543ms, tests 82ms, environment 457ms)
+
+
+GREEN after one shared stop-before-toggle callback for ordinary and fallback controls:
+npx vitest run tests/chat-live-dictation.test.tsx tests/chat-live-handoff.test.tsx tests/conversation-band-live.test.tsx (exit 0)
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:13702) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13703) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13704) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  3 passed (3)
+      Tests  25 passed (25)
+   Start at  13:18:27
+   Duration  2.20s (transform 1.52s, setup 152ms, import 2.49s, tests 505ms, environment 962ms)
+
+
+node --import tsx scripts/typecheck.ts (exit 0)
+✓ src/web/tsconfig.json  (301 files)
+✓ tests/tsconfig.json  (1348 files)
+✓ tsconfig.json  (413 files)
+✓ all 1424 source files are covered by some project
+
+npx biome lint src/web/ChatPanel.tsx tests/chat-live-dictation.test.tsx (exit 0)
+Checked 2 files. No fixes applied. One existing ChatPanel complexity info (40; max 25); no errors.
+
+
+Final gate — reopened paragraph panel URL assertion
+2026-09-06, base f0a614e4. Only tests/public-network-trace.test.tsx changed permanently.
+The test from 77e045a6e assumed six zero-time turns flushed nuqs history; threadParam uses the default throttle. Draft UI already changed. The URL assertion now awaits its exact invariant with bounded vi.waitFor.
+
+RED
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:36279) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |unit| tests/public-network-trace.test.tsx (60 tests | 1 failed | 59 skipped) 250ms
+     × still offers a way to start a second conversation, from the reopened panel 248ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/public-network-trace.test.tsx > the same address, as the owner > still offers a way to start a second conversation, from the reopened panel
+AssertionError: expected 'spya-thr001' to be null
+
+- Expected:
+null
+
++ Received:
+"spya-thr001"
+
+ ❯ tests/public-network-trace.test.tsx:2527:64
+    2525|     /* An empty composer, on this paragraph — the panel's other shape.…
+    2526|     expect(host.querySelector("textarea.chat-input")).not.toBeNull();
+    2527|     expect(new URLSearchParams(location.search).get("thread")).toBeNul…
+       |                                                                ^
+    2528|     /* And the transcript is gone, which is what says the button force…
+    2529|        rather than reopening what it was already showing. */
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 59 skipped (60)
+   Start at  15:50:45
+   Duration  2.39s (transform 1.24s, setup 54ms, import 1.69s, tests 250ms, environment 310ms)
+
+
+GREEN
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:37005) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  1 passed (1)
+      Tests  60 passed (60)
+   Start at  15:51:45
+   Duration  8.48s (transform 1.18s, setup 42ms, import 1.60s, tests 6.45s, environment 299ms)
+
+
+MUTATION
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:37155) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |unit| tests/public-network-trace.test.tsx (60 tests | 1 failed | 59 skipped) 1248ms
+     × still offers a way to start a second conversation, from the reopened panel 1247ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/public-network-trace.test.tsx > the same address, as the owner > still offers a way to start a second conversation, from the reopened panel
+AssertionError: expected 'spya-thr001' to be null
+
+- Expected:
+null
+
++ Received:
+"spya-thr001"
+
+ ❯ tests/public-network-trace.test.tsx:2530:89
+    2528|     // Six zero-time turns can finish before the URL queue is allowed …
+    2529|     await act(async () => {
+    2530|       await vi.waitFor(() => expect(new URLSearchParams(location.searc…
+       |                                                                                         ^
+    2531|     });
+    2532|     /* And the transcript is gone, which is what says the button force…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 59 skipped (60)
+   Start at  15:52:22
+   Duration  3.31s (transform 1.20s, setup 45ms, import 1.63s, tests 1.25s, environment 295ms)
+
+
+Mutation exit: 1
+
+RESTORED-GREEN
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:37280) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 59 skipped (60)
+   Start at  15:52:38
+   Duration  2.79s (transform 1.52s, setup 59ms, import 2.01s, tests 295ms, environment 338ms)
+
+
+Mutation temporarily omitted App.startChatAboutBlock setThread(null); revised assertion failed. The exact source line was restored in finally; no production change retained.
+Scoped lint: npx biome lint tests/public-network-trace.test.tsx — exit 0, checked 1 file, no diagnostics.
