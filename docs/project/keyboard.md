@@ -178,7 +178,7 @@ and the header row gave up its height, both in
 ← / →, so the aim moved onto the one surface left — the column itself.
 
 **The mechanism, and every part of it is a thing that was got wrong first**
-([styles.css § the aimed column](../../src/web/styles.css), `tests/aimed-column.test.ts`):
+([styles/table.css § the aimed column](../../src/web/styles/table.css), `tests/aimed-column.test.ts`):
 
 - **One `data-aim` attribute on `.reader`**, never a class on the cells: a deep article renders
   thousands of `<td>`s and `memo(TableView)` is what keeps a pointer move cheap. It went on `.reader`

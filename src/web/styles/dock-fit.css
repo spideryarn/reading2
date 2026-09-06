@@ -1,0 +1,180 @@
+/* dock-fit.css — the mode switch in the bottom bar (DockModes in Dock.tsx) and
+   the bar's fit ladder: the rungs its buttons drop through as the window
+   narrows. The rest of the dock is dock.css, six files earlier. */
+
+/* ------------------------------------------------------- the mode switch --
+   The three things the middle band can be — Hierarchy, Chat, Glossary — drawn
+   as one control rather than three buttons that happen to be adjacent. See
+   DockModes in Dock.tsx, and docs/plans/260826a-chat-mode.md for what a mode is.
+
+   The grouping is the entire visual job here. Exactly one of these is on at any
+   moment, and three separate-looking buttons where only one ever lights up
+   reads as three toggles you could turn on together. A hairline box around them
+   says "one of these", which is what the markup already promises a screen
+   reader via `role="radiogroup"` — this is the sighted half of the same claim. */
+.dock-modes {
+  display: inline-flex;
+  align-items: stretch;
+  /* **The segment must never shrink, and `overflow: hidden` below is why.**
+     This is a flex item in the dock's row, so its default `flex: 0 1 auto` let
+     the bar squeeze it whenever the row did not fit — and squeezing something
+     that clips its own overflow does not make it smaller, it makes it *shorter*
+     by deleting buttons off the right-hand end, with no scrollbar and no sign
+     that anything is gone. Measured at 390px on 2026-08-27: `clientWidth` 48
+     against a `scrollWidth` of 245, so five of the six modes could not be
+     pressed at all. Greg had noticed the symptom on a phone — "I couldn't see
+     the radio-group properly" — and it is the same failure the note beside the
+     § the bar's fit ladder predicted and only half fixed, because the half it
+     fixed is the half a laptop can see — and the pixel breakpoint that fixed it
+     then went stale as the modes multiplied, which is why that section measures
+     now rather than guessing.
+
+     `flex: none` turns a silent deletion into an honest overflow of the bar,
+     which § a narrow window then makes scrollable. This is not a narrow-window
+     rule: any width where the row does not fit was losing buttons the same way. */
+  flex: none;
+  /* Sits inside a bar of --dock-h with no vertical room to spare, so the frame
+     is inset rather than added: margin, not padding, or the buttons would grow
+     the bar. */
+  margin: 0.3rem 0.25rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  /* Clips the selected button's own background to the rounded corners, so the
+     highlight cannot square off the end of the frame. */
+  overflow: hidden;
+}
+
+/* Hairlines BETWEEN the buttons, never on the ends — `+` puts a left border on
+   every button after the first, which is exactly the n-1 rules a segmented
+   control needs and stays right when a fourth mode is added. */
+.dock-modes .dock-btn + .dock-btn { border-left: 1px solid var(--rule); }
+
+.dock-modes .dock-btn {
+  /* The inset top-border marker belongs to the bar's *other* buttons, where it
+     means "this is the page you are on". Inside the frame the selected state is
+     the fill, and keeping both would draw a stray 2px cap across one segment. */
+  box-shadow: none;
+  border-radius: 0;
+}
+.dock-modes .dock-btn.on { box-shadow: none; }
+
+/* The focus ring goes on the segment, inset, so it is not clipped by the
+   frame's `overflow: hidden`.
+
+   It used to matter for a second reason that no longer holds, and the
+   correction is worth keeping: the group was ONE tab stop with arrow keys
+   inside it, so the ring was the only thing saying which button an arrow would
+   move from. The arrows went on 2026-08-31 — on this page they belong to the
+   article (Dock.tsx § the mode switch) — and every button is its own tab stop
+   now, so the ring is doing the ordinary job of a focus ring. Still inset,
+   still for the `overflow: hidden`. */
+.dock-modes .dock-btn:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
+
+
+/* ------------------------------------------------- § the bar's fit ladder ----
+   What the bar drops when the row will not fit — and **which rung it is on is
+   measured by the browser, not decided by a width in this file**. `useDockFit`
+   in src/web/dock-fit.ts asks `.dock` whether it overflows, steps down this
+   list until it does not, and puts the class here.
+
+   **There was a pixel breakpoint here and it went stale, which is the whole
+   reason this is JavaScript.** `@media (max-width: 1100px)` did rung 1's job,
+   and the 1100 was chosen against a measured 1046 when there were six modes.
+   At thirteen the spelled-out row wants 1416px, so every window from 1101px to
+   1416px showed its labels *and* ran the last buttons off the right-hand edge —
+   which is where Greg found it, at two thirds of a laptop screen, 2026-09-02.
+   The failure is the one `.dock-modes` warns about above: nothing overflows
+   visibly, nothing scrolls, and a button that is not drawn cannot be pressed.
+   Mode fourteen now moves the threshold by itself.
+
+   **The label gives way, never the button**, and that argument is unchanged:
+   every button says its name in a hover tooltip and in an explicit `aria-label`
+   (Dock.tsx), so losing the text costs a sighted reader a hover and costs a
+   screen-reader user nothing — where a dropped button costs both of them the
+   mode. `keepLabel` in Dock.tsx keeps exactly one word on every rung, and it is
+   the way *out*.
+
+   Rung 0 is the bar spelled out and has no class. Below the last rung the row
+   overflows honestly and § a narrow window scrolls it, which is the floor under
+   this ladder rather than another rung: a phone in portrait cannot give fifteen
+   buttons a pressable width, and Greg chose scrolling over shrinking further
+   (§ a coarse pointer). */
+
+/* Rung 1 — the modes go to glyphs and the other three keep their words.
+   Square-ish once the text is gone, so thirteen icons read as one segmented
+   control rather than as loose glyphs.
+
+   **Two selectors because the bar has two shapes.** On the reading view the
+   modes are one `.dock-modes` segment; on the metadata and tweets pages they
+   are thirteen loose `DockLink`s with no segment around them (Dock.tsx). A rung
+   that only knew the segment did nothing on those pages, so the ladder skipped
+   past it to rung 2 and took every label. GPT Sol found it in the design. */
+.dock.dock-fit-1 .dock-modes .dock-btn-label,
+.dock.dock-fit-1 .dock-mode .dock-btn-label { display: none; }
+.dock.dock-fit-1 .dock-modes .dock-btn,
+.dock.dock-fit-1 .dock-mode { padding-inline: 0.6rem; }
+
+/* Rung 2 — every button in the bar, not just the modes. Tighter than rung 1 by
+   0.15rem, and that is not cosmetic: measured at thirteen icons, 0.55rem
+   brought the row to 401px against 390 of bar, and closing an 11px gap exactly
+   would have reopened it the moment the Comments count reached three digits.
+
+   These selectors are shorter than rung 1's and come after them, which is what
+   Biome's `noDescendingSpecificity` warns about. It cannot bite: a bar wears
+   one rung class at a time, so the two blocks can never both match. */
+/* biome-ignore-start lint/style/noDescendingSpecificity: mutually exclusive rungs — see above */
+.dock.dock-fit-2 .dock-btn-label { display: none; }
+.dock.dock-fit-2 .dock-btn { padding-inline: 0.45rem; }
+/* biome-ignore-end lint/style/noDescendingSpecificity: mutually exclusive rungs */
+
+/* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
+
+   **Last, and it ties on specificity with the rules above deliberately**, so
+   source order is what makes it win. That is why the mode-link selector above
+   is `.dock-mode .dock-btn-label` and not `.dock-btn.dock-mode
+   .dock-btn-label`: the extra class made the hide (0,5,0) against this rule's
+   (0,4,0), and Plain lost its word on the metadata page at rung 1 while keeping
+   it at rung 2. Caught in a browser pass, 2026-09-02. */
+.dock.dock-fit-1 .dock-btn-label.always,
+.dock.dock-fit-2 .dock-btn-label.always { display: inline; }
+
+/* **And the mode you are actually in keeps its word, on every rung.**
+   Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
+   mode we're in, so for example 'Summary' mode doesn't need to say `Summary` at
+   the top."* Stage 5 of docs/plans/260905d-declutter-the-reading-view-top-bars.md
+   took him at his word and removed the name from every band's title row — and
+   that premise was **false at exactly the widths it matters**, which a
+   screenshot showed and no unit check could.
+
+   A band is 400px of the window, so opening one is itself what pushes the bar
+   onto rung 1 — where every mode label except Plain's is hidden. So in Summary
+   at 1440×900 the band no longer said "Summary" and the bar had never said it
+   either: the only thing naming the open mode was a highlighted glyph. The
+   sighted reader who wanted the word had to hover for a tooltip.
+
+   One word costs nothing the ladder cannot absorb, because the ladder is
+   *measured* rather than declared (dock-fit.ts) — it walks down until the row
+   fits, so a rung that no longer fits with this word simply steps to the next,
+   and past the last one § a coarse pointer scrolls rather than clips.
+
+   Higher specificity than the hides above (0,5,0) rather than tying with them,
+   deliberately, and it is the safe direction: the accident this file records
+   just above is a rule that was accidentally *longer* than the one meant to
+   win. This one is meant to win.
+
+   **Rung 1 only, and rung 2 was tried and measured first.** Past the last rung
+   the bar overflows and scrolls (§ a coarse pointer), and at 390×844 in a band
+   mode it already does: measured 2026-09-05, `scrollWidth` 617 against a
+   `clientWidth` of 390. Adding this word there took it to 758 — 141px more of a
+   row the reader already has to drag sideways, to reveal a word that is only
+   legible *after* they drag. A bar that scrolls cannot tell you anything you
+   have not scrolled to, so at rung 2 this rule is pure cost and no benefit, and
+   the reader on a phone has in any case just pressed the icon themselves. At
+   rung 1 it is free: all four band modes measured `scrollWidth === clientWidth
+   === 1440` with the word shown, on the same rung they were already on. */
+.dock.dock-fit-1 .dock-btn.on .dock-btn-label { display: inline; }
+
+

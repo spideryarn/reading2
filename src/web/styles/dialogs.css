@@ -1,0 +1,518 @@
+/* dialogs.css — the floating panels that share the bottom-right corner: the
+   chat dialog (ChatDialog.tsx), the annotate box a selection opens
+   (AnnotateDialog.tsx), and PlaceOnCriterion inside both. It ends with
+   `mark.chat`, the mark a corner conversation leaves in the prose.
+
+   The panel they are shaped after is `.cmt-dialog`, in annotations.css. */
+
+/* ---------------------------------------------- the floating chat panel -- */
+/* docs/plans/260826ab-chat-as-gateway.md. Shares the slot and the geometry of
+   `.cmt-dialog` above — one of the two is ever open, decided by the overlay
+   state in App.tsx rather than by either panel noticing the other. */
+
+.chat-dialog {
+  position: fixed;
+  /* `--safe-right`: these are `position: fixed` against the physical screen,
+     so in landscape the gutter alone leaves them inside the notch. */
+  right: calc(1.25rem + var(--safe-right));
+  /* `--kb-inset` for the reason `.cmt-dialog` gives — and this panel has a
+     composer in it, so the keyboard is its ordinary state rather than an edge
+     case. ChatDialog.tsx sets it; `0px` when there is nothing to avoid. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem + var(--kb-inset, 0px));
+  width: min(26rem, calc(100vw - 2.5rem));
+  max-height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.9rem 1.1rem 0.8rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  /* Same layer as the explanation panel: above the sticky bars and the spine,
+     below the tooltip layer, for the reasons written on `.cmt-dialog`. */
+  z-index: 70;
+}
+
+/* ------------------------------------------------------- the comment box --
+   `AnnotateDialog` — what a selection opens since 2026-08-28. Same frame as the
+   floating chat beside it, on purpose: they occupy the same corner and one
+   becomes the other when the reader ticks the box, so a different shape would
+   read as the panel jumping rather than continuing.
+   docs/plans/260828a-comments-and-bookmarks.md. */
+.annotate-dialog {
+  position: fixed;
+  /* `--safe-right`: these are `position: fixed` against the physical screen,
+     so in landscape the gutter alone leaves them inside the notch. */
+  right: calc(1.25rem + var(--safe-right));
+  /* And `--kb-inset`, the same as its two neighbours: this box exists to be
+     typed into. AnnotateDialog.tsx sets it. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem + var(--kb-inset, 0px));
+  width: min(26rem, calc(100vw - 2.5rem));
+  max-height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.9rem 1.1rem 0.8rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  /* The same layer as the two panels it shares a corner with. */
+  z-index: 70;
+}
+
+.annotate-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.annotate-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.77rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Copy sits beside Close, so the header is label on the left and the two icon
+   buttons on the right. */
+.annotate-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+/* 24px is WCAG 2.2's minimum target, and the pair used to measure 19.8px with
+   2.4px between them — close enough that the spacing exception does not save
+   them either. The icons stay at 15px; the box around them grew. */
+.annotate-close,
+.annotate-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0.15rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.annotate-close:hover,
+.annotate-copy:hover { color: var(--ink); }
+
+.annotate-body { overflow-y: auto; }
+
+.annotate-quote {
+  margin: 0.55rem 0 0.6rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--highlight);
+  font-family: var(--font-reading);
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.annotate-dialog textarea {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  field-sizing: content;
+  min-height: 3.4rem;
+  max-height: 12rem;
+  resize: vertical;
+}
+.annotate-dialog textarea::placeholder { color: var(--ink-faint); }
+.annotate-dialog textarea:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The tick-box is the whole of the paid/free decision, so it gets a row of its
+   own rather than sitting in the button strip where it would read as a third
+   button. */
+.annotate-ask {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.15rem;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.annotate-ask input { cursor: pointer; }
+
+.annotate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+.annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
+
+/* **The fourth `.linky`, and it had never been styled.** The class was scoped on
+   purpose — `.controls`, `.cmt-dialog`, `.chat-dialog`, the first of those since
+   deleted with the controls bar on 2026-09-05 — and this panel's root
+   is `.annotate-dialog`, so `AnnotateDialog`'s Cancel matched no rule at all
+   and rendered as bare text beside `.annotate-save`'s bordered box. Found
+   2026-09-04 by sweeping every `className="linky"` for an ancestor that styles
+   it; the sharing card, `BillingSection` and `SettingsSection` had the same bug
+   and are fixed in their own files. `App.tsx`'s was inside `.controls` and was
+   always fine; it has since been deleted along with that bar.
+
+   Written out in full here rather than by widening one of the other two,
+   which is the rule this file already states above `.cmt-dialog button.linky`:
+   a shape, not a shared class. This one is `.cmt-dialog`'s, because Cancel in
+   the comment panel and Cancel in this one are the same control in the same
+   position — `font: inherit` included, which is now also in the button reset
+   (tailwind.css) but is cheap to keep beside the rule that depends on it. */
+.annotate-dialog button.linky {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.annotate-dialog button.linky:hover { color: var(--highlight); }
+
+.annotate-save {
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+.annotate-save:hover { border-color: var(--highlight); }
+.annotate-save:disabled { opacity: 0.4; cursor: default; }
+
+.annotate-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.77rem;
+  color: var(--ink-faint);
+}
+
+/* --------------------------------------------- placing a passage yourself --
+   `PlaceOnCriterion` — the referee's own judgement, in the two dialogs a
+   selection and a stored comment open. Its header carries the argument for why
+   it lives here rather than beside the model's valence in `CriteriaPanel`.
+
+   **Every position is legible with `.place-swatch` deleted.** The words carry
+   the direction and the colour decorates them, which is the condition
+   docs/project/colour-scales.md attaches to the red↔green ramp being permitted
+   at all — see src/web/valence.ts. Nothing in here may become colour-only. */
+.place {
+  display: block;
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid var(--rule);
+}
+
+.place-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.place-title {
+  font-size: 0.77rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.place-optional {
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+}
+
+.place-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.79rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+.place-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.place-pick-label {
+  font-size: 0.79rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* `min-width: 0` so a long criterion shrinks the control rather than pushing
+   the dialog wider — these boxes are `position: fixed` at a capped width. */
+.place-pick select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.2rem 0.3rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.81rem;
+}
+
+/* What is stored now, shown before it is overwritten — v1 keeps no history of
+   placements, so this line is the whole of "an overwrite is never invisible".
+   Words, then the number, then the colour. */
+.place-current {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0;
+  font-size: 0.81rem;
+  color: var(--ink-soft);
+}
+
+.place-current-number {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.place-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.45rem;
+}
+
+/* One row per position, in order, so the sequence itself says which way the
+   scale runs — position is the third non-colour carrier, after the words and
+   the sign. */
+.place-step {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.22rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  text-align: left;
+  cursor: pointer;
+}
+.place-step:hover { background: var(--page); }
+.place-step.on {
+  border-color: var(--highlight);
+  background: var(--page);
+  color: var(--ink);
+}
+
+.place-swatch {
+  flex: 0 0 auto;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.place-clear {
+  margin-top: 0.35rem;
+  font-size: 0.79rem;
+}
+
+/* A write that did not land, said out loud in the dialog that made it. */
+.cmt-write-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.81rem;
+  line-height: 1.4;
+  color: var(--destructive);
+  overflow-wrap: anywhere;
+}
+
+/* A conversation wants a steady frame; the ask box is three controls and should
+   not open as a 34rem rectangle. `.chat-scroll` is `Conversation`'s own
+   transcript element, so this is "there is a conversation in here" said in CSS
+   rather than a second class threaded down for the stylesheet's benefit. */
+.chat-dialog:has(.chat-scroll) { height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h))); }
+
+.chat-dialog header,
+.chat-dialog footer { flex: 0 0 auto; }
+
+.chat-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chat-dialog-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.77rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* **`.chat-dialog-stop` was here until 2026-09-05 and nothing writes it now.**
+   It dressed the header's ✕ while it meant "cancel and throw this away", which
+   the "?" in the gutter turned into a trap — see the long note on `stopControl`
+   in ChatDialog.tsx. The discard moved to the footer and wears
+   `.chat-dialog-delete` below, which already paints destructive on hover, so
+   this rule went with the markup rather than being left for the next reader to
+   prove is dead (design-css-overview.md makes that the rule). */
+.chat-dialog-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  padding: 0.1rem 0.2rem;
+  line-height: 1;
+  font: inherit;
+  font-size: 0.81rem;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.chat-dialog-close:hover { color: var(--highlight); }
+
+.chat-dialog-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.chat-dialog-quote {
+  margin: 0.55rem 0 0.6rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--highlight);
+  font-family: var(--font-reading);
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.chat-dialog-opening {
+  margin: 0.55rem 0 0.6rem;
+  font-family: var(--font-reading);
+  font-size: 0.94rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Said out loud, because the previous behaviour spent a model call here without
+   being asked, and a reader who knew that needs telling it has stopped. */
+.chat-dialog-hint {
+  margin: 0 0 0.4rem;
+  font-size: 0.77rem;
+  color: var(--ink-faint);
+}
+
+.chat-dialog-loading,
+.chat-dialog-gone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+.chat-dialog-spinner { animation: cmt-spin 0.9s linear infinite; }
+
+.chat-dialog-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.77rem;
+}
+.chat-dialog-delete { margin-left: auto; }
+.chat-dialog button.linky {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.chat-dialog button.linky:hover { color: var(--highlight); }
+/* Beaten into place at 0-4-1, for the reason `.cmt-delete` documents: the
+   general link hover above outscores a bare class selector however it is
+   ordered, so the only button here that destroys something would otherwise
+   hover the same friendly orange as the rest. */
+.chat-dialog button.linky.chat-dialog-delete:hover { color: var(--destructive); }
+
+.chat-dialog-error {
+  margin: 0.4rem 0 0;
+  font-size: 0.77rem;
+  color: var(--destructive);
+}
+
+/* ------------------------------------------------------------ chat marks -- */
+/* A conversation started from a selection. A different hue from a comment's
+   wash rather than a different alpha, so the two are told apart by kind rather
+   than by strength — the rule search.md sets out for its own wash. */
+
+mark.chat {
+  background: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--chat-mark) 60%, var(--page));
+}
+mark.chat[data-chat-open] {
+  background: var(--chat-mark-wash);
+  border-bottom-color: var(--chat-mark);
+}
+/* Its own marker, on the final run only. A separate attribute from the
+   comment's `data-mark-end` because a run can end a chat mark without ending a
+   comment mark that overlaps it, and one attribute would put the marker in the
+   wrong place for whichever did not end there. */
+mark.chat[data-chat-end]::before {
+  content: "❞";
+  font-family: var(--font-ui);
+  font-size: 0.6em;
+  line-height: 1;
+  vertical-align: super;
+  margin-left: 0.15em;
+  color: var(--chat-mark);
+}
+

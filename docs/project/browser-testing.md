@@ -759,8 +759,8 @@ Each of these looked right in review and was wrong on the page.
    not pinned, whatever `position` says. Written up on its own, because it is not specific to this
    project, in [css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md).
 
-`styles.css` also carries three structural constraints that look arbitrary until you've hit the
-failure — `border-collapse: separate`, no `overflow-x` wrapper around the table, and the two-axis
+[`styles/table.css`](../../src/web/styles/table.css) also carries three structural constraints that
+look arbitrary until you've hit the failure — `border-collapse: separate`, no `overflow-x` wrapper around the table, and the two-axis
 sticky bars that follow. They're commented in place; read them before you tidy them.
 
 ## Two more, since Tailwind went in

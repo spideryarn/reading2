@@ -892,7 +892,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`tests/store-shelf-reads.test.ts`](../../tests/store-shelf-reads.test.ts) | **how many questions the shelf asks, and about what** — two, whatever it holds, and neither about a block |
 | [`tests/table-sort.test.ts`](../../tests/table-sort.test.ts), [`tests/relative-time.test.ts`](../../tests/relative-time.test.ts) | the URL round-trip and `sinkLast`; and where "days ago" stops helping |
 
-Styling is Tailwind utilities, not a block in [`styles.css`](../../src/web/styles.css). That is the
+Styling is Tailwind utilities, not a block under [`src/web/styles/`](../../src/web/styles/). That is the
 rule rather than a preference: this page is chrome, and chrome is what shadcn and Tailwind were
 adopted for ([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)).
 The reading view stays hand-written, because its geometry is not something utilities can say. Every

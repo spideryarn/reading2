@@ -206,8 +206,8 @@ tested in [`tests/context.test.ts`](../../tests/context.test.ts);
 [`useColumnContext.ts`](../../src/web/useColumnContext.ts) is the live half — which item is under
 the focus line and where the columns are; [`ContextList.tsx`](../../src/web/ContextList.tsx)
 draws the list and the landmarks' tooltips; [`ContextPanel.tsx`](../../src/web/ContextPanel.tsx) is
-the panel; the cells under the panel are in [`TableView.tsx`](../../src/web/TableView.tsx); the styles are the
-`column context` section of [`styles.css`](../../src/web/styles.css).
+the panel; the cells under the panel are in [`TableView.tsx`](../../src/web/TableView.tsx); the styles are
+[`styles/column-context.css`](../../src/web/styles/column-context.css) § column context.
 
 ### What the panel replaced, and what it cost
 
@@ -340,7 +340,7 @@ sections column shows two part boundaries at once:
 not the sections column's, so the eye files the heading with the column to its left. The part you
 are in is at full strength; the others recede with their sections. Screenshots are in the session
 that made the choice; the CSS comment at `.ctx-group` in
-[`styles.css`](../../src/web/styles.css) carries the reasoning.
+[`styles/column-context.css`](../../src/web/styles/column-context.css) carries the reasoning.
 
 ### The three that went
 

@@ -1,0 +1,350 @@
+/* summary.css — the Summary panel: the article at more than one length, as one
+   nested list with a depth bar down it. SummaryPanel.tsx,
+   docs/project/summaries.md. */
+
+/* -------------------------------------------------------- § summary mode ----
+   The article at more than one length, in the mode band. The shell is
+   `.mode-band` above; everything here is what goes inside it. See
+   SummaryPanel.tsx and docs/project/summaries.md.
+
+   Two things about this layout are decisions rather than taste:
+
+   **The indentation is `padding-left` on a nested `<ol>`, not a margin on the
+   entry.** The summaries are prose and they wrap, so a wrapped line has to
+   align with the first one; a margin on the `<li>` does that and a text-indent
+   does not. It also means the depth colour bar below can run the full height of
+   a section including its children, which is what makes a part read as one
+   thing rather than as a heading followed by some unrelated paragraphs.
+
+   **The colour of the bar is `--depth-N`**, the same four tokens the gist
+   columns use. A reader who has met L1 and L2 as colours in the table meets the
+   same two colours here, so "this is the parts level" needs no legend. Change
+   them in one place or they stop meaning one thing. */
+
+/* The title row is `.band-head`, § mode band — where this panel's `flex: none`
+   now lives, for every band. */
+
+/* ---- the two controls ---- */
+.summ-controls {
+  flex: none;
+  padding: 0.4rem 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.summ-row {
+  /* A `<fieldset>`, so the reset comes first — the UA gives it a groove border,
+     side padding and a margin nobody asked for. `display: flex` is doing a
+     second job beyond layout: a `<legend>` only gets its notched-into-the-
+     border rendering while the fieldset is a block box, so flex is what turns
+     the group's label into an ordinary item on the row. */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0; /* a fieldset defaults to min-content, which refuses to shrink */
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  /* Wraps rather than scrolling: the band is as narrow as 18rem (MODE_MIN in
+     layout.ts) and three named rungs plus a label do not always fit on one
+     line. A horizontal scroller here would hide a control behind a gesture
+     nobody would think to try on a five-item row. */
+  flex-wrap: wrap;
+}
+.summ-row + .summ-row { margin-top: 0.3rem; }
+.summ-label {
+  /* Also the `<legend>` of each group. `padding: 0` because a UA gives a legend
+     side padding to sit in the border it no longer has. */
+  width: 3.4rem;
+  flex: none;
+  padding: 0;
+  font-size: 0.79rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.summ-pill {
+  padding: 0.16rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.summ-pill:not(:disabled):hover { color: var(--ink); border-color: var(--highlight); }
+.summ-pill.on {
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+  color: var(--highlight-ink);
+}
+/* Dimmed, not gone. A rung that has not been generated yet still has to be
+   visible, or there is nothing on screen to explain what the button at the
+   bottom of the panel would buy. */
+.summ-pill:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- the outline ---- */
+/* The reader's own scroller, and also the one the panel moves itself to follow
+   the reading position (follow.ts). Deliberately **no `scroll-behavior: smooth`
+   here**: that rule would animate every write to `scrollTop`, including the ones
+   that must be instant — the first placement, and every frame of the panel's own
+   animation, which sets `scrollTop` sixty times a second and would be smoothed
+   into treacle. follow.ts decides the motion per move, which is also the only
+   way `prefers-reduced-motion` can be honoured for a scroll that is sometimes
+   wanted instantly anyway. */
+.summ-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 0.7rem 0.8rem;
+  /* Wheeling past the end of the outline must not start scrolling the article.
+     Chrome chains an over-scroll to the nearest scrollable ancestor by default,
+     and here that ancestor is the page — so a flick at the top of the list moved
+     the reader's place in the piece, which moved `?at=`, which moved this panel.
+     A flick in the outline is not a request to go somewhere. Found at a narrow
+     window, where the panel and the prose sit close enough that it is easy to
+     do by accident (browser pass, 2026-08-26). */
+  overscroll-behavior: contain;
+}
+
+.summ-list, .summ-children { margin: 0; padding: 0; list-style: none; }
+.summ-children {
+  /* The indent, and the depth bar it makes room for. */
+  margin-top: 0.35rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--rule);
+}
+
+.summ-entry + .summ-entry { margin-top: 0.7rem; }
+.summ-entry.d1 > .summ-children { border-left-color: var(--depth-2); }
+.summ-entry.d0 > .summ-children { border-left-color: var(--depth-1); }
+
+/* The apparatus, in the same key it wears in the spine: present in the
+   structure, quieter than the argument, and carrying no number. It is a row the
+   reader can jump to and never a section of the piece — the same grammar
+   `.spine-part.supplement` uses (and `.arc-step.arc-supplement` used, until the
+   arc's column went), so a reader who has learned it in one panel reads it in
+   this one without being told. docs/plans/260828o-footnotes.md. */
+.summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
+  color: var(--ink-faint);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Where the reader actually is. Every ancestor of the current section is marked
+   too — see the note in SummaryPanel.tsx: at a shallow depth cut-off the part
+   you are inside is the honest answer to "where am I", and marking only the
+   deepest visible node would leave the panel with nothing lit at all. */
+.summ-entry.here > .summ-body > .summ-title-row > .summ-title { color: var(--highlight-ink); }
+.summ-entry.here > .summ-children { border-left-color: var(--highlight); }
+
+/* And the one row of that chain the reader is actually *in*, which is the row
+   the panel scrolls to. Two marks rather than one: `here` draws the path down
+   to the reader, `now` says where the path ends. One mark strong enough to find
+   at a glance, repeated on every ancestor, is a stripe down the panel and no
+   answer.
+
+   The wash goes on `.summ-body`, which is the same box the hover already tints,
+   so the two must stay apart: hover is `--surface-raised`, a neutral lift, and
+   this is `--highlight-wash`, the orange the pressed pills use. The bar down
+   the left is what actually finds the row in peripheral vision — a background
+   alone reads as "hovered" on a panel the pointer is sitting over.
+
+   `box-shadow: inset`, not a `border-left`: `.summ-body` carries a negative
+   margin so the tint reaches into the panel's gutter, and a border would add a
+   pixel to the box and shift every line of the row's text sideways as the
+   reader crossed into it. An inset shadow paints inside the box it already has. */
+.summ-entry.now > .summ-body {
+  background: var(--highlight-wash);
+  box-shadow: inset 2px 0 0 var(--highlight);
+}
+.summ-entry.now > .summ-body:hover { background: var(--highlight-wash); }
+.summ-entry.now > .summ-body > .summ-title-row > .summ-title { color: var(--highlight-ink); }
+.summ-entry.now > .summ-body > .summ-text { color: var(--ink); }
+
+/* The click target, and the reason it exists: the title alone was a line of
+   0.82rem text as wide as the heading happened to be, inside a panel four times
+   that. Everything around it looked as pressable and did nothing. Now the
+   header, the summary and the range are one target — the same call TableView
+   makes with a whole gist `<td>`. SummaryPanel.tsx § the whole entry.
+
+   The negative margin plus matching padding is what lets the highlight reach
+   past the text without indenting it: the entry keeps the position it had, and
+   the hover extends into the panel's own gutter. */
+.summ-body {
+  margin: 0 -0.35rem;
+  padding: 0.15rem 0.35rem 0.2rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.12s;
+}
+.summ-body:hover { background: var(--surface-raised); }
+@media (prefers-reduced-motion: reduce) {
+  .summ-body { transition: none; }
+}
+
+.summ-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.summ-twist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  /* Only the rotation animates, and only when the reader has not asked for
+     less. `transform` is composited, so this is free even on a long outline. */
+  transition: transform 0.15s;
+}
+.summ-twist.open { transform: rotate(90deg); }
+.summ-twist.leaf { visibility: hidden; }
+.summ-twist:not(:disabled):hover { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  .summ-twist { transition: none; }
+}
+
+.summ-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.91rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.summ-title:hover { color: var(--highlight-ink); }
+.summ-number {
+  margin-right: 0.4rem;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.83rem;
+  font-weight: 400;
+}
+
+/* How much is under this — the question our gist columns cannot answer, since a
+   section holding forty paragraphs and one holding three look identical in an
+   L2 cell. docs/project/original-version/structure-panel.md. */
+.summ-size {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.81rem;
+}
+
+.summ-text {
+  margin: 0.25rem 0 0 1.25rem;
+  /* The reading face, not the UI one: these are sentences somebody wrote, and
+     a summary set in the interface font reads as a system message. Same call
+     `.chat-scroll` makes for the same reason. */
+  font-family: var(--font-reading);
+  font-size: 0.93rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  /* Paragraphs in the longer rungs arrive as blank lines in one string. */
+  white-space: pre-wrap;
+}
+.summ-list > .summ-entry > .summ-body > .summ-text {
+  /* The root has no title row to indent under. */
+  margin-left: 0;
+  color: var(--ink);
+}
+.summ-text.missing { color: var(--ink-faint); font-style: italic; }
+
+/* **The Socratic question, under the claim it leaves open.**
+   SPIDERYARN-READING2-1V.
+
+   Deliberately a *different kind of line* rather than a second sentence in the
+   same voice: italic, a step down, and fainter, so the eye reading the panel
+   for what the article says can skip the whole column of them, and the reader
+   looking for a way in finds one on every part. No label and no "?" glyph —
+   the question mark it ends with is the only marker it needs.
+
+   It follows `.summ-text`'s indent so the two line up under the title, and it
+   takes the same un-indenting on the root, where there is no title row. */
+/* **The question is the row's summary now, not a note under it** — it replaced
+   the gist rather than joining it on 2026-09-05 (SPIDERYARN-READING2-24), so it
+   takes `.summ-text`'s weight exactly: the same size, the same ink, the same
+   reading face. It was 0.87rem italic `--ink-faint` while it was the second
+   line, and leaving it there would have made every row's only sentence look
+   like a footnote to a claim that is no longer above it.
+
+   **The italic went with the demotion.** It marked the question as a different
+   kind of thing from the sentence above; there is no sentence above, and a
+   panel set entirely in italic is a panel that is harder to read for a
+   distinction nobody can see any more. The question mark does that job. */
+.summ-question {
+  margin: 0.25rem 0 0 1.25rem;
+  font-family: var(--font-reading);
+  font-size: 0.93rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.summ-list > .summ-entry > .summ-body > .summ-question { margin-left: 0; }
+/* Lifts on the current row exactly as the gist does (§ `.summ-entry.now`), and
+   to the same `--ink` rather than the `--ink-soft` it lifted to as a second
+   line — it is the claim on that row now. */
+.summ-entry.now > .summ-body > .summ-question { color: var(--ink); }
+
+/* The citation chips inside a summary. Smaller than chat's, because a summary
+   is denser than an answer and the chips are punctuation in it rather than
+   claims of their own. `white-space: normal` undoes `.summ-text`'s `pre-wrap`
+   for the chip alone — inside a `pre-wrap` box the space between two ids in one
+   bracket is preserved twice and the flex gap adds a third. */
+.summ-text .cite {
+  white-space: normal;
+  vertical-align: baseline;
+}
+.summ-text .cite .block-ref { font-size: 0.74rem; }
+
+/* Where this section starts and ends. Under the summary, as in a gist cell —
+   and the one place ids appear at the `gist` rung, which is the default and the
+   only rung an article nobody has paid for has at all. */
+.summ-range {
+  margin: 0.2rem 0 0 1.25rem;
+  opacity: 0.75;
+}
+.summ-range:hover { opacity: 1; }
+.summ-list > .summ-entry > .summ-body > .summ-range { margin-left: 0; }
+
+
+/* "+4 sections", and "−2 parts" on the root once its parts are open. A control
+   on every row since 2026-08-31, the root included — it writes one node into
+   `opened` rather than moving the Depth buttons. SummaryPanel.tsx. */
+.summ-more {
+  margin: 0.3rem 0 0 1.25rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 0.81rem;
+  cursor: pointer;
+}
+.summ-more:hover { color: var(--ink); border-color: var(--highlight); }
+
+.summ-quiet { padding: 1rem 0.2rem; color: var(--ink-faint); }
+
+/* **Summary mode spends nothing, so it has no foot.** `.summ-foot`,
+   `.summ-hint`, `.summ-error`, `.summ-stale` and `.summ-rung-tag` went on
+   2026-08-31 with the generated length ladder: there is no job to report, no
+   artefact to be stale, and no shorter rung to fall back to
+   (docs/plans/260831s-gist-only-summaries.md). Its run button had gone earlier, on
+   2026-08-26, into the shared src/web/JobProgress.tsx. */
+
+

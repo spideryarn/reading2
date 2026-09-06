@@ -1,0 +1,734 @@
+/* gutter.css — the column of controls beside every paragraph: the comment mark,
+   the permalink, the chat door, the "?" and the "…" that appears when the row
+   has no room for the rest. BlockGutter.tsx has the rule it follows and the
+   slots it is. */
+
+/* ------------------------------------------------------- § the gutter ------
+   The reader's column beside every paragraph — BlockGutter.tsx has the rule it
+   follows and the slots it is.
+
+   **It is one column, as long as the paragraph has room for, since 2026-09-05.**
+
+       mark        only when you have made a note on this paragraph
+       permalink   every block, on hover
+       chat        on hover; always where there are conversations
+       "?"         on hover
+       "…"         only when the row has no room for the rest of them
+
+   **The row decides how many are drawn, and it is asked with a container
+   query**, not with JavaScript and not with a floor: the gutter's box is the
+   room the row has to spare, `container-type: size` makes that box askable, and
+   the rules further down draw the first however-many controls fit. A one-line
+   paragraph has room for one 24px target, a two-line one for two, a three-line
+   one for three. Whatever is left over goes behind the "…", which takes the
+   last slot that fits.
+
+   **This is the third arrangement in three days**, and the first that costs the
+   article nothing. The column was three ~15px slots until 2026-09-04, when Greg
+   asked for targets a finger can hit on an iPad — WCAG 2.5.8's 24 × 24 — and
+   four of those stacked come to ~100px against a 39px one-line paragraph row.
+   First the arrangement paid for that (a 2 × 2 pad), and Greg looked at it:
+   *"They are no longer in a vertical line. The three are arranged in an
+   L-shape."* Then the rhythm paid (a line of three, every short row floored at
+   87.1px), and he looked at that:
+
+       for short paragraphs we simply show a `...` button that reveals them all?
+       That would be simpler and more consistent as a UI for the user.
+
+   So a one-line paragraph is 39.1px again — where it was before either of them.
+   docs/plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md, and
+   260905b and 260904b for the two this replaces.
+
+   **The mark leads the column**, because it is *state* and the rest are
+   affordances: a note must not be the thing that falls off a short paragraph.
+   Greg's call, asked directly, 2026-09-05. The price is the one guarantee the
+   pad bought — adding a note now pushes chat and the "?" down a slot — and it is
+   spent knowingly. The one exception is the one-slot bracket, where the way to
+   everything beats the mark itself; the rule below has that argument.
+
+   **The gutter is one slot wide**, which is Greg's other ask the same day —
+   *"especially on mobile we want the margins either side of the text to be
+   minimal, to maximise the space we have for the text"* — and worth 24px of
+   prose on each side. `--text-pad-l`, `proseAloneMaxPx` in layout.ts and the
+   `90vw` caveat below all move with it, and the second column's departure is
+   what reopened that caveat and made it worth fixing rather than recording.
+
+   **Absolutely positioned, which the chat button never was.** Until 2026-08-31
+   `.block-chat` had no `position` at all, so it was an in-flow inline-flex box
+   at the top of the cell — above the first line of prose, at the prose's own
+   left edge, 21px of height on every block in the article — while every comment
+   around it described a button sitting in the gutter under the block id. It
+   looked right because it was invisible. Measured with a real browser:
+   docs/postmortems/block-chat-was-never-in-the-gutter.md.
+
+   **Nothing moves when the pointer arrives**, which is the half of "fixed" that
+   still holds: every control a reader has is rendered on every row whether or
+   not it is visible, so hovering adds no element and shifts none. What does move
+   is a *note*: the mark leads the column, so making one pushes chat and the "?"
+   down a slot and can push the last of them behind the "…". The 2 × 2 pad bought
+   that guarantee with `grid-area` on every slot; a column that truncates cannot
+   keep it, because "the first k that fit" has to count the controls that are
+   actually there. Greg's call, and the trade is named above.
+
+   `align-items` / `justify-items: center` because the glyphs have different
+   widths and a ragged column of icons reads as a mistake. */
+.blk-gutter {
+  position: absolute;
+  /* **It travels with the measure, because the measure moved.** `.prose` is
+     centred in this cell (§ text), so in a mode — where the cell is the window
+     minus the rail and the band and the text is 65ch of it — a gutter left at
+     `--blk-gutter-x` alone would be a column of icons 200px out in the margin,
+     marking paragraphs it is no longer beside.
+
+     `--blk-gutter-x` is still the offset; what is added is half the room the
+     centring divides. **`100%` here is the CELL's padding box** — this box is
+     absolutely positioned and `td.text` is its containing block — which is why
+     the two pads are subtracted, and why this is written out rather than shared
+     with the `auto` above: `margin-inline: auto` on `.prose` divides the same
+     quantity against the *content* box, so one custom property could not serve
+     both without meaning two different numbers at its two use sites.
+
+     `max(0px, …)` for the same reason `auto` is self-limiting: below about
+     900px the measure is wider than the cell, there is nothing to divide, and
+     the gutter stays exactly where it has always been.
+
+     **It follows the PARAGRAPH's measure, not this row's box**, and that is a
+     choice rather than an oversight. A callout is 58ch, a caption and an opaque
+     block are narrower again (§ text), so tracking each row would give a ragged
+     column of icons — the thing `align-items: center` below already exists to
+     avoid. One straight column, aligned to the ordinary paragraphs that are
+     nearly all of an article, and a callout's icons a few pixels further from
+     its first word. GPT Sol asked for that to be stated rather than implied,
+     2026-09-04.
+
+     **The `clamp` is `.prose`'s own, and copying it is what closes the second
+     caveat rather than re-opening it.** `.prose` is
+     `clamp(45ch, 90vw, --reading-measure)` (§ text), so below about
+     `measure / 0.9` of window the text is *narrower* than the measure and
+     centring on the measure puts this column left of where the words start. The
+     pad's 59.2px of padding hid that; one column's 35.2px does not. The two
+     lines above make the gutter divide the same quantity the prose divides, and
+     `ch` means the same number in both because the two lines below set this box
+     to the prose's own `font-size` and `font-weight` — which is exactly what
+     they were already here for. The masthead in § plain, centred has the same
+     shape of bug and is *not* fixed by this; its own comment says so.
+
+     **The caveat this replaces, and the arithmetic that says it had to be
+     replaced.** `.prose`'s `clamp` has a `90vw` branch, and while the cell's
+     left padding was 33.6px that branch bound between roughly 680 and 810px of
+     window, leaving the gutter up to ~6px shy of the text. The pad's wider
+     `--text-pad-l` closes that interval, and it stays closed at every root
+     rather than only at 16 — which is worth writing out, because the
+     neighbouring rule in § plain, centred shipped a bug this week from an
+     argument that was checked at one root and assumed at the others. The
+     `90vw` branch can only bite while the cell is *also* wider than the
+     measure, and those two want `9 × (--text-pad-l + --text-pad-r + --spine-w)
+     < --reading-measure`. With the pad's width it was the other way round
+     everywhere — 842 against 742 at a 16px root — which is why it could be left
+     alone. With one column it is **626 against 742**, so the interval is live
+     again and the `clamp` above is the fix rather than the note. GPT Sol,
+     2026-09-04, for the arithmetic; re-run at one column 2026-09-05.
+
+     The `max(0px, …)` above is the second reason this rule is safe where the
+     masthead's is not: it self-limits to "leave the gutter alone", where a
+     fixed `max-width` cannot. */
+  left: calc(
+    var(--blk-gutter-x) +
+      max(
+        0px,
+        (
+            100% - var(--text-pad-l) - var(--text-pad-r) -
+              clamp(45ch, 90vw, var(--reading-measure))
+          ) / 2
+      )
+  );
+  /* **These two are here to make `ch` mean what it means in the article, and
+     for nothing else.** `--reading-measure` is `65ch` (styles/tokens.css), and
+     `ch` is the zero glyph of the font the length is *used* on — **including
+     its weight**, because Geist is a variable face and the axis changes the
+     digit's advance. So the line above would otherwise measure 65 zeroes at the
+     cell's 1rem/400 rather than the prose's 1.0625rem/450: 6% short on size,
+     and a further ~3px on weight. GPT Sol found the weight half, 2026-09-04,
+     from a 2.8px residual in the measurements.
+
+     Nothing in this column is changed by them: every glyph is a fixed-px icon,
+     `.blk-n` sets its own size, and `line-height` is 0 below. If a child is ever
+     added that sizes itself in `em`, these are the lines that will have moved
+     it. */
+  font-size: var(--reading-size);
+  font-weight: var(--reading-weight);
+  top: var(--blk-top);
+  /* **The box is exactly the room this row has to spare, and that is the whole
+     mechanism.** The cell's height is the paragraph's; take off where the column
+     starts and the pad it must not sit on, and what is left is how much column
+     this row can hold. Then `container-type: size` lets the query below ask the
+     one question a stylesheet cannot otherwise ask — *does the next 24px target
+     fit?* — without counting a single line of text.
+
+     **Two insets rather than a height, which is GPT Sol's fifth finding.**
+     `height: calc(100% - var(--blk-top) - var(--block-pad))` says the same thing
+     and is defensible by spec — positioned layout runs after the cell's size is
+     known, and CSS Tables says to resolve such a percentage in the cell's second
+     pass — but percentage heights inside table cells are an
+     interoperability-sensitive corner, and this is the number the whole overhang
+     invariant now rests on. Two insets ask the same question in the form every
+     engine agrees about. The insets are against the CELL's padding box, as
+     `left` above is, because `td.text` is `position: relative`.
+
+     **Size containment is safe here because that height is definite**: it comes
+     from the containing block, never from the icons inside. Nothing in this
+     column has ever sized the box — every child is a fixed 24px slot — so the
+     containment costs nothing that was being used. */
+  bottom: var(--block-pad);
+  container-type: size;
+  width: var(--blk-gutter-w);
+  display: grid;
+  /* **One column, named rather than `1fr`.** A single fraction of a one-slot
+     box comes to the same width, but it says "share what there is" where the
+     claim being made is "each of these is a 24px target" — and it was the
+     *column*, not the slot height, that GPT Sol pointed at: a `max()` on the
+     height alone would have left 18px-wide targets at a 12px root while every
+     comment here said 24.
+
+     **Rows are implicit and every one of them is a slot.** Nothing is placed by
+     `grid-area` any more: the controls run down the column in the order they
+     are rendered, which is the order they matter in, and the rules below draw
+     the first however-many of them that fit. `align-content: start` because the
+     box is now taller than its contents on most rows — the column belongs
+     against the paragraph's first line, not floating in the middle of it. */
+  grid-template-columns: var(--blk-slot);
+  grid-auto-rows: var(--blk-slot);
+  align-content: start;
+  /* **No row gap, deliberately.** The first draft asked for 4px of it and GPT
+     Sol took it out: going from a 15px slot to a 24px one already supplies the
+     visible separation Greg asked for, and a gap on top of that pushed the row
+     floor up by 4px for nothing. */
+  align-items: center;
+  justify-items: center;
+  line-height: 0;
+  /* **The box is not a target; only the icons in it are.** Without this the
+     container is an `auto` hit-test surface the full height of the stack, so it
+     swallowed hits aimed at the icons *inside* it while they were hidden — and,
+     where a short row let the stack hang below its own row, it took the hover
+     for that row from the row underneath. (No closed gutter hangs below its row
+     any more; the one that does is the open panel, and that one takes its
+     `pointer-events` back deliberately, because it is opaque and you should not
+     be able to click the paragraph behind it.) Found by Playwright refusing to
+     click:
+     "<div class="blk-gutter"> intercepts pointer events". Nothing here would
+     have shown it, because the container has no handler of its own and swallows
+     silently.
+
+     Hovering blank gutter still reveals the icons: the pointer now falls through
+     to the `<td>`, which is inside the same `<tr>`, so `tr:hover` still matches.
+     Every child opts back in below, and the ones that are hidden deliberately do
+     not. */
+  pointer-events: none;
+}
+
+/* **No row is given height for the column any more; the column is given the
+   height the row has.** That is the 2026-09-05 inversion, and it is what took
+   the article's rhythm back.
+
+   The invariant is the reason all of this exists, and it is **narrowed rather
+   than unchanged**: no ***closed*** interactive control may cross a row
+   boundary. An overhanging control is inside the *upper* row's `<tr>`, so
+   pointing at it marks that row active while the pointer is geometrically in the
+   next one — Sol's second and third findings on the 2026-09-04 work, and the
+   reasoning that killed its earlier "the overhang is harmless" answer. It is
+   live wherever `.block-chat.has` matches, and live on **every** touch device,
+   where `(hover: none)` reveals the whole gutter.
+
+   The exception is the open "…" panel below, and the difference is consent: an
+   overhang the reader has just pressed a button to produce, that closes on
+   Escape, on a press outside and on choosing anything, is a menu. GPT Sol asked
+   for the invariant to be stated this way rather than claimed as a stronger
+   version of itself, 2026-09-05.
+
+   Two ways to hold it. Until today: floor the row at the whole column, which
+   cost a one-line paragraph 48px of height it had no other use for. From today:
+   draw only the slots that already fit, which costs nothing and is what
+   `container-type: size` above makes askable. **The three-slot floor and
+   `.gutter-pad` are gone** — with `tests/gutter-pad-floor.test.tsx`, replaced by
+   the eight-combination matrix in `tests/block-gutter.test.tsx` — and the
+   one-slot floors below stay, because the collapsed state still draws one 24px
+   control and at a 12px root a natural one-line paragraph has 18px of room.
+
+   **What the rhythm did this week**, measured at a 16px root for the reader who
+   owns the article — a change made three times and landing back where it began:
+
+       one-line paragraph   39.1 → 63.1 (the pad) → 87.1 (the line) → 39.1
+       ordinary heading     39.9 → 69.1 → 93.1 → 39.9
+       two-line paragraph   66.3 → 66.3 → 87.1 → 66.3
+       three lines or more  unmoved throughout
+
+   Measured with the floors removed, at 1280 x 900 and again at 390 x 844, on
+   the article this was designed against: docs/plans/260905c-… § The arithmetic. */
+
+/* **Every row still holds one slot, and now the container query stands on it.**
+   The room the query measures is `100% − --blk-top − --block-pad`, and this rule
+   is what makes that at least one whole slot on every row in the article — so
+   there is no row where the gutter is a box too small to draw anything in.
+
+   At a 16px root a 24px target in a 39.1px one-line paragraph fits with 0.04px
+   to spare, which is to say it fits by luck. **`--blk-slot`'s px floor turns that luck into a bug below 16**:
+   the row keeps shrinking with the root and the target stops, so at a 12px root
+   the permalink hung 1.56px into the next paragraph and the first heading's hung
+   0.81px into the table head. Measured, after GPT Sol's stage 1 review asked for
+   the geometry pass to be re-run at 12 and 20 — his audit had found the
+   construction "scales and remains safe at 12px and 20px", and it did, right up
+   until the fix for his own finding 1 made the target stop scaling.
+
+   The cost lands exactly where the floor bites and nowhere else: at a 16px root
+   this adds **0.04px** to a one-line paragraph and nothing at all to any other
+   row, and at 20px nothing anywhere. At 12px short paragraphs go 29.3 → 35.3,
+   which is the honest price of a target that is 24 CSS pixels rather than 18.
+   It used to be a visitor's price alone, because a reader who owned the article
+   had the far larger floor above; from 2026-09-05 it is the only floor there
+   is. */
+td.text {
+  height: calc(var(--blk-top) + var(--blk-slot) + var(--block-pad));
+}
+
+/* A heading hangs its gutter from the *bottom* (below), so what it has to hold
+   is the slot plus that offset — not `--blk-top`, which is the distance from the
+   other end and is doubled on a heading. Flooring it the top-anchored way
+   instead would add 5px to every heading at the default root, to buy nothing: at
+   16 and 20 this rule never bites at all. */
+td.text.kind-heading {
+  height: calc(var(--blk-slot) + var(--block-pad));
+}
+
+/* **Every heading's gutter is a bottom-aligned box**, and since 2026-09-05 that
+   is every heading rather than only an unfloored one, because the floor that
+   used to divide them — `.gutter-pad`'s three slots — is gone. The one-slot
+   floor above applies to all of them and changes nothing about this shape.
+
+   A heading row is the shortest row in the article and it has three pads of
+   *empty space above it*, because a heading belongs to what follows it (§ text).
+   One 24px slot top-anchored under a heading's doubled `padding-top` ends
+   **0.76px** above the bottom of a 39.9px heading row — measured, not reasoned.
+   That is not a margin, it is a coincidence of this face's metrics, and one font
+   change or one browser's rounding turns it into a control hanging in the next
+   paragraph's row.
+
+   **So the box starts at the top of the cell and the controls sit at its
+   bottom.** `--blk-top` is not used here at all, which is the difference from a
+   paragraph and is GPT Sol's third finding: a heading's `--blk-top` is doubled,
+   so a box that began there would be 18.8px tall at a 16px root — *less than a
+   slot* — and the query would then measure a box smaller than the target it is
+   about to allow. Starting at 0 makes the queried room and the paintable room
+   the same 36.9px, which is one slot with 12.9px to spare, and `align-content:
+   end` puts that slot beside the heading's words rather than a line above them.
+   A heading long enough to wrap gets a taller box and a second slot, still
+   bottom-aligned.
+
+   Measured: a mid-document heading is 39.9px and a first-child one 38.9px, and
+   both come out at exactly one slot. docs/plans/260905c-… § The arithmetic. */
+td.text.kind-heading .blk-gutter {
+  top: 0;
+  bottom: calc(var(--block-pad) / 2);
+  align-content: end;
+}
+
+/* One slot, square, and the number is load-bearing: WCAG 2.5.8 asks for 24 × 24
+   and this is what makes it so, in both directions — `min-height` here, and one
+   whole grid column through the `width: 100%` below. `--blk-slot` carries the
+   px floor (§ tokens), so both directions hold at every root rather than only at
+   16px. One of them plus the cell's padding is what the floor above reserves,
+   and every slot the query lets through is another of them, which is why the
+   thresholds are multiples of this number. Every slot is this tall whether or
+   not anything is drawn in it. */
+.blk-gutter > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  min-height: var(--blk-slot);
+  /* **The whole column, not the width of the glyph.** Without this each
+     target was the SVG's own 12px and the note on `td.text` claiming the gutter
+     width *was* the target was simply false. GPT Sol, 2026-08-31. It was the
+     whole 1.4rem gutter, then one of the pad's two columns for a day; now the
+     gutter is a single column again and this is it, sized at exactly
+     `--blk-slot`. */
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.12s, color 0.12s;
+}
+
+/* **The row decides how many of these are drawn, and it decides it here.**
+
+   Greg, 2026-09-05: *"for short paragraphs we simply show a `...` button that
+   reveals them all? That would be simpler and more consistent as a UI for the
+   user."* This is that, and it replaces both of the arrangements this file has
+   carried this week — the 2 x 2 pad and the line of three, each of which paid
+   for the fourth control with the article's rhythm.
+
+   **The order is the priority order, and it is BlockGutter.tsx's render order**,
+   which is the opposite of what stood here yesterday. The pad named every cell
+   with `grid-area` precisely so that source order and drawn order could differ;
+   a column that truncates cannot afford that, because "the first k that fit" has
+   to mean something. So the controls are auto-placed, `:nth-child` counts them,
+   and the two files have one order between them: **mark, permalink, chat, "?"**,
+   with the "…" last. `tests/gutter-target-size.test.ts` pins it from this end
+   and `tests/block-gutter.test.tsx` from the other, because a re-ordered JSX
+   element would otherwise change the layout silently.
+
+   **What each row shows**, at a 16px root, where a one-line paragraph has room
+   for one 24px slot, a two-line one for two, and so on:
+
+       slots   no note                      with a note
+       1       …                            mark; "…" takes the slot on hover
+       2       permalink, …                 mark, …
+       3       permalink, chat, "?"         mark, permalink, …
+       4+      permalink, chat, "?"         mark, permalink, chat, "?"
+
+   **The dot appears only when something is behind it**, which is why the
+   three-slot row splits: three controls fit in three slots, and four do not.
+   Fable arbitrated the table, 2026-09-05, and its first answer had this row
+   wrong — it assumed four controls on every paragraph and hid the "?" behind a
+   dot on rows that had room for it.
+
+   **`data-controls` is how many controls this gutter actually has**, written by
+   BlockGutter.tsx, and every rule below that hides or shows the "…" is keyed on
+   it. `:has(.blk-cmt)` was the first draft and it is a *proxy* for the count,
+   not the count: `comments`, `onChatAbout` and `onHelp` are independent at that
+   component's boundary, so a visitor with a note (two controls, no dot rendered)
+   and a caller with one callback and a note (three controls, treated as four)
+   both came out wrong. GPT Sol's fourth finding on the plan, 2026-09-05. **There
+   is no `:has()` left in this section at all** — the last one held the mark in
+   the one-slot bracket, and it went the same day for the reason below.
+
+   **`display`, not `opacity`, and that is a reversal of this file's own rule.**
+   The reveal rules below use `opacity` because a `display: none` control is not
+   focusable, so hiding by display would delete the gutter for a keyboard reader.
+   Here it is right and there it is not, for one reason: a control hidden *here*
+   is not gone, it is behind the "…", which is itself a focusable button in the
+   tab order. Hiding by opacity instead would leave a target sitting in a slot
+   the row has no room for — the overhang this whole section exists to prevent.
+
+   **Every threshold is written twice, and the second one is not a typo.**
+   `--blk-slot` is `max(1.5rem, 24px)`, and a container query cannot read a
+   custom property, so `(min-height: 48px) and (min-height: 3rem)` is how
+   `max()` is spelled with nothing but the plain query grammar. (GPT Sol
+   suggested `min-height: max(3rem, 48px)`, which means the same thing and needs
+   a browser that takes math functions in a query condition; the `and` form
+   needs nothing.) At a 20px root the slot is 30px and the rem half bites; below
+   16 the px half does. Get this wrong and a 20px reader is shown three 30px
+   targets in room for two — Sol's first finding, and the reason it is asserted
+   as an exact string rather than looked at.
+
+   **The default sits outside every query on purpose.** A browser without
+   container queries gets the most collapsed state — one control and the way to
+   the others — rather than a column hanging into the next paragraph. */
+.blk-gutter > * { display: none; }
+
+/* One slot. Everything fits only if there is one control; otherwise the slot is
+   the way to the rest. */
+.blk-gutter[data-controls="1"] > * { display: inline-flex; }
+.blk-gutter[data-controls="2"] > .blk-more,
+.blk-gutter[data-controls="3"] > .blk-more,
+.blk-gutter[data-controls="4"] > .blk-more { display: inline-flex; }
+
+/* **At one slot the way to everything beats the mark itself**, and this is the
+   one place Greg's *"promote the mark when it exists"* is walked back. It is
+   written down rather than left to be found.
+
+   Fable's arbitration put the mark in that slot at rest and swapped the "…" in
+   on hover. It reads beautifully and it cannot be reached: there is no hover on
+   a phone, and a `display: none` button is not in the tab order, so on every
+   noted one-line paragraph the chat button and the "?" were unreachable **by
+   keyboard and by touch alike** — not only for the orphaned notes the plan had
+   named. And the rule that did the swapping was `(0,5,1)` against the count's
+   `(0,3,0)`, so it also forced the dot on at *every* capacity: at four slots
+   with four controls that is a fifth item in a four-slot box, hanging below its
+   own row — the exact bug this section exists to prevent. GPT Sol's first and
+   second findings on the built code, 2026-09-05, and the second is why the fix
+   is to delete rather than to scope.
+
+   So a one-slot noted row shows the "…", and the mark is one press behind it.
+   The note is not lost to the eye — `mark.cmt` paints the passage itself, in
+   the same `--highlight` this column uses — except for an *orphaned* note, one
+   whose quoted words were edited away, which draws nothing in the prose. On a
+   one-line paragraph that one now lives only behind the dot.
+
+   **The mark still leads the column everywhere it fits**, which is what Greg's
+   answer was about: at two slots it is the thing that shows, and the permalink
+   is what gives way. There is no `:has(.blk-cmt)` left in this section at all —
+   the count says everything the mark used to be asked to stand in for. */
+
+@container (min-height: 48px) and (min-height: 3rem) {
+  /* Two slots: the first control, and either the second or the way to it. */
+  .blk-gutter > :nth-child(1) { display: inline-flex; }
+  .blk-gutter[data-controls="2"] > * { display: inline-flex; }
+  .blk-gutter[data-controls="3"] > .blk-more,
+  .blk-gutter[data-controls="4"] > .blk-more { display: inline-flex; }
+  .blk-gutter[data-controls="2"] > .blk-more { display: none; }
+}
+
+@container (min-height: 72px) and (min-height: 4.5rem) {
+  /* Three slots: three controls are out, four are two and a dot. */
+  .blk-gutter > :nth-child(-n + 2) { display: inline-flex; }
+  .blk-gutter[data-controls="3"] > * { display: inline-flex; }
+  .blk-gutter[data-controls="4"] > .blk-more { display: inline-flex; }
+  .blk-gutter[data-controls="3"] > .blk-more { display: none; }
+}
+
+@container (min-height: 96px) and (min-height: 6rem) {
+  /* Four slots, which is every control there can be. */
+  .blk-gutter > * { display: inline-flex; }
+  .blk-gutter[data-controls="4"] > .blk-more { display: none; }
+}
+
+/* **State is visible; an affordance waits to be asked for.** The permalink and
+   an unused chat button are hidden until the pointer is on the row; a comment
+   marker, and a chat button on a block that already has conversations, are
+   there whether or not anyone is looking, because they are facts about the
+   article rather than buttons.
+
+   `opacity`, never `display: none`: a hidden element is not focusable, so this
+   would delete the gutter outright for a keyboard reader and every check done
+   with a mouse would look fine. `pointer-events` has to travel with the
+   opacity, or an invisible target grows in the gutter and eats the clicks. */
+.blk-permalink,
+.block-chat,
+.blk-help,
+.blk-more {
+  opacity: 0;
+  pointer-events: none;
+}
+tr:hover .blk-permalink,
+tr:hover .block-chat,
+tr:hover .blk-help,
+tr:hover .blk-permalink,
+tr:hover .block-chat,
+tr:hover .blk-help,
+tr:hover .blk-more,
+.blk-permalink:focus-visible,
+.block-chat:focus-visible,
+.blk-help:focus-visible,
+.blk-more:focus-visible,
+.block-chat.has {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Recessive on the row, full when it is the thing you are pointing at — the
+   ladder `.block-ref` used to have, kept. */
+tr:hover .blk-permalink { opacity: 0.6; }
+.blk-permalink:hover,
+.blk-permalink:focus-visible { opacity: 1; color: var(--highlight); }
+
+/* Copying failed, and the reader is told rather than left with a tick that
+   means nothing. The title says what to do instead.
+
+   `tr:hover` is in the selector because without it this loses: `tr:hover
+   .blk-permalink` above is (0,2,1) against this rule's (0,2,0), so the alert a
+   pointer failure produces would have been drawn at 0.6 — dimmed, on the one
+   row the reader is looking at, in the one state that needs to be seen. Found
+   by reading specificity rather than by looking, which is the only way it could
+   be: it is a wrong *opacity*, not a missing element. GPT Sol, 2026-08-31. */
+.blk-permalink.failed,
+tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
+
+/* **On a touch device there is no hover, so an affordance revealed by hover
+   does not exist.** This stylesheet has shipped that bug twice — once for
+   `.block-chat` and once for `.block-id` — and both times a desktop-Chrome
+   harness said everything was fine, because `(hover: none)` never matches
+   there. So the permalink is decided here rather than by omission.
+
+   **One number for all three**, since the "?" arrived. The chat button was 0.45
+   and the permalink 0.35, which was accretion rather than a hierarchy — two
+   rules written months apart — and two weights inside one small group read as a
+   mistake rather than as a hierarchy: the eye landed on the brighter glyph
+   before it landed on the prose. One number makes the line read as a single
+   small mark, which is what it is. (It was written against the 2 × 2 pad, where
+   the imbalance was left-right; in a column it is top-bottom, and the argument
+   is the same one.)
+
+   **And the number is 0.653, which is exactly 3:1 against the page.** These are
+   icon-only controls that are permanently visible here, so WCAG 2.2's 1.4.11
+   applies to them, and the 0.35 this file carried for a day was **1.65:1** —
+   short by a wide margin. The arithmetic, from the tokens rather than from a
+   screenshot: `--page` is `oklch(0.145 0 0)` and `--ink-faint` is
+   `oklch(0.63 0 0)`; both are achromatic, so linear-light sRGB is `L³` and that
+   *is* the relative luminance, and `opacity` composites in gamma-encoded sRGB —
+   which the pixels confirm to the digit (0.35 predicted 54.4 and Chrome drew
+   54; 0.653 predicted 92.9 and drew 93).
+
+   **Why not 4.5:1, and this is the part not to "round up to be safe".** The
+   gutter's grammar is that the reader's own mark carries the weight and the
+   affordances do not. The bookmark's luminance lead over them is 2.72:1 at
+   0.35, **1.49:1 at 0.653 — plus its hue, which the affordances have none of**,
+   1.00:1 at the 0.868 that buys 4.5:1, and *inverted* above that. So 0.868 is
+   the point where the reader's mark stops leading and the buttons begin to
+   outshine it. 0.653 is not the least we can get away with: it is the compliant
+   setting the grammar survives, and the next step up is the one that breaks it.
+
+   **Two shortfalls left in deliberately, recorded rather than discovered.**
+   Both are known and neither was worth its cost, in the same spirit as the
+   22 × 15 target that stood for a month before Greg asked:
+
+   1. **1x: 2.34:1.** A 12px lucide glyph draws a 1px stroke that never covers a
+      whole device pixel on a 1x screen, so the rendered peak falls short of the
+      nominal ratio. The one-line remedy is `.blk-gutter svg { stroke-width: 2.5 }`
+      in this block, measured at 3.01:1 at 1x, 2x and 3x. Not taken: it buys the
+      ratio only on 1x `(hover: none)` hardware — old Android tablets, since a 1x
+      touch laptop has a trackpad and does not match this query — and costs about
+      a quarter more ink on every iPad, every row.
+   2. **A tinted row: 2.77:1.** `td.text.opaque` (media and captions) paints
+      `--muted` and `tr.row-active td.text` paints `--panel`, and the ratio is
+      quoted against `--page`. Alpha partly rides a lighter background up, which
+      is the argument that killed the alternative of writing this as a flat grey:
+      a flat `oklch(0.478 0 0)` is the same 3:1 over the page and drops to
+      **2.46:1** over `--muted`, where 0.653 holds 2.77.
+
+   **`.block-chat.has` is untouched by this and must stay so**: it is *state*,
+   not an affordance, and its `opacity: 1` and `--chat-mark` win here on
+   specificity (0,2,0 against 0,1,0) rather than by being written below. A block
+   that already has a conversation goes on saying so at full strength, in blue.
+   Nothing in this block may set `color`, or that quietly stops being true —
+   `tests/gutter-target-size.test.ts` says so.
+
+   docs/plans/260904b-… § The touch contrast has the tables, the crops and the
+   option held in reserve: deleting this block altogether so touch inherits the
+   desktop grammar. */
+@media (hover: none) {
+  .blk-permalink,
+  .block-chat,
+  .blk-help,
+  .blk-more {
+    opacity: 0.653;
+    pointer-events: auto;
+  }
+}
+
+/* The reader's mark. `--highlight` is exactly what `mark.cmt` paints the
+   passage with, so the gutter and the words underline the same fact.
+
+   `pointer-events: auto` because the container above is `none` and this is the
+   one slot with no reveal rule to hand it back — it is always visible, so it was
+   the one that would have shipped un-clickable. */
+.blk-cmt { color: var(--highlight); opacity: 0.75; pointer-events: auto; }
+.blk-cmt:hover,
+.blk-cmt:focus-visible { opacity: 1; }
+.blk-n {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+/* **What "…" opens: this same column, unfolded over the rows below it.**
+
+   Not a second panel with a second copy of the controls — one copy, one set of
+   handlers, and the only thing that changes is how much of it is drawn. A
+   duplicate would be a second place for the chat button to drift out of step
+   with the first, which is the failure this file has already had once (see the
+   postmortem named in § the gutter).
+
+   It overhangs, and that is the one place the row-boundary rule is deliberately
+   broken. The difference is consent: an overhang the reader has just pressed a
+   button to produce, that closes on Escape, on choosing anything, and on a press
+   anywhere else, is a menu; an overhang that is simply always there is a control
+   stealing hits from a paragraph nobody was pointing at.
+
+   **It covers gutters, never prose.** The column is one 24px slot wide and the
+   text starts `--blk-gutter-x` + a slot to the right of it, so what is behind
+   the panel is the blank gutter of the next paragraph or two.
+
+   `container-type: normal` because size containment means "your height does not
+   depend on your contents", which is exactly what has to stop being true. The
+   height goes back to `auto` in the same rule; leaving containment on would
+   compute the unfolded column as zero. */
+.blk-gutter[data-open] {
+  container-type: normal;
+  /* Released from the box the query measured: down the page from where the
+     column starts, as far as its contents. `bottom: auto` is the half that is
+     easy to forget — with both insets still set, `height: auto` would keep the
+     old box and the extra slots would simply overflow it. */
+  bottom: auto;
+  height: auto;
+  align-content: start;
+  /* Above the rows it covers. Every gutter is positioned and none of the others
+     names a level, so without this the *later* rows' gutters paint over the open
+     panel — they come after it in the document and that is the whole rule.
+     GPT Sol's sixth finding, 2026-09-05. */
+  z-index: 3;
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  /* **`content-box` is what makes the sentence after it true.** Everything here
+     is `border-box`, so with an explicit one-slot `width` the border would eat
+     into the content and leave a 22px box holding a 24px grid track — which
+     overflows rather than shrinking, so it *looks* right and the reason is
+     false. GPT Sol, 2026-09-05. Switching this one box to `content-box` keeps
+     the slots at 24, grows the painted box by the border instead, and the
+     negative margin puts it back over the column it came from. */
+  box-sizing: content-box;
+  margin: -1px;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.35);
+  pointer-events: auto;
+}
+/* Everything, at full strength, whether or not the pointer is still on the row —
+   the reader has walked away from the row to reach the panel, and a column that
+   fades as you approach it is a column you cannot use. */
+.blk-gutter[data-open] > * {
+  display: inline-flex;
+  opacity: 1;
+  pointer-events: auto;
+}
+/* A heading's box is bottom-aligned and starts at the top of the cell, so
+   without this the panel unfolds *upward* over the paragraph before it — Sol's
+   sixth finding again, and the reason the two anchors are written out rather
+   than left to the earlier rule's specificity, which is higher than the
+   attribute selector above. */
+td.text.kind-heading .blk-gutter[data-open] {
+  top: var(--blk-top);
+  bottom: auto;
+  align-content: start;
+}
+
+.blk-gutter > *:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------- the paragraph's door -- */
+/* What is left that is specific to the chat button. Its box, its reveal and its
+   touch rule are § the gutter's above, shared with the other two slots.
+
+   The touch rule up there is the one this button already had, and it is worth
+   knowing why it existed: every way of reaching this button was a pointer state
+   — `tr:hover`, `:focus-visible`, or the block already having a conversation —
+   and a finger produces none of them, so the door into chat was shut on exactly
+   the device Greg was reading on. Found by reading the stylesheet rather than by
+   looking at the page, and it could only have been found that way: the harness
+   is a desktop Chrome, where `(hover: none)` never matches. */
+
+/* A block that already has conversations says so whether or not you are
+   hovering it — the only affordance a whole-block anchor gets, since it draws
+   no mark in the prose. */
+.block-chat.has { color: var(--chat-mark); }
+.block-chat:hover { color: var(--highlight); }
+.block-chat-n {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+/* ------------------------------------------------------ one press for help --
+   The "?" — Greg's *"hey, I don't understand. Tell me more"* in a single press.
+   Everything about its box, its reveal and its touch rule is § the gutter's
+   above, shared with the other three; what is here is the one thing it does not
+   share, which is what it turns when you point at it.
+
+   `--highlight` rather than `--chat-mark`: the reader is the one asking, and
+   this is their own gutter. The chat button's colour is reserved for the fact
+   that a conversation *exists*, which is the one thing in this column that is
+   about what the machine has produced rather than what the reader has done. */
+.blk-help:hover { color: var(--highlight); }
+

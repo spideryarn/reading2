@@ -58,7 +58,7 @@ Then the residue, which is why this page exists:
   *[`tests/modes-that-start-themselves.test.tsx`](../../tests/modes-that-start-themselves.test.tsx)
   for the modes already in it; nothing for a new one.*
 - **The band's chrome**: the scroller is documented in
-  [`styles.css`](../../src/web/styles.css) § mode band. A `.band-head` title row is **optional, and
+  [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § mode band. A `.band-head` title row is **optional, and
   the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because
   the Dock at the foot of the page is already saying it (Greg: *"I think we can rely on the bottom
   bar to tell us what mode we're in"*). Add the row only if you have something else for it — a

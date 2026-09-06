@@ -1,0 +1,436 @@
+/* shell.css — the frame around the article: `body` and `.reader`, the loading
+   and error states, the article's facts list, and the two sticky bars at the
+   top — Masthead.tsx, and the controls bar in App.tsx.
+
+   It spends the geometry tokens defined one file above. The only file that
+   redefines them afterwards is narrow-window.css, which is near the end of the
+   order for exactly that reason. */
+
+/* --------------------------------------------------------------- shell ----
+   `min-width: max-content` is load-bearing and does NOT do what it looks like.
+   `position: sticky` is clamped to its *containing block*, so a sticky element
+   whose containing block is exactly as wide as itself has a sticky range of
+   zero — it is declared sticky and never moves. That is what used to happen to
+   .masthead and .controls: both are viewport-wide, their containing block was
+   body at viewport width, and so they scrolled away horizontally despite
+   saying `left: 0`. Meanwhile `thead th.pin-left` pinned perfectly from a
+   materially identical declaration, purely because *its* containing block is
+   the table, which is wider than the viewport. Widening this element to the
+   content's max-content width is what gives the bars somewhere to slide.
+   Diagnosed by spideryarn2-c1, 2026-08-25; written up in
+   docs/reusable/css-sticky-containing-block.md. */
+.reader {
+  /* **Px, not rem, and that is the point rather than a style choice.** It was
+     `1.5rem` against `SPINE_W = 24` in layout.ts, which are the same width only
+     at a 16px root — and nothing here locks the root font size. At a 20px root
+     CSS painted 30px of rail while the layout arithmetic subtracted 24, so the
+     table was 6px wider than the fit believed. The rail is a term in pixel
+     arithmetic (the column widths, `minWidth`, and the two breakpoints at the
+     end of this file), so px is the unit it belongs in. GPT Sol, 2026-08-28. */
+  --spine-w: 12px;
+  /* **One cell of the prose gutter, square** — § the gutter, and
+     `BlockGutter.tsx` for what goes in it. Everything else about the gutter's
+     size is arithmetic on this one number: the grid's one column is one of
+     these, the row floor is one of these, the cell's left padding below is one
+     plus its inset, and the container queries in § the gutter are written in
+     multiples of it (twice over, since a query cannot read a custom property).
+
+     **`max()`, and the px half is the whole point.** WCAG 2.5.8 asks for a
+     24 × 24 CSS-pixel target, and `1.5rem` is that only at a 16px root — it is
+     18px at the 12px root a reader can choose in their browser's settings, and
+     this app explicitly supports other roots (`fitView` takes `rootFontPx`, and
+     tests/layout.test.ts asserts 12 and 20). So the floor is the standard's own
+     unit and the rem is what grows past it: a reader who has chosen larger type
+     gets a larger target, and nobody gets a smaller one. GPT Sol's stage 1
+     review, 2026-09-04, and it was commit-blocking — the claim in every comment
+     around here was true at one root out of three.
+
+     **`SLOT_MIN_PX` and `BLK_SLOT_REM` in layout.ts are copies of these two
+     numbers**, because the lone-column cap has to know how wide the gutter
+     actually is at a given root and CSS cannot tell it. `tests/gutter-target-size.test.ts`
+     reads this declaration and fails when they disagree. */
+  --blk-slot: max(1.5rem, 24px);
+  /* **The gutter's one column, and nothing else** — the inset below is
+     separate. One since 2026-09-05: the bookmark used to have a column beside
+     the line, and it is now *in* the line, at the top of it (§ the gutter). The
+     second column was 24px of margin on both sides of every article, which is
+     what Greg asked for back: *"especially on mobile we want the margins either
+     side of the text to be minimal, to maximise the space we have for the
+     text."* */
+  --blk-gutter-w: var(--blk-slot);
+  /* How far the gutter sits from each edge of the cell's left padding. */
+  --blk-gutter-x: 0.35rem;
+  /* The reading cell's own horizontal padding — the gutter's column on the left
+     (§ the gutter) and an ordinary breathing space on the right. Named because
+     two rules need the same two numbers: `td.text` sets them as padding, and
+     the centred masthead (§ plain, centred) insets itself by them so the title
+     starts on the same pixel as the first line of the article under it.
+
+     **The left one is the gutter's column and nothing else, so it is computed
+     from it rather than restated.** It was `2.1rem` for a one-icon-wide column
+     until 2026-09-04 and then `3.7rem` for the pad, which was correct and was
+     three numbers that had to be kept in step by hand — the same trap `--blk-top`
+     below exists to close. Written as `calc()`, the icons cannot touch the prose
+     however the slot moves, and the px floor above flows through for free: 35.2px
+     at a 16px root, 32.4 at 12, 44 at 20 — one whole slot less than the pad's,
+     which is 24px at the roots where the px floor holds and 30 at 20, where the
+     rem wins. (It said "24px at every root" for an hour; GPT Sol did the
+     multiplication, 2026-09-05.) That is the prose's half of the day.
+     **`proseAloneMaxPx` in layout.ts is a fact about this number**, and goes
+     stale the moment it moves. */
+  --text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2);
+  --text-pad-r: 1.4rem;
+  /* **How much horizontal room the mode band takes from the table**, set inline
+     in pixels by App from `fit.modeW`. Declared here so every rule below can
+     add it unconditionally: `+ 0px` is a no-op, which is what makes the default
+     mode cost nothing rather than needing a second set of rules.
+     See § mode band at the end of this file.
+
+     It is ZERO in two cases, not one, and the second is easy to misread as a
+     bug: the table-of-contents mode, where there is no band — and **a narrow
+     window, where there is a band and it takes no room from the table because
+     it covers it instead** (§ a narrow window). So `--mode-w: 0` does not mean
+     "no band is open"; nothing may infer that from it. The name is the width it
+     costs, not the width it is. */
+  --mode-w: 0px;
+  /* `--safe-left` follows the spine, which is fixed to the left edge of the
+     *screen* and therefore starts inside the notch in landscape unless it is
+     pushed clear. `--safe-right` has no rail behind it and is here only so the
+     last column does not run under the far corner. */
+  padding-left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+  padding-right: var(--safe-right);
+  /* min-width is set inline, in pixels, by App — see the note above. */
+}
+/* One rail width, since 2026-08-26: the labelled 13rem form is gone and the
+   spine is always the collapsed strip — see Spine.tsx. Mirrors SPINE_W in
+   layout.ts; change both together, and `tests/spine-width.test.ts` is what
+   notices when you don't. Halved from 24px on 2026-08-28 —
+   docs/plans/260828ay-spine-rail.md. */
+.reader.spine-on { --spine-w: 12px; }
+.reader.spine-off { --spine-w: 0px; }
+
+/* **The status-bar strip is nobody's, so the reading view claims it.**
+
+   `viewport-fit=cover` lays the document across the whole physical screen and
+   every piece of chrome adds back the edge it faces (§ tokens). The controls
+   bar faces this one and adds it as `top: var(--safe-top)` — it *starts* below
+   the clock, which is right — so `[0, --safe-top)` belongs to whoever is behind
+   it, and behind it is the article.
+
+   The masthead was covering that, incidentally rather than deliberately: its
+   `padding: calc(1.25rem + var(--safe-top)) …` paints `--page` up into the
+   inset, and it is the top of the page until you scroll. So the strip was
+   covered exactly while nothing was moving, and the two states where something
+   is:
+
+    - **A mode band covering the article** (§ a band with no room), where the
+      masthead is `display: none` and 59px of prose scrolls along the top of the
+      screen above a panel that is supposed to be covering it. Greg, 2026-09-03,
+      on the installed app: *"Most of the modes don't display correctly any more
+      on mobile. When activated, they occlude the text (which you can see
+      scrolling behind, peeking out at the top and bottom."*
+    - **Plain and Hierarchy, once the masthead has scrolled away** and the bar
+      has stuck. Same strip, same prose, and it was there first.
+
+   One backstop answers both, and it is a backstop rather than a taller bar for
+   three reasons: it changes no layout, it does not need to know whether a
+   sticky element is currently stuck — which CSS cannot ask — and it is outside
+   `.controls`, which is `overflow: auto hidden` at ≤731px and would clip a
+   pseudo-element of its own. GPT Sol proposed it over the taller bar this was
+   written as first, 2026-09-03. An offset `box-shadow` was the other candidate
+   and is wrong for an arithmetic reason worth keeping: it leaves a gap whenever
+   `--safe-top > --bar-h`, which is 59 against 44 on the device in question.
+
+   **z-index 39 is the whole of its correctness**: over the article and the
+   table head, under the controls bar (40), the band (44), the spine (45), the
+   dock (96) and every dialog. `--page` is the bar's own background and the
+   masthead's, so where it overlaps the masthead's inset padding it is
+   invisible.
+
+   **Zero-height on every machine we develop on**, which is why nobody saw the
+   hole and why this rule cannot be checked by looking —
+   `scripts/safe-area-check.ts` is how, and
+   docs/postmortems/260903f-the-mode-band-stopped-short-of-the-notch.md is why.
+   `.reader::after` is the overflow fade, below; this is the other one. */
+.reader::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--safe-top);
+  background: var(--page);
+  z-index: 39;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-reading);
+  font-size: 1rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.loading, .error {
+  padding: 3rem;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------- header --
+   Three stacked layers, each with a fixed sticky offset so they never collide:
+   the masthead scrolls away, the controls pin at 0, the table head pins below
+   the controls, and a gist cell's sticky content pins below both. Change one
+   height and you must change the offsets under it.  */
+/* The table can be wider than the viewport, so the PAGE scrolls horizontally
+   (an inner overflow-x container would force overflow-y to `auto` too, which
+   would break every vertical sticky below). These bars pin to the left so they
+   don't drift away when you scroll right. */
+.masthead {
+  position: sticky;
+  /* Shifted clear of the mode band, along with the controls bar below it.
+     Both are `100vw`-wide sticky bars, so without the `--mode-w` term the band
+     would paint over their left end — and what it would cover is the article's
+     own title, which is the one thing on this page you would notice missing. */
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
+  background: var(--page);
+  /* `--safe-top` because this is what sits at y=0 before you scroll, and in the
+     installed app y=0 is under the clock. It is added to the padding rather
+     than to a `top`, so the title still scrolls away completely — a masthead
+     that stopped `--safe-top` short of the edge would leave a band of page
+     colour behind it that nothing ever covers. */
+  padding: calc(1.25rem + var(--safe-top)) 1.5rem 0.9rem;
+  /* Room for the corner wordmark, but only when there is not already room.
+     This bar starts at `left: --spine-w + --mode-w`, so the logo reaches
+     `--logo-w` minus that offset into it; once a mode band is open the term is
+     negative and the ordinary 1.5rem wins. That is the whole mechanism — see
+     HomeLogo.tsx for why the corner is otherwise free.
+
+     The `+ 1.5rem` is not slack. Without it the title starts at exactly the
+     wordmark's right edge, which does not overlap and still reads as broken:
+     it is the ordinary gutter this bar has everywhere else, kept rather than
+     eaten. */
+  /* **Named, because the title has to be placed against them.** This bar is
+     asymmetric — the wordmark reserves the left, the Feedback button the right
+     — and § the title over the column has to undo that asymmetry to land the
+     title on the prose's own left edge. Two declarations reading one number
+     each, rather than the arithmetic being written out twice.
+     `.controls` below still carries the same two expressions of its own: it
+     needs the same numbers here and *different* ones on a phone (§ a narrow
+     window gives it a 0.75rem right gutter and this bar 1rem), so one shared
+     pair would be a claim that is false at the width it matters most. */
+  --masthead-pad-l: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
+  padding-left: var(--masthead-pad-l);
+  /* And the same again on the other side, for the Feedback button. Simpler
+     than its mirror, deliberately: both bars are *positioned* at
+     `left: --spine-w + --mode-w`, so the wordmark only reaches into them by
+     what is left after that — while nothing insets them from the right but
+     `--safe-right`, which the button sits inside too. So the button reaches
+     exactly `--feedback-w` in, and there is nothing to subtract.
+     FeedbackButton.tsx § The bars have to reserve the space. */
+  --masthead-pad-r: calc(var(--feedback-w) + 1.5rem);
+  padding-right: var(--masthead-pad-r);
+}
+
+.masthead-inner { max-width: 62rem; }
+
+h1 {
+  margin: 0;
+  font-family: var(--font-reading);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  /* Article titles are long and this one wraps often; balancing evens the
+     lines rather than leaving one word stranded on the second. */
+  text-wrap: balance;
+}
+
+/* Title and the disclosure control on one line, the control pushed to the far
+   right of the *inner* width rather than the window's, so it sits at the end of
+   the measure instead of stranded across an empty 1600px. */
+h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight); }
+
+/* The chevron. `align-self: center` rather than the baseline the flex row
+   otherwise imposes, because an icon-only button has no text baseline worth
+   aligning; the inner flex centres the SVG in the circle. Icons are Lucide —
+   docs/project/icons.md. */
+/* The facts line: byline, source, and the article's measurements. Separators
+   are drawn by ::before on every span after the first, so a missing byline or
+   siteName can't leave a stranded interpunct. */
+.facts {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+.facts span + span::before {
+  content: "·";
+  margin: 0 0.45rem;
+  opacity: 0.6;
+}
+
+/* `.about` was here: the provenance list, first behind the masthead's ▾ and
+   then in the bottom drawer. It is gone because the panel is — the details are
+   a page of their own now, Metadata.tsx, styled with Tailwind utilities like
+   the rest of the chrome (web-client.md#tailwind-and-shadcn-components).
+   docs/plans/260825e-metadata-page.md. */
+
+/* How this article was made, when the answer is not "a web page" — see
+   Masthead.tsx. Deliberately the same size and colour as `.facts` rather than a
+   warning: it is a statement about provenance, and dressing it as an alarm
+   would make a checked PDF look broken. The scan wording carries its own weight
+   without any help from the colour.
+
+   **Not `.provenance`**, which this was for a few hours. The name was taken at
+   the time: there was a `.provenance` chip further down this file — monospace,
+   in a dashed box, right-aligned, holding the tree version — and being declared
+   later it simply won. That chip went on 2026-09-05 with the rest of the
+   controls bar, so the collision is gone and the name is free; the class is
+   still not worth reclaiming, since `.source-note` says what this is. The masthead
+   line came out as a debug-looking box beside a sans-serif facts line, and no
+   test could see it. A Sonnet subagent driving Chrome caught it, by reading the
+   *computed* styles rather than by looking at the screenshot: 10.88px Geist
+   Mono in a dashed border where the rule above it says 0.82rem sans, no border.
+   Reading the pixels rather than the picture is the whole reason that pass is
+   worth doing (docs/project/browser-testing.md). */
+.source-note {
+  margin: 0.35rem 0 0;
+  max-width: 48rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+
+/* A block the model admitted it could not fully read — src/pdf-read.ts writes
+   the class, and the ⟦illegible⟧ markers are in the text itself. The rule is
+   here rather than in tokens.css because it is article content, not chrome.
+
+   A left border rather than a background wash: the search and comment
+   highlights already own washes, and a third one competing with them would
+   make a page with all three unreadable (docs/project/search.md). */
+.pdf-uncertain {
+  border-left: 2px solid var(--ink-faint);
+  padding-left: 0.75rem;
+  opacity: 0.92;
+}
+
+.root-gist {
+  margin: 0.55rem 0 0;
+  max-width: 48rem;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  font-style: italic;
+}
+
+.controls {
+  position: sticky;
+  /* **The bar moves by `transform`; everything pinned under it moves by `top`.**
+
+     A transform only moves the paint, where animating a sticky element's own
+     `top` re-runs the stickiness constraint every frame. Everything below the
+     bar is either `position: fixed` (the spine, the band, the fade) or a sticky
+     element whose `top` is simply a different number (the table head), so `top`
+     is right for those and a transform is right for this one.
+
+     Verified 2026-08-27 with transitions disabled: switching `--bar-bottom` to
+     `0px` gives `matrix(1, 0, 0, 1, 0, -44)` and a `getBoundingClientRect().top`
+     of -44, **with no scroll event at all** — which is the case that matters,
+     because the `:focus-within` rule in § a small device brings the bar back for
+     a keyboard reader who is not scrolling.
+
+     **Do not trust a browser measurement of this without turning the transition
+     off first.** An earlier version of this comment asserted that transforms
+     were inert on this element and could not be used, and a later one asserted
+     that a sticky element will not re-position until the next scroll. Both were
+     wrong, and both came from the same place: the measuring tab is never the
+     frontmost window, and **a CSS transition does not advance in a hidden tab**,
+     so `getComputedStyle` returns the value the property started from however
+     long you wait. Every reading looked stable and self-consistent. GPT Sol
+     flagged the first claim as under-evidenced before the second one was made.
+     docs/project/browser-testing.md § a hidden tab.
+
+     `getBoundingClientRect` includes transforms, so `stickyOffset()` in
+     scroll.ts reads a hidden bar's `bottom` as `--safe-top` and needs no
+     special case — it measures the bar rather than recomputing the token.
+
+     **`top` and the transform read different tokens, and that is the fix rather
+     than an inconsistency.** `top: var(--safe-top)` pins the bar below the
+     clock. The transform cannot be derived from `--bar-bottom` any more: that
+     token falls to `--safe-top` when the bar hides, which is right for
+     everything pinned *under* the bar and would move the bar itself only by its
+     own height — parking it inside the status-bar strip rather than off the top
+     of the screen. `--bar-hide` carries the bar's own travel, `--bar-h +
+     --safe-top`, and both tokens switch together in § a small device. See the
+     note beside `--bar-hide` in § tokens. */
+  top: var(--safe-top);
+  transform: translateY(var(--bar-hide));
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
+  z-index: 40;
+  height: var(--bar-h);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 1.5rem;
+  /* Same expression as .masthead above, and for the same reason. Both bars are
+     inset by the spine, so both need it, and it has to be the same number in
+     both or the title and the granularity pills stop lining up. */
+  padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
+  /* And the same again on the other side, for the Feedback button. Simpler
+     than its mirror, deliberately: both bars are *positioned* at
+     `left: --spine-w + --mode-w`, so the wordmark only reaches into them by
+     what is left after that — while nothing insets them from the right but
+     `--safe-right`, which the button sits inside too. So the button reaches
+     exactly `--feedback-w` in, and there is nothing to subtract.
+     FeedbackButton.tsx § The bars have to reserve the space. */
+  padding-right: calc(var(--feedback-w) + 1.5rem);
+  background: var(--page);
+  border-bottom: 1px solid var(--rule-strong);
+  font-family: var(--font-ui);
+  transition: transform 0.18s ease;
+}
+
+/* **There is no `.controls button` rule at all, and that is not an oversight.**
+   The granularity pills used to be styled from here, by a `.controls button`
+   block plus `:hover` and `.on`. They are shadcn `Toggle`s now, carrying the
+   PILL string in App.tsx, and Radix marks the on state with `data-state="on"`
+   rather than a class — so `.controls button.on` had stopped matching anything
+   at all, and the rest was being overridden a declaration at a time. So any
+   button ever put back in this bar states its own reset in full: there is
+   nothing here to inherit one from.
+
+   Two such buttons lived here until 2026-09-05 and both were deleted with the
+   rest of the bar (App.tsx § the controls bar): a `.linky` `auto`, and a
+   `.mode-close` `×`. `.linky` survives elsewhere and is still what it always
+   was — a shape, not a shared class; see `.cmt-dialog button.linky`. */
+
+/* A word in the bar that states rather than acts. **One consumer left**: the
+   read-only chip a visitor gets (PublicChrome.tsx § `ViewOnlyChip`), which
+   writes `mode on`. The chips it was designed alongside — the mode's name,
+   `fit`, `reading`/`outline` — all went on 2026-09-05, and it stays because a
+   visitor's footing is the one fact in this bar that outranks the controls.
+   Nothing to do with `.mode-band`, which is the middle column. */
+.mode {
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-left: 0.5rem;
+}
+
+/* `.provenance` was here — the dashed monospace chip in the controls holding the
+   tree's version, `margin-left: auto` so it sat hard right. Gone on 2026-09-05
+   with the glossary's and the quotes' provenance lines; App.tsx says why, at the
+   spot it used to occupy. Note the comment further up this file (§ `.about`)
+   still warns that `.provenance` is "taken" — it is not any more, but the reason
+   that class was the wrong name for a masthead list stands on its own. */
+

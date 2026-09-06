@@ -1,0 +1,990 @@
+/* referee.css — Referee mode's band and its four sub-modes: Criteria, Claims,
+   Mirror and Candidates (CriteriaPanel.tsx, ClaimsPanel.tsx, MirrorPanel.tsx,
+   CandidatesPanel.tsx), plus PlaceOnCriterion's colours where they are the
+   panel's rather than the dialog's.
+
+   The shell is mode-band.css and the placeholder lines are glossary.css's
+   `.gloss-quiet`, so what is here is only what this mode has and no other one
+   does. */
+
+/* -------------------------------------------------------- § referee mode ----
+   The mode for somebody who has been asked to peer-review the piece. The shell
+   is `.mode-band` above and the head is `.band-head`, unchanged; what is here
+   is the three things this band has that no other one does. See App.tsx
+   § RefereeBand and docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+
+   Everything else is borrowed on purpose rather than duplicated — `.band-head`
+   for the title row and `.gloss-quiet` for the placeholder lines — so this
+   section stays the size of what is genuinely new. */
+
+/* **The mode's own preamble — the notice and the scan — capped at 40% of the
+   band and scrolling inside it.**
+
+   Without this the mode was unusable at an ordinary window size, and had been
+   since the scan was wired. `.mode-band` is `position: fixed` with a computed
+   height and `overflow: visible`, so a child that does not fit is neither
+   scrolled to nor clipped: it is simply drawn past the bottom of the band and
+   off the screen, with nothing to say it is there. `.ref-panel` below carried
+   `min-height: 0` — every band's scroller does, or it refuses to shrink — so it
+   was the one child flexbox was willing to squeeze, and it went to **zero**
+   while the boxes above it kept their full content height.
+
+   Measured at 1280 × 720 on an article whose scan found **three** things, which
+   is a small result: head 41 + notice 214 + scan 386 + chips 46 = 687 in a
+   636px band. `.ref-views` started at y=700 in a 720px window, so the sub-mode
+   chips were themselves below the fold, and `.ref-panel` was `height: 0` with
+   321px of content in it. Criteria, Claims, Mirror and Candidates were all
+   unreachable, on every window shorter than about 1400px, and the referee had
+   nothing to scroll because there was nothing scrollable.
+
+   **40% is the number that keeps both halves honest.** The notice is 214px in a
+   400px band, so 40% of 636 = 254px shows all of it without scrolling at
+   1280 × 720 — a first-time referee still meets the confidentiality sentence
+   whole — while leaving `.ref-panel` 295px, which is a panel rather than a
+   sliver. Below that the notice scrolls, and it is still the first thing in the
+   box.
+
+   **Two other fixes were weighed.** A `min-height` on `.ref-panel` alone does
+   not work: nothing above it would give way, so the overflow would move rather
+   than go, and a band that overflows here draws over the dock instead of
+   scrolling. And making the notice collapsible was the most attractive of the
+   three, since after one reading it is 214px of chrome — but a layout bug is
+   not the place to reopen a product decision, so the cap shipped alone.
+
+   **Both boxes are collapsible now**, since 2026-09-02, and Greg asked for it
+   as a product change rather than as a layout fix: the notice opens on a press
+   and the scan opens by itself only when it found something. So the ordinary
+   first screen of this box is two lines rather than 600px, and everything above
+   still holds — the cap and the fade are what keep it honest on the visit where
+   a referee has opened both. The measurements above are of the *open* state and
+   are still the ones to design against. src/web/App.tsx § RefereeBand and
+   src/web/SourceScanNotice.tsx carry why a collapse here is not a dismissal.
+
+   `.ref-scan-list` keeps its own 14rem cap inside this one. Two nested
+   scrollers is not lovely, but the inner cap is what stops a hundred findings
+   from making this box's scrollbar meaningless, and it is the rule that was
+   already there. */
+.ref-brief {
+  /* Shrinkable, so that on a very short band this box gives way rather than the
+     panel; `.ref-panel`'s flex basis is 0, so all of the shrinking lands here. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40%;
+  overflow-y: auto;
+  /* **Overflow has to be discoverable**, and here more than anywhere: what is
+     below the fold in this box is the injection scan's findings. Measured in
+     Chrome on 2026-09-01, this scroller's `clientWidth` equals its
+     `offsetWidth` — the scrollbar is an overlay and takes no width, so a box
+     with 616px of content in 254px looks exactly like one that ends where it
+     stops. A trailing fade is the answer this file already gives twice — the
+     table that runs off the right edge
+     (`.reader:has(table.zoom.overflowing)::after`) and `.ctx-panel`'s own mask.
+     It is drawn whether or not there is anything below it, which is the price
+     of a rule that cannot ask. */
+  mask-image: linear-gradient(to bottom, black calc(100% - 1.1rem), transparent);
+}
+
+/* **The confidentiality notice, and the one rule about it is that it is not an
+   error.** Nothing has gone wrong: the referee is being told, in the past tense,
+   where this article's text has already been, and which manuscripts this mode is
+   for. So it takes `--surface-raised` and a plain rule, like
+   `.gloss-stale`, and specifically NOT `--highlight-ink`, the red of
+   `.gloss-error`. A red panel makes a person dismiss the sentence as chrome
+   they have seen before, which is the exact failure this notice exists to
+   avoid — and there is nothing to dismiss it with, because it is always here.
+
+   Wider measure than the panel's other text and a taller line height: it is a
+   paragraph somebody has to actually read, not a label. */
+.ref-notice {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.ref-notice p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+/* **The fact, as the control.** The whole line is the target rather than a 12px
+   chevron — Metadata.tsx's `Section` makes the same call — and it is `--ink`
+   rather than `--ink-soft`, because shut is this notice's ordinary state and
+   this sentence is then the only one on screen. Left-aligned text with the
+   chevron pushed to the end, so a two-line wrap still reads as a paragraph and
+   not as a menu item. */
+.ref-notice-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+.ref-notice-toggle > span { flex: 1; }
+.ref-notice-toggle svg { flex: none; margin-top: 0.2rem; }
+.ref-notice-toggle:hover { color: var(--highlight-ink); }
+.ref-notice-toggle:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Only when it is open: shut, the button IS the notice, and a gap under a
+   single line would read as a box with something missing from it. */
+.ref-notice-toggle[aria-expanded="true"] { margin-bottom: 0.45rem; }
+/* The disclosure line is for a different reader — somebody whose agreement
+   permits this — so it is separated rather than run on. */
+.ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
+/* **Outside the collapse**, so it is on screen whether the notice is open or
+   shut — it is the one sentence here in the future tense, about something the
+   next chip press would cause rather than something already done. Not
+   `--ink-faint` like the line above it: that one is a footnote for a reader who
+   has decided the notice does not apply to them, and this one is a warning
+   nobody has read yet. src/messages.ts § `REFEREE_CANDIDATES_REACHES_SEARCH`. */
+.ref-notice .ref-notice-ahead { margin-top: 0.45rem; margin-bottom: 0; }
+/* Only when the notice is open: the paragraphs now sit *under* the ahead line
+   (App.tsx says why), so the gap belongs between them rather than above it. */
+.ref-notice-toggle[aria-expanded="true"] ~ .ref-notice-ahead { margin-bottom: 0.45rem; }
+
+/* **The source scan.** src/web/SourceScanNotice.tsx, and it sits between the
+   confidentiality notice and the sub-mode chips because it belongs to the mode
+   rather than to a panel: a hidden instruction is a fact about the document.
+
+   Styled as a notice, not as an error, for the same reason `.ref-notice` above
+   is: most articles have nothing in them and the ordinary state of this box is
+   a sentence saying what was and was not checked. `.ref-scan-warn` takes full
+   `--ink` rather than a colour — *not checked at all* is neither a finding nor a
+   failure, and a red box would make a referee read it as one and dismiss it.
+
+   The list is capped and scrolls. `MAX_FINDINGS` is 100, and a badly built HTML
+   export really can produce that many; a band whose first screen is a wall of
+   navigation chrome is a band a referee stops reading, which is the failure
+   src/injection-scan.ts is most afraid of. */
+.ref-scan {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.ref-scan-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+/* The heading is the disclosure, and it carries the tooltip that says what the
+   scan is for and how much to worry — so the hit area is the whole row, and it
+   inherits the heading's own type rather than declaring a second one. The `h3`
+   stays an `h3`: the band's outline is the same open or shut. */
+.ref-scan-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+/* The chevron to the far end, so shut and open are tellable at the edge of
+   vision rather than by reading the row. */
+.ref-scan-toggle svg:last-child { margin-left: auto; }
+.ref-scan-toggle:hover { color: var(--ink); }
+.ref-scan-toggle:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.ref-scan-line {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.ref-scan-line + .ref-scan-line { margin-top: 0.4rem; }
+.ref-scan-warn { color: var(--ink); }
+/* The cap notice and the forgeability sentence: true, and not the thing being
+   read first. */
+.ref-scan-note, .ref-scan-blind { margin-top: 0.4rem; color: var(--ink-faint); font-size: 0.83rem; }
+
+.ref-scan-list {
+  margin: 0.45rem 0 0;
+  padding: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  list-style: none;
+}
+/* One block per finding, every field on its own line, because a referee reading
+   this is going to go and look at the source and needs the path and the words
+   separately. */
+.ref-scan-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+/* **Dimmed, never hidden.** The `ordinary` label is read off class names and is
+   therefore forgeable, so a labelled finding is sorted last and drawn quieter —
+   and it is still here, with its own words on screen. docs/project/security.md. */
+.ref-scan-item.explained { opacity: 0.7; }
+.ref-scan-kind { color: var(--ink); font-weight: 600; }
+.ref-scan-tag { color: var(--ink-faint); font-style: italic; }
+.ref-scan-where, .ref-scan-detail {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.81rem;
+  overflow-wrap: anywhere;
+}
+/* The words themselves, which is the thing the referee actually needs to see. */
+.ref-scan-text { color: var(--ink-soft); overflow-wrap: anywhere; }
+/* Why this one may be innocent — required on the type for a visible
+   instruction, and drawn so it cannot be read with the certainty hidden text
+   earns. */
+.ref-scan-caveat { color: var(--ink-faint); }
+
+/* The sub-modes. Deliberately the same shape as the summary panel's depth
+   pills and the quotes panel's order buttons, because it is the same gesture:
+   one of these is on, you press another, the panel below changes. The markup is
+   Diagram's — a `role="radiogroup"` of `role="radio"` buttons, each its own tab
+   stop and none of them handling a key — so the styling has to carry the
+   selected state on its own; see App.tsx § RefereeViews. */
+.ref-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.ref-view-btn {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.ref-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+/* Fill rather than a border change: the selected one has to be tellable from
+   the hovered one at a glance, and a border is the channel hover is already
+   using. */
+.ref-view-btn.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 600;
+}
+.ref-view-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The scroller. `.mode-band` is a fixed flex column from the controls bar to
+   the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`
+   child inside it — without one the panel's last rows sit below the bottom of
+   the band with no way to reach them, and it looks perfectly fine on a tall
+   window. The ideas panel shipped without one; see § ideas mode.
+
+   **`min-height` is `5rem` and not the usual `0`**, and the pair with
+   `.ref-brief`'s cap above is what makes this band hold at any height. `0` says
+   "squeeze me first", and flexbox obliged: with an unconstrained notice and
+   scan above, this panel was 0px tall on an ordinary 1280 × 720 window and
+   every sub-mode was unreachable. A floor on its own would only move the
+   overflow into the band, which clips nothing; a floor *plus* a shrinkable,
+   scrolling `.ref-brief` gives the band a child that can give way, so at 900 ×
+   337 — a 253px band — the brief drops to 86px and this keeps its 80. It still
+   overrides the `auto` that `min-height: 0` was there to override, so the
+   panel's own content never sets a floor of its own. */
+.ref-panel {
+  flex: 1;
+  min-height: 5rem;
+  overflow-y: auto;
+}
+
+/* **The explainer card, and the button in the header that brings it back.**
+   src/web/RefereeCard.tsx says what it is for; what matters here is that it is
+   inside `.ref-panel` and not in `.ref-brief`, so it scrolls away with the
+   sub-mode under it rather than eating the capped 40% the two undismissable
+   notices live in.
+
+   Quiet rather than loud: it is an explanation, not an alert, so it borrows the
+   surface the panel already uses and carries no accent colour of its own. A
+   card that shouted would make the confidentiality notice above it look
+   subordinate, which is the wrong way round.
+
+   **The width the copy is written against is this band's**, so the type is the
+   panel's small size. `.ref-how-list` was here and went with the four sub-mode
+   lines it styled, 2026-09-02 — those lines repeated the four chip cards
+   directly above the card. */
+.ref-how-card {
+  margin: 0.45rem 0.35rem 0.2rem;
+  padding: 0.45rem 0.55rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.ref-how-head { display: flex; align-items: baseline; gap: 0.4rem; }
+.ref-how-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ref-how-close {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  line-height: 1;
+}
+.ref-how-close:hover { color: var(--ink); }
+.ref-how-close:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.ref-how-p {
+  margin: 0.35rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ref-how-p b { color: var(--ink); font-weight: 600; }
+
+/* In the mode header beside the title, where `.band-head h2` has `flex: 1` and
+   pushes it to the right edge. Text rather than an icon: a `?` in a circle is
+   the affordance nobody presses, and the card it opens is two paragraphs that
+   change what the rest of the band means. */
+.ref-how-btn {
+  flex: none;
+  font: inherit;
+  font-size: 0.83rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.ref-how-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+.ref-how-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* --- Criteria, the first sub-mode. src/web/CriteriaPanel.tsx.
+
+   Nothing here paints a valence. Every swatch takes its colour from an inline
+   `--div-rg-*` / `--div-*` reference chosen by `valenceToken` in
+   src/web/valence.ts, so the ramp stays in styles/colourscales.css and this
+   file never learns what red means. The rules below are layout, and the one
+   thing they are opinionated about is that the rank, the words and the number
+   are all *text*: colour may never be the only carrier
+   (docs/project/colour-scales.md). */
+
+.crit { padding: 0 0.35rem 0.5rem; }
+
+.crit-new { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.35rem 0; }
+.crit-label { font-size: 0.83rem; color: var(--ink-faint); }
+/* The poles' two inputs and the criterion box. There was a scale `<select>` in
+   here until 2026-09-02, when the ramp became a property of the mode
+   (`?refscale=`) rather than of a criterion — CriteriaPanel.tsx says why. */
+.crit-text, .crit-poles input {
+  width: 100%;
+  font: inherit;
+  font-size: 0.91rem;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.35rem;
+}
+.crit-poles { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.crit-kinds { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.crit-kind-btn {
+  font: inherit;
+  font-size: 0.84rem;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.crit-kind-btn.on { color: var(--ink); border-color: var(--rule-strong); background: var(--panel); }
+.crit-kind-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.crit-kind-note { margin: 0; font-size: 0.83rem; color: var(--ink-faint); }
+
+.crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+.crit-preset {
+  font: inherit;
+  font-size: 0.81rem;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.35rem;
+  cursor: pointer;
+}
+.crit-preset:hover { color: var(--ink); border-color: var(--rule-strong); }
+
+.crit-run {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+/* **`aria-disabled`, not `:disabled`** — CriteriaPanel.tsx § the run button
+   says why the button stays hoverable and focusable while the form is
+   incomplete, and where its inertness actually lives. This rule is the whole of
+   what `:disabled` was doing for it. */
+.crit-run[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+
+.crit-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
+.crit-retry {
+  font: inherit;
+  font-size: 0.84rem;
+  background: none;
+  border: none;
+  color: var(--highlight);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* **What the tick does**, above the list. Claims says the same thing inside its
+   checkbox's own label; here the label is the criterion's words, so the sentence
+   has to live beside the list rather than in it. */
+.crit-how { margin: 0.25rem 0; font-size: 0.83rem; color: var(--ink-faint); }
+
+/* **The key**, shown only while a for/against criterion is switched on —
+   `TheKey` in CriteriaPanel.tsx says what it is for and why it tracks the mode's
+   ramp instead of naming red and green. The sign is printed at full ink because
+   it is the carrier; the swatch is decoration beside it. */
+.crit-key {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  margin: 0.25rem 0;
+  font-size: 0.81rem;
+  color: var(--ink-faint);
+}
+.crit-key-lead { color: var(--ink-faint); }
+.crit-key-end { display: inline-flex; align-items: center; gap: 0.2rem; }
+.crit-key-swatch { width: 0.7rem; height: 0.7rem; border-radius: 2px; }
+.crit-key-sign { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.crit-list { margin: 0; padding: 0; list-style: none; }
+.crit-row { border-top: 1px solid var(--rule); padding: 0.4rem 0; }
+.crit-head { display: flex; align-items: flex-start; gap: 0.3rem; }
+.crit-tick { display: flex; align-items: flex-start; gap: 0.3rem; flex: 1; cursor: pointer; }
+/* The tick takes the criterion's own hue where that hue is what the tick
+   actually draws — the same call `.srch-saved-tick` makes. The fallback is not
+   only for a row with no slot yet: a **for/against** criterion deliberately
+   sets no `--cat-rgb` at all, because its phrase marks are painted by direction
+   from the ramp and its categorical hue reaches only the paragraph bar and the
+   rail. A coloured tick there would be pointing at the wrong thing
+   (CriteriaPanel.tsx § `identityPaintsProse`). */
+.crit-tick input { margin-top: 0.15rem; accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+.crit-criterion { font-size: 0.91rem; color: var(--ink); }
+
+.crit-colour, .crit-del {
+  flex: none;
+  font: inherit;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-faint);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+}
+.crit-colour { width: 1.1rem; height: 1.1rem; background: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+
+.crit-picker { display: flex; flex-wrap: wrap; gap: 0.2rem; padding: 0.3rem 0; }
+.crit-swatch {
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgb(var(--cat-rgb));
+  cursor: pointer;
+}
+.crit-swatch.current { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.crit-swatch-auto {
+  font: inherit;
+  font-size: 0.81rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0 0.3rem;
+}
+
+.crit-meta { margin: 0.15rem 0 0.25rem; font-size: 0.81rem; color: var(--ink-faint); }
+
+.crit-results { margin: 0; padding: 0; list-style: none; }
+.crit-result { padding: 0.25rem 0; }
+/* The row the referee last pressed, so the panel and the ringed phrase in the
+   prose are visibly the same thing after a jump — the panel's half of
+   `mark.hit[data-hit-open]`. A rule down the side rather than a background,
+   because a background here would be a fifth thing wearing a colour in a panel
+   whose colours all already mean something. */
+.crit-result.on {
+  box-shadow: inset 2px 0 0 rgb(var(--hit-wash-rgb) / 0.8);
+  padding-left: 0.3rem;
+}
+.crit-jump {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+}
+/* **The rank leads, and it is large** — the plan's § 1. It is the first thing
+   in the row and the first thing in the accessible name. */
+.crit-rank {
+  flex: none;
+  font-size: 1.07rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  min-width: 1.1rem;
+}
+.crit-quote { font-size: 0.9rem; }
+
+.crit-valence {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.15rem 0 0 1.45rem;
+  font-size: 0.83rem;
+  color: var(--ink-faint);
+}
+.crit-valence-swatch {
+  align-self: center;
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}
+.crit-valence-words { color: var(--ink); }
+.crit-valence-number { font-variant-numeric: tabular-nums; }
+
+/* **The referee's own judgement beside the model's**, and the sub-list of the
+   ones the model never turned up. src/web/CriteriaPanel.tsx § `RefereeGap`.
+
+   There is no swatch and no ramp here on purpose. The line is four words about
+   direction on each side — colour would be a fifth carrier of something the
+   words already say, and docs/project/colour-scales.md wants the words first.
+   It is also the reason nothing in this block is coloured *by value*: a single
+   hue running between the two halves would be the one number the whole feature
+   refuses, drawn instead of printed. */
+.crit-gap {
+  margin: 0.15rem 0 0 1.45rem;
+  font-size: 0.83rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.crit-disagree { margin: 0.1rem 0 0 1.45rem; font-size: 0.83rem; color: var(--ink-faint); }
+
+/* Two sub-lists and not one, with two class names rather than a shared name and
+   a modifier — `Yours` in CriteriaPanel.tsx says why. They look identical on
+   purpose: the difference between them is the heading, which is the whole of
+   what each is claiming. */
+.crit-misses,
+.crit-unpaired { margin: 0.3rem 0 0; }
+.crit-misses-head,
+.crit-unpaired-head {
+  margin: 0 0 0.15rem;
+  font-size: 0.81rem;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule);
+  padding-top: 0.25rem;
+}
+.crit-unpaired-why { margin: 0 0 0.15rem; font-size: 0.79rem; color: var(--ink-faint); }
+.crit-miss-list,
+.crit-unpaired-list { margin: 0; padding: 0; list-style: none; }
+.crit-miss,
+.crit-unpaired-one { padding: 0.15rem 0; }
+/* Indented as the model's rows are, although there is no rank to indent past —
+   the two lists read as one column rather than as two shapes. */
+.crit-yours {
+  margin: 0.1rem 0 0 1.45rem;
+  font-size: 0.83rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.83rem; color: var(--ink-faint); }
+.crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.83rem; }
+
+/* --- Claims, the second sub-mode. src/web/ClaimsPanel.tsx.
+
+   What the paper says about itself, and where it takes each claim up.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2.
+
+   **There is deliberately nothing here that could carry a ranking.** No rank
+   badge, no count chip, no bar, no ordering affordance — the criteria panel's
+   `.crit-rank` has no counterpart, because a claim's place in this list is where
+   the paper makes it and there is nothing to number. If a future edit wants a
+   number on one of these rows, read § 2 of the plan first: a count of passages
+   is one glance from a ranking, and the ranking is what the review removed.
+
+   The empty state is the same weight as a full one — it is an answer about the
+   run, not a fault. */
+
+.clm { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
+
+/* What a row is and is not, above the button, because it is the thing a referee
+   is likeliest to read past: linkage, never adequacy. */
+.clm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+
+.clm-run {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.clm-run:hover:not(:disabled) { border-color: var(--ink-faint); }
+.clm-run:disabled { opacity: 0.6; cursor: default; }
+.clm-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
+.clm-retry {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.84rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Both of these are quiet lines rather than warnings: one says the paper has
+   moved since the run, the other says what the order means. Neither is a fault. */
+.clm-stale, .clm-order { margin: 0; font-size: 0.81rem; color: var(--ink-faint); }
+
+.clm-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.55rem; }
+.clm-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
+
+/* The claim in one line, and the paper's own sentence under it — the label and
+   the evidence that the paper said it, in that order. */
+.clm-claim { margin: 0 0 0.15rem; font-size: 0.91rem; font-weight: 600; color: var(--ink); }
+
+.clm-jump {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.clm-jump:hover .clm-quote { text-decoration: underline; }
+.clm-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.clm-quote { font-size: 0.88rem; color: var(--ink); }
+
+.clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }
+.clm-tick input { accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+
+/* **Not an error colour and not an error shape.** A claim the model found no
+   passage for is an ordinary answer about the run, and dressing it as a warning
+   is how it comes to be read as a finding about the paper. */
+.clm-none { margin: 0.2rem 0 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+
+.clm-passages { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+.clm-passage { padding-left: 0.5rem; border-left: 2px solid var(--rule); }
+.clm-why { margin: 0.1rem 0 0; font-size: 0.83rem; color: var(--ink-faint); }
+
+/* --- Mirror, the third sub-mode. src/web/MirrorPanel.tsx.
+
+   **The evidence label is text, and these rules must not be the thing that
+   carries it.** Two of the five remark kinds say on the row that no trial has
+   tested them, and that distinction is the honest core of the whole mode — so
+   it is a word, always rendered, and what is below only makes the word easier
+   to find. `[data-trial-tested="false"]` takes a dotted border where the tested
+   one takes a solid rule: a second channel for somebody scanning, never the
+   channel. docs/project/colour-scales.md, and the panel's own header. */
+
+.mir { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
+
+/* What the mode is, above the button, because it is the thing a referee is
+   likeliest to misread: this call is not given the paper. */
+.mir-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+
+.mir-run {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.mir-run:hover:not(:disabled) { border-color: var(--ink-faint); }
+.mir-run:disabled { opacity: 0.6; cursor: default; }
+.mir-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.mir-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
+/* **Not an error colour, and not an error shape.** An empty answer is the
+   commonest correct outcome this feature has; the sentence beside it is an
+   answer, so it reads like every other quiet line in a panel. */
+.mir-nothing, .mir-coverage {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+.mir-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.mir-remark { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
+
+.mir-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+}
+.mir-kind { font-size: 0.84rem; font-weight: 600; color: var(--ink); }
+.mir-evidence {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  font-size: 0.77rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+/* The one visual difference, and it is the second carrier rather than the
+   first — the words inside it already say which this is. */
+.mir-evidence[data-trial-tested="false"] { border-style: dashed; }
+
+.mir-jump {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mir-jump:hover .mir-quote { text-decoration: underline; }
+.mir-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.mir-quote, .mir-criterion { font-size: 0.88rem; color: var(--ink); }
+
+/* The referee's own sentence, and the passage under it — set apart from the
+   model's remark below, because on this panel who wrote which is the whole
+   point. */
+.mir-yours, .mir-passage {
+  margin: 0.15rem 0 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--rule);
+  font-size: 0.84rem;
+  color: var(--ink-faint);
+}
+
+.mir-placement { margin: 0.15rem 0 0; font-size: 0.84rem; color: var(--ink-faint); }
+.mir-placement-number { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+.mir-note { margin: 0.25rem 0 0; font-size: 0.88rem; line-height: 1.45; color: var(--ink); }
+
+.mir-evidence-note {
+  margin: 0;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.81rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+/* --- Candidates, the fourth sub-mode. src/web/CandidatesPanel.tsx.
+
+   **The shortlist sits above the transcript, and that is the layout decision
+   rather than a preference.** The research behind this sub-mode found that
+   people like chat and do worse with it on comparison tasks — and choosing
+   between reviewers is a comparison task. So the conversation is how the editor
+   steers and the list is what they read, which means the list must not be
+   something you scroll up a transcript to find.
+
+   **No ordinal, no score, no swatch on a candidate row.** Referee mode's first
+   rule is *no verdict, ever*, and a number beside a person's name is one glance
+   from a ranking of people. There is deliberately nothing here that could carry
+   one, and no sort control.
+
+   The tool strip reuses `.chat-tool*` above rather than restyling it: two
+   strips that looked different would say the two panels mean different things
+   by "searched the web". */
+
+.cnd { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.45rem 0.35rem 0.6rem; }
+
+/* What the sub-mode is, and whose question it answers — the thing an editor is
+   likeliest to misread, since every other sub-mode is the referee's. */
+.cnd-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-quiet { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
+
+/* **The one press that spends money**, and the line under it that says so.
+   `StartBrief` in CandidatesPanel.tsx says why this is a button rather than a
+   `useEffect`. Drawn like a real action — filled, full width, an icon that names
+   the web — because a quiet link would be the sub-mode looking broken until
+   somebody found it. */
+.cnd-start { display: flex; flex-direction: column; gap: 0.25rem; }
+.cnd-start-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.cnd-start-btn:hover { border-color: var(--ink-faint); }
+.cnd-start-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-start-note { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
+
+.cnd-list-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.cnd-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+/* How many names, not how good they are. A count of a list is not a score of a
+   person, and it is the number an editor actually needs: the shortlist has to
+   be deep enough to survive a 60–70% attrition rate. */
+.cnd-count { font-size: 0.81rem; font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+.cnd-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.cnd-row { border-top: 1px solid var(--rule); padding: 0.4rem 0 0; }
+.cnd-name { margin: 0; font-size: 0.91rem; font-weight: 600; color: var(--ink); }
+/* The affiliation is the model's claim and reads as one. */
+.cnd-affil { font-weight: 400; font-size: 0.84rem; color: var(--ink-faint); }
+.cnd-requirement { margin: 0.15rem 0 0; font-size: 0.86rem; line-height: 1.45; color: var(--ink); }
+.cnd-why { margin: 0.1rem 0 0; font-size: 0.83rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-sources { margin: 0.2rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.1rem; }
+.cnd-sources li { font-size: 0.83rem; }
+.cnd-sources a { color: var(--ink); }
+/* The real host beside the model's label, exactly as chat's citation chips do
+   it — the label is a search result's words, and this is where they lead. */
+.cnd-host { color: var(--ink-faint); }
+
+/* What the rules threw away. Quiet, but never absent when there is something to
+   say: a shortlist that silently shrank is the failure this whole panel is
+   built against. */
+.cnd-dropped { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
+
+/* The three sentences that are printed whatever the model said — what was not
+   checked, and what the list is skewed towards. Separated by a rule so they
+   read as the panel's own voice rather than as more of the answer. */
+.cnd-caveat {
+  margin: 0;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.81rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+.cnd-turns { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.cnd-turn { font-size: 0.88rem; line-height: 1.5; color: var(--ink); }
+.cnd-turn.user { padding-left: 0.5rem; border-left: 2px solid var(--rule-strong); }
+.cnd-asked { margin: 0; font-size: 0.86rem; color: var(--ink-faint); white-space: pre-wrap; }
+.cnd-stop {
+  margin-top: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  cursor: pointer;
+}
+.cnd-stop:hover { color: var(--ink); }
+.cnd-stop:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.cnd-composer { display: flex; flex-direction: column; gap: 0.25rem; }
+.cnd-box {
+  width: 100%;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+}
+.cnd-box:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-send {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.cnd-send:hover:not(:disabled) { border-color: var(--ink-faint); }
+.cnd-send:disabled { opacity: 0.6; cursor: default; }
+.cnd-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+

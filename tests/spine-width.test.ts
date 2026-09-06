@@ -50,12 +50,16 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCss } from "./helpers/stylesheets.js";
 import { GIST_MIN, MODE_MIN, PROSE_MIN, SPINE_W, fitView } from "../src/web/layout.js";
 
-const CSS_PATH = new URL("../src/web/styles.css", import.meta.url);
 const SCROLL_PATH = new URL("../src/web/scroll.ts", import.meta.url);
 
-const css = readFileSync(CSS_PATH, "utf8");
+/* The reading-view sheets as a set, concatenated in cascade order. One file
+   until 2026-09-06 and thirty-eight since, and the `spine-width-check` markers
+   below are matched against the query on the line after them, which the
+   concatenation preserves. tests/helpers/stylesheets.ts. */
+const css = readerCss();
 const scroll = readFileSync(SCROLL_PATH, "utf8");
 
 /**
@@ -223,7 +227,10 @@ describe("scroll.ts's SMALL_DEVICE is the same query as § a small device", () =
        drifted apart in the first place — is a failure rather than a shrug.
        GPT Sol, 2026-08-28. */
     const uses = cssCode.split(`@media ${literal} {`).length - 1;
-    expect(uses, `styles.css should use "@media ${literal} {" exactly once`).toBe(1);
+    expect(
+      uses,
+      `the reader stylesheets should use "@media ${literal} {" exactly once`,
+    ).toBe(1);
   });
 });
 
@@ -291,7 +298,7 @@ function enclosing(source: string, index: number): string[] {
 
 function coversRule(): { selector: string; gates: string[] } {
   const idx = cssCode.indexOf(FULL_WIDTH_BAND);
-  expect(idx, `no rule in styles.css declares ${FULL_WIDTH_BAND}`).toBeGreaterThan(-1);
+  expect(idx, `no rule in the reader stylesheets declares ${FULL_WIDTH_BAND}`).toBeGreaterThan(-1);
   expect(
     cssCode.indexOf(FULL_WIDTH_BAND, idx + 1),
     "more than one rule widens the band to the window; this check no longer knows which is which",
@@ -320,7 +327,7 @@ describe("the band covers the article on a fact, not on a width", () => {
     const width = gates.find((g) => /^@media/.test(g) && /max-width/.test(g));
     expect(
       width,
-      `styles.css widens the band inside ${width} — a width the stylesheet cannot make conditional on ?spine=0`,
+      `the reader stylesheets widen the band inside ${width} — a width the stylesheet cannot make conditional on ?spine=0`,
     ).toBeUndefined();
   });
 

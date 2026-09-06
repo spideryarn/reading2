@@ -1,0 +1,601 @@
+/* prose.css — the prose cell `td.text`, and everything the article's own HTML
+   renders as: reading typography and the vertical rhythm every gap in the
+   column is a multiple of, block ids, figures, callouts, content that cannot
+   reflow, and captions that arrived as paragraphs.
+
+   Its last section is called `outline` and is a **different feature** from
+   outline-mode.css further down the order: this one is the same table with the
+   text column switched off, and that one is the `.outln-*` panel in the mode
+   band. Same word, two things. */
+
+/* ------------------------------------------------------------------ text --
+   The article column. 17px/1.6 and a 65ch measure come from the original app's
+   typography research (styles/tokens.css) — 80 chars per line reads ~7% faster
+   but comprehends ~12% worse. The face is Geist, not the Georgia this line said
+   until 2026-09-05: `--font-reading` is `--font-sans` (tokens.css § fonts), and
+   the gutter's `left:` rule three thousand lines down depends on that, because
+   `ch` is measured in the face and weight the length is used at. The measure is applied to
+   .prose rather than by using .reading-column, because that class centres
+   itself and here the text is left-aligned in a table cell.  */
+/* Vertical rhythm. Every gap in this column is a multiple of --block-pad
+   (a QUARTER of --rhythm, styles/tokens.css — it was a third when this line was
+   written and the gap has come down twice since), so paragraph spacing and
+   heading spacing are related by arithmetic rather than by two people's taste on
+   two days. **Change the size of the gaps in tokens.css, not here** — every rule
+   below is a multiple of that one number, and they only stay in proportion if
+   nobody hand-picks a value.
+
+   One pad top and bottom, so the gap BETWEEN two paragraphs — which is two
+   pads, one from each row — is two. Padding rather than margin because these
+   are table cells and margins on a <td> do nothing. */
+/* No rule between blocks here. Every other column is a list of separate
+   answers, so a hairline between rows helps; this column is one continuous
+   article, and a line across it every paragraph cuts the prose into strips.
+   The vertical rhythm above already does the separating. The border-right
+   stays — that one divides this column from its neighbour, not paragraph from
+   paragraph. */
+/* **The gutter is one width at every window width. It was 5.2rem, then 2.1rem,
+   then two slots for a day, and it is now one slot — 35.2px at a 16px root, and
+   not a literal any more.**
+
+   83px of every prose row bought 64px of monospace block id that was invisible
+   until you hovered it. It became an icon column (BlockGutter.tsx) at 2.1rem —
+   this file's own number, promoted rather than invented: what the narrow window
+   had reserved for the chat button since 2026-08-27 — which is what let § a
+   narrow window stop hiding half of it.
+
+   **2.1rem bought a 22 × 15px target, and WCAG 2.5.8 asks for 24 × 24.** That
+   shortfall was recorded here as Greg's call rather than a tidy-up, because no
+   vertical arrangement of 24px targets fits a 39px one-line paragraph row. Greg
+   made the call on 2026-09-04 — bigger targets everywhere, desktop included —
+   and the first answer to the arithmetic was to stop stacking: a 2 × 2 pad, two
+   24px columns wide instead of four slots tall.
+   docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
+
+   **Neither the width nor the height outlived the day.** On 2026-09-05 Greg
+   asked for the line back, and then — when the line's price turned out to be
+   87.1px on every short row — for a "…" instead of a taller row. So the column
+   went back to one slot, the second column went with it, and this number came
+   down to 2.2rem: 35.2px at a 16px root, 32.4 at 12, 44 at 20. The prose has
+   those 24px back at every root but 20, where it has 30.
+   docs/plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md.
+
+   The width is still the hit target, and it is two of them. All three of
+   those numbers are **one** number now — `--blk-slot` in § tokens — because this
+   note used to name them separately and a reader had to trust that 3.7 = 3 +
+   0.35 × 2 by eye. `--text-pad-l` is `calc()` over the gutter, the gutter is two
+   slots, and the slot carries a **24px floor** so the target survives a reader
+   whose browser root is 12px rather than 16. GPT Sol's stage 1 review found that
+   last one, and it was the difference between meeting WCAG 2.5.8 and claiming
+   to.
+
+   (An earlier draft of this note said the width also had to clear the pinned
+   column's shadow. It does not — only `.pin-left` is pinned, and it is on the
+   other side of the prose. GPT Sol, 2026-08-31.) */
+td.text {
+  padding: var(--block-pad) var(--text-pad-r) var(--block-pad) var(--text-pad-l);
+  position: relative;
+  border-bottom: 0;
+  /* `--blk-slot` used to be declared here, and it has moved up to `.reader`
+     (§ tokens) — the row floor below reads it, the grid's columns read it, and
+     the cell's own `--text-pad-l` is now computed from it, so it has to be
+     visible to all three. A custom property inherits, and `.reader` is an
+     ancestor of every one of them. */
+  /* **Where the gutter's first row starts, measured from the top of the cell —
+     and it is the cell's own `padding-top` plus a hair.** Named because three
+     rules need the same number and they must not disagree: `.blk-gutter`
+     positions itself at it *and subtracts it from its own height*, which is what
+     the container query measures, and `td.text` floors the row at it plus a slot
+     plus a pad. A heading has twice the padding above it, so it overrides
+     this rather than the gutter rule; without that the icons would sit a line
+     above the words they belong to. */
+  --blk-top: calc(var(--block-pad) + 0.2rem);
+}
+
+/* A HEADING BELONGS TO WHAT FOLLOWS IT, so the space above it must exceed the
+   space below. The original app had this right — `mt-6 mb-4` against a
+   paragraph's `mb-4` (simple-document-viewer.tsx) — and we had lost it: every
+   block is a table row here, every row had the same padding, and a heading
+   therefore floated exactly halfway between the section it ended and the
+   section it introduced, attached to neither.
+
+   Above: 2 pads + the previous row's 1 = 3 pads (23.8px).
+   Below: half a pad + the next row's 1 = 1.5 pads (11.9px).
+
+   The class comes off `block.kind`, which the splitter has always set
+   (src/blocks.ts § classify) and which nothing was reading. */
+td.text.kind-heading {
+  padding-top: calc(var(--block-pad) * 2);
+  padding-bottom: calc(var(--block-pad) / 2);
+  /* And the gutter follows the padding, because it is anchored to the first
+     line of the block rather than to the top of the cell. */
+  --blk-top: calc(var(--block-pad) * 2 + 0.2rem);
+}
+
+/* The first row has nothing above it to be separated from, so the extra pad
+   would just be a gap under the table head. */
+tbody tr:first-child td.text.kind-heading {
+  padding-top: var(--block-pad);
+  --blk-top: calc(var(--block-pad) + 0.2rem);
+}
+
+tr.row-active td.text { background: var(--panel); }
+
+/* `.block-id` was here, positioning six characters of Courier in an 83px
+   gutter. The gutter is icons now and the id has moved into their `title`, so
+   the rule has gone rather than been kept "in case" — a class nothing renders
+   is a rule the next reader has to prove is dead. BlockGutter.tsx. */
+
+tr.row-active .block-ref { opacity: 0.95; }
+
+/* ---------------------------------------------------------- block ids --
+   Every block id still drawn as characters: both ends of a gist's range, the
+   same range under a summary entry, and a cited id in model prose. **Not the
+   gutter beside a paragraph** — that was the fourth until 2026-08-31 and is now
+   an icon whose `title` carries the id (§ the gutter). Courier at Greg's asking, and small and faint on
+   purpose — an id is machine text sitting next to prose, and it should read as
+   a footnote to the thing it labels rather than as part of it.
+
+   It is a link (BlockRef.tsx), so it needs to look clickable when you are on it
+   and like nothing at all when you are not. Hence: no underline at rest, no
+   colour of its own, and both on hover. */
+.block-ref {
+  font-family: var(--font-id);
+  font-size: 0.58rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  opacity: 0.5;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.12s, color 0.12s;
+}
+.block-ref:hover {
+  opacity: 1;
+  color: var(--highlight-ink);
+  text-decoration: underline;
+}
+.block-ref:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+/* The dash is not inside either link, so dragging across one id selects that
+   id and not the pair. */
+.block-range { line-height: 1; }
+.block-range-dash {
+  font-family: var(--font-id);
+  font-size: 0.58rem;
+  color: var(--ink-faint);
+  opacity: 0.5;
+  padding: 0 0.1em;
+}
+
+/* The four reading properties are set on the CONTAINER, not on `p`. They used
+   to be on `.prose p`, which meant a list item, a definition list or a table
+   cell in the article silently rendered at the body default of 1rem/1.55
+   instead of 17px/1.6 — a different size and a different leading for the same
+   prose, depending only on which tag the author reached for. */
+.prose {
+  max-width: clamp(45ch, 90vw, var(--reading-measure));
+  /* **And the measure sits in the middle of whatever cell it is given** —
+     Greg, 2026-09-04: *"Always centre the Text view within its column when
+     visible, no matter which mode is active."* § plain, centred already
+     centred the whole TABLE when the article was the only thing on the page;
+     this is the other half, and it is the half that covers a mode. In a band
+     mode the prose cell is the window minus the rail minus the band — 1190px
+     at 1600 — while this box is 65ch, so the article used to sit against the
+     left of its cell with 400px of empty page beyond it.
+
+     `auto`, not arithmetic, so it is **self-limiting**: the moment the cell is
+     narrower than the measure there is nothing to divide and the rule does
+     nothing at all. That is the whole of why Plain (whose cell is already
+     capped at `PROSE_ALONE_MAX_REM`) and a phone are untouched by it.
+
+     Every `.prose` variant with a narrower measure of its own — a callout at
+     58ch, a caption, an opaque block — centres on the same axis rather than
+     keeping its old left edge, which is what stops the column reading as two
+     columns that nearly line up. The footnotes are the single exception, and
+     they opt out as a block rather than half-moving: § footnotes.
+
+     **Two things still drawn against the cell's own edges, deliberately.** The
+     gutter had to follow the text and does (§ the gutter). The search bar
+     (§ has-hit) and `row-active` did not: both say *this row matched* or *this
+     is the row you are on*, which is a fact about the row rather than a mark on
+     a phrase, so a rule down the cell's edge is the right shape for them and
+     stays legible while you scroll past at speed. The alone rule below warns
+     that moving prose inside its cell leaves four things behind; two of the
+     four needed to come and two did not, and that is the reading of it rather
+     than an exemption. GPT Sol pressed on this, 2026-09-04. */
+  margin-inline: auto;
+  font-family: var(--font-reading);
+  font-size: var(--reading-size);
+  line-height: var(--reading-line-height);
+  font-weight: var(--reading-weight);
+}
+.prose > * { margin: 0; }
+
+/* Headings are the SAME FACE as the body, with hierarchy carried by size and
+   weight alone. That is the original app's ladder (h1 bold, h2/h3 semibold,
+   h4 medium) and it is why these no longer say --font-ui: a sans heading in
+   the prose column read as our chrome rather than as the author's own
+   structure, and now that the whole column is one face there is no reason to
+   name a different token. See styles/tokens.css § type.
+
+   `text-wrap: balance` was on the original app's wishlist and was never cheap
+   enough to do; it is now. It evens the line lengths of a heading that wraps,
+   which in a 65ch column happens constantly. It applies only up to a handful
+   of lines by spec, so it is safe to set on all six. */
+.prose h1 { font-size: 1.5rem; font-weight: 700; }
+.prose h2 { font-size: 1.25rem; font-weight: 600; }
+.prose h3 { font-size: 1.0625rem; font-weight: 600; }
+.prose h4 { font-size: 1rem; font-weight: 550; }
+.prose h5, .prose h6 { font-size: 0.9375rem; font-weight: 550; }
+.prose h1, .prose h2, .prose h3,
+.prose h4, .prose h5, .prose h6 {
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+}
+.prose a {
+  color: var(--highlight-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.prose img { max-width: 100%; height: auto; }
+
+/* ---- figures, and the light sheet under them ------------------------
+   **An article's pictures are printed on a light sheet, in a dark-only app.**
+
+   Greg, 2026-08-28, on Wolfram's *What If We Had Bigger Brains?*: "tables,
+   equations … seem to be being displayed in dark text on a black background."
+   They were, and it was not a colour bug — the block is a `<p>` containing one
+   `<img>`, and all seven of that article's images are PNGs with an alpha
+   channel carrying near-black ink. Drawn for a white page; served onto ours.
+
+   The sheet is unconditional because **nothing here can tell those apart from
+   an opaque photograph.** CSS cannot see an alpha channel, and JavaScript
+   cannot either: the images are hot-linked cross-origin with no `crossorigin`
+   attribute, so a canvas drawn from one is tainted and `getImageData` throws.
+   The colour, and where Wikipedia's night mode landed after trying to be
+   cleverer than this, are on --figure-sheet in styles/tokens.css.
+
+   **Scoped to `.zoomable >`, and that is what keeps it off a tracking pixel.**
+   A 1x1 transparent GIF given this rule is a 12px light square in the middle of
+   a paragraph. `zoomable.ts` already decides what counts as a figure — it skips
+   an `<img>` narrower than 64 declared pixels — so letting its wrapper carry
+   the sheet means that judgement is made once rather than twice, in the one
+   place that can actually see the width attribute. */
+/* **A DESCENDANT selector, not a child one.** The first version of this said
+   `.zoomable > :is(img, svg)` and was wrong for the case the feature exists
+   for: when the wrapper holds a `<figure>` or a `<picture>` — or a bare `<a>`
+   around a linked picture — the media is a *grand*child, so every captioned
+   figure in the corpus went on rendering dark-on-dark while the loose images
+   beside them came right. It looked fixed. GPT Sol, 2026-08-28.
+
+   `:not(.zoom-btn *)` is what keeps it off the enlarge control's own icon,
+   which is inside the wrapper too and would otherwise get a light chip behind
+   it. */
+.prose .zoomable :is(img, svg):not(.zoom-btn *),
+.lightbox-content :is(img, svg) {
+  background: var(--figure-sheet);
+  /* The alt text, when the file 404s: it is drawn ON the sheet, so it cannot be
+     --ink or it is off-white on off-white. A missing image is exactly when a
+     reader needs to be able to read what it was. */
+  color: #1c1c1c;
+  border-radius: 4px;
+  /* Small. This is a mat around a photograph as often as it is breathing room
+     around an equation, and a wide mat reads as a frame nobody asked for. */
+  padding: 0.35rem;
+}
+
+/* The wrapper `zoomable.ts` puts round each figure. It exists so the ⤢ can be
+   positioned over the corner of the thing it enlarges — and, as above, so that
+   "is this a figure?" is decided once.
+
+   `inline-block` by default because the common case is an `<img>` inside a
+   `<p>`, where a block wrapper would break the line. The three that are already
+   block-level say so, keyed off the tag the wrapper records. */
+.prose .zoomable {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+.prose .zoomable[data-zoom-kind="table"],
+.prose .zoomable[data-zoom-kind="pre"],
+.prose .zoomable[data-zoom-kind="figure"] {
+  display: block;
+}
+/* **The wrapper has to re-do `.prose > * { margin: 0 }`.** That rule is what
+   flattens the UA's own block margins in this column, and it is a CHILD
+   selector — so the moment a `<pre>` gains a wrapper it stops being a direct
+   child of `.prose` and Chrome's `margin: 1em 0` comes back, in a column whose
+   whole spacing story is that every gap is a multiple of `--block-pad`. Nothing
+   errors; one kind of block is just differently spaced from every other one.
+   GPT Sol, 2026-08-28. */
+.prose .zoomable > * { margin: 0; }
+
+/* The ⤢ itself — see zoomable.ts, and Lightbox.tsx for what it opens.
+
+   **Visible at rest, not on hover.** Every instinct says to fade it in under
+   the pointer, and it would be wrong twice: there is no hover on a phone, which
+   is the device where a 423px-wide data table most needs enlarging; and a
+   control nobody can see is a control nobody uses. So it sits at 55% and comes
+   up to full when you are on the figure or on it.
+
+   The border and the cursor are written out because this button is injected
+   HTML rather than a shadcn one, and the app's reset is scoped to `[data-slot]`
+   — a `<button>` with no `border-style` of its own gets the UA's `2px outset
+   white`, which is the bug design-css-overview.md § The reset covered a
+   minority of what it named is about. */
+.prose .zoom-btn {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  /* Over the figure, and nothing more: this is inside .prose, and the numbers
+     that matter (the spine at 45, the bars, the tooltip at 100) are all on
+     positioned ancestors of their own. */
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--surface-raised) 90%, transparent);
+  color: var(--ink);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+.prose .zoomable:hover .zoom-btn,
+.prose .zoom-btn:hover,
+.prose .zoom-btn:focus-visible { opacity: 1; }
+.prose .zoom-btn:hover {
+  color: var(--highlight);
+  border-color: var(--highlight);
+}
+.prose .zoom-btn:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+}
+/* A picture is its own button (TableView § the delegated click handler), so it
+   should say so. Not on a table or a code block, where a press is someone
+   starting a selection, and not on a picture inside a link, where the link
+   wins. */
+.prose .zoomable > img { cursor: zoom-in; }
+.prose a .zoomable > img { cursor: inherit; }
+/* Video embeds arrive with the host's own `width="560" height="315"`, which is
+   wider than a reading column and overflowed it visibly. `height: auto` alone
+   won't do here as it does for an image: an iframe has no intrinsic ratio, so
+   without `aspect-ratio` it would collapse to the 150px CSS default. 16/9 is
+   hard-coded because the ratio can't be read off the attributes in CSS, and the
+   obvious escape — an inline `style` — is forbidden by the sanitiser on purpose
+   (docs/project/security.md). Every embed the allowlist admits is 16/9 today. */
+.prose iframe { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; }
+.prose figure { margin: 0; }
+/* A caption is set SHORTER than the body — 48ch against 65 — so it reads as
+   belonging to the figure rather than as more prose that happens to sit under
+   it. Their per-genre research put figure captions at 45-50ch, and it is the
+   cheapest of the three things in that section worth taking. */
+.prose figcaption {
+  max-width: 48ch;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+/* A quotation is a different voice, so it is set differently rather than just
+   indented: narrower (58ch), a little tighter, and italic. Their research says
+   1.3 for the leading; that number was written for Georgia and is too tight for
+   a sans on a dark ground, where the lines close up visually as well as
+   metrically. 1.45 is the same intent at the right value for this face.
+
+   The italic is real, not synthesised — see the wght-italic.css import in
+   tailwind.css. Without it the browser slants the upright, which on a variable
+   face is visibly wrong. */
+.prose blockquote {
+  margin: 0;
+  max-width: 58ch;
+  padding-left: 1rem;
+  border-left: 2px solid var(--highlight);
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ---- callouts, and the mark that says so -----------------------------
+   **A callout is the box an author sets apart from the argument** — a Substack
+   callout, a MkDocs admonition, an RFC's editorial aside. Stage 2 recognises it
+   before Readability deletes the element that says so (src/callouts.ts) and
+   stage 3 stores it as `kind: "callout"`; TableView writes that onto the cell
+   as `ctx-callout`, which is the only reason this is a stylesheet-only rule.
+
+   **Not a second thing with a left rule.** A quotation already has one, and two
+   left-ruled treatments a few paragraphs apart read as the same treatment
+   applied inconsistently. Greg picked this one out of three sketches,
+   2026-08-31: "big faint mark in the gutter, indented text, no bar". So the
+   callout is displaced — indented, on a narrower measure, in the softer ink —
+   and the mark does the saying.
+
+   `2.4rem` of padding is the mark's gutter, and it is inside `.prose` rather
+   than on the cell: the cell's own gutter already holds the block id and the
+   door into chat (td.text above), and a mark placed there would sit on top of
+   them.
+
+   Every paragraph of a multi-paragraph callout gets its own mark. That is the
+   printer's convention for a quotation running across paragraphs — open on
+   each, close only on the last — and it is also the only thing available here,
+   since each paragraph is its own block in its own row and CSS cannot ask
+   whether the row above belongs to the same box.
+
+   A heading, a blockquote or a figure inside a callout keeps its own kind
+   (src/blocks.ts § describeBlock), so none of them lands here. */
+/* **Two selectors, one treatment.** `ctx-callout` is the current spelling — an
+   authored *context* a run of blocks belongs to (Block.context, src/types.ts) —
+   and `kind-callout` is what revisions extracted during a few hours of
+   2026-08-31 carry instead, when this was a block *kind*. Both are read rather
+   than one being migrated, because re-extracting every article to change how a
+   paragraph is set would be a strange price for a stylesheet.
+   docs/plans/260831af-carrying-markup-facts-past-readability.md. */
+td.text.ctx-callout .prose,
+td.text.kind-callout .prose {
+  position: relative;
+  max-width: 58ch;
+  /* Logical, not physical: an article in Arabic or Hebrew keeps the indent and
+     the mark on the side its text starts from. `--reading-measure` and the
+     quotation's own rule are still physical, so this is a first step rather
+     than a claim that the column is direction-aware. GPT Sol, 2026-08-31. */
+  padding-inline-start: 2.4rem;
+  color: var(--ink-soft);
+}
+/* **The mark is for prose and nothing else.** The indent and the softer ink
+   above are right for everything in the box; a big quote mark is not. A heading
+   is not somebody speaking — that is the case the old spelling could not express
+   at all, since a heading in a callout has to keep `kind: "heading"` — and
+   neither is a `<blockquote>`, which has its own italic-and-rule treatment and
+   was getting both at once, nor a code block, a figure or a caption.
+   `:not(.kind-heading)` said the first of those and meant all five. GPT Sol,
+   2026-08-31. */
+td.text.ctx-callout.kind-text .prose::before,
+td.text.kind-callout .prose::before {
+  /* “, and the empty alt text after the slash is what keeps it out of the
+     accessibility tree — CSS `content` is otherwise announced, and a screen
+     reader would hear a stray quote mark before every callout paragraph. */
+  content: "\201C" / "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: -0.02em;
+  /* **The reading face, not a serif ornament.** Georgia's “ is rounder and
+     reads more like a printed pull-quote, and it was tried and rejected:
+     styles/tokens.css records that this app deliberately has no serif, so one
+     decorative glyph is not the place to reintroduce one. */
+  font-family: var(--font-reading);
+  /* Big and very faint, which is the shape Greg picked. Both numbers matter
+     together — at this size a mark any darker stops being a mark in the gutter
+     and starts being a second thing to read. */
+  font-size: 4.2rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  opacity: 0.34;
+  /* Decoration, so it stays out of a selection the reader drags across the
+     paragraph and out of what that selection copies. */
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ---- content that cannot reflow -------------------------------------
+   A code block or a data table in the article is as wide as its widest line,
+   and neither will wrap. Until now nothing stopped either: the cell grew, the
+   table grew, and the whole PAGE scrolled sideways — which in this view also
+   drags the spine, the masthead and every sticky bar off to the left, because
+   they are pinned to the horizontal scroll (see .masthead above). One wide
+   code sample in one paragraph broke the layout of the entire article.
+
+   The rule we already hold elsewhere: wide content scrolls inside its own box,
+   never the page.
+
+   `display: block` on the <table> is the load-bearing half and it is not a
+   typo — `overflow` does nothing on `display: table`, which sizes itself to its
+   content and ignores `max-width` besides. The cost is that the table no longer
+   fills the column when it is narrow enough to; that is the accepted price, and
+   the alternative — wrapping every table in a scroll container — would have to
+   happen in the annotation stage, which is not this stage's code to touch. */
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.prose th, .prose td {
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--rule);
+  text-align: left;
+  /* A cell of numbers is a column you read down, so it must not also be a
+     column that reflows. The table scrolls; the cells do not wrap to nothing. */
+  vertical-align: top;
+}
+/* A header row that looks exactly like a data row is a table with no header.
+   `th` already carries the browser's bold; what it did not have was a ground of
+   its own, so the first row of every article table read as data. */
+.prose th {
+  background: var(--muted);
+  font-weight: 600;
+  color: var(--ink);
+}
+.prose code { font-family: var(--font-mono); font-size: 0.9em; }
+/* Inside a <pre> the size is already reduced once by the rule above; without
+   this the nested <code> reduces it again to 0.77em. */
+.prose pre code { font-size: inherit; }
+/* Long URLs and unbroken identifiers are the one thing that can still push the
+   column wider than its measure, and unlike a table they have nowhere to
+   scroll. Break them mid-word rather than let one link widen the article. */
+.prose a { overflow-wrap: break-word; }
+
+/* Media, captions and rules — present, but never competing with the argument. */
+td.text.opaque { background: var(--muted); }
+td.text.opaque .prose { font-size: 0.95rem; color: var(--ink-soft); }
+
+/* ---- a caption that arrived as a paragraph ---------------------------
+   `kind: "caption"` is a `Figure 3: …` paragraph sitting *beside* a figure
+   rather than inside it — stage 3 recognises it by the marker at the front of
+   the text (src/blocks.ts § CAPTION_MARKER) — and until 2026-08-31 nothing
+   styled it. `.prose figcaption` above covers only real `<figcaption>`
+   elements, so the same sentence was set two different ways depending on how
+   the publisher happened to mark it up. Same treatment as a figcaption's, for
+   the same reason: it belongs to the picture, not to the argument.
+
+   **After `td.text.opaque`, and that is why it is down here rather than up with
+   the other block kinds.** A caption is `gistable: false`, so it already
+   carries `.opaque`, and the two selectors have exactly the same specificity —
+   which leaves source order deciding, silently, whether a caption is set at
+   0.85rem or at the 0.95rem `.opaque` gives everything it covers. */
+td.text.kind-caption .prose {
+  max-width: 48ch;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+
+/* --------------------------------------------------------------- outline --
+   Text off: rows collapse to their natural height and the same table becomes a
+   whole-article table of contents. The leaf column appears here and only here,
+   carrying navLabels — navigation chrome, never a stand-in for prose. */
+.outline td.gist .sticky { padding: 0.5rem 0.9rem 0.55rem; }
+.outline td.gist .gist-text { font-size: 0.82rem; }
+.outline td.gist .range { display: none; }
+
+.nav-label {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+td.gist.leaf { cursor: pointer; background: var(--page); }
+td.gist.leaf:hover { background: var(--highlight-wash); }
+
+/* The leaf column in READING mode — one nav label per paragraph, beside the
+   paragraph rather than instead of it. It sits on the panel colour like the
+   other gist columns (in outline mode it is the detail column and sits on the
+   page), and its label rides the top of the row so it lines up with the first
+   line of the prose it labels rather than floating in the middle of a tall
+   cell. */
+.reading td.gist.leaf { background: var(--panel); }
+.reading td.gist.leaf .sticky { padding: 0.75rem 0.9rem 0.5rem; }
+.reading td.gist.leaf .nav-label { font-size: 0.75rem; color: var(--ink-faint); }
+.reading tr.row-active td.gist.leaf .nav-label { color: var(--ink-soft); }
+

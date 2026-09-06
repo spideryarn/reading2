@@ -42,7 +42,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`App.tsx`](../../src/web/App.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
-| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
+| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). `styles.css` is an entry point of nothing but `@import`s; every rule is in one of the 37 files under [`src/web/styles/`](../../src/web/styles/). Both now load *inside* `@layer app`, via `tailwind.css` — the map of the stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
 | [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
@@ -53,7 +53,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [260826a-chat-mode.md § The citation contract](../plans/260826a-chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → what goes in `?at=`, and the one rule about when the scroll spy may overwrite it |
-| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in styles.css § plain, centred) |
+| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § plain, centred) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
 | `src/store/index.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, bound to the Postgres reader and reached through [`src/routes.ts`](../../src/routes.ts). These lived in `src/api.ts` — the filesystem reader — until it went with the store on 2026-09-05 |
@@ -262,7 +262,7 @@ second is the one that mattered:
   rule for the rest, so it was made to state its box in full. Both it and the `×` went on
   2026-09-05, when the bar was cut down to the granularity pills
   ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), and their rules went with
-  them. The lesson outlives them and is written above `.mode` in `styles.css`: **any button put
+  them. The lesson outlives them and is written above `.mode` in [`styles/shell.css`](../../src/web/styles/shell.css): **any button put
   back in this bar states its own reset in full**, because there is no `.controls button` left to
   inherit one from.
 
@@ -307,8 +307,9 @@ the element, and it only exists while Tab is held. It is also not a misconfigura
 Two fixes, both in [tokens.css](../../styles/tokens.css) and
 [`toggle.tsx`](../../src/web/components/ui/toggle.tsx):
 
-- `--ring` is the app's orange, 7.3:1, matching the focus convention `styles.css` already had in
-  `.spine-hit` and `.cmt-search`. The token alone could not fix it — halved, even the orange is
+- `--ring` is the app's orange, 7.3:1, matching the focus convention the hand-written CSS already
+  had in `.spine-hit` ([`styles/spine.css`](../../src/web/styles/spine.css)) and `.cmt-search`
+  ([`styles/annotations.css`](../../src/web/styles/annotations.css)). The token alone could not fix it — halved, even the orange is
   2.6:1 — so the `/50` came off.
 - `focus-visible:border-ring` is gone from `Toggle`. Upstream has focus repaint the border to match
   the ring, which is right where a border is decoration. On these pills the border colour **is** the
@@ -350,7 +351,7 @@ How it's put together, and what to know before touching it:
   light-on-dark bloom is about the contrast, not the face. The other half of the same fix is
   `--reading-weight: 450`; see
   [design-css-overview.md § Typography](design-css-overview.md#typography).
-- **Soft and faint greys run the other way.** In [`src/web/styles.css`](../../src/web/styles.css),
+- **Soft and faint greys run the other way.** In [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css),
   `--ink-soft` / `--ink-faint` now *descend* in lightness from `--ink` instead of ascending. Anything
   that read `color-mix(…, black)` to darken the orange became `color-mix(…, white)` to lift it — that
   one lives in `--highlight-ink` now, so it's stated once.

@@ -10,9 +10,7 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { readerCss } from "./helpers/stylesheets.js";
 import {
   annotateHtml,
   BAR_HUES,
@@ -565,14 +563,20 @@ describe("annotateHtml — the colours of the searches that found the words", ()
        paints nothing at all — the whole mark vanishes rather than losing its
        ninth stripe. Nothing in TypeScript can see that, so it is checked
        against the stylesheet here rather than left to a comment. */
-    const css = readFileSync(
-      path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src/web/styles.css"),
-      "utf8",
-    );
+    /* The reading-view sheets as a set — `src/web/styles.css` has been the list
+       of `@import`s since 2026-09-06, and these rules live in one of the files
+       it names. tests/helpers/stylesheets.ts. */
+    const css = readerCss();
     const counts = [
       ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]/g),
     ].map((m) => Number(m[1]));
-    expect(counts.length).toBeGreaterThan(0);
+    /* The vacuity guard: with no rules matched, `Math.max()` of nothing is
+       `-Infinity` and the message would be about the number rather than about
+       the scan having stopped seeing anything. */
+    expect(
+      counts.length,
+      'no `td.text.has-hit[data-hues="N"]` rule in the reader stylesheets',
+    ).toBeGreaterThan(0);
     expect(Math.max(...counts)).toBe(BAR_HUES);
   });
 

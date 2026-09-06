@@ -55,14 +55,29 @@
  */
 import { globSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerSheets } from "./helpers/stylesheets.js";
 
-/** Every stylesheet the client actually loads — tailwind.css imports the rest. */
-const SHEETS = [
-  "src/web/tailwind.css",
-  "src/web/styles.css",
-  "styles/tokens.css",
-  "styles/colourscales.css",
-];
+/**
+ * The hand-written reading-view sheets, in cascade order — one file until
+ * 2026-09-06 and thirty-eight since. Resolved from the `@import` graph, so a
+ * sheet added there is scanned here without anybody remembering to.
+ */
+const READER = readerSheets().map((s) => s.path);
+
+/**
+ * Every stylesheet the client actually loads — tailwind.css imports the rest.
+ *
+ * **The order here is not the cascade's, and must not be "corrected" to it.**
+ * `valueOf` below is last-definition-wins, and three tokens are declared twice:
+ * `--highlight` in the reader sheets and again in `styles/tokens.css`, and
+ * `--font-sans` / `--font-mono` in `styles/tokens.css` and again in
+ * tailwind.css's `@theme inline`. Putting the reader sheets in the slot
+ * `src/web/styles.css` used to hold keeps all three resolving to the value this
+ * file has always resolved them to. That the answer depends on the order at all
+ * is a known latent defect and deliberately out of scope —
+ * docs/plans/260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md.
+ */
+const SHEETS = ["src/web/tailwind.css", ...READER, "styles/tokens.css", "styles/colourscales.css"];
 
 /** Comments are prose *about* tokens, not uses of them. `--cat-N-rgb` is a
  *  comment's way of writing a family and would otherwise fail here. Applied to
@@ -79,7 +94,7 @@ const declared = (re: RegExp, hay: string) => {
   return out;
 };
 
-/** `--x: <value>` across all four sheets, for resolving one alias to the next. */
+/** `--x: <value>` across every sheet, for resolving one alias to the next. */
 const valueOf = new Map<string, string>();
 for (const { css } of sheets) {
   for (const m of css.matchAll(/(--[A-Za-z0-9_-]+)\s*:\s*([^;}]*)/g)) {
@@ -332,7 +347,13 @@ describe("no component reaches a surface token through a Tailwind text utility",
  * `auto` track is sizing to.
  */
 describe("the outline row's number track is content-sized, not a percentage", () => {
-  const css = sheets.find((s) => s.path === "src/web/styles.css")?.css ?? "";
+  /* The reader sheets, not `src/web/styles.css`: since the split that path is
+     thirty-eight `@import` lines and holds no rule at all, so a `find` on it
+     would hand every assertion below an empty string. */
+  const css = sheets
+    .filter((s) => READER.includes(s.path))
+    .map((s) => s.css)
+    .join("\n");
   const rule = css.match(/\.outln-row\s*\{([^}]*)\}/)?.[1] ?? "";
 
   it("has a rule to check", () => {

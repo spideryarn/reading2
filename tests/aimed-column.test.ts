@@ -33,11 +33,13 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
-const css = readFileSync(new URL("../src/web/styles.css", import.meta.url), "utf8").replace(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
+/* The reading-view sheets as a set. Named `src/web/styles.css` until
+   2026-09-06, when that file became thirty-eight `@import` lines: a rule that
+   moves between sheets must go on being found, and one that is *deleted* must
+   still fail. tests/helpers/stylesheets.ts. */
+const css = readerCssNoComments();
 const tsx = readFileSync(new URL("../src/web/TableView.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/web/App.tsx", import.meta.url), "utf8");
 
@@ -82,6 +84,9 @@ describe("the aimed column", () => {
 
   it("paints with a background-image, which is what composes with the shadow", () => {
     const body = /\.reader\[data-aim="7"\][^{]*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    /* The vacuity guard, named: two of the three assertions below are
+       `not.toContain`, and an empty body satisfies both. */
+    expect(body, 'no `.reader[data-aim="7"]` rule in the reader stylesheets').not.toBe("");
     expect(body).toContain("background-image: linear-gradient(");
     /* Not `box-shadow`: `.pin-left` owns that for the overflow-layer cue, and a
        second declaration replaces it. Not `background-color` either: `td.text`,

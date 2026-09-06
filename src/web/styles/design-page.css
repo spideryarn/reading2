@@ -1,0 +1,222 @@
+/* design-page.css — the /design reference page's own furniture, and nothing
+   else: no colour, face or size that another file already owns may be restated
+   here, or the page would go on looking right after the real rule broke.
+   DesignPage.tsx. */
+
+/* ---------------------------------------------------------------- /design --
+   The design reference page. See DesignPage.tsx for what it is for.
+
+   These rules are the page's own furniture ONLY — the layout of the swatch
+   grid, the spacing between sections. Nothing here may restate a colour, a
+   face or a size that the rest of this file already owns: the page's job is to
+   show what those rules produce, and a stylesheet that gave it its own copy
+   would keep it looking correct after the real one broke. Everything on
+   display comes through var(--…) or through the component itself. */
+.design {
+  max-width: 62rem;
+  margin: 0 auto;
+  /* Top padding clears the corner wordmark (HomeLogo.tsx), which is fixed and
+     therefore sits over this page's own heading on any window narrow enough
+     that the centred column reaches the left edge. */
+  padding: 3.5rem 1.5rem 6rem;
+  font-family: var(--font-ui);
+  color: var(--ink);
+}
+.design-head { margin-bottom: 2.5rem; }
+.design-head h1 { margin-bottom: 0.4rem; }
+.design-head p { margin: 0; font-size: 0.9rem; color: var(--ink-faint); }
+
+.design section {
+  margin-top: 2.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+/* `:not(.prose *)` is load-bearing, and its absence was a small instance of
+   exactly what this page exists to catch. `.design h2` and `.prose h2` have the
+   SAME specificity (0,1,1), so source order decides — and these rules are at
+   the foot of the file, so the page's own section-heading style was winning
+   inside the type sample. The sample was therefore showing this page's chrome
+   rather than the `.prose` rule it claims to demonstrate, at a different size
+   and a different letter-spacing, and it looked entirely plausible.
+
+   A design reference that quietly restyles the thing it is displaying is worse
+   than no design reference. Everything inside `.prose` here is off-limits to
+   this section of the stylesheet. */
+.design :is(h2, h3):not(.prose *) {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.design h3:not(.prose *) {
+  margin: 1.4rem 0 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 550;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.design-note {
+  margin: 0 0 0.9rem;
+  max-width: 62ch;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+.design-token {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+/* A panel, so anything shown on --panel is shown on --panel here too. Several
+   tokens (--highlight-wash especially) are opaque BLENDS with the surface
+   behind them and look like a different colour on the page than in a panel. */
+.design-panel {
+  padding: 1.1rem 1.3rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+/* THE SAMPLE ARTICLE HAS NO TABLE UNDER IT, and that turned out to matter.
+   In the reading view every block is its own table row, and all the vertical
+   rhythm comes from `td.text` padding (§ text, far above). Here the same
+   elements are plain siblings inside one .prose, where `.prose > * { margin: 0 }`
+   leaves them touching: the heading sat directly on the paragraph it
+   introduced, the quote directly on the paragraph before it, and the sample
+   demonstrated the exact opposite of what its own caption claims.
+
+   So the row padding is restated here — in the SAME arithmetic off the SAME
+   variable, never as hand-picked numbers, so the sample still shows the real
+   spacing rather than an imitation of it:
+
+     between blocks   one pad each side of a row     = 2 pads
+     above a heading  2 pads + the previous row's 1  = 3 pads
+     below a heading  half a pad + the next row's 1  = 1.5 pads  */
+.design-sample > * + * { margin-top: calc(var(--block-pad) * 2); }
+.design-sample > :is(h1, h2, h3, h4, h5, h6) { margin-top: calc(var(--block-pad) * 3); }
+.design-sample > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--block-pad) * 1.5); }
+
+.design-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.design-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.9rem;
+}
+.design-swatch { display: flex; flex-direction: column; gap: 0.15rem; }
+.design-swatch .design-note { margin: 0; }
+/* The chequerboard shows through anything not fully opaque, which is the only
+   way to see at a glance that a token you assumed was solid is not.
+
+   TWO ELEMENTS, and the reason is a shorthand. The swatch colour arrives as an
+   inline `style={{ background: … }}`, and `background` is a SHORTHAND: it
+   resets `background-image` to `none`. Painted onto this element it therefore
+   wiped the chequerboard, and every chip rendered flat — the comment above
+   promised a capability the code had silently removed, which nothing would ever
+   have reported because all our tokens happen to be opaque today.
+
+   Even switching the inline style to `background-color` would not fix it:
+   `background-image` paints ABOVE `background-color`, so the chequerboard would
+   cover the colour rather than show through it. The board has to be on a parent
+   and the colour on a child. */
+.design-chip {
+  height: 3rem;
+  margin-bottom: 0.3rem;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) - 4px);
+  background-image:
+    linear-gradient(45deg, var(--rule-strong) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--rule-strong) 25%, transparent 25%);
+  background-size: 10px 10px;
+}
+.design-chip-fill { height: 100%; }
+
+/* A colour scale, drawn as one unbroken strip.
+   Butted together with no gap and no radius, because the thing being reviewed
+   is the *boundary* between two steps: a gap between the chips would separate
+   every pair by the page's own colour and hide exactly the two-steps-that-look-
+   the-same problem this section exists to catch. The labels underneath keep
+   their spacing instead. */
+.design-scale {
+  display: flex;
+  margin: 0.4rem 0 1rem;
+  overflow-x: auto;
+}
+.design-scale-step {
+  flex: 1 0 3.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.design-scale-chip {
+  width: 100%;
+  height: 3rem;
+  /* A hairline so the palest step of a ramp does not appear to bleed into the
+     page. Inset, so it does not add width and pull the strip apart. */
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+
+.design-table { border-collapse: collapse; width: 100%; }
+/* `border-right: 0` is not redundant. The bare `td` rule far above gives EVERY
+   cell in the app a right border in --rule-strong, for the zoom table's column
+   grid; it reaches here, and reaches into an article's own <table> inside
+   .prose as well (which is why .prose th/td restate `border` in full rather
+   than only the parts they want). */
+.design-table td {
+  padding: 0.55rem 0.9rem 0.55rem 0;
+  border-right: 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+.design-table td:first-child { width: 10rem; }
+/* Otherwise the last row's rule and the next section's top border stack up a
+   few pixels apart and read as a mistake. */
+.design-table tr:last-child td { border-bottom: 0; }
+
+.design-icons { gap: 1.4rem; }
+.design-icon-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+}
+/* `.design-note` carries a 0.9rem bottom margin for its use as a paragraph,
+   and inside a centred flex row that margin lifts the label clear of the icons
+   beside it — they looked misaligned, and the cause was a margin rather than
+   anything to do with alignment. */
+.design-icon-cell em { font-style: normal; }
+.design-icon-cell .design-note { margin: 0; }
+
+/* The one place in the app outside the article where --rhythm and --block-pad
+   are legitimate: this section exists to display them. */
+.design-rhythm > * { margin: 0; }
+.design-rhythm p {
+  font-family: var(--font-reading);
+  font-size: var(--reading-size);
+  line-height: var(--reading-line-height);
+  padding-block: var(--block-pad);
+}
+/* Beats `.design h3:not(.prose *)` (0,2,1) by adding the section class, so this
+   demonstration heading is set as article prose rather than as page chrome. */
+.design-panel.design-rhythm h3 {
+  margin: 0;
+  font-family: var(--font-reading);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  padding-top: calc(var(--block-pad) * 2);
+  padding-bottom: calc(var(--block-pad) / 2);
+}
+
