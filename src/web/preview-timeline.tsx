@@ -46,7 +46,7 @@
  *    height from the viewport, and the bug worth catching is the scroller
  *    missing, which only shows when the content is taller than the band.
  *
- * Delete this file, preview-timeline.html and preview-timeline-fixture.json
+ * Delete this file, preview/preview-timeline.html and preview-timeline-fixture.json
  * when the check is done; nothing links to any of them.
  */
 import { createRoot } from "react-dom/client";

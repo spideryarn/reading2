@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 /**
- * **Five of the fourteen modes are only drawn for a reader who asked for them.**
+ * **Four of the fourteen modes are only drawn for a reader who asked for them.**
  *
- * Quotes, Timeline, Referee and Remember are behind the
+ * Quotes, Timeline, Referee and Remember were behind the
  * experimental-features switch since 2026-09-03
  * (docs/project/experimental-features.md,
  * docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md),
  * and Debate joined them on 2026-09-05.
+ * **Quotes came out on 2026-09-06**, Greg's call that it is valuable enough to
+ * show every reader, leaving four.
  * Greg, looking at a shared article while signed out:
  *
  * > When a non-logged-in user reads a Public-readable article, I thin it should
@@ -19,9 +21,9 @@
  * row's end of that is tests/diagram-kind-gating.test.tsx; both ends draw by one
  * rule, src/web/experimental-visibility.ts.
  *
- * **The counts here are nine and fourteen, not eight and thirteen.** Structure —
+ * **The counts here are ten and fourteen, not nine and thirteen.** Structure —
  * the merge of Hierarchy and Outline — has not landed, so both of those are
- * today's default-visible stand-ins for it. Eight/thirteen is the shape *after*
+ * today's default-visible stand-ins for it. Nine/thirteen is the shape *after*
  * that merge and must not be written down before it.
  *
  * ## The two rules, and the second is the one that is easy to lose
@@ -54,10 +56,10 @@ import {
   EXPERIMENTAL_SIGNED_OUT,
 } from "./helpers/experimental-fixtures.js";
 
-/** The five, by name, so a sixth cannot be added without this file saying so. */
-const BEHIND_THE_SWITCH: readonly Mode[] = ["quotes", "timeline", "referee", "remember", "debate"];
+/** The four, by name, so a fifth cannot be added without this file saying so. */
+const BEHIND_THE_SWITCH: readonly Mode[] = ["timeline", "referee", "remember", "debate"];
 
-/** Everything else — nine of them, until Structure replaces two with one. */
+/** Everything else — ten of them, until Structure replaces two with one. */
 const ALWAYS: readonly Mode[] = MODES.filter((m) => !BEHIND_THE_SWITCH.includes(m));
 
 let host: HTMLDivElement;
@@ -92,7 +94,7 @@ function reading(props: Record<string, unknown>): void {
   });
 }
 
-/** The bar off the reading view: fourteen loose links, or nine of them. */
+/** The bar off the reading view: fourteen loose links, or ten of them. */
 function loose(search: string, props: Record<string, unknown> = {}): void {
   history.replaceState(null, "", `/read/a-piece/metadata${search}`);
   act(() => {
@@ -132,9 +134,9 @@ function checked(): string[] {
 const labels = (modes: readonly Mode[]) => modes.map((m) => MODE_LABEL[m]).sort();
 
 describe("how many buttons the bar draws", () => {
-  it("nine, with the switch off", () => {
+  it("ten, with the switch off", () => {
     reading({ experimental: EXPERIMENTAL_OFF });
-    expect(radioModes()).toHaveLength(9);
+    expect(radioModes()).toHaveLength(10);
     expect([...radioModes()].sort()).toEqual(labels(ALWAYS));
   });
 
@@ -147,7 +149,7 @@ describe("how many buttons the bar draws", () => {
   /**
    * The signed-out reader Greg was looking at, **as far as this file can see
    * them**: the bar is handed the answer, so what is checked here is that being
-   * told *signed out, off* draws nine buttons.
+   * told *signed out, off* draws ten buttons.
    *
    * It does not exercise a session, and the name used to imply it did (GPT Sol,
    * reviewing stage 2). That a signed-out session produces this answer *because
@@ -155,13 +157,13 @@ describe("how many buttons the bar draws", () => {
    * tests/experimental-store.test.tsx's, and that the reading view asks for
    * nothing on their behalf is tests/public-network-trace.test.tsx's.
    */
-  it("nine when the bar is told the reader is signed out and off", () => {
+  it("ten when the bar is told the reader is signed out and off", () => {
     reading({
       experimental: EXPERIMENTAL_SIGNED_OUT,
       visitor: true,
       marked: markedModes(NOTHING_SHARED),
     });
-    expect(radioModes()).toHaveLength(9);
+    expect(radioModes()).toHaveLength(10);
     expect(radioModes()).not.toContain(MODE_LABEL.timeline);
   });
 });
@@ -180,7 +182,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
   it("a reading view in Timeline draws it, checked, with the switch off", () => {
     reading({ mode: "timeline", experimental: EXPERIMENTAL_OFF });
     expect(radioModes()).toContain(MODE_LABEL.timeline);
-    expect(radioModes()).toHaveLength(10);
+    expect(radioModes()).toHaveLength(11);
     expect(checked()).toEqual([MODE_LABEL.timeline]);
   });
 
@@ -199,13 +201,13 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    * metadata page knows which mode the reader came from.
    */
   it("the metadata page retains the mode its URL carries", () => {
-    loose("?mode=quotes");
-    expect(linkModes()).toHaveLength(10);
-    expect(linkModes()).toContain(MODE_LABEL.quotes);
+    loose("?mode=remember");
+    expect(linkModes()).toHaveLength(11);
+    expect(linkModes()).toContain(MODE_LABEL.remember);
     expect(linkModes()).not.toContain(MODE_LABEL.timeline);
   });
 
-  it("the metadata page with no mode in its URL draws the nine", () => {
+  it("the metadata page with no mode in its URL draws the ten", () => {
     loose("");
     expect([...linkModes()].sort()).toEqual(labels(ALWAYS));
   });
@@ -218,7 +220,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
 
 /**
  * **The fit key carries the identities, not the count.** GPT Sol, finding 4:
- * retaining the current mode keeps the count unmoved while `?mode=quotes`
+ * retaining the current mode keeps the count unmoved while `?mode=timeline`
  * becomes `?mode=remember`, and those two words are not the same width — so a
  * signature counting buttons would leave the bar overflowing, or its labels
  * dropped with room to spare, until the next resize.
@@ -232,8 +234,8 @@ describe("the fit signature", () => {
     fitSignature(visibleModes(on, current), current, noop, undefined, null, null);
 
   it("changes when the visible identities change at a constant count", () => {
-    expect(visibleModes(false, "quotes")).toHaveLength(visibleModes(false, "remember").length);
-    expect(sig(false, "quotes")).not.toBe(sig(false, "remember"));
+    expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "remember").length);
+    expect(sig(false, "timeline")).not.toBe(sig(false, "remember"));
   });
 
   it("changes when the switch does", () => {
