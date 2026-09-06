@@ -23,7 +23,7 @@
  * arrived that day went through the same token rather than firing from a mount,
  * for the reason the next section gives — and two of them, Tweets and
  * Candidates, had been cut back to a button precisely because an earlier version
- * fired on mount. docs/plans/260906a-opening-a-mode-starts-it-generating.md.
+ * fired on mount. docs/plans/260906b-opening-a-mode-starts-it-generating.md.
  *
  * ## Why a mount is not a click
  *
@@ -200,7 +200,7 @@ const MODE_TARGET: Partial<Record<Mode, AutoRunTarget>> = {
  * before any chip has been pressed. If that line goes, this row goes with it.
  * CandidatesPanel.tsx § `startBrief` carries the whole argument.
  *
- * docs/plans/260906a-opening-a-mode-starts-it-generating.md § Stage 4.
+ * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
  */
 const REFEREE_TARGET: Partial<Record<RefereeView, AutoRunTarget>> = {
   claims: "claims",

@@ -3841,7 +3841,7 @@ export const REFEREE_DECLARE_IT =
  * sight while the Candidates chip stays on screen.
  *
  * If Candidates ever goes back behind a button, this line goes with it.
- * docs/plans/260906a-opening-a-mode-starts-it-generating.md § Stage 4.
+ * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
  */
 export const REFEREE_CANDIDATES_REACHES_SEARCH =
   "Opening Candidates may send terms drawn from this paper to a search engine, which is a " +

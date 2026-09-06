@@ -30,7 +30,7 @@
  * `beginAutoAttempt` exactly like the rest — it is only a `Set` key — but there
  * is no job behind them for the reader to watch or cancel.
  *
- * docs/plans/260906a-opening-a-mode-starts-it-generating.md § Stage 1.
+ * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 1.
  */
 import type { StepName } from "../types.js";
 

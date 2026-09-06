@@ -16,7 +16,7 @@
  * **A mount is still not an ask, and that is what every test here holds.** What
  * changed on 2026-09-06 is that the *chip press* which opens the sub-mode counts
  * as one, through the activation token
- * ([260906a](../docs/plans/260906a-opening-a-mode-starts-it-generating.md)) — so
+ * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)) — so
  * the four chips are no longer "three inert and one not": Claims and Candidates
  * both run what they open, and Criteria and Mirror arm nothing. Nothing in this
  * file arms a token, so every mount below is the bare mount, which is exactly

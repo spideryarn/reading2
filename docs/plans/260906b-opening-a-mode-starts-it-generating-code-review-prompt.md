@@ -4,10 +4,10 @@ or a hook whose status mapping is subtly off.
 
 Read, in this order:
 
-1. `docs/plans/260906a-opening-a-mode-starts-it-generating.md` — especially the **As built** section,
+1. `docs/plans/260906b-opening-a-mode-starts-it-generating.md` — especially the **As built** section,
    which records what your plan review changed. Your findings 1, 2, 3, 4, 9, 10 and the `useClaims`
    ordering point were all acted on; check that each fix is real and not cosmetic.
-2. `docs/plans/260906a-opening-a-mode-starts-it-generating-plan-review-sol.md` — your own plan review.
+2. `docs/plans/260906b-opening-a-mode-starts-it-generating-plan-review-sol.md` — your own plan review.
 3. The scoped diff at `/tmp/claude-1000/-home-greg-code-spideryarn2/d809fe00-8eb1-4b23-a332-b174b22d7f11/scratchpad/code.diff`
    (tracked-file diff, with the two new files appended in full at the end).
 4. The files themselves in the repo where you need more context than the diff gives —

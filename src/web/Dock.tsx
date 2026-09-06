@@ -635,7 +635,7 @@ const MODES_UI = [
      **Pressing this button draws the Sketch, since 2026-09-06.** It used to buy
      nothing — the mode landed on an invitation with the price on it and waited
      for a second press — and Greg asked for the second press to go
-     (docs/plans/260906a-opening-a-mode-starts-it-generating.md). So this is now
+     (docs/plans/260906b-opening-a-mode-starts-it-generating.md). So this is now
      the most expensive button in the bar that is in front of *every* reader:
      ~$0.20 and about two minutes. Only the Sketch; Illustrated is still its own
      chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the

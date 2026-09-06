@@ -168,7 +168,7 @@ prompt.
 `quiz` is a pipeline step like `ideas` or `timeline` — off the default list, run on demand by a
 button in the band — and, since 2026-09-06, by pressing the **Quiz** chip itself,
 which is Greg's rule that opening a mode is the reader asking for it
-([260906a](../plans/260906a-opening-a-mode-starts-it-generating.md);
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md);
 [`activation.ts`](../../src/web/activation.ts)). The chip arms whether or not the
 sub-mode changes, so pressing Quiz while already in Quiz is how a reader asks
 again after a read that failed. `useQuiz` grew a second verb for it: **`ensure`**

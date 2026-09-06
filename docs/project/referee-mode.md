@@ -55,7 +55,7 @@ gesture — a pasted link, a Back step and a re-render all reach one — so a fi
 a model call and sent paper-derived terms to a search engine without having asked for either
 (2026-09-02). The press-not-mount rule survives; since 2026-09-06 a press on the **chip** counts as
 one, and the button stays for the reader whose automatic attempt failed
-([260906a](../plans/260906a-opening-a-mode-starts-it-generating.md), and § the disclosure, below). It is a third `ThreadKind` on chat's own machinery
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md), and § the disclosure, below). It is a third `ThreadKind` on chat's own machinery
 (`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
 [`src/referee-candidates.ts`](../../src/referee-candidates.ts),
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
@@ -474,7 +474,7 @@ happened yet.
 
 **Since 2026-09-06 the chip runs it, and the disclosure moved rather than went.** Greg asked for
 every mode to start itself on being opened
-([260906a](../plans/260906a-opening-a-mode-starts-it-generating.md)), and this is the sub-mode where
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md)), and this is the sub-mode where
 that is most worth arguing about. What made the mount version wrong survives intact — a pasted link,
 a Back step and a re-render all reach a mount, and none of them is anybody asking — and none of them
 reaches a chip's `onClick`, which is where `armActivationForRefereeView` is called and the only place

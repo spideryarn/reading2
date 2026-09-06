@@ -313,7 +313,7 @@ sentence correct when the notice is collapsed at 1400px and 390px, and below the
 expanded notice cannot push it out of sight while the Candidates chip stays on screen.
 
 Verdict after the fixes: the tests Sol still wants are listed in its review
-([-code-review-sol.md](260906a-opening-a-mode-starts-it-generating-code-review-sol.md)); the two
+([-code-review-sol.md](260906b-opening-a-mode-starts-it-generating-code-review-sol.md)); the two
 highest-value ones — the malformed `?diagram=` case, and Quiz's forced/unforced request bodies in
 [`step-job-force.test.tsx`](../../tests/step-job-force.test.tsx) — are written. The rest are
 recorded there rather than built.

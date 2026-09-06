@@ -7,7 +7,7 @@
  * not* — end to end, from a real click to a counted POST. This file holds the
  * same rule for the four controls that are **not** mode buttons and that started
  * running what they open on 2026-09-06
- * ([260906a](../docs/plans/260906a-opening-a-mode-starts-it-generating.md)):
+ * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)):
  *
  *  - Referee's four sub-mode chips, two of which arm and two of which must not;
  *  - Remember's Recall | Quiz toggle;

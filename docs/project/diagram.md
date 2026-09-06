@@ -188,7 +188,7 @@ posted, for an owner arriving at `?mode=diagram` and at
 *Pressing Diagram in the bar* now draws the picture it is about to open, which
 makes it the dearest button in the bar that is in front of every reader: about
 $0.20 and two minutes. Greg's rule
-([260906a](../plans/260906a-opening-a-mode-starts-it-generating.md)):
+([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md)):
 
 > By opening the mode, the user is implicitly indicating that they want what's
 > already generated, or to generate it if needed.

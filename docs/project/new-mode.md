@@ -54,7 +54,7 @@ Then the residue, which is why this page exists:
   [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), a row in `MODE_TARGET`
   ([`activation.ts`](../../src/web/activation.ts)), and `useAutoRun` in its hook, called with the
   **unforced** verb. The traps, and the one mode deliberately left out, are
-  [260906a](../plans/260906a-opening-a-mode-starts-it-generating.md).
+  [260906b](../plans/260906b-opening-a-mode-starts-it-generating.md).
   *[`tests/modes-that-start-themselves.test.tsx`](../../tests/modes-that-start-themselves.test.tsx)
   for the modes already in it; nothing for a new one.*
 - **The band's chrome**: the scroller is documented in

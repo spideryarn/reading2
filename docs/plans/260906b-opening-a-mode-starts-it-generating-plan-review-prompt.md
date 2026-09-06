@@ -2,7 +2,7 @@ You are reviewing a PLAN, before it is built, for a TypeScript/React reading app
 
 Read these files (you are at the repo root):
 
-- docs/plans/260906a-opening-a-mode-starts-it-generating.md   <- THE PLAN UNDER REVIEW
+- docs/plans/260906b-opening-a-mode-starts-it-generating.md   <- THE PLAN UNDER REVIEW
 - src/web/activation.ts
 - src/web/useAutoRun.ts
 - src/web/jobEngine.ts   (just `beginAutoAttempt` and the `autoAttempts` set)
