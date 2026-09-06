@@ -78,6 +78,47 @@ in fifteen worktrees, green on the Mac, and no two people can reproduce each oth
 [silent-success.md](../reusable/silent-success.md) shape inverted: not a check that passes while
 doing nothing, but a check whose passing means nothing in particular.
 
+## The next morning it happened again, and it was not the same thing — 2026-09-06
+
+The 01:35 sweep found `tests/store-parity.test.ts` red again, and the first diagnosis written here
+was wrong. It is left on the record because the way it was wrong is the more useful half.
+
+**What it looked like.** The Postgres library listed 10 articles where the on-disk corpus has 12.
+The two missing, `revistes-ub-30977` and `source-2`, both carry `archived_at` set on **2026-08-27**
+— ten days before the run, on this box, by somebody doing an ordinary thing. That reads exactly
+like the bug above: an assertion meeting local state older than itself. It was written up as a
+second instance of the same class.
+
+**What it actually was.** GPT Sol refused that write-up and was right. The suite *itself* recreates
+those archive flags moments before asserting: `seedShelfFromFiles(slug)` runs for every loaded
+article ([store-parity.test.ts:362](../../tests/store-parity.test.ts)) and writes all five shelf
+columns from each `data/<slug>/shelf.json`, `null` included and deliberately so — its own comment
+says leaving a key absent would let a previous run's `archivedAt` survive, "the exact failure mode
+the parity suite exists to rule out". Both files still carry an `archivedAt`. So the database state
+was not stale; it was seeded from disk by the test, on that run, on purpose.
+
+**The real cause is a regression, and it came in with Stage G.** Until 2026-09-05 the assertion
+compared two *listings* — filesystem against Postgres — and both ends excluded archived articles,
+because that is what a library listing does. `86a4ef7c` deleted the filesystem store and replaced
+that end with `slugs`: every directory holding blocks and a tree, which excludes nothing. An
+archived article thereby became a slug the assertion demanded and the query is correct to withhold.
+Green in every worktree, because a worktree has none of those gitignored directories to ask about;
+red only in the primary, which is the same asymmetry as the bug above and the only thing the two
+share.
+
+**Fixed in this sweep**, in `tests/store-parity.test.ts`, by partitioning rather than excluding: the
+active slugs must be exactly the active shelf and the archived slugs exactly the archived shelf,
+each read from the same `shelf.json` the suite seeded from. That is stronger than the assertion it
+replaces and much stronger than naming the two articles — dropping an archived article from
+Postgres altogether would now fail, where an exclusion would have passed. 108 passed, 0 failed.
+
+**The lesson is about the shape of the first answer, not about shelves.** "Old local state met a new
+assertion" was available, familiar, fitted every visible fact, and was wrong. It was reached by
+reading the database and the calendar and never reading the fifteen lines of test setup directly
+above the failure. A diagnosis that explains the evidence is not thereby correct, and the sign of
+this particular error is comfort: it arrived already matching a postmortem written the day before.
+What broke it open was a reviewer asking for the code path rather than the symptom.
+
 ## What would have caught it
 
 Ranked by ease and by value, which here are not the same order.
@@ -98,16 +139,37 @@ Ranked by ease and by value, which here are not the same order.
    rather than predicted: pointed at the corpus, `loadComments("writes")` returned the laptop's
    eleven comments instead of the fixture's three.
 
-   Worth saying, because it makes the deferred sweep cheaper than its own plan assumes:
-   [`dataRoot()`](../../src/store/data-root.ts) already exists, already reads the override, and its
-   doc-comment already forbids exactly this — *"Call it; never hoist it into a `const` at module
-   scope, which is the bug the header describes."* Undeployed and unoverridden it returns the repo
-   root, which is what those five constants evaluate to today, so the swap is behaviour-preserving
-   on a laptop and only starts differing where it should: under a test's override, and under a
-   deployed job's scope — where `import.meta.dirname/..` is a read-only bundle path, which is the
-   latent second bug in the same four lines.
+   **This got more expensive within hours of being written, and the note is the point.** When the
+   sentence above was drafted on 2026-09-05 it went on to say the sweep was cheap, because
+   `dataRoot()` already existed, already read the override, and its own doc-comment already forbade
+   exactly this hoisting. That is no longer true: `src/store/data-root.ts` was **deleted the same
+   evening** by `86a4ef7c` "Stage G: the filesystem store is gone", and `SPIDERYARN_DATA_ROOT` is
+   now referenced nowhere in `src/` at all. Twelve files under `tests/` still mention the name, but
+   only one still assigns it (`tests/pipeline-slug-claim.test.ts:102`); the rest are comments
+   describing a mechanism that no longer exists. Verified 2026-09-06. The readers are still there,
+   still hoisted, still reading the laptop's `data/` whatever a test sets — and there are **five**
+   of them, not four, because the fifth is worse and easy to miss:
 
-   Until that lands, a gate result from a worktree is not evidence about the primary and vice versa.
+   ```
+   src/comments.ts:33         const ROOT = path.resolve(import.meta.dirname, "..")
+   src/chat.ts:56             const ROOT = path.resolve(import.meta.dirname, "..")
+   src/searches.ts:50         const ROOT = path.resolve(import.meta.dirname, "..")
+   src/shelf.ts:51            const ROOT = path.resolve(import.meta.dirname, "..")
+   src/glossary-lookups.ts:66 const ROOT = process.cwd()
+   ```
+
+   `process.cwd()` is not the same bug as the other four. Theirs is fixed relative to the module and
+   merely ignores the override; this one moves with whatever directory the process happened to start
+   in, so it reads a different `data/` depending on where you typed the command. The paragraph above
+   said "five" and then listed four, which is how it stayed unnoticed.
+
+   So the bug is unchanged and the remedy has to be rebuilt rather than reused. Whoever picks this
+   up should know they are introducing the override, not adopting it — and should check first
+   whether these four readers ought to exist at all now that the filesystem store is gone, since
+   deleting a file reader beats parameterising one. That question is genuinely open here; it is not
+   a recommendation dressed as one.
+
+   Until it lands, a gate result from a worktree is not evidence about the primary and vice versa.
 3. **A repair path for a stored tree, not only for a proposed one.** `collapseRestatedRungs` fixes
    trees at build time, from a model proposal. Nothing fixes a tree that is already stored: grep
    `src/` and `src/store/` and there is no such path. So an article whose tree was published before

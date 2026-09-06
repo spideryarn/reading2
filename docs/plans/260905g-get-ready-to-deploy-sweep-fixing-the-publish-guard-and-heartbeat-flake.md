@@ -163,3 +163,65 @@ for its full 30s, because the server cannot close while a request is still pendi
 fails *slowly* — around 35s — where the old one failed instantly. That is an acceptable trade for
 not going red on a busy box, but it is the reason to prefer being told about it here rather than
 discovering it in a 28-minute `npm run check`.
+
+## Stage 4: the merge, and the red it exposed — 2026-09-06
+
+The 01:35 sweep merged 82 commits (486 files, five migrations, already applied locally by another
+agent) and ran `npm run check` in 12 minutes. `typecheck`, `build`, `cycles`, `chain` and
+`committed` clean; lint, knip, complexity (105) and dupes (295) advisory as always. Two test files
+red out of 727, and both were this sweep's to fix.
+
+- **`tests/doc-links.test.ts`** — a link in the postmortem committed 40 minutes earlier pointed at
+  `src/store/data-root.ts`, which the merge had just deleted (`86a4ef7c`, "Stage G: the filesystem
+  store is gone"). Fixed by rewriting the recommendation that named it, since the file's absence
+  changes the advice and not just the link: `SPIDERYARN_DATA_ROOT` now has no reader in `src/` at
+  all, so that remedy has to be rebuilt rather than adopted.
+
+- **`tests/store-parity.test.ts`** — diagnosed wrong first, and the write-up in the postmortem
+  says how. It looked like local database state older than the assertion; it was a regression that
+  arrived with Stage G, which replaced a listing-to-listing comparison with a listing-to-disk one
+  and so began demanding that archived articles appear on the active shelf. Fixed by partitioning
+  the assertion into active and archived halves, which is stronger than what it replaces. 108
+  passed.
+
+Both fixes went to GPT Sol. Round one returned **REFUSE** with two P1s: the store-parity diagnosis
+was wrong on the evidence (F1) and there was a correct narrow fix that the write-up had declared
+ownerless (F2), plus a P2 inventory correction and a P3 overclaim. All four were checked against
+the code, all four were upheld, all four applied. The P2 was the useful surprise: there are **five**
+hoisted fixture readers rather than four, and the fifth (`src/glossary-lookups.ts`) uses
+`process.cwd()`, which moves with the directory the process started in rather than merely ignoring
+the override.
+
+### What this sweep got wrong, kept
+
+The first store-parity diagnosis fitted every visible fact — two articles archived in August, a
+gate red in the primary and green in every worktree — and was reached without reading the fifteen
+lines of test setup directly above the failure, which seed those very flags from disk on every run.
+It was wrong in the direction of the previous day's postmortem, which is the direction a tired
+sweep is most likely to be wrong in. Kept in the postmortem rather than quietly corrected, because
+the recognisable part is not the shelf: it is a diagnosis arriving already agreeing with something
+written yesterday.
+
+### The browser pass
+
+Playwright against system Chrome on the box, in a Sonnet subagent, over the areas the merge
+actually touched. Signed in through the real login form rather than a seeded session, 29 articles
+listed, reading view rendering real prose. Link hover-cards fire `GET /api/link-summary` → 200 and
+render; the Debate band reaches its empty state (via `?mode=debate` — it is `experimental: true`
+and deliberately absent from the dock); all five shelf buttons present with distinct `aria-label`s
+on every row; `/admin` and `/design` both load, which is the check worth having, since lazy-loading
+a route is exactly the change that white-screens it. **Zero console errors.**
+
+Two things reported honestly rather than waved through. The glossary re-annotation improvement was
+**not** verified — clicking a term reloaded nothing and threw nothing, but the render count was
+never instrumented, so the perf claim is unconfirmed, not confirmed. And both
+`POST /api/library/:slug/open` and `GET /api/link-summary` emit a successful response (204/200) and
+*then* a `net::ERR_ABORTED` `requestfailed` event for the same request, reproducibly and with no
+navigation in between. The app has its data both times, so this is very likely a Chromium/CDP
+double-report on teardown rather than a real failure — but it is written down here because "almost
+certainly benign" is how the interesting ones start, and the next person to see it should find
+somebody has seen it before.
+
+Round two of the GPT Sol review, scoped to the store-parity fix alone, returned **no findings**:
+the partition is a real partition and not an exclusion, the seeded state and the partition source
+are the same `shelf.json`, and the ordering assertion is correctly left on the active half.
