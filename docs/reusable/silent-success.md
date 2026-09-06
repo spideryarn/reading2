@@ -189,7 +189,7 @@ same wrong conclusion. Optimise for shortening that interval, not for the fix.
 > When something looks right, ask what you would have to measure for it to look **wrong** — then
 > measure that.
 
-Four corollaries, each of which caught something here:
+Some corollaries, each of which caught something here:
 
 **Sweep a continuous input; don't sample it.** Where the input is a width, an offset, a count, assert
 the *shape* of the output over the range rather than its value at points you thought to name. A
@@ -249,6 +249,15 @@ The gap is usually between the test's scope and the claim in its own name — an
 everybody reads. All of the above
 was collected in spideryarn on one afternoon, 2026-08-28; the tell for the first was four controls
 passing at once, which is not a thing that happens.
+
+**And a suite that never had the occasion to assert something cannot defend it.** The corollaries
+above ask whether one control really ran. This one is about the suite: red-first fixes a test's scope
+to the diff — you cannot write a failing test for behaviour that is *already* correct — so the
+invariants a change has to **preserve** get no assertion, because nobody had any occasion to write
+one. Ask the finished code the other question, *what could break this without my suite noticing?*,
+and mutate it to find out. Worth the minutes wherever the passing value is zero, "unchanged" or "the
+same object", and on caches, instruments, compound keys and composition seams — the last two
+mechanically, by reading the signature and counting.
 
 ## Spotting the family
 

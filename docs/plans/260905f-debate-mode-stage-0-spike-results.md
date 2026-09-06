@@ -174,6 +174,72 @@ Three consequences, all of which changed the plan:
 a *typical* article costs less than $0.135. Both probes were adversarial by design. The real
 distribution comes from Stage 2's first runs against the shelf.
 
+## Stage 3½ — the first live runs, 2026-09-05
+
+Two articles, **$0.6252** of real spend, from the `ai_calls` ledger rather than from a probe script.
+Everything before this section was measured with a bare prompt; this is the built stage.
+
+| article | pass | searches | cost | ms | outcome |
+|---|---|---|---|---|---|
+| `cargocult-spya-rz663q` | A | 6 | $0.1747 | 82,784 | **0 direct** — 2 reported, both lost to `unverifiedSource` |
+| `cargocult-spya-rz663q` | B | 4 | $0.1780 | 63,833 | **7 claim rows** kept of 8; 1 lost to `claimNotInBlock` |
+| `claudes-constitution-…` | A | 2 | $0.0777 | 37,026 | process killed before pass B — **paid for, discarded** |
+| `claudes-constitution-…` | A | 2 | $0.0725 | — | produced 1 direct + 5 claim rows … |
+| `claudes-constitution-…` | B | 2 | $0.1223 | — | … and then **failed to store them** |
+
+### 1. The cost figure is a range, and the plan's ceiling was too low
+
+A completed run cost **$0.3527** — above § The spend ceiling's "up to ~$0.27", which was measured with
+probes carrying **no article** while pass B sends the whole thing. Per-pass cost varied **2.4×**
+($0.0725 to $0.1780) with how much the model chose to search, so *any* single figure is a sample.
+Quote it as **$0.20–0.40 for a completed run on a short article**, rising with length, and say it is
+a range rather than a number.
+
+### 2. `STEP_BUDGET_MS = 120_000` is too small, and would not have fired anyway
+
+The completed run took **146.7 s** wall-clock. The guess was 120 s. It did not abort, because
+`STEP_BUDGET_MS` is consulted only between steps (Sol's F31) — so the guess was both wrong and inert.
+
+### 3. Group one's binding constraint is **not** the rule two review rounds were spent hardening
+
+On Feynman — fifty years of citation — group one kept **nothing**, and `directnessUnverified` was
+**0**. Both reported rows died earlier, at `unverifiedSource`: the model's quotations were not
+findable in the search extract. So `articleReferenceQuote` never got a look in, and the real limit is
+the one § Attribution calls out under F18 — the extract is a 236–4,945 character slice chosen by a
+search engine, not the page. **Fetching the full page, listed in § Deliberately not in v1, is now the
+highest-value deferred item rather than a nicety.**
+
+Group one is *not* impossible: the second article produced **1 direct row**. So the rule admits real
+reception; the extract is what usually stops it.
+
+### 4. `valence` is systematically measuring the wrong thing — the one user-visible bug
+
+Three of the seven Feynman rows point valence at the **source's own subject** rather than at the row's
+target:
+
+| row | relation | valence | what it actually does |
+|---|---|---|---|
+| psi-encyclopedia, metal-bending | `disputes` | **positive** | disputes Feynman; positive about psi |
+| skepticalinquirer | `corroborates` | **negative** | backs Feynman; negative about Geller |
+| psi-encyclopedia, Rhine | `disputes` | **positive** | disputes Feynman; positive about parapsychology |
+
+§ 4 defines the target — *the cited passage's stance toward the row's target* — after Sol's F19, and
+the prompt does not enforce it. On screen a source **supporting** the article draws a red *Critical*
+chip, which inverts the at-a-glance signal Greg asked for, on roughly half the rows. **Fix the prompt
+and re-run**; it is not measurable any other way.
+
+### 5. Two operational findings about spending money on a shared box
+
+- **Atomicity means a process death burns the completed pass.** The two passes are one step (F16,
+  correctly), so a kill between them writes nothing and bills pass A anyway — $0.0777, here, to the
+  OOM killer. A background job on a loaded box is not a safe place to run this; use tmux.
+- **A CLI-queued job may be executed by somebody else's checkout.** The local Supabase is shared, so
+  the second run's job was claimed by a dev server in another worktree, ran both passes, produced
+  `1 about this piece, 5 about what it claims`, then errored on the write — and **its logs are not in
+  this tree**, so the cause is unresolved. `whyUnusable("debate", …)` and `isDebateDocument` both
+  accept a one-direct-row document, so the shared validators are not it. To settle it: run the step
+  with no other dev server up, or read the logs of whichever server claimed the job.
+
 ---
 
 Up: [260905f-debate-mode-what-the-web-says-about-this-piece.md](260905f-debate-mode-what-the-web-says-about-this-piece.md)
