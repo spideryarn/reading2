@@ -1,6 +1,7 @@
 # A mode failure should leave the article readable
 
-Status: **plan, not yet built.** Worktree `a2-mode-failure-containment`, branch
+Status: **built.** Stage 0 recorded, stage 1 committed (`d86810ed`), stage 2 done — the Dock focus
+correction and the docs. Worktree `a2-mode-failure-containment`, branch
 `worktree-a2-mode-failure-containment`, off `6eecb377f24d92446086a006d5b3103daae40aef`
 (2026-09-05T22:04+01:00).
 
@@ -176,8 +177,13 @@ Established from source before any change, and to be confirmed in a browser:
 - `.dock-drawer` is `z-index: 95`.
 - `.dock` is `z-index: 96` — **above the scrim**.
 
-So the bar stays clickable with the drawer open, by construction, while the prose does not. The
-drawer is therefore **modeless with respect to the dock and modal with respect to the prose**, and
+So the bar stays clickable with the drawer open, by construction, while the rest of the reader does
+not. The drawer is therefore **modeless with respect to the dock and pointer-blocking over the
+reader beneath it** — the scrim is fixed across the whole viewport, so the prose *and* the other
+reader chrome below `z-index: 92` are behind it, and only pointer input is intercepted; nothing
+behind it is inert or hidden from keyboard or assistive-technology navigation (GPT Sol, F22 and F26
+on the Stage 2 reviews, which are where "modal with respect to the prose" overstated it and "only
+the prose is behind the dim" then understated it) — and
 `aria-modal="true"` is a false statement about it: that attribute tells assistive technology to hide
 everything outside the dialog, including a bar that is visually present and operable, and there is no
 focus containment in the file to make the claim true the other way.
@@ -347,6 +353,40 @@ there, because neither ever selects it.
 
 Done: as above, plus a browser transcript in this doc.
 
+#### What landed
+
+The reproduction below is what the correction was cut to fit, and it is **both halves and nothing
+else**: `aria-modal="true"` is gone from the drawer (the labelled `role="dialog"` stays), the drawer
+records the opener and moves focus to its close button when it opens, and every close path — Escape,
+the scrim, the ×, the same tab pressed again — puts focus back. One effect in `Dock` does both
+halves, because they are one fact. **No focus trap**: the bar behind is operable and Tab-reachable,
+which is exactly why the `aria-modal` claim was false. The capture-phase Escape handler and its
+race with `CommentDialog`, the scrim, the z-indexes and every other overlay are untouched.
+
+**The red, kept.** Against the unchanged tree,
+`tests/the-dock-drawer-is-not-a-modal.test.tsx` gave `6 failed | 2 passed (8)`:
+`does not claim the rest of the page away` (*expected true to be false* — the attribute was there),
+`moves into the drawer when it opens with Enter` (*expected false to be true* — the drawer did not
+contain `document.activeElement`), and all four close paths, each *expected `<button …>` to be
+`<button …>`* with focus on `<body>` or on the close button rather than the opener. The two that
+passed are the two the browser had already established as true: the labelled dialog, and Tab not
+being trapped.
+
+**Three of those four close-path tests were green in a first draft**, and the reason is worth
+keeping: jsdom's `.click()` does not focus the button it lands on, so with focus never entering the
+drawer the opener still held it at close time and the assertion passed over a contract nothing kept
+— [silent-success.md](../reusable/silent-success.md) in miniature. Each now asserts that focus is
+*inside* the drawer first, and clicks the way a pointer does.
+
+Docs corrected in the same stage: [web-client.md](../project/web-client.md) (rows for both
+boundaries and `src/web/modes/`, plus § A mode that breaks does not take the article with it),
+[copy.md](../project/copy.md) (`[mode-render]` and `[render]` as the third exception to
+`src/messages.ts`), [comments.md](../project/comments.md) (§ The drawer, which is where this focus
+contract lives), [ideas.md](../project/ideas.md) (its code list still pointed `IdeasBand` at
+`App.tsx`), and [logging.md § The browser](../project/logging.md#the-browser-nothing-yet), which
+still said `src/web/` had no logger, that browser errors were invisible in production, and that a
+reporting error boundary was something we might build.
+
 ## The simpler option passed over
 
 **Leave the boundary where it is and add nothing.** The counter is that the review's own acceptance
@@ -499,3 +539,56 @@ exist, while the bar behind it is visually present, operable by pointer, and rea
 
 This also settles Sol F5: asking "does Tab leave the drawer?" was vacuous, because focus never
 enters it. The correction is therefore both halves — the declaration and the focus.
+
+### Round 5 — Stage 2, GPT Sol, 2026-09-06
+
+Prompt: [260905h-stage2-review-prompt.md](260905h-stage2-review-prompt.md). Answer:
+[260905h-stage2-review-sol.md](260905h-stage2-review-sol.md). **Verdict: refuse**, on one established
+P1. All four accepted; nothing overruled.
+
+| ID | Severity | Finding | Disposition |
+|----|----------|---------|-------------|
+| F19 | P1 | **Selecting a comment hands focus back to the dock instead of into the dialog.** Open Comments → Tab to a question → activate it: `App` closes the drawer and opens `CommentDialog` in the same interaction, the drawer's cleanup focuses the Comments button, and `CommentDialog` has no focus effect — so the dialog that just opened gets nothing, and the next Tab goes onward through Tweets/Metadata rather than into the comment. **Not a regression**: before Stage 2 focus never left the Comments button either, so the end state is unchanged. Moving focus properly is what made the gap visible | Fixed — `CommentDialog` gets the same modeless-dialog lifecycle, with its own red-first test |
+| F20 | P3 | The docs say **two** error boundaries; there are three. `ChunkBoundary` inside `LazyPage` (`[chunk]`) arrived in this tree from the lazy-route job while this one was running | Fixed in `copy.md` and `logging.md` |
+| F21 | P3 | My own correction to `logging.md` replaced one wrong statement with another: "`src/web/` has no logger" is false in a file that describes `recordLog`, a ring buffer and redaction — what it lacks is **Pino and a continuous remote stream** — and of the 11 grep matches, three are comments, so eight are executable calls. A textual grep is not a call counter | Fixed |
+| F22 | P3 | "Modal with respect to the prose" overstates it: only *pointer* input is intercepted; the prose is not inert, not hidden, and focus is deliberately free to leave | Fixed wherever the phrase was copied to |
+
+Three things it cleared, which are what the design now rests on:
+
+- **Dropping `aria-modal` while keeping a labelled `role="dialog"` is the right call.** `aria-modal`
+  would claim every external surface is unavailable, contradicting a deliberately operable dock; a
+  real trap would make the contradiction worse unless the dock moved inside the modal scope.
+- **The `open`-only dependency is safe**: `Panel` has exactly one legal non-null value, so `?panel=`
+  cannot switch between two open panels.
+- The new focus effect does not fight the capture-phase Escape handler or the scrim.
+
+**F21 is the one to learn from.** It is the second time in this job that a correction to a stale doc
+introduced a fresh inaccuracy — the first was the trace-diff narrowing in F9. Both times the new
+sentence was written from a plausible reading rather than from a measurement, and both times the
+reviewer simply went and looked. When replacing a false statement about the code, run the command.
+
+### Round 6 — Stage 2, second pass, GPT Sol, 2026-09-06
+
+Prompt: [260905h-stage2-review-prompt-2.md](260905h-stage2-review-prompt-2.md). Answer:
+[260905h-stage2-review-sol-2.md](260905h-stage2-review-sol-2.md). **Verdict: refuse**, on two
+established P1s, both reproduced in a harness of its own. All five accepted; nothing overruled.
+**This is the last round on Stage 2** — two rounds, as the cadence says.
+
+| ID | Severity | Finding | Disposition |
+|----|----------|---------|-------------|
+| F23 | P1 | **Selecting another comment from the drawer bypasses the dialog's mount-only effect.** `App` swaps comment A → B with no `key`, so the dialog stays mounted, the empty-dep effect never re-runs, focus stays outside, and `openerRef` still describes A's opening path — so closing B could restore an obsolete gutter control | Fixed: a second effect keyed on the comment id, bailing out when focus is already inside so prev/next and delete-to-neighbour are untouched |
+| F24 | P1 | **Deleting a gutter-opened comment with no neighbour drops focus on `<body>`.** The gutter button and the focused Delete button both vanish in the same commit, `isConnected` is false, the cleanup deliberately does nothing, and the reader loses their place | Fixed: fall back to the dock's Comments button when the recorded opener has gone |
+| F25 | P3 | The console-inventory command I wrote down **does not do what it says** — it claims to exclude the preview pages and does not, so it returns 18, not 11 | Fixed, and the corrected command run before writing it down |
+| F26 | P3 | "Only the prose is behind the dim" is too narrow: the scrim is fixed across the viewport at z-index 92, the comment and chat dialogs are at 70, so most of the reader is behind it | Fixed in `Dock.tsx` and `comments.md` |
+| F27 | P3 | The close button is **not** first in the dialog's tab order — Previous and Next precede it when navigation is shown | Fixed |
+
+**Neither P1 is a regression**, and that is worth stating plainly: before this job nothing moved
+focus at all, so the end state of both sequences was exactly the same. They are pre-existing gaps
+that doing focus properly made reachable. Closing them is the "default to doing it now" rule, not
+repair work.
+
+**And F25 is the third time in this job** that correcting a stale statement about the code produced a
+fresh inaccuracy — after F9's trace-diff narrowing and F21's "no logger". Every one was written from a
+plausible reading rather than from running the thing, and every one was caught by a reviewer who
+simply ran it. The lesson has earned its place in this doc: **when you replace a false sentence about
+the code, run the command first, and paste what it actually printed.**

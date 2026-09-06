@@ -589,21 +589,21 @@ both would apply to any future schema change here.
 
 ### Stage: Establish the behavioural baseline and contain one mode failure
 
-- [ ] Refresh this source snapshot and check which earlier work has since landed. Record a scoped
+- [x] Refresh this source snapshot and check which earlier work has since landed. Record a scoped
   manifest, source SHA and relevant test names; do not reuse this audit's counts as current facts.
-- [ ] Run existing access, public-network, mode-entry, passage and offline-remount tests before
+- [x] Run existing access, public-network, mode-entry, passage and offline-remount tests before
   extraction. Capture the real request trace of Plain, Ideas and Chat on one fixture article.
-- [ ] Extract Ideas' existing owner/visitor controller without changing its props, sorting or
+- [x] Extract Ideas' existing owner/visitor controller without changing its props, sorting or
   lifecycle. Leave a deliberate import compatibility shim only while named tests are moved.
-- [ ] Write a failing shell-level test that throws inside that controller: prose and navigation
+- [x] Write a failing shell-level test that throws inside that controller: prose and navigation
   should survive, and choosing Plain should work. Add the local feature boundary and pass it.
-- [ ] Test explicit retry and an article/account change; neither should leave a stuck fallback or
+- [x] Test explicit retry and an article/account change; neither should leave a stuck fallback or
   cause an automatic paid request. Extend the throw to mode-only computation, not only its panel.
-- [ ] Add exact-token retirement for a failed initial render before `useAutoRun` claims its press.
+- [x] Add exact-token retirement for a failed initial render before `useAutoRun` claims its press.
   Test throw → Plain → Back/retry and a racing newer press, without effects in the failed child.
-- [ ] Audit the Dock's real focus contract; if a defect is established, reproduce it first and
+- [x] Audit the Dock's real focus contract; if a defect is established, reproduce it first and
   apply the smallest semantic/focus correction described in A6.
-- [ ] Update [web-client](../project/web-client.md), [copy](../project/copy.md) and the relevant
+- [x] Update [web-client](../project/web-client.md), [copy](../project/copy.md) and the relevant
   mode doc. Acceptance: one independently failing feature, still a usable reader.
 
 ### Stage: Separate article access, reader composition and mode controllers

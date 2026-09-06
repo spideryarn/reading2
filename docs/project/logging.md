@@ -48,7 +48,17 @@ terminal, which is the rule working rather than failing:
 [setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue). The tool
 that still prints a report like the one above is `npm run eval:pdf-read`.
 
-`src/web/` has zero `console` calls and is gaining none. See [§ The browser](#the-browser-nothing-yet).
+`src/web/` has no Pino or continuous remote log stream; it does have the
+structured client-side ring buffer in `log-buffer.ts`. A textual grep run on
+2026-09-06 returned 11 non-preview matching lines: three mentions in comments
+and eight executable direct `console.log`/`console.error` calls across the six
+files below. This is a dated inventory of direct spellings, not an enforced
+count; re-run it and inspect the matches.
+
+The command is `grep -rn --exclude='preview-*.tsx' 'console\.\(log\|warn\|error\|info\|debug\)' src/web/`,
+and the six files are `upload.ts`, `lib/api.ts` (five lines, three of them comments), `Tweets.tsx`, `perf.ts`,
+`live/useLiveConversation.ts` and `live/wiring.ts`. The `preview-*.tsx` pages are excluded: they are
+standalone dev pages and a different question. See [§ The browser](#the-browser-nothing-yet).
 
 ## The decision: Pino
 
@@ -917,25 +927,34 @@ Pino's Node build **does not run on edge/workerd**. No edge functions are planne
 non-issue — with one exception worth naming now so nobody meets it at deploy time: if the
 [one-email beta gate](auth.md) ever becomes edge middleware, that file logs with `console`, not Pino.
 
-## The browser: nothing, yet
+## The browser: no Pino, and no longer nothing <a id="the-browser-nothing-yet"></a>
 
-`src/web/` has no logger and no `console` calls, and that is the decision rather than an oversight.
+**There is still no Pino in `src/web/`, and no line of it reaches stdout.** That much is the
+original decision and it stands: the client surfaces its failures in the UI rather than swallowing
+them (`useComments`, `useJobs`, `App` and `Library` all carry error state to the screen), which is
+better than logging them.
 
-The usual argument for client logging — that errors experienced by users are lost in their own
-browsers and you only learn about them through reports — is an argument about users this app does not
-have. When something breaks, the one reader has DevTools open. The client already surfaces its
-failures in the UI rather than swallowing them (`useComments`, `useJobs`, `App` and `Library` all
-carry error state to the screen), which is better than logging them.
+The rest of the section was written on 2026-08-25 and stopped being true within days. What the
+browser has now:
 
-The original version reached the same place by accident: its Pino logger never ran in the browser at
-all, its "client-side error logging" was `console.error` calls in two auth forms, and its Next.js
-error boundary reported to nothing. Browser errors were, in production, invisible. That was fine for
-the same reason it is fine here.
+- **Three React error boundaries**, and all three report —
+  [`AppBoundary.tsx`](../../src/web/AppBoundary.tsx) for the whole app,
+  `ChunkBoundary` in [`LazyPage.tsx`](../../src/web/LazyPage.tsx) for a lazy route whose chunk never
+  arrived, and [`FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) for one mode
+  ([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it)).
+  Each calls `captureClientFailure` (Sentry, through the shared scrubber) and `recordLog`.
+- **`watchUncaughtErrors()`**, called by [`main.tsx`](../../src/web/main.tsx): `window.onerror` and
+  `unhandledrejection` into the ring buffer. Not a second reporter — Sentry already sees both — but
+  it is what orders a throw against the API calls around it.
+- **The ring buffer itself** ([`log-buffer.ts`](../../src/web/log-buffer.ts)): two hundred flat
+  entries, redacted and truncated at write time, normally thrown away, and sent only when a reader
+  ticks *Send extra diagnostics* on a bug report ([feedback.md](feedback.md)).
 
-**If that changes,** the cheap version is about twenty lines and no dependency: an error boundary
-plus `window.onerror` and `window.onunhandledrejection`, POSTing `{ message, stack, url }` to an
-endpoint that logs it server-side. Two things to get right — rate-limit it, because a render loop
-will eat the 256-line budget, and do not send the article URL.
+So *browser errors are invisible in production* is no longer the case, and an error boundary that
+reports somewhere is no longer a thing we would build one day. What is still not built is a client
+**log stream**: nothing POSTs a running account of what the client did to an endpoint, and the
+constraint that would govern one has not changed — rate-limit it, because a render loop will eat the
+budget, and do not send the article URL.
 
 ## Not built
 
