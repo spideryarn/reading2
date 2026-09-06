@@ -168,10 +168,10 @@ than quietly fixed, because each is a different way a sweep like this goes wrong
   machinery S5 was told to copy. "Additive" describes the diff, not the authorisation boundary. S5
   becomes a **plan-only session**: research, plan doc, Sol review, a line in `awaiting-approval.md`,
   and nothing built.
-- **R4 — the `a1-a3` question to Greg was stale.** The work has its own plan,
-  [260906c](260906c-separate-article-access-reader-composition-and-mode-controllers.md), with its
-  own stage-1 and stage-3/4a Sol reviews and a status line reading *"stages 1–4 built and
-  committed"*. 260905e's "not adopted" is the umbrella review; 260906c is the commission. So it is
+- **R4 — the `a1-a3` question to Greg was stale.** The work has its own plan —
+  `260906c-separate-article-access-reader-composition-and-mode-controllers.md`, which is **on the
+  branch and not yet on `dev`**, so it cannot be linked from here — with its own stage-1 and
+  stage-3/4a Sol reviews and a status line reading *"stages 1–4 built and committed"*. 260905e's "not adopted" is the umbrella review; 260906c is the commission. So it is
   **active work with a live owner**, not an architecture change awaiting approval, and the right
   action is neither to land it nor to ask about it but to leave its owner to the 03:23 merge it has
   already scheduled.
