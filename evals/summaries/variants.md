@@ -289,14 +289,22 @@ line and obvious the moment it becomes the only one.
 
 ## The shipped GISTS block, toc/6
 
-**Copied out of `src/hierarchy.ts` § SYSTEM, verbatim** — the block the `toc/6` bump added a
-per-depth length ceiling to (root at most 18 words, depth 1 at most 25, deeper 22–32), plus the
+**Copied out of `src/hierarchy.ts` § SYSTEM, verbatim** — the block `toc/6` gave a per-depth length
+rule (root at most 18 words, depth 1 at most 25, deeper at least 22 and at most 32), plus the
 no-meta-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
 
 It is copied rather than sliced live because the arm that carries it has to stay put while
 `src/hierarchy.ts` moves on; `tests/summaries-eval.test.ts` asserts the copy is
 character-for-character what production sends today, so a drift is a red test rather than a
 measurement of something we do not ship.
+
+**Revised once, on 2026-09-06, and the two revisions are different measurements.** The first draft
+gave depth 2 as *"22-32 words, and use them"* — a range that the model could satisfy from below, and
+did: measured over four documents at `--depth 2`, depth-2 length was **unmoved** against `toc/5`
+(mean 20.9 → 21.0 words), with 63 of 134 gists still under 22. A ceiling the model can satisfy by
+writing less is not a floor. The block below states the floor **as a floor**, and gives the reason a
+fine gist is allowed to be longer. Any depth-2 number from before that revision is a measurement of
+the earlier wording.
 
 ```
 GISTS (internal nodes)
@@ -309,9 +317,12 @@ GISTS (internal nodes)
     - the root: AT MOST 18 words. It is the shelf blurb — the one claim the
       piece makes, shorter than any chapter's gist.
     - depth 1: AT MOST 25 words.
-    - deeper than that: 22-32 words, and use them. This is the level a reader
-      reads INSTEAD of the paragraphs under it, so it can afford a subordinate
-      clause the root cannot.
+    - deeper than that: AT LEAST 22 words, and at most 32. The floor is the
+      half that will feel wrong, so obey it: down here a one-clause gist is too
+      SHORT, not admirably terse. A reader at this zoom is reading your sentence
+      INSTEAD of the paragraphs it covers, so give them the claim AND the ground
+      it stands on. If 22 words cannot be filled honestly, the section was too
+      slight to be its own node.
   A root that runs "X stems from A and B, so we should C while reaffirming D" is
   four gists wearing one full stop. Pick the claim they add up to and stop there.
 - No empty meta-narration: never "the essay opens by", "the essay closes by
