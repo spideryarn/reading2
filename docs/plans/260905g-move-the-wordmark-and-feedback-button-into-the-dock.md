@@ -1,6 +1,6 @@
 # Move the wordmark and the Feedback button into the Dock
 
-**Status: staged, in build as of 2026-09-06.** Written 2026-09-05 as the successor to stage 4 of
+**Status: stage 1 built 2026-09-06; stages 2 and 3 not started.** Written 2026-09-05 as the successor to stage 4 of
 [260905d](260905d-declutter-the-reading-view-top-bars.md), which was abandoned once measuring showed
 it could not deliver what it promised.
 
@@ -320,6 +320,73 @@ still announce as a radiogroup of the visible-mode set rather than of a literal 
 still centres on the viewport from inside a transformed, `overflow-x: auto` bar (a browser check,
 not a reasoned one — `.dock` carries a `transform`, which would capture a `position: fixed`
 descendant if the top layer did not escape it).
+
+### What stage 1 actually cost, measured
+
+Re-measured the same way after the change, same article and same box, 2026-09-06:
+
+| modes drawn | rung 0 | rung 1 | rung 2 | rung 3 |
+|---|---|---|---|---|
+| 9 — the default reader | 1397px | 1263px | 872px | ≤ 740px |
+| 14 — experimental on | 1838px | 1702px | 1048px | ≤ 740px |
+
+Two words cost rung 0 about **190px** — close to the ~1420 predicted for the default reader — and the
+new rung needs 1263, so **1280 and 1366 keep every mode label** and give up only `Spideryarn` and
+`Feedback`. That is the band the rung was added for, and it holds. The mode rung moved ~57px
+(815→872, 992→1048), which is the two extra glyphs; the last rung did not move, because it is the
+floor and the floor is the phone. Observed in Chrome: rung 0 at 1600 and 1440, rung 1 at 1366, 1300
+and 1280, rung 2 at 1024 and 900, rung 3 at 800 and 760 with no overflow (Sol's 732–900 check), and
+at 390 the row scrolls at `scrollWidth` 542 against 390.
+
+The dialog check the stage asked for passed: opened from `.dock-feedback` at 1440×900 it is
+`:modal`, its backdrop is the whole viewport and its panel is centred on it (448 + 544 = 992 in a
+1440 window), so neither `.dock`'s `transform` nor its `overflow-x: auto` captures it.
+
+**One thing found while building it, and it is worth knowing before stage 3.** `Dock` was at Biome's
+cognitive-complexity ceiling already; one more `&&` in its markup put it over, so the Feedback gate
+lives in a two-line `DockFeedback` component rather than inline. The next conditional added to that
+function will hit the same wall.
+
+**And one thing the tests could not see.** `FeedbackTrigger` renders nothing when it finds no
+`FeedbackHost` above it, and a signed-out reader has none — so G2's `experimental.signedIn` gate and
+the missing host agree on every page the router can produce, and deleting the gate left the whole
+route walk green. The gate has its own test now, mounting `Dock` inside a host with the bar told
+nobody is signed in, which is an arrangement the router never produces. Worth remembering as a shape
+rather than as an incident: a belt-and-braces pair where the braces are invisible to the test is one
+brace.
+
+**The phone bug is already gone, two stages earlier than the plan expected.** Stage 3's done
+condition claimed it, on the reasoning that nothing would be left fixed in that corner once
+`.controls` stopped being drawn. It did not need `.controls` at all: at 390×844, scrolled until
+`data-bars="hidden"`, `elementFromPoint(6, 10)` now returns `button.spine-hit` where it returned
+`a.logo logo-home` the same morning. The rail's top 44px is pressable. What was actually covering it
+was the wordmark, and the wordmark has left —
+[the postmortem](../postmortems/260905g-the-top-of-the-spine-is-under-the-wordmark-on-a-phone.md).
+
+### What the review of the built code found
+
+GPT Sol, round one on the code, returned **DO NOT LAND** on one P1 and three P3s; all four accepted
+and fixed, and round two returned **LAND** with no findings.
+
+**S1 (P1) — the bar could sit on a stale rung after any mode switch.** `fitSignature` recorded which
+modes are *drawn* but not which one is *on*, and § the bar's fit ladder gives the open mode its word
+back at rung 2 (since 2026-09-05). So Plain → Summary draws one more label with the signature
+unchanged: same visible set, same count, nothing to re-measure on, and the bar keeps a rung chosen
+for a narrower row. Pre-existing rather than introduced here, and found because this stage was in
+that code. The active mode is a term now, with a test proven red by mutation.
+
+**And the fix's own guard was dead, which the test is what proved.** Sol asked for the mode "when
+segmented"; the guard was written, and then the test defending it could not be made to fail —
+`shape` is `"links"` exactly when `mode` is absent, in every arrangement the four mount sites
+produce, so both spellings return the same string for every bar that exists. The branch went rather
+than the test being contorted into an unreachable arrangement to justify it. Sol confirmed on the
+second pass, and added the reason that settles it rather than merely permits it: if the loose links
+ever gain an `.on` state, the term wanted is `mode ?? modeInSearch(search)` on *both* shapes, and a
+`shape === "seg"` guard would be the thing in the way.
+
+The three P3s were a rung comment naming the wrong rung's survivors, "five pages that mount a Dock"
+where it is three routes in an owner's and a visitor's shape, and the Dock's button taxonomy, which
+went from four kinds to five when a modal opener joined it.
 
 **Stage 2 — the reservations come out.** `.masthead` and `.controls` drop the reservation from their
 `padding-left` / `padding-right`, along with the narrow-window rules that give the same two terms

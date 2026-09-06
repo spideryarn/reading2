@@ -70,6 +70,24 @@
  * dead control, and the shelf already names the app in its `<h1>`. App.tsx
  * makes that choice, so this component never has to know which route it is on.
  *
+ * **And, since 2026-09-06, none of the pages that mount a `Dock`.** The
+ * article, its metadata and tweets pages, and the three visitor stand-ins in
+ * PublicPages.tsx draw `DockHome` in the bottom bar instead — same glyph, same
+ * word, same colour, different corner. Greg's call: the reading view is the one
+ * page whose whole job is a column of prose, and the only one where a permanent
+ * strip of chrome sits between the reader and it. The cost he accepted with it
+ * is that the way home *moves* as you navigate, from the top-left corner of the
+ * shelf to the bottom-left of an article.
+ * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md.
+ *
+ * **Everything above is still true, and is true of the pages that keep this
+ * component**: the shelf-adjacent pages (`/add`, `/profile`, `/features`,
+ * `/pricing`, `/contact`, `/privacy`, `/read/public`, the 404 and the admin
+ * pages), and the four branches of `ArticlePage` that draw no `Dock` — loading,
+ * error, not-shared and reauth-required. The corner is free on those for the
+ * same structural reason, and both bars still reserve `--logo-w` for it.
+ * `ArticlePage`'s final branch is where it stopped being drawn.
+ *
  * The class names are the original app's, so its fifteen CSS-only logo
  * animations can be dropped in later as one file — see
  * docs/project/original-version/design-system.md, and the argument there for

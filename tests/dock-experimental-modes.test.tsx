@@ -225,11 +225,14 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
  */
 describe("the fit signature", () => {
   const noop = () => {};
-  /* The sixth argument is the bar's own switch, and `null` is "not drawn". What
-     it contributes has its own file — tests/dock-experimental-switch.test.tsx §
-     the fit signature — because it is about the toggle, not about the modes. */
+  /* The sixth argument is the bar's own switch, and `null` is "not drawn"; the
+     seventh is whether the bar draws a Feedback trigger, and `false` is the
+     signed-out bar. What each contributes has its own file —
+     tests/dock-experimental-switch.test.tsx § the fit signature, and
+     tests/dock-corner-controls.test.tsx § the fit signature — because they are
+     about those controls, not about the modes. */
   const sig = (on: boolean, current: Mode) =>
-    fitSignature(visibleModes(on, current), current, noop, undefined, null, null);
+    fitSignature(visibleModes(on, current), current, noop, undefined, null, null, false);
 
   it("changes when the visible identities change at a constant count", () => {
     expect(visibleModes(false, "quotes")).toHaveLength(visibleModes(false, "remember").length);
@@ -239,6 +242,26 @@ describe("the fit signature", () => {
   it("changes when the switch does", () => {
     expect(sig(false, "plain")).not.toBe(sig(true, "plain"));
   });
+
+  /**
+   * **The same modes drawn, a different one of them on.**
+   *
+   * The case above is a different *set* at the same size. This is the same set
+   * with a different member selected, and it changed the row's width on
+   * 2026-09-05 with nothing watching: styles.css § the bar's fit ladder gives
+   * the open mode its word back at rung 2, so Plain → Summary draws one more
+   * label than it did. Both are ordinary modes, so `visibleModes` returns the
+   * identical list for each — which is the point, and why the assertion checks
+   * that before checking the signatures differ. GPT Sol, S1, reviewing the
+   * built code of docs/plans/260905g-…-into-the-dock.md.
+   */
+  it("changes when the same modes are drawn and a different one is on", () => {
+    expect(visibleModes(false, "plain").map((m) => m.mode)).toEqual(
+      visibleModes(false, "summary").map((m) => m.mode),
+    );
+    expect(sig(false, "plain")).not.toBe(sig(false, "summary"));
+  });
+
 
   it("is the same string for the same bar", () => {
     expect(sig(false, "plain")).toBe(sig(false, "plain"));

@@ -3635,7 +3635,13 @@ td.text.has-hit[data-hues="8"] {
 
 /* The way home, fixed in the very top-left of the window — HomeLogo.tsx.
    Height matches `--bar-h` so it sits on the same line as the reading view's
-   controls bar rather than floating above it. */
+   controls bar rather than floating above it.
+
+   **Not on the pages that mount a `Dock` since 2026-09-06** — the article, its
+   metadata and tweets pages, and the three visitor stand-ins draw `.dock-home`
+   in the bottom bar instead (Dock.tsx § the way home is back). This rule is for
+   everywhere else: the shelf-adjacent pages, `/privacy`, the article's loading
+   and error screens, and the two refusal pages. */
 .logo-home {
   position: fixed;
   /* Fixed in the corner the phone rounds off, so both insets apply. `--safe-top`
@@ -3647,7 +3653,18 @@ td.text.has-hit[data-hues="8"] {
   padding: 0 0.7rem;
   /* Above the spine (45) and the controls bar (40), and below the drawer's dim
      (92). The drawer is modal — while it is open, leaving the page is not one
-     of the things you are being offered, and Escape or the dim closes it. */
+     of the things you are being offered, and Escape or the dim closes it.
+
+     **That rule is now local to this corner, and it was reversed for the copy
+     in the bar.** `.dock` is z-index 96, deliberately above the dim, so
+     `.dock-home` *stays* operable while the drawer is open — leaving the page
+     is one of the things being offered there. The flip was accepted rather than
+     overlooked (GPT Sol's G-note, Fable's item 4): the bar is already how you
+     shut the drawer and already carries Metadata, which is itself a link off
+     this page. Nothing about this rule changed; what changed is that it no
+     longer describes every copy of the wordmark, so this paragraph exists to
+     stop the next reader finding two files asserting opposite things.
+     § the bar's fit ladder and .dock above. */
   z-index: 60;
   text-decoration: none;
   /* Opacity rather than a second colour: the wordmark is already `--highlight`
@@ -6061,6 +6078,38 @@ td.text.note-open {
 }
 .dock-modes .dock-btn.on { box-shadow: none; }
 
+/* **The wordmark at the left-hand end of the bar** — `DockHome` in Dock.tsx,
+   which has the argument for why it is here at all and why it is not a
+   fourteenth mode.
+
+   **`.dock-home` and deliberately not `.dock-btn`.** The one thing that would
+   make this read as a mode is the wash: `.dock-btn:hover` paints
+   `var(--panel)`, and in this bar a wash means hovered-or-selected. So it takes
+   `.logo`'s colour and metrics (§ the wordmark, far above — same glyph, same
+   `--highlight`, same 0.82rem as the corner copy on every other page) and this
+   rule supplies the box. Fable's call, 2026-09-06.
+
+   It hovers by opacity instead, which is `.logo-home`'s answer to the same
+   question and for the same reason: the wordmark is already `--highlight`, and
+   every other colour in the palette would be a step *down* from it.
+
+   `padding` matches `.dock-btn`'s 0.6rem so it sits on the row's rhythm; rung 3
+   tightens it alongside the buttons (§ the bar's fit ladder). */
+.dock-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.6rem;
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.dock-home:hover { opacity: 1; }
+.dock-home:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -2px;
+}
+
 /* The focus ring goes on the segment, inset, so it is not clipped by the
    frame's `overflow: hidden`.
 
@@ -6084,8 +6133,9 @@ td.text.note-open {
    list until it does not, and puts the class here.
 
    **There was a pixel breakpoint here and it went stale, which is the whole
-   reason this is JavaScript.** `@media (max-width: 1100px)` did rung 1's job,
-   and the 1100 was chosen against a measured 1046 when there were six modes.
+   reason this is JavaScript.** `@media (max-width: 1100px)` did what is rung 2's
+   job now, and the 1100 was chosen against a measured 1046 when there were six
+   modes.
    At thirteen the spelled-out row wants 1416px, so every window from 1101px to
    1416px showed its labels *and* ran the last buttons off the right-hand edge —
    which is where Greg found it, at two thirds of a laptop screen, 2026-09-02.
@@ -6104,33 +6154,74 @@ td.text.note-open {
    overflows honestly and § a narrow window scrolls it, which is the floor under
    this ladder rather than another rung: a phone in portrait cannot give fifteen
    buttons a pressable width, and Greg chose scrolling over shrinking further
-   (§ a coarse pointer). */
+   (§ a coarse pointer).
 
-/* Rung 1 — the modes go to glyphs and the other three keep their words.
-   Square-ish once the text is gone, so thirteen icons read as one segmented
-   control rather than as loose glyphs.
+   **The rungs renumbered on 2026-09-06**, when the wordmark and the Feedback
+   button moved off the top corners into this bar and a new rung went in *above*
+   the old rung 1 to pay for them. What was rung 1 is rung 2 and what was rung 2
+   is rung 3; the numbers in the prose here and in dock-fit.ts have all been
+   moved with them, so a rung number written down anywhere older than that date
+   is one lower than it should be.
+   docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md. */
+
+/* Rung 1 — **the app cluster gives up its words, and never gets them back.**
+   The wordmark and Feedback, at the two ends of the row; every mode keeps its
+   label. Measured before it was built: with the default nine modes rung 0 needs
+   1206px today and both words would take it to roughly 1420, so 1280 and 1366 —
+   two of the commonest laptop widths — would otherwise drop straight to a bar
+   of glyphs to keep two words that pay least. dock-fit.ts § the rungs has the
+   table and the argument Fable got half right.
+
+   **Listed at all three rungs rather than at rung 1 alone**, because a bar
+   wears exactly one rung class: a rule written only for rung 1 would let
+   `Spideryarn` and `Feedback` reappear at rung 2, which is the opposite of what
+   this rung is for. Rung 3's `.dock-btn-label` sweep does catch `.dock-feedback`
+   (it is a `.dock-btn`) but not `.dock-home` (it is not), so both are spelled
+   out at every rung and nothing depends on noticing that asymmetry.
+
+   No padding change here. The two are at the ends of the row, where 0.15rem
+   buys nothing the words did not already, and the rungs below tighten
+   everything anyway. */
+.dock.dock-fit-1 .dock-home .dock-btn-label,
+.dock.dock-fit-1 .dock-feedback .dock-btn-label,
+.dock.dock-fit-2 .dock-home .dock-btn-label,
+.dock.dock-fit-2 .dock-feedback .dock-btn-label,
+.dock.dock-fit-3 .dock-home .dock-btn-label,
+.dock.dock-fit-3 .dock-feedback .dock-btn-label { display: none; }
+
+/* Rung 2 — the modes go to glyphs, and what is left with a word is Comments,
+   Tweets and Metadata. **Not "the other three":** the app cluster's two words
+   went at rung 1 and do not come back, and the experimental switch has never
+   carried one. Square-ish once the text is gone, so fourteen icons read as one
+   segmented control rather than as loose glyphs. **This was rung 1 until
+   2026-09-06** and is still the old `max-width: 1100px` rule's job.
 
    **Two selectors because the bar has two shapes.** On the reading view the
    modes are one `.dock-modes` segment; on the metadata and tweets pages they
    are thirteen loose `DockLink`s with no segment around them (Dock.tsx). A rung
    that only knew the segment did nothing on those pages, so the ladder skipped
-   past it to rung 2 and took every label. GPT Sol found it in the design. */
-.dock.dock-fit-1 .dock-modes .dock-btn-label,
-.dock.dock-fit-1 .dock-mode .dock-btn-label { display: none; }
-.dock.dock-fit-1 .dock-modes .dock-btn,
-.dock.dock-fit-1 .dock-mode { padding-inline: 0.6rem; }
+   past it to the next rung and took every label. GPT Sol found it in the
+   design. */
+.dock.dock-fit-2 .dock-modes .dock-btn-label,
+.dock.dock-fit-2 .dock-mode .dock-btn-label { display: none; }
+.dock.dock-fit-2 .dock-modes .dock-btn,
+.dock.dock-fit-2 .dock-mode { padding-inline: 0.6rem; }
 
-/* Rung 2 — every button in the bar, not just the modes. Tighter than rung 1 by
+/* Rung 3 — every button in the bar, not just the modes. Tighter than rung 2 by
    0.15rem, and that is not cosmetic: measured at thirteen icons, 0.55rem
    brought the row to 401px against 390 of bar, and closing an 11px gap exactly
    would have reopened it the moment the Comments count reached three digits.
 
-   These selectors are shorter than rung 1's and come after them, which is what
+   `.dock-home` is named beside `.dock-btn` because it is not one — see
+   `.dock-home` in § the mode switch for why it stays out of that class.
+
+   These selectors are shorter than rung 2's and come after them, which is what
    Biome's `noDescendingSpecificity` warns about. It cannot bite: a bar wears
    one rung class at a time, so the two blocks can never both match. */
 /* biome-ignore-start lint/style/noDescendingSpecificity: mutually exclusive rungs — see above */
-.dock.dock-fit-2 .dock-btn-label { display: none; }
-.dock.dock-fit-2 .dock-btn { padding-inline: 0.45rem; }
+.dock.dock-fit-3 .dock-btn-label { display: none; }
+.dock.dock-fit-3 .dock-btn,
+.dock.dock-fit-3 .dock-home { padding-inline: 0.45rem; }
 /* biome-ignore-end lint/style/noDescendingSpecificity: mutually exclusive rungs */
 
 /* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
@@ -6139,10 +6230,18 @@ td.text.note-open {
    source order is what makes it win. That is why the mode-link selector above
    is `.dock-mode .dock-btn-label` and not `.dock-btn.dock-mode
    .dock-btn-label`: the extra class made the hide (0,5,0) against this rule's
-   (0,4,0), and Plain lost its word on the metadata page at rung 1 while keeping
-   it at rung 2. Caught in a browser pass, 2026-09-02. */
+   (0,4,0), and Plain lost its word on the metadata page at one rung while
+   keeping it at the next. Caught in a browser pass, 2026-09-02.
+
+   **Rung 1 is in the list even though nothing there hides a `keepLabel` word.**
+   It costs nothing, it keeps "on every rung" a true sentence rather than one
+   with a footnote, and it keeps the tie: the app cluster's hides above are four
+   classes at every rung, so an `.always` rule missing a rung would be
+   out-specified there the moment somebody gave `.dock-home` a `keepLabel`
+   sibling. tests/dock-fit.test.ts checks exactly that. */
 .dock.dock-fit-1 .dock-btn-label.always,
-.dock.dock-fit-2 .dock-btn-label.always { display: inline; }
+.dock.dock-fit-2 .dock-btn-label.always,
+.dock.dock-fit-3 .dock-btn-label.always { display: inline; }
 
 /* **And the mode you are actually in keeps its word, on every rung.**
    Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
@@ -6153,7 +6252,7 @@ td.text.note-open {
    screenshot showed and no unit check could.
 
    A band is 400px of the window, so opening one is itself what pushes the bar
-   onto rung 1 — where every mode label except Plain's is hidden. So in Summary
+   onto the rung where every mode label except Plain's is hidden. So in Summary
    at 1440×900 the band no longer said "Summary" and the bar had never said it
    either: the only thing naming the open mode was a highlighted glyph. The
    sighted reader who wanted the word had to hover for a tooltip.
@@ -6168,17 +6267,24 @@ td.text.note-open {
    just above is a rule that was accidentally *longer* than the one meant to
    win. This one is meant to win.
 
-   **Rung 1 only, and rung 2 was tried and measured first.** Past the last rung
-   the bar overflows and scrolls (§ a coarse pointer), and at 390×844 in a band
-   mode it already does: measured 2026-09-05, `scrollWidth` 617 against a
-   `clientWidth` of 390. Adding this word there took it to 758 — 141px more of a
-   row the reader already has to drag sideways, to reveal a word that is only
-   legible *after* they drag. A bar that scrolls cannot tell you anything you
-   have not scrolled to, so at rung 2 this rule is pure cost and no benefit, and
-   the reader on a phone has in any case just pressed the icon themselves. At
-   rung 1 it is free: all four band modes measured `scrollWidth === clientWidth
-   === 1440` with the word shown, on the same rung they were already on. */
-.dock.dock-fit-1 .dock-btn.on .dock-btn-label { display: inline; }
+   **Rung 2 only — the first rung that takes a mode's word — and the rung below
+   it was tried and measured first.** Past the last rung the bar overflows and
+   scrolls (§ a coarse pointer), and at 390×844 in a band mode it already does:
+   measured 2026-09-05, `scrollWidth` 617 against a `clientWidth` of 390. Adding
+   this word there took it to 758 — 141px more of a row the reader already has
+   to drag sideways, to reveal a word that is only legible *after* they drag. A
+   bar that scrolls cannot tell you anything you have not scrolled to, so at the
+   last rung this rule is pure cost and no benefit, and the reader on a phone
+   has in any case just pressed the icon themselves. Here it is free: all four
+   band modes measured `scrollWidth === clientWidth === 1440` with the word
+   shown, on the same rung they were already on.
+
+   **This rule was written for `dock-fit-1` and is `dock-fit-2` since
+   2026-09-06**, when a new rung went in above it. Both measurements above were
+   taken against the old numbering and are unchanged by the renumber: they are
+   about the rung that hides the mode labels, which is this one. Rung 1 hides no
+   mode label, so there is nothing there for this rule to put back. */
+.dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
 
 
 /* --------------------------------------------------------- § search mode ----
@@ -12270,7 +12376,8 @@ td.text.kind-heading .blk-gutter[data-open] {
      A floor that only exists on a phone is not a floor. */
 
   /* **The labels are not dropped here any more.** Every button losing its text,
-     and the 0.45rem that goes with it, is rung 2 of § the bar's fit ladder —
+     and the 0.45rem that goes with it, is the ladder's last rung — rung 3
+     since 2026-09-06, rung 2 before it —
      measured rather than keyed to this width, because at thirteen modes the row
      stops fitting a long way above 731px and did so silently. This query used to
      carry a second copy of those three rules, and a second copy is a thing
@@ -12715,14 +12822,26 @@ td.text.kind-heading .blk-gutter[data-open] {
   .dock-modes { flex: 8 0 auto; }
   .dock > .dock-btn { flex: 1 0 auto; }
   .dock-modes .dock-btn { flex: 1 0 auto; }
+  /* **And the wordmark grows with them**, which is a decision rather than a
+     consequence — it is not a `.dock-btn`, so it would otherwise have been the
+     one item left at its content width while everything to its right spread
+     across a tablet's bar, huddled against the left end. It is the same kind of
+     control as the ones beside it here (something you press with a thumb), and
+     the reason it is not a `.dock-btn` is about the hover wash, not about size.
+     Fable's item 4. */
+  .dock > .dock-home { flex: 1 0 auto; }
 
   /* The floor — 40px, Apple's 44pt minimum less the hairline it shares with its
      neighbour — and the centring that makes growth look deliberate: without it
      a button that grew would hold its icon at the left and the row would read
      as ragged rather than as spread out. A min-width is a floor and not a cap,
      which is what lets the Comments button carry a two-digit count without
-     anything being clipped. */
-  .dock-btn {
+     anything being clipped.
+
+     `.dock-home` takes both, for the reason above: a grown box that held its
+     glyph at the left would be the one ragged thing in a spread-out row. */
+  .dock-btn,
+  .dock-home {
     min-width: 2.5rem;
     justify-content: center;
   }
@@ -14584,13 +14703,25 @@ td.text.kind-heading .blk-gutter[data-open] {
    docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
 
    `fb-*` classes rather than Tailwind: the house convention for dialogs, and
-   this one is a form with a dozen elements whose spacing has to agree. */
+   this one is a form with a dozen elements whose spacing has to agree.
+
+   **`.fb-button` is one of two shapes the trigger wears since 2026-09-06.** The
+   other is `.dock-feedback`, a button in the bottom bar, which needs no rule of
+   its own: it is a `.dock-btn` and § the bar's fit ladder owns its word. This
+   corner is what every page *without* a `Dock` still draws. */
 
 /* The mirror of `.logo-home` in the other corner, and the same three numbers:
    `--safe-*` insets, `--bar-h` so it sits on the controls bar's line rather
    than floating above it, and a z-index above the spine (45) and the bars (40)
    but below the drawer's dim (92) — while the drawer is open, filing a report
-   is not one of the things being offered. */
+   is not one of the things being offered.
+
+   **And that last clause is now true of this corner only.** The bar's copy sits
+   at `.dock`'s z-index 96, above the dim and operable by design, so moving the
+   trigger into the bar reverses the decision this line records. Accepted, with
+   the same reasoning `.logo-home` carries: the bar is how the drawer is shut,
+   and it already holds a link off the page. Said in both places so the next
+   reader does not find one file contradicting the other. */
 .fb-button {
   position: fixed;
   top: var(--safe-top);
