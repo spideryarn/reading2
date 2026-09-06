@@ -290,15 +290,14 @@ line and obvious the moment it becomes the only one.
 ## The shipped GISTS block, toc/6
 
 **Copied out of `src/hierarchy.ts` § SYSTEM, verbatim** — the block `toc/6` gave a per-depth length
-rule (root at most 18 words, depth 1 at most 25, deeper 22-30 wherever the range runs to a paragraph
-or more), plus the no-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
+rule, plus the no-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
 
 It is copied rather than sliced live because the arm that carries it has to stay put while
 `src/hierarchy.ts` moves on; `tests/summaries-eval.test.ts` asserts the copy is
 character-for-character what production sends today, so a drift is a red test rather than a
 measurement of something we do not ship.
 
-### Four drafts in one day, and a depth-2 number belongs to exactly one of them
+### Five drafts in one day, and what the numbers said
 
 Each was measured at `--depth 2` over the same four documents — 134 depth-2 nodes, 31 at depth 1,
 3 roots. The count under 22 words is the line that separates them, **split by how many words of prose
@@ -306,30 +305,43 @@ the node's range actually covers**, because that split is what makes the count r
 words there is nothing in the range but a title, a URL or a credit line, and over 120 a short gist is
 a miss rather than a judgement.
 
-| draft | depth-2 wording | mean | under 22 | <40w | 40-120w | >120w | root mean (ceiling) |
+| draft | register of the depth-2 rule | mean | under 22 | <40w | 40-120w | **>120w** | root mean (ceiling) |
 |---|---|---|---|---|---|---|---|
 | `toc/5` | *(no rule at all)* | 20.9 | 68 | 16 | 16 | 36 | 25.3 |
-| A | *"22-32 words, and use them"* | 21.0 | 63 | 15 | 15 | 33 | 19.7 (18) |
-| B | *"AT LEAST 22 words … too SHORT, not admirably terse"* | 23.4 | 33 | 16 | 6 | 11 | 18.0 (18) |
-| C | *"normally 22-30 … shorter where no second substantive element"* | 22.1 | 47 | 15 | 17 | 15 | 22.0 (20) |
-| D — below | *"22-30 where the range runs to a paragraph or more … shorter only where the range itself is slight"* | see the run | | | | | (18) |
+| A | descriptive — *"22-32 words, and use them"* | 21.0 | 63 | 15 | 15 | 33 | 19.7 (18) |
+| B | **imperative** — *"AT LEAST 22 … so obey it"* | 23.4 | 33 | 16 | 6 | **11** | 18.0 (18) |
+| C | softened norm — *"normally 22-30"* | 22.1 | 47 | 15 | 17 | 15 | 22.0 (20) |
+| D | descriptive — *"22-30 is what it takes"* | 20.2 | 76 | 15 | 23 | 38 | 22.3 (18) |
+| **E — below, and shipped** | **imperative** + D's range-tied exception | **23.9** | **27** | 14 | 4 | **9** | **19.7 (18)** |
 
-**A is why B exists.** A range the model can satisfy from below is a ceiling, not a floor: depth 2
-did not move at all against `toc/5` (20.9 → 21.0).
+E was declared a pass or a fail **before** it ran, against two numbers: at most 15 short gists on
+ranges over 120 words (C's figure), and a root mean at most 20. It cleared both — 9 and 19.7 — and is
+the best draft measured on the thing the whole exercise was about. **Its costs are at the other end
+of the band, which the criterion did not look at**: 6 depth-2 gists over the 32-word ceiling where B
+had none (the stored trees had 9, so this is back to where we started at the top end), and 8 of 31
+depth-1 gists over 25 against B's 3 — worse than `toc/5`. The floor works; the ceilings are what to
+watch next.
 
-**B is why C exists**, and the reason came from GPT Sol rather than from any number here. B carried
-*"if 22 words cannot be filled honestly, the section was too slight to be its own node"* — which, in
-**production**, is said to a model that is choosing the boundaries in the same breath, so it licences
-merging a real section to satisfy a prose constraint. **This eval fixes the tree and therefore cannot
-see that.**
+**The finding, and it was not what anyone was looking for.** The depth-2 number tracks how
+**imperative** the wording is and not what it says. A and D are descriptive and land on the model's
+own default (`toc/5`, 20.9); C softens B and gives back half; only B's blunt imperative moved
+anything. The substance-vs-range distinction that two rounds were spent on costs nothing and buys
+nothing on its own. The root is the same story: B's *"THE ONE claim the piece makes"* gave 18.0,
+D's *"the central claim or governing move"* gave 22.3, at the same ceiling of 18.
 
-**C is why D exists**, and that reason is in the table. C gave back half of B's recovered nodes, but
-almost all of the give-back sat in the 40-120-word band (6 → 17) rather than above 120 (11 → 15) — so
-*"no second substantive element"*, which asks the model to judge substance, was being used as a
-general licence. D ties the exception to the range instead: a title, a credit line, a URL. And C's
-root moved with its ceiling and then past it — ceiling 18 gave a mean of 18.0, ceiling 20 gave 22.0,
-with 2 of 3 over the new line where 1 of 3 was over the old one. The model tracks the number loosely
-and overshoots it upward, so the ceiling is back at 18.
+Two dead inferences worth keeping, because both were reasonable:
+
+- *"Raising the ceiling to 20 made roots longer, so put it back to 18 and they will shorten."*
+  D had 18 and produced 22.3. The ceiling number is not the lever.
+- *"A range the model can satisfy from below is a ceiling, not a floor"* — true, and A proves it,
+  but D shows the converse fails: a floor stated descriptively is not a floor either.
+
+**A truncation is not a model failure.** `budgetForNodes(27)` is 6,400 tokens and adaptive thinking
+shares it, which is marginal on a small document once the gists lengthen — draft D's first
+`noema` call was cut off at 5,268 characters for exactly that reason. Production sizes its budget
+from `TOKENS_PER_NODE` and not from this function, so this is a fact about the harness. Read the
+error: *"it ends part-way through"* is the cap, *"it breaks at position N"* is the trailing comma
+(`evals/results/summaries/trailing-comma/`).
 
 ```
 GISTS (internal nodes)
@@ -339,18 +351,20 @@ GISTS (internal nodes)
 - Write a parent's gist from its children, not from the raw text.
 - LENGTH IS SET BY WHERE THE LINE IS READ, and it runs SHORTER as the node gets
   coarser:
-    - the root: AT MOST 18 words. It is the shelf card and the coarsest zoom —
-      the central claim or governing move, shorter than any chapter's gist. A
-      root that runs "X stems from A and B, so we should C while reaffirming D"
-      is four gists wearing one full stop; pick the claim they add up to and
-      stop there.
+    - the root: AT MOST 18 words. It is the shelf blurb — THE ONE claim the
+      piece makes, or its one governing move if it makes no single claim,
+      shorter than any chapter's gist. A root that runs "X stems from A and B,
+      so we should C while reaffirming D" is four gists wearing one full stop.
+      Pick the claim they add up to and stop there.
     - depth 1: AT MOST 25 words. Chapter-level orientation.
-    - deeper than that: this line SUBSTITUTES for the prose it covers, so where
-      the range runs to a paragraph or more, 22-30 words is what it takes — the
-      main claim or move, plus its essential reason, contrast, consequence or
-      example. Shorter is right only where the range itself is slight: a title,
-      a credit line, a URL, a heading with nothing under it. Never pad, never
-      invent support, and never change a boundary to reach a word count.
+    - deeper than that: AT LEAST 22 words, and at most 32. The floor is the
+      half that will feel wrong, so obey it: down here a one-clause gist is too
+      SHORT, not admirably terse. A reader at this zoom is reading your sentence
+      INSTEAD of the paragraphs it covers, so give them the claim AND the ground
+      it stands on — its reason, contrast, consequence or example. The floor
+      does not apply where the RANGE itself is slight: a title, a credit line, a
+      URL, a heading with nothing under it. Never pad, never invent support, and
+      never move a boundary to reach a word count.
 - No narration of document order: not "the essay opens by", "the essay closes by
   urging", "this section explores", "the author then turns to", "goes on to".
   Say what the section CLAIMS; do not narrate that it is claiming. Ordinary
