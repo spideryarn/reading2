@@ -23,9 +23,18 @@ than an argument.
   wins. `evals/results/` is the case that fixes the order: machine-written JSON and hand-written
   write-ups of what that JSON meant, side by side.
 - **`.gitignore` is the only exclusion list**, which is the point of taking the file list from git.
-  This repo ignores `api-dist/`, `scratch-bakeoff/`, `output/` and `*.activity.log`, none of which
-  appear in any generic skip list — and the flip side is that a file written but not `git add`ed is
-  not counted. `--untracked` counts it.
+  Nothing vendored is counted, and that is structural rather than a rule somebody maintains:
+  `node_modules/`, `dist/`, `.vercel`, `api-dist` and `scratch-bakeoff` are ignored, so
+  `git ls-files` never offers them and cloc never sees them. The one-line audit, if you want to see
+  it hold rather than take it on trust:
+
+  ```
+  git ls-files | grep -E '(^|/)(node_modules|dist|\.vercel|api-dist|build|vendor)/'
+  ```
+
+  It printed nothing on 2026-09-06. This repo also ignores `output/` and `*.activity.log`, neither of
+  which appears in any generic skip list — and the flip side is that a file written but not
+  `git add`ed is not counted. `--untracked` counts it.
 - **`CLAUDE.md` is a symlink to `AGENTS.md`**, which is the symlink that found the cloc
   de-duplication trap: cloc kept the symlink and dropped the target, so 261 lines were filed under a
   name that is not a file and the total was simply short. If a second symlink to real content ever
@@ -38,37 +47,62 @@ than an argument.
   double-counting. Closing it means testing each uncounted file rather than subtracting —
   [count-lines-in-a-repo.md](../reusable/count-lines-in-a-repo.md).
 
-**What the 2026-08-27 run turned up**, as dated observations rather than current counts: seven files
-and 400 lines in extensions cloc does not recognise (`.jsonc`, `.gitignore`, `.env.example`,
-`.vercelignore`), 14 binary files with no lines at all, and — the reason generated material is kept
-out of the hand-written headline — an 8,629-line lockfile plus 48 drizzle snapshots.
-
 ## What it says today
 
-As of 2026-08-27:
+As of 2026-09-06, at `39282f8c`:
 
 ```
-docs                   203   52,555   38.0%       13   0.0%  13,683  docs/ and every other .md
-tests                  186   34,645   25.1%   14,471  29.5%   5,138  vitest suites
-styles                   4    4,588    3.3%    3,100  40.3%     628  hand-written CSS
-source                 213   41,879   30.3%   47,284  53.0%   5,277  the app itself
-evals                    8    1,812    1.3%      764  29.7%     196  model evals, run by hand
-scripts                 15    1,811    1.3%    1,327  42.3%     250  dev + ops commands
-config                  17      869    0.6%      445  33.9%     118  build, lint, deploy, supabase
-— written by hand      646  138,159  100.0%   67,404  32.8%  25,290
+                     files     code   share  comment  % cmt    blank
+docs                 1,460  328,535   47.8%    3,492   1.1%   72,601  docs/ and every other .md
+  plans              1,077  242,487   35.3%
+  project              104   41,120    6.0%
+  research              55   14,572    2.1%
+  postmortems           86   12,834    1.9%
+tests                  789  190,273   27.7%  109,356  36.5%   27,287  vitest suites
+source                 488  103,684   15.1%  155,507  60.0%   13,284  the app itself
+  client               257   47,598    6.9%
+  pipeline + server    167   43,576    6.3%
+  storage               59   11,110    1.6%
+evals                   86   31,034    4.5%   14,153  31.3%    2,030  model evals, run by hand
+scripts                 94   23,449    3.4%   18,777  44.5%    2,893  dev + ops commands
+styles                   5    8,688    1.3%    7,613  46.7%    1,378  hand-written CSS
+config                  21    1,612    0.2%    1,022  38.8%      188  build, lint, deploy, supabase
+— written by hand    2,943  687,275  100.0%  309,920  31.1%  119,661
+
+fixtures               253  142,152       —                          committed pipeline output, eval PDFs
+generated              421  661,997       —                          drizzle migrations, eval results, the lockfile
+— nobody wrote         711  810,105       —
 ```
 
-A dated example, not a fact — re-run the command rather than trusting it. Three of those numbers are
-worth saying out loud:
+A dated example, not a fact — re-run the command rather than trusting it, and note that the tree
+moves under you: two runs eleven minutes apart on 2026-09-06 differed by 93 files and 19,290
+hand-written lines, because other agents were pushing to `dev` in between. Quote a commit with a
+count or the number means nothing.
 
-- **53% of `src/` is comments.** That is the house style working, not a lint failure —
-  [CLAUDE.md](../../AGENTS.md) asks for the reasoning to sit next to the code, and this is what it
-  costs. Hence the `% cmt` column.
-- **Tests are 43% of the code.** Source and tests are the same order of magnitude, which is the
-  shape [testing.md](testing.md) is aiming for.
-- **Two thirds of a line of prose per line of code.** `docs/` is the largest single category in the
-  repo, and `docs/plans/` alone is larger than `src/web/`. That is deliberate and it is worth being
-  able to see.
+Three of those numbers are worth saying out loud:
+
+- **60% of `src/` is comments** (53% in August). That is the house style working, not a lint
+  failure — [CLAUDE.md](../../AGENTS.md) asks for the reasoning to sit next to the code, and this is
+  what it costs. Hence the `% cmt` column.
+- **Tests are 63% of the code**, up from 43% in August: 190,273 lines of tests against 103,684 of
+  app and 8,688 of CSS. Tests are now comfortably the larger half, which is the shape
+  [testing.md](testing.md) is aiming for.
+- **1.09 lines of prose per line of code**, up from two thirds. `docs/` is the largest single
+  category in the repo and `docs/plans/` alone — 1,077 files, 242,487 lines — is more than twice
+  `src/`. That is deliberate and it is worth being able to see.
+
+**What the 2026-09-06 run turned up**, again as dated observations: 72 files that cloc returned
+nothing for, 88 binary files (39 `.png`, 18 `.jpeg`, 13 `.pdf`, 11 `.webm` dictation clips) with no
+lines at all, and — the reason generated material is kept out of the hand-written headline — an
+11,239-line lockfile plus 78 drizzle snapshots.
+
+Those 72 are not all unrecognised extensions, which is what the August note assumed. **61 of them
+are `.json`, and they are byte-duplicates** — repeated-sample eval outputs under `evals/pdf/titles/`,
+22 distinct contents between them. This is the same cloc de-duplication that ate `AGENTS.md`: cloc
+hashes contents and reports the first file only. Here it costs nothing, because the fallback counter
+picks up everything cloc returned no row for and counts it the plain way — but the rescue path is
+load-bearing, not a nicety, and without it the total would be short by 31,349 lines while every
+column still added up.
 
 ## See also
 

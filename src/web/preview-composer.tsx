@@ -45,6 +45,16 @@ function still(phase: LivePhase, over: Partial<LiveApi> = {}): LiveApi {
     tools: [],
     hearing: false,
     speaking: false,
+    inputLevel: { current: 0.55 },
+    measuringInput: true,
+    quietInput: false,
+    deviceLabel: "MacBook Pro Microphone",
+    playbackBlocked: false,
+    enableAudio: async () => {},
+    thinking: false,
+    pendingTools: [],
+    notice: null,
+    hasUnsavedLines: false,
     seen: {},
     placement: { placement: "laptop", from: "guessed", label: "MacBook Pro Microphone" },
     threadId: "spya-k3m9qt",
@@ -67,6 +77,15 @@ const PHASES: { phase: LivePhase; what: string; over?: Partial<LiveApi> }[] = [
   { phase: "connecting", what: "connecting" },
   { phase: "live", what: "live, hearing you", over: { hearing: true } },
   { phase: "live", what: "live, speaking", over: { speaking: true } },
+  { phase: "live", what: "streaming transcript", over: {
+    thinking: true,
+    lines: [
+      { id: "reader", role: "reader", text: "What does the author mean by this distinction?", done: true },
+      { id: "companion", role: "companion", text: "The distinction is between", done: false },
+    ],
+  } },
+  { phase: "live", what: "sound blocked, quiet microphone", over: { playbackBlocked: true, quietInput: true } },
+  { phase: "failed", what: "failed connection", over: { error: "Live could not connect. Check your connection, then retry, or continue typing." } },
   { phase: "closing", what: "hanging up" },
 ];
 

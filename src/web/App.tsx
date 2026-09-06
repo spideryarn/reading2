@@ -4177,6 +4177,9 @@ export function ConversationBand({
    */
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
+  const selectedThread = useRef(thread);
+  selectedThread.current = thread;
+  const [pendingLive, setPendingLive] = useState<{ id: string; from: string | null } | null>(null);
 
   /**
    * **The live conversation, owned here** — above the panel, above the keyed
@@ -4201,7 +4204,10 @@ export function ConversationBand({
   const live = useLiveConversation(slug, {
     speak,
     tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
-    onThreadId: (id) => void setThread(id),
+    onThreadId: (id, startedThreadId) => {
+      // A delayed spoken append may finish after the reader has left its thread.
+      if (selectedThread.current === startedThreadId) void setThread(id);
+    },
   });
 
   /**
@@ -4227,6 +4233,19 @@ export function ConversationBand({
     if (live.threadId && live.threadId !== thread) void hangUp.current();
   }, [thread, live.phase, live.threadId]);
 
+  useEffect(() => {
+    if (!pendingLive) return;
+    if (thread !== pendingLive.id) {
+      if (thread !== pendingLive.from) setPendingLive(null);
+      return;
+    }
+    if (live.phase !== "idle" && live.phase !== "failed") return;
+    // Selection must reach the render before start, or the navigation effect above
+    // mistakes a just-created session for one the reader has already left.
+    setPendingLive(null);
+    live.start({ threadId: pendingLive.id });
+  }, [pendingLive, thread, live.phase, live.start]);
+
   /**
    * A counter that goes up whenever a *new* conversation is started, so the
    * composer knows to take focus.
@@ -4244,6 +4263,7 @@ export function ConversationBand({
    */
   const [focusNonce, setFocusNonce] = useState(0);
   const startNew = useCallback(() => {
+    setPendingLive(null);
     void setThread(begin(kind));
     setFocusNonce((n) => n + 1);
   }, [begin, setThread, kind]);
@@ -4369,6 +4389,7 @@ export function ConversationBand({
        * Remember-thread entry on the Back stack in between.
        */
       onThread={(id) => {
+        setPendingLive(null);
         const target = id ? threads.find((t) => t.id === id) : null;
         /* `ThreadKind` and `Mode` are separate vocabularies (src/types.ts,
            src/modes.ts) that agree on the two *conversation* kinds — since
@@ -4395,7 +4416,13 @@ export function ConversationBand({
       /* **Owned above this panel**, which is remounted on every conversation
          switch — see the note where the hook is called. */
       live={live}
-      onStartLive={(id) => live.start({ threadId: id })}
+      onStartLive={(id) => {
+        if (!id && kind !== "chat") return;
+        const next = id ?? begin("chat");
+        setPendingLive({ id: next, from: thread });
+        void setThread(next);
+        return next;
+      }}
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
