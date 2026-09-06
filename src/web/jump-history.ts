@@ -231,6 +231,57 @@ let armed: ArmedJump | null = null;
 /** Say that a push is coming, where it starts, and where it is going. */
 export function armJump(jump: ArmedJump): void {
   armed = jump;
+  announce();
+}
+
+/**
+ * **Is a jump in flight?** — which is to say, has the reader asked to be
+ * somewhere else, and has the history write that records it not landed yet.
+ *
+ * The window is 50ms here and up to 320ms on an older Safari, and in it the
+ * page is already scrolling towards the destination while the current entry
+ * still describes the jump *before* this one. Anything drawn from that entry is
+ * therefore describing a journey the reader has already left: the chip would
+ * name the previous origin, and pressing it would go back one place further
+ * than the reader meant and cancel the jump they just asked for. GPT Sol F19,
+ * 2026-09-06.
+ *
+ * ## The simpler fix, and why it was passed over
+ *
+ * The obvious answer is to hold the scroll until the push commits — one thing
+ * happening once, no window at all. It was refused because nuqs **abandons** a
+ * queued write when the page navigates, so a jump whose push never lands would
+ * become a tap that silently does nothing: a worse failure than the one being
+ * fixed, and of exactly the class this repo names silent-success. Withholding
+ * the *claim* costs nothing when the push is abandoned, because there was
+ * never anything to claim.
+ */
+export function isJumpArmed(): boolean {
+  return armed !== null;
+}
+
+/* ---------------------------------------------------------- who to tell -- */
+
+/**
+ * Arming is not a history write, so nothing else would notice it.
+ *
+ * `watchHistoryWrites` fires `NAVIGATED` on every write and that is what
+ * redraws the chip — but an arm changes what the chip should say *without*
+ * writing anything, which is the whole of F19. A listener set here rather than
+ * a DOM event because this file has to stay clear of the DOM (see the header):
+ * router.ts imports it, and router.ts is in the reader's startup bundle and in
+ * the lazy admin one.
+ */
+const armListeners = new Set<() => void>();
+
+/** Hear about arming and disarming. Returns the unsubscribe. */
+export function onArmedJumpChange(listener: () => void): () => void {
+  armListeners.add(listener);
+  return () => armListeners.delete(listener);
+}
+
+function announce(): void {
+  for (const listener of armListeners) listener();
 }
 
 /**
@@ -255,6 +306,9 @@ export function consumeArmedJump(
   if (armed.from !== here || armed.pathname !== pathname || armed.target !== target) return null;
   const { origin } = armed;
   armed = null;
+  /* No `announce()` here on purpose: the caller is the wrapper, mid-write, and
+     it fires `NAVIGATED` immediately afterwards. Announcing first would redraw
+     the chip against the entry the push is about to replace. */
   return origin;
 }
 
@@ -270,5 +324,7 @@ export function consumeArmedJump(
  * something else entirely.
  */
 export function clearArmedJump(): void {
+  if (armed === null) return;
   armed = null;
+  announce();
 }

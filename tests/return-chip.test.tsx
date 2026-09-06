@@ -20,13 +20,15 @@
  *    the reader is standing on and adds nothing to the stack, or the escape
  *    from the chip would itself need a press of Back. GPT Sol F12.
  */
-import { act, createElement } from "react";
+import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { enableHistorySync } from "nuqs/adapters/react";
+import { useQueryState } from "nuqs";
+import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Block, BlockId, NodeId } from "../src/types.js";
 import { armJump, clearArmedJump, readStamp } from "../src/web/jump-history.js";
+import { atParam } from "../src/web/params.js";
 import type { Section } from "../src/web/position.js";
 import { ReturnChip } from "../src/web/ReturnChip.js";
 import { watchHistoryWrites } from "../src/web/router.js";
@@ -76,13 +78,26 @@ const at = (id: BlockId) => ({ kind: "block", blockId: id }) as const;
 let host: HTMLDivElement;
 let root: Root;
 
+/**
+ * The scroll spy's write, queued behind `atParam`'s 300ms debounce.
+ *
+ * Mounted beside the chip because dismissal has to be shown *not* to cancel it
+ * (§ does not cancel a position write). A real `useQueryState` rather than a
+ * stand-in, since the whole finding is about nuqs's own queue.
+ */
+let queueAt: (id: BlockId) => void = () => {};
+
+function Harness(): ReactNode {
+  const [, set] = useQueryState("at", atParam);
+  queueAt = (id) => void set(id);
+  return createElement(ReturnChip, { sections: SECTIONS, rowOf: ROW_OF });
+}
+
 function mount(): void {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  act(() =>
-    root.render(createElement(ReturnChip, { sections: SECTIONS, rowOf: ROW_OF })),
-  );
+  act(() => root.render(createElement(NuqsAdapter, null, createElement(Harness))));
 }
 
 const chip = () => host.querySelector(".return-chip");
@@ -137,6 +152,40 @@ describe("when the chip is drawn", () => {
   it("draws on the entry a jump stamped", () => {
     jumped(at(block(15)), block(25));
     expect(chip()).not.toBeNull();
+  });
+
+  /**
+   * **Not while a jump is in flight**, which is a window of 50ms here and up to
+   * 320ms on an older Safari — the gap between the reader asking and nuqs
+   * flushing the push that records it.
+   *
+   * In that gap the page is already scrolling towards the new destination while
+   * the entry underneath still describes the *previous* jump. The chip would
+   * name the previous origin, and a reader who pressed it would go back one
+   * place further than they meant **and** cancel the jump they had just asked
+   * for. GPT Sol F19, 2026-09-06 — reproduced against nuqs 2.10.0 before this
+   * was written.
+   */
+  it("draws nothing while a jump is in flight", () => {
+    jumped(at(block(15)), block(25));
+    expect(chip()).not.toBeNull();
+    /* The second jump: armed, and its push not yet flushed. */
+    act(() =>
+      armJump({
+        pathname: location.pathname,
+        from: location.pathname + location.search,
+        origin: at(block(25)),
+        target: block(2),
+      }),
+    );
+    expect(chip()).toBeNull();
+  });
+
+  /** And it comes back, saying the new thing, once that push lands. */
+  it("draws again on the entry the flight lands on", () => {
+    jumped(at(block(15)), block(25));
+    jumped(at(block(25)), block(2));
+    expect(label()).toBe("↩ back to How it ends");
   });
 
   /**
@@ -253,5 +302,28 @@ describe("pressing the chip", () => {
     act(() => host.querySelector<HTMLButtonElement>(".return-chip-close")?.click());
     await act(async () => await goBack());
     expect(new URLSearchParams(location.search).get("at")).toBe(block(15));
+  });
+
+  /**
+   * **And it must not cancel a write somebody else had queued.**
+   *
+   * The captured `replaceState` is nuqs's own wrapper, and that wrapper runs
+   * `sync()` — which resets nuqs's update queue before it notices the search
+   * string has not changed — for any write not marked `__nuqs__`. So dismissing
+   * while the scroll spy's 300ms `?at=` replace was still pending threw that
+   * write away, and nothing retried it: `synced.current` had already moved on.
+   * The address went on naming the section the reader had left, which a reload
+   * or a shared link would then return to. GPT Sol F20, 2026-09-06.
+   */
+  it("does not cancel a position write that was queued when it was pressed", async () => {
+    jumped(at(block(15)), block(25));
+    /* A queued nuqs write, exactly as the scroll spy makes one. */
+    act(() => void queueAt(block(28)));
+    act(() => host.querySelector<HTMLButtonElement>(".return-chip-close")?.click());
+    expect(readStamp(history.state)).toBeNull();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+    expect(new URLSearchParams(location.search).get("at")).toBe(block(28));
   });
 });

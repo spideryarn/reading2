@@ -288,6 +288,27 @@
    * has to move with it.
    */
   --hint-h: 0px;
+
+  /**
+   * **How much room the way-back chip takes at the bottom left**, and 0 when
+   * there is no chip — `--hint-h`'s arrangement, for the same reason: only the
+   * thing that is drawn knows whether it is drawn, and only a variable can tell
+   * the rest of the furniture.
+   *
+   * It exists so the offline strip can stand above the chip rather than over
+   * it. **Room, not height**, and the difference cost a browser check: the
+   * chip's own `bottom` stands it 0.75rem off the edge below, so a strip given
+   * only the chip's 2.5rem still clipped the top 7px of the button — measured
+   * at both 390px and 1280px, since it is arithmetic rather than a wrapping
+   * artefact. Counting the gap here rather than in the strip's rule keeps the
+   * no-chip case exactly as it was.
+   *
+   * The number is a constant because the chip is deliberately one truncating
+   * line — 2rem of button, `.install-hint-close`'s floor, plus its own padding
+   * and border — so unlike the strip it cannot grow when the window narrows.
+   * Set beside the chip's own rule, below.
+   */
+  --return-chip-h: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -3666,7 +3687,15 @@ td.text.has-hit[data-hues="8"] {
   position: fixed;
   left: var(--safe-left);
   right: var(--safe-right);
-  bottom: calc(var(--dock-space) + var(--hint-h));
+  /* **`--return-chip-h` too**, because the two share this slot and the strip is
+     the one that can be told where to stand. The chip sat 0.75rem above the
+     same edge at z-index 46 and the strip covers it from 97, so at 390px —
+     where the offline sentence wraps to two lines — the way back was under it
+     and unreachable, while internal jumps and Back go on working offline. The
+     chip is a fixed single line, which is what makes *its* height a constant
+     and the strip's not: it truncates rather than wraps. GPT Sol F21,
+     2026-09-06. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + var(--return-chip-h));
   /* Above the bar (96), its drawer (95) and the drawer's dim (92). A lost
      connection outranks everything the bar offers, because none of it is going
      to work — and the dim exists to say "deal with this first", which is a
@@ -3740,6 +3769,14 @@ td.text.has-hit[data-hues="8"] {
    is the same expression `.reader`'s padding, `.masthead`, `.controls` and
    `td.pin-left` all use for "after the furniture on the left", plus a gutter,
    and it comes to the same 20px in the mode where the plan measured it. */
+/* 2.5rem of chip — 2rem of button, plus 0.15rem of padding and a 1px border
+   either side, measured at 38.78px rather than guessed — and then the 0.75rem
+   it stands off the edge below, because what the strip above needs is the room
+   the chip occupies rather than its height. `:root:has()`, the install hint's
+   arrangement, so that the strip can read it. Pinned by the browser check at
+   390px and 1280px: the two rectangles must not intersect. */
+:root:has(.return-chip) { --return-chip-h: 3.25rem; }
+
 .return-chip {
   position: fixed;
   left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left) + 0.5rem);

@@ -568,9 +568,12 @@ describe("the jump transaction", () => {
 
   /**
    * **One render.** The wrapper rewrites the predecessor and pushes the
-   * destination back to back against the functions it captured, so nothing
-   * between them is observable: the only `?at=` React is ever given is the
-   * destination. A transaction that instead asked nuqs for the predecessor
+   * destination back to back against the functions it captured, so **no React
+   * or nuqs subscriber sees the address in between**: the only `?at=` React is
+   * ever given is the destination. (Something *can* see the two writes — the
+   * recorder installed between the two history patches, § performs the pair,
+   * which is the point of that test.) A transaction that instead asked nuqs for
+   * the predecessor
    * rewrite would render the **origin** first, and `useReadingPosition`'s
    * restore effect — which scrolls whenever `at` is not the value it last
    * synced — would drag the reader back to where they came from and then

@@ -2,12 +2,12 @@
 
 Status as of 2026-09-06: **Stages A and B built**; B2, C and the docs are not — evidence:
 `src/web/ReturnChip.tsx` exists, and `goToComment` in `App.tsx` still pushes nothing.
-Revised twice, after two cross-family reviews that each refused the draft before them —
-[round 1](260906g-plan-review-sol.md) on four established P1s,
-[round 2](260906g-plan-review2-sol.md) on three more. What changed is in
-[§ What the reviews changed](#what-the-reviews-changed), which also carries
-[the third review](260906g-stage-a-review-sol.md) — of Stage A's **code**, and also a refusal.
-Eighteen findings over three rounds, all accepted, none overruled.
+**Four cross-family reviews, four refusals** — [round 1](260906g-plan-review-sol.md) and
+[round 2](260906g-plan-review2-sol.md) on the plan, [round 3](260906g-stage-a-review-sol.md) on
+Stage A's code and [round 4](260906g-stage-b-review-sol.md) on Stage B's. What each changed is in
+[§ What the reviews changed](#what-the-reviews-changed).
+Twenty-one findings over four rounds, all accepted, none overruled — the fourth also re-checked the
+third's fixes rather than trusting them, and found one still open.
 
 A reader clicks a glossary term, lands three thousand words away, and cannot find their way home.
 On a desktop browser they press Back and it mostly works. Added to an iOS home screen — which is
@@ -194,6 +194,42 @@ Sol also confirmed what it could not fault: the four permitted suites pass, and 
 in the app — `last-view`, the canonical rewrites, ordinary query replaces — discards a stamp it
 should have kept.
 
+### Round four: Stage B, and whether round three's fixes held
+
+[The Stage B review](260906g-stage-b-review-sol.md), against `6e270bf2`. **A fourth refusal**, on
+three P1s. It was also asked to re-check F13–F18 rather than take them on trust, and found five of
+the six closed — F18 was not, and its remaining defects are corrected above.
+
+| ID | Finding | What changed |
+|----|---------|--------------|
+| F19 | P1 — **a chained jump leaves the previous chip up for 50–320ms.** `beginJump` scrolls immediately and the push lands later, so in that window the page is moving towards C while the entry underneath still says "back to A". Pressing the chip there goes back one place further than the reader meant *and* cancels the jump they just asked for. Reproduced against nuqs 2.10.0 | **Accepted**, with a different fix from the one suggested. Sol proposed holding the scroll until the push commits; that was refused because nuqs **abandons** a queued write when the page navigates, which would turn an abandoned push into a tap that silently does nothing — a worse failure, and the exact class [silent-success.md](../reusable/silent-success.md) names. Instead the chip withholds its claim while a jump is armed: `isJumpArmed`, and a listener set in `jump-history.ts` so the store hears about an arm, which is not a history write and would otherwise go unnoticed |
+| F20 | P1 — **the × cancelled a queued position write.** The captured `replaceState` is nuqs's own wrapper, which runs `sync()` for any write not marked `__nuqs__` — and `sync()` calls `spinQueueResetMutex()` *before* noticing the search string has not changed. So dismissing while the scroll spy's 300ms `?at=` replace was pending threw it away, and nothing retried: `synced.current` had already moved on. The address went on naming the section the reader had left, so a reload or a shared link returned to it | **Accepted.** The dismissal wears nuqs's marker, so nuqs skips `sync()` altogether. Confirmed by mutation: without the marker the queued write to block 28 never lands and the address stays on block 25 |
+| F21 | P1 — **the offline strip covers the chip.** The strip is full width at `bottom: dock-space + hint-h` and z-index 97; the chip sat 0.75rem above the same edge at z-index 46. At 390px the offline sentence wraps to two lines and covers it completely — and internal jumps and Back go on working offline, so the way back is exactly what a reader offline still needs | **Accepted.** A `--return-chip-h` variable on the `--hint-h` pattern, and the strip stands above the chip rather than on it. The chip's height is the constant here because it is deliberately one truncating line; the strip's is not, because it wraps. **The first fix was still wrong, and only a browser said so** — see below |
+| F18 | P3 — **still not closed**: four contradictions in the plan and one in a test comment | **Accepted**, all five corrected |
+
+The three suspicions were closed rather than confirmed: `useJumpOrigin`'s cache has no defect;
+`useArticleAccess` refuses a previous slug's payload synchronously, so there is no paint combining a
+new entry's stamp with the old article's sections; and the empty-title fallback is the right trade.
+
+#### F21's fix was wrong the first time, and the browser is what caught it
+
+Worth writing down, because it is the argument for the browser check being a step rather than a
+formality. `--return-chip-h` was first set to the chip's **height**, 2.5rem, measured correctly at
+38.78px. But the chip's own `bottom` stands it 0.75rem off the edge below, so what the strip needs
+is the *room the chip occupies*, not its height — and the strip went on clipping the top 7px of the
+button. Nothing in the suite could see it: the rule is arithmetic in CSS variables, and it
+reproduced identically at 390px and 1280px, so it was not the wrap it looked like.
+
+Measured with both elements really on screen — the chip from a real spine-band jump, the strip from
+a real `offline` event through `watchConnection` — the rectangles now clear each other by 1.2px at
+both widths, and `elementFromPoint` **2px in from the button's top edge** returns the button rather
+than the strip. That top-edge probe is the one that found the bug; the centre probe passed
+throughout, and a screenshot looked fine at normal zoom the whole time.
+
+The gap is counted inside the variable rather than in `.offline-strip`'s rule, which was checked
+too: with no chip drawn, `--return-chip-h` computes to `0px` and the strip's bottom edge sits
+exactly where it always did.
+
 ## What the research turned up
 
 A separate read-only pass over `node_modules/nuqs` and the client, before the review:
@@ -245,14 +281,18 @@ The predecessor entry must name where the reader actually was, and the stamp mus
 
       At the moment of a jump, take the block crossing the reading line — `measureRow()` in
       [`keynav.ts`](../../src/web/keynav.ts) returns exactly this, over every `tr[data-block]`
-      rather than only section rows. **Not `?at=`**, for the three reasons in F1. But **if
-      `window.scrollY <= stickyOffset()` the origin is `top`** and the predecessor rewrite *removes*
-      `?at=` rather than setting it — F8, because `measureRow()` answers `0` at the top of the
-      article whether or not any row has reached the line, and a `scrollToBlock` on the first block
-      lands under the sticky chrome rather than at the top.
+      rather than only section rows. **Not `?at=`**, for the three reasons in F1. But **if the
+      first `tr[data-block]` has not itself crossed the reading line the origin is `top`**, and the
+      predecessor rewrite *removes* `?at=` rather than setting it — F8, because `measureRow()`
+      answers `0` at the top of the article whether or not any row has reached the line, and a
+      `scrollToBlock` on the first block lands under the sticky chrome rather than at the top.
+      (The draft asked `window.scrollY <= stickyOffset()` here, copying `positionToWrite`. F13 is
+      why it does not: the masthead scrolls away above the first row, leaving a band hundreds of
+      pixels deep where that test says "a block" and no row has arrived.)
 
-- [x] **One transaction, owned by the wrapper** (F11). `jumpTo` arms `{ pathname, origin, target }`
-      and makes **exactly one** nuqs call — the destination push. When `watchHistoryWrites`
+- [x] **One transaction, owned by the wrapper** (F11). `jumpTo` arms
+      `{ pathname, from, origin, target }` — `from` being the whole address at the moment of asking,
+      which F14 added — and makes **exactly one** nuqs call: the destination push. When `watchHistoryWrites`
       intercepts the matching armed push it synchronously calls its **captured inner**
       `replaceState` to rewrite the current entry to the origin, then its **captured inner**
       `pushState` with the destination and the stamped state; it emits `NAVIGATED` once after the
@@ -338,10 +378,7 @@ coin toss wearing a green tick. `tests/jump-history.test.ts` § settled waits pa
 and says why.
 
 **`scrollY` is not observable in jsdom**, which has no layout and whose `window.scrollTo` is a
-no-op. The top-of-the-article test therefore asserts the thing that *produces* `scrollY === 0` — the
-predecessor entry carries **no** `?at=` at all, which is the branch `useReadingPosition`'s restore
-effect takes to `scrollToTop()`. The stamp round-trips as `{ kind: "top" }` beside it. Said plainly
-here because a test that claims more than it checks is the failure mode this stage kept hitting.
+no-op — which is why the checklist above says what the top-of-the-article test asserts instead.
 
 ### Stage B — the chip — **built, 2026-09-06**
 
@@ -349,7 +386,9 @@ here because a test that claims more than it checks is the failure mode this sta
       which subscribes to **both** `popstate` and the `NAVIGATED` event (F6). `useAddress` is not
       enough — two entries can share a URL and differ only in state.
 - [x] `src/web/ReturnChip.tsx`: a small pill, bottom left, above the `Dock`, reading
-      `↩ back to <section>`, following `.cmt-dialog`'s positioning at z-index 46.
+      `↩ back to <section>`. It borrows `.cmt-dialog`'s *bottom arithmetic*, mirrored to the left;
+      the z-index is 46, which is `.install-hint`'s number and not that dialog's 70 — chrome about
+      the reading session rather than a dialog.
 - [x] Drawn **exactly when** the current entry carries a stamp naming a block this article has —
       no section-equality hide rule (F2). Pressing Back, or any push that clears the stamp, removes
       it.

@@ -83,7 +83,9 @@ import {
   canStamp,
   clearArmedJump,
   consumeArmedJump,
+  isJumpArmed,
   type JumpOrigin,
+  onArmedJumpChange,
   readStamp,
   withStamp,
 } from "./jump-history.js";
@@ -1328,6 +1330,16 @@ export function onAddressChange(listener: () => void): () => void {
  * second throws.
  */
 let historyWatched = false;
+
+/**
+ * **nuqs's own marker for a write it made.** Its history patch runs its
+ * `sync()` — and, before that, resets its update queue — for every write that
+ * does not carry this, which is why anything of ours writing *through* that
+ * patch has to wear it (nuqs/dist/patch-history-*.js; `dismissJumpOrigin`, and
+ * GPT Sol F20).
+ */
+const NUQS_MARKER = "__nuqs__";
+
 /**
  * `replaceState` as it was before the wrapper below was installed, or `null`
  * until it is. See `dismissJumpOrigin`, the only thing that reads it.
@@ -1401,13 +1413,23 @@ export function watchHistoryWrites(): void {
  * **A replace, so the stack does not grow.** A push would mean that leaving the
  * chip cost a press of Back, which is the thing the chip exists to spare.
  *
- * The URL is unchanged, so nuqs's own patch skips its `sync()` (it compares the
- * write's search against the last it saw) and no parameter hook is disturbed;
- * `NAVIGATED` is ours to fire, and it is what redraws `useJumpOrigin`.
+ * **And it goes in wearing nuqs's marker**, which is not cosmetic. The captured
+ * function *is* nuqs's wrapper, and that wrapper runs its `sync()` for any
+ * write not marked `__nuqs__` (nuqs/dist/patch-history-*.js). `sync()` calls
+ * `spinQueueResetMutex()` **before** it notices the search string has not
+ * changed — so dismissing the chip while the scroll spy's 300ms `?at=` replace
+ * was still queued *cancelled that write*. The position tracker does not retry:
+ * `synced.current` has already moved on. The address was left naming the
+ * section the reader had left, so a reload or a shared link went back to it.
+ * A dismissal must cost nothing but the stamp. GPT Sol F20, 2026-09-06.
+ *
+ * With the marker, nuqs skips `sync()` altogether: no queue reset and no
+ * parameter hook disturbed. `NAVIGATED` is ours to fire, and it is what redraws
+ * `useJumpOrigin`.
  */
 export function dismissJumpOrigin(): void {
   const replace = capturedReplace ?? history.replaceState.bind(history);
-  replace(withStamp(history.state, null), "", location.href);
+  replace(withStamp(history.state, null), NUQS_MARKER, location.href);
   window.dispatchEvent(new Event(NAVIGATED));
 }
 
@@ -1512,14 +1534,35 @@ export function useAddress(): string {
  */
 let originCache: { key: string; origin: JumpOrigin | null } = { key: "", origin: null };
 function jumpOriginSnapshot(): JumpOrigin | null {
-  const next = readStamp(history.state);
+  /* **Nothing to offer while a jump is in flight.** The reader has asked to be
+     somewhere else and the page is already moving, but the push that records it
+     is 50ms away — 320ms on an older Safari — so the entry underneath still
+     describes the jump *before* this one. Drawing it would name the wrong
+     origin, and pressing it would go back one place further than the reader
+     meant while cancelling the jump they just asked for. GPT Sol F19,
+     2026-09-06; jump-history.ts § isJumpArmed has the fix that was passed over
+     and why. */
+  const next = isJumpArmed() ? null : readStamp(history.state);
   const key = next === null ? "" : JSON.stringify(next);
   if (key !== originCache.key) originCache = { key, origin: next };
   return originCache.origin;
 }
 
+/**
+ * `subscribe` plus arming, which is the one thing that changes what this store
+ * says without writing to history at all.
+ */
+function subscribeToJumpOrigin(onChange: () => void): () => void {
+  const stopWatchingHistory = subscribe(onChange);
+  const stopWatchingArm = onArmedJumpChange(onChange);
+  return () => {
+    stopWatchingHistory();
+    stopWatchingArm();
+  };
+}
+
 export function useJumpOrigin(): JumpOrigin | null {
-  return useSyncExternalStore(subscribe, jumpOriginSnapshot, () => null);
+  return useSyncExternalStore(subscribeToJumpOrigin, jumpOriginSnapshot, () => null);
 }
 
 /**
