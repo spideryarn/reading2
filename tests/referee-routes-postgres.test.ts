@@ -236,8 +236,8 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
 
   it("reads a claims run back, where it used to answer 501", async () => {
     /* The exact call that was broken in production: `GET` reaches
-       `refereeClaimsStore.sweep` and `.sourceHash`, both of which refused
-       through `notMigrated`. A paper nobody has asked is a 200 with `run: null`
+       `refereeClaimsStore.sweep` and `.sourceHash`, both of which refused with
+       a 501. A paper nobody has asked is a 200 with `run: null`
        — the ordinary state, which the panel has a sentence for. */
     const reply = await call("GET", `/api/referee/claims/${SLUG}`);
     expect(reply.status, `GET answered ${reply.status}: ${reply.text.slice(0, 300)}`).toBe(200);

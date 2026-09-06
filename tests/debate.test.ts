@@ -152,9 +152,11 @@ const ARTICLE = {
   byline: "Greg Detre",
 };
 
-const groupInput = { admissible, article: ARTICLE };
+const groupInput = { admissible, article: ARTICLE, blockText };
 
-const claimInput = { ...groupInput, blockText };
+/* One input for both readers since 2026-09-06: group one shingles the article's
+   blocks against a page's extract, so it needs them too. */
+const claimInput = groupInput;
 
 /* ------------------------------------------------------ the sourdough fixture -- */
 
@@ -539,7 +541,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           applies: "It accepts the schedule only for cool kitchens.",
         },
       ],
-      { admissible: withReview, article: ARTICLE },
+      { admissible: withReview, article: ARTICLE, blockText },
       2,
     );
     expect(group.counts.keptRows).toBe(1);
@@ -613,7 +615,7 @@ describe("what a cap and a bad row are counted as", () => {
       valence: "negative",
       applies: "It accepts the schedule only for cool kitchens.",
     }));
-    const group = readDirectGroup(many, { admissible: evidenceMap([review]), article: ARTICLE }, 2);
+    const group = readDirectGroup(many, { admissible: evidenceMap([review]), article: ARTICLE, blockText }, 2);
 
     expect(group.counts.keptRows).toBe(MAX_DIRECT_ROWS);
     expect(group.counts.reportedRows).toBe(MAX_DIRECT_ROWS + 3);
@@ -736,7 +738,7 @@ describe("a direct row must show the page naming this article", () => {
           applies: "It agrees about the kitchen.",
         },
       ],
-      { admissible: evidenceMap([page]), article: ARTICLE },
+      { admissible: evidenceMap([page]), article: ARTICLE, blockText },
       2,
     );
     expect(group.rows).toEqual([]);
@@ -768,7 +770,7 @@ describe("a direct row must show the page naming this article", () => {
       };
       const group = readDirectGroup(
         [rowFor(page, "a piece called On rye that makes the same case")],
-        { admissible: evidenceMap([page]), article: SHORT },
+        { admissible: evidenceMap([page]), article: SHORT, blockText },
         2,
       );
       expect(group.rows).toEqual([]);
@@ -783,7 +785,7 @@ describe("a direct row must show the page naming this article", () => {
       };
       const group = readDirectGroup(
         [rowFor(page, "Marta Ek's On rye makes the same case")],
-        { admissible: evidenceMap([page]), article: SHORT },
+        { admissible: evidenceMap([page]), article: SHORT, blockText },
         2,
       );
       expect(group.counts.keptRows).toBe(1);
@@ -816,7 +818,7 @@ describe("a direct row must show the page naming this article", () => {
           applies: "It rejects the feeding schedule.",
         },
       ],
-      { admissible: evidenceMap([page]), article: ARTICLE },
+      { admissible: evidenceMap([page]), article: ARTICLE, blockText },
       2,
     );
     expect(group.counts.keptRows).toBe(1);
@@ -843,7 +845,7 @@ describe("a direct row must show the page naming this article", () => {
           applies: "It answers the claim.",
         },
       ],
-      { admissible: evidenceMap([page]), article: ARTICLE },
+      { admissible: evidenceMap([page]), article: ARTICLE, blockText },
       2,
     );
     expect(group.counts.keptRows).toBe(1);
@@ -976,7 +978,7 @@ describe("a quote too short to be evidence", () => {
           applies: "It accepts the schedule only for cool kitchens.",
         },
       ],
-      { admissible: evidenceMap([review]), article: ARTICLE },
+      { admissible: evidenceMap([review]), article: ARTICLE, blockText },
       2,
     );
     expect(group.rows).toEqual([]);

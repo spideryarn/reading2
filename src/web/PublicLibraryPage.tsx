@@ -76,18 +76,23 @@ import {
   PUBLIC_SHELF_LEDE,
   PUBLIC_SHELF_RETRY,
   PUBLIC_SHELF_SLOW,
+  PUBLIC_SHELF_PROVENANCE,
+  PUBLIC_SHELF_TAKEDOWN,
   PUBLIC_SHELF_TRUNCATED,
   publicShelfShared,
   publicShelfWords,
-  TAKEDOWN_LINK,
+  TAKEDOWN_TIP_HEAD,
+  TAKEDOWN_TIP_HOW,
+  TAKEDOWN_TIP_WHAT,
 } from "../messages.js";
 import type { PublicLibrary, PublicLibraryEntry } from "../public-library-types.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { loadPublicLibrary } from "./public-api.js";
 import { timeAgo } from "./relative-time.js";
-import { readHref, TAKEDOWN_HREF } from "./router.js";
+import { PUBLIC_SHARING_HREF, readHref } from "./router.js";
 import { SHELL, SiteNav } from "./SiteBits.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 
 export function PublicLibraryPage({
@@ -132,6 +137,51 @@ export function PublicLibraryPage({
         <div className={`${SHELL} tw:relative`}>
           <h1 className="site-display tw:max-w-[16ch]">{PUBLIC_SHELF_HEADING}</h1>
           <p className="site-lede tw:mt-6">{PUBLIC_SHELF_LEDE}</p>
+
+          {/* **Whose these articles are, and what to do if one is yours** —
+              moved up from the foot of the page on Greg's ask, 2026-09-06.
+
+              **The facts come before the offer, and that is the whole reason
+              this is two sentences rather than the one that used to be at the
+              bottom.** `TAKEDOWN_LINK` on its own up here would make the first
+              thing anybody reads a note about takedowns, which reads as a
+              warning about every article underneath it — the exact objection
+              that put it at the foot in the first place. Saying what these
+              pieces *are* first turns the offer into a consequence of behaving
+              openly. src/messages.ts § PUBLIC_SHELF_PROVENANCE.
+
+              **In the header rather than in `<main>`**, and outside every state
+              arm for the reason the foot line was: it is about the page and not
+              about the list, so an empty shelf and a failed read both keep it.
+
+              **`placement="bottom"` and `keepSide`.** This is a line of text
+              near the top of a wide page rather than a glyph in a row, so the
+              card has nowhere to go but down — and without `keepSide` the
+              default `flip` would happily send a 22rem panel sideways off a
+              narrow viewport. The Feedback button wants the same pair for the
+              same reason (FeedbackButton.tsx). */}
+          <p className="tw:mt-6 tw:mb-0 tw:max-w-[62ch] tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
+            {PUBLIC_SHELF_PROVENANCE}{" "}
+            <Tooltip
+              placement="bottom"
+              keepSide
+              className="tip-soon"
+              content={
+                <ControlTip
+                  head={TAKEDOWN_TIP_HEAD}
+                  what={TAKEDOWN_TIP_WHAT}
+                  how={TAKEDOWN_TIP_HOW}
+                />
+              }
+            >
+              <Link
+                href={PUBLIC_SHARING_HREF}
+                className="tw:text-highlight tw:no-underline tw:hover:underline"
+              >
+                {PUBLIC_SHELF_TAKEDOWN}
+              </Link>
+            </Tooltip>
+          </p>
         </div>
       </header>
 
@@ -202,25 +252,11 @@ export function PublicLibraryPage({
             <p className="tw:mt-6 tw:text-sm tw:text-muted-foreground">{PUBLIC_SHELF_TRUNCATED}</p>
           )}
 
-          {/* **The way to complain about something on this page**, and it is
-              here rather than on a card.
-
-              This shelf is where a stranger *finds* a republished article, so it
-              is one of the two surfaces that has to carry it — the other is the
-              article's own details page (PublicPages.tsx). A link on every card
-              would read as a warning about each article, and almost every one of
-              them is shared perfectly legitimately.
-
-              **Outside the three state arms**, so it survives an empty shelf and
-              a failed read. It is about the page rather than about the list, and
-              the version that hangs off `entries.length > 0` is the one that
-              quietly loses it in exactly the case where somebody is still
-              looking at the address. src/messages.ts § TAKEDOWN_LINK. */}
-          <p className="tw:mt-10 tw:text-xs tw:text-ink-faint">
-            <Link href={TAKEDOWN_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-              {TAKEDOWN_LINK}
-            </Link>
-          </p>
+          {/* **The way to complain used to be here**, in faint grey under the
+              list, and it is now the second sentence under the lede — Greg,
+              2026-09-06. It is not drawn twice: a page that makes the same offer
+              at both ends reads as anxious about it, and the version at the top
+              carries the facts that make the offer mean something. */}
         </div>
       </main>
     </div>

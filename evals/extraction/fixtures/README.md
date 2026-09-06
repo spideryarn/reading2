@@ -187,6 +187,21 @@ rather than a nice-to-have.
 
 Registered in `corpus.mts`'s `EXTRA_FIXTURES`, same as the nine above and for the same reason.
 
+## What is NOT in this directory: the shape corpus, added 2026-09-06
+
+**The thirty-five pages here cannot exercise most of what the two hard gates do.** Every blocker
+found from GPT Sol's fourth review onwards needed a page built by hand, and the fifteen shipped
+extractions between them reach **two** of the order walk's seven placement branches (`owner` and
+`page`, measured 2026-09-06 and printed by the run). So the gates'
+cases live in [../shapes.mts](../shapes.mts) instead: named source shapes, named candidate
+transformations, and each case pinning the resolution path and exposure counts rather than only
+pass/fail. `npx tsx evals/extraction/shapes.mts` prints the matrix;
+[../score.mts](../score.mts) prints a summary beside the fifteen and exits non-zero on a failure.
+
+They are **not** fixtures and must not become some: a fixture is a real page with real bytes and a
+provenance line, and a shape is a five-element document that exists to make one branch fire. Keeping
+them apart is what stops a synthetic page being quoted as evidence about the web.
+
 ## The assertion manifests, added 2026-09-05
 
 Fifteen of the thirty-five now carry a `<name>.manifest.json` beside the HTML: what an extraction

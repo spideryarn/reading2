@@ -39,7 +39,8 @@ interface Props {
   focusRow: number;
   /**
    * False where the band covers the prose instead of sitting beside it — below
-   * `MODE_MIN + PROSE_MIN` in layout.ts, which is iPad portrait. Paragraph rows
+   * `MODE_MIN + MODE_PROSE_FLOOR` in layout.ts (700px), which since 2026-09-06 is
+   * narrower than a phone in landscape rather than wider than one. Paragraph rows
    * are navigation chrome justified by the prose being visible next to them, so
    * where it is not, they are the substitution principle 1 forbids.
    */
