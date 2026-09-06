@@ -241,6 +241,17 @@ export type Route =
    */
   | { kind: "contact" }
   /**
+   * Every release since launch, newest first — `/changelog`. See
+   * ChangelogPage.tsx and docs/project/changelog.md.
+   *
+   * Signed out for the same reason as `privacy`, `features`, `pricing` and
+   * `contact`: it is a page somebody is *sent* — a reader is more likely to
+   * arrive from a link somebody shared than from browsing while signed in —
+   * and it is about the product rather than about their account, so there is
+   * nothing on it an account would change.
+   */
+  | { kind: "changelog" }
+  /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
    * **The one route that must be exempt from every rewrite in main.tsx**, and
@@ -325,6 +336,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   "public-sharing": false,
   pricing: false,
   contact: false,
+  changelog: false,
   callback: false,
   "not-found": false,
 };
@@ -671,6 +683,12 @@ export const PRICING_HREF = "/pricing";
  */
 export const CONTACT_HREF = "/contact";
 /**
+ * Every release since launch — linked from the footer, where it is labelled
+ * "What's new" rather than "Changelog", the internal name for the process
+ * that writes it (docs/project/changelog.md).
+ */
+export const CHANGELOG_HREF = "/changelog";
+/**
  * The shelf of public articles.
  *
  * **Built from `PUBLIC_LIBRARY_SLUG`, not typed out**, and that is the point of
@@ -732,6 +750,11 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
   [FEATURES_HREF, "features"],
   [PRICING_HREF, "pricing"],
   [CONTACT_HREF, "contact"],
+  /* Landed as an `if` of its own the same day this table replaced the eight it
+     was written beside, so it joins here rather than there. Order is
+     indifferent to it: `/changelog` is top level and shares a prefix with
+     nothing. */
+  [CHANGELOG_HREF, "changelog"],
 ] as const;
 
 /**

@@ -68,7 +68,7 @@ afterEach(() => {
  */
 function footerAt(
   pathname: string,
-  here?: "library" | "features" | "privacy" | "contact",
+  here?: "library" | "features" | "privacy" | "contact" | "changelog",
 ): string[] {
   history.replaceState(null, "", pathname);
   act(() => root.render(<SiteFooter {...(here ? { here } : {})} />));
@@ -82,28 +82,33 @@ const FEATURES = "Features → /features";
 const PRICING = "Pricing → /pricing";
 const PRIVACY = "Privacy → /privacy";
 const CONTACT = "Contact → /contact";
+const CHANGELOG = "What’s new → /changelog";
 
 describe("the site footer", () => {
   it("carries the whole row on a page that is not one of its own", () => {
     // The control: if this ever stops holding, every "is missing" assertion
     // below would pass over a footer that rendered nothing at all.
-    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT]);
+    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
   });
 
   it("drops Home on the shelf, which is also the landing page", () => {
-    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT]);
+    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
   });
 
   it("drops Features on the features page", () => {
-    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT]);
+    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, CHANGELOG]);
   });
 
   it("drops Privacy on the privacy page", () => {
-    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT]);
+    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, CHANGELOG]);
   });
 
   it("drops Contact on the contact page", () => {
-    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY]);
+    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CHANGELOG]);
+  });
+
+  it("drops What's new on the changelog page", () => {
+    expect(footerAt("/changelog")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT]);
   });
 
   it("carries no email address anywhere in the row", () => {
@@ -111,7 +116,7 @@ describe("the site footer", () => {
        Greg, 2026-09-06: *"Remove the hello@spideryarn.com from the footer —
        just keep the Contact page, which already points to that."* Every entry
        in this row is now a page, which is what SiteFooter.tsx § `LINKS` says. */
-    for (const at of ["/", "/features", "/pricing", "/privacy", "/contact", "/profile"]) {
+    for (const at of ["/", "/features", "/pricing", "/privacy", "/contact", "/changelog", "/profile"]) {
       for (const link of footerAt(at)) expect(link).not.toContain("mailto:");
     }
   });
@@ -129,7 +134,13 @@ describe("the site footer", () => {
    * ways, which is precisely the distinction `here` was added to make.
    */
   it("believes the page over the address when the caller says which it is", () => {
-    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT]);
+    expect(footerAt("/profile", "library")).toEqual([
+      FEATURES,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
+    ]);
   });
 
   it("takes a sentence of its own above the links", () => {
@@ -179,6 +190,8 @@ describe("the pages that mount it", () => {
 
   it("is exactly the nine pages that have a bottom, once each", () => {
     expect(Object.fromEntries(mounts)).toEqual({
+      /* `/changelog`, since 2026-09-06 — docs/project/changelog.md. */
+      "ChangelogPage.tsx": 1,
       /* `/contact`, since 2026-09-05 — docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
       "ContactPage.tsx": 1,
       "FeaturesPage.tsx": 1,

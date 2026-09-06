@@ -62,13 +62,78 @@
 export const SPINE_W = 12;
 
 const GIST_IDEAL = 240; // 15rem — comfortable for a one-sentence gist
-/* Exported for `tests/spine-width.test.ts` alone: the two breakpoints in
-   styles.css are `GIST_MIN + PROSE_MIN + SPINE_W − 1` and
-   `MODE_MIN + PROSE_MIN + SPINE_W − 1`, performed by hand because a `@media`
+/* Exported for `tests/spine-width.test.ts` alone: both breakpoints in styles.css
+   are `GIST_MIN + PROSE_MIN + SPINE_W − 1`, performed by hand because a `@media`
    query cannot read a custom property, and that test is the only thing that can
-   notice when one of the four moves and the others don't. */
+   notice when one of them moves and the others don't. **The mode crossover is
+   deliberately not among them** — it moves with `?spine=0`, which no query can
+   see, so the stylesheet is told it by a class instead (`.band-covers`, written
+   from `fit.modeW`). That test asserts its absence. */
 export const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
-export const PROSE_MIN = 544; // 34rem — the narrowest the reading column may be
+export const PROSE_MIN = 544; // 34rem — the width the reading column is defended at
+
+/**
+ * **The narrowest the reading column may actually be, as against the width it
+ * is defended at.**
+ *
+ * `PROSE_MIN` is a *priority*: while there is room to give, the band gives it
+ * to the prose, and 544px is the point past which it stops giving. This is a
+ * *floor*: the width below which a reading column is no longer worth putting on
+ * the screen, and the band should cover the article instead of standing beside
+ * a sliver of it (`bandCoversProse`).
+ *
+ * **`MODE_` is in the name because it is not a fact about prose.** Plain on a
+ * 390px phone draws a 378px reading column and always has; nothing here forbids
+ * that, and a bare `PROSE_FLOOR` would read as though something did. This is
+ * the narrowest prose worth showing *beside a mode band* — the width at which
+ * the trade of article-for-panel stops paying — and it is only ever consulted
+ * by `fitMode` and `bandCoversProse`. GPT Sol named it, 2026-09-06.
+ *
+ * **They were one number until 2026-09-06, and that is what put the crossover
+ * out of every phone's reach.** `MODE_MIN + PROSE_MIN + SPINE_W` is 844, and
+ * `useWindowWidth` subtracts the notch, so a landscape iPhone hands `fitMode`
+ * something between 667 and 838 — no iPhone made has ever cleared it, in either
+ * orientation. Greg, 2026-09-06: *"Even when my browser window is fairly wide,
+ * it still only shows the Mode column … I'd really like to be able to see a
+ * Mode (e.g. Outline) + Text side-by-side when viewing on a modern iPhone in
+ * landscape mode."*
+ *
+ * Splitting the two rather than lowering `PROSE_MIN` is what keeps the change
+ * to the widths that were broken. Above `MODE_MIN + PROSE_MIN` the floor never
+ * binds — `avail − modeW` is 544 or more by construction — so every laptop and
+ * desktop width behaves exactly as it did. Lowering `PROSE_MIN` to 400 instead
+ * would have handed the band its 400px ideal at the prose's expense on a
+ * 900–1000px laptop, which is where most reading happens and which nobody
+ * complained about.
+ *
+ * **400px, and the comparison that settles it is the app's own phone.**
+ * Measured in Chrome on 2026-09-06, at a 16px root, `1ch` in the reading face
+ * (Geist at 17px) is **11.34px**, and the cell spends `--text-pad-l` +
+ * `--text-pad-r`:
+ *
+ * | column | text run | measure |
+ * |---|---|---|
+ * | 390px window, portrait phone, no band | 328px | **29.0ch** |
+ * | `MODE_PROSE_FLOOR` = 400 | 342px | **30.2ch** |
+ * | `PROSE_MIN` = 544 | 486px | **42.9ch** |
+ *
+ * So the floor is a hair *wider* than what a phone reader gets in portrait
+ * today, which is the app's everyday mobile experience and has drawn no
+ * complaint. A landscape split is therefore no worse for the prose than
+ * portrait already is, and it comes with a mode panel beside it. Below this the
+ * two halves start starving each other and the covering band is the better
+ * answer, which is why there is a floor at all.
+ *
+ * **`.prose`'s `clamp(45ch, 90vw, var(--reading-measure))` is not a third
+ * opinion here, and it is worth saying so because it reads like one.** 45ch is
+ * 510px of *text*, so a column honouring it would be 568px — wider than
+ * `PROSE_MIN` has ever been. The clamp's low end is a lower bound on a
+ * `max-width`, not a minimum width: when the cell is narrower than 45ch the
+ * prose simply takes the cell, which is what it already does at every width
+ * this app ships. Fable read it as a declared floor while arbitrating this
+ * change, 2026-09-06; the measurement above is why it isn't one.
+ */
+export const MODE_PROSE_FLOOR = 400; // 25rem
 
 /**
  * **The widest the reading column goes when it is the only column there is —
@@ -209,8 +274,12 @@ export interface Fit extends Layout {
    *
    * It is `0` in two cases, and reading it as "there is no band" is wrong in
    * the second: the table-of-contents mode, where there genuinely is no band —
-   * and **a window under 844px, where there is one and it takes no room from
-   * the table because it covers it instead** (`fitMode`). Ask `mode !== "hierarchy"`
+   * and **a window under `MODE_MIN + MODE_PROSE_FLOOR` plus whatever the rail
+   * costs — 700px with it, 688 with `?spine=0` — where there is one and it
+   * takes no room from the table because it covers it instead** (`fitMode`,
+   * and `bandCoversProse` for the one statement of that width; it takes
+   * `showSpine` precisely because the answer is not a single number).
+   * Ask `mode !== "hierarchy"`
    * if what you want to know is whether a band is open.
    */
   modeW: number;
@@ -283,12 +352,20 @@ function modeSpine(showSpine: boolean | null): SpineMode {
  * is the design and not a failure, and styles.css § a band with no room for the
  * other half of it.
  *
+ * **It is `MODE_PROSE_FLOOR` and not `PROSE_MIN`**, and that distinction is what
+ * lets a phone in landscape have both. The band yields to the prose down to
+ * `PROSE_MIN` (544) while there is room to give, but the question *this*
+ * function answers is a different one — how narrow a reading column is still
+ * worth standing beside — and the answer to that is the floor, 400. See
+ * `MODE_PROSE_FLOOR` for why the two were one number until 2026-09-06 and what that
+ * cost.
+ *
  * **It moves with the rail**, which is why it takes `showSpine` rather than
- * being a number: 844 with the rail on, 832 without. A caller that guessed the
- * rail was on would miss an iPad in portrait by two pixels, and one that
- * guessed it was off would warn a reader whose band fits perfectly well.
- * Getting that wrong from a hand-copied breakpoint is the accident this
- * codebase has already had once — see `App.tsx` § `band-covers`.
+ * being a number: 700 with the rail on, 688 without. A caller that guessed the
+ * rail was on would miss a phone by twelve pixels, and one that guessed it was
+ * off would warn a reader whose band fits perfectly well. Getting that wrong
+ * from a hand-copied breakpoint is the accident this codebase has already had
+ * once — see `App.tsx` § `band-covers`.
  *
  * **It answers a hypothetical when no band is open**, and that is the point:
  * `SmallScreenHint` is the other caller, and its whole job is to say what will
@@ -296,7 +373,7 @@ function modeSpine(showSpine: boolean | null): SpineMode {
  * underneath one.
  */
 export function bandCoversProse(windowWidth: number, showSpine: boolean | null = null): boolean {
-  return MODE_MIN + PROSE_MIN > Math.max(0, windowWidth - spineWidth(modeSpine(showSpine)));
+  return MODE_MIN + MODE_PROSE_FLOOR > Math.max(0, windowWidth - spineWidth(modeSpine(showSpine)));
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -592,10 +669,14 @@ export function fitView({
  *  - **The spine is on unless the reader turned it off.** `?spine=0` is a
  *    choice about the page, not about the mode they happen to be in, and it is
  *    the only thing that turns the rail off in a mode.
- *  - **The prose wins.** The band shrinks from `MODE_IDEAL` to `MODE_MIN`
- *    before the reading column drops below `PROSE_MIN`, and past that the page
- *    overflows and scrolls rather than either of them getting narrower. Same
- *    order of preference the ToC layout has: the article is what is being read.
+ *  - **The prose wins, and then it yields to a floor.** The band shrinks from
+ *    `MODE_IDEAL` to `MODE_MIN` before the reading column drops below
+ *    `PROSE_MIN` — same order of preference the ToC layout has, because the
+ *    article is what is being read. Past that the *prose* narrows, from 544 to
+ *    `MODE_PROSE_FLOOR`, and past *that* the band gives up sharing the screen
+ *    and covers the article instead. **The page never overflows and never
+ *    scrolls sideways**; it said it did until 2026-09-06, and that was already
+ *    only reachable in the branch the cover check had made unreachable.
  *  - **The prose is always on**, which is `proseVisible`'s job rather than this
  *    function's. It used to be asserted here and nowhere else, and that is
  *    exactly how the outline-mode bug got in: a comment claiming a fact the
@@ -606,14 +687,20 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   /**
-   * **Below `MODE_MIN + PROSE_MIN` the band stops taking room from the article
-   * and covers it instead.**
+   * **Below `MODE_MIN + MODE_PROSE_FLOOR` the band stops taking room from the
+   * article and covers it instead.**
    *
    * The negotiation below has an implied floor and no behaviour underneath it:
    * both terms bottom out, so at 390px this function used to return a 288px
    * band beside a 544px column and ask a 390px window for 832px of content.
    * Opening chat on a phone put two half-visible panels side by side and
    * neither of them could be read.
+   *
+   * **`MODE_PROSE_FLOOR`, not `PROSE_MIN`, since 2026-09-06.** The sum was 832 and
+   * the crossover 844, which is above every iPhone's landscape width once the
+   * notch is subtracted, so *no* phone ever got a band beside its article. It
+   * is 688 and 700 now, and the widths between 700 and 844 are the whole of the
+   * change: the band pins at `MODE_MIN` there and the prose takes the rest.
    *
    * **`modeW` is 0 here, and that is not a lie about there being a band.** The
    * field's job is to say how much horizontal room the band takes *from the
@@ -641,8 +728,13 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
    * guess it.**
    *
    * `avail` is the window minus the rail, so the width at which the band stops
-   * fitting beside the prose depends on whether the rail is there: 844 with it,
-   * 832 without. `styles.css` § a band with no room used to be a plain
+   * fitting beside the prose depends on whether the rail is there: **700 with
+   * it, 688 without**, since 2026-09-06. The pair below is the one that was
+   * live when the bug happened — 844 and 832 — and every number in this note is
+   * that era's, deliberately, because it is a reproduction and not a
+   * description.
+   *
+   * `styles.css` § a band with no room used to be a plain
    * `@media (max-width: 843px)`, which knows nothing about `?spine=0`, and
    * between **832 and 843 with the rail off** the two disagreed: this function
    * handed the band 288–299px and squeezed the table to make room, while the
@@ -685,8 +777,18 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
     };
   }
 
+  /* **Two different prose numbers, and the difference is the whole negotiation.**
+     The band's share is computed against `PROSE_MIN` — the width the prose is
+     *defended* at — so while the window can afford it the band shrinks and the
+     reading column keeps its 544. The column's own width then falls back to
+     `MODE_PROSE_FLOOR`, which only binds once the band has already bottomed out at
+     `MODE_MIN`: between 688 and 832 of `avail` the band sits at 288 and the
+     prose grows 400 → 544, and at 832 the two agree and the arithmetic is
+     identical to what it was when there was one constant. Below 688 the branch
+     above has already taken the covering path, so `proseW` is never less than
+     `MODE_PROSE_FLOOR` and the sum is never more than `avail`. */
   const modeW = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
-  const proseW = Math.max(PROSE_MIN, avail - modeW);
+  const proseW = Math.max(MODE_PROSE_FLOOR, avail - modeW);
   return {
     // The table is the prose column and nothing else. Its own `pin-left` and
     // `pin-right` land on the same single column, which is what they already do

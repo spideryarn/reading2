@@ -417,15 +417,29 @@ straight past would have explained nothing to the one person it is for. Nothing 
 the one bit in `localStorage` records a *press*.
 
 **It asks the layout rather than a width**, and that is the part worth carrying elsewhere: an iPad in
-portrait is 834px, which is *above* `MODE_MIN + PROSE_MIN` and *below* the real crossover with the
+portrait is 834px, which was *above* `MODE_MIN + PROSE_MIN` and *below* the real crossover with the
 12px rail on. A gate written as the sum warned every phone and no iPad — the device it was most
 obviously for — by two pixels.
 
+**And the crossover has since moved, which is the better half of that story.** It is
+`MODE_MIN + MODE_PROSE_FLOOR` and 700px since 2026-09-06, not 844, so that a phone in landscape gets
+the band beside the article rather than over it —
+[260906h](../plans/260906h-the-mode-band-beside-the-prose-on-a-phone-in-landscape.md) has why no
+iPhone had ever cleared the old number, and [layout.ts](../../src/web/layout.ts)
+§ `MODE_PROSE_FLOOR` has the constant. **The iPad is no longer a case at all** — 834px clears 700
+with 134px to spare, so it gets the band beside the article and no banner.
+
+The banner's *behaviour* followed the constant with no code change, because the gate is a fact rather
+than a width. Its tests did have to move, and that is not the same claim: the two boundary widths
+they pin (838 and 844) were chosen as the old crossover's neighbours, so they became 694 and 700 —
+coordinates on the thing being tested, not copies of it.
+
 **Landscape is suggested only when there is a landscape to turn to.** `moreRoomSideways` compares the
-viewport's two sides; a phone already held sideways gets the rest of the sentence and not that
-advice. The crossover itself lands at 844px of *usable* width — and note that is a window rather than
-a device, since `useWindowWidth` takes the safe-area insets out first, so a notched phone whose
-screen is 844pt sideways is handed rather less and keeps the banner.
+viewport's two sides; a phone already held sideways gets a different last sentence and not that
+advice — and since the crossover moved, the offer is a real one: *"Landscape may have room for
+both"*, because on a modern phone it now does. Note the crossover is a window rather than a device,
+since `useWindowWidth` takes the safe-area insets out first, so a phone whose screen is 852pt
+sideways is handed nearer 734.
 
 **Arriving with a mode already open is the one case it does not cover**, and that is accepted rather
 than solved. A covering band is `position: fixed` over the whole article, so there is no stable place
