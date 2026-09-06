@@ -1,0 +1,57 @@
+{
+  "fixture": "mdn-cache-control",
+  "file": "mdn_cache.html",
+  "note": "550 sidebar list items and an inline 'In this article' nav that repeats every heading — the duplication case at heading level. The pre floor is here because this page's value is its 30 code samples. HEADING FLOORS SAY 'exactly', CHECKED HEADING BY HEADING 2026-09-05: the source's 9 <h2> are the 7 article sections (Syntax, Vocabulary, Directives, Use Cases, Specifications, Browser compatibility, See also) plus 'In this article' — the inline ToC this fixture exists to punish — plus 'Help improve MDN'. So 7 is source truth for the article, and 'exactly' rather than 'atLeast' is what catches an arm admitting the ToC: a floor of 7 alone cannot fail an arm that brings the duplication in with it. The 7 <h3> and 21 <h4> are all article: the <h4> are the directive names (max-age, private, public, immutable …), one-word headings of real reference content, which is exactly what a 'drop the short blocks' rule deletes. THE TABLE FLOOR FAILS TODAY AND IS MEANT TO: the source has 3 tables — MDN's own header-summary box ('Header type: Request header, Response header / Forbidden request header: No / CORS-safelisted response header: Yes'), the request/response directive matrix, and the specifications table — and the shipped extraction returns 2, having lost the summary box, along with the <figure class='table-container'> that wraps it. minArticleChars 17000: the shipped extraction returns 19,083 gistable characters and is missing only that box; the source body's 28,996 is inflated by 509 sidebar <li>, so 17,000 is the reference page itself with a margin. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The reference body less its article-footer holds 16,615 characters against 25,747 for the source body — the difference is the 509-item sidebar, the inline ToC and 'Help improve MDN'. The shipped extraction returns ALL 16,615 of it, and that is worth saying plainly: the header-summary table this fixture fails on is lost as a <table>, not as text, which is why the table floor is the instrument that catches it and a length floor never could. The floor is 15,700.",
+  "mustContain": [
+    {
+      "text": "Cache-Control: <directive>, <directive>, ...",
+      "why": "the syntax line, the first thing a reader came for"
+    },
+    {
+      "text": "Caching directives are case-insensitive",
+      "why": "the first rule in the list"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Skip to main content",
+      "why": "the accessibility skip link; page chrome, never article"
+    },
+    {
+      "text": "HTML cheatsheet",
+      "why": "a mega-menu item in the site header, not the page — what article-plus-rail admits"
+    },
+    {
+      "text": "Date & time formats",
+      "why": "and a second, so losing one menu item is not enough to pass"
+    }
+  ],
+  "structure": {
+    "pre": {
+      "atLeast": 30
+    },
+    "table": {
+      "atLeast": 3
+    },
+    "h2": {
+      "exactly": 7
+    },
+    "h3": {
+      "exactly": 7
+    },
+    "h4": {
+      "exactly": 21
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "div.reference-layout__body"
+    ],
+    "except": [
+      ".article-footer"
+    ],
+    "why": "MDN's reference body holds the seven article sections; the 'In this article' inline ToC that this fixture exists to punish sits OUTSIDE it in aside.reference-layout__toc, and 'Help improve MDN' is section.content-section.article-footer inside it, so that one is subtracted. The 509-item sidebar is in aside#main-sidebar, also outside."
+  },
+  "minArticleChars": 15700
+}

@@ -1,0 +1,60 @@
+{
+  "fixture": "plos-biology",
+  "file": "plos_biology.html",
+  "note": "JOURNAL FURNITURE at its worst: 43% of blocks are reference-list buttons — 'View Article' x26, 'Google Scholar' x26, 'PubMed/NCBI' x23, every one gistable:true. All four of the original exclusion needles are present in the extraction today, so exclusionPrecision read 0.00 and NO ARM COULD EVER BE CAUGHT BY IT ON THIS PAGE: a metric already on its floor cannot fall. Two needles the shipped extraction does exclude were added 2026-09-05 to get it off the floor. STRUCTURE, CHECKED HEADING BY HEADING: the source's 12 <h2> are all article — Correction, Figures, Abstract, Introduction, Defining Reproducibility, Analysis of Four Categories of Irreproducibility, Economic Impact of Irreproducibility, The Role of Best Practices and Standards, Conclusions, Supporting Information, Acknowledgments, References — and the shipped extraction returns 11, of which one is the article title, so THREE article sections are gone. Two of them were verified by text: the 2018 correction notice ('Correction 10 Apr 2018: The PLOS Biology Staff (2018) Correction: The Economics of Reproducibility in Preclinical Research') and the whole Supporting Information section. The floor is 12 and it fails, which is the finding. Of the 10 <h3>, only four are body subsections (Limitations of the Analysis, Box 1, Study Design, Biological Reagents and Reference Materials); three are the Supporting Information file titles and three are chrome (Submit Your Manuscript, Related PLOS Articles, Subject Areas), so the h3 floor is 4 and is deliberately the conservative reading. No img floor is honest: the source's 13 <img src> are the PLOS logo, six share icons, a Crossmark badge, a footer logo, and the paper's two figures rendered twice each. minArticleChars 25000: the paper's own container (div#artText) holds 28,047 gistable characters, ~1,000 of which are the reference-list buttons above, so 25,000 is the paper with a margin; the shipped extraction returns 27,719. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: div#artText less ul.reflinks holds 23,330 characters against 27,743 for the source body. (It was 24,207 until the 877 characters of 'View Article | PubMed/NCBI | Google Scholar' were taken out of the region on 2026-09-05 for being text this manifest forbids; the floor moved with it, by the same rule and not to make anything pass.) The shipped extraction returns 22,659, 97.1%; the 671 it misses are the Supporting Information section, its three file titles and two figure captions. The floor is 22,100 — the region less 5%, which covers the figure permalinks and 'original image' affordances a correct extraction may drop — and the missing sections are caught by the h2 floor, which is the instrument that can name them.",
+  "mustContain": [
+    {
+      "text": "Low reproducibility rates within life science research undermine cumulative knowledge production",
+      "why": "the abstract's first sentence. The obvious needle for this page lives only in a <meta content=> attribute, which is in the bytes and not in the text, and the integrity check caught it"
+    },
+    {
+      "text": "Leonard P. Freedman",
+      "why": "the author, in the byline position"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "View Article",
+      "why": "a reference-list button, 26 of them, all gistable today"
+    },
+    {
+      "text": "PubMed/NCBI",
+      "why": "the same shape, 23 of them"
+    },
+    {
+      "text": "Loading metrics",
+      "why": "an app-shell placeholder that arrives as the article's first block"
+    },
+    {
+      "text": "See all article types",
+      "why": "site chrome inside the article container"
+    },
+    {
+      "text": "Submit Your Manuscript",
+      "why": "the journal's own call-for-papers callout, an <h3 class='callout-headline'> in the rail beside the paper. Excluded by the shipped extraction today, and that is why it is here: with every declared needle already kept, exclusionPrecision sat at 0.00 on this fixture and no arm could ever lose a point on it"
+    },
+    {
+      "text": "Related PLOS Articles",
+      "why": "the onward-journey rail under the reference list — also excluded today, and the second needle keeping the metric off its floor"
+    }
+  ],
+  "structure": {
+    "h2": {
+      "atLeast": 12
+    },
+    "h3": {
+      "atLeast": 4
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "div#artText"
+    ],
+    "why": "PLOS puts the paper in div#artText; the reference-list buttons ('View Article' x26, 'Google Scholar' x26, 'PubMed/NCBI' x23) are inside it, and counting them as article was called the conservative direction — it is not, because this manifest also FORBIDS them, so an arm that removed them lost articleRecall and gained exclusionPrecision at once. The aside, the subject-area rail and the site nav are out. EXCEPT ul.reflinks — the 26 repeats of 'View Article | PubMed/NCBI | Google Scholar' hung off each reference, 877 squeezed characters, which this manifest's own mustNotContain forbids. GPT Sol, 2026-09-05.",
+    "except": [
+      "ul.reflinks"
+    ]
+  },
+  "minArticleChars": 22100
+}
